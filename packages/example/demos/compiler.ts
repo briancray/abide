@@ -11,19 +11,8 @@ import { styleTags } from 'abide/server'
 import { adopt, streamed } from 'abide/runtime'
 import { compile, describe, locate, originalPosition, ParseError } from 'abide/compiler'
 import { renderToString } from 'abide/server'
-import {
-    container,
-    duration,
-    install,
-    keep,
-    measureFlush,
-    nonZero,
-    nsPerOp,
-    sleep,
-    suite,
-    tick,
-    until,
-} from 'abide/tests'
+import { container, sleep, suite, until } from 'abide-kit'
+import { duration, install, keep, measureFlush, nonZero, nsPerOp, tick } from 'abide-kit/measure'
 import { mount } from 'abide/ui'
 import Compiled, {
     count as compiledCount,
@@ -42,6 +31,7 @@ import Narrow, { session as narrowSession } from './fixtures/narrow.abide'
 import Rows, { items, rate } from './fixtures/rows.abide'
 import Stream, { failing, room } from './fixtures/stream.abide'
 import Widget, { text as widgetText } from './fixtures/widget.abide'
+import { LADDER } from './fixtures/compiler/ladder.ts'
 import { META } from './SUITES.ts'
 
 install()
@@ -82,6 +72,7 @@ function setup(source: string): string {
 
 export default suite({
     ...META.compiler,
+    examples: LADDER,
     cases: [
         {
             title: 'a read desugars, and naming a cell alone hands over the CELL',

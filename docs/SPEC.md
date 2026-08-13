@@ -8,12 +8,12 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 
 | Specifier | Holds |
 | --- | --- |
-| `abide` | What an author TYPES — **15 values and 22 types**, and the file behind it is CURATED rather than collected: `./abide.ts`, one line per decision, not a barrel over a directory. `state` / `memo` / `channel`, `watch`, `html` / `props` (with `Props`, the type a compiled component's parameter is written in), `log`, `online()` / `health()` / `identity()`, `route()` / `navigate()` / `url()`, `invalidate` / `refresh`. A VALUE is here because a user-facing app types it — the standard is the example's own pages and server, never its demos, which test the framework rather than use it. A TYPE is here because it is the input or output of one of those values, which is why `Route` is here and `RouteEntry` is not. `scope`, `untrack` and `isolate` are on no entry point at all: nothing an app writes calls one, so the suites that test the graph reach `$shared/*` directly |
+| `abide` | What an author TYPES — **16 values and 22 types**, and the file behind it is CURATED rather than collected: `./abide.ts`, one line per decision, not a barrel over a directory. `state` / `memo` / `channel`, `watch`, `html` / `props` (with `Props`, the type a compiled component's parameter is written in), `log`, `online()` / `health()` / `identity()`, `route()` / `navigate()` / `url()`, `invalidate` / `refresh`, `isPending` (the one predicate about the signal, for an author's own `catch` — see "a read that signals"). A VALUE is here because a user-facing app types it — the standard is the example's own pages and server, never its demos, which test the framework rather than use it. A TYPE is here because it is the input or output of one of those values, which is why `Route` is here and `RouteEntry` is not. `scope`, `untrack` and `isolate` are on no entry point at all: nothing an app writes calls one, so the suites that test the graph reach `$shared/*` directly |
 | `abide/runtime` | What only the COMPILER writes, plus the predicates that read what it wrote. Emitted: `classes` / `styles` (a `class:` / `style:` toggle), `adopt` (a `<style>` block), `awaited` / `boundary` / `streamed` (the blocks), `component` / `propCell` (a `<Name/>` tag and the props it binds), `raw` (`{html(...)}`), `keyed` (`by` on a `{#for}`), and `routes` / `outlet` / `ready` (what `abide build` writes into the client entry). Read-back: `isTemplate`, `isKeyed`, `classifySlots`, `escape`, `cellProps`. Each emitted name is what the compiler writes for a SPELLING, never a name a source file says — with one exception, `start`, which is written for a POSITION rather than a spelling: the memos an unconditional plain slot reads, started before the walk reaches any of them. `html` is the one exception and stays on `abide`: it is the template tag, which a hand-written `.ts` component writes too. Nothing here may import a renderer, which is why `hydrate` is on `abide/ui` |
 | `abide/runtime/transport` | What a server module ELIDES TO in the client lane — `remote` / `remoteSocket` and the shapes describing one (`Rpc`, `RpcHandle`, `RemoteOptions`, `RemoteSocket`, `RemoteSocketOptions`, `CallOptions`, `Kind`, `Method`, `Wire`). Split off `abide/runtime` for a BUNDLING reason and no other: that module is what the generated client entry imports for `routes` / `outlet` / `ready`, so anything re-exported from it sits in the chunk every page loads, and one lazy route with one rpc put the whole call-and-decode path in front of every page — 4,066 bytes of the perf app's shared entry, on a page that calls nothing. Reached by its own specifier it lands in the chunk of whatever page imports it |
 | `abide/ui` | The DOM substrate: `mount`, `hydrate` |
 | `abide/server` | The SSR substrate, the request scope and its ambients, `server()`, `appDataDir()`, `config()`, `pages()`, the process lifecycle, and the declaring half of both transports |
-| `abide/tests` | The test kit: the `Case` shape, assertions, DOM counters, bench timing, `loopback()` |
+| `abide-kit` | Its own PACKAGE, not an entry point of this one. The `Case` shape, the assertions, the headless runner and `loopback()`; `abide-kit/measure` is the half with no abide in its graph (timing, ratios, DOM counters) and `abide-kit/spawn` is the bun-only half. See "The kit" below |
 | `abide/compiler` | `compile()`, `elide()`, and their diagnostics. Pure: text in, text out, no filesystem |
 | `abide/compiler/check` | `emitFor`, `remap`, `diagnose` — the lane `abide check` runs |
 | `abide/compiler/shapes` | `deriveShapes` — the real checker over a project, for the shapes tokens cannot read |
@@ -922,18 +922,39 @@ list alike. The `<` ambiguity is resolved by speculative parse.
 | component props | The type argument to `props<T>()` in a `<script>` types them, through `Props<T>` — the same members with every one that is data behind a cell — and a type declared there is lifted to module scope so the signature can name it. The call site is checked against the AUTHORED type, since `component()` inverts the mapping back. Without the call the component accepts none of its own |
 | writes | `count = v` keeps the cell's type through the `set` it desugars to |
 
-## The test kit — `abide/tests`
+## The kit — `abide-kit`
+
+A separate package, and split by DEPENDENCY rather than by topic:
+
+| Entry | Holds | Imports |
+| --- | --- | --- |
+| `abide-kit` | The `Case` / `Suite` shape, `suite()`, the assertions, `runHeadless`, `collector`, `reader`, `container`, `until` / `sleep`, `loopback()` | `abide` |
+| `abide-kit/measure` | Timing (`timeArms`, `nsPerOp`, `duration`, `ratioText`, `verdict`, `NOISE`), the waits (`quiesce` / `settled` / `frame` / `tick` / `microtasks`), the DOM work counters, and `keep` | **nothing** |
+| `abide-kit/spawn` | The binary as a child process: `abide()`, `spawn`, `started`, the line readers | bun |
+
+`abide-kit/measure` importing nothing is the invariant the split exists for. Every performance claim
+here is a RATIO against hand-written code in the same substrate, so the vanilla arm has to be timed by
+the same clock, batch sizing and quiesce as the abide arm — and an `abide` import from that layer would
+put the framework in the graph of the arm that exists to have none. It is also what makes the layer
+importable by a browser page and by the cross-repo comparison harness, both of which time arms that
+are not abide's. The two probes it needs (`isThenable`, `messageOf`) are its own six lines for the same
+reason. Assertions are on `abide-kit` rather than in `measure`: an assertion is how a case states a
+claim, not how a number is taken.
+
+A CASE has three faces, and a SUITE has a fourth:
 
 | Face | Type Signature | Where it runs |
 | --- | --- | --- |
-| `run` | `(ctx: Ctx) => void \| Promise<void>` | Headless AND in the browser card. Carries the assertions. |
+| `run` | `(ctx: Ctx) => void \| Promise<void>` | Headless AND in the browser row. Carries the assertions. |
 | `interact` | `(ctx: Ctx) => void` | Browser only — buttons and inputs. Skipped by the runner. |
 | `bench` | `Bench` | Measurement arms. Smoke-run headless to prove they still run. |
+| `examples` | `Example[]` — on the SUITE | The ladder. Rendered as the reference; never run by the runner. |
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `suite` | `(spec: { name, title, blurb, cases }) => Suite` | Identity, and the one place a suite naming nothing is caught. `name` is the route segment and test-file name. |
-| `ctx.host` | `HTMLElement` | The live area — a detached element headless, the card's body in the browser. |
+| `suite` | `(spec: { name, title, blurb, examples?, cases }) => Suite` | Identity, and the one place a suite naming nothing — or carrying a one-rung ladder — is caught. `name` is the route segment and test-file name. |
+| `Example` | `{ adds: string; source: string; view?: (args) => TemplateResult }` | One RUNG: the one thing it introduces that the rung before it did not, the file's own text (through `?source`, so it is what an author wrote in every lane), and what to mount when the capability has something to show. About half do not — a lifecycle hook and a config declaration are examples with nothing to render. Order is the content: each rung is the one before it plus one new thing. |
+| `ctx.host` | `HTMLElement` | The live area — a detached element headless, the row's own in the browser. |
 | `ctx.is` | `<T>(label: string, actual: T, expected: T) => void` | Structural equality. Records the line either way; throws on a mismatch. |
 | `ctx.throws` | `(label: string, fn: () => unknown, match?: string \| RegExp) => void` | Asserts the call throws, matching the message by substring or pattern. |
 | `ctx.rejects` | `(label: string, value: PromiseLike<unknown>, match?) => Promise<void>` | The same for a rejection. |

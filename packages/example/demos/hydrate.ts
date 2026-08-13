@@ -12,19 +12,11 @@
 import { html, state, type State, type TemplateResult } from 'abide'
 import { awaited, component, keyed } from 'abide/runtime'
 import { renderToString } from 'abide/server'
-import {
-    container,
-    install,
-    measure,
-    measureFlush,
-    nodesMade,
-    nonZero,
-    suite,
-    tick,
-    total,
-} from 'abide/tests'
+import { container, suite } from 'abide-kit'
+import { install, measure, measureFlush, nodesMade, nonZero, tick, total } from 'abide-kit/measure'
 import { hydrate, mount } from 'abide/ui'
 import { button, lazy, output, row, stage } from './dom.ts'
+import { LADDER } from './fixtures/hydrate/ladder.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -114,6 +106,7 @@ function benchHost(markup: string): HTMLElement {
 
 export default suite({
     ...META.hydrate,
+    examples: LADDER,
     cases: [
         {
             title: 'adopting server markup writes NOTHING',

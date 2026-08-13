@@ -23,7 +23,7 @@ import { isolate } from '$shared/internal/scopes.ts'
 import { awaited, outlet, routes } from 'abide/runtime'
 import { remote, type Rpc } from 'abide/runtime/transport'
 import { GET, register, renderFragment, type SchemaRefusal, serve } from 'abide/server'
-import { container, loopback, sweepContainers, until } from 'abide/tests'
+import { container, loopback, sweepContainers, until } from 'abide-kit'
 import { mount } from 'abide/ui'
 
 const NAVIGATION_HEADER = 'x-abide-navigation'

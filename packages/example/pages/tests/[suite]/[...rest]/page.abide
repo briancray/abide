@@ -1,0 +1,42 @@
+<!-- One suite's cases, as a table.
+
+     `[...rest]` catches whatever is under the suite name, which is what makes `/tests/routing/users/1`
+     the routing suite rather than a 404 — the routing cases drive the address bar for real, and a page a
+     browser can reach that a reload cannot is broken. Moving inside it is still a navigation the server
+     answers: what comes back is this page rendered at the new url, and the outlet adopts it.
+
+     The suite is reached through `LOADERS`, so this page's chunk is the one suite it is showing.
+     Routing every page through a static list put every suite in every page, which was invisible until
+     `compiler` joined it and dragged TypeScript's scanner along — ~700 kB of compiler on a page with
+     nothing to compile. -->
+<script module>
+import { memo, route } from 'abide'
+import type { Suite } from 'abide-kit'
+import { LOADERS, type SuiteName } from '../../../../demos/index.ts'
+import Cases from '../../../../site/cases.abide'
+
+const loaded = memo(async ({ name }: { name: string }): Promise<Suite | null> => {
+    if (!Object.hasOwn(LOADERS, name)) return null
+    return (await LOADERS[name as SuiteName]()).default
+})
+
+const BLURB =
+    'Every claim this suite makes, run in this browser. The same bodies `bun test` runs — open a row ' +
+    'for its lines and the code that made them.'
+</script>
+
+{#if loaded({ name: route().params.suite ?? '' }).pending()}
+    <p class="mx-auto max-w-5xl px-6 py-16 text-slate-500">loading…</p>
+{:else}
+    <script>
+    const found = loaded({ name: route().params.suite ?? '' })
+    </script>
+    {#if found}
+        <Cases suites={[found]} title={found.title} blurb={BLURB}/>
+    {:else}
+        <div class="mx-auto max-w-5xl px-6 py-16">
+            <h1 class="text-3xl font-semibold text-slate-100">nothing here</h1>
+            <p class="mt-2 text-slate-400">There is no suite named “{route().params.suite}”.</p>
+        </div>
+    {/if}
+{/if}

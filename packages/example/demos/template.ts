@@ -7,9 +7,16 @@ import { html, state, type TemplateResult, watch } from 'abide'
 // predicates that read what it wrote — by hand.
 import { classifySlots, escape, isKeyed, isTemplate, keyed, raw } from 'abide/runtime'
 import { renderToString } from 'abide/server'
-import { container, install, keep, measureFlush, show, sleep, suite, tick } from 'abide/tests'
 import { mount } from 'abide/ui'
+import { container, show, sleep, suite } from 'abide-kit'
+import { install, keep, measureFlush, tick } from 'abide-kit/measure'
 import { button, el, LABEL, lazy, row, stage } from './dom.ts'
+// The rungs the case at the bottom asserts, one mount each: what a slot MEANS is decided by where it
+// sits, so a single mount over one file could not say which position each claim was about.
+import Attribute, { name as attributeName } from './fixtures/template/2-an-attribute.abide'
+import Toggle, { warn as toggleWarn } from './fixtures/template/3-a-class-toggle.abide'
+import List, { rows as listRows } from './fixtures/template/5-a-list.abide'
+import { LADDER } from './fixtures/template/ladder.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -65,6 +72,7 @@ const detached = lazy((): HTMLElement => document.createElement('div'))
 
 export default suite({
     ...META.template,
+    examples: LADDER,
     cases: [
         {
             title: 'child slots — text is escaped, on both sides',
@@ -843,6 +851,44 @@ export default suite({
                 mount(list, () => html`${built}`)
                 log('500 rows from one call site', built.length)
                 log('distinct `strings` identities', new Set(built.map((r) => r.strings)).size)
+            },
+        },
+
+        {
+            title: 'the documented example runs',
+            note: 'What `/docs/template` shows and mounts: every place a `${}` can sit, in one component. Asserted per POSITION rather than as one blob of markup, because what a slot means is decided by where it is — and a toggle that silently became a class string would still render something plausible.',
+            async run({ is }) {
+                // Rung 2 — content, and a whole attribute value.
+                attributeName.set('ada')
+                const attribute = container()
+                mount(attribute, () => Attribute({}))
+                is('child position is content', attribute.querySelector('p')?.textContent, 'hello ada')
+                const link = attribute.querySelector('a') as HTMLAnchorElement
+                is('an attribute slot is the WHOLE value', link.getAttribute('href'), '/who/ada')
+                is('…and one written bare is too', link.getAttribute('title'), 'ada')
+                attribute.remove()
+
+                // Rung 3 — a toggle, which is the claim a rendering cannot make on its own: what matters
+                // is that the REST of the attribute is untouched.
+                toggleWarn.set(false)
+                const toggled = container()
+                mount(toggled, () => Toggle({}))
+                const styled = toggled.querySelector('p.line') as HTMLElement
+                is('a toggle leaves the rest of the attribute alone', styled.className, 'line')
+                toggleWarn.set(true)
+                await tick()
+                is('…and adds only its own class', styled.className, 'line danger')
+                toggleWarn.set(false)
+                toggled.remove()
+
+                // Rung 5 — a keyed list.
+                listRows.set(['alpha', 'beta'])
+                const list = container()
+                mount(list, () => List({}))
+                const rows: string[] = []
+                for (const item of list.querySelectorAll('li')) rows.push(item.textContent ?? '')
+                is('a keyed {#for}', rows, ['alpha', 'beta'])
+                list.remove()
             },
         },
     ],

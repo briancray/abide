@@ -2,7 +2,8 @@
 
 import { channel, html, memo, state, type TemplateResult, watch } from 'abide'
 import { renderToString } from 'abide/server'
-import { container, sleep, suite, tick } from 'abide/tests'
+import { container, sleep, suite } from 'abide-kit'
+import { tick } from 'abide-kit/measure'
 import { mount } from 'abide/ui'
 import { button, field, output, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'

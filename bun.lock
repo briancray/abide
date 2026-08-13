@@ -16,6 +16,13 @@
       "bin": {
         "abide": "./cli/index.ts",
       },
+    },
+    "packages/abide-kit": {
+      "name": "abide-kit",
+      "version": "0.0.0",
+      "dependencies": {
+        "abide": "workspace:*",
+      },
       "devDependencies": {
         "@happy-dom/global-registrator": "^20.10.6",
       },
@@ -25,6 +32,7 @@
       "version": "0.0.0",
       "dependencies": {
         "abide": "workspace:*",
+        "abide-kit": "workspace:*",
         "marked": "^18.0.9",
       },
       "devDependencies": {
@@ -37,6 +45,7 @@
       "version": "0.0.0",
       "dependencies": {
         "abide": "workspace:*",
+        "abide-kit": "workspace:*",
       },
     },
   },
@@ -142,6 +151,8 @@
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
     "abide": ["abide@workspace:packages/abide"],
+
+    "abide-kit": ["abide-kit@workspace:packages/abide-kit"],
 
     "buffer-image-size": ["buffer-image-size@0.6.4", "", { "dependencies": { "@types/node": "*" } }, "sha512-nEh+kZOPY1w+gcCMobZ6ETUp9WfibndnosbpwB1iJk/8Gt5ZF2bhS6+B6bPYz424KtwsR6Rflc3tCz1/ghX2dQ=="],
 

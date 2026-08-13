@@ -14,7 +14,8 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { CLIENT_ROUTE, type ClientManifest, MANIFEST_FILE } from 'abide/cli'
-import { abide, BINARY, ended, EXAMPLE_ROOT as ROOT, type Running, spawn, started } from './spawned.ts'
+import { abide, BINARY, ended, type Running, spawn, started } from 'abide-kit/spawn'
+import { EXAMPLE_ROOT as ROOT } from './root.ts'
 
 let app: Running
 let manifest: ClientManifest
@@ -30,7 +31,7 @@ beforeAll(async () => {
     expect(built.code).toBe(0)
     manifest = (await Bun.file(`${ROOT}/${MANIFEST_FILE}`).json()) as ClientManifest
     entry = manifest.entries['client.ts'] as string
-    app = await started(['start', '--port', '0'])
+    app = await started(['start', '--port', '0'], ROOT)
 }, 30_000)
 
 afterAll(() => {
@@ -234,12 +235,20 @@ test('a navigation carries no patch SCRIPT — the client swaps the placeholders
 })
 
 test('a path that is no route is a 404, and a method that is no page falls through to one', async () => {
-    // This one is the APP's: `pages/[suite]/` is one page for twenty suites, and a parameter matches
-    // anything — so the only half of this app that knows `/nowhere` is not a suite is `app.ts`, which
-    // is asked before the pages and answers it.
+    // Two 404s with two different authors, which is the distinction this case exists for.
+    //
+    // ABIDE's: nothing in the pages directory matches `/nowhere` at all, so the router answers. There is
+    // no catch-all any more — `[suite]` used to sit at the ROOT and match every single-segment path, so
+    // this used to be the app's answer rather than the framework's.
     const missing = await fetch(`${app.base}nowhere`)
     expect(missing.status).toBe(404)
-    expect(await missing.text()).toContain('no suite named nowhere')
+    expect(((await missing.json()) as { error: { name: string } }).error.name).toBe('AbideRouteError')
+
+    // The APP's: `/docs/[suite]` matches anything in its one segment, so the only half of this app that
+    // knows `nowhere` is not a capability is `app.ts`, asked before the pages.
+    const noSuite = await fetch(`${app.base}docs/nowhere`)
+    expect(noSuite.status).toBe(404)
+    expect(await noSuite.text()).toContain('no suite named nowhere')
 
     // And this one is abide's, on the same route the app just declined to claim: a POST is not a page
     // read, the app's own route answers `undefined`, and `handle` decides what that means. Which is
@@ -356,10 +365,11 @@ test('the page is served in the app’s own app.html, in the slot', async () => 
     const body = markup.slice(markup.indexOf('<body>'))
     const inSlot = body.slice(body.indexOf('<slot>') + '<slot>'.length, body.indexOf('</slot>'))
     expect(inSlot).not.toContain('loading…')
-    // The hub, rendered: its heading and one card per case of the overview suite. Server-rendered
-    // with no case having RUN — a case needs a live area, and a live area needs a browser.
+    // The hub, rendered: its heading, the four ways in, and the index of capabilities under them.
+    // Server-rendered with nothing having run — the hub links to the sections rather than being one.
     expect(inSlot).toContain('>abide<')
-    expect(inSlot).toContain('<section')
+    expect(inSlot).toContain('the capabilities')
+    expect(inSlot).toContain('href="/tests"')
     // Nothing else of abide's is in there. A `<script>` the shell did not write is an element the
     // hydrating client would find where its own first node should be.
     expect(inSlot).not.toContain('<script')
@@ -397,7 +407,7 @@ test('a stylesheet a page imported is built, linked and served', async () => {
 test('SIGTERM drains through the app’s onStop and closes the socket', async () => {
     // Its OWN process, named apart from the module-level `app` every other case fetches against —
     // this one is signalled, and a shadowed name would make `app.base` mean two things in one file.
-    const doomed = await started(['start', '--port', '0'])
+    const doomed = await started(['start', '--port', '0'], ROOT)
     const base = doomed.base
     expect((await fetch(`${base}__abide/health`)).status).toBe(200)
 
@@ -673,6 +683,8 @@ test('the compressed head is on the wire before the slow panel settles', async (
     const started = performance.now()
     const at: number[] = []
     let wire = 0
+    // Kept as well as counted, so the RESPONSE HEAD can come back out of the total below.
+    const seen: Uint8Array[] = []
     const socket = await Bun.connect({
         hostname: url.hostname,
         port: Number(url.port),
@@ -680,6 +692,7 @@ test('the compressed head is on the wire before the slow panel settles', async (
             data(_handle, bytes) {
                 at.push(performance.now() - started)
                 wire += bytes.length
+                seen.push(new Uint8Array(bytes))
             },
             open(handle) {
                 handle.write(
@@ -704,12 +717,27 @@ test('the compressed head is on the wire before the slow panel settles', async (
     // than the whole document having been small enough to land at once.
     expect(at[at.length - 1] as number).toBeGreaterThanOrEqual(WAIT_MS * 0.8)
 
-    // The ratio, measured where it is real: `wire` is every byte the socket saw, headers and chunked
-    // framing included, against the document those bytes carry. A streamed response has no
-    // `content-length`, so this is the only honest place to compare the two.
+    // The ratio, measured where it is real: a streamed response has no `content-length`, so the socket
+    // is the only honest place to compare the wire form against the document it carries.
+    //
+    // The RESPONSE HEAD comes out of the total first, and that is not tidiness — headers do not
+    // compress, so leaving them in makes this a claim about the size of the page rather than about the
+    // compressor. It passed for a document with a twenty-link nav in it and failed the moment the nav
+    // became three links: same compressor, same behaviour, 2334 bytes against a 3968-byte page.
+    const all = new Uint8Array(wire)
+    let at_ = 0
+    for (const chunk of seen) {
+        all.set(chunk, at_)
+        at_ += chunk.length
+    }
+    const head = new TextDecoder().decode(all.subarray(0, Math.min(2048, all.length)))
+    const bodyFrom = head.indexOf('\r\n\r\n') + 4
+    expect(bodyFrom).toBeGreaterThan(4)
+    const body = wire - bodyFrom
+
     const identity = await fetch(url, { headers: { 'accept-encoding': 'identity' } })
     const whole = (await identity.text()).length
-    expect(wire).toBeLessThan(whole / 2)
+    expect(body).toBeLessThan(whole / 2)
 })
 
 test('every response abide generates carries the headers it should', async () => {
@@ -737,7 +765,7 @@ test('every response abide generates carries the headers it should', async () =>
 })
 
 test('a rendered page is private by default, and a route that wants a CDN says so', async () => {
-    const page = await fetch(`${app.base}channel`)
+    const page = await fetch(`${app.base}docs/channel`)
     expect(page.headers.get('cache-control')).toBe('private, no-store')
     expect(page.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin')
 

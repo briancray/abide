@@ -1,0 +1,21 @@
+<script module>
+import { memo } from 'abide'
+
+let served = 0
+
+export const quote = memo(async ({ symbol }: { symbol: string }) => {
+    await new Promise((settle) => setTimeout(settle, 400))
+    return `${symbol} @ ${++served}`
+})
+</script>
+
+{#if quote({ symbol: 'ABC' }).pending()}
+    <p>loading…</p>
+{:else}
+    <p>{quote({ symbol: 'ABC' })()}</p>
+{/if}
+
+<!-- `refresh` KEEPS serving what is there and re-runs underneath, so nothing blinks — and `refreshing()`
+     is how a page says that is happening. -->
+<p>refreshing: {quote({ symbol: 'ABC' }).refreshing() ? 'yes' : 'no'}</p>
+<button onclick={() => quote({ symbol: 'ABC' }).refresh()}>refresh</button>

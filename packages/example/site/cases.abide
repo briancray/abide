@@ -1,0 +1,58 @@
+<!-- Suites as one table of cases: a heading per suite, a row per case, and the status in a column.
+
+     Handed the suites it should show rather than reaching for them, which is what lets one component be
+     both `/tests` (all of them) and `/tests/<name>` (one), with no branch inside it for which page it is
+     on. Whatever is nested inside lands under the table.
+
+     Every case runs. `<details>` decides who is LOOKING, not what happened — see `case-row.abide`. -->
+<script module>
+import type { Suite } from 'abide-kit'
+import Row from './case-row.abide'
+import { GROUP, HEAD, STICKY, TABLE } from './table.ts'
+
+/** The same column template the rows are laid on, for the header above them. */
+const ROW = 'grid grid-cols-[minmax(0,1fr)_7rem] items-baseline gap-x-4 px-3'
+
+/**
+ * How many cases are on the page, so the heading is a count rather than a promise.
+ *
+ * The parameter is NOT named `suites`: what counts as a cell is decided syntactically and file-wide, so a
+ * parameter shadowing the prop's name is rewritten into a read of the prop.
+ */
+function total(shown: Suite[]): number {
+    let count = 0
+    for (const suite of shown) count += suite.cases.length
+    return count
+}
+</script>
+
+<script>
+import { props } from 'abide'
+
+const { suites, title, blurb } = props<{ suites: Suite[]; title: string; blurb: string }>()
+</script>
+
+<div class="mx-auto max-w-5xl px-6 pt-10 pb-2">
+    <h1 class="text-3xl font-semibold text-slate-100">{title}</h1>
+    <p class="mt-2 text-slate-400 max-w-3xl">{blurb}</p>
+</div>
+
+<main class="mx-auto max-w-5xl px-6 pb-24 space-y-6">
+    <div class={TABLE}>
+        <div class="{ROW} {STICKY}">
+            <span class={HEAD}>case · {total(suites)}</span>
+            <span class="{HEAD} text-right">status</span>
+        </div>
+
+        {#for suite of suites}
+            <div class={GROUP}>
+                <a href="/docs/{suite.name}" class="hover:text-slate-200">{suite.name}</a> · {suite.cases.length}
+            </div>
+            {#for spec of suite.cases}
+                <Row spec={spec} suite={suite.name}/>
+            {/for}
+        {/for}
+    </div>
+
+    <slot/>
+</main>

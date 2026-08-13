@@ -16,9 +16,6 @@
 /** The binary itself, for the one case that has to hand it a stdin the helpers below do not model. */
 export const BINARY = Bun.resolveSync('abide/cli', import.meta.dir)
 
-/** The example package, which is the working directory a command means unless a case says otherwise. */
-export const EXAMPLE_ROOT = `${import.meta.dir}/..`
-
 /** Everything a finished process said. `code` is `-1` for one that was killed rather than exited. */
 export interface Ended {
     code: number
@@ -167,14 +164,18 @@ export interface Running extends Reading {
 }
 
 /**
- * Start the binary and wait for the address it printed.
+ * Start the binary in an app's directory and wait for the address it printed.
  *
  * The app's own `log()` lines come first — `onStart` runs before the socket exists — and the report
  * has a second line under the address, so this waits for a line that ARRIVES rather than counting to
  * a line number. `abide start` and `abide dev` print the same one, which is why this is here rather
  * than in whichever file needed it first.
+ *
+ * `cwd` is required and has no default: this file used to hold the example's own root, which is the
+ * one thing in it that was about an APP rather than about spawning one. Every app that boots this way
+ * names its own — see `packages/example/test/root.ts`.
  */
-export async function started(argv: string[], cwd = EXAMPLE_ROOT): Promise<Running> {
+export async function started(argv: string[], cwd: string): Promise<Running> {
     const app = reading(['bun', BINARY, ...argv], { cwd })
     return { ...app, base: addressOf(await app.until(LISTENING)) }
 }

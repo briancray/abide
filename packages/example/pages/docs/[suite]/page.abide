@@ -1,0 +1,38 @@
+<!-- Every capability's reference, as one page.
+
+     The same shape as the suite page next door and for the same reason: `[suite]` is the segment that
+     names it, the loader map is how one page serves twenty routes, and each entry being an `import()`
+     is what keeps this page's chunk free of every suite it might show. Reaching them through one
+     static list put ~700 kB of TypeScript scanner — `compiler`'s — on every page that has nothing to
+     do with compiling. -->
+<script module>
+import { memo, route } from 'abide'
+import type { Suite } from 'abide-kit'
+import { LOADERS, type SuiteName } from '../../../demos/index.ts'
+import Reference from '../../../site/reference.abide'
+
+/** One suite, by name. The args are the cache key, so navigating away and back reads what is loaded. */
+const loaded = memo(async ({ name }: { name: string }): Promise<Suite | null> => {
+    if (!Object.hasOwn(LOADERS, name)) return null
+    return (await LOADERS[name as SuiteName]()).default
+})
+</script>
+
+<!-- Asking about `.pending()` is what sends the shell out now with the placeholder in it. The call
+     stays in the markup rather than being hoisted into setup: it reads `route()`, so it belongs in the
+     slot's own thunk, where a navigation re-runs it. -->
+{#if loaded({ name: route().params.suite ?? '' }).pending()}
+    <p class="mx-auto max-w-4xl px-6 py-16 text-slate-500">loading…</p>
+{:else}
+    <script>
+    const found = loaded({ name: route().params.suite ?? '' })
+    </script>
+    {#if found}
+        <Reference suite={found}/>
+    {:else}
+        <div class="mx-auto max-w-4xl px-6 py-16">
+            <h1 class="text-3xl font-semibold text-slate-100">nothing here</h1>
+            <p class="mt-2 text-slate-400">There is no capability named “{route().params.suite}”.</p>
+        </div>
+    {/if}
+{/if}

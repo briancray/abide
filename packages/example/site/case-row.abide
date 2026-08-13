@@ -1,0 +1,104 @@
+<!-- One case as a row: what it claims, whether it passed, and — on open — everything that says why.
+     Forty cases used to be forty cards, each showing its live area, its log and two source panes at
+     once, so reviewing a suite meant scrolling past everything that was working. A row per case is read
+     by SCANNING: the status is in a column, and the detail is one click away for the row that is red.
+
+     Collapsed is not "not run". The case runs when its live area lands, exactly as the card did — the
+     queue is the kit's and runs one case at a time, because the DOM counters are global and a case
+     started beside another has its work billed to whichever one is measuring. What `<details>` decides
+     is whether anybody is LOOKING, not whether it happened.
+
+     `bind:element` is client-only, which is also what decides WHEN a case runs: a server render writes
+     the row's shell and starts nothing, and the browser that adopts it is what puts the case in the
+     queue. So a page of rows server-renders in one pass with no case having run. -->
+<script module>
+import { state, watch } from 'abide'
+import { type Case, enqueue, running, type Status } from 'abide-kit'
+import { HEAD } from './table.ts'
+import Source from './source.abide'
+
+/** The badge's ramp. `waiting` and `running` are deliberately quiet — neither is news. */
+const TONE: Record<Status, string> = {
+    waiting: 'text-slate-600',
+    running: 'text-slate-600',
+    passing: 'text-emerald-500',
+    failed: 'text-rose-400',
+    interactive: 'text-emerald-500',
+    benched: 'text-emerald-500',
+}
+
+const LINE: Record<'note' | 'pass' | 'fail', string> = {
+    note: 'text-emerald-300',
+    pass: 'text-emerald-400',
+    fail: 'text-rose-400',
+}
+
+/** The one column template every case row is laid on, so titles and statuses line up down the page. */
+const ROW = 'grid grid-cols-[minmax(0,1fr)_7rem] items-baseline gap-x-4 px-3 py-2'
+</script>
+
+<script>
+import { props } from 'abide'
+
+const { spec, suite } = props<{ spec: Case; suite: string }>()
+
+const stage = state<HTMLElement | null>(null)
+const held = running()
+
+watch(() => {
+    const node = stage()
+    if (node !== null) enqueue(spec(), held, node)
+})
+
+/** The console follows its own tail — a case that logs forty lines should show the last one. */
+const console_ = state<HTMLElement | null>(null)
+watch(() => {
+    held.lines()
+    const node = console_()
+    if (node !== null) node.scrollTop = node.scrollHeight
+})
+</script>
+
+<!-- `data-case` names the row for whoever is counting or clicking it: a source pane inside is a
+     `<details>` too, so "how many rows" is a question the tag cannot answer. It is also the handle a
+     browser-driven test reaches a case by. -->
+<details class="group" data-case={spec.title}>
+    <summary class="cursor-pointer select-none hover:bg-slate-900/40 marker:text-slate-700">
+        <span class={ROW}>
+            <span class="text-sm text-slate-100 truncate" title={spec.title}>{spec.title}</span>
+            <span class="{HEAD} text-right {TONE[held.status()]}">{held.status()}</span>
+        </span>
+    </summary>
+
+    <div class="px-3 pb-4 space-y-3 border-t border-slate-900 bg-slate-950/40">
+        {#if spec.note}<p class="pt-3 text-sm text-slate-400 max-w-3xl">{spec.note}</p>{/if}
+
+        <!-- The live area. In the document whether or not the row is open, so the case runs either way —
+             but a closed `<details>` hides its children, so while it is shut this host has no LAYOUT BOX
+             and a case reading `offsetWidth` off it would read zero. No case does; the measurements that
+             need a real box are bench arms, and those run on `/bench` against their own containers. A
+             case that starts needing one belongs there rather than here. -->
+        <div class="space-y-3 text-slate-200" bind:element={stage}></div>
+
+        <div
+            class="py-2 font-mono text-xs text-slate-400 space-y-0.5 max-h-64 overflow-auto bg-black/40 rounded"
+            bind:element={console_}
+        >
+            {#for line of held.lines()}
+                <div class="flex gap-3 px-2">
+                    <span class="text-slate-500 shrink-0 w-56 truncate">{line.label === '' ? ' ' : line.label}</span>
+                    {#if line.value !== ''}
+                        <span class="{LINE[line.kind]} whitespace-pre-wrap break-all">{line.value}</span>
+                    {/if}
+                </div>
+            {/for}
+        </div>
+
+        {#if spec.run}
+            <Source suite={suite} title={spec.title} face="run" label="the assertions"/>
+        {/if}
+        {#if spec.interact}
+            <Source suite={suite} title={spec.title} face="interact" label="the interactive half"/>
+        {/if}
+    </div>
+</details>

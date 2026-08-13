@@ -6,8 +6,13 @@
 // split has to read identically on a state, a derivation, a keyed slot and a channel.
 
 import { channel, invalidate, memo, refresh, state } from 'abide'
-import { reader, sleep, suite, tick, until } from 'abide/tests'
+import { mount } from 'abide/ui'
+import { container, reader, sleep, suite, until } from 'abide-kit'
+import { tick } from 'abide-kit/measure'
 import { button, el, row } from './dom.ts'
+// The rung the case at the bottom asserts — the one whose `adds` it is about.
+import Example, { quote as exampleQuote, refreshEverything } from './fixtures/verbs/3-reach-it-by-tag.abide'
+import { LADDER } from './fixtures/verbs/ladder.ts'
 import { META } from './SUITES.ts'
 
 function stamp(): string {
@@ -16,6 +21,7 @@ function stamp(): string {
 
 export default suite({
     ...META.verbs,
+    examples: LADDER,
     cases: [
         {
             title: 'every source reads, probes and invalidates alike',
@@ -718,6 +724,33 @@ export default suite({
                     ),
                 )
                 report()
+            },
+        },
+
+        {
+            title: 'the documented example runs',
+            note: 'What `/docs/verbs` shows and mounts, mounted here and asserted — including the one claim the two verbs exist to make: after `refresh` the OLD value is still on screen while the new one loads, and after `invalidate` there is nothing to show at all.',
+            async run({ is }) {
+                const host = container()
+                mount(host, () => Example({}))
+                const line = (): string => host.querySelector('p')?.textContent ?? ''
+                is('the placeholder arm is what a cold load shows', line(), 'loading…')
+
+                await until(() => line().startsWith('ABC @'), 'the first load')
+                const first = line()
+
+                // `refresh` KEEPS serving: the value does not blink, and the row says it is refreshing.
+                refreshEverything()
+                await tick()
+                is('refresh keeps the old value on screen', line(), first)
+                is('…and says so', exampleQuote({ symbol: 'ABC' }).refreshing(), true)
+                await until(() => line() !== first, 'the refreshed load')
+
+                // `invalidate` DROPS it: the region is back to its placeholder, with nothing started.
+                exampleQuote({ symbol: 'ABC' }).invalidate()
+                await tick()
+                is('invalidate leaves nothing to show', line(), 'loading…')
+                host.remove()
             },
         },
     ],

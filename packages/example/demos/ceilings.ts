@@ -19,10 +19,11 @@ import { html, memo, state } from 'abide'
 import { awaited } from 'abide/runtime'
 import { isolate } from '$shared/internal/scopes.ts'
 import { render, renderDocument } from 'abide/server'
-import { reader, suite } from 'abide/tests'
+import { reader, suite } from 'abide-kit'
 import { capture, writtenAt } from './console.ts'
 import { button, row, stage } from './dom.ts'
 import { DECLARABLE, withEnv, writeEnv } from './env.ts'
+import { LADDER } from './fixtures/ceilings/ladder.ts'
 import { META } from './SUITES.ts'
 
 const CACHE = 'ABIDE_MAX_GLOBAL_CACHE_SIZE'
@@ -38,6 +39,7 @@ async function* lines(count: number, size: number): AsyncGenerator<string> {
 
 export default suite({
     ...META.ceilings,
+    examples: LADDER,
     cases: [
         {
             title: 'unset is the default, and unset is no ceiling at all',

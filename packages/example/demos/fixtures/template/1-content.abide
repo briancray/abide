@@ -1,0 +1,8 @@
+<script module>
+import { state } from 'abide'
+
+export const name = state('ada')
+</script>
+
+<!-- In CHILD position a slot is content. -->
+<p>hello {name}</p>

@@ -20,6 +20,20 @@ yet", so every caller has to handle a state the framework could have handled.
 `undefined`. Whatever is rendering catches it, produces no output for that region, and re-runs when
 the graph wakes it.
 
+An author's own `try`/`catch` between a slot and a read catches that sentinel too — a JavaScript
+`catch` is total — and swallowing it turns "the graph will run this again" into an error message that
+never clears. `isPending(error)` on `abide` is the one thing to ask, and re-throwing is the only
+correct answer:
+
+```ts
+try {
+    return render(source())
+} catch (error) {
+    if (isPending(error)) throw error
+    return `could not load — ${String(error)}`
+}
+```
+
 That is one rule with two mechanisms, which is what the substrate split is for:
 
 | | how it waits |

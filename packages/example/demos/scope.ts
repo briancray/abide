@@ -11,14 +11,16 @@
 // await and one variable cannot tell two of them apart.
 
 import { memo, online, state, watch } from 'abide'
+import { suite } from 'abide-kit'
 import { isolate } from '$shared/internal/scopes.ts'
-import { suite } from 'abide/tests'
 import { button, row, stage } from './dom.ts'
+import { LADDER } from './fixtures/scope/ladder.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
 export default suite({
     ...META.scope,
+    examples: LADDER,
     cases: [
         {
             title: 'the default is per-caller — two callers, two caches',

@@ -5,16 +5,16 @@
 // A separate PROCESS rather than a test body, because `bunfig.toml` preloads happy-dom for every
 // `bun test` file and happy-dom replaces `URL` — and `AbortController`, `Event` and `WebSocket` —
 // with its own, which `Bun.serve` cannot serialise. (`Response` and the rest of the data layer are
-// put back by the preload; see `abide/tests`' `happydom.ts` for where that line is drawn and why.)
+// put back by the preload; see the kit's `internal/happydom.ts` for where that line is drawn and why.)
 // The UI suites need the emulator and a transport needs it gone, so they cannot be the same lane.
 // `transport.test.ts` spawns this and asserts on the JSON it prints.
 //
 // Run it directly to watch it: `bun packages/example/test/transport-wire.ts`.
 
-import { remote, remoteSocket } from 'abide/runtime/transport'
 import { abidePlugin } from 'abide/compiler/plugin'
+import { remote, remoteSocket } from 'abide/runtime/transport'
 import { dispatch, registered, websocket } from 'abide/server'
-import { until } from 'abide/tests'
+import { until } from 'abide-kit'
 import { plugin } from 'bun'
 
 plugin(abidePlugin)

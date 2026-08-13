@@ -1,0 +1,15 @@
+<script module>
+import { state } from 'abide'
+
+// Handed a promise, `state` starts a LOAD rather than storing the promise. `who` reads the settled
+// value, with the same call it would take if this had been `state({ name: 'guest' })`.
+export const who = state(
+    new Promise<{ name: string }>((settle) => setTimeout(() => settle({ name: 'ada' }), 200)),
+)
+</script>
+
+{#if who.pending()}
+    <p>loading…</p>
+{:else}
+    <p>hello {who?.name}</p>
+{/if}

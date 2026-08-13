@@ -1,0 +1,21 @@
+{
+    "name": "abide-kit",
+    "version": "0.0.0",
+    "type": "module",
+    "private": true,
+    "exports": {
+        ".": "./kit.ts",
+        "./measure": "./measure.ts",
+        "./spawn": "./spawn.ts"
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit",
+        "test": "cd ../.. && bun test packages/abide-kit"
+    },
+    "dependencies": {
+        "abide": "workspace:*"
+    },
+    "devDependencies": {
+        "@happy-dom/global-registrator": "^20.10.6"
+    }
+}

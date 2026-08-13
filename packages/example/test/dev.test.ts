@@ -17,16 +17,8 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { CLIENT_ROUTE } from 'abide/cli'
-import {
-    abide,
-    addressOf,
-    BINARY,
-    LISTENING,
-    EXAMPLE_ROOT as ROOT,
-    type Running,
-    reading,
-    started,
-} from './spawned.ts'
+import { abide, addressOf, BINARY, LISTENING, type Running, reading, started } from 'abide-kit/spawn'
+import { EXAMPLE_ROOT as ROOT } from './root.ts'
 
 let app: Running
 
@@ -87,7 +79,7 @@ async function reloadSocket(base: string): Promise<Held> {
 }
 
 beforeAll(async () => {
-    app = await started(['dev', '--port', '0'])
+    app = await started(['dev', '--port', '0'], ROOT)
 }, 30_000)
 
 afterAll(() => {
@@ -213,7 +205,7 @@ test('--port hops where abide start refuses, and says where it came from', async
     // Through `Number` because the hop is asserted as ARITHMETIC — the next port, not merely another
     // one — and a bound server's port is typed as possibly absent.
     const taken = Number(holder.port)
-    const hopped = await started(['dev', '--port', String(taken)])
+    const hopped = await started(['dev', '--port', String(taken)], ROOT)
     try {
         // The distinguishing row: `abide start` exits 1 on this exact input, because a deploy that
         // quietly listened somewhere else is a health check passing against the process it was meant
@@ -236,7 +228,7 @@ test('--port hops where abide start refuses, and says where it came from', async
 }, 30_000)
 
 test('SIGTERM ends it promptly even with a browser holding the reload socket', async () => {
-    const doomed = await started(['dev', '--port', '0'])
+    const doomed = await started(['dev', '--port', '0'], ROOT)
     const live = await reloadSocket(doomed.base)
     expect(live.status).toContain('101')
 
@@ -250,7 +242,7 @@ test('SIGTERM ends it promptly even with a browser holding the reload socket', a
 }, 30_000)
 
 test('killing it takes the server with it, because it is one process', async () => {
-    const orphaned = await started(['dev', '--port', '0'])
+    const orphaned = await started(['dev', '--port', '0'], ROOT)
     const base = orphaned.base
     expect((await fetch(base)).status).toBe(200)
 

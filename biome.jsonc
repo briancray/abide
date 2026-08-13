@@ -54,7 +54,7 @@
         }
     },
     // No per-file overrides. There used to be one for the bench, which assigned to a module-level
-    // sink inside an expression to defeat dead-code elimination; `keep()` in `abide/tests` names that
-    // intent instead, so the rule no longer has anything to be turned off for.
+    // sink inside an expression to defeat dead-code elimination; `keep()` in `abide-kit/measure`
+    // names that intent instead, so the rule no longer has anything to be turned off for.
     "overrides": []
 }

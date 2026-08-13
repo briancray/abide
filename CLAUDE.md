@@ -15,8 +15,9 @@
 
 # seams and imports
 
-* a bun workspace: `packages/abide` is the framework, `packages/example` is the dogfood. see "directory structure" below; import across the seams with the `$server` / `$ui` / `$shared` / `$compiler` tsconfig-path aliases, never with `../`. `./sibling.ts` inside one directory is fine — the rule is about CROSSING a seam, and a `../../` is the tell
-* `packages/example` imports the framework by its PUBLIC specifiers — `abide` / `abide/ui` / `abide/server` / `abide/tests` / `abide/compiler` — through the workspace link and abide's own `exports` map, so a broken public entry point fails the example's typecheck instead of being papered over by an alias. an entry point nothing resolves through is an entry point nothing tests
+* a bun workspace: `packages/abide` is the framework, `packages/abide-kit` is the harness everything is tested and measured with, `packages/example` is the dogfood. see "directory structure" below; import across the seams with the `$server` / `$ui` / `$shared` / `$compiler` tsconfig-path aliases, never with `../`. `./sibling.ts` inside one directory is fine — the rule is about CROSSING a seam, and a `../../` is the tell
+* the aliases are `packages/abide`'s OWN. no other package may use them: the kit and the two apps reach the framework by its PUBLIC specifiers — `abide` / `abide/ui` / `abide/server` / `abide/runtime` / `abide/compiler` / `abide/cli` — through the workspace link and abide's own `exports` map, so a broken public entry point fails a typecheck instead of being papered over by an alias. an entry point nothing resolves through is an entry point nothing tests
+* the kit's own split is by DEPENDENCY, and that is the whole reason it is a package rather than a folder inside the framework: `abide-kit/measure` has no abide in its graph at all, which is what lets the hand-written arm of a ratio be timed by the same clock and the same batch sizing as the abide arm. so `abide-kit` may import `abide`, `abide-kit/measure` may not, and `abide-kit/spawn` is bun-only and may reach neither app
 * an export in the `exports` map is public SURFACE, not dead code — a static tool reporting it unused is reporting that the example does not exercise it, which is a gap in the dogfood, not machinery to delete
 * before adding a helper, grep the sibling seam — the same utility on both sides of `$shared` is the duplication this layout invites. widen the existing one, or lift it to `$shared` when both sides need it; a second implementation is only right when the two seams have genuinely different invariants, and then the comment says which
 
@@ -81,16 +82,20 @@ these fail SILENTLY — the output stays right while the work goes wrong, so a c
 
 # demos and docs
 
-* a case in `packages/example/demos` has three optional faces: `run` (headless, carries the assertions, runs under `bun test` AND in the browser card), `interact` (browser only — buttons and inputs), and `bench` (measurement arms, smoke-run headless). a claim that needs a click is a claim no test can make, so keep it out of `run`
+* a case in `packages/example/demos` has three optional faces: `run` (headless, carries the assertions, runs under `bun test` AND in the browser row on `/tests`), `interact` (browser only — buttons and inputs), and `bench` (measurement arms, smoke-run headless). a claim that needs a click is a claim no test can make, so keep it out of `run`
+* a SUITE has a fourth face: `examples`, the LADDER on `/docs/<suite>`. every rung is the one before it plus exactly one new thing, and says which in `adds` — one file showing five things is a large example of none, because a reader cannot tell which line does which. the diff between two rungs is the lesson, so a rung is small and its explanation lives on the page rather than in a comment header
+* a rung is a real file this app compiles, and the mountable ones are asserted by a case that mounts them. the source shown is the file's own text through `?source`, which the loader inlines — never `Function.prototype.toString`, which reports the BUNDLER's text once the app is built
 * docs/spec.md is the succinct spec of public primitives and core terminology
 
 # checks
 
 a check produces CANDIDATES, not violations — it names the lines worth reading, and the rule above decides.
 
-* `bun run typecheck && bun test` — the gate. green before a change and green after; run it from `~/Code` casing or typecheck fails on TS1149 for reasons that have nothing to do with the change
+* `bun run typecheck && bun test` — the gate. green before a change and green after; run it from `~/Code` casing or typecheck fails on TS1149 for reasons that have nothing to do with the change, and from the REPO ROOT or `bunfig.toml`'s DOM preload is not found and the kit's own tests measure a different code path while still passing
+* a suite that HANGS reports nothing at all — no failed test, no summary — so when `bun test` stops rather than fails, bisect by file and then by test with `-t`. it has happened twice: a hook with no timeout around a build that grew past 5s, and `compile()` looping on a source ending in `{#`
 * `bun run lint` — unused locals, imports and parameters
-* `bunx knip --workspace packages/abide` — exports and files nothing resolves through, for "when a mechanism is REPLACED". read it against the public-surface rule in "seams and imports" first
+* `bunx knip --workspace packages/abide` — exports and files nothing resolves through, for "when a mechanism is REPLACED". read it against the public-surface rule in "seams and imports" first, and note it cannot see an import made from a `.abide` file, so every module only a page imports reads as unused
+* `grep -rn "from 'abide" packages/abide-kit/measure.ts packages/abide-kit/internal/{assert,bench,dom,probes}.ts` — the one import that would cost `abide-kit/measure` its reason to exist
 * `grep -rn "from ['\"]\.\./\.\./" --include="*.ts" --include="*.abide" packages/abide` — imports escaping a seam
 * `grep -rn "from ['\"]node:" --include="*.ts" packages/abide` — node apis standing in for a bun api
 * `grep -rn "style=" --include="*.abide" --include="*.ts" packages` — style properties that want to be tailwind
@@ -108,13 +113,19 @@ a check produces CANDIDATES, not violations — it names the lines worth reading
       * ./internal - shared source between server and ui
     * ./ui - ui source (aliased to $ui)
       * ./internal - ui internal source
-  * ./tests - abide testing framework (reached as `abide/tests`)
-    * ./internal - internal testing source
-* ./packages/example - the dogfood: ONE abide app, served by `abide dev` / `abide build && abide start`, whose pages are the capability demos. there is no second server and no hand-written html per suite
+* ./packages/abide-kit - the harness: one `Case` shape with three faces, the assertions, the measurement, and the process spawner. its own package because `abide-kit/measure` must have NO abide in its graph — see "seams and imports"
+  * ./kit.ts - the front door: the `Case` / `Suite` shape, the assertions, the headless runner, `loopback()`. imports `abide`
+  * ./measure.ts - timing, ratios and the DOM work counters. imports nothing
+  * ./spawn.ts - the binary as a child process, and reading what it printed. bun-only
+  * ./internal - what those three are built from, plus the happy-dom registrator `bunfig.toml` preloads
+* ./packages/example - the dogfood: ONE abide app, served by `abide dev` / `abide build && abide start`, whose pages are THREE VIEWS of the same capabilities — written down, running, and priced. there is no second server and no hand-written html per suite
   * ./demos - one suite per capability. each case is the demonstration, the test and the bench
+    * ./fixtures/<suite>/ - the capability's LADDER: one small file per rung, each introducing one thing, assembled by that directory's `ladder.ts`. shown on `/docs/<suite>`, and the rungs with a `view` are mounted there
+    * ./fixtures/*.abide - the older fixtures that are inputs to a CASE rather than a rung — `card`, `library`, `widget` and the rest. a rung is documentation; these are arguments
     * ./vanilla.ts - the hand-written arms every bench ratio is measured against
     * ./dom.ts - hand-written furniture for the inside of a CASE. the page around it is abide; the case is a comparison, so its furniture must not be the thing under measurement
-  * ./test - the thin runners that hand every suite to `bun test`
-  * ./pages - what the app SERVES: the directory is the route table. `[suite]/[...rest]` is every capability suite, `bench` is their measurements, and the rest is the app's own
-  * ./site - what those pages are made of: the card, the source pane, the nav, and the one scanner the panes and the slicing rpc share
+  * ./test - the thin runners that hand every suite to `bun test`, plus the claims a browser cannot make (a build, a socket, a spawned process)
+  * ./pages - what the app SERVES: the directory is the route table. `docs/[suite]` is the ladder, `tests/[suite]/[...rest]` is its cases running, `bench/[suite]` is what they cost, each with an index above it, and the rest is the app's own
+  * ./site - what those pages are made of: the case row, the measurement rows, the reference, the painted `<pre>`, and the one scanner the panes and the slicing rpc share. FACTS come from the kit and become classes here — see `bench.ts`
   * ./server/rpc, ./server/sockets - what the app ANSWERS, including the endpoint that serves a case's own source
+* ./packages/perf - the second app: full use cases at scale, on a shell that ships NO stylesheet. that is load-bearing rather than austere — one CSS rule was the whole of a "4.5x faster" reading, so nothing here may gain one

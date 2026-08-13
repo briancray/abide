@@ -9,7 +9,7 @@
 // The loaders are keyed by `SuiteName`, so a suite listed in `ORDER` and missing here is a type
 // error rather than a suite that quietly never runs.
 
-import type { Suite } from 'abide/tests'
+import type { Suite } from 'abide-kit'
 import { ORDER, type SuiteName } from './SUITES.ts'
 
 export { META, NAV, ORDER, type SuiteMeta, type SuiteName } from './SUITES.ts'
@@ -50,13 +50,6 @@ export async function allSuites(): Promise<Suite[]> {
     return loaded
 }
 
-/** Every case that carries a bench, tagged with the suite it came from. */
-export async function benched(): Promise<{ suite: Suite; index: number }[]> {
-    const out: { suite: Suite; index: number }[] = []
-    for (const suite of await allSuites()) {
-        for (let i = 0; i < suite.cases.length; i++) {
-            if (suite.cases[i]?.bench !== undefined) out.push({ suite, index: i })
-        }
-    }
-    return out
-}
+// `benched()` was here — every case carrying a bench, tagged with its suite — and it went with the row
+// building it existed for: `abide-kit`'s `benchRowsOf` walks the suites itself, so the pair of a suite
+// and an INDEX into its cases is a shape nothing needs any more.

@@ -10,7 +10,7 @@
 
 import { expect, test } from 'bun:test'
 import { COMMANDS, LineEditor, suggest } from 'abide/cli'
-import { abide, BINARY, type Ended, ended, firstLine, linesUntil, spawn } from './spawned.ts'
+import { abide, BINARY, type Ended, ended, firstLine, linesUntil, spawn } from 'abide-kit/spawn'
 
 const LOGS_APP = `${import.meta.dir}/cli-logs-app.ts`
 

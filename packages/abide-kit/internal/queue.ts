@@ -1,15 +1,21 @@
-// What a card holds while its case runs, and the queue that decides when that is.
+// What a page holds while a case runs, and the queue that decides when that is.
 //
 // Two facts shape this file. The first is that a case's log is APPENDED to and read whole: pushing a
 // line must not cost a copy of every line before it, so the lines live in one array with a version
 // cell beside them and the snapshot is taken on the read that follows. The second is that the cases
-// on a page must run ONE AT A TIME — the DOM counters `abide/tests` installs are global and a
+// on a page must run ONE AT A TIME — the DOM counters `abide-kit/measure` installs are global and a
 // `measureFlush` window is a few microtasks wide, so a case started beside another has its work
 // billed to whichever one is measuring. `a write costs one text write` read 25 that way, and drifted
 // between loads.
+//
+// In the kit rather than in the app whose pages it drives, and the second fact is why: "one at a time"
+// is a rule about the COUNTERS, which are the kit's and are global to a page. An app that ran cases
+// two at a time would not fail — it would report numbers billed to the wrong case — so the rule cannot
+// live somewhere each app is trusted to re-derive it. Nothing here paints anything; a `Status` is a
+// word, and which colour that word gets is the page's business.
 
 import { memo, type State, state } from 'abide'
-import { type Case, collector, context, type LogLine, type Sink, sweepContainers } from 'abide/tests'
+import { type Case, collector, context, type LogLine, type Sink, sweepContainers } from '../kit.ts'
 
 /** Where a case is. `waiting` is a card the queue has not reached yet. */
 export type Status = 'waiting' | 'running' | 'passing' | 'failed' | 'interactive' | 'benched'

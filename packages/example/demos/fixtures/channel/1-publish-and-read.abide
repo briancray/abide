@@ -1,0 +1,12 @@
+<script module>
+import { channel } from 'abide'
+
+export const feed = channel<string>()
+
+let sent = 0
+export const send = (): void => feed.publish(`message ${++sent}`)
+</script>
+
+<!-- Reading the channel IS the subscription — there is no handler to register. -->
+<p>latest: {feed ?? 'nothing yet'}</p>
+<button onclick={send}>publish</button>

@@ -18,14 +18,16 @@
 
 import { identity } from 'abide'
 import { onIdentity } from 'abide/server'
-import { loopback, suite } from 'abide/tests'
+import { loopback, suite } from 'abide-kit'
 import { button, row, stage } from './dom.ts'
+import { LADDER } from './fixtures/identity/ladder.ts'
 import { META } from './SUITES.ts'
 
 const IDENTITY = '/__abide/identity'
 
 export default suite({
     ...META.identity,
+    examples: LADDER,
     cases: [
         {
             title: 'a principal is never null — anonymous is an answer, not an absence',

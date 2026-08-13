@@ -4,14 +4,19 @@
 
 import { channel, html, memo } from 'abide'
 import { renderToString } from 'abide/server'
-import { container, duration, nsPerOp, quiesce, reader, sleep, suite, tick, until } from 'abide/tests'
 import { mount } from 'abide/ui'
+import { container, reader, sleep, suite, until } from 'abide-kit'
+import { duration, nsPerOp, quiesce, tick } from 'abide-kit/measure'
 import { button, el, field, row, stage } from './dom.ts'
+// The rung the case at the bottom asserts — the one whose `adds` it is about.
+import Example, { feed as exampleFeed, send as exampleSend } from './fixtures/channel/2-remember-the-last-few.abide'
+import { LADDER } from './fixtures/channel/ladder.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
 export default suite({
     ...META.channel,
+    examples: LADDER,
     cases: [
         {
             title: 'a channel in a slot is READ, on both substrates',
@@ -559,6 +564,31 @@ export default suite({
                         if (Number.isFinite(parsed)) temperature.publish(parsed)
                     }),
                 )
+            },
+        },
+
+        {
+            title: 'the documented example runs',
+            note: 'What `/docs/channel` shows and mounts, mounted here and asserted. The claim a reader most needs from it is the one about `tail`: nothing subscribes, and the transcript still fills — reading the channel IS the subscription.',
+            async run({ is }) {
+                // Every claim here is RELATIVE, and that is forced rather than chosen: a published
+                // message cannot be un-published — a transcript is a record of what happened — so unlike
+                // a cell this example cannot be put back to a known value. Asserting `message 1` would
+                // be asserting that this case is the first thing that ever ran against the channel.
+                const before = exampleFeed.chunks().length
+                const host = container()
+                mount(host, () => Example({}))
+
+                exampleSend()
+                await tick()
+                const latest = exampleFeed.peek() as string
+                is('the latest message is on the page', host.querySelector('p')?.textContent, `latest: ${latest}`)
+
+                const kept: string[] = []
+                for (const item of host.querySelectorAll('li')) kept.push(item.textContent ?? '')
+                is('the transcript is on the page too', kept, exampleFeed.chunks())
+                is('…one longer, up to the cap', kept.length, Math.min(5, before + 1))
+                host.remove()
             },
         },
     ],

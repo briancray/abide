@@ -1,34 +1,86 @@
-<!-- The hub: the overview suite, with an index of every other suite under it.
+<!-- The hub: four ways in, and an index of the capabilities under them.
 
-     The suite module is imported by NAME, statically, so this page's chunk is its own suite and
-     nothing else. Reaching it through the loader map would put every suite in the graph — and
-     `compiler` brings TypeScript's scanner, so the front page would ship a compiler it never runs. -->
+     Four, because there are four questions somebody arrives with — what is this, does it work, what does
+     it cost, and what does one of these look like at scale — and each has a section that answers only
+     that one. This used to be the `overview` suite's cards with an index beneath them, which answered the
+     first question and buried the other three.
+
+     `overview`'s own blurb is the prose here: it is the one place that text lives, so the hub cannot
+     describe this repo differently from the suite that used to. -->
 <script module>
 import { NAV } from '../demos/SUITES.ts'
-import overview from '../demos/overview.ts'
-import Cards from '../site/cards.abide'
+import { META } from '../demos/SUITES.ts'
 
 const SUITES = NAV.filter((entry) => entry.name !== 'overview')
 
-const CARD = 'block rounded-xl border border-slate-800 bg-slate-950/60 p-5 hover:border-slate-600 transition-colors'
-const BENCH =
-    'Every case above that carries a bench, against a hand-written equivalent: time as a ratio, ' +
-    'work as DOM calls, and reactivity as wake-ups.'
+const SECTION =
+    'block rounded-xl border border-slate-800 bg-slate-950/60 p-5 hover:border-slate-600 transition-colors'
+const CARD =
+    'block rounded-lg border border-slate-800/70 bg-slate-950/40 p-4 hover:border-slate-600 transition-colors'
+const TAG = 'mt-1 text-xs uppercase tracking-widest text-slate-600'
+
+const WAYS_IN: { href: string; title: string; tag: string; blurb: string }[] = [
+    {
+        href: '/docs/state',
+        title: 'docs',
+        tag: 'what it looks like written',
+        blurb:
+            'One page per capability: a ladder of examples, each rung adding exactly one thing, and every ' +
+            'rung is a real file this app compiles and runs.',
+    },
+    {
+        href: '/tests',
+        title: 'tests',
+        tag: 'whether it works',
+        blurb:
+            'Every claim in the repo as a row, run in this browser — the same bodies `bun test` runs. ' +
+            'Scan the status column; open a row for its lines and the code that made them.',
+    },
+    {
+        href: '/bench',
+        title: 'bench',
+        tag: 'what it costs',
+        blurb:
+            'Every case that carries a bench, against a hand-written equivalent: time as a ratio, work as ' +
+            'DOM calls, reactivity as wake-ups, and emitted code as its budget.',
+    },
+    {
+        href: '/users/42',
+        title: 'the app itself',
+        tag: 'not a demo',
+        blurb:
+            'The pages this app serves for its own sake — a user page through two layouts, a file tree, a ' +
+            'stream. The furniture the sections above are built out of.',
+    },
+]
 </script>
 
-<Cards suite={overview}>
+<div class="mx-auto max-w-5xl px-6 pt-10 pb-2">
+    <h1 class="text-3xl font-semibold text-slate-100">abide</h1>
+    <p class="mt-2 text-slate-400 max-w-3xl">{META.overview.blurb}</p>
+</div>
+
+<main class="mx-auto max-w-5xl px-6 pb-24 space-y-8">
     <div class="grid gap-3 sm:grid-cols-2">
-        {#for entry of SUITES}
-            <a href="/{entry.name}" class={CARD}>
-                <h3 class="text-base font-medium text-slate-100">{entry.title}</h3>
-                <p class="mt-1 text-xs uppercase tracking-widest text-slate-600">{entry.tag}</p>
-                <p class="mt-2 text-sm text-slate-400">{entry.blurb}</p>
+        {#for way of WAYS_IN}
+            <a href={way.href} class={SECTION}>
+                <h2 class="text-base font-medium text-slate-100">{way.title}</h2>
+                <p class={TAG}>{way.tag}</p>
+                <p class="mt-2 text-sm text-slate-400">{way.blurb}</p>
             </a>
         {/for}
-        <a href="/bench" class={CARD}>
-            <h3 class="text-base font-medium text-slate-100">bench</h3>
-            <p class="mt-1 text-xs uppercase tracking-widest text-slate-600">vs hand-written</p>
-            <p class="mt-2 text-sm text-slate-400">{BENCH}</p>
-        </a>
     </div>
-</Cards>
+
+    <div>
+        <h2 class="text-xs uppercase tracking-widest text-slate-600">the capabilities · {SUITES.length}</h2>
+        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            {#for entry of SUITES}
+                <a href="/docs/{entry.name}" class={CARD}>
+                    <h3 class="text-base font-medium text-slate-100">{entry.title}</h3>
+                    <p class={TAG}>{entry.tag}</p>
+                    <p class="mt-2 text-sm text-slate-400">{entry.blurb}</p>
+                </a>
+            {/for}
+        </div>
+    </div>
+</main>

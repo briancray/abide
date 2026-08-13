@@ -1,0 +1,13 @@
+<script module>
+import { state } from 'abide'
+
+export const name = state('ada')
+export const warn = state(false)
+</script>
+
+<p>hello {name}</p>
+
+<!-- A toggle rather than a string: the condition decides whether the ONE class is there, and nothing
+     rewrites the rest of the attribute. -->
+<p class="line" class:danger={warn}>styled by a toggle</p>
+<button onclick={() => (warn = !warn)}>toggle</button>

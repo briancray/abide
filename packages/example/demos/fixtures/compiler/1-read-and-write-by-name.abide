@@ -1,0 +1,12 @@
+<script module>
+import { state } from 'abide'
+
+export const count = state(0)
+</script>
+
+<!-- `{count}` is the value and `count = n` is the write. The explicit `count()` / `count.set(n)`
+     spelling keeps compiling — this is sugar OVER it rather than instead of it. -->
+<p>count {count}</p>
+<button onclick={() => count++}>++</button>
+<button onclick={() => (count += 10)}>+= 10</button>
+<button onclick={() => count.set(0)}>count.set(0)</button>

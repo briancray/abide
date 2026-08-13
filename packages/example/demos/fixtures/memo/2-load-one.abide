@@ -1,0 +1,15 @@
+<script module>
+import { memo, state } from 'abide'
+
+export const query = state('ab')
+
+// Declaring an argument says the args ARE the dependency set — and the cache key, so this is one slot
+// per `text` and typing the same letters twice asks once.
+export const hits = memo(async ({ text }: { text: string }) => {
+    await new Promise((settle) => setTimeout(settle, 400))
+    return text === '' ? [] : [`${text}-one`, `${text}-two`]
+})
+</script>
+
+<input bind:value={query} />
+<ul>{#for hit of hits({ text: query })()}<li>{hit}</li>{/for}</ul>

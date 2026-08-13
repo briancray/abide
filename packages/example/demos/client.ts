@@ -7,8 +7,8 @@
 
 import { html, memo, state, type State, type TemplateResult } from 'abide'
 import { awaited, component, keyed } from 'abide/runtime'
+import { container, sleep, suite, until } from 'abide-kit'
 import {
-    container,
     countCalls,
     install,
     keep,
@@ -16,14 +16,14 @@ import {
     nodesMade,
     nonZero,
     settled,
-    sleep,
-    suite,
     tick,
     total,
-    until,
-} from 'abide/tests'
+} from 'abide-kit/measure'
 import { mount } from 'abide/ui'
 import { button, field, lazy, row, stage } from './dom.ts'
+// The rung the case at the bottom asserts — the one whose `adds` it is about.
+import Example, { rows as exampleRows, swapFirstTwo } from './fixtures/client/2-key-it-so-a-move-is-a-move.abide'
+import { LADDER } from './fixtures/client/ladder.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -349,6 +349,7 @@ const chats = lazy((): { owning: ChatArm; rebuilding: ChatArm; byHand: vanilla.V
 
 export default suite({
     ...META.client,
+    examples: LADDER,
     cases: [
         {
             title: 'mount — one effect per slot, not one per render',
@@ -2268,6 +2269,34 @@ export default suite({
                 // that it reloaded, which is the claim.
                 is('…and the block did NOT reload', loads, 1)
                 is('…and still shows what it settled to', host.querySelector('b')?.textContent, 'load 1')
+                host.remove()
+            },
+        },
+
+        {
+            title: 'the documented example runs',
+            note: 'What `/docs/client` shows and mounts. The claim is a COUNT, not a rendering: after a two-row swap the two rows have MOVED and nothing was built — a rebuild produces exactly the same correct list, which is why the assertion is `nodesMade` rather than the list itself. The list is asserted too, because a minimal reconcile that corrupts the order would also make nothing.',
+            async run({ is }) {
+                exampleRows.set([
+                    { id: 1, label: 'alpha' },
+                    { id: 2, label: 'beta' },
+                    { id: 3, label: 'gamma' },
+                ])
+                const host = container()
+                mount(host, () => Example({}))
+                const shown = (): string[] => {
+                    const out: string[] = []
+                    for (const item of host.querySelectorAll('li')) out.push(item.textContent ?? '')
+                    return out
+                }
+                is('the list rendered', shown(), ['alpha', 'beta', 'gamma'])
+
+                const counts = await measureFlush(() => swapFirstTwo())
+                is('the two rows swapped', shown(), ['beta', 'alpha', 'gamma'])
+                // The whole of what `by item.id` buys: a keyed move builds nothing. Without the key this
+                // is three text writes and the same correct list.
+                is('nothing was built', nodesMade(counts), 0)
+                is('…and no text was rewritten', counts.textWrite, 0)
                 host.remove()
             },
         },

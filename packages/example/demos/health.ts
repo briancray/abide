@@ -19,15 +19,17 @@
 
 import { health } from 'abide'
 import { onHealth } from 'abide/server'
-import { loopback, suite } from 'abide/tests'
+import { loopback, suite } from 'abide-kit'
 import { capture, writtenAt } from './console.ts'
 import { button, row, stage } from './dom.ts'
+import { LADDER } from './fixtures/health/ladder.ts'
 import { META } from './SUITES.ts'
 
 const HEALTH = '/__abide/health'
 
 export default suite({
     ...META.health,
+    examples: LADDER,
     cases: [
         {
             title: 'the baseline is what an app that said nothing answers',

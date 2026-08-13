@@ -20,15 +20,24 @@ const HERE = new URL('../pages/', import.meta.url)
 test('a directory is a pattern and a filename is a kind', async () => {
     const table = await pages(HERE)
     const paths = table.map((entry) => entry.path).sort()
-    // `[suite]/[...rest]` is the site's twenty capability pages behind one file, and it is the row
-    // that makes precedence load-bearing here rather than only in `demos/routing.ts`: `/users/42` and
-    // `/bench` both match it, and both are answered by the literal that outranks it.
+    // Three views of the same nineteen capabilities, one page each: `/docs/[suite]` is the capability
+    // written down, `/tests/[suite]/[...rest]` is its cases running, and `/bench/[suite]` is what they
+    // cost. Each is a literal SECTION over a parameter, which is what makes precedence load-bearing here
+    // rather than only in `demos/routing.ts`: `/tests` and `/tests/state` both exist, and the literal
+    // outranks the parameter, so the index is reachable and so is every suite under it.
+    //
+    // `[...rest]` is only on the tests route, and only because the routing suite's cases drive the
+    // address bar for real: `/tests/routing/users/1` has to be that page rather than a 404, since a page
+    // a browser can reach and a reload cannot is broken. Nothing under `/docs` or `/bench` navigates.
     expect(paths).toEqual([
         '/',
-        '/[suite]/[...rest]',
         '/bench',
+        '/bench/[suite]',
+        '/docs/[suite]',
         '/files/[...path]',
         '/streaming',
+        '/tests',
+        '/tests/[suite]/[...rest]',
         '/users/[id]',
     ])
 })
@@ -59,7 +68,7 @@ test('a page renders through its layouts, with its params', async () => {
     expect(markup).toContain('user 42')
     // The outer layout reads the ambient too, and a server render is a snapshot of THIS caller: the
     // nav marks the section the URL is in, and `/users/42` is in none of them.
-    expect(markup).toContain('href="/state"')
+    expect(markup).toContain('href="/tests"')
 })
 
 test('a rest segment reaches the page as the joined remainder', async () => {

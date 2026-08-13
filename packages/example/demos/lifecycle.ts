@@ -16,9 +16,10 @@
 // `test/lifecycle.test.ts`, spawned, for the same reason `serve`'s interleaving does.
 
 import { boot, error, handle, json, middleware, onError, onStart, onStop, shutdown } from 'abide/server'
-import { suite } from 'abide/tests'
+import { suite } from 'abide-kit'
 import { capture, writtenAt } from './console.ts'
 import { button, row, stage } from './dom.ts'
+import { LADDER } from './fixtures/lifecycle/ladder.ts'
 import { META } from './SUITES.ts'
 
 /** Nothing is upgrading here, so nothing needs the Bun server — and passing one would latch it. */
@@ -28,6 +29,7 @@ const HOME = 'https://app.test/'
 
 export default suite({
     ...META.lifecycle,
+    examples: LADDER,
     cases: [
         {
             title: 'onStart WRAPS the boot — the socket binds inside it',

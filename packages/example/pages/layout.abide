@@ -16,12 +16,35 @@ import { NAV } from '../demos/SUITES.ts'
  * pages it indexes. `bench` is appended rather than declared in `SUITES.ts` for the same reason from
  * the other side: it is not a suite, it is every suite's measurements on one page.
  */
-const LINKS: { href: string; label: string }[] = []
-for (const entry of NAV) {
-    if (entry.name === 'overview') continue
-    LINKS.push({ href: `/${entry.name}`, label: entry.name === 'template' ? 'html' : entry.name })
+/**
+ * The four sections, and nothing per capability.
+ *
+ * Twenty capability links used to be the nav, which made the header the site's index and left no room
+ * for the question a reader actually arrives with. The capabilities are indexed on the hub and reached
+ * from inside a section, where the section is what says which VIEW of them you get.
+ */
+const LINKS: { href: string; label: string }[] = [
+    { href: '/docs/state', label: 'docs' },
+    { href: '/tests', label: 'tests' },
+    { href: '/bench', label: 'bench' },
+]
+
+/**
+ * The other views of the capability being shown, when one is.
+ *
+ * `/docs/state`, `/tests/state` and `/bench/state` are three views of one thing — written down, running,
+ * and priced — and which one a reader wants is decided by why they came. So the nav names the section
+ * and this names the same capability in the other two.
+ */
+function siblings(pathname: string): { href: string; label: string }[] {
+    const [, section, name] = pathname.split('/')
+    if (name === undefined || name === '' || !NAV.some((entry) => entry.name === name)) return []
+    const out: { href: string; label: string }[] = []
+    for (const other of ['docs', 'tests', 'bench']) {
+        if (other !== section) out.push({ href: `/${other}/${name}`, label: `${other} →` })
+    }
+    return out
 }
-LINKS.push({ href: '/bench', label: 'bench' })
 
 const HERE = 'text-sm text-sky-300 underline underline-offset-4'
 const AWAY = 'text-sm text-slate-400 hover:text-slate-200'
@@ -41,6 +64,9 @@ function at(pathname: string, href: string): string {
     <div class="mx-auto max-w-5xl px-6 py-3 flex flex-wrap items-baseline gap-x-4 gap-y-2">
         <a href="/" class="text-slate-100 font-semibold mr-2">abide</a>
         {#for link of LINKS}<a href={link.href} class={at(route().url.pathname, link.href)}>{link.label}</a>{/for}
+        <span class="ml-auto flex items-baseline gap-x-4">
+            {#for sibling of siblings(route().url.pathname)}<a href={sibling.href} class={AWAY}>{sibling.label}</a>{/for}
+        </span>
     </div>
 </header>
 

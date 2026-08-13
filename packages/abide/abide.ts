@@ -43,6 +43,14 @@ export { html, type Props, props, type TemplateResult } from './src/shared/html.
 // rather than being missing from it: a client that could set its own principal is a client that
 // guesses one, and one call shape on both sides is what makes that a message rather than a mystery.
 export { type Identify, type Identity, identity } from './src/shared/identity.ts'
+// The one predicate an app needs about a read that had nothing to serve YET.
+//
+// Here because a JavaScript `catch` is TOTAL. A read with no value yet signals by throwing, so any
+// try/catch an author writes between a slot and a read catches that signal along with the failures it
+// was written for — and swallowing it turns "the graph will run this again" into an error message that
+// never clears. Nothing else about the signal is surface: `Pending` is not nameable here and
+// `settledOf` is not exported, because the only correct thing to do with one is pass it on.
+export { isPending } from './src/shared/internal/graph.ts'
 // A DECLARED failure, as it is caught — the type `x.isError(e, name)` narrows to. Here because that
 // probe is on every source, so it is the output type of a `memo` that fronts an endpoint.
 export type { Failed } from './src/shared/internal/wire.ts'

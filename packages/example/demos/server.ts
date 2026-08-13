@@ -19,11 +19,13 @@ import {
     shell,
     toStream,
 } from 'abide/server'
-import { container, floorTicks, keep, microtasks, settled, sleep, suite, tick } from 'abide/tests'
+import { container, sleep, suite } from 'abide-kit'
+import { floorTicks, keep, microtasks, settled, tick } from 'abide-kit/measure'
 import { hydrate, mount } from 'abide/ui'
 import { button, el, output, row } from './dom.ts'
 import Concurrent, { peakInFlight, reset as resetConcurrent } from './fixtures/concurrent.abide'
 import Derived, { peakInFlight as peakDerived, reset as resetDerived } from './fixtures/derived.abide'
+import { LADDER } from './fixtures/server/ladder.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -34,6 +36,7 @@ const ROWS_200 = vanilla.rows(200)
 
 export default suite({
     ...META.server,
+    examples: LADDER,
     cases: [
         {
             title: 'renderToString — interleave and escape',

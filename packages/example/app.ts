@@ -17,27 +17,35 @@ import { csp, type Middleware } from 'abide/server'
 import { META } from './demos/SUITES.ts'
 
 /**
- * The one path the pages directory cannot answer for itself.
+ * The paths the pages directory cannot answer for itself.
  *
- * `pages/[suite]/[...rest]/` is one page for twenty suites, and a parameter matches anything — so
- * `/nonsense` matches it and would be served as a 200 with an apology on it. A route only the APP
- * knows is wrong is exactly what `export default` is for: it is asked before the pages, and
- * `undefined` is how it hands the path back to them.
+ * Each section is one page for nineteen capabilities, and a parameter matches anything — so
+ * `/docs/nonsense` matches and would be served as a 200 with an apology on it. What is wrong about it is
+ * something only the APP knows, which is exactly what `export default` is for: it is asked before the
+ * pages, and `undefined` is how it hands the path back to them.
  *
- * The page still renders its own "nothing here" for the same case, and that is not a duplicate: a
- * client that navigates there never asks this server anything.
+ * The pages still render their own "nothing here" for the same case, and that is not a duplicate: a
+ * client that NAVIGATES there never asks this server anything.
  */
 export default function notFound(): Response | undefined {
     const asked = route()
-    if (asked.name !== SUITE_ROUTE || Object.hasOwn(META, asked.params.suite as string)) return undefined
-    return new Response(`no suite named ${asked.params.suite}\n`, {
+    if (!SUITE_ROUTES.has(asked.name)) return undefined
+    const name = asked.params.suite as string
+    if (Object.hasOwn(META, name)) return undefined
+    return new Response(`no suite named ${name}\n`, {
         status: 404,
         headers: { 'content-type': 'text/plain; charset=utf-8' },
     })
 }
 
-/** The pattern `pages/[suite]/[...rest]/page.abide` installs — a route's NAME is the pattern. */
-const SUITE_ROUTE = '/[suite]/[...rest]'
+/**
+ * The three patterns a `[suite]` parameter appears in — a route's NAME is its pattern.
+ *
+ * Three because there are three VIEWS of a capability: written down, running, and priced. Enumerated
+ * rather than matched on a prefix, so a route added under one of these sections is a name this does not
+ * claim to know about until somebody puts it here.
+ */
+const SUITE_ROUTES = new Set(['/docs/[suite]', '/tests/[suite]/[...rest]', '/bench/[suite]'])
 
 /**
  * One rung, and what a rung is for: it sees the request going down and the response coming back.

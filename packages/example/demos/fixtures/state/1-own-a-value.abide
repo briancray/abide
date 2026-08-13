@@ -1,0 +1,9 @@
+<script module>
+import { state } from 'abide'
+
+// At module scope, so the cell outlives any one render.
+export const count = state(0)
+</script>
+
+<p>count {count}</p>
+<button onclick={() => count++}>add one</button>

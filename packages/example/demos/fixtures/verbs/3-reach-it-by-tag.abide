@@ -1,0 +1,25 @@
+<script module>
+import { memo, refresh } from 'abide'
+
+let served = 0
+
+// Tags name the DATA, not the memo holding it.
+export const quote = memo(
+    async ({ symbol }: { symbol: string }) => {
+        await new Promise((settle) => setTimeout(settle, 400))
+        return `${symbol} @ ${++served}`
+    },
+    { tags: ['quotes'] },
+)
+
+// So this reaches every slot carrying the tag, from anywhere, knowing no memo's name.
+export const refreshEverything = (): void => refresh({ tags: ['quotes'] })
+</script>
+
+{#if quote({ symbol: 'ABC' }).pending()}
+    <p>loading…</p>
+{:else}
+    <p>{quote({ symbol: 'ABC' })()}</p>
+{/if}
+
+<button onclick={refreshEverything}>refresh by tag</button>

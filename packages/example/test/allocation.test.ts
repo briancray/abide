@@ -102,7 +102,8 @@ test('a timer cannot interleave a loop that only drains microtasks', async () =>
 // one where indexing all n rows to answer two lookups is pure waste.
 test('an adjacent swap builds no key index, and a scattered pass still does', async () => {
     const { html, state } = await import('abide')
-    const { container, install, tick } = await import('abide/tests')
+    const { container } = await import('abide-kit')
+    const { install, tick } = await import('abide-kit/measure')
     const { keyed } = await import('abide/runtime')
     const { mount } = await import('abide/ui')
     install()

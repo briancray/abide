@@ -1,0 +1,29 @@
+<script module>
+import { state } from 'abide'
+
+export interface Row {
+    id: number
+    label: string
+}
+
+export const rows = state<Row[]>([
+    { id: 1, label: 'alpha' },
+    { id: 2, label: 'beta' },
+    { id: 3, label: 'gamma' },
+])
+
+/** The distinguishing case: two rows swap and nothing else may be touched. */
+export const swapFirstTwo = (): void => {
+    const held = rows().slice()
+    if (held.length < 2) return
+    const first = held[0] as Row
+    held[0] = held[1] as Row
+    held[1] = first
+    rows = held
+}
+</script>
+
+<!-- `by item.id` makes a reorder a MOVE. Without it the same swap rewrites the text of every row that
+     changed position — the same correct list, at a cost only a counter can see. -->
+<ul>{#for item of rows by item.id}<li data-id={item.id}>{item.label}</li>{/for}</ul>
+<button onclick={swapFirstTwo}>swap the first two</button>

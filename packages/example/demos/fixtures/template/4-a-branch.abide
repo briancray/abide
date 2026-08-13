@@ -1,0 +1,14 @@
+<script module>
+import { state } from 'abide'
+
+export const warn = state(false)
+</script>
+
+<!-- A block is an ordinary expression once the compiler is done with it. -->
+{#if warn}
+    <p>the warning arm</p>
+{:else}
+    <p>the quiet arm</p>
+{/if}
+
+<button onclick={() => (warn = !warn)}>toggle</button>

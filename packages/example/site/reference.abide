@@ -1,0 +1,92 @@
+<!-- One capability as a reference page: a LADDER of examples, and every claim the repo asserts about it.
+
+     A ladder rather than one example, because a file that shows five things is a large example of none:
+     the reader cannot tell which line is responsible for which behaviour. Each rung adds exactly one
+     thing and says which, so the lesson is the diff between two adjacent rungs.
+
+     Every rung is rendered rather than described. `rung.view` is a compiled `.abide` component, so
+     interpolating what it returns is ordinary content in a slot — which means the preview
+     server-renders with the page instead of waiting for a client to mount it. About half the rungs have
+     no `view`: a lifecycle hook and a config declaration are examples with nothing to show, and there
+     the source IS the example.
+
+     The claims are the suite's own cases, prose only. What a case ASSERTS runs on `/tests`, and the
+     line under each note says so rather than repeating the run here — a reference page that ran every
+     assertion would be the card this replaced, doing three jobs at once. -->
+<script module>
+import type { Example, Suite } from 'abide-kit'
+import Code from './code.abide'
+
+/**
+ * The preview frame styles whatever the example renders, once, here.
+ *
+ * So that the examples themselves stay class-free: their SOURCE is the artifact a reader copies, and
+ * a `class="rounded border border-slate-700 px-2"` on every button in it would teach Tailwind rather
+ * than abide. Descendant selectors put the styling on the page, where it belongs.
+ */
+const PREVIEW =
+    'rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-2 text-slate-200 ' +
+    '[&_p]:text-sm [&_ul]:text-sm [&_li]:text-slate-400 ' +
+    '[&_button]:rounded [&_button]:border [&_button]:border-slate-700 [&_button]:px-2 [&_button]:py-1 ' +
+    '[&_button]:text-xs [&_button]:text-slate-300 [&_button:hover]:border-slate-500 ' +
+    '[&_input]:rounded [&_input]:border [&_input]:border-slate-700 [&_input]:bg-slate-950 ' +
+    '[&_input]:px-2 [&_input]:py-1 [&_input]:text-sm'
+
+const LABEL = 'text-xs uppercase tracking-widest text-slate-600'
+const CLAIM = 'rounded-lg border border-slate-800/70 bg-slate-950/40 px-5 py-4'
+
+// The ladder, and the optional answered in TypeScript rather than by narrowing in the markup — a
+// `{#if x}` over a cell read cannot narrow the NEXT read of it, since each mention is its own call, and
+// a block-local `<script>` may only be a block's first node.
+//
+// The parameter is NOT named `suite`: what counts as a cell is decided syntactically and file-wide, so
+// a parameter shadowing the prop's name is rewritten into a read of the prop — `suite()` on a value
+// that is already a `Suite`.
+const ladderOf = (capability: Suite): Example[] => capability.examples ?? []
+
+/** A rung's preview, or nothing when the rung is code with nothing to render. */
+const previewOf = (rung: Example): unknown => rung.view?.({})
+</script>
+
+<script>
+import { props } from 'abide'
+
+const { suite } = props<{ suite: Suite }>()
+</script>
+
+<div class="mx-auto max-w-4xl px-6 pt-10 pb-2">
+    <h1 class="text-3xl font-semibold text-slate-100">{suite.title}</h1>
+    <p class="mt-2 text-slate-400">{suite.blurb}</p>
+</div>
+
+<main class="mx-auto max-w-4xl px-6 pb-24 space-y-10">
+    <!-- The ladder, smallest rung first. Each is numbered and labelled with the ONE thing it adds, so
+         what a reader compares is two adjacent rungs rather than one file against a paragraph. -->
+    {#for rung, at of ladderOf(suite)}
+        <section class="space-y-3">
+            <h2 class="flex items-baseline gap-2">
+                <span class="text-xs font-mono text-slate-600">{at + 1}</span>
+                <span class="text-base font-medium text-slate-100">{rung.adds}</span>
+            </h2>
+            <div class="rounded-lg border border-slate-800 bg-black/40 p-4">
+                <Code source={rung.source}/>
+            </div>
+            {#if rung.view}
+                <div class={PREVIEW}>{previewOf(rung)}</div>
+            {/if}
+        </section>
+    {/for}
+
+    <section class="space-y-3">
+        <h2 class={LABEL}>what is asserted about it · {suite.cases.length}</h2>
+        {#for spec of suite.cases}
+            <article class={CLAIM}>
+                <h3 class="text-base font-medium text-slate-100">{spec.title}</h3>
+                {#if spec.note}<p class="mt-1.5 text-sm text-slate-400">{spec.note}</p>{/if}
+            </article>
+        {/for}
+        <p class="text-xs text-slate-600">Every claim above is a case that runs under <code>bun test</code> and on this app’s own tests page. A case with a bench is measured against a hand-written arm on <a href="/bench" class="text-sky-400 hover:text-sky-300">/bench</a>.</p>
+    </section>
+
+    <slot/>
+</main>

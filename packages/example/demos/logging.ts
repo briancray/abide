@@ -19,14 +19,16 @@
 
 import { log } from 'abide'
 import { error, GET, handle, json, type LogRecord, register, socket } from 'abide/server'
-import { loopback, sleep, suite, until } from 'abide/tests'
+import { loopback, sleep, suite, until } from 'abide-kit'
 import { capture, type Written } from './console.ts'
 import { button, field, row, stage } from './dom.ts'
 import { DECLARABLE, withEnv, writeEnv } from './env.ts'
+import { LADDER } from './fixtures/logging/ladder.ts'
 import { META } from './SUITES.ts'
 
 export default suite({
     ...META.logging,
+    examples: LADDER,
     cases: [
         {
             title: 'the app’s own channel is not gated',

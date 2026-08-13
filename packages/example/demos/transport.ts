@@ -55,10 +55,12 @@ import {
     sse,
     validateJson,
 } from 'abide/server'
-import { countCalls, duration, loopback, nsPerOp, reader, sleep, suite, tick, until } from 'abide/tests'
+import { loopback, reader, sleep, suite, until } from 'abide-kit'
+import { countCalls, duration, nsPerOp, tick } from 'abide-kit/measure'
 import { hydrate } from 'abide/ui'
 import { assertType, type Exact } from '../types/exact.ts'
 import { button, el, field, row, stage } from './dom.ts'
+import { LADDER } from './fixtures/transport/ladder.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -97,6 +99,7 @@ function find(id: number): User {
 
 export default suite({
     ...META.transport,
+    examples: LADDER,
     cases: [
         {
             title: 'a read is a keyed memo whose body is a fetch',

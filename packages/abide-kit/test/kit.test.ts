@@ -1,17 +1,35 @@
-// The test kit, asserted through its own public entry point.
+// The kit, asserted through its own public entry points.
 //
-// `abide/tests` is surface like any other, and every case in `demos/` runs THROUGH it — so a change
-// to what `is` counts as equal, or to where the noise band sits, moves every claim on every page
-// silently and in the same direction. `equals`, `NOISE` and `smokeBench` have no other reader in the
-// example: a demo asserts with the kit rather than about it, which is why they had none at all.
-// `timeArms`, `quiesce` and `verdict` do have one — `site/bench.ts` paints every bench row with them,
-// and `verdict` picks the tail and tone — so a change there is not contained by this file.
+// Every case in the example runs THROUGH this, so a change to what `is` counts as equal, or to where
+// the noise band sits, moves every claim on every page silently and in the same direction. `equals`,
+// `NOISE` and `smokeBench` have no other reader in the example: a demo asserts with the kit rather
+// than about it, which is why they had none at all. `timeArms`, `quiesce` and `verdict` do have one —
+// `site/bench.ts` paints every bench row with them, and `verdict` picks the tail and tone — so a
+// change there is not contained by this file.
 //
-// Here rather than in `demos/` because a demo is a page about the APP's capabilities, and the runner
-// is not one of them — a card titled "the harness works" is furniture, not a claim about abide.
+// Beside the kit rather than in the app that consumes it, which is what the package split buys: the
+// runner is not one of the app's capabilities, and a page titled "the harness works" would be
+// furniture rather than a claim about abide.
+//
+// The two import lines below are the layering, asserted by being written: `smokeBench` knows what a
+// `Case` is and `timeArms` does not know what abide is.
 
 import { describe, expect, test } from 'bun:test'
-import { AssertionError, equals, NOISE, quiesce, smokeBench, timeArms, verdict } from 'abide/tests'
+import { AssertionError, equals, smokeBench } from 'abide-kit'
+import { NOISE, quiesce, timeArms, verdict } from 'abide-kit/measure'
+
+// Run from the REPO ROOT. `bunfig.toml`'s preload is what puts a document here, and bun reads a bunfig
+// from the current directory only — so `cd packages/abide-kit && bun test` runs this file against no
+// DOM at all.
+//
+// Stated as a throw rather than left to fail on its own, because it does NOT fail on its own: `frame()`
+// checks `typeof requestAnimationFrame` before it touches `document`, so without a DOM it short-circuits
+// to its `MessageChannel` branch and every timing assertion below passes while measuring a different
+// path. A file whose substrate depends on which directory it was started from is one that reports green
+// for two different things.
+if (typeof document === 'undefined') {
+    throw new Error('abide-kit: run `bun test` from the repo root — the DOM preload is in its bunfig.toml')
+}
 
 describe('equals — what `is` means by equal', () => {
     test('structural, not identity', () => {

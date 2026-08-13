@@ -9,7 +9,7 @@
 // silently passing.
 
 import { describe, expect, test } from 'bun:test'
-import { runHeadless } from 'abide/tests'
+import { runHeadless } from 'abide-kit'
 import { allSuites } from '../demos/index.ts'
 
 // Every suite module, loaded up front. The pages load them one at a time — that is the whole point

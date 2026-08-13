@@ -3,9 +3,14 @@
 // while waking readers nothing moved for is the wrong implementation.
 
 import { state, watch } from 'abide'
+import { mount } from 'abide/ui'
+import { container, reader, sleep, suite, until } from 'abide-kit'
+import { keep, settled, tick } from 'abide-kit/measure'
 import { isolate } from '$shared/internal/scopes.ts'
-import { keep, reader, settled, sleep, suite, tick, until } from 'abide/tests'
 import { button, el, field, row, stage } from './dom.ts'
+// The rung the case at the bottom asserts — the one whose `adds` it is about.
+import Example, { count as exampleCount } from './fixtures/state/2-derive-from-it.abide'
+import { LADDER } from './fixtures/state/ladder.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -24,6 +29,7 @@ async function* chunks(n: number): AsyncGenerator<number> {
 
 export default suite({
     ...META.state,
+    examples: LADDER,
     cases: [
         {
             title: 'read · write · peek',
@@ -840,6 +846,29 @@ export default suite({
                 // The watch IS the subscription: reading `text()` inside it is the whole registration.
                 reader(() => (view.textContent = text().toUpperCase()))
                 host.append(field('text.set(', (value) => text.set(value), 'type here'))
+            },
+        },
+
+        {
+            title: 'the documented example runs',
+            note: 'The file `/docs/state` shows and mounts, mounted here and asserted. A reference example nothing runs is one that rots quietly: it stays plausible, and nobody finds out it stopped compiling until somebody copies it. This is the whole of why the example is a real `.abide` file rather than a fenced block in a markdown document.',
+            async run({ is }) {
+                // Set FIRST, and put back at the end. The example's cell is module-level — the same one
+                // the docs page renders — so a case that asserted its starting value would be asserting
+                // that nothing had touched the page yet, which is true under `bun test` and not true in
+                // a browser where somebody has already clicked the button.
+                exampleCount.set(0)
+                const host = container()
+                mount(host, () => Example({}))
+                const line = (): string | undefined => host.querySelector('p')?.textContent ?? undefined
+
+                is('the cell is on the page', line(), 'count 0 · doubled 0')
+                exampleCount.set(3)
+                await tick()
+                is('a write by name reaches the DOM', line(), 'count 3 · doubled 6')
+
+                exampleCount.set(0)
+                host.remove()
             },
         },
     ],

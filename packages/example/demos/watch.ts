@@ -2,9 +2,11 @@
 // before every re-run and once on disposal. That is why there is no onMount/onDestroy.
 
 import { channel, memo, state, watch } from 'abide'
+import { reader, sleep, suite } from 'abide-kit'
+import { keep, tick } from 'abide-kit/measure'
 import { scope, untrack } from '$shared/reactive.ts'
-import { keep, reader, sleep, suite, tick } from 'abide/tests'
 import { button, el, row } from './dom.ts'
+import { LADDER } from './fixtures/watch/ladder.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -38,6 +40,7 @@ async function whileSwallowingUncaught(fn: () => Promise<void>): Promise<void> {
 
 export default suite({
     ...META.watch,
+    examples: LADDER,
     cases: [
         {
             title: 'the read is the subscription',

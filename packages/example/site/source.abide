@@ -9,7 +9,7 @@
      nobody looked at. The endpoint is a `memo` with the args as its cache key, so two cards showing
      one body ask once and the second reads the first one's answer. -->
 <script module>
-import { memo, state } from 'abide'
+import { isPending, memo, state } from 'abide'
 import { bodyOf } from '../server/rpc/sources.ts'
 import { type Face, painted, type Painted } from './code.ts'
 
@@ -38,9 +38,12 @@ const spans = memo((): Painted[] => {
         // an empty `<pre>` and then filling it.
         return painted(bodyOf({ suite: suite(), title: title(), face: face() }).source)
     } catch (failure: unknown) {
+        // A SIGNAL lands here too, because a JavaScript catch is TOTAL, and it is passed on: the body
+        // has not arrived, this memo will be re-run when it does, and anything returned here is a
+        // frame of red where the answer is merely late. That is what `isPending` is on `abide` for.
+        if (isPending(failure)) throw failure
         // A body the file does not have, or a server that could not be asked. The pane says so in the
-        // place the code would have been, which is where somebody is already looking. A SIGNAL lands
-        // here too — a JavaScript catch is total — and what this builds for one is discarded.
+        // place the code would have been, which is where somebody is already looking.
         return [{ class: 'text-rose-400', text: String(failure) }]
     }
 })

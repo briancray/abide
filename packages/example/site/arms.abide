@@ -1,0 +1,79 @@
+<!-- Rows of measurements: one section per case, one line per arm.
+
+     Every row is laid on ONE column template, so a number sits directly under every other number of its
+     kind and the eye runs down the page instead of re-entering each card's own little grid.
+
+     The numbers are cells, so a row repaints when its own measurement lands and no other row hears about
+     it. What arrives from `abide-kit` is FACTS — which arm is the subject, which is the harness floor, how
+     full a bar would be, which way the ratio went — and this file is the only place those become colours.
+     That seam is why the perf app can draw the same rows without a stylesheet. -->
+<script module>
+import type { ArmRow, BenchRow } from 'abide-kit'
+import { armBar, armTone, armWidth, tailTone } from './bench.ts'
+import { HEAD, NUMBER } from './table.ts'
+
+/** The one column template every row is laid on. */
+const ROW = 'grid grid-cols-[minmax(0,1fr)_6.5rem_7rem_9.5rem] items-center gap-x-4 px-3'
+
+// The kind is a chip rather than a column: it says how to read the rest of the row, and four colours are
+// quicker to skip past than four words in the same grey.
+const KIND_TONE: Record<BenchRow['kind'], string> = {
+    time: `${HEAD} text-slate-500 shrink-0`,
+    work: `${HEAD} text-emerald-500/80 shrink-0`,
+    wake: `${HEAD} text-violet-400/80 shrink-0`,
+    budget: `${HEAD} text-amber-500/80 shrink-0`,
+}
+
+const SMALL = 'rounded border border-slate-800 px-2 py-0.5 text-xs text-slate-400 hover:text-slate-200'
+
+/** An empty `of` reads as nothing measured rather than as a blank column. */
+const ofText = (arm: ArmRow): string => (arm.of() === '' ? '—' : arm.of())
+</script>
+
+<script>
+import { props } from 'abide'
+
+const { rows } = props<{ rows: BenchRow[] }>()
+</script>
+
+{#for row of rows}
+    <section class="py-1">
+        <div class="{ROW} pt-2 pb-0.5">
+            <div class="flex items-baseline gap-2 min-w-0">
+                <span class="text-sm font-medium text-slate-100 truncate" title={row.title}>{row.title}</span>
+                <span class={KIND_TONE[row.kind]}>{row.kind}</span>
+            </div>
+            <div class="col-span-3 flex items-center justify-end gap-3">
+                {#if row.per}<span class={HEAD}>{row.per}</span>{/if}
+                <span class={HEAD}>{row.status()}</span>
+                <button class={SMALL} onclick={() => void row.run()}>run</button>
+            </div>
+        </div>
+
+        {#if row.note}<p class="px-3 pb-1.5 text-xs text-slate-500 max-w-3xl">{row.note}</p>{/if}
+
+        <div class="pb-1">
+            {#for arm of row.arms}
+                <div class="{ROW} py-1 hover:bg-slate-900/40">
+                    <span class="text-sm truncate {armTone(arm)}" title={arm.label}>{arm.label}</span>
+                    {#if row.kind === 'work'}
+                        <span class="col-span-3 font-mono text-xs text-emerald-300 truncate" title={arm.of()}>{ofText(arm)}</span>
+                    {:else if row.kind === 'time'}
+                        <span class="{NUMBER} text-slate-200">{arm.value()}</span>
+                        <!-- `style=` because the width is a MEASUREMENT: this arm's time against the
+                             slowest arm in its row, which no class can name. -->
+                        <div class="h-1.5 rounded bg-slate-900 overflow-hidden"><div class="h-full {armBar(arm)}" style:width={armWidth(arm)}></div></div>
+                        <span class={tailTone(arm)}>{arm.tail()}</span>
+                    {:else}
+                        <span class="{NUMBER} text-emerald-300">{arm.value()}</span>
+                        <span class="col-span-2 text-xs text-slate-500 truncate" title={arm.of()}>{arm.of()}</span>
+                    {/if}
+                </div>
+            {/for}
+        </div>
+
+        {#if row.noisy()}
+            <p class="px-3 pt-1 text-xs text-amber-400">noisy: most passes were far off the best one. Re-run this case on its own before quoting the ratio.</p>
+        {/if}
+    </section>
+{/for}

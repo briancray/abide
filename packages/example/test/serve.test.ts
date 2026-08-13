@@ -37,7 +37,7 @@ import {
     toStream,
     trace,
 } from 'abide/server'
-import { sleep } from 'abide/tests'
+import { sleep } from 'abide-kit'
 import { withEnv, writeEnv } from '../demos/env.ts'
 
 test('a streamed response is written after the handler returned, and it is still the caller’s', async () => {

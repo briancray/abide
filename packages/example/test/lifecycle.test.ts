@@ -9,7 +9,8 @@
 // `bun test` would take Ctrl-C away from the runner.
 
 import { expect, test } from 'bun:test'
-import { EXAMPLE_ROOT, type Reading, reading } from './spawned.ts'
+import { type Reading, reading } from 'abide-kit/spawn'
+import { EXAMPLE_ROOT } from './root.ts'
 
 const APP = `${import.meta.dir}/lifecycle-app.ts`
 

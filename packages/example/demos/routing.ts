@@ -22,11 +22,13 @@
 
 import { html, navigate, route, url, watch } from 'abide'
 import type { Loader, RouteEntry, View } from 'abide/runtime'
-import { isolate } from '$shared/internal/scopes.ts'
 import { outlet, routes } from 'abide/runtime'
-import { reader, settled, suite } from 'abide/tests'
 import { mount } from 'abide/ui'
+import { reader, suite } from 'abide-kit'
+import { settled } from 'abide-kit/measure'
+import { isolate } from '$shared/internal/scopes.ts'
 import { button, el, row } from './dom.ts'
+import { LADDER } from './fixtures/routing/ladder.ts'
 import { META } from './SUITES.ts'
 import { hrefFor, routerRecord } from './vanilla.ts'
 
@@ -92,6 +94,7 @@ async function withTable<T>(table: RouteEntry[], body: () => Promise<T>): Promis
 
 export default suite({
     ...META.routing,
+    examples: LADDER,
     cases: [
         {
             title: 'a URL names a route, and its segments name the params',

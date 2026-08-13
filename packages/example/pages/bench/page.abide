@@ -9,29 +9,18 @@
      kind nobody is reading is a row that is not on the page at all. -->
 <script module>
 import { memo, state } from 'abide'
-import type { Bench } from 'abide/tests'
-import { clockResolution } from 'abide/tests'
-import { LABEL, SMALL_BUTTON } from '../../demos/dom.ts'
+import type { Bench } from 'abide-kit'
+import { clockResolution } from 'abide-kit/measure'
+import { SMALL_BUTTON } from '../../demos/dom.ts'
+import Arms from '../../site/arms.abide'
 import { type BenchRow, benchRows } from '../../site/bench.ts'
+import { CHIP, CHIP_ON, GROUP, grouped, HEAD, STICKY, TABLE } from '../../site/table.ts'
 
 const KINDS = ['all', 'time', 'work', 'wake', 'budget'] as const
 type Kind = (typeof KINDS)[number]
 
 /** The one column template every row is laid on. */
 const ROW = 'grid grid-cols-[minmax(0,1fr)_6.5rem_7rem_9.5rem] items-center gap-x-4 px-3'
-const HEAD = `${LABEL} text-slate-600`
-const NUMBER = 'font-mono text-xs tabular-nums text-right'
-const CHIP = 'rounded border px-2 py-0.5 text-xs border-slate-800 text-slate-500 hover:text-slate-300'
-const CHIP_ON = 'rounded border px-2 py-0.5 text-xs border-sky-800 bg-sky-950 text-sky-300'
-
-// The kind is a chip rather than a column: it says how to read the rest of the row, and four colours
-// are quicker to skip past than four words in the same grey.
-const KIND_TONE: Record<Bench['kind'], string> = {
-    time: `${LABEL} text-slate-500 shrink-0`,
-    work: `${LABEL} text-emerald-500/80 shrink-0`,
-    wake: `${LABEL} text-violet-400/80 shrink-0`,
-    budget: `${LABEL} text-amber-500/80 shrink-0`,
-}
 
 const CLOCK =
     `This browser reports time in steps of ${clockResolution().toFixed(3)} ms; each batch is sized ` +
@@ -70,20 +59,18 @@ const loaded = memo(async (): Promise<BenchRow[]> => {
 /**
  * The rows this filter is showing, grouped by suite.
  *
- * Grouped in one pass over the filtered list rather than by asking each group for its own rows: the
- * groups are the suites in order, and a group nobody is showing a row from is not a heading.
+ * The filter DROPS rows from the list rather than hiding them with a class, so a kind nobody is reading
+ * is a row that is not on the page at all — and `grouped` then leaves no heading for a suite it emptied.
  */
 const groups = memo((): { suite: string; rows: BenchRow[] }[] => {
-    const shown: { suite: string; rows: BenchRow[] }[] = []
+    const showing: BenchRow[] = []
     // No cold check: this body is re-run, so a read of a load that has not landed signals out of
     // here rather than handing back `undefined`.
     for (const row of loaded()) {
         if (kind !== 'all' && row.kind !== kind) continue
-        const last = shown[shown.length - 1]
-        if (last !== undefined && last.suite === row.suite) last.rows.push(row)
-        else shown.push({ suite: row.suite, rows: [row] })
+        showing.push(row)
     }
-    return shown
+    return grouped(showing)
 })
 
 async function runEverything(): Promise<void> {
@@ -116,8 +103,8 @@ async function runEverything(): Promise<void> {
 
     {#if failure}<p class="text-sm text-rose-400">{failure}</p>{/if}
 
-    <div class="border-y border-slate-800 divide-y divide-slate-900">
-        <div class="{ROW} sticky top-12 z-[5] py-2 bg-slate-950/95 backdrop-blur">
+    <div class={TABLE}>
+        <div class="{ROW} {STICKY}">
             <span class={HEAD}>case · arm</span>
             <span class="{HEAD} text-right">per op</span>
             <span class={HEAD}></span>
@@ -125,46 +112,10 @@ async function runEverything(): Promise<void> {
         </div>
 
         {#for group of groups}
-            <div class="px-3 py-2 {LABEL} text-slate-400 bg-slate-900/40">{group.suite} · {group.rows.length}</div>
-            {#for row of group.rows}
-                <section class="py-1">
-                    <div class="{ROW} pt-2 pb-0.5">
-                        <div class="flex items-baseline gap-2 min-w-0">
-                            <span class="text-sm font-medium text-slate-100 truncate" title={row.title}>{row.title}</span>
-                            <span class={KIND_TONE[row.kind]}>{row.kind}</span>
-                        </div>
-                        <div class="col-span-3 flex items-center justify-end gap-3">
-                            {#if row.per}<span class={HEAD}>{row.per}</span>{/if}
-                            <span class={HEAD}>{row.status()}</span>
-                            <button class={SMALL_BUTTON} onclick={() => void row.run()}>run</button>
-                        </div>
-                    </div>
-
-                    {#if row.note}<p class="px-3 pb-1.5 text-xs text-slate-500 max-w-3xl">{row.note}</p>{/if}
-
-                    <div class="pb-1">
-                        {#for arm of row.arms}
-                            <div class="{ROW} py-1 hover:bg-slate-900/40">
-                                <span class="text-sm truncate {arm.tone}" title={arm.label}>{arm.label}</span>
-                                {#if row.kind === 'work'}
-                                    <span class="col-span-3 font-mono text-xs text-emerald-300 truncate" title={arm.of()}>{arm.of() === '' ? '—' : arm.of()}</span>
-                                {:else if row.kind === 'time'}
-                                    <span class="{NUMBER} text-slate-200">{arm.value()}</span>
-                                    <div class="h-1.5 rounded bg-slate-900 overflow-hidden"><div class="h-full {arm.bar}" style:width={arm.width()}></div></div>
-                                    <span class={arm.tailTone()}>{arm.tail()}</span>
-                                {:else}
-                                    <span class="{NUMBER} text-emerald-300">{arm.value()}</span>
-                                    <span class="col-span-2 text-xs text-slate-500 truncate" title={arm.of()}>{arm.of()}</span>
-                                {/if}
-                            </div>
-                        {/for}
-                    </div>
-
-                    {#if row.noisy()}
-                        <p class="px-3 pt-1 text-xs text-amber-400">noisy: most passes were far off the best one. Re-run this case on its own before quoting the ratio.</p>
-                    {/if}
-                </section>
-            {/for}
+            <div class={GROUP}>
+                <a href="/bench/{group.suite}" class="hover:text-slate-200">{group.suite}</a> · {group.rows.length}
+            </div>
+            <Arms rows={group.rows}/>
         {/for}
     </div>
 

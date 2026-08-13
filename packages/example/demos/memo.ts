@@ -4,8 +4,16 @@
 //   memo(({ id }) => fetch(id))  args    -> the args ARE the cache key
 
 import { memo, state, watch } from 'abide'
-import { keep, reader, show, sleep, suite, tick, until } from 'abide/tests'
+import { mount } from 'abide/ui'
+import { container, reader, show, sleep, suite, until } from 'abide-kit'
+import { keep, tick } from 'abide-kit/measure'
 import { button, field, row, stage } from './dom.ts'
+// The rungs the case at the bottom asserts. Two of them, because the two FORMS are two rungs: a
+// derivation paints at once and a load has to say what to show meanwhile, and one mount cannot claim
+// both without being a file that shows two things.
+import Derive, { query as deriveQuery } from './fixtures/memo/1-derive-one.abide'
+import Load, { query as loadQuery } from './fixtures/memo/3-say-what-to-show-meanwhile.abide'
+import { LADDER } from './fixtures/memo/ladder.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -16,6 +24,7 @@ async function fetchSession(name: string): Promise<{ name: string }> {
 
 export default suite({
     ...META.memo,
+    examples: LADDER,
     cases: [
         // --- the derive form -------------------------------------------------
 
@@ -1076,6 +1085,39 @@ export default suite({
                 is('settled()', parse({ text: '{oops' }).settled(), true)
                 await rejects('await', Promise.resolve(parse({ text: '{oops' })))
                 is('a good key still works', parse({ text: '{"ok":true}' })(), { ok: true })
+            },
+        },
+
+        {
+            title: 'the documented example runs',
+            note: 'What `/docs/memo` shows and mounts, mounted here and asserted — including the half a reader would not think to check: the load form’s `pending()` region resolves to the list, on its own, with nothing in the markup awaiting anything.',
+            async run({ is }) {
+                // Written first, and put back at the end: these cells are module-level — the same ones the
+                // reference page renders — so a case that assumed their defaults would be asserting that
+                // nobody had typed in the example.
+
+                // Rung 1 — the derive form. Synchronous, so it is painted by the time `mount` returns.
+                deriveQuery.set('cd')
+                const derive = container()
+                mount(derive, () => Derive({}))
+                is('a derivation paints at once', derive.querySelector('p')?.textContent, 'CD')
+                deriveQuery.set('ab')
+                derive.remove()
+
+                // Rung 3 — the load form, whose whole claim is the region: a placeholder now, the list
+                // when it lands, and nothing in the markup awaiting anything.
+                loadQuery.set('cd')
+                const load = container()
+                mount(load, () => Load({}))
+                is('a load shows its placeholder', load.querySelector('p')?.textContent, 'searching…')
+
+                await until(() => load.querySelector('li') !== null, 'the load to land')
+                const shown: string[] = []
+                for (const item of load.querySelectorAll('li')) shown.push(item.textContent ?? '')
+                is('…and then the list, with no await in the markup', shown, ['cd-one', 'cd-two'])
+
+                loadQuery.set('ab')
+                load.remove()
             },
         },
     ],

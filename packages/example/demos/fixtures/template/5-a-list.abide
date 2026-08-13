@@ -1,0 +1,9 @@
+<script module>
+import { state } from 'abide'
+
+export const rows = state(['alpha', 'beta'])
+</script>
+
+<!-- `by` is the KEY — a spelling the compiler translates, not a function to import. -->
+<ul>{#for row of rows by row}<li>{row}</li>{/for}</ul>
+<button onclick={() => (rows = [...rows(), `row ${rows().length + 1}`])}>append</button>

@@ -1,0 +1,9 @@
+<script module>
+import { state } from 'abide'
+
+export const name = state('ada')
+</script>
+
+<!-- Inside a tag, a slot is a WHOLE attribute value, written unquoted. Nothing here is concatenation. -->
+<p>hello {name}</p>
+<a href="/who/{name}" title={name}>link</a>

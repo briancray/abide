@@ -13,8 +13,9 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { rm } from 'node:fs/promises'
 import { brotliDecompressSync } from 'node:zlib'
 import { CLIENT_DIR, type ClientAsset, type ClientManifest, MANIFEST_FILE } from 'abide/cli'
+import { type Ended, abide as spawnAbide } from 'abide-kit/spawn'
 import { SERVER_ONLY_MARKER } from '../server/db.ts'
-import { type Ended, EXAMPLE_ROOT as ROOT, abide as spawnAbide } from './spawned.ts'
+import { EXAMPLE_ROOT as ROOT } from './root.ts'
 
 const OUT = `${ROOT}/${CLIENT_DIR}`
 
@@ -28,13 +29,17 @@ let manifest: ClientManifest
 /** Every asset's text, keyed by name — what "does not ship" is asserted against. */
 const texts = new Map<string, string>()
 
+// A real build, so it gets a real budget: bun's default hook timeout is 5s and this bundles every page,
+// every capability suite and every example rung — 52 files. It sat just under the default until the
+// reference ladders added forty-odd modules to compile, and then the whole file failed on a hook rather
+// than on anything it asserts. `start.test.ts` builds too and has said 30s all along.
 beforeAll(async () => {
     built = await abide(['build'])
     manifest = (await Bun.file(`${ROOT}/${MANIFEST_FILE}`).json()) as ClientManifest
     for (const name of Object.keys(manifest.assets)) {
         texts.set(name, await Bun.file(`${OUT}/${name}`).text())
     }
-})
+}, 60_000)
 
 test('the build succeeds, and the manifest names exactly what is on disk', async () => {
     expect(built.code).toBe(0)

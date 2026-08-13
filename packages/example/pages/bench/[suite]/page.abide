@@ -1,0 +1,70 @@
+<!-- One suite's measurements.
+
+     The same rows `/bench` builds, filtered to one capability — because forty benches are read by
+     scanning and eight are read by running them. This page loads ONE suite through `LOADERS`, so
+     measuring `state` does not cost the compiler's chunk.
+
+     `run everything` here means everything on this page, which is the other half of why the split is
+     worth a route: a run of eight cases finishes while somebody is still looking at it. -->
+<script module>
+import { memo, state } from 'abide'
+import { type BenchRow, benchRowsOf } from 'abide-kit'
+import { clockResolution } from 'abide-kit/measure'
+import { SMALL_BUTTON } from '../../../demos/dom.ts'
+import { LOADERS, type SuiteName } from '../../../demos/index.ts'
+import Arms from '../../../site/arms.abide'
+
+const rowsFor = memo(async ({ name }: { name: string }): Promise<BenchRow[] | null> => {
+    if (!Object.hasOwn(LOADERS, name)) return null
+    return benchRowsOf([(await LOADERS[name as SuiteName]()).default])
+})
+
+const CLOCK =
+    `This browser reports time in steps of ${clockResolution().toFixed(3)} ms; each batch is sized to ` +
+    'take about 40 ms, so that clamp is the noise floor under every number below. A 1.05× difference is ' +
+    'not a difference.'
+</script>
+
+<script>
+import { route } from 'abide'
+
+const progress = state('')
+
+async function runEverything(rows: BenchRow[]): Promise<void> {
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i] as BenchRow
+        progress = `${i + 1} / ${rows.length} — ${row.title}`
+        await row.run()
+    }
+    progress = `done — ${rows.length} cases`
+}
+</script>
+
+{#if rowsFor({ name: route().params.suite ?? '' }).pending()}
+    <p class="mx-auto max-w-6xl px-6 py-16 text-slate-500">loading…</p>
+{:else}
+    <script>
+    const rows = rowsFor({ name: route().params.suite ?? '' })
+    </script>
+    {#if rows}
+        <div class="mx-auto max-w-6xl px-6 pt-10 pb-2">
+            <h1 class="text-3xl font-semibold text-slate-100">{route().params.suite} · bench</h1>
+            <p class="mt-2 text-slate-400 max-w-3xl">Every case in this suite that carries a bench, against a hand-written equivalent. Blue is abide; the last column is abide ÷ that arm.</p>
+        </div>
+
+        <main class="mx-auto max-w-6xl px-6 pb-24 space-y-6">
+            <div class="flex flex-wrap items-center gap-3">
+                <button class={SMALL_BUTTON} onclick={() => void runEverything(rows)}>run everything</button>
+                <span class="text-sm text-slate-500">{progress}</span>
+                <a href="/bench" class="ml-auto text-sm text-sky-400 hover:text-sky-300">every suite →</a>
+            </div>
+            <p class="text-xs text-slate-600">{CLOCK}</p>
+            <Arms rows={rows}/>
+        </main>
+    {:else}
+        <div class="mx-auto max-w-6xl px-6 py-16">
+            <h1 class="text-3xl font-semibold text-slate-100">nothing here</h1>
+            <p class="mt-2 text-slate-400">There is no suite named “{route().params.suite}”.</p>
+        </div>
+    {/if}
+{/if}

@@ -15,9 +15,10 @@
 
 import { log, memo } from 'abide'
 import { appDataDir, appName, boot, type Config, config, onConfig } from 'abide/server'
-import { loopback, suite } from 'abide/tests'
+import { loopback, suite } from 'abide-kit'
 import { button, row, stage } from './dom.ts'
 import { DECLARABLE, withEnv } from './env.ts'
+import { LADDER } from './fixtures/config/ladder.ts'
 import { META } from './SUITES.ts'
 
 /** The remote feed's address, which is what a `logs` default is asserted against. */
@@ -41,6 +42,7 @@ function caught(): string {
 
 export default suite({
     ...META.config,
+    examples: LADDER,
     cases: [
         {
             title: 'every knob abide reads, as the type it actually is',

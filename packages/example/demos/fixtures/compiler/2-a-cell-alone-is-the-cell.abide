@@ -1,0 +1,12 @@
+<script module>
+import { state } from 'abide'
+
+export const text = state('type here')
+
+// Naming a cell ALONE hands over the CELL; using it in an expression reads it. One rule, two outcomes,
+// decided by the caller — which is what `bind:` and a component prop need.
+export const held = text
+</script>
+
+<input bind:value={text} />
+<p>{text.toUpperCase()}</p>
