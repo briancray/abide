@@ -21,7 +21,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 // halves, and a shape language declared twice is a keyword that means one thing here and another
 // there.
 import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
-import { ANYTHING, arrayOf, formatOf, INTRINSICS, isAnything, NOTHING, objectOf, union } from './assemble.ts'
+import { ANYTHING, arrayOf, formatOf, INTRINSICS, isAnything, NOTHING, objectOf, union, usable } from './assemble.ts'
 import { type Token, tokensOf } from './lex.ts'
 import { IDENTIFIER } from './parse.ts'
 
@@ -741,10 +741,6 @@ export function shapesAt(reader: TypeReader, methodAt: number, rpc: boolean): De
         input: usable(input) ? input : undefined,
         output: usable(output) ? output : undefined,
     }
-}
-
-function usable(schema: JsonSchema | undefined): schema is JsonSchema {
-    return schema !== undefined && !isAnything(schema)
 }
 
 /**

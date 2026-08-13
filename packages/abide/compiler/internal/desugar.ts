@@ -145,7 +145,8 @@ interface Frame {
 }
 
 const NO_END = Number.MAX_SAFE_INTEGER
-const NO_HOIST: ReadonlyMap<string, string> = new Map()
+/** No hoisted locals — the default here, and what `emit` hands a `cell` position. Shared, never written. */
+export const NO_HOIST: ReadonlyMap<string, string> = new Map()
 
 interface Cursor {
     tokens: Token[]
@@ -206,6 +207,32 @@ function boundNames(cursor: Cursor, from: number, to: number, inType: Uint8Array
         indices.push(i)
     }
     return indices
+}
+
+/**
+ * What a DETACHED parameter list binds — a `{#component Name(…)}` header, which `emit` reads as a
+ * string because the parse node carries it as one.
+ *
+ * The same walk pass one makes over a `(…) =>`, so the two cannot disagree about a list. `emit`
+ * answered it with `/([A-Za-z_$][\w$]*)/g`, which cannot see a type: every identifier in an
+ * ANNOTATION came back as a binding, so `Row(props: { count: number })` shadowed an outer `count`
+ * cell and the body's `{count + 1}` emitted an unthunked read — right value on the first render, and
+ * no wake after it.
+ *
+ * Parenthesised before tokenizing because `boundNames` reads DEPTH to tell a destructuring key from
+ * an annotated name, and the list's own level is the one the parens make.
+ */
+export function parameterNames(parameters: string): string[] {
+    const wrapped = `(${parameters})`
+    const cursor = tokenize(wrapped, 0, wrapped.length)
+    const tokens = cursor.tokens
+    if (tokens.length < 2) return []
+    const { marks } = typeRegions(tokens, cursor.nesting, true)
+    const names: string[] = []
+    for (const index of boundNames(cursor, 1, tokens.length - 1, marks)) {
+        names.push((tokens[index] as Token).text)
+    }
+    return names
 }
 
 /**

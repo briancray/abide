@@ -425,7 +425,7 @@ function parseHole(reader: Reader): Node {
     const { text, end } = readExpression(reader.source, start)
     reader.at = end + 1
     const trimmed = text.trim()
-    const at = start + 1 + (text.length - text.trimStart().length)
+    const at = start + 1 + leading(text)
 
     // A slot is a THUNK, and a thunk is not async — so there is no code to emit for an `await` in
     // one, and the refusal names the two spellings that do work. A promise in a slot renders what it
@@ -545,12 +545,7 @@ function parseAttributes(reader: Reader): Attribute[] {
                 kind: 'spread',
                 value: {
                     source: inner.trim(),
-                    start:
-                        start +
-                        1 +
-                        (text.length - text.trimStart().length) +
-                        3 +
-                        (inner.length - inner.trimStart().length),
+                    start: start + 1 + leading(text) + 3 + leading(inner),
                 },
             })
             continue
@@ -768,7 +763,7 @@ function parseFor(reader: Reader, rest: string, at: number, open: number): Node 
     let tail = (match[3] as string).trim()
 
     let key: Expr | null = null
-    const by = findKeyword(tail, 'by')
+    const by = findBy(tail)
     if (by >= 0) {
         const named = tail.slice(by + 3)
         key = { source: named.trim(), start: at + rest.indexOf(tail) + by + 3 + leading(named) }
@@ -801,11 +796,14 @@ function parseFor(reader: Reader, rest: string, at: number, open: number): Node 
     }
 }
 
-/** The offset of a top-level `keyword` in an expression, ignoring one inside brackets or strings. */
-function findKeyword(text: string, keyword: string): number {
-    const pattern = new RegExp(`(^|[^\\w$])${keyword}(?=\\s)`, 'g')
+/** `by` as a WORD rather than as the tail of one — `sortedBy` and `by` differ only in what precedes. */
+const BY_KEYWORD = /(^|[^\w$])by(?=\s)/g
+
+/** The offset of the top-level `by` in a `{#for}` tail, ignoring one inside brackets or strings. */
+function findBy(text: string): number {
+    BY_KEYWORD.lastIndex = 0
     for (;;) {
-        const match = pattern.exec(text)
+        const match = BY_KEYWORD.exec(text)
         if (match === null) return -1
         const at = match.index + (match[1] as string).length
         if (balanced(text.slice(0, at))) return at
@@ -831,8 +829,8 @@ function balanced(text: string): boolean {
 
 function parseSwitch(reader: Reader, value: Expr, open: number): Node {
     if (value.source === '') fail(reader, '{#switch} needs a value', open)
-    const leading = blockBody(reader)
-    for (const node of leading) {
+    const before = blockBody(reader)
+    for (const node of before) {
         if (node.kind !== 'text' || node.value.trim() !== '') {
             fail(reader, '{#switch} takes only {:case} and {:default} branches', open)
         }

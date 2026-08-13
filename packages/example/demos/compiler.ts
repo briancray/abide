@@ -58,6 +58,13 @@ function template(source: string): string {
     return code.slice(start + 'return html`'.length, code.lastIndexOf('`')).trim()
 }
 
+/** The `{#component}` arrow a file declares, which sits above the return rather than inside it. */
+function component(source: string): string {
+    const code = compile(source, { filename: 'Case.abide' }).code
+    for (const line of code.split('\n')) if (line.includes(' = (')) return line.trim()
+    return ''
+}
+
 /**
  * …and the other half of the same file: the setup statements, which run once per instance. Undented,
  * because the emit indents a `<script>` body into the component function and that is formatting.
@@ -365,6 +372,22 @@ export default suite({
                     'a {#for} binding shadows',
                     template(`${source}<ul>{#for count of xs}<li>{count}</li>{/for}</ul>`),
                     '<ul>${() => (xs ?? []).map((count) => html`<li>${count}</li>`)}</ul>',
+                )
+
+                // A TYPE binds nothing, and reading it as if it did is the silent half of this rule.
+                // `{#component}` collected its shadows with a regex over the parameter text, which
+                // cannot see a type — so every identifier in an ANNOTATION shadowed an outer cell of
+                // that name, and the body read a plain value that never wakes. Answered by the same
+                // walk pass one makes, which consults the type marks.
+                is(
+                    'an identifier in an annotation binds nothing',
+                    component(`${source}{#component Row(props: { count: number })}<b>{count + 1}</b>{/component}`),
+                    'const Row = (props: { count: number }) => html`<b>${() => count() + 1}</b>`',
+                )
+                is(
+                    '…and a real parameter of that name still shadows',
+                    component(`${source}{#component Row(count: number)}<b>{count + 1}</b>{/component}`),
+                    'const Row = (count: number) => html`<b>${count + 1}</b>`',
                 )
             },
         },
@@ -1158,6 +1181,26 @@ export default suite({
                     'a script module really nested in a branch is still refused',
                     () => compile('{#if x}<script module>\nconst A = 1\n</script>{/if}\n', { filename: 'C.abide' }),
                     'module scope',
+                )
+
+                // The same mistake one diagnostic over: `props()` in a `<script module>` was found by
+                // a regex over the region's RAW TEXT, so a comment naming the rule tripped the rule.
+                // It is read off the region's tokens now — the same `propsCall` the setup block uses,
+                // which is what makes a comment, a string and a template literal all not-a-call.
+                is(
+                    'a comment naming props() is not a call',
+                    compile('<script module>\n// props() must move to <script>\nconst A = 1\n</script>\n<p>ok</p>\n', {
+                        filename: 'C.abide',
+                    }).code.includes('const A = 1'),
+                    true,
+                )
+                throws(
+                    'a real props() in a script module is still refused',
+                    () =>
+                        compile('<script module>\nconst p = props<{ a: number }>()\n</script>\n<p>ok</p>\n', {
+                            filename: 'C.abide',
+                        }),
+                    'no props there',
                 )
 
                 // And the escape hatch SPEC names, for a comment that really has to reach a browser.

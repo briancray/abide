@@ -26,7 +26,7 @@ import type { Checker, Type } from 'typescript/unstable/sync'
 import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
 // The one place both derivations agree, reached RELATIVELY because Node resolves no alias — and it
 // holds no runtime import of its own for the same reason.
-import { ANYTHING, arrayOf, formatOf, INTRINSICS, isAnything, NOTHING, objectOf, union } from './assemble.ts'
+import { ANYTHING, arrayOf, formatOf, INTRINSICS, NOTHING, objectOf, union, usable } from './assemble.ts'
 
 /** `SymbolFlags.Optional`. Spelled out because the enum is not on the API's public surface. */
 const OPTIONAL = 1 << 24
@@ -175,15 +175,14 @@ function shapesFor(checker: Checker, type: Type | undefined, kind: 'rpc' | 'sock
     if (kind === 'socket') {
         // A room channel addresses subscribers by its FIRST argument and carries its second.
         const schema = at(name === 'KeyedChannel' ? 1 : 0)
-        return { input: isAnything(schema) ? undefined : schema, output: undefined }
+        return { input: usable(schema) ? schema : undefined, output: undefined }
     }
     const input = at(0)
     const output = at(1)
-    const shapes: Shapes = {
-        input: isAnything(input) ? undefined : input,
-        output: isAnything(output) ? undefined : output,
+    return {
+        input: usable(input) ? input : undefined,
+        output: usable(output) ? output : undefined,
     }
-    return shapes
 }
 
 async function main(): Promise<void> {

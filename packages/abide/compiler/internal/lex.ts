@@ -82,8 +82,8 @@ export class SyntaxError_ extends Error {
  * takes a whole compile down by ~1.1x on its own.
  *
  * WHAT MAKES IT SAFE, and it is a property of the call sites rather than of this file: every
- * `new Lexer` (four of them — `tokensOf` and `readExpression` here, `desugar.ts`'s `tokenize`,
- * `emit.ts`'s `regionTokens`) is immediately followed by a synchronous `for(;;)` whose body calls
+ * `new Lexer` (three of them — `tokensOf` and `readExpression` here, `desugar.ts`'s `tokenize`) is
+ * immediately followed by a synchronous `for(;;)` whose body calls
  * only `lexer.next()`, so no `Lexer` is ever alive across a call that could construct another. The
  * constructor's `setText` resets this, which is also what makes a `Lexer` abandoned by a thrown
  * `ParseError` harmless. A new `new Lexer` whose loop grows a call is what would break it — that is
@@ -176,19 +176,24 @@ export class Lexer {
 }
 
 /**
- * Every token in a source, once.
+ * Every token in `source`, once — or in the `[from, to)` region of it.
  *
  * For the consumer that has to look BACKWARD as well as forward — a type annotation is read after
  * the endpoint that owns it is recognised, and a local `interface` it names may be declared further
  * down the file. Streaming cannot answer either without a second pass, and a transport module is a
  * handful of declarations.
+ *
+ * The bounded form is what a `<script>` region takes. It was a second walker in `emit.ts` until the
+ * two were one: a region was being put through the scanner three times per compile — the export
+ * check, the import split and the reactive-binding walk each opened their own `Lexer` over the same
+ * span — and a scanner pass is the expensive half of emitting a file.
  */
-export function tokensOf(source: string): Token[] {
-    const lexer = new Lexer(source, 0)
+export function tokensOf(source: string, from = 0, to = source.length): Token[] {
+    const lexer = new Lexer(source, from)
     const tokens: Token[] = []
     for (;;) {
         const token = lexer.next()
-        if (token === null) return tokens
+        if (token === null || token.start >= to) return tokens
         tokens.push(token)
     }
 }

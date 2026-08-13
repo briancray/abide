@@ -98,8 +98,8 @@ async function walkToPackage(from: string): Promise<string> {
  * package, and what makes a compiled module's own `../models.ts` land back on the real one.
  */
 export async function emitFor(path: string): Promise<EmitResult> {
-    const source = await Bun.file(path).text()
-    const root = await projectOf(path)
+    // Independent — the read does not wait on the climb, and `emitAll` starts every file at once.
+    const [source, root] = await Promise.all([Bun.file(path).text(), projectOf(path)])
     const mirrored = `${root}/${TYPES_DIR}/${relative(root, resolve(path))}`
     const modulePath = `${mirrored}.ts`
     const declarationPath = mirrored.replace(/\.abide$/, '.d.abide.ts')

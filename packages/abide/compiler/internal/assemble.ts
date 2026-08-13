@@ -40,6 +40,18 @@ export function isAnything(schema: JsonSchema): boolean {
     return true
 }
 
+/**
+ * A schema worth CARRYING, as both derivations must agree it is.
+ *
+ * One that says nothing is dropped to `undefined` here rather than published as an absent key, so a
+ * `Shapes` from the syntactic reader and one from the checker are the same record for the same
+ * endpoint — the two spelling an answer differently is the whole failure `checked.ts`'s header is
+ * about.
+ */
+export function usable(schema: JsonSchema | undefined): schema is JsonSchema {
+    return schema !== undefined && !isAnything(schema)
+}
+
 /** How many fields this schema actually claims — the count `union` needs, where 1 is the question. */
 function described(schema: JsonSchema): number {
     let count = 0

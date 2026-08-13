@@ -19,9 +19,17 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { scopeCss, scopeName } from './css.ts'
-import { CLOSERS, desugar, OPENERS, REACTIVE_CONSTRUCTORS, REACTIVE_TYPES } from './desugar.ts'
+import {
+    CLOSERS,
+    desugar,
+    NO_HOIST,
+    OPENERS,
+    parameterNames,
+    REACTIVE_CONSTRUCTORS,
+    REACTIVE_TYPES,
+} from './desugar.ts'
 import { kindOf } from './elide.ts'
-import { Lexer, type Token, tokensOf } from './lex.ts'
+import { type Token, tokensOf } from './lex.ts'
 import { extract, mark, type Segment } from './map.ts'
 import type { Attribute, Blocks, Branch, Expr, Node } from './parse.ts'
 import { HTML_COMMENT, IDENTIFIER, ParseError } from './parse.ts'
@@ -125,25 +133,6 @@ const NO_TOKENS: Token[] = []
 
 /** A file with no `props()` at all, which is most of them. Shared, never written. */
 const NO_KINDS: Map<string, PropKind> = new Map()
-
-/**
- * One `<script>` region, scanned ONCE.
- *
- * Everything below that used to take `(source, from, to)` takes these instead. A region was being
- * put through the TypeScript scanner three times per compile — the export check, the import split
- * and the reactive-binding walk each opened their own `Lexer` over the same span — and a scanner
- * pass is the expensive half of emitting a file. Same reason `setupTokens` is reused for `replaced`
- * when no `props()` was spliced.
- */
-function regionTokens(source: string, from: number, to: number): Token[] {
-    const lexer = new Lexer(source, from)
-    const tokens: Token[] = []
-    for (;;) {
-        const token = lexer.next()
-        if (token === null || token.start >= to) return tokens
-        tokens.push(token)
-    }
-}
 
 /** A keyword that is a deliberate error in a region, reported at the token that spelled it. */
 function forbidKeyword(tokens: Token[], kind: SyntaxKind, message: string): void {
@@ -635,15 +624,20 @@ function propKinds(bound: Binding[], declared: string): Map<string, PropKind> {
     return kinds
 }
 
-/** `props()` in a `<script module>`: module scope has no instance, so there are no props to bind. */
-function checkNoProps(module: Blocks['module'], filename: string): void {
-    if (module === null) return
-    const at = /\bprops\s*[<(]/.exec(module.body)
-    if (at === null) return
+/**
+ * `props()` in a `<script module>`: module scope has no instance, so there are no props to bind.
+ *
+ * The SAME recogniser the setup block is read with, over the tokens `emit` already scanned for this
+ * region. A regex over the raw text saw comments, strings and template text alike — a `<script module>`
+ * holding only the comment `// props() must move to <script>` failed to compile.
+ */
+function checkNoProps(source: string, tokens: Token[], filename: string): void {
+    const found = propsCall(source, tokens, new TypeReader(tokens))
+    if (found === null) return
     throw new ParseError(
         `abide: props() in a <script module> (${filename}) — module scope is shared by every ` +
             `instance, so there are no props there. Move it to <script>.`,
-        module.start + at.index,
+        found.start,
     )
 }
 
@@ -915,8 +909,6 @@ function liveKeyed(context: Context, name: string): boolean {
  *         the wrong thing entirely, not merely a coarser one
  */
 type Position = 'read' | 'slot' | 'cell'
-
-const NO_HOIST: ReadonlyMap<string, string> = new Map()
 
 function code(expr: Expr, context: Context, position: Position = 'read'): string {
     const hoisted = position === 'cell' ? NO_HOIST : context.hoisted
@@ -1334,7 +1326,7 @@ function scoped(nodes: Node[], context: Context): Scoped {
 
     const from = leading.start
     const to = from + leading.body.length
-    const tokens = regionTokens(context.source, from, to)
+    const tokens = tokensOf(context.source, from, to)
     forbidKeyword(
         tokens,
         SyntaxKind.ImportKeyword,
@@ -1478,41 +1470,42 @@ function element(
         }
     }
 
-    // The names are STATIC and the conditions are not, so they are emitted apart: the array is lifted
-    // to module scope once and the wake allocates only the rest array. Built as one pass rather than
-    // two `.map`s over the same toggles.
-    // …and the thunk is only kept when a condition can actually READ. The two sibling attribute cases
-    // in the loop above both ask; these did not, so `<b class:on={row.flag}>` inside a `{#for}` cost a
-    // closure, a graph node and its observer set per row for a wake that cannot happen.
-    if (classToggles.length > 0) {
-        let names = ''
-        let conditions = ''
-        let reads = false
-        for (const toggle of classToggles) {
-            const emitted = code(toggle.value, context)
-            if (!unthunked(emitted, context)) reads = true
-            names += `${names === '' ? '' : ', '}${JSON.stringify(toggle.name)}`
-            conditions += `, ${emitted}`
-        }
-        const call = `${need(context, 'classes')}(${JSON.stringify(staticClass)}, ${liftArray(names, context)}${conditions})`
-        open += ` class=\${${reads ? `() => ${call}` : call}}`
-    }
-    if (styleToggles.length > 0) {
-        let names = ''
-        let values = ''
-        let reads = false
-        for (const toggle of styleToggles) {
-            const emitted = code(toggle.value, context)
-            if (!unthunked(emitted, context)) reads = true
-            names += `${names === '' ? '' : ', '}${JSON.stringify(toggle.name)}`
-            values += `, ${emitted}`
-        }
-        const call = `${need(context, 'styles')}(${JSON.stringify(staticStyle)}, ${liftArray(names, context)}${values})`
-        open += ` style=\${${reads ? `() => ${call}` : call}}`
-    }
+    if (classToggles.length > 0) open += toggled(classToggles, staticClass, 'class', 'classes', context)
+    if (styleToggles.length > 0) open += toggled(styleToggles, staticStyle, 'style', 'styles', context)
 
     if (node.children.length === 0 && VOID_ELEMENTS.has(node.name.toLowerCase())) return `${open} />`
     return `${open}>${children(node.children, context)}</${node.name}>`
+}
+
+/**
+ * A `class:`/`style:` toggle group, emitted as the one attribute it owns.
+ *
+ * The names are STATIC and the conditions are not, so they are emitted apart: the array is lifted to
+ * module scope once and the wake allocates only the rest array. Built as one pass rather than two
+ * `.map`s over the same toggles.
+ *
+ * …and the thunk is only kept when a condition can actually READ. The two sibling attribute cases in
+ * `element` both ask; these did not, so `<b class:on={row.flag}>` inside a `{#for}` cost a closure, a
+ * graph node and its observer set per row for a wake that cannot happen.
+ */
+function toggled(
+    toggles: { name: string; value: Expr }[],
+    base: string,
+    attribute: 'class' | 'style',
+    helper: Runtime,
+    context: Context,
+): string {
+    let names = ''
+    let conditions = ''
+    let reads = false
+    for (const toggle of toggles) {
+        const emitted = code(toggle.value, context)
+        if (!unthunked(emitted, context)) reads = true
+        names += `${names === '' ? '' : ', '}${JSON.stringify(toggle.name)}`
+        conditions += `, ${emitted}`
+    }
+    const call = `${need(context, helper)}(${JSON.stringify(base)}, ${liftArray(names, context)}${conditions})`
+    return ` ${attribute}=\${${reads ? `() => ${call}` : call}}`
 }
 
 const ELEMENT_TYPES: Record<string, string> = {
@@ -1634,6 +1627,7 @@ function bind(
 
 function invoke(node: { name: string; attributes: Attribute[]; children: Node[] }, context: Context): string {
     const props: string[] = []
+    let spread = false
     for (const attribute of node.attributes) {
         switch (attribute.kind) {
             case 'static':
@@ -1651,6 +1645,7 @@ function invoke(node: { name: string; attributes: Attribute[]; children: Node[] 
                 break
             case 'spread':
                 props.push(`...${held(attribute.value, context)}`)
+                spread = true
                 break
             case 'bind': {
                 const source = attribute.value === null ? attribute.target : held(attribute.value, context)
@@ -1680,12 +1675,14 @@ function invoke(node: { name: string; attributes: Attribute[]; children: Node[] 
     // `...spread`, which is emitted BEFORE this and may carry a `children` of its own: an
     // unconditional `undefined` would overwrite it, and a spread has already made the literal
     // shapeless anyway.
-    const rendered = content.filter((n) => n.kind !== 'text' || n.value.trim() !== '')
-    let spread = false
-    for (const attribute of node.attributes) {
-        if (attribute.kind === 'spread') spread = true
+    let rendered = false
+    for (const child of content) {
+        if (child.kind !== 'text' || child.value.trim() !== '') {
+            rendered = true
+            break
+        }
     }
-    if (rendered.length > 0) props.push(`children: ${fragment(content, context)}`)
+    if (rendered) props.push(`children: ${fragment(content, context)}`)
     else if (!spread) props.push('children: undefined')
 
     // A state- or memo-named tag is a REACTIVE component: the cell is read, so a change re-mounts it.
@@ -1718,7 +1715,7 @@ function define(node: { name: string; parameters: string; body: Node[] }, contex
         shadow: new Set(context.shadow),
         children: childrenOf(node.parameters),
     }
-    for (const name of bindingsOf(node.parameters)) inner.shadow.add(name)
+    for (const name of parameterNames(node.parameters)) inner.shadow.add(name)
     return `(${node.parameters || 'args'}) => ${fragment(node.body, inner)}`
 }
 
@@ -1771,17 +1768,6 @@ function childrenOf(parameters: string): string | null {
         return IDENTIFIER.test(local) ? local : null
     }
     return null
-}
-
-/** Identifiers a parameter list binds — enough to shadow a reactive name of the same spelling. */
-function bindingsOf(parameters: string): string[] {
-    const names: string[] = []
-    const pattern = /([A-Za-z_$][\w$]*)/g
-    for (;;) {
-        const match = pattern.exec(parameters)
-        if (match === null) return names
-        names.push(match[1] as string)
-    }
 }
 
 // --- control flow ----------------------------------------------------------
@@ -2048,7 +2034,7 @@ function loop(
     context: Context,
 ): string {
     const inner: Context = { ...context, shadow: new Set(context.shadow) }
-    for (const name of bindingsOf(node.item)) inner.shadow.add(name)
+    for (const name of parameterNames(node.item)) inner.shadow.add(name)
     if (node.index !== null) inner.shadow.add(node.index)
 
     const parameters = node.index === null ? node.item : `${node.item}, ${node.index}`
@@ -2115,20 +2101,20 @@ export function emit(
     const moduleBody = blocks.module === null ? '' : blocks.module.body
     const moduleTo = blocks.module === null ? 0 : blocks.module.start + moduleBody.length
     const moduleTokens =
-        blocks.module === null ? NO_TOKENS : regionTokens(source, blocks.module.start, moduleTo)
+        blocks.module === null ? NO_TOKENS : tokensOf(source, blocks.module.start, moduleTo)
     const moduleImports =
         blocks.module === null
             ? { imports: [], rest: '' }
             : splitImports(source, blocks.module.start, moduleTo, moduleTokens)
 
-    checkNoProps(blocks.module, options.filename)
+    checkNoProps(source, moduleTokens, options.filename)
 
     let setup: { imports: string[]; rest: string } = { imports: [], rest: '' }
     let setupRegion: Token[] = NO_TOKENS
     if (blocks.setup !== null) {
         const from = blocks.setup.start
         const to = from + blocks.setup.body.length
-        setupRegion = regionTokens(source, from, to)
+        setupRegion = tokensOf(source, from, to)
         checkNoExport(setupRegion, options.filename)
         setup = splitImports(source, from, to, setupRegion)
     }
@@ -2238,10 +2224,10 @@ export function emit(
     // turned out to use it, so a component that never toggles a class does not import `classes`.
     context.used.add('html')
     // Two statements, because the two specifiers mean different things: `abide` is what an author
-    // types, and `abide/runtime` is what only this emitter does. The split falls where AUTHORED does —
-    // a hand-written template calls `html`, `raw` and `keyed`, so those stay on `abide` and merge with
-    // the author's own import of them. Nothing on `abide/runtime` can collide, because nothing there
-    // is a name a source file spells.
+    // types, and `abide/runtime` is what only this emitter does. The split falls where
+    // `AUTHORED_RUNTIME` does — `html` is the one name a source file also spells, so it stays on
+    // `abide` and merges with the author's own import of it. Nothing on `abide/runtime` can collide,
+    // because nothing there is a name a source file spells.
     const authored: string[] = []
     const emitted: string[] = []
     for (const name of [...context.used].sort()) (AUTHORED_RUNTIME.has(name) ? authored : emitted).push(name)
