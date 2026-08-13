@@ -144,7 +144,13 @@ type LogShape = 'color' | 'plain' | 'tsv' | 'json'
 
 // A browser is decided by having a document and no terminal behind it: ANSI would arrive as literal
 // junk in the console, and a tab is not a field separator anybody there can use.
-const IN_BROWSER = typeof document !== 'undefined' && !stdoutIsTTY()
+//
+// Latched on the first line written rather than at import, for the reason `stdoutIsTTY` states: bun
+// BUILDS `process.stdout` on the first touch and it costs ~6ms, so a module-level const charges it
+// to every importer. A document short-circuits it away on the server and in the CLI, but not in the
+// lane where a document AND a process both exist — the DOM emulator every `bun test` run preloads,
+// which reaches this file transitively through `ceilings.ts` and `memo.ts`.
+let inBrowser: boolean | null = null
 
 /**
  * One decision, not two. Whether a line is machine-readable and whether it carries color are the
@@ -161,7 +167,8 @@ export function logShape(): LogShape {
     const declared = textKnob('ABIDE_LOG_FORMAT')
     if (declared === 'json') return 'json'
     if (declared === 'tsv') return 'tsv'
-    if (IN_BROWSER) return 'plain'
+    if (inBrowser === null) inBrowser = typeof document !== 'undefined' && !stdoutIsTTY()
+    if (inBrowser) return 'plain'
     return colorAllowed() ? 'color' : 'tsv'
 }
 

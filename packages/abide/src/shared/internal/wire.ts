@@ -85,10 +85,14 @@ function carry(_key: string, value: unknown): unknown {
  * is what `decodeArgs` maps back — otherwise an in-process call and a wire call would hand the
  * handler different args.
  */
-export function encodeArgs(args: unknown): Encoded {
+export function encodeArgs(args: unknown, carriesFile: boolean = hasFile(args)): Encoded {
     // Asked before encoding rather than answered during it: a replacer takes `JSON.stringify` off
     // its native serializer for every key in the graph, and a call carrying a file is the exception.
-    if (!hasFile(args)) return { text: JSON.stringify(args ?? null) ?? 'null', files: null }
+    //
+    // Taken as an argument by the one caller that already asked: `remote`'s read arm probes the args
+    // to decide whether they fit in a URL, and the fall-through then walked the whole graph a second
+    // time to be told the same thing.
+    if (!carriesFile) return { text: JSON.stringify(args ?? null) ?? 'null', files: null }
     carried = null
     const text = JSON.stringify(args, carry) ?? 'null'
     const files = carried
@@ -392,10 +396,9 @@ export interface FailureOptions extends ErrorOptions {
  * A failure with a status on it, which is what `respond` reads to answer with something other than
  * a 500 — and what the client rebuilds a refusal as, so the two lanes hand a caller the same object.
  *
- * The kind is also assigned to `name`, and that is the copy that matters: `name` is what crosses the
- * wire, what `isError` matches, and what prefixes a stack line — a typed failure that left `name` as
- * `'HttpError'` would be anonymous everywhere it travelled. `kind` is the local spelling, for a
- * reader holding the real error rather than the plain object a wire delivers.
+ * The kind lands on `name`, and that is the ONLY copy of it: `name` is what crosses the wire, what
+ * `isError` matches, what `errorPayload` reads, and what prefixes a stack line — a typed failure that
+ * left it as `'HttpError'` would be anonymous everywhere it travelled.
  *
  * Here rather than beside `error` because a browser builds one too: `wireError` rebuilds a refusal
  * from what came back, and a second class with the same four fields is how the two lanes come to
@@ -403,13 +406,11 @@ export interface FailureOptions extends ErrorOptions {
  */
 export class HttpError extends Error {
     readonly status: number
-    readonly kind: string
     /** What the declaration carried, or `undefined`. Always assigned, so the shape stays one shape. */
     readonly data: unknown
 
     constructor(kind: string, message: string, status: number, options?: FailureOptions) {
         super(message, options)
-        this.kind = kind
         this.status = status
         this.data = options?.data
         this.name = kind
@@ -522,6 +523,41 @@ export async function payloadOf(response: Response): Promise<unknown> {
 }
 
 /**
+ * Did the caller name a wire?
+ *
+ * The FIELDS rather than the argument: a caller spreading a config that named neither is a caller
+ * that named no wire, and sending it over one would be answering a question it did not ask. Asked by
+ * every door that could answer LOCALLY instead — `health()` off its own source, `identity()` off the
+ * session the page holds — so a third one does not restate the rule in a third spelling, which is
+ * how the two that exist came to spell it inverted from each other.
+ */
+export function namesWire(options: WireOptions | undefined): boolean {
+    return options?.base !== undefined || options?.fetch !== undefined
+}
+
+/**
+ * An address to ask, resolved against the base the caller named.
+ *
+ * `at` is already `mounted()`, because `/__abide/**` is served under the app's own base and a client
+ * asking this app about itself has to ask where it actually is. A caller that named no base gets the
+ * relative form back untouched, which keeps a same-origin call off the URL parser — and makes the
+ * socket lane's extra fallback an ARGUMENT here rather than a fourth spelling of the same line.
+ */
+export function addressed(at: string, base: string | undefined): string {
+    return base === undefined ? at : new URL(at, base).href
+}
+
+/**
+ * `fetch`, for a caller that named no `fetch` of its own.
+ *
+ * Module-level rather than a default built per call: `askWire` runs once per health or identity poll
+ * and the arrow captured nothing to begin with.
+ */
+export function sendWith(input: string, init: RequestInit): Promise<Response> {
+    return fetch(input, init)
+}
+
+/**
  * One GET at a named wire, read by the rules above and floored when nothing answers.
  *
  * `health()` and `identity()` ask the same question of a different path, and three rules are what
@@ -544,11 +580,8 @@ export async function askWire<T>(
     init: RequestInit,
     floor: () => T,
 ): Promise<T> {
-    const send = options?.fetch ?? ((input: string, request: RequestInit) => fetch(input, request))
-    // Mounted for the reason an rpc address is: `/__abide/**` is served under the app's own base, so a
-    // client asking this app about itself has to ask where it actually is.
-    const at = mounted(path)
-    const address = options?.base === undefined ? at : new URL(at, options.base).href
+    const send = options?.fetch ?? sendWith
+    const address = addressed(mounted(path), options?.base)
     try {
         const traced = traceHeaders()
         const answered = await send(address, traced === null ? init : { ...init, headers: traced })

@@ -7,7 +7,7 @@ import { memo, state, watch } from 'abide'
 import { start } from 'abide/runtime'
 import { mount } from 'abide/ui'
 import { container, reader, show, sleep, suite, until } from 'abide-kit'
-import { keep, tick } from 'abide-kit/measure'
+import { countCalls, keep, tick } from 'abide-kit/measure'
 import { button, field, row, stage } from './dom.ts'
 // The rungs the case at the bottom asserts. Two of them, because the two FORMS are two rungs: a
 // derivation paints at once and a load has to say what to show meanwhile, and one mount cannot claim
@@ -648,6 +648,38 @@ export default suite({
                     log.live('body runs (one per distinct key)', bodyRuns)
                 })
                 host.append(field('q =', (value) => query.set(value)))
+            },
+        },
+
+        {
+            title: 'a NULL-valued arg addresses its slot WITHOUT the JSON path',
+            note: '`typeof null` is `object`, so a nullable optional argument used to fall out of the length-prefixed key and onto `Object.entries` + `JSON.stringify` — the same cliff the key format exists to avoid, one type over. It cost 26 ns on a select costing 124. COUNTED rather than timed, because the wrong implementation returns exactly the right key at full price: what is asserted is that the expensive path was not walked.',
+            async run({ is }) {
+                const get = memo(async (args: { id: number; parent: number | null }) => `${args.id}/${args.parent}`)
+
+                // Warmed first: a MISS builds the slot, and the SELECT is what is being counted.
+                is('the null slot loads', await get({ id: 1, parent: null }), '1/null')
+                is('and the ordinary one', await get({ id: 1, parent: 2 }), '1/2')
+
+                const stringify = countCalls(JSON, 'stringify')
+                try {
+                    get({ id: 1, parent: null })
+                    is('selecting with a null arg stringifies nothing', stringify.calls, 0)
+                } finally {
+                    stringify.restore()
+                }
+
+                // The `typeof` tag is what keeps the two apart now that both are written inline:
+                // `null` carries `object`, the string carries `string`. Without it they would glue
+                // into one key and the second call would be answered with the first's result.
+                let runs = 0
+                const spelled = memo(async (args: { v: unknown }) => {
+                    runs++
+                    return String(args.v)
+                })
+                is('null', await spelled({ v: null }), 'null')
+                is("the string 'null'", await spelled({ v: 'null' }), 'null')
+                is('two spellings, two slots', runs, 2)
             },
         },
 

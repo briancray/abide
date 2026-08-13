@@ -139,8 +139,7 @@ const BY_NAME = new Map<string, Installed>()
 // not the `Installed` records built from them: what a borrower gives back has to be something
 // `routes` accepts, and an install is a rebuild — a view resolved into one record does not carry
 // over into the next.
-const NO_ENTRIES: RouteEntry[] = []
-let ENTRIES: RouteEntry[] = NO_ENTRIES
+let ENTRIES: RouteEntry[] = []
 
 const NO_ARGS: { children?: unknown } = Object.freeze({})
 const NO_WRAPS: View[] = []
@@ -744,16 +743,25 @@ export function url(path: string, params?: Record<string, unknown>, query?: Reco
 // --- moving --------------------------------------------------------------------
 
 /**
+ * Whether this caller is the one that owns the page.
+ *
+ * A caller SCOPE is what separates the two worlds: a request being served, or a test driving a route
+ * on the side, must not write to an address bar or ask the server for a page. A browser app has no
+ * scope — one caller, forever — and is the only thing that drives the document. Named rather than
+ * spelled twice, so a third document-driving sink copies the RULE and not the expression.
+ */
+function drivesDocument(): boolean {
+    return currentScope() === null
+}
+
+/**
  * The address bar's half of landing, on its own because a served navigation does the two halves at
  * different moments: the URL moves when the first piece is on screen, and the route is committed when
  * the range behind it is whole.
  */
 function place(cells: Cells, url: URL, options: NavigateOptions | undefined): void {
     const moved = cells.url.peek().pathname !== url.pathname
-    // A caller SCOPE is what separates the two worlds: a request being served, or a test driving a
-    // route on the side, must not write to an address bar. A browser app has no scope — one caller,
-    // forever — and is the only thing that drives the document.
-    const sink = currentScope() === null ? HISTORY_SINK : null
+    const sink = drivesDocument() ? HISTORY_SINK : null
     if (sink === null) return
     sink.push(url.href, options?.replace === true)
     // A same-path navigation is a republish — a tab, a filter, a page number — and scrolling to the
@@ -869,9 +877,8 @@ export function navigate(target: string, options?: NavigateOptions): Promise<voi
     // second rendering path for "the pattern did not change" would be the same page assembled two
     // ways, which is the one thing this arrangement exists to not have.
     //
-    // The scope test is `place`'s, for `place`'s reason: only the ambient caller has a document. A
-    // request being served and a test driving a route on the side each render locally.
-    const sink = currentScope() === null ? NAVIGATION_SINK : null
+    // A request being served and a test driving a route on the side each render locally.
+    const sink = drivesDocument() ? NAVIGATION_SINK : null
     if (sink !== null) return enter(cells, url, options, found, sink)
 
     const loading = found === null ? null : loadFor(found.held)

@@ -21,6 +21,7 @@ import { hasFile } from './internal/probes.ts'
 import { arm } from './internal/timers.ts'
 import { traceHeaders } from './internal/trace.ts'
 import {
+    addressed,
     argsQuery,
     chunksOf,
     encodeArgs,
@@ -30,6 +31,7 @@ import {
     MAX_GET_URL,
     multipartBody,
     payloadOf,
+    sendWith,
     TTL_HEADER,
     wireError,
 } from './internal/wire.ts'
@@ -114,17 +116,18 @@ function abandonable<T>(handle: RpcHandle<T>, signal: AbortSignal): RpcHandle<T>
     return view
 }
 
-interface RpcSpec<Args> {
-    method: Method
-    description: string | undefined
-    raw(args: Args, init?: RequestInit): Promise<Response>
-}
-
 /**
  * A keyed memo, wearing the rpc surface. Both lanes end here, which is the law made structural: the
  * server's `GET` and the browser's `remote` differ in the body they were handed and in nothing else.
  */
-export function asRpc<Args, T>(call: KeyedMemo<Args, T>, spec: RpcSpec<Args>): Rpc<Args, T> {
+export function asRpc<Args, T>(
+    call: KeyedMemo<Args, T>,
+    spec: {
+        method: Method
+        description: string | undefined
+        raw(args: Args, init?: RequestInit): Promise<Response>
+    },
+): Rpc<Args, T> {
     const rpc = ((args: Args, options?: CallOptions): RpcHandle<T> => {
         // Nothing to attach: a handle IS a cell, and every cell carries its own iterator. The
         // per-slot attach this replaced existed only because the loop lived out here.
@@ -202,12 +205,11 @@ export function remote<Args, T, F extends Failed = never>(
 ): Rpc<Args, T, F> {
     const method = options.method ?? 'GET'
     const streams = options.stream === true
-    const send = options.fetch ?? ((input: string, init: RequestInit) => fetch(input, init))
+    const send = options.fetch ?? sendWith
     // Mounted, because this is an ADDRESS rather than an id: the endpoint is still `demo/query/search`
     // wherever the app is served, and a proxy forwarding one sub-path forwards `/__abide/**` under it
     // like everything else. The id stays app-space, so a trace and a refusal still name the endpoint.
-    const path = mounted(RPC_PREFIX + id)
-    const address = options.base === undefined ? path : new URL(path, options.base).href
+    const address = addressed(mounted(RPC_PREFIX + id), options.base)
 
     // A read is an HTTP GET with one query parameter per argument, so the address says what was
     // asked and an intermediary may cache it; a mutation is its own method with a JSON body. Two
@@ -218,8 +220,10 @@ export function remote<Args, T, F extends Failed = never>(
     function ask(args: Args, init?: RequestInit): Promise<Response> {
         // Asked before anything is built rather than read off an encoding: a read that fits in a URL
         // is the whole of the client's ordinary path, and it should not pay a `JSON.stringify` of
-        // the args to find out that it is one.
-        if (method === 'GET' && !hasFile(args)) {
+        // the args to find out that it is one. Asked ONCE and handed to `encodeArgs` below, which
+        // otherwise walks the same graph again to reach the same answer.
+        const carriesFile = hasFile(args)
+        if (method === 'GET' && !carriesFile) {
             const url = address + argsQuery(args)
             if (url.length <= MAX_GET_URL) {
                 const headers = continued(init?.headers as Record<string, string> | undefined)
@@ -233,7 +237,7 @@ export function remote<Args, T, F extends Failed = never>(
                     : send(url, { method: 'GET', ...init, headers })
             }
         }
-        const encoded = encodeArgs(args)
+        const encoded = encodeArgs(args, carriesFile)
         const sending = method === 'GET' ? 'POST' : method
         if (encoded.files !== null) {
             // No `content-type` of our own: `fetch` writes one naming the boundary it chose, and a
@@ -430,9 +434,10 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
     const received = channel<T>(options.channel)
     const path = mounted(SOCKET_PREFIX + id)
     const relative = args === undefined ? path : path + argsQuery(args)
+    // The document is the fallback base only on this lane: a socket needs an ABSOLUTE address to
+    // swap the scheme for `ws`, where a relative one is what keeps the rpc lane off the URL parser.
     const base = options.base ?? (globalThis as { location?: { href: string } }).location?.href
-    const address = base === undefined ? relative : new URL(relative, base).href
-    const url = address.replace(/^http/, 'ws')
+    const url = addressed(relative, base).replace(/^http/, 'ws')
     const open = options.open ?? ((at: string) => new WebSocket(at) as unknown as Wire)
 
     let wire: Wire | null = null

@@ -34,7 +34,7 @@ import {
     type TemplateResult,
 } from '$shared/html.ts'
 import { abideLog } from '$shared/log.ts'
-import { renderBudget } from '$shared/internal/ceilings.ts'
+import { numberKnob } from '$shared/internal/knobs.ts'
 import { isPending, type Pending, retryable, retryableCall, settledOf } from '$shared/internal/graph.ts'
 import {
     closeMarker,
@@ -395,12 +395,12 @@ async function awaitedProduce(signal: Pending, produce: () => unknown, out: Out)
  * signal is not a throw of that kind, so it travels on to the walk.
  */
 function armsOf(node: Awaited, settled: unknown, failed: boolean): Renderable {
-    if (failed) return settledArms(node.branches, settled, undefined, true) as Renderable
+    if (failed) return settledArms(node.branches, true, settled) as Renderable
     try {
-        return settledArms(node.branches, undefined, settled, false) as Renderable
+        return settledArms(node.branches, false, settled) as Renderable
     } catch (error) {
         if (isPending(error) || node.branches.catch === undefined) throw error
-        return settledArms(node.branches, error, undefined, true) as Renderable
+        return settledArms(node.branches, true, error) as Renderable
     }
 }
 
@@ -596,6 +596,22 @@ function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
     }
     out.text += PLACEHOLDER_CLOSE
     return null
+}
+
+/**
+ * The wall budget for one streaming render.
+ *
+ * WALL rather than per slot: a slot holds the walk for as long as what it waits on takes, so a page
+ * that waits thirty times has no single slot to blame for a response that never ends — and the whole
+ * run is the only number a proxy in front of it is measuring anyway. One clock spans every PHASE of
+ * a render, which is what makes a document's deferred half answer to it too.
+ *
+ * Here rather than in `$shared`'s `ceilings.ts` beside the other two: those bound what a PROCESS
+ * remembers and are read from paths both lanes walk, while a streaming render only ever happens on
+ * this side — a browser has no walk to budget and could not set the knob if it did.
+ */
+function renderBudget(): number {
+    return numberKnob('ABIDE_SSR_STREAM_BUDGET')
 }
 
 /**

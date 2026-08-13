@@ -246,7 +246,7 @@ function onion(
  * would be one an app has to filter, and the filter would be this test written a second time.
  */
 function failing(failure: unknown): Response {
-    if (failure instanceof HttpError) return failed(failure.kind, failure.message, failure.status)
+    if (failure instanceof HttpError) return failed(failure.name, failure.message, failure.status)
 
     const hook = FAILING
     if (hook !== null) {

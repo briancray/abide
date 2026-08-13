@@ -16,7 +16,7 @@
 
 import { IDENTITY_PATH } from './internal/PATHS.ts'
 import { isThenable } from './internal/probes.ts'
-import { askWire, type WireError } from './internal/wire.ts'
+import { askWire, namesWire, type WireError } from './internal/wire.ts'
 import type { WireOptions } from './transport.ts'
 
 /**
@@ -78,10 +78,9 @@ export function anonymous(): Identity {
 let asked: Promise<Identity> | null = null
 
 function ask(options?: WireOptions): Promise<Identity> {
-    // The FIELDS rather than the argument, the same rule `health()` reads its options by: a caller
-    // spreading a config that named neither named no wire, and a named wire is another app — so it
-    // is asked even in a process that could have composed an answer about its own caller instead.
-    const named = options?.base !== undefined || options?.fetch !== undefined
+    // A named wire is another app, so it is asked even in a process that could have composed an
+    // answer about its own caller instead.
+    const named = namesWire(options)
     const held = source
     if (!named && held !== null && held.serving()) {
         const resolved = held.resolve()

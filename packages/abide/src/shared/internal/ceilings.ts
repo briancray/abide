@@ -81,18 +81,6 @@ export function reportOverflow(charged: number, ceiling: number): void {
     )
 }
 
-/**
- * The wall budget for one streaming render.
- *
- * WALL rather than per slot: a slot holds the walk for as long as what it waits on takes, so a page
- * that waits thirty times has no single slot to blame for a response that never ends — and the whole
- * run is the only number a proxy in front of it is measuring anyway. One clock spans every PHASE of
- * a render, which is what makes a document's deferred half answer to it too.
- */
-export function renderBudget(): number {
-    return numberKnob('ABIDE_SSR_STREAM_BUDGET')
-}
-
 // --- the process-wide memo cache --------------------------------------------
 //
 // ONE registry across every memo, because the ceiling is on the cache rather than on any memo in it:

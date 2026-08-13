@@ -52,9 +52,15 @@ export function keyOf(args: unknown): string {
         const name = keys[i] as string
         const value = record[name]
         const type = typeof value
-        // `null` reports `object`, so it takes the long way with everything else that is not a
-        // primitive. That branch is what JSON is genuinely needed for.
-        if (type === 'object' || type === 'function' || type === 'symbol') return sortedKey(record, keys)
+        // `null` reports `object`, but unlike everything else that does it has exactly ONE spelling —
+        // so it is written here rather than sent the long way. A nullable optional argument is an
+        // ordinary shape rather than an edge, and it used to drop the whole call onto `sortedKey`'s
+        // entries array and `JSON.stringify`: 26 ns on a select costing 124, twice over. Its `object`
+        // tag is what keeps it apart from the string `'null'`, which carries `string`. A real object
+        // still takes the long way, which is what JSON is genuinely needed for.
+        if (value !== null && (type === 'object' || type === 'function' || type === 'symbol')) {
+            return sortedKey(record, keys)
+        }
         const text = String(value)
         out += `${name.length}:${name}${type}${text.length}:${text}`
     }

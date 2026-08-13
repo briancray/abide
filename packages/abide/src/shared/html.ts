@@ -356,9 +356,15 @@ export function streamed<T>(
     return new Streamed(source, row as (item: never, index: number) => unknown, failure)
 }
 
-/** The settled arms, in render order: the branch that matched, then `finally` if there is one. */
-export function settledArms(branches: Branches, error: unknown, value: unknown, failed: boolean): unknown[] {
-    const arm = failed ? branches.catch?.(error) : branches.then?.(value as never)
+/**
+ * The settled arms, in render order: the branch that matched, then `finally` if there is one.
+ *
+ * ONE payload, because a settle has one: `failed` says which arm it belongs to. Spelled as an error
+ * and a value side by side, every one of the eight call sites had to pass `undefined` to the slot the
+ * boolean was about to disable, which is a hole an argument order can be got wrong in silently.
+ */
+export function settledArms(branches: Branches, failed: boolean, settled: unknown): unknown[] {
+    const arm = failed ? branches.catch?.(settled) : branches.then?.(settled as never)
     return branches.finally === undefined ? [arm] : [arm, branches.finally()]
 }
 
@@ -378,7 +384,7 @@ export function settledBoundary(block: Boundary): unknown {
         // A read with nothing to serve YET is not a failure, and this is not the boundary that
         // recovers from it: the signal passes through to whoever will run the body again.
         if (isPending(error) || block.branches.catch === undefined) throw error
-        return settledArms(block.branches, error, undefined, true)
+        return settledArms(block.branches, true, error)
     }
     const settled = block.branches.finally
     return settled === undefined ? produced : [produced, settled()]
@@ -491,9 +497,16 @@ const ESCAPES: Record<string, string> = {
     "'": '&#39;',
 }
 
+// Hoisted, for `wire.ts`'s reason: a regex LITERAL builds a fresh `RegExp` every time it is
+// evaluated, and this pair is evaluated per interpolated text node and per attribute value on the
+// server walk. The two spellings are one probe and one replace, so the `g` one's `lastIndex` is
+// reset by `replace` itself and never read.
+const ESCAPABLE = /[&<>"']/
+const ESCAPABLE_ALL = /[&<>"']/g
+
 export function escape(value: string): string {
     // Probe before replacing — most interpolated text has nothing to escape, and `replace` with a
     // callback allocates per hit.
-    if (!/[&<>"']/.test(value)) return value
-    return value.replace(/[&<>"']/g, (c) => ESCAPES[c] as string)
+    if (!ESCAPABLE.test(value)) return value
+    return value.replace(ESCAPABLE_ALL, (c) => ESCAPES[c] as string)
 }

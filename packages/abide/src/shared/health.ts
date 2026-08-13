@@ -14,7 +14,7 @@
 
 import { HEALTH_PATH } from './internal/PATHS.ts'
 import { isThenable } from './internal/probes.ts'
-import { askWire, type WireError } from './internal/wire.ts'
+import { askWire, namesWire, type WireError } from './internal/wire.ts'
 import type { WireOptions } from './transport.ts'
 
 /**
@@ -66,9 +66,7 @@ export function useHealthSource(compose: HealthSource): void {
  * returning it out of an `async` function would re-wrap it for two more microtask ticks.
  */
 export function health(options?: WireOptions): Promise<Health> {
-    // The FIELDS rather than the argument: a caller spreading a config that named neither is a caller
-    // that named no wire, and sending it over one would be answering a question it did not ask.
-    if (options?.base === undefined && options?.fetch === undefined && source !== null) {
+    if (!namesWire(options) && source !== null) {
         const composed = source()
         return isThenable(composed) ? composed : Promise.resolve(composed)
     }

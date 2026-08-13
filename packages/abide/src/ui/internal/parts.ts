@@ -384,7 +384,7 @@ export class ChildPart {
             const operand = value.value
             this.generation++
             if (!isThenable(operand)) {
-                this.take(claimed, settledArms(value.branches, undefined, operand, false))
+                this.take(claimed, settledArms(value.branches, false, operand))
                 this.holding = operand
                 return
             }
@@ -487,7 +487,7 @@ export class ChildPart {
                     this.set(value)
                     return
                 }
-                this.show(settledArms(branches, undefined, value, false), operand)
+                this.show(settledArms(branches, false, value), operand)
             },
             (error: unknown) => {
                 if (generation !== this.generation) return
@@ -498,7 +498,7 @@ export class ChildPart {
                     })
                     return
                 }
-                this.show(settledArms(branches, error, undefined, true), operand)
+                this.show(settledArms(branches, true, error), operand)
             },
         )
     }
@@ -525,7 +525,7 @@ export class ChildPart {
 
         if (!isThenable(operand)) {
             this.show(branches.pending?.() ?? null, operand)
-            this.show(settledArms(branches, undefined, operand, false), operand)
+            this.show(settledArms(branches, false, operand), operand)
             return
         }
         // STARTED before the pending arm runs, and the promise kept for the settle below — see

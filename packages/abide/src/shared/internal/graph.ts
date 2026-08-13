@@ -464,11 +464,6 @@ function transformed(node: Node, value: unknown): unknown {
 // The bookkeeping below is allocated on first contact with a promise or a probe, never before, so a
 // cell that only ever holds sync values still costs exactly one Node.
 
-interface Waiter {
-    resolve(value: unknown): void
-    reject(reason: unknown): void
-}
-
 // Four one-bit nodes rather than one status record, for the same reason `memo`'s slot keeps
 // `refreshing` separate: each probe must wake only on ITS OWN transition. A status record makes
 // `pending()` wake on a warm refresh it reports `false` for, and the identity check on a rebuilt
@@ -499,7 +494,7 @@ class Async {
     // A later write must win even when an earlier promise settles after it. Without the stamp a slow
     // first load lands on top of the fast second one and the cell reports the value nobody asked for.
     generation = 0
-    waiters: Waiter[] | null = null
+    waiters: { resolve(value: unknown): void; reject(reason: unknown): void }[] | null = null
 
     constructor(settled: boolean) {
         this.settled = new Node(settled, null)
