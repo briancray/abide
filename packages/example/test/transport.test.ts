@@ -12,6 +12,8 @@
 //      runs in a spawned process; see `transport-wire.ts`.
 
 import { expect, test } from 'bun:test'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { abidePlugin } from 'abide/compiler/plugin'
 import { registered } from 'abide/server'
 import { plugin } from 'bun'
@@ -21,6 +23,9 @@ import { plugin } from 'bun'
 import type { WireResult } from './transport-wire.ts'
 
 const SERVER = new URL('../server/', import.meta.url).pathname
+/** The app the shapes are derived FOR, and the repo the deriver is in. Both absolute — see `derivedShapes`. */
+const APP = new URL('../', import.meta.url).pathname
+const ROOT = new URL('../../../', import.meta.url).pathname
 
 test('the browser bundle carries the address and not the module', async () => {
     const entry = `${SERVER}browser_entry.ts`
@@ -60,8 +65,37 @@ test('the server lane registers what the browser calls, with no filesystem scan'
     expect(registered('socket')).toContain('feed/ticks')
 })
 
+/**
+ * A directory holding shapes this case DERIVED, for the wire process to run in.
+ *
+ * `plugin.ts` reads `.abide/shapes.json` beside the WORKING DIRECTORY, and that file is a build
+ * artifact: gitignored, written by `bun run shapes` and by nothing in the documented gate. So the
+ * enriched half of the claim below — a shape whose type is declared in ANOTHER file — was being
+ * answered by whatever the last build happened to leave in the repo root. On this machine that was
+ * five days stale, on a fresh clone it is absent, and from any directory but the root it is
+ * unreachable: `userShape` comes back `null` and the case fails for a reason that is about the
+ * machine rather than about the compiler.
+ *
+ * Derived rather than located, so the case owns its input. It costs ~0.3s and it is the difference
+ * between asserting what the compiler DERIVES and asserting what a previous build left behind.
+ */
+async function derivedShapes(): Promise<string> {
+    const dir = await mkdtemp(`${tmpdir()}/abide-wire-`)
+    const made = Bun.spawn(
+        ['bun', `${ROOT}packages/abide/compiler/shapes.ts`, APP, '--out', `${dir}/.abide/shapes.json`],
+        { stdout: 'pipe', stderr: 'pipe' },
+    )
+    const failed = await new Response(made.stderr).text()
+    if ((await made.exited) !== 0) throw new Error(`abide: the shapes derivation failed — ${failed}`)
+    return dir
+}
+
 test('both laws meet over a real wire', async () => {
+    // The child's cwd is this case's, not the caller's, which is what makes the answer the same from
+    // the repo root and from inside the package.
+    const held = await derivedShapes()
     const run = Bun.spawn(['bun', `${import.meta.dir}/transport-wire.ts`], {
+        cwd: held,
         stdout: 'pipe',
         stderr: 'pipe',
     })
