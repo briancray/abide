@@ -140,7 +140,7 @@ test('the page is the app’s own, with a reload client that is not in the bundl
     // that is broken is exactly when the page has to still be able to reconnect and reload itself
     // once it is fixed. A reload client that shipped in the bundle could not do that — so this is
     // the dev server's own file, hand-written and served from memory.
-    expect(markup).toContain(`<script defer src="${RELOAD_CLIENT}">`)
+    expect(markup).toContain(`<script async src="${RELOAD_CLIENT}?`)
     const client = await fetch(`${app.base}${RELOAD_CLIENT.slice(1)}`)
     expect(client.headers.get('content-type')).toContain('javascript')
     // Same reason `client.js` is `no-store`: the address does not promise one set of bytes.
@@ -156,9 +156,15 @@ test('the page is the app’s own, with a reload client that is not in the bundl
     // reload lands the moment it frees, which is a long run throwing its results away at the end.
     const boot = await (await fetch(`${app.base}${RELOAD_CLIENT.slice(1)}?boot`)).text()
     expect(boot.length).toBeGreaterThan(8)
-    // The tie that makes the comparison mean anything: the id the client holds is the id this
-    // process answers with, so a mismatch can only be a different process.
-    expect(source).toContain(boot)
+    // The tie that makes the comparison mean anything, and it is to the DOCUMENT rather than to this
+    // file: the tag the page carries names the process that RENDERED it, and the script reads that
+    // off its own src instead of holding an id of its own. A page whose first socket attempt failed
+    // goes on to fetch this file from whatever worker is up NEXT, so an id baked in here would be
+    // that worker's — the stale page would compare itself against the server serving it, find them
+    // equal, and sit there showing what the files used to say.
+    expect(markup).toContain(`<script async src="${RELOAD_CLIENT}?${boot}">`)
+    expect(source).toContain('document.currentScript.src')
+    expect(source).not.toContain(boot)
     // Stable while the process is. Asked twice because "reload when they differ" is satisfied by an
     // id that differs every time — which would reload on every reconnect exactly as before.
     expect(await (await fetch(`${app.base}${RELOAD_CLIENT.slice(1)}?boot`)).text()).toBe(boot)

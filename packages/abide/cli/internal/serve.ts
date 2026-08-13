@@ -35,8 +35,7 @@ import { config } from '$server/config.ts'
 import { boot, shutdown } from '$server/lifecycle.ts'
 import { register, websocket } from '$server/registry.ts'
 import { socket } from '$server/rpc.ts'
-import { mountBase, mounted, unmounted } from '$shared/internal/mount.ts'
-import { RELOAD_PATH, SOCKET_PREFIX } from '$shared/internal/PATHS.ts'
+import { mountBase } from '$shared/internal/mount.ts'
 import { messageOf } from '$shared/internal/probes.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { CLIENT_KEY, clientGraph, entryNames } from '../CLIENT_BUILD.ts'
@@ -44,6 +43,7 @@ import { heldClient, type LoadedClient } from './assets.ts'
 import { clientLane } from './entry.ts'
 import { clientBuild, type Lane } from './lane.ts'
 import { type Answer, assemble, portFrom, report } from './layers.ts'
+import { RELOAD_ID, reloadClient, reloadSource, reloadTag } from './reload.ts'
 
 /**
  * The worker's own global surface, named rather than assumed.
@@ -74,19 +74,6 @@ export interface Said {
 }
 
 /**
- * Where a browser waits to be told the app came back.
- *
- * Under the reserved prefix and through the ordinary socket mux, so a dev server claims no address
- * an operator does not already proxy with one pattern — and so the reload path is the same transport
- * every other socket in the app uses rather than a private one that only works in development.
- *
- * Namespaced under `abide/` because the id space is the app's: a project with its own
- * `server/sockets/reload.ts` registers `reload`, and two declarations at one address is one of them
- * silently winning.
- */
-const RELOAD_ID = 'abide/reload'
-
-/**
  * Nothing is ever published on it, and that is the design.
  *
  * The signal is the CONNECTION, not a message: this worker being torn down is what closes every
@@ -97,89 +84,6 @@ const RELOAD_ID = 'abide/reload'
  */
 const reload = socket<never>()
 register('socket', [[RELOAD_ID, 'reload']], { reload })
-
-/**
- * This worker's identity, so a RECONNECT can be told from a RESTART.
- *
- * Reopening the socket was taken as proof the app had come back, and it is not: a laptop that slept,
- * a proxy that timed the connection out, a browser reclaiming an idle socket all close it against a
- * server that never went anywhere. The page then reloaded for no reason — and because a reload
- * queued behind a busy main thread lands the moment it frees, what that looks like is a long-running
- * page throwing everything away the instant it finishes. Every measurement on `/bench`, gone, with
- * nothing in the console and nothing having changed on disk.
- *
- * A boot id makes the question answerable: the client bakes in the one it loaded with, and asks on
- * every reconnect whether the server on the other end is still that process.
- */
-const BOOT_ID = Bun.randomUUIDv7()
-
-/**
- * The reload client, hand-written and served from this worker's memory at `RELOAD_PATH`.
- *
- * Not from the bundle, because a client build that is BROKEN is exactly when a developer needs the
- * page to still reconnect and reload itself once the build is fixed. Reconnecting is the whole of it
- * — the first open is this page's own, and any open after that is a server that was not there when
- * the page loaded.
- *
- * A file rather than an inline `<script>` for the reason `RELOAD_PATH` states: an app running `csp()`
- * refuses inline script it did not stamp, and a head cut once at boot has no per-request nonce to be
- * stamped with. That failure is the quiet kind — the page renders, and only the reloading stops.
- *
- * The backoff exists so a page left open after Ctrl-C is not a socket attempt every 100ms forever.
- */
-// Built per BOOT rather than at import, because the mount is `APP_URL`'s and config has not been
-// resolved when this module is loaded. One string per dev process, which is what it was before.
-const reloadSource = (): string =>
-    '(()=>{' +
-    `const at=(location.protocol==='https:'?'wss://':'ws://')+location.host+${JSON.stringify(mounted(SOCKET_PREFIX + RELOAD_ID))};` +
-    `const who=${JSON.stringify(mounted(RELOAD_PATH) + BOOT_QUERY)},id=${JSON.stringify(BOOT_ID)};` +
-    'let seen=false,wait=100;' +
-    // The reconnect ASKS rather than assumes. A fetch that fails leaves the page alone: the server
-    // is not answering, so it is not the one to reload against, and the next close will try again.
-    'const back=()=>fetch(who,{cache:"no-store"}).then(r=>r.text()).then(t=>{if(t!==id)location.reload()},()=>{});' +
-    'const open=()=>{const live=new WebSocket(at);' +
-    'live.onopen=()=>{if(seen)back();seen=true;wait=100};' +
-    'live.onclose=()=>setTimeout(open,wait=Math.min(wait*2,1000))};' +
-    'open()})()'
-
-/** What the client appends to `RELOAD_PATH` to ask who is answering. See `BOOT_ID`. */
-const BOOT_QUERY = '?boot'
-
-/**
- * What the head carries instead — appended to the end of the shell's head.
- *
- * `defer` so the document's parse does not wait on a fetch: a page that streams is one this would
- * otherwise stall at the head, and the socket is worth nothing until there is a page to reload.
- */
-const reloadTag = (): string => `<script defer src="${mounted(RELOAD_PATH)}"></script>`
-
-/** Dev's own file, in FRONT of the app — or `undefined` when the request is the app's. */
-function reloadClient(request: Request, source: string): Response | undefined {
-    // The raw url text first and the parsed pathname deciding, exactly as the bundle route does it:
-    // an app's own request pays one substring test rather than a URL parse.
-    if (!request.url.includes(RELOAD_PATH)) return undefined
-    const url = new URL(request.url)
-    if (unmounted(url.pathname) !== RELOAD_PATH) return undefined
-    // Who is answering, for a client deciding whether its socket came back to the SAME process. The
-    // same address rather than one of its own: it is already exempt from the app's pipeline, already
-    // uncached, and already the one path a page loaded by `abide dev` is guaranteed to be able to
-    // reach — a second route would be a second thing to keep in front of `csp()` and the mount.
-    if (url.search === BOOT_QUERY) {
-        return new Response(BOOT_ID, {
-            headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
-        })
-    }
-    return new Response(source, {
-        headers: {
-            'content-type': 'text/javascript; charset=utf-8',
-            // Every dev asset's answer: the address is stable, so the bytes behind it are not.
-            'cache-control': 'no-store',
-            // This route never reaches `headersFor` — it is answered in front of the pipeline — and
-            // what it hands back is JavaScript on the app's own origin.
-            'x-content-type-options': 'nosniff',
-        },
-    })
-}
 
 /** How far `--port` will walk before giving up. A range, so a busy machine fails rather than spins. */
 const HOPS = 64
