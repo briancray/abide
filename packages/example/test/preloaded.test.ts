@@ -1,26 +1,31 @@
-// The preload list is written TWICE, and this is what keeps the two copies saying the same thing.
+// The preload list is written once per package, and this is what keeps every copy saying the same
+// thing.
 //
 // A bunfig SHADOWS rather than merges: bun reads the one in the directory it was invoked from and no
-// other. This package has its own for `[serve.static] plugins` — Tailwind, an example dependency the
-// framework must not acquire — and that file existing at all is what took the DOM and the `.abide`
-// loader away from a `bun test` typed inside the package. What it looked like was 19 failures reading
-// `document is not defined` and `has no default export`, not one of which names the cause.
+// other, and it does not walk up. So a `bun test` typed inside a package gets whatever that package
+// declares — or nothing, which is how `packages/example` produced 19 failures reading `document is not
+// defined` and `.abide` pages reporting no default export, and how `packages/perf` lost six of eight.
 //
-// So the root's `[test] preload` is repeated here, and a repetition that can drift is one a gate owes
-// a check to.
+// Worse than either is the case that does not fail: without the DOM the kit's own cases go on PASSING
+// while measuring a code path the repo never ships. That is the failure CLAUDE.md names and no count
+// reports, and it is why the rule is EVERY package holding a `*.test.ts` rather than the ones that
+// happen to need a document this week.
+//
+// Four copies of a two-line list, taken deliberately. The alternatives are a preload barrel — a module
+// whose whole job is to be two imports — or leaving a trap whose symptom points anywhere but at it. A
+// repetition that can drift owes a gate; this is the gate.
 
 import { expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
-const APP = new URL('../', import.meta.url).pathname
 const ROOT = new URL('../../../', import.meta.url).pathname
 
 /**
  * A bunfig's `[test] preload`, as absolute paths.
  *
- * Read as TEXT rather than through a TOML parser: the two lists are written relative to their own
- * files — `./packages/abide-kit/…` at the root and `../abide-kit/…` here — so what is being compared
- * is what they RESOLVE to, and a parser would hand back the strings this still has to resolve.
+ * Read as TEXT rather than through a TOML parser: each list is written relative to its OWN file —
+ * `./packages/abide-kit/…` at the root, `../abide-kit/…` in a package — so what is compared is what
+ * they RESOLVE to, which is the only sense in which two of them can be the same list.
  */
 async function preloaded(dir: string): Promise<string[]> {
     const text = await Bun.file(`${dir}bunfig.toml`).text()
@@ -33,24 +38,41 @@ async function preloaded(dir: string): Promise<string[]> {
     return paths
 }
 
-test('both bunfigs preload the same files, in the same order', async () => {
-    const app = await preloaded(APP)
-    // Non-empty as its own claim: a regex that matched nothing would make two missing sections equal,
+/** Every package holding at least one test file — the packages this rule is ABOUT. */
+async function packagesWithTests(): Promise<string[]> {
+    const names = new Set<string>()
+    for await (const found of new Bun.Glob('packages/*/**/*.test.ts').scan({ cwd: ROOT })) {
+        names.add(found.split('/')[1] as string)
+    }
+    return [...names].sort()
+}
+
+test('every package holding a test declares the preload, and declares the same one', async () => {
+    const root = await preloaded(ROOT)
+    // Non-empty as its own claim: a regex that matched nothing would make two ABSENT sections equal,
     // which is the one way this passes while preloading nothing at all.
-    expect(app.length).toBe(2)
-    expect(app).toEqual(await preloaded(ROOT))
+    expect(root.length).toBe(2)
+
+    const packages = await packagesWithTests()
+    // The list itself, so a package that stops carrying tests is a line to read rather than a silent
+    // shrink — and so a glob that matched nothing cannot pass this by asserting over an empty loop.
+    expect(packages).toEqual(['abide', 'abide-kit', 'example', 'perf'])
+
+    for (const name of packages) {
+        const at = `${ROOT}packages/${name}/`
+        const declared = await Bun.file(`${at}bunfig.toml`).exists()
+        expect(declared, `packages/${name} has tests and no bunfig`).toBe(true)
+        expect(await preloaded(at), `packages/${name} preloads something else`).toEqual(root)
+    }
 })
 
-test('and every file either of them names is on disk', async () => {
-    for (const path of await preloaded(APP)) {
+test('every file any of them names is on disk', async () => {
+    for (const path of await preloaded(ROOT)) {
         expect(await Bun.file(path).exists(), `${path} is preloaded and does not exist`).toBe(true)
     }
 })
 
 test('the DOM the preload installs is here, whichever directory this was run from', () => {
-    // The symptom of its absence, and the reason it is asserted rather than assumed: without it the
-    // ui suites fail thirteen times over on `document is not defined`, and the kit's own cases go on
-    // passing while measuring a different code path.
     expect(typeof document).toBe('object')
     expect(document.createElement('div').isConnected).toBe(false)
 })

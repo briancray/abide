@@ -1,0 +1,10 @@
+# The root's `[test] preload`, repeated for the reason `packages/example/bunfig.toml` states.
+#
+# Here it changes nothing TODAY — `cli/internal/reload.test.ts` stubs its own browser and asks for no
+# DOM — and that is exactly why it is written down: the next test in this package to touch a document
+# would not fail without it, it would measure a different code path and pass. Every package holding a
+# `*.test.ts` declares this, so which ones happen to need a DOM this week is not a thing to know.
+#
+# `packages/example/test/preloaded.test.ts` is what holds every copy of this list to the same answer.
+[test]
+preload = ["../abide-kit/internal/happydom.ts", "./compiler/preload.ts"]

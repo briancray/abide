@@ -1,0 +1,8 @@
+# The root's `[test] preload`, repeated because a bunfig SHADOWS rather than merges: bun reads the one
+# in the directory it was invoked from and no other, so `bun test` typed in this package got neither
+# the DOM nor the `.abide` loader. Here that is not a row of failures but the quiet kind — the kit's
+# own cases go on passing while measuring a code path the repo never ships.
+#
+# `packages/example/test/preloaded.test.ts` is what holds every copy of this list to the same answer.
+[test]
+preload = ["./internal/happydom.ts", "../abide/compiler/preload.ts"]
