@@ -14,10 +14,15 @@
 <script module>
 import { state, watch } from 'abide'
 import { type Case, enqueue, running, type Status } from 'abide-kit'
-import { HEAD } from './table.ts'
+import { CASE_ROW, LABEL } from './table.ts'
 import Source from './source.abide'
 
-/** The badge's ramp. `waiting` and `running` are deliberately quiet — neither is news. */
+/**
+ * The badge's ramp. `waiting` and `running` are deliberately quiet — neither is news.
+ *
+ * `LABEL` and not `HEAD`: `HEAD` ends in `text-slate-600`, and two `color` utilities on one element are
+ * settled by Tailwind's emit order rather than the attribute's, so every one of these lost to the grey.
+ */
 const TONE: Record<Status, string> = {
     waiting: 'text-slate-600',
     running: 'text-slate-600',
@@ -33,8 +38,19 @@ const LINE: Record<'note' | 'pass' | 'fail', string> = {
     fail: 'text-rose-400',
 }
 
-/** The one column template every case row is laid on, so titles and statuses line up down the page. */
-const ROW = 'grid grid-cols-[minmax(0,1fr)_7rem] items-baseline gap-x-4 px-3 py-2'
+/**
+ * The row itself, laid on the table's shared columns — see `CASE_ROW`.
+ *
+ * On the `<summary>` rather than on a `<span>` inside it, which is the whole of the disclosure fix: a
+ * `<summary>` is a `list-item`, and a block-level only child pushes the marker onto a LINE OF ITS OWN
+ * above the title. Every row on `/tests` was two lines tall with a stray triangle floating over it.
+ * So the marker goes (`list-none`, plus WebKit's own pseudo-element, which `list-none` does not reach)
+ * and the chevron below takes the first column.
+ */
+const ROW = `${CASE_ROW} py-2 cursor-pointer select-none list-none hover:bg-slate-900/40 [&::-webkit-details-marker]:hidden`
+
+/** `items-baseline` has no baseline to give an svg, so the chevron centres itself against the title. */
+const CHEVRON = 'self-center w-2 h-2 fill-slate-600 transition-transform duration-100 group-open:rotate-90'
 </script>
 
 <script>
@@ -63,11 +79,10 @@ watch(() => {
      `<details>` too, so "how many rows" is a question the tag cannot answer. It is also the handle a
      browser-driven test reaches a case by. -->
 <details class="group" data-case={spec.title}>
-    <summary class="cursor-pointer select-none hover:bg-slate-900/40 marker:text-slate-700">
-        <span class={ROW}>
-            <span class="text-sm text-slate-100 truncate" title={spec.title}>{spec.title}</span>
-            <span class="{HEAD} text-right {TONE[held.status()]}">{held.status()}</span>
-        </span>
+    <summary class={ROW}>
+        <svg viewBox="0 0 8 8" class={CHEVRON} aria-hidden="true"><path d="M2 0 L7 4 L2 8 Z"/></svg>
+        <span class="text-sm text-slate-100 truncate" title={spec.title}>{spec.title}</span>
+        <span class="{LABEL} text-right {TONE[held.status()]}">{held.status()}</span>
     </summary>
 
     <div class="px-3 pb-4 space-y-3 border-t border-slate-900 bg-slate-950/40">

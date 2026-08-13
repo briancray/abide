@@ -134,6 +134,19 @@ async function drain(at: string): Promise<void> {
  * needs a person. A failed assertion stops the case exactly as it stops the test.
  */
 async function start(spec: Case, held: Running, host: HTMLElement): Promise<void> {
+    // A live area that has left the document is a case nobody is showing any more — a filter dropped
+    // its row while the queue was still working towards it. Skipped rather than run: the queue is one
+    // line for the whole page, so a hidden case is not free, it is every visible case behind it
+    // waiting. `queued` is put back so re-showing the row queues it again, which is what makes the
+    // chips on `/tests` reversible rather than a one-way discard.
+    //
+    // Only reachable for a case that was in the document when it enqueued, because `bind:element` is
+    // what enqueues it. That is also why the check is HERE and not in `enqueue`.
+    if (!host.isConnected) {
+        held.queued = false
+        return
+    }
+
     const ctx = context(host, held.sink)
     held.status.set('running')
     try {

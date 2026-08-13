@@ -15,7 +15,7 @@
 // `Case` is and `timeArms` does not know what abide is.
 
 import { describe, expect, test } from 'bun:test'
-import { AssertionError, equals, smokeBench } from 'abide-kit'
+import { AssertionError, type Case, enqueue, equals, running, smokeBench } from 'abide-kit'
 import { NOISE, quiesce, timeArms, verdict } from 'abide-kit/measure'
 
 // Run from the REPO ROOT. `bunfig.toml`'s preload is what puts a document here, and bun reads a bunfig
@@ -67,6 +67,106 @@ describe('equals — what `is` means by equal', () => {
         expect(equals(new TypeError('boom'), new TypeError('boom'))).toBe(true)
         expect(equals(new TypeError('boom'), new RangeError('boom'))).toBe(false)
         expect(equals(new TypeError('boom'), new TypeError('other'))).toBe(false)
+    })
+})
+
+/**
+ * The queue's one CONTRACT that produces no output at all: a case whose live area has left the
+ * document is not run.
+ *
+ * A "does less work" claim, so nothing about any value moves when it breaks — the skipped case simply
+ * runs anyway, against a host nobody can see, while every case behind it in the one-at-a-time queue
+ * waits for it. With the guard reverted the first expectation below reads `['dropped', 'shown']`
+ * instead of `['shown']`, and the last one — the case coming BACK when its row does — never runs at
+ * all, because `queued` stayed true.
+ *
+ * The filter chips on `/tests` are what needs this: dropping a row is how you stop three hundred cases
+ * you are not reading, and putting it back is how you start it again.
+ */
+describe('the queue skips a case whose live area has left the document', () => {
+    /** How many turns of the event loop the queue is given before the case gives up on it. */
+    const TURNS = 200
+
+    /** A case that writes its own name down when it runs, and nothing else. */
+    function spy(title: string, ran: string[], hold?: Promise<void>): Case {
+        return {
+            title,
+            run: async () => {
+                ran.push(title)
+                if (hold !== undefined) await hold
+            },
+        }
+    }
+
+    const areas: HTMLElement[] = []
+
+    /**
+     * A live area of this case's own, appended to the body rather than taken from `container()`.
+     *
+     * `container()` hands back a child of the scratch holder, and `start` EMPTIES that holder after
+     * every case — so a host taken from it is detached the moment the case in front of it finishes,
+     * and every case behind the first is then skipped by the very guard under test. On a page the
+     * two are never the same element: a card's live area is its own `bind:element`, and the holder is
+     * the scratch a case renders INTO.
+     */
+    function liveArea(): HTMLElement {
+        const area = document.createElement('div')
+        document.body.append(area)
+        areas.push(area)
+        return area
+    }
+
+    /**
+     * Let the queue work until `done`, and FAIL rather than spin when it never does.
+     *
+     * A macrotask per turn rather than `await Promise.resolve()`, and that is the whole difference
+     * between a red suite and no suite at all: a microtask loop starves the event loop, so bun's own
+     * per-test timeout — a timer — never gets to run. What that looks like is `bun test` pinned at
+     * 100% CPU with no failure, no summary and no output, for as long as it is left.
+     */
+    async function until(done: () => boolean, what: string): Promise<void> {
+        for (let turn = 0; turn < TURNS; turn++) {
+            if (done()) return
+            await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+        throw new Error(`abide-kit: the queue never ${what}`)
+    }
+
+    test('a detached host is skipped, and re-queues when it comes back', async () => {
+        const ran: string[] = []
+        let release = (): void => {}
+        const held = new Promise<void>((resolve) => {
+            release = resolve
+        })
+
+        // The drain starts inside the first `enqueue` and runs synchronously into the first case, so
+        // there has to be one HOLDING it while the row behind it is dropped. Without this the case
+        // under test has already started and the guard is unreachable.
+        const blocker = running()
+        enqueue(spy('blocker', ran, held), blocker, liveArea())
+
+        const dropped = running()
+        const droppedHost = liveArea()
+        enqueue(spy('dropped', ran), dropped, droppedHost)
+
+        const shown = running()
+        enqueue(spy('shown', ran), shown, liveArea())
+
+        droppedHost.remove()
+        release()
+        await until(() => shown.status.peek() === 'passing', 'reached the case behind the dropped one')
+
+        expect(ran).toEqual(['blocker', 'shown'])
+        expect(dropped.status.peek()).toBe('waiting')
+        // Put back, so the row coming back on screen starts the case rather than stranding it.
+        expect(dropped.queued).toBe(false)
+
+        document.body.append(droppedHost)
+        enqueue(spy('dropped', ran), dropped, droppedHost)
+        await until(() => dropped.status.peek() === 'passing', 're-ran the case that came back')
+        expect(ran).toEqual(['blocker', 'shown', 'dropped'])
+
+        for (const area of areas) area.remove()
     })
 })
 

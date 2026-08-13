@@ -16,15 +16,16 @@
 <script module>
 import type { ArmRow, BenchRow } from 'abide-kit'
 import { armBar, armTone, armWidth, tailTone } from './bench.ts'
-import { BENCH_ARM as ARM, BENCH_ROW as ROW, HEAD, NUMBER } from './table.ts'
+import { BENCH_ARM as ARM, BENCH_ROW as ROW, HEAD, LABEL, NUMBER } from './table.ts'
 
 // The kind is a chip rather than a column: it says how to read the rest of the row, and four colours are
-// quicker to skip past than four words in the same grey.
+// quicker to skip past than four words in the same grey. `LABEL` and not `HEAD` — see `LABEL`: `HEAD`
+// carries a colour of its own, and which of the two won was Tailwind's emit order to decide.
 const KIND_TONE: Record<BenchRow['kind'], string> = {
-    time: `${HEAD} text-slate-500 shrink-0`,
-    work: `${HEAD} text-emerald-500/80 shrink-0`,
-    wake: `${HEAD} text-violet-400/80 shrink-0`,
-    budget: `${HEAD} text-amber-500/80 shrink-0`,
+    time: `${LABEL} text-slate-500 shrink-0`,
+    work: `${LABEL} text-emerald-500/80 shrink-0`,
+    wake: `${LABEL} text-violet-400/80 shrink-0`,
+    budget: `${LABEL} text-amber-500/80 shrink-0`,
 }
 
 const SMALL = 'rounded border border-slate-800 px-2 py-0.5 text-xs text-slate-400 hover:text-slate-200'

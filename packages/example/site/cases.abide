@@ -4,25 +4,34 @@
      both `/tests` (all of them) and `/tests/<name>` (one), with no branch inside it for which page it is
      on. Whatever is nested inside lands under the table.
 
-     Every case runs. `<details>` decides who is LOOKING, not what happened — see `case-row.abide`. -->
+     The filter is here for the same reason: three hundred and forty rows are read by NARROWING, and the
+     narrowing is the table's rather than either page's. It matches `/bench`'s — the same field, the same
+     chips, the same all-terms rule — and it DROPS rows rather than hiding them with a class, so a face
+     nobody is reading is a row that is not on the page at all.
+
+     The chips are the FACES a case has, which is the axis nothing else on the site offers: `/docs/<name>`
+     is a suite's ladder and `/bench` is its measurements, but a case's `interact` half — the part that
+     needs a click — appears nowhere but here, and until there was a chip for it there was no way to find
+     the sixty-odd rows that have one among the three hundred that do not. There is deliberately no
+     `bench` chip: that page exists.
+
+     Every case that is ON the page runs. `<details>` decides who is LOOKING, not what happened — and
+     dropping a row is what STOPS it, since the queue skips a case whose live area has left the document.
+     See `case-row.abide` and `enqueue`. -->
 <script module>
-import type { Suite } from 'abide-kit'
+import { memo, state } from 'abide'
+import type { Case, Suite } from 'abide-kit'
 import Row from './case-row.abide'
-import { GROUP, HEAD, STICKY, TABLE } from './table.ts'
+import { CASE_ROW, caseText, CHIP, CHIP_ON, FIELD, GROUP, HEAD, matches, STICKY, TABLE, terms } from './table.ts'
 
-/** The same column template the rows are laid on, for the header above them. */
-const ROW = 'grid grid-cols-[minmax(0,1fr)_7rem] items-baseline gap-x-4 px-3'
+/** Which face a chip asks for. `all` is every case, whatever it carries. */
+const FACES = ['all', 'run', 'interact'] as const
+type Face = (typeof FACES)[number]
 
-/**
- * How many cases are on the page, so the heading is a count rather than a promise.
- *
- * The parameter is NOT named `suites`: what counts as a cell is decided syntactically and file-wide, so a
- * parameter shadowing the prop's name is rewritten into a read of the prop.
- */
-function total(shown: Suite[]): number {
-    let count = 0
-    for (const suite of shown) count += suite.cases.length
-    return count
+function hasFace(spec: Case, face: Face): boolean {
+    if (face === 'run') return spec.run !== undefined
+    if (face === 'interact') return spec.interact !== undefined
+    return true
 }
 </script>
 
@@ -30,6 +39,45 @@ function total(shown: Suite[]): number {
 import { props } from 'abide'
 
 const { suites, title, blurb } = props<{ suites: Suite[]; title: string; blurb: string }>()
+
+const face = state<Face>('all')
+const query = state('')
+
+/**
+ * The suites this filter is showing, with the cases it dropped already gone — and no heading left over
+ * a suite it emptied.
+ *
+ * The query is taken apart ONCE, outside the loops: this body re-runs on every character, and three
+ * hundred rows per keystroke is three hundred re-parses of the same string otherwise.
+ */
+const shown = memo((): Suite[] => {
+    const wanted = terms(query)
+    const out: Suite[] = []
+    for (const suite of suites) {
+        const cases: Case[] = []
+        for (const spec of suite.cases) {
+            if (!hasFace(spec, face)) continue
+            if (!matches(caseText(spec, suite.name), wanted)) continue
+            cases.push(spec)
+        }
+        if (cases.length > 0) out.push({ ...suite, cases })
+    }
+    return out
+})
+
+/**
+ * How many cases are on the page, out of how many there are.
+ *
+ * A function rather than a memo because one slot reads it and nothing else does — there is no second
+ * reader for a cell to serve, and the slot it is called from already tracks everything it touches.
+ */
+function shownCount(): string {
+    let showing = 0
+    for (const suite of shown) showing += suite.cases.length
+    let total = 0
+    for (const suite of suites) total += suite.cases.length
+    return showing === total ? `${total}` : `${showing} of ${total}`
+}
 </script>
 
 <div class="mx-auto max-w-5xl px-6 pt-10 pb-2">
@@ -38,13 +86,26 @@ const { suites, title, blurb } = props<{ suites: Suite[]; title: string; blurb: 
 </div>
 
 <main class="mx-auto max-w-5xl px-6 pb-24 space-y-6">
+    <div class="flex flex-wrap items-center gap-3">
+        <input class={FIELD} bind:value={query} placeholder="filter — title, suite or note"/>
+        <span class="text-sm text-slate-500">{shownCount()} cases</span>
+        <div class="flex flex-wrap items-center gap-1.5 ml-auto">
+            {#for name of FACES}<button class={face === name ? CHIP_ON : CHIP} onclick={() => (face = name)}>{name}</button>{/for}
+        </div>
+    </div>
+
     <div class={TABLE}>
-        <div class="{ROW} {STICKY}">
-            <span class={HEAD}>case · {total(suites)}</span>
+        <div class="{CASE_ROW} {STICKY}">
+            <span></span>
+            <span class={HEAD}>case</span>
             <span class="{HEAD} text-right">status</span>
         </div>
 
-        {#for suite of suites}
+        {#if shown.length === 0}
+            <p class="px-3 py-6 text-sm text-slate-500">Nothing matches “{query}”.</p>
+        {/if}
+
+        {#for suite of shown}
             <div class={GROUP}>
                 <a href="/docs/{suite.name}" class="hover:text-slate-200">{suite.name}</a> · {suite.cases.length}
             </div>

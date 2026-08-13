@@ -56,6 +56,41 @@ test('an interact face survives being poked — the claim no headless run can ma
     await expect(row.locator('p').filter({ hasText: /^HELLO E2E$/ }).first()).toBeVisible()
 })
 
+/**
+ * The filter, which is browser-only twice over: it is typed into and clicked, and what it does is DROP
+ * rows rather than dim them — so the claim is about how many `[data-case]` there are, which is a count
+ * only a rendered page has.
+ *
+ * The `interact` chip is the point of the thing. A case's interactive half appears nowhere else on the
+ * site — `/docs/<suite>` is the ladder and `/bench` is the measurements — so until this chip existed
+ * there was no way to find the rows that have one.
+ */
+test('the filter drops rows, and the interact chip finds the ones with a click in them', async ({ page }) => {
+    await page.goto('/tests/state')
+
+    const rows = page.locator('[data-case]')
+    const all = await rows.count()
+
+    await page.getByRole('button', { name: 'interact', exact: true }).click()
+    const interactive = await rows.count()
+    expect(interactive, 'no case in the suite carries an interact face').toBeGreaterThan(0)
+    expect(interactive, 'the chip showed every row, so it filtered nothing').toBeLessThan(all)
+    // The face the chip names, in the row it left: the pane is only rendered for a case that has one.
+    await expect(rows.first().locator('details', { hasText: 'the interactive half' }).first()).toHaveCount(1)
+
+    await page.getByRole('button', { name: 'all', exact: true }).click()
+    await expect(rows).toHaveCount(all)
+
+    await page.getByPlaceholder('filter').fill('peek')
+    const narrowed = await rows.count()
+    expect(narrowed).toBeGreaterThan(0)
+    expect(narrowed).toBeLessThan(all)
+    // A query nothing answers says so, rather than showing an empty table that reads as "no tests".
+    await page.getByPlaceholder('filter').fill('zzzz no case says this')
+    await expect(rows).toHaveCount(0)
+    await expect(page.getByText('Nothing matches')).toBeVisible()
+})
+
 test('a row opens to the code that made its lines', async ({ page }) => {
     await page.goto('/tests/memo')
 
