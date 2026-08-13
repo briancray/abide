@@ -172,9 +172,24 @@ function tokenize(source: string, from: number, to: number): Cursor {
 /**
  * The token indices a binding pattern introduces. An identifier followed by `:` is an object-pattern
  * KEY, not a binding — `{ a: b }` binds `b`. An identifier after `.` is a property.
+ *
+ * That key rule is why the colon is checked against the pattern's DEPTH rather than on its own, and
+ * the difference is a whole class of silent miscompiles. Every caller here — a declarator, a
+ * parameter list, a `catch` — is a place a TYPE ANNOTATION is legal, and an annotated binding wears
+ * the same colon a key does: `const showing: number[] = []` and `(showing: number[]) => …` both name
+ * `showing` and both were skipped, so neither ever shadowed an outer cell of that name. What the
+ * emitter then produced was `showing()` over a plain array — a call on the LOCAL, in a file where
+ * nothing near it mentions a cell. It cost a page: a memo named for a local one function away
+ * compiled to `showing().push(row)` and took every control on `/bench` down with it.
+ *
+ * A key only exists inside a `{ }` or `[ ]`, so depth is what tells the two apart: deeper than the
+ * pattern's own level is a destructuring key, and at that level it is a name with a type on it.
  */
 function boundNames(cursor: Cursor, from: number, to: number, inType: Uint8Array): number[] {
     const indices: number[] = []
+    // The level the pattern itself sits at. A destructuring key is always deeper than this, because
+    // it is inside the brace or bracket that makes it a pattern at all.
+    const base = cursor.nesting[from] as number
     for (let i = from; i < to; i++) {
         // `const a: typeof n = n` names `a` and mentions `n`. Without this the annotation's `n` was
         // collected as a binding, which shadowed the cell for the rest of the block. Required rather
@@ -184,7 +199,9 @@ function boundNames(cursor: Cursor, from: number, to: number, inType: Uint8Array
         if (token.kind !== SyntaxKind.Identifier) continue
         const previous = cursor.tokens[i - 1]
         if (previous?.kind === SyntaxKind.DotToken || previous?.kind === SyntaxKind.QuestionDotToken) continue
-        if (cursor.tokens[i + 1]?.kind === SyntaxKind.ColonToken) continue
+        if (cursor.tokens[i + 1]?.kind === SyntaxKind.ColonToken && (cursor.nesting[i] as number) > base) {
+            continue
+        }
         indices.push(i)
     }
     return indices
@@ -310,13 +327,24 @@ export function desugar(
         const level = nesting[i] as number
 
         if (token.kind === SyntaxKind.EqualsGreaterThanToken) {
-            const previous = tokens[i - 1]
+            // Back over a RETURN TYPE first. `(x: T): R => …` puts the annotation between the
+            // parameters and the arrow, so the token before `=>` is the type's last one — read
+            // directly it bound the TYPE's name and the parameters bound nothing, which left every
+            // annotated arrow parameter shadowing an outer cell of that name.
+            let at = i - 1
+            while (
+                at >= 0 &&
+                (inType[at] === 1 || (tokens[at] as Token).kind === SyntaxKind.ColonToken)
+            ) {
+                at--
+            }
+            const previous = tokens[at]
             let indices: number[] = []
             if (previous?.kind === SyntaxKind.CloseParenToken) {
-                const open = matchBackwards(cursor, i - 1)
-                if (open >= 0) indices = boundNames(cursor, open + 1, i - 1, inType)
+                const open = matchBackwards(cursor, at)
+                if (open >= 0) indices = boundNames(cursor, open + 1, at, inType)
             } else if (previous?.kind === SyntaxKind.Identifier) {
-                indices = [i - 1]
+                indices = [at]
             }
             const block = tokens[i + 1]?.kind === SyntaxKind.OpenBraceToken
             bind(indices, i, block ? level + 1 : level, !block)
@@ -399,11 +427,38 @@ export function desugar(
         }
 
         if (token.kind === SyntaxKind.FunctionKeyword) {
-            // The name binds outside and the parameters inside; both shadow, so take them together.
             let open = i + 1
             while (open < tokens.length && (tokens[open] as Token).kind !== SyntaxKind.OpenParenToken) open++
             const close = open < tokens.length ? matchForwards(cursor, open) : -1
-            bind(boundNames(cursor, i + 1, close < 0 ? open : close, inType), i, level, false)
+
+            // TWO frames, because the name and the parameters have two different scopes and one
+            // frame can only have the wider. The NAME belongs to the enclosing scope and outlives
+            // the body; the PARAMETERS end with it.
+            //
+            // Collected separately for a second reason as well: `boundNames` reads DEPTH to tell a
+            // type annotation from a destructuring key, and the parameters sit a level deeper than
+            // the name. Spanning both, every ANNOTATED parameter read as a key and bound nothing —
+            // `function f(count: number)` left `count` naming the outer cell and the body compiled
+            // to `count()` over a plain number.
+            bind(boundNames(cursor, i + 1, open, inType), i, level, false)
+            if (close < 0) continue
+
+            // Retired by INDEX, the way `catch` is and for the same reason: nesting dips back out
+            // between the parens and the block, so a depth rule kills the frame before the body the
+            // parameters name. Sharing the name's frame instead left every parameter shadowing for
+            // the rest of the FILE — that frame opens at the enclosing level and so never retires —
+            // and a cell read anywhere after the function came out as a bare identifier.
+            let brace = close + 1
+            // The first `{` that is not part of a RETURN TYPE: `function f(): { a: number } { … }`
+            // has two, and the body is the second.
+            while (
+                brace < tokens.length &&
+                ((tokens[brace] as Token).kind !== SyntaxKind.OpenBraceToken || inType[brace] === 1)
+            ) {
+                brace++
+            }
+            const end = brace < tokens.length ? matchForwards(cursor, brace) : -1
+            bind(boundNames(cursor, open + 1, close, inType), close, -1, false, end < 0 ? NO_END : end)
         }
     }
 

@@ -179,7 +179,14 @@ export function inObjectLiteral(tokens: Token[], nesting: number[], i: number, e
             // read as a block, `a ? { k: cell } : b` made `k:` a label and the cell inside it a type
             // annotation, so the cell was never read and the object rendered its own function.
             before.kind === SyntaxKind.QuestionToken ||
-            before.kind === SyntaxKind.ReturnKeyword
+            before.kind === SyntaxKind.ReturnKeyword ||
+            // `const { a: b } = obj` opens a destructuring PATTERN, and its colon is a key exactly
+            // as a literal's is. Read as a block the colon annotated, so `b` landed inside a type
+            // region, bound nothing, and every later mention of `b` desugared as though it named an
+            // outer cell — the same silent miscompile a literal's would be, one step earlier.
+            before.kind === SyntaxKind.ConstKeyword ||
+            before.kind === SyntaxKind.LetKeyword ||
+            before.kind === SyntaxKind.VarKeyword
         )
     }
     return false
