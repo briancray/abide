@@ -50,13 +50,16 @@ export async function start(argv: string[]): Promise<number> {
         return CLI_EXIT_CODES.failed
     }
 
-    const assembled = await assemble({ root, label: 'abide start', client: built })
-    if (typeof assembled === 'number') return assembled
-
     // `config()`, not the flag: an app that declared its own default gets it, and the floor is 3000.
     // Taken as it is, because the document already resolved it as a PORT — however it was named, by a
     // variable or by an app's `onConfig` default. A floor here would be a third rule for one number.
+    //
+    // Read BEFORE the app is assembled, and not only for the port: resolving the document installs the
+    // mount from `APP_URL`, and the shell `assemble` cuts writes that into every asset href.
     const port = config().PORT
+
+    const assembled = await assemble({ root, label: 'abide start', client: built })
+    if (typeof assembled === 'number') return assembled
 
     let running: Awaited<ReturnType<typeof boot<ReturnType<typeof Bun.serve>>>>
     try {

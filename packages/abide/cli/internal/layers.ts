@@ -70,6 +70,7 @@ import { page } from '$server/responses.ts'
 import type { Schema } from '$server/schema.ts'
 import type { Shell } from '$server/shell.ts'
 import { outlet, type RouteEntry, route as routeAsked, routes } from '$shared/router.ts'
+import { mounted } from '$shared/internal/mount.ts'
 import { NAVIGATION_HEADER } from '$shared/internal/PATHS.ts'
 import { isThenable, messageOf } from '$shared/internal/probes.ts'
 import { acceptedEncoding, JSON_TYPE } from '$shared/internal/wire.ts'
@@ -323,7 +324,8 @@ function shellsPerRoute(paged: Paged, manifest: ClientManifest | null): Map<stri
         if (named.length === 0) continue
 
         let links = ''
-        for (const name of named) links += `<link rel="modulepreload" href="${CLIENT_ROUTE}${name}">`
+        const at = mounted(CLIENT_ROUTE)
+        for (const name of named) links += `<link rel="modulepreload" href="${at}${name}">`
         // A shallow copy per ROUTE, not per request: `open` and `close` are the same strings every
         // route is served with, and only the head differs.
         perRoute.set(entry.path, { ...paged.shell.parts, head: paged.shell.parts.head + links })
@@ -703,7 +705,11 @@ export function portFrom(argv: string[]): number | null | string {
  */
 export function report(url: string, assembly: Assembly, note?: string): void {
     const on = colored()
-    console.log(`listening ${paint(url, BOLD, on)}`)
+    // The address an operator should OPEN, which under a mount is not the socket's own: the server
+    // binds an origin and the app is served under a path of it, so printing the origin sends a reader
+    // to a 404 in their own app. `new URL` rather than concatenation — `url` ends in `/`.
+    const at = new URL(mounted('/'), url).href
+    console.log(`listening ${paint(at, BOLD, on)}`)
 
     // Named only when there is one. An app with no module of its own has nothing to say here, and a
     // line reading `app.ts` for a file that is not there is the one mistake this line exists to catch.

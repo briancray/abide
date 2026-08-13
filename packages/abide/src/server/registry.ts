@@ -9,6 +9,7 @@
 
 import type { Server, ServerWebSocket } from 'bun'
 import type { Channel, KeyedChannel } from '$shared/channel.ts'
+import { mountBase } from '$shared/internal/mount.ts'
 import {
     ABIDE_PREFIX,
     HEALTH_PATH,
@@ -256,7 +257,15 @@ export function dispatch(
     // pathname below is still what decides.
     if (!request.url.includes(ABIDE_PREFIX)) return undefined
     const url = new URL(request.url)
-    const path = url.pathname
+    // The prefix as the BROWSER has to ask for it: an app mounted at `/v2` serves `/v2/__abide/**` and
+    // does not go on answering the same endpoints at the origin root. Tested against the mounted
+    // prefix rather than by stripping first, because "the path was not under the mount" and "the path
+    // is not abide's" have to be the same answer here — a root `/__abide/health` is both.
+    const base = mountBase()
+    if (!url.pathname.startsWith(base)) return undefined
+    // Past this line everything — the ids, the refusals, the trace — is in APP space, so an endpoint
+    // is named the same wherever the app is served.
+    const path = url.pathname.slice(base.length)
     if (!path.startsWith(ABIDE_PREFIX)) return undefined
     // Past this line the request is ABIDE'S, and all of it is served inside one scope — opened here
     // rather than in each lane, so the next `/__abide/*` endpoint does not have to remember to. It is

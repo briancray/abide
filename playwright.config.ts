@@ -19,11 +19,15 @@ import { defineConfig } from '@playwright/test'
 /** Fixed ports, so a failing run leaves a URL somebody can open rather than one that has gone. */
 const EXAMPLE_PORT = 4331
 const PERF_PORT = 4332
+/** The same example again, served under a sub-path. See the `mounted` project below. */
+const MOUNTED_PORT = 4333
+const MOUNT_BASE = '/v2'
 
-const app = (port: number, cwd: string) => ({
+const app = (port: number, cwd: string, env?: Record<string, string>) => ({
     command: `bun ../abide/cli/index.ts dev --port ${port}`,
     cwd,
-    url: `http://localhost:${port}/`,
+    ...(env === undefined ? {} : { env }),
+    url: `http://localhost:${port}${env === undefined ? '' : MOUNT_BASE}/`,
     // Never reused: an app left running from a previous session is an app serving whatever the files
     // said then, which is the one thing a gate must not measure.
     reuseExistingServer: false,
@@ -49,6 +53,10 @@ export default defineConfig({
         {
             name: 'example',
             testDir: './packages/example/e2e',
+            // `mounted/` is the same app under a sub-path and has its own server below. Ignored here
+            // rather than moved elsewhere: it is this app's spec, and a recursive `testDir` would
+            // otherwise run it against the ROOT server, where every path in it is off by `/v2`.
+            testIgnore: '**/mounted/**',
             use: { baseURL: `http://localhost:${EXAMPLE_PORT}/` },
         },
         {
@@ -56,6 +64,21 @@ export default defineConfig({
             testDir: './packages/perf/e2e',
             use: { baseURL: `http://localhost:${PERF_PORT}/` },
         },
+        // The SAME app, one environment variable different. A third project rather than a case inside
+        // the first, because a mount is a fact about the whole process — the document, the bundle
+        // route and every endpoint move together, and there is no way to ask one server for both.
+        {
+            name: 'mounted',
+            testDir: './packages/example/e2e/mounted',
+            use: { baseURL: `http://localhost:${MOUNTED_PORT}${MOUNT_BASE}/` },
+        },
     ],
-    webServer: [app(EXAMPLE_PORT, './packages/example'), app(PERF_PORT, './packages/perf')],
+    webServer: [
+        app(EXAMPLE_PORT, './packages/example'),
+        app(PERF_PORT, './packages/perf'),
+        app(MOUNTED_PORT, './packages/example', {
+            ...process.env,
+            APP_URL: `http://localhost:${MOUNTED_PORT}${MOUNT_BASE}`,
+        } as Record<string, string>),
+    ],
 })

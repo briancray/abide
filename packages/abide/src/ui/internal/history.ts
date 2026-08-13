@@ -5,6 +5,7 @@
 // a `history` from there would mean a browser's worth of `globalThis` guessing inside code the server
 // loads too, plus a `location` that answers for whichever caller happened to ask.
 
+import { MOUNT_META, useMountBase } from '$shared/internal/mount.ts'
 import { type HistorySink, useHistorySink } from '$shared/router.ts'
 
 class DocumentHistory implements HistorySink {
@@ -28,6 +29,22 @@ class DocumentHistory implements HistorySink {
     listen(go: (href: string) => void): void {
         addEventListener('popstate', () => go(location.href))
     }
+}
+
+/**
+ * Where this document says the app is mounted, from the `<meta>` its shell wrote.
+ *
+ * The client is TOLD rather than asked to work it out: a mount is a deploy-time value, so it is not in
+ * the bundle, and the alternatives all name the wrong thing eventually — `location.pathname` is the
+ * page rather than the base, and the bundle's own URL is the CDN when there is one.
+ *
+ * Absent is the ROOT, which is both the default and the honest reading of a document that said
+ * nothing. Before the sink below, because installing that is what lets a navigation happen at all.
+ */
+export function installMount(): void {
+    if (typeof document !== 'object') return
+    const declared = document.querySelector(`meta[name="${MOUNT_META}"]`)
+    if (declared !== null) useMountBase(declared.getAttribute('content') ?? '')
 }
 
 /**

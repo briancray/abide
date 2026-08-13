@@ -1019,8 +1019,8 @@ none of them. The TYPES stay on `abide`, because `pages()` hands back a `RouteEn
 | `routes` | `() => RouteEntry[]` | What is installed right now, as it was declared. The table is PROCESS-WIDE — a server installs one at boot and serves every request from it — so a caller that installs one of its own is speaking for the whole process, and this is what lets it hand back what it displaced. |
 | `pages` | `(dir: string \| URL) => Promise<RouteEntry[]>` | A pages directory as a route table. The one part of routing that is not isomorphic — a browser has no directory to scan — so the CLIENT half is generated instead: `abide build` writes the same table into `.abide/client.entry.ts` as a static `import()` per row, at build time, where the tree still is. What either hands back is the table `routes()` takes. |
 | `route` | `() => Route` | `.url`, `.params`, `.name`, `.kind`, `.navigating` — each its own read, over four small cells rather than one record. |
-| `url` | `(path: string, params?, query?) => string` | Build an in-app href. The result is NORMALISED: a trailing slash goes, a doubled slash collapses, and the empty path is `/`. A missing required segment, or a param the pattern has no segment for, THROWS. |
-| `navigate` | `(target: string, options?: { replace?, keepScroll? }) => Promise<void>` | Move to one. In a document this is a REQUEST for the target url, so the app's middleware runs — see below. Every navigation, including one that stays on the route it is on: a different `[id]` is a different page to render, and the rule has no exceptions. |
+| `url` | `(path: string, params?, query?) => string` | Build an in-app href. Takes every TARGET `navigate` takes, and agrees with it — see below. A root-absolute pattern is NORMALISED: a trailing slash goes. A missing required segment, or a param the pattern has no segment for, THROWS. Under a mount the result carries the base — see below. |
+| `navigate` | `(target: string, options?: { replace?, keepScroll? }) => Promise<void>` | Move to one. In a document this is a REQUEST for the target url, so the app's middleware runs — see below. Every navigation, including one that stays on the route it is on: a different `[id]` is a different page to render, and the rule has no exceptions. Accepts a target in either space under a mount — see below. |
 | `outlet` | `() => TemplateResult` | The current route's page wrapped in its layouts. Reads the route's NAME, and whether a range has been ADOPTED off the wire — two different facts, since a served navigation can land on the route already showing. Nothing else, so a param-only move re-runs it once and no more. |
 | `ready` | `() => Promise<void>` | Resolve the current route's modules, so the render that follows is a snapshot. What a server render calls before `renderToString` and what a client awaits before `hydrate` — a page adopted before its chunk arrives is a tree the server did not write. `navigate` awaits it for you. |
 
@@ -1037,6 +1037,59 @@ none of them. The TYPES stay on `abide`, because `pages()` hands back a `RouteEn
 `navigating` is set only where there is an in-flight window: a route is committed once its page has
 arrived, and a navigation to a route already loaded has none. In a DOCUMENT there is always one — the
 request below is the window — so it reports every navigation there.
+
+### `url` and `navigate` take the same target
+
+One set of shapes, one meaning, so `navigate(url(x))` and `navigate(x)` are the same move for every
+`x`. `url` builds the href and `navigate` goes there; neither is a special spelling of the other.
+
+| Target | Means | `url()` under a mount at `/v2`, from `/v2/users/42` |
+| --- | --- | --- |
+| `/users/[id]` | root-absolute PATTERN — the shape an app writes | `/v2/users/42` |
+| `bar`, `./bar`, `../bar` | relative to where the caller IS | `/v2/users/bar`, `/v2/users/bar`, `/v2/bar` |
+| `?tab=x` | this page, another query | `/v2/users/42?tab=x` |
+| `''` | where the caller is | `/v2/users/42` |
+| `https://foo.bar/x` | another origin | `https://foo.bar/x` — **no base**, it is not this app |
+| `https://this.app/x` | this origin | `https://this.app/v2/x` |
+| `//host/x` | protocol-relative — an ORIGIN, not a doubled slash | `//host/x` |
+| `mailto:…`, `tel:…` | opaque | unchanged |
+
+Params substitute in every shape (`url('https://api/u/[id]', { id: 7 })`), and the refusals are the
+same everywhere — a missing required segment and a param with no segment both throw wherever the
+pattern came from. A `query` third argument MERGES with a query the target already carried.
+
+A relative target is resolved against `route().url`, so `url('bar')` is a REACTIVE read: a relative
+href in a template moves when the route does. The root-absolute pattern reads nothing and is the fast
+path, which is the shape called per row.
+
+### Mounted under a sub-path
+
+`APP_URL`'s PATH is the app's mount base: `APP_URL=https://abide.com/v2` serves the whole app under
+`/v2`, and there is no second knob — an operator who said where the app is served has already said
+this. Everything moves together: the pages, `/__abide/**`, and the client bundle. Nothing is left
+answering at the origin root, so an app behind a proxy does not go on exposing its schema and log feed
+beside its mounted copy.
+
+Two spaces, and which one a path is in is decided by which side of the wire it is on.
+
+| Space | What is written in it | Carries the base |
+| --- | --- | --- |
+| APP | the route table, a pattern, `route().name`, an rpc id, a `pages/` directory | no |
+| BROWSER | an `href`, the address bar, a `fetch`, `route().url` | yes |
+
+A page under a mount is not a page that was renamed, so nothing an app calls things BY moves. `url()`
+is the only thing that mints a browser-space path, which is what makes a mount a deploy-time value:
+an app that builds its hrefs there needs no source change to move. **A hand-written `href="/users/42"`
+in a template does not move** — it is a literal, not a call, and abide does not rewrite one.
+
+`navigate()` accepts either space and the crossing is idempotent — `navigate('/users/42')` and
+`navigate(url('/users/[id]', { id: 42 }))` land on the same page. The one thing it cannot tell apart
+is an app whose own route starts with the base's first segment: mounted at `/v2`, `navigate('/v2/x')`
+goes to the app's `/x`. Naming a route after the mount is the fix.
+
+The CLIENT is told the base by the document, in a `<meta name="abide-mount">` the shell writes. It
+cannot be in the bundle — a mount is chosen after the build — and it is not derived from where the
+bundle was fetched from, which would name the CDN when there is one.
 
 ### A navigation is a request
 
@@ -1106,7 +1159,7 @@ and the app's own `onConfig` defaults beneath that. An app's own fields join on 
 | Name | Type | Description |
 | --- | --- | --- |
 | `PORT` | `number` | Listen port (default `3000`). `--port` on a command overrides it by DECLARING it, so `config().PORT` is the port. Resolved as an integer `0`–`65535` whether a variable or an `onConfig` default named it — anything else is the floor, so no reader checks the range again. `0` is the kernel's "whatever is free" and is the one number here that may be zero. |
-| `APP_URL` | `string \| null` | The app's public URL / mount base, and the origin both gates compare against (WS CSWSH, CSRF). Undeclared, they fall back to the REQUEST's own origin — which is the weaker answer, since a caller controls its own `Host`, and the wrong one behind TLS termination, where that origin is the proxy's. |
+| `APP_URL` | `string \| null` | The app's public URL. Its ORIGIN is what both gates compare against (WS CSWSH, CSRF) — undeclared, they fall back to the REQUEST's own, which is the weaker answer, since a caller controls its own `Host`, and the wrong one behind TLS termination, where that origin is the proxy's. Its PATH is the app's mount base: `https://abide.com/v2` serves every page, endpoint and asset under `/v2`. See "Mounted under a sub-path". |
 | `NODE_ENV` | `string \| null` | Verbatim. `isProduction()` is the conclusion drawn from it, and is not a field. |
 | `ABIDE_APP_NAME` | `string \| null` | The app's name, and therefore `log`'s default channel. Falls back to the nearest package.json `name`, then `abide`. |
 | `ABIDE_DATA_DIR` | `string \| null` | Overrides the per-user directory backing `appDataDir()`. |

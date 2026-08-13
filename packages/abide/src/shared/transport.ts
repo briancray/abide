@@ -15,6 +15,7 @@ import { type Channel, type ChannelOptions, channel, type KeyedChannel } from '.
 import { markSource } from './internal/BRANDS.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { seedKey, takeSeed } from './internal/seed.ts'
+import { mounted } from './internal/mount.ts'
 import { RPC_PREFIX, SOCKET_PREFIX } from './internal/PATHS.ts'
 import { hasFile } from './internal/probes.ts'
 import { arm } from './internal/timers.ts'
@@ -202,7 +203,10 @@ export function remote<Args, T, F extends Failed = never>(
     const method = options.method ?? 'GET'
     const streams = options.stream === true
     const send = options.fetch ?? ((input: string, init: RequestInit) => fetch(input, init))
-    const path = RPC_PREFIX + id
+    // Mounted, because this is an ADDRESS rather than an id: the endpoint is still `demo/query/search`
+    // wherever the app is served, and a proxy forwarding one sub-path forwards `/__abide/**` under it
+    // like everything else. The id stays app-space, so a trace and a refusal still name the endpoint.
+    const path = mounted(RPC_PREFIX + id)
     const address = options.base === undefined ? path : new URL(path, options.base).href
 
     // A read is an HTTP GET with one query parameter per argument, so the address says what was
@@ -424,7 +428,7 @@ export function remoteSocket<T, Args = void>(
 /** One room, one connection. Opened by the first READ, never by construction. */
 function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Connection<T> {
     const received = channel<T>(options.channel)
-    const path = SOCKET_PREFIX + id
+    const path = mounted(SOCKET_PREFIX + id)
     const relative = args === undefined ? path : path + argsQuery(args)
     const base = options.base ?? (globalThis as { location?: { href: string } }).location?.href
     const address = base === undefined ? relative : new URL(relative, base).href

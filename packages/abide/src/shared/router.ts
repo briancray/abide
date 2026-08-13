@@ -17,6 +17,7 @@
 // test driving a route on the side each have a scope of their own, and the document has only one.
 
 import { html, type TemplateResult } from './html.ts'
+import { mountBase, mounted, unmounted } from './internal/mount.ts'
 import {
     buildPath,
     comparePatterns,
@@ -187,8 +188,19 @@ export function routes(table?: RouteEntry[]): RouteEntry[] | undefined {
     }
 }
 
+/**
+ * Which route a BROWSER-space pathname names. The mount crossing is here rather than at the three
+ * call sites because this is the only thing that reads a pattern against a path: a table is written
+ * in app space, an address bar is in browser space, and one of them has to move to meet the other.
+ *
+ * A path OUTSIDE the mount matches NOTHING, which is a different answer from stripping a base that is
+ * not there — that would leave every page served at its mounted address and at the origin root alike,
+ * and the root copy would be a page whose own hrefs all point somewhere else.
+ */
 function lookup(pathname: string): Match | null {
-    const parts = splitPath(pathname)
+    const base = mountBase()
+    if (base !== '' && !pathname.startsWith(base)) return null
+    const parts = splitPath(unmounted(pathname))
     for (let i = 0; i < TABLE.length; i++) {
         const held = TABLE[i] as Installed
         const params = matchPattern(held.pattern, parts)
@@ -595,38 +607,138 @@ function heldPattern(path: string): Pattern {
 }
 
 /**
+ * The pattern half, on a path that is already known to be one.
+ *
+ * The placeholder probe is the DISPATCH rather than a pre-check, and that is what keeps the two arms
+ * from taxing each other: a path with a `[` goes straight to its cached pattern and never touches the
+ * scan below, which was otherwise 65% on `url('/a/[[b]]')`. Only a real pattern is cached — caching
+ * built hrefs would grow the map by one entry per href for the process's life.
+ *
+ * And a path that is already the answer IS the answer. `url('/about')` is the commonest shape a nav
+ * has, and it was paying a split, a segment array and a rebuild to arrive back at the string it
+ * started with — per row. Only with no params to place, because a param against a placeholder-free
+ * pattern is a typo the long way is there to report.
+ */
+function pathFor(path: string, params: Record<string, unknown> | undefined): string {
+    if (path.indexOf('[') !== -1) return buildPath(heldPattern(path), params)
+    if (params === undefined && literalPath(path)) return path
+    return buildPath(parsePattern(path), params)
+}
+
+/**
+ * The ORIGIN a target names, or `''` when it names none — `https://host`, `//host`, and the whole of
+ * an opaque `mailto:…`.
+ *
+ * Split by SCANNING rather than by handing the string to `new URL`, and that is not a preference: the
+ * other half is still a PATTERN with its `[id]` in it, and a URL parser percent-encodes the brackets.
+ * `/users/%5Bid%5D` is a path no pattern matches and no route serves.
+ */
+function originOf(target: string): string {
+    if (target.charCodeAt(0) === 47 /* / */) {
+        // `//host` is protocol-relative and names an origin; one slash is an ordinary path.
+        if (target.charCodeAt(1) !== 47) return ''
+        const end = target.indexOf('/', 2)
+        return end === -1 ? target : target.slice(0, end)
+    }
+    const colon = target.indexOf(':')
+    if (colon === -1) return ''
+    // A `:` inside a later segment — `notes/a:b` — is a path, not a scheme.
+    const slash = target.indexOf('/')
+    if (slash !== -1 && slash < colon) return ''
+    if (target.charCodeAt(colon + 1) !== 47 || target.charCodeAt(colon + 2) !== 47) return target
+    const end = target.indexOf('/', colon + 3)
+    return end === -1 ? target : target.slice(0, end)
+}
+
+/** Where the caller IS, for the two shapes that are resolved against it. `NOWHERE` when nothing knows. */
+function hereHref(): string {
+    const here = hereFor()
+    // A REACTIVE read, not a peek: a relative href is a fact about the current URL, so one built into
+    // a template has to move when the route does. Only these two shapes pay it — the root-absolute
+    // pattern every app writes never reaches here.
+    return here.cells === null ? hrefOf(NOWHERE) : here.cells.url().href
+}
+
+/**
+ * Everything `navigate` accepts that is not a root-absolute pattern: an absolute URL, a
+ * protocol-relative one, and a path relative to where the caller is.
+ *
+ * Kept out of `url` proper so the shape an app actually writes stays one `charCodeAt` away from its
+ * fast path — an href is built per row, and none of the work here belongs to that row.
+ */
+function elsewhere(path: string, params: Record<string, unknown> | undefined): string {
+    const origin = originOf(path)
+    // An opaque target, or an origin with nothing after it. There is no path to build.
+    if (path !== '' && origin === path) return path
+    if (origin !== '') {
+        const [ahead, tail] = beforeQuery(path.slice(origin.length))
+        const built = pathFor(ahead, params)
+        // The mount belongs to THIS app, so it goes on only when the target IS this app — the same
+        // test `navigate` makes, and for the same reason.
+        const here = new URL(hereHref()).origin
+        return origin + (origin === here ? mounted(unmounted(built)) : built) + tail
+    }
+    // Relative. BUILT before it is resolved, for `originOf`'s reason: `new URL` would encode the
+    // brackets. `buildPath` roots what it hands back and takes an unrooted pattern as written, so the
+    // slice is the only adjustment — and a refusal then names `users/[id]` rather than a `/users/[id]`
+    // the author did not write.
+    const [ahead, tail] = beforeQuery(path)
+    const at = new URL(pathFor(ahead, params).slice(1) + tail, hereHref())
+    return mounted(unmounted(at.pathname)) + at.search + at.hash
+}
+
+/** A target split at its query or hash — the pattern is the part in front, and the rest is carried. */
+function beforeQuery(target: string): [string, string] {
+    let cut = target.length
+    for (let i = 0; i < target.length; i++) {
+        const code = target.charCodeAt(i)
+        if (code === 63 /* ? */ || code === 35 /* # */) {
+            cut = i
+            break
+        }
+    }
+    return cut === target.length ? [target, ''] : [target.slice(0, cut), target.slice(cut)]
+}
+
+/**
  * An in-app href: `url('/users/[id]', { id: 42 }, { tab: 'posts' })` → `/users/42?tab=posts`.
  *
- * The first argument is a PATTERN, not an href — the query belongs in the third argument, where it
- * can be encoded. A missing required segment throws, and so does a param the pattern has no segment
- * for: both are typos every time, and both otherwise build an href to the wrong page, which is a bug
- * nothing catches until somebody clicks it.
+ * The first argument is a PATTERN, and it accepts every shape `navigate` does — a root-absolute
+ * pattern, a relative one resolved against where the caller is, an absolute URL, and a
+ * protocol-relative one. The two agree by construction, so `navigate(url(…))` and `navigate(…)` are
+ * the same move. The query still belongs in the third argument, where it can be encoded.
+ *
+ * A missing required segment throws, and so does a param the pattern has no segment for: both are
+ * typos every time, and both otherwise build an href to the wrong page, which is a bug nothing catches
+ * until somebody clicks it.
+ *
+ * What comes back is in BROWSER space: under a mount it carries the base, because an `href` is what a
+ * browser resolves against the ORIGIN rather than against the app. This is the only thing that mints
+ * one, and that is what makes a mount a deploy-time value — an app that builds its hrefs here moves
+ * under a sub-path with no source change, and one writing `href="/users/42"` by hand has opted out.
+ * A target on ANOTHER origin carries no base: this app's mount is not a fact about somebody else's.
  */
 export function url(path: string, params?: Record<string, unknown>, query?: Record<string, unknown>): string {
-    // The placeholder probe is the DISPATCH rather than a pre-check, and that is what keeps the two
-    // arms from taxing each other: a path with a `[` goes straight to its cached pattern and never
-    // touches the scan below, which was otherwise 65% on `url('/a/[[b]]')`. Only a real pattern is
-    // cached — caching built hrefs would grow the map by one entry per href for the process's life.
-    //
-    // And a path that is already the answer IS the answer. `url('/about')` is the commonest shape a
-    // nav has, and it was paying a split, a segment array and a rebuild to arrive back at the string
-    // it started with — per row, by the comment above. Only with no params to place, because a param
-    // against a placeholder-free pattern is a typo the long way is there to report.
-    let built: string
-    if (path.indexOf('[') !== -1) built = buildPath(heldPattern(path), params)
-    else if (params === undefined && literalPath(path)) built = path
-    else built = buildPath(parsePattern(path), params)
+    // One compare picks the shape every app writes — a root-absolute pattern, which is also the only
+    // one that resolves against nothing and so needs no caller. `//` is NOT it: it names a host, the
+    // way it does everywhere else a URL is written, and `elsewhere` hands it back untouched.
+    const built =
+        path.charCodeAt(0) === 47 && path.charCodeAt(1) !== 47
+            ? mounted(pathFor(path, params))
+            : elsewhere(path, params)
     if (query === undefined) return built
     let search = ''
-    // `for…in` rather than `Object.keys`, for the reason `buildPath` one line up gives: an href is
-    // built per row, and the keys array would be garbage every time.
+    // `for…in` rather than `Object.keys`, for the reason `buildPath` gives: an href is built per row,
+    // and the keys array would be garbage every time.
     for (const name in query) {
         const value = query[name]
         if (value === undefined || value === null) continue
         const pair = `${encodeURIComponent(name)}=${encodeURIComponent(String(value))}`
         search += `${search === '' ? '?' : '&'}${pair}`
     }
-    return built + search
+    // Appended with the separator the target already has: an absolute URL may have brought its own
+    // query, and a second `?` is a query string nothing parses.
+    return built + (search === '' ? '' : built.indexOf('?') === -1 ? search : `&${search.slice(1)}`)
 }
 
 // --- moving --------------------------------------------------------------------
@@ -707,6 +819,31 @@ async function enter(
 }
 
 /**
+ * A target as the browser has to ask for it, whichever space the caller wrote it in.
+ *
+ * `navigate('/users/42')` is APP space — the same space the route table and every `href` in the source
+ * is written in — and `navigate(url('/users/[id]', …))` is BROWSER space, because `url` already
+ * crossed. Both are ordinary spellings and both arrive here, so the crossing is IDEMPOTENT: take off
+ * a base that is there, put on the one that should be. That is what lets a mount be a deploy-time
+ * value — every `navigate` in an app keeps working when `APP_URL` gains a path.
+ *
+ * The one thing it cannot tell apart is an app whose own route starts with the base's first segment:
+ * mounted at `/v2`, `navigate('/v2/x')` moves to the app's `/x`, never to its `/v2/x`. Naming a route
+ * after the mount is the fix, and it is a fix in the app rather than a case here.
+ *
+ * A target on another ORIGIN is left alone — nothing about this app's mount applies to it, and the
+ * fetch that follows lands somewhere `unmounted` has no claim on.
+ */
+function mountedTarget(at: URL, from: URL): URL {
+    if (mountBase() === '' || at.origin !== from.origin) return at
+    const path = mounted(unmounted(at.pathname))
+    if (path === at.pathname) return at
+    const moved = new URL(at.href)
+    moved.pathname = path
+    return moved
+}
+
+/**
  * Move to a target — a path, or a whole href. Resolves once the page is on screen.
  *
  * The route is committed only after its modules arrive, so nothing ever renders a page that is not
@@ -723,7 +860,7 @@ export function navigate(target: string, options?: NavigateOptions): Promise<voi
     // caller already standing on a page that has not loaded. Built only when it is going to be USED —
     // the seed belongs to the first navigation, and every later one would parse it to discard it.
     const cells = here.cells ?? cellsFor(new URL('/', new URL(target, NOWHERE)).href)
-    const url = new URL(target, cells.url.peek().href)
+    const url = mountedTarget(new URL(target, cells.url.peek().href), cells.url.peek())
     const found = lookup(url.pathname)
 
     // Where there is a document showing the outlet, a navigation is the SERVER's to answer — every

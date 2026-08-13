@@ -149,6 +149,20 @@ test('the page is the app’s own, with a reload client that is not in the bundl
     expect(source).toContain('__abide/socket/abide/reload')
     expect(source).toContain('location.reload()')
 
+    // A RECONNECT IS NOT A RESTART, and the client can only tell them apart if it knows which
+    // process it loaded against. Reopening the socket used to be the whole proof the app had come
+    // back — so a slept laptop, a proxy timeout or a browser reclaiming an idle connection reloaded
+    // the page against a server that never went anywhere. Queued behind a busy main thread the
+    // reload lands the moment it frees, which is a long run throwing its results away at the end.
+    const boot = await (await fetch(`${app.base}${RELOAD_CLIENT.slice(1)}?boot`)).text()
+    expect(boot.length).toBeGreaterThan(8)
+    // The tie that makes the comparison mean anything: the id the client holds is the id this
+    // process answers with, so a mismatch can only be a different process.
+    expect(source).toContain(boot)
+    // Stable while the process is. Asked twice because "reload when they differ" is satisfied by an
+    // id that differs every time — which would reload on every reconnect exactly as before.
+    expect(await (await fetch(`${app.base}${RELOAD_CLIENT.slice(1)}?boot`)).text()).toBe(boot)
+
     const health = await fetch(`${app.base}__abide/health`)
     expect(((await health.json()) as { example: unknown }).example).toEqual({ serving: true })
 })
@@ -175,6 +189,8 @@ test('the reload client passes the app’s own policy', async () => {
 test('a change restarts the app, and the socket a browser holds is what notices', async () => {
     const live = await reloadSocket(app.base)
     expect(live.status).toContain('101')
+    // Taken BEFORE the restart, because the claim is that it moves — and only across one.
+    const before = await (await fetch(`${app.base}${RELOAD_CLIENT.slice(1)}?boot`)).text()
 
     // The mtime and nothing else: this is a file the repository tracks, and a case that rewrote it to
     // prove a watcher works would be a case that can fail by leaving the tree dirty.
@@ -194,6 +210,11 @@ test('a change restarts the app, and the socket a browser holds is what notices'
     const again = await reloadSocket(app.base)
     expect(again.status).toContain('101')
     again.end()
+
+    // The other half of "a reconnect is not a restart": this one IS a restart, so the page holding
+    // the old id has to see a different one and reload. Same address, different process — which is
+    // exactly the case the socket alone could never distinguish from a dropped connection.
+    expect(await (await fetch(`${app.base}${RELOAD_CLIENT.slice(1)}?boot`)).text()).not.toBe(before)
 
     expect((await fetch(app.base)).status).toBe(200)
 }, 30_000)

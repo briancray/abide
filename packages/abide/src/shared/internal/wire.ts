@@ -6,6 +6,7 @@
 // is false however faithfully it was serialised.
 
 import type { WireOptions } from '../transport.ts'
+import { mounted } from './mount.ts'
 import { ARGS_PARAM } from './PATHS.ts'
 import { hasFile, isFile, isThenable } from './probes.ts'
 import type { JsonSchema } from './shapes.ts'
@@ -544,7 +545,10 @@ export async function askWire<T>(
     floor: () => T,
 ): Promise<T> {
     const send = options?.fetch ?? ((input: string, request: RequestInit) => fetch(input, request))
-    const address = options?.base === undefined ? path : new URL(path, options.base).href
+    // Mounted for the reason an rpc address is: `/__abide/**` is served under the app's own base, so a
+    // client asking this app about itself has to ask where it actually is.
+    const at = mounted(path)
+    const address = options?.base === undefined ? at : new URL(at, options.base).href
     try {
         const traced = traceHeaders()
         const answered = await send(address, traced === null ? init : { ...init, headers: traced })

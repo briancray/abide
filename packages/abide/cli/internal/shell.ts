@@ -14,6 +14,7 @@
 
 import { commented, DOCUMENT_OPEN, type Shell, shell, within } from '$server/shell.ts'
 import { escape } from '$shared/html.ts'
+import { mountBase, mounted, MOUNT_META } from '$shared/internal/mount.ts'
 import { CLIENT_ROUTE, type ClientAsset, type ClientManifest } from '../CLIENT_BUILD.ts'
 
 /**
@@ -48,8 +49,27 @@ export async function appShell(
     // `head` is BY DEFINITION the text before `</head>`, so appending to it puts the links exactly
     // where a second scan for `</head>` would have — found once, by the function that owns where a
     // head ends. An app's own `<link>` is already in there and still comes first.
-    parts.head += stylesheets(manifest)
+    parts.head += mountMeta() + stylesheets(manifest)
     return { parts, own }
+}
+
+/**
+ * Where the app is mounted, for the CLIENT to read back — the one fact the browser half of routing
+ * cannot work out for itself.
+ *
+ * The server knows it from `APP_URL`; the bundle cannot, because a mount is a deploy-time value and
+ * the bundle was built before anyone chose one. So the DOCUMENT carries it, which is also the only
+ * carrier that survives an app serving its assets from a CDN — deriving the base from where the
+ * bundle came from would then name the CDN.
+ *
+ * A `<meta>` rather than an inline script: `csp()`'s `script-src` has no `'unsafe-inline'` and the
+ * head is cut ONCE at boot, so it has no per-render nonce to carry — the same constraint that made
+ * `abide dev`'s reload client a file. Emitted only when there IS a mount, so the overwhelming case is
+ * a document with nothing extra in it.
+ */
+function mountMeta(): string {
+    const base = mountBase()
+    return base === '' ? '' : `<meta name="${MOUNT_META}" content="${escape(base)}">`
 }
 
 // A source path in a `src` or an `href`. Quoted values only: an unquoted attribute cannot hold the
@@ -71,7 +91,7 @@ function built(html: string, manifest: ClientManifest | null): string {
         // this repo ships does — must not have the sentence rewritten out from under it.
         if (within(ranges, at)) return whole
         const entry = manifest.entries[value.startsWith('./') ? value.slice(2) : value]
-        return entry === undefined ? whole : `${attribute}="${CLIENT_ROUTE}${entry}"`
+        return entry === undefined ? whole : `${attribute}="${mounted(CLIENT_ROUTE)}${entry}"`
     })
 }
 
@@ -87,7 +107,7 @@ function stylesheets(manifest: ClientManifest | null): string {
     let tags = ''
     for (const name in manifest.assets) {
         if (!(manifest.assets[name] as ClientAsset).type.startsWith('text/css')) continue
-        tags += `<link rel="stylesheet" href="${CLIENT_ROUTE}${name}">`
+        tags += `<link rel="stylesheet" href="${mounted(CLIENT_ROUTE)}${name}">`
     }
     return tags
 }

@@ -9,13 +9,17 @@
 import type { TemplateResult } from '$shared/html.ts'
 import { scope, watch } from '$shared/reactive.ts'
 import { outlet } from '$shared/router.ts'
-import { installHistory } from './internal/history.ts'
+import { installHistory, installMount } from './internal/history.ts'
 import { installNavigation } from './internal/navigation.ts'
 import { ChildPart } from './internal/parts.ts'
 
 // Routing's client edge, handed to `$shared` here rather than found there: importing this entry point
 // is what says there is a document, exactly as calling `serve` says there is a request. At import and
 // not on the first `mount`, because an app navigates to where it already is before it renders.
+//
+// The mount FIRST: it is what every href, every endpoint address and every route match on this side is
+// read against, and the sink below is what can start a navigation.
+installMount()
 installHistory()
 
 export interface Mounted {

@@ -26,6 +26,7 @@ import { outlet, routes } from 'abide/runtime'
 import { mount } from 'abide/ui'
 import { reader, suite } from 'abide-kit'
 import { settled } from 'abide-kit/measure'
+import { mountBase, useMountBase } from '$shared/internal/mount.ts'
 import { isolate } from '$shared/internal/scopes.ts'
 import { button, el, row } from './dom.ts'
 import { LADDER } from './fixtures/routing/ladder.ts'
@@ -80,6 +81,27 @@ function borrowTable(table: RouteEntry[]): () => void {
         routes(table)
     })
     return () => routes(held)
+}
+
+/**
+ * Serve `body` as though the app were mounted at `base`, and put it back at the root afterwards.
+ *
+ * The install is what `abide/server` does from `APP_URL` and `abide/ui` does from the document's
+ * `<meta>` — reached here rather than through either, because a case is not a process and this page's
+ * own app really is at the root. Restored in a `finally` for `withTable`'s reason: the mount is
+ * process-wide, so a case that left one on would move every href on the page a reader is looking at.
+ */
+async function withMount<T>(base: string, body: () => Promise<T>): Promise<T> {
+    // Restored to what was THERE, never to the root. On this app that is the root, and writing `''`
+    // read the same — right up until the same case ran inside an app that is itself mounted, where it
+    // would unmount the running client and leave every href on the page pointing outside it.
+    const held = mountBase()
+    try {
+        useMountBase(base)
+        return await body()
+    } finally {
+        useMountBase(held)
+    }
 }
 
 /** The borrow, for the usual case: one table, one caller, for the length of one body. */
@@ -305,8 +327,14 @@ export default suite({
                 // path already in this shape is handed back untouched, anything else takes the walk.
                 is('an already-normalised path is handed back', url('/docs/guide'), '/docs/guide')
                 is('a trailing slash goes', url('/a/b/'), '/a/b')
-                is('a doubled slash collapses', url('//a'), '/a')
-                is('and the empty path is the root', url(''), '/')
+                // `//host` is an ORIGIN, the way it is everywhere else a URL is written, and it is
+                // handed back untouched rather than collapsed to `/a`. It used to collapse, and the
+                // reason that changed is the case below: `url` takes what `navigate` takes.
+                is('a protocol-relative target names a host', url('//a/b'), '//a/b')
+                // Every assertion in THIS case is a root-absolute pattern, which is the one shape
+                // that resolves against nothing. The relative and absolute ones are in the case
+                // below, inside a `navigate` — they are answers about where the caller is, and a
+                // case that does not say where that is would be asserting the case before it.
                 is('with a query', url('/users/[id]', { id: 42 }, { tab: 'posts' }), '/users/42?tab=posts')
                 is('an absent optional drops out', url('/blog/[[slug]]'), '/blog')
                 is('…and present when given', url('/blog/[[slug]]', { slug: 'hi' }), '/blog/hi')
@@ -325,6 +353,80 @@ export default suite({
                 )
                 throws('a rest segment before the end', () => url('/[...a]/b'), 'catch-all is terminal')
                 throws('an unclosed segment', () => url('/users/[id'), 'unclosed')
+            },
+        },
+
+        {
+            title: '`url` takes every target `navigate` takes',
+            note: 'One argument, one set of shapes. `navigate(url(x))` and `navigate(x)` are the same move for every `x`, which is the property that makes composing the two safe — and it is why `url` is not merely a pattern builder: an absolute URL passes through, a relative one resolves against where the caller IS, and only this app’s own targets are given its mount.',
+            async run({ is }) {
+                await withTable(TABLE, async () => {
+                    await navigate('/users/42')
+
+                    // RELATIVE, against the caller's current URL — the shape that used to come back
+                    // as the app-space path `/bar`, pointing at a route that is not there.
+                    is('a relative target resolves against here', url('bar'), '/users/bar')
+                    is('…a dot segment too', url('./bar'), '/users/bar')
+                    is('…and up a level', url('../bar'), '/bar')
+                    is('the empty target is here', url(''), '/users/42')
+                    is('a query-only target keeps the path', url('?tab=x'), '/users/42?tab=x')
+                    is('a pattern still builds when relative', url('users/[id]', { id: 7 }), '/users/users/7')
+
+                    // ABSOLUTE. This used to come back as `/https:/foo.bar/x` — a path, silently, so
+                    // an external link rendered as an in-app one and nothing said a word.
+                    is('an absolute target is left alone', url('https://foo.bar/x'), 'https://foo.bar/x')
+                    is('…with nothing after the host', url('https://foo.bar'), 'https://foo.bar')
+                    is('…and a pattern inside one still builds', url('https://foo.bar/u/[id]', { id: 7 }), 'https://foo.bar/u/7')
+                    is('an opaque scheme is not a path', url('mailto:a@b.c'), 'mailto:a@b.c')
+                    // A `:` that is not a scheme — the check is "before the first slash", not "anywhere".
+                    is('a colon inside a segment is still a path', url('notes/a:b'), '/users/notes/a:b')
+
+                    // The third argument still lands, and it MERGES rather than opening a second `?`.
+                    is('a query joins one the target brought', url('https://foo.bar/x?z=0', undefined, { a: 1 }), 'https://foo.bar/x?z=0&a=1')
+                })
+            },
+        },
+
+        {
+            title: 'mounted under a sub-path, a table is unchanged and every href moves',
+            note: 'One value — `APP_URL`’s PATH — and two spaces. APP space is the table, the pattern, `route().name` and an rpc id; a page moved under a mount is not a page that was renamed. BROWSER space is the href, the address bar and the fetch. `url` is the only thing that mints one, which is what makes a mount a deploy-time value: the source below says `/users/[id]` either way.',
+            async run({ is }) {
+                // What this app answers with the mount it actually has, which on `bun test` and on
+                // the served page alike is the root — but not when this same case runs inside an app
+                // that is itself mounted, which is what the `mounted` e2e project does with it.
+                const before = url('/users/[id]', { id: 42 })
+
+                await withTable(TABLE, async () => {
+                    await withMount('/v2', async () => {
+                        is('an href carries the base', url('/users/[id]', { id: 42 }), '/v2/users/42')
+                        is('…the query still lands after it', url('/', undefined, { q: 'x' }), '/v2?q=x')
+                        is('and the root is the base itself', url('/'), '/v2')
+
+                        // The two spellings an app actually writes. `navigate('/users/42')` is what
+                        // was there before anyone chose a mount, and `navigate(url(…))` is what a
+                        // page composing an href does — the crossing is idempotent so that adding a
+                        // mount is a deploy change rather than an edit to every call site.
+                        await navigate('/users/42')
+                        is('app space navigates', route().name, '/users/[id]')
+                        is('…and the address bar carries the base', route().url.pathname, '/v2/users/42')
+                        await navigate(url('/users/[id]', { id: 7 }))
+                        is('browser space navigates to the same route', route().name, '/users/[id]')
+                        is('…and does not double the base', route().url.pathname, '/v2/users/7')
+                        is('the params are the app’s either way', route().params, { id: '7' })
+
+                        // The boundary is a SEGMENT boundary, and this is the case that says so
+                        // rather than one that merely satisfies it: read as a bare string prefix
+                        // `/v2users/new` is the base plus `users/new`, which MATCHES a real route in
+                        // the table above. A neighbour that only fails to match proves nothing here,
+                        // because it fails to match either way.
+                        await navigate('/v2users/new')
+                        is('a path sharing the base’s TEXT is not under the mount', route().name, '')
+                    })
+                })
+
+                // Restored, or every case after this one runs against a mount it never asked for —
+                // and so does the app whose page this is being rendered onto.
+                is('the mount is back to this app’s own', url('/users/[id]', { id: 42 }), before)
             },
         },
 

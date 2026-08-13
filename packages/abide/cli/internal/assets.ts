@@ -21,6 +21,7 @@
 
 // `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
 import { basename } from 'node:path'
+import { mountBase } from '$shared/internal/mount.ts'
 import { acceptedEncoding } from '$shared/internal/wire.ts'
 import {
     assetOf,
@@ -86,7 +87,13 @@ export class ClientAssets {
         // substring test for the bundle existing rather than a URL parse. The test is a cheap
         // SUPERSET — a query string could carry the prefix — so the parsed pathname decides.
         if (!request.url.includes(CLIENT_ROUTE)) return undefined
-        const path = new URL(request.url).pathname
+        // Against the MOUNTED prefix, exactly as `dispatch` does it and for the same reason: the
+        // document asked for `/v2/__abide/client/x.js`, the file this build wrote is still `x.js`, and
+        // the bundle is not also served at the origin root.
+        const at = new URL(request.url).pathname
+        const base = mountBase()
+        if (!at.startsWith(base)) return undefined
+        const path = at.slice(base.length)
         if (!path.startsWith(CLIENT_ROUTE)) return undefined
 
         const asset = this.held.get(path.slice(CLIENT_ROUTE.length))

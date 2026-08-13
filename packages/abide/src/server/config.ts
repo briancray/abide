@@ -42,6 +42,7 @@
 
 import { env, envNumber } from '$shared/internal/env.ts'
 import { useConfigSource } from '$shared/internal/knobs.ts'
+import { useMountBase } from '$shared/internal/mount.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { NO_LIMIT } from '$shared/internal/timers.ts'
 import { abideLog } from '$shared/log.ts'
@@ -435,13 +436,26 @@ function coerced(raw: string, exemplar: unknown): unknown {
  */
 function checked(document: Config, gated: Gate<unknown> | null): Config {
     if (!isPort(document.PORT)) document.PORT = FLOOR.PORT
-    if (gated === null) return document
+    if (gated === null) return mounting(document)
     const answered = gated(document)
-    if (!isThenable(answered)) return answered as Config
+    if (!isThenable(answered)) return mounting(answered as Config)
     void (answered as Promise<unknown>).catch(() => undefined)
     throw new Error(
         'abide: onConfig’s schema validated asynchronously, and config is resolved synchronously so that reading a field is never a read to await. Do the waiting inside `onStart` and register what it settled to before calling `start()`.',
     )
+}
+
+/**
+ * `APP_URL`'s PATH, handed to routing and the transport as the app's mount base.
+ *
+ * On the way OUT of `checked` rather than at a boot step, because this is where the value is settled:
+ * an operator who exported the variable, an app that defaulted it in `onConfig`, and `abide dev`
+ * writing back the port it actually bound all arrive at this one line, and `config.invalidate()`
+ * re-runs it. A server therefore never has to be told twice where it is.
+ */
+function mounting(document: Config): Config {
+    useMountBase(document.APP_URL ?? '')
+    return document
 }
 
 /** What abide means by each variable when nobody declared one. Never mutated — always spread from. */

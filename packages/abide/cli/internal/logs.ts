@@ -45,7 +45,11 @@ export async function logs(argv: string[]): Promise<number> {
     }
 
     const base = appTarget()
-    const address = new URL(LOGS_PATH, base).href
+    // Resolved UNDER whatever path the target named, rather than at its origin: `ABIDE_APP_URL` and
+    // `APP_URL` both carry the app's mount, and `new URL('/__abide/logs', 'https://host/v2')` throws
+    // that away and tails an address the app is not serving. Root-relative for a target with no path,
+    // which is the same string it always was.
+    const address = new URL(LOGS_PATH.slice(1), base.endsWith('/') ? base : `${base}/`).href
     const token = config().ABIDE_APP_TOKEN
     // A bearer if there is one. The feed itself is gated by `ABIDE_LOGS` rather than by a token — the
     // header is here for what an operator put IN FRONT of the app, which is the only thing between a
