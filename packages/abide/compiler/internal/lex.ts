@@ -105,12 +105,30 @@ export class Lexer {
     ) {
         this.scanner.setText(source, from)
         this.depth = depth
+        this.reached = from
     }
+
+    /**
+     * How far the last token reached, so a scanner that stops advancing is end of input.
+     *
+     * `EndOfFile` is not the only way a scan can run out. A source ending in a lone `#` — which is what
+     * a `.abide` truncated mid-`{#if}` ends in — makes TypeScript's scanner hand back a zero-width
+     * token at that offset for ever, so `readExpression`'s "until `}` or null" loop never ended and
+     * `compile('{#')` hung the process. `{#i` throws, because `#i` is a whole private identifier and the
+     * scan after it does reach the end.
+     *
+     * The guard is here rather than in that one loop because all four `Lexer` call sites walk until this
+     * returns null, so any of them could have been the one to spin. A token that consumes no characters
+     * cannot be followed by one that does.
+     */
+    private reached: number
 
     /** The next token, or `null` at end of input. */
     next(): Token | null {
         let kind = this.scanner.scan()
         if (kind === SyntaxKind.EndOfFile) return null
+        if (this.scanner.getTokenEnd() <= this.reached) return null
+        this.reached = this.scanner.getTokenEnd()
 
         if (kind === SyntaxKind.SlashToken || kind === SyntaxKind.SlashEqualsToken) {
             if (!ENDS_EXPRESSION.has(this.previous)) kind = this.scanner.reScanSlashToken()

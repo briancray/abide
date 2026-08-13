@@ -139,7 +139,12 @@ export const abidePlugin: BunPlugin = {
             }
         })
 
-        build.onResolve({ filter: /\.abide\?source$/ }, (args) => ({
+        // `.ts` as well as `.abide`, because the question "what does this file SAY?" is not about the
+        // compiler. A capability whose example is a server module — a lifecycle hook, a config
+        // declaration, an endpoint — has an example with nothing to render and text as its whole
+        // content, and the reference page that shows it may not read a disk. Nothing below cares which
+        // extension it was: the loader strips the query and reads the file.
+        build.onResolve({ filter: /\.(abide|ts)\?source$/ }, (args) => ({
             path: resolve(dirname(args.importer), args.path),
             namespace: SOURCE_NAMESPACE,
         }))

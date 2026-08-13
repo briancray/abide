@@ -507,13 +507,34 @@ export function desugar(
             continue
         }
 
-        // `source++` / `source--`, and the prefix forms.
-        const update =
-            next?.kind === SyntaxKind.PlusPlusToken || next?.kind === SyntaxKind.MinusMinusToken
-                ? next
-                : previous?.kind === SyntaxKind.PlusPlusToken || previous?.kind === SyntaxKind.MinusMinusToken
-                  ? previous
-                  : undefined
+        // `source++` / `source--`, and the prefix forms — each guarded by the rule that says which
+        // statement the operator belongs to, because in a file written without semicolons a `++` has a
+        // neighbour on both sides and only one of them is its operand.
+        //
+        // POSTFIX is a restricted production: `a [no LineTerminator here] ++`. So a `++` that starts a
+        // line is the next statement's prefix, and `count` / newline / `++other` is two statements.
+        //
+        // PREFIX is not restricted, so the test on that side is whether the operator is already SPOKEN
+        // FOR: it is somebody else's postfix only if the token before it ends an expression AND no line
+        // break separates the two. `n++` on the line above ends its own statement, and reading its `++`
+        // as a prefix on this name emitted `nc.set(c.peek() + 1) = 2` — a module that does not parse,
+        // out of a file that type-checks. Both halves of that test are load-bearing: without the first,
+        // `++count` at the top of a block is not an increment; without the second, `n = 1` / newline /
+        // `++count` reads the operator as the literal's postfix and emits `++count()`.
+        const postfix =
+            (next?.kind === SyntaxKind.PlusPlusToken || next?.kind === SyntaxKind.MinusMinusToken) &&
+            !next.startsLine
+        const operand = tokens[i - 2]
+        const spokenFor =
+            previous !== undefined &&
+            !previous.startsLine &&
+            operand !== undefined &&
+            ENDS_EXPRESSION.has(operand.kind)
+        const prefix =
+            (previous?.kind === SyntaxKind.PlusPlusToken ||
+                previous?.kind === SyntaxKind.MinusMinusToken) &&
+            !spokenFor
+        const update = postfix ? next : prefix ? previous : undefined
         if (update !== undefined) {
             const operator = update.kind === SyntaxKind.PlusPlusToken ? '+' : '-'
             const start = Math.min(token.start, update.start)

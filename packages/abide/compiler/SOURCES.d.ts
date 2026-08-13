@@ -9,6 +9,15 @@ declare module '*.abide?source' {
     export default source
 }
 
+// The same for a `.ts` module, and for the same reason: a reference page shows a file's own text, and
+// a browser has no disk to read it from. `import x from './x.ts'` and `import SRC from './x.ts?source'`
+// are two different modules out of one file — see the note in `plugin.ts` about keeping the query on
+// the resolved path, which is what stops the bundler handing the second import the first one's module.
+declare module '*.ts?source' {
+    const source: string
+    export default source
+}
+
 // `import './app.css'` — a stylesheet, reached by the component that needs it.
 //
 // A no-op on the server and an asset in the browser lane, so it has no shape either way: what the

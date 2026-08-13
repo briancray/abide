@@ -35,6 +35,21 @@ function parses(code: string): void {
 
 const CELLS = '<script>const n = state(0)\nconst m = state("a")\nconst on = state(true)</script>'
 
+/**
+ * Two statements on two lines, with no semicolon between them — which is the only thing that decides
+ * which of them a `++` belongs to, and is how this codebase is written.
+ *
+ * A helper rather than eight spelled-out sources, because the shape under test is the PAIR: what broke
+ * was reading the operator of one statement as part of the other, so every row is the same file with
+ * two lines swapped in.
+ */
+function updating(first: string, second: string): string {
+    return (
+        '<script>const n = state(0)\nlet k = 0\nconst o = { k: 0 }\n' +
+        `const go = (): void => {\n    ${first}\n    ${second}\n}</script><p onclick={go}>{n}</p>`
+    )
+}
+
 /** One entry per shape that has broken the emit, and the shapes either side of it. */
 const SOURCES: [string, string][] = [
     // An unmatched `?` — the tokens that made the desugar's ternary counter lose its place.
@@ -54,6 +69,23 @@ const SOURCES: [string, string][] = [
         'an optional member type',
         `<script>const s: { reset?() } = {}\nconst k = { a: 1 }</script><p>{k.a}</p>`,
     ],
+
+    // `++` / `--`, which have a neighbour on BOTH sides and belong to only one of them. Without a
+    // semicolon — which is how this codebase is written — the token that says which statement the
+    // operator is in is the line break, so every row here is a pair of statements on two lines.
+    //
+    // `n++` above a cell write emitted `nc.set(c.peek() + 1) = 2`: the postfix was re-read as a prefix
+    // on the name below it. The mirror shape emitted `++n()`, reading a prefix as the line above's
+    // postfix and then adding a READ to the name it had just refused to increment. Both parse as
+    // nothing, out of files that type-check.
+    ['a plain postfix above a cell write', updating('k++', 'n = 2')],
+    ['a cell postfix above a cell write', updating('n++', 'n = 2')],
+    ['a cell prefix below a plain write', updating('k = 1', '++n')],
+    ['a plain postfix above a cell prefix', updating('k++', '++n')],
+    ['a member postfix above a cell write', updating('o.k++', 'n = 2')],
+    ['a cell postfix above a plain write', updating('n++', 'k = 2')],
+    ['a cell postfix above a cell prefix', updating('n++', '++n')],
+    ['two cell prefixes', updating('++n', '++n')],
 
     // Ternaries, which share the `:` token with an object key and with an annotation.
     ['a ternary in a slot', `${CELLS}<p>{on ? n : m}</p>`],
@@ -145,6 +177,26 @@ test('every .abide in the example package parses', async () => {
 // abandons its lexer mid-scan, and if the next one inherited that state the output would be wrong
 // while still parsing — so `every emitted module parses` above would stay green. A truncated source
 // is the cheapest way to throw at every position in a file.
+// A compile that never RETURNS is the one failure the property above cannot express: there is no emit to
+// parse and no throw to catch, and a suite that hits it reports nothing at all — `bun test` simply stops.
+//
+// It was reachable from the very test below, whose whole job is to throw at every offset in the biggest
+// `.abide` in the package. The shape had been latent for as long as the scanner has been shared; what
+// changed was which file is biggest, so a cut finally landed on `{#` — a source ending in a lone `#`,
+// where TypeScript's scanner hands back a zero-width token at that offset for ever rather than reaching
+// `EndOfFile`. `{#i` always threw, because `#i` is a whole private identifier.
+//
+// Asserted as a DEADLINE rather than as a message, because the message is not the claim: `compile` must
+// come back. Reverting the guard in `lex.ts` hangs this test rather than failing it, which is exactly why
+// the bound is here.
+test('a compile that cannot finish scanning still comes back', () => {
+    for (const source of ['{#', '<div>{#', '{#i', '{@', '<p>{']) {
+        const started = performance.now()
+        expect(() => compile(source, { filename: 'stuck.abide' })).toThrow()
+        expect(performance.now() - started, `${source} took too long to refuse`).toBeLessThan(1_000)
+    }
+})
+
 test('a compile that threw leaves nothing behind for the next one', async () => {
     const root = new URL('..', import.meta.url).pathname
     const files = [...new Bun.Glob('**/*.abide').scanSync({ cwd: root, absolute: true })].sort()
