@@ -8,6 +8,7 @@
     ],
     "scripts": {
         "test": "bun test",
+        "e2e": "playwright test",
         "cli": "bun packages/abide/cli/index.ts",
         "abide": "bun packages/abide/compiler/check.ts packages/example",
         "typecheck": "bun packages/abide/cli/index.ts check packages/example packages/perf",
@@ -22,6 +23,7 @@
     },
     "devDependencies": {
         "@biomejs/biome": "^2.5.7",
+        "@playwright/test": "^1.62.1",
         "@types/bun": "latest",
         "typescript": "^7.0.2"
     }

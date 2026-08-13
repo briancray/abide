@@ -6,7 +6,8 @@
     "exports": {
         ".": "./kit.ts",
         "./measure": "./measure.ts",
-        "./spawn": "./spawn.ts"
+        "./spawn": "./spawn.ts",
+        "./e2e": "./e2e.ts"
     },
     "scripts": {
         "typecheck": "tsc --noEmit",
@@ -16,6 +17,7 @@
         "abide": "workspace:*"
     },
     "devDependencies": {
-        "@happy-dom/global-registrator": "^20.10.6"
+        "@happy-dom/global-registrator": "^20.10.6",
+        "@playwright/test": "^1.62.1"
     }
 }

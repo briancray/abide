@@ -6,3 +6,7 @@ dist/
 # `.abide/types/` — what every `.abide` compiles to so the real type-checker can see it. One line
 # here is also one line in a `.dockerignore` and one thing to delete. The `.abide` is the source.
 .abide/
+
+# playwright
+test-results/
+playwright-report/

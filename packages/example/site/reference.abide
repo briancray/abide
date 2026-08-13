@@ -63,7 +63,9 @@ const { suite } = props<{ suite: Suite }>()
     <!-- The ladder, smallest rung first. Each is numbered and labelled with the ONE thing it adds, so
          what a reader compares is two adjacent rungs rather than one file against a paragraph. -->
     {#for rung, at of ladderOf(suite)}
-        <section class="space-y-3">
+        <!-- `data-rung` names the rung for whoever is counting or clicking it. The claims below are a
+             `<section>` with an `<h2>` too, so "how many rungs" is a question the tag cannot answer. -->
+        <section class="space-y-3" data-rung={at + 1}>
             <h2 class="flex items-baseline gap-2">
                 <span class="text-xs font-mono text-slate-600">{at + 1}</span>
                 <span class="text-base font-medium text-slate-100">{rung.adds}</span>
