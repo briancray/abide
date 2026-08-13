@@ -12,4 +12,4 @@ export const hits = memo(async ({ text }: { text: string }) => {
 </script>
 
 <input bind:value={query} />
-<ul>{#for hit of hits({ text: query })()}<li>{hit}</li>{/for}</ul>
+<ul>{#for hit of hits({ text: query })}<li>{hit}</li>{/for}</ul>

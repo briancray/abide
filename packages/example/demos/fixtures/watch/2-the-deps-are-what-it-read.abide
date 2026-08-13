@@ -10,7 +10,7 @@ export const runs = state(0)
 watch(() => {
     if (both()) other()
     name()
-    runs.set(runs.peek() + 1)
+    runs += 1
 })
 </script>
 

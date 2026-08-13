@@ -7,7 +7,7 @@ export const runs = state(0)
 // Reading a cell inside a `watch` IS the subscription. There is no dependency array.
 watch(() => {
     name()
-    runs.set(runs.peek() + 1)
+    runs += 1
 })
 </script>
 

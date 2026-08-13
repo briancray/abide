@@ -30,6 +30,7 @@ import Loader, { calls, label } from './fixtures/loader.abide'
 import Narrow, { session as narrowSession } from './fixtures/narrow.abide'
 import Rows, { items, rate } from './fixtures/rows.abide'
 import Stream, { failing, room } from './fixtures/stream.abide'
+import { name as tallyName, runs as tallyRuns } from './fixtures/tally.abide'
 import Widget, { text as widgetText } from './fixtures/widget.abide'
 import { LADDER } from './fixtures/compiler/ladder.ts'
 import { META } from './SUITES.ts'
@@ -294,10 +295,12 @@ export default suite({
 
         {
             title: 'a write desugars to `set`, and never subscribes',
-            note: 'A compound write reads through `peek`: a write that subscribed to what it is about to overwrite would wake itself. `++` is statement-only, since a `set` has no value to hand back.',
+            note: 'A write reads through `peek`: a write that subscribed to what it is about to overwrite would wake itself on every OTHER writer\'s write — the same value, one extra run, and nothing about the output moves. All four spellings of an update agree on it, including the target named on its own right-hand side. Only the target: `n = other + 1` subscribes to `other`, which is a dependency the author does mean. `++` is statement-only, since a `set` has no value to hand back.',
             run({ is }) {
                 const one = (body: string): string =>
-                    template(`<script>const n = state(0)</script><button onclick={${body}}>x</button>`)
+                    template(
+                        `<script>const n = state(0)\nconst other = state(0)</script><button onclick={${body}}>x</button>`,
+                    )
                 is('assignment', one('() => n = 5'), '<button @click=${() => n.set(5)}>x</button>')
                 is(
                     'compound reads through peek',
@@ -306,10 +309,40 @@ export default suite({
                 )
                 is('increment', one('() => n++'), '<button @click=${() => n.set(n.peek() + 1)}>x</button>')
                 is(
-                    'the right-hand side is desugared too',
+                    'the target on its own right-hand side peeks, like the other three',
                     one('() => n = n + 1'),
+                    '<button @click=${() => n.set(n.peek() + 1)}>x</button>',
+                )
+                is(
+                    'and only the target — another cell still subscribes',
+                    one('() => n = other + 1'),
+                    '<button @click=${() => n.set(other() + 1)}>x</button>',
+                )
+                // The sugar is over the explicit spelling rather than instead of it, so a write that
+                // DOES mean to subscribe stays reachable — there is no untrack to reach for.
+                is(
+                    'the explicit read is left alone, so subscribing is still writable',
+                    one('() => n = n() + 1'),
                     '<button @click=${() => n.set(n() + 1)}>x</button>',
                 )
+            },
+        },
+
+        {
+            title: 'and what that peek buys is a wake-up the effect never asked for',
+            note: 'The emitted text above is the shape; this is the cost. `tally.abide` runs a real `watch` whose body writes `runs = runs + 1`, and the contract is that ANOTHER writer of `runs` does not wake it. No assertion on a value can see the difference — the counter reads the same either way — so what is asserted is the run count, and the second half is owed too: an effect that woke for nothing would pass a gate that only checks it stayed asleep.',
+            async run({ is }) {
+                // Read rather than assumed: the module-level effect ran at import, and this case may
+                // not be the first thing in the process to have written the cell.
+                const before = tallyRuns.peek()
+
+                tallyRuns.set(before + 100) // somebody ELSE writes the cell the effect writes
+                await tick()
+                is('an outside write to its own cell does not wake it', tallyRuns.peek(), before + 100)
+
+                tallyName.set(tallyName.peek() === 'ada' ? 'alan' : 'ada')
+                await tick()
+                is('and the cell it READS still does', tallyRuns.peek(), before + 101)
             },
         },
 
@@ -963,6 +996,64 @@ export default suite({
                 is('the call becomes the parameter', erased.includes('const { n: $n } = args'), true)
                 is('…and the local is the cell', erased.includes('const n = propCell($n)'), true)
                 is('…and `props` is not imported by what was emitted', erased.includes('props'), false)
+
+                // The SETUP BODY, which every assertion above is blind to — and which is the half
+                // that does not reach the desugar as an author wrote it. The two lines just asserted
+                // are spliced in FRONT of it, and both BIND names the walk was told are reactive, so
+                // read as ordinary bindings they shadowed the very props they had made, for the rest
+                // of the body. `n + 1` in a `<script>` was a function plus a number; `for (const r of
+                // rows)` iterated a function; `chat({ room })` handed back a handle nobody called.
+                // Nothing in the repo caught it because nothing in the repo read a prop anywhere but
+                // in a template, where neither line exists.
+                const setup = (members: string, bound: string, body: string): string =>
+                    compile(
+                        `<script>\nimport { props } from 'abide'\ntype Props = {\n${members}\n}\n` +
+                            `const { ${bound} } = props<Props>()\n${body}\n</script><p>x</p>`,
+                        { filename: 'Case.abide' },
+                    ).code
+
+                is(
+                    'a prop is read by NAME in a setup body, the way it is in a template',
+                    setup('    n: number', 'n', 'function plus(): number { return n + 1 }').includes(
+                        'return n() + 1',
+                    ),
+                    true,
+                )
+                is(
+                    '…and iterating one iterates the VALUE',
+                    setup(
+                        '    rows: string[]',
+                        'rows',
+                        'function count(): number { let c = 0; for (const r of rows) c += r.length; return c }',
+                    ).includes('for (const r of rows())'),
+                    true,
+                )
+                // The run-once rule, unchanged by any of this: a read among the setup's own
+                // statements peeks, because setup runs once and subscribing there would subscribe
+                // nobody. Inside a function it is an ordinary read, as above.
+                is(
+                    '…and a read among the statements themselves still PEEKS',
+                    setup('    n: number', 'n', 'const first = n + 1').includes('n.peek() + 1'),
+                    true,
+                )
+                is(
+                    'a keyed prop is still read by its CALL there',
+                    setup(
+                        '    chat: KeyedChannel<{ room: string }, string>',
+                        'chat',
+                        "function say(): number { return chat({ room: 'a' }).length }",
+                    ).includes("chat({ room: 'a' })().length"),
+                    true,
+                )
+                is(
+                    '…and a function prop is still called rather than read',
+                    setup(
+                        '    onpick: (t: string) => void',
+                        'onpick',
+                        "function go(): void { onpick('x') }",
+                    ).includes("onpick('x')"),
+                    true,
+                )
             },
         },
 

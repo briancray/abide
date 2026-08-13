@@ -13,6 +13,7 @@
 //   {source + 1}      a read      -> source() + 1
 //   source = v        a write     -> source.set(v)
 //   source += v       both        -> source.set(source.peek() + v)     peek: a write must not subscribe
+//   source = source+v the same    -> source.set(source.peek() + v)     the TARGET on its own RHS peeks
 //   source()          untouched   -> an identifier in callee position is already an explicit read
 //   source.set(v)     untouched   -> the shared surface in SPEC is reserved; every OTHER property is
 //                                    the value's own, so `state('abc').length` is `source().length`
@@ -406,12 +407,34 @@ export function desugar(
             // the name compile to the cell itself — so `kind !== 'all'` compared a function to a
             // string and was true forever, with nothing anywhere saying why.
             const maker = tokens[end + 1]?.text ?? ''
+            // The same question over the text the EMIT writes rather than the text an author does.
+            //
+            // A `<script>` body does not reach this file as it was written: `bindProps` has already
+            // spliced its own two lines into the front of it — `const { note: $note, pick } = args`,
+            // and `const note = propCell($note)` under it. Both BIND names this file has been told
+            // are reactive, so read as ordinary bindings they shadow the very props they create, for
+            // the whole body. Every prop read in a setup was then left as the bare source:
+            // `rows.length` was the arity of a function, `for (const r of rows)` iterated one, and a
+            // keyed prop's `pick({ id })` handed back a handle nobody called.
+            //
+            // A TEMPLATE is its own region and neither line is in it, which is why props read
+            // correctly there and this went unnoticed — the two halves of one file disagreed about
+            // what a prop is.
             const declares =
-                (REACTIVE_CONSTRUCTORS.has(maker) && opensCall(cursor, end + 2)) ||
+                ((REACTIVE_CONSTRUCTORS.has(maker) || maker === 'propCell') &&
+                    opensCall(cursor, end + 2)) ||
                 (maker === 'state' &&
                     tokens[end + 2]?.kind === SyntaxKind.DotToken &&
                     tokens[end + 3]?.text === 'shared' &&
-                    opensCall(cursor, end + 4))
+                    opensCall(cursor, end + 4)) ||
+                // `const { … } = args` — the props destructure, whose right-hand side is the emitted
+                // parameter and nothing else. The pattern is required as well as the name: `args.x` is
+                // a read of one prop and binds whatever the author called it, which IS a shadow.
+                (maker === 'args' &&
+                    tokens[i + 1]?.kind === SyntaxKind.OpenBraceToken &&
+                    tokens[end + 2]?.kind !== SyntaxKind.DotToken &&
+                    tokens[end + 2]?.kind !== SyntaxKind.QuestionDotToken &&
+                    tokens[end + 2]?.kind !== SyntaxKind.OpenBracketToken)
             if (declares) {
                 for (const index of names) binding.add(index)
                 continue
@@ -465,6 +488,9 @@ export function desugar(
     const closingColons = regions.ternary
 
     const frames: Frame[] = []
+    // Token indices naming the TARGET of the write they sit inside, so their read peeks. Filled by
+    // the write branch below, which the walk reaches before the right-hand-side tokens it marks.
+    const selfReads = new Set<number>()
     const shadowed = (name: string): boolean => {
         for (let f = frames.length - 1; f >= 0; f--) {
             if ((frames[f] as Frame).names.has(name)) return true
@@ -622,6 +648,20 @@ export function desugar(
                         // the operator survives into the emitted code instead of being flattened.
                         `void (${name}.peek() ${logical} ${name}.set(`
                       : `${name}.set(`
+            // The TARGET named on its own right-hand side is the same claim the opener above makes by
+            // peeking, and plain `=` was the one spelling of the three that missed it: `count = count
+            // + 1` inside a `watch` subscribed the effect to the cell it writes, so every OTHER
+            // writer's write woke it — the same value, one extra run, and nothing about the output
+            // moves. `++` and `+=` were right because their read is synthesised rather than walked.
+            //
+            // Only the target's own name: `total = total + rate` still subscribes to `rate`, which is
+            // a dependency the author does mean. And `count = count() + 1` still subscribes to
+            // `count`, because a call the author wrote is left alone — the sugar is over the explicit
+            // spelling, so the subscribing read stays reachable.
+            for (let j = i + 2; j < rhs.endIndex; j++) {
+                const at = tokens[j] as Token
+                if (at.kind === SyntaxKind.Identifier && at.text === name) selfReads.add(j)
+            }
             // The opener swallows the gap after `=` too, so the emitted call has no stray space.
             edits.push({ start: token.start, end: rhs.start, replacement: opener })
             edits.push({ start: rhs.end, end: rhs.end, replacement: logical !== undefined ? '))' : ')' })
@@ -635,7 +675,8 @@ export function desugar(
             inObjectLiteral(cursor.tokens, cursor.nesting, i, expression)
         reads.push({ key: name, start: token.start, end: token.end, keyed: false })
         const local = hoisted.get(name)
-        const read = local ?? (insideFunction !== null && insideFunction[i] === 0 ? `${name}.peek()` : `${name}()`)
+        const peeking = selfReads.has(i) || (insideFunction !== null && insideFunction[i] === 0)
+        const read = local ?? (peeking ? `${name}.peek()` : `${name}()`)
         edits.push({
             start: token.start,
             end: token.end,
@@ -791,13 +832,16 @@ function assignmentEnd(
     from: number,
     level: number,
     limit: number,
-): { start: number; end: number } {
+): { start: number; end: number; endIndex: number } {
     const first = cursor.tokens[from]
     if (first === undefined) {
         throw new SyntaxError_('abide: assignment with nothing on the right', limit)
     }
-    const last = cursor.tokens[expressionEnd(cursor, from, level) - 1] as Token
-    return { start: first.start, end: last.end }
+    // The token index as well as the offsets: the caller walks the right-hand side's TOKENS to find
+    // the target read on itself, and a second `expressionEnd` to recover it could disagree with this.
+    const endIndex = expressionEnd(cursor, from, level)
+    const last = cursor.tokens[endIndex - 1] as Token
+    return { start: first.start, end: last.end, endIndex }
 }
 
 /** The same rule as an index, which is what an expression-bodied arrow's extent is measured in. */

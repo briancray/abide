@@ -18,4 +18,4 @@ const found = memo(() => getUser({ id: Number(route().params.id) }))
 <!-- The refusal is narrowed in the lane that has none of the declaration in it: the name and the
      shape are in the handler's TYPE, and the schema that checks the data is server-side text this
      bundle never sees. -->
-{#try}<p>{found()?.name}</p>{:catch e}<p>no user {route().params.id}</p>{/try}
+{#try}<p>{found?.name}</p>{:catch e}<p>no user {route().params.id}</p>{/try}

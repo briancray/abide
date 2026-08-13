@@ -1,0 +1,20 @@
+<script module>
+import { state, watch } from 'abide'
+
+export const name = state('ada')
+/** How many times the effect body has run — written by the effect, in the sugar an author reaches for. */
+export const runs = state(0)
+
+/**
+ * The write is spelled `runs = runs + 1` ON PURPOSE. `++` and `+=` synthesise their read and have
+ * always peeked; this spelling walks its right-hand side, so it is the one that can subscribe the
+ * effect to the cell it writes. What that costs is invisible in the value — `runs` counts up either
+ * way — and shows only as a wake this effect never asked for, which is what the case asserts.
+ */
+watch(() => {
+    name()
+    runs = runs + 1
+})
+</script>
+
+<p>{name} — {runs}</p>
