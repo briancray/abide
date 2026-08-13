@@ -9,6 +9,7 @@
         "build": "bun ../abide/cli/index.ts build"
     },
     "dependencies": {
-        "abide": "workspace:*"
+        "abide": "workspace:*",
+        "abide-kit": "workspace:*"
     }
 }

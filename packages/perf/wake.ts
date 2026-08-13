@@ -23,68 +23,42 @@
 import { html, state, watch } from 'abide'
 import { keyed } from 'abide/runtime'
 import { mount } from 'abide/ui'
+// The kit's measurement half, which has no abide in its graph — so the hand-written floor below is timed
+// by the same clock, the same batch sizing and the same quiesce as the arms it is the control for.
+import { quiesce, tick, timeArms } from 'abide-kit/measure'
 
 const ROWS = 1000
-const WARM = 5
-const TIMED = 12
 
-/**
- * Selection moves per timed sample.
- *
- * Chrome coarsens `performance.now()` to 100 µs, and a single move over a thousand rows lands well
- * under that — every arm came back as 0.000 or 0.100 ms, which is the clock's resolution and not a
- * measurement. A batch of moves is milliseconds, so the quantisation is a rounding error on the
- * total rather than the whole of it. This is the same reason the perf harness reports CPU time from
- * `Performance.getMetrics` rather than a wall clock: see the frame-quantisation note in the handoff.
- */
-const PER_SAMPLE = 40
-
+/** One arm of the ladder, with its number — what the page shows and the harness reads. */
 export interface Arm {
     label: string
-    /** Milliseconds per selection move, median of `TIMED`. */
+    /** Milliseconds per selection move, best of the interleaved passes. */
     ms: number
     /** What the arm has between the write and the attribute, for reading the ladder. */
     through: string
 }
 
-/** Effects are microtask-batched, so a measurement has to span the flush, not just the write. */
-async function drain(): Promise<void> {
-    for (let i = 0; i < 4; i++) await Promise.resolve()
-}
-
-function median(values: number[]): number {
-    const sorted = values.slice().sort((a, b) => a - b)
-    const at = sorted.length >> 1
-    return sorted.length % 2 === 0
-        ? ((sorted[at - 1] as number) + (sorted[at] as number)) / 2
-        : (sorted[at] as number)
+/**
+ * One arm of the ladder, before it has a number.
+ *
+ * `run` moves the selection to row `i` and, for everything reactive, RETURNS the flush — `timeArms`
+ * awaits a thenable per operation, so the wait lands exactly where the arm needs it and the synchronous
+ * floor pays nothing for it.
+ */
+interface Rung {
+    label: string
+    through: string
+    run: (i: number) => unknown
 }
 
 /**
- * Time one arm over the same schedule. `move` selects row `i`; `settle` is what the arm needs before
- * the attribute is on screen — nothing for the synchronous floor, a microtask drain for everything
- * reactive. The drain is a few microseconds against a measurement in the hundreds, but it is the one
- * asymmetry between the floor and the rest, so it is spelled rather than hidden.
+ * A DIFFERENT row every time.
+ *
+ * Re-selecting the row already selected writes the same two values, every binding compares before it
+ * writes, and the arm would time nothing at all. `timeArms` hands `i` up monotonically, which is what
+ * makes this a walk rather than a repeat.
  */
-async function time(move: (i: number) => void, settle: (() => Promise<void>) | null): Promise<number> {
-    for (let i = 0; i < WARM; i++) {
-        move(i)
-        if (settle !== null) await settle()
-    }
-    const samples: number[] = []
-    let step = 0
-    for (let sample = 0; sample < TIMED; sample++) {
-        const started = performance.now()
-        for (let i = 0; i < PER_SAMPLE; i++) {
-            // A DIFFERENT row every time: re-selecting the row already selected writes the same two
-            // values, every binding compares before it writes, and the arm would time nothing.
-            move(100 + (step++ % 700))
-            if (settle !== null) await settle()
-        }
-        samples.push((performance.now() - started) / PER_SAMPLE)
-    }
-    return median(samples)
-}
+const rowFor = (i: number): number => 100 + (i % 700)
 
 function listOf(host: HTMLElement, tag: string): HTMLElement[] {
     const holder = document.createElement('ul')
@@ -140,7 +114,7 @@ class Reader {
     }
 }
 
-async function vanillaArm(host: HTMLElement): Promise<Arm> {
+function vanillaRung(host: HTMLElement): Rung {
     const items = listOf(host, 'vanilla')
     const selected = new Signal(-1)
     for (let i = 0; i < ROWS; i++) {
@@ -152,32 +126,44 @@ async function vanillaArm(host: HTMLElement): Promise<Arm> {
     }
     return {
         label: 'vanilla — array subscribers, no batching',
-        ms: await time((i) => selected.write(i), null),
         through: 'write → reader → attribute',
+        // Synchronous all the way to the attribute, so it returns nothing to await. That asymmetry is
+        // the one thing separating this from the rungs below, and it is spelled rather than hidden.
+        run: (i) => selected.write(rowFor(i)),
     }
 }
 
 // --- abide, one layer at a time ---------------------------------------------
 
-async function graphOnlyArm(): Promise<Arm> {
+/**
+ * What the effect bodies observed, and DELIBERATELY read from outside.
+ *
+ * A body whose only effect is a counter nobody reads is a body an engine may prove dead, and this rung's
+ * whole point is that the graph ran. `observedWakes` is the reader that makes the increment survive —
+ * the same trick as the kit's `keep` / `keptValue` pair.
+ */
+let observed = 0
+
+export const observedWakes = (): number => observed
+
+function graphOnlyRung(): Rung {
     const selected = state(-1)
-    let seen = 0
     for (let i = 0; i < ROWS; i++) {
         watch(() => {
-            if (selected() === i) seen++
+            if (selected() === i) observed++
         })
     }
-    await drain()
-    const ms = await time((i) => selected.set(i), drain)
-    if (seen < 0) throw new Error('unreachable')
     return {
         label: 'abide — 1000 watch, NO dom',
-        ms,
         through: 'write → mark → queue → flush → run → body',
+        run: (i) => {
+            selected.set(rowFor(i))
+            return tick()
+        },
     }
 }
 
-async function graphWithDomArm(host: HTMLElement): Promise<Arm> {
+function graphWithDomRung(host: HTMLElement): Rung {
     const items = listOf(host, 'graph')
     const selected = state(-1)
     for (let i = 0; i < ROWS; i++) {
@@ -187,15 +173,17 @@ async function graphWithDomArm(host: HTMLElement): Promise<Arm> {
             if (item.className !== on) item.className = on
         })
     }
-    await drain()
     return {
         label: 'abide — 1000 watch, writing the attribute',
-        ms: await time((i) => selected.set(i), drain),
         through: '…+ attribute',
+        run: (i) => {
+            selected.set(rowFor(i))
+            return tick()
+        },
     }
 }
 
-async function slotArm(host: HTMLElement): Promise<Arm> {
+function slotRung(host: HTMLElement): Rung {
     const rows: { id: number; label: string }[] = []
     for (let i = 0; i < ROWS; i++) rows.push({ id: i, label: `row ${i}` })
     const holder = document.createElement('div')
@@ -215,11 +203,13 @@ async function slotArm(host: HTMLElement): Promise<Arm> {
                     ),
                 )}</ul>`,
     )
-    await drain()
     return {
         label: 'abide — 1000 template attribute slots',
-        ms: await time((i) => selected.set(i), drain),
         through: '…+ slot effect → unwrap → binder → thunk',
+        run: (i) => {
+            selected.set(rowFor(i))
+            return tick()
+        },
     }
 }
 
@@ -239,11 +229,28 @@ export async function profileWakePath(attached: boolean): Promise<{ arms: Arm[];
     // That is exactly the condition that decided the framework comparison, and it is spelled at the
     // top of this file: to make attaching cost anything, give the class a rule first.
     if (attached) document.body.append(host)
-    const arms: Arm[] = []
-    arms.push(await vanillaArm(host))
-    arms.push(await graphOnlyArm())
-    arms.push(await graphWithDomArm(host))
-    arms.push(await slotArm(host))
+
+    // Every rung BUILT before any of them is timed, which is the change that made this file honest.
+    // It used to build one, time it to completion, then build the next — and an arm timed after another
+    // inherits whatever that one left behind. The kit's own note prices that mistake: the same
+    // hand-written emitter measured 38.6 ns alone and 8.84 µs after abide's arm had run, which reads as
+    // "abide 121x faster" instead of "2.21x slower". `timeArms` interleaves one batch per arm per pass,
+    // so the drift is spread across all of them rather than loaded onto whichever ran second.
+    const rungs: Rung[] = [
+        vanillaRung(host),
+        graphOnlyRung(),
+        graphWithDomRung(host),
+        slotRung(host),
+    ]
+    await tick()
+
+    const timings = await timeArms(rungs, quiesce)
+    const arms: Arm[] = rungs.map((rung, at) => ({
+        label: rung.label,
+        through: rung.through,
+        ms: (timings[at] as { nsPerOp: number }).nsPerOp / 1e6,
+    }))
+
     if (attached) host.remove()
     return { arms, rows: ROWS }
 }
