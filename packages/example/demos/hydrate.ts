@@ -11,10 +11,10 @@
 
 import { html, state, type State, type TemplateResult } from 'abide'
 import { awaited, component, keyed } from 'abide/runtime'
-import { renderToString } from 'abide/server'
-import { container, suite } from 'abide-kit'
-import { install, measure, measureFlush, nodesMade, nonZero, tick, total } from 'abide-kit/measure'
-import { hydrate, mount } from 'abide/ui'
+import { renderDocument, renderToString, shell } from 'abide/server'
+import { type Case, container, sleep, suite } from 'abide-kit'
+import { install, keep, measure, measureFlush, nodesMade, nonZero, tick, total } from 'abide-kit/measure'
+import { hydrate, mount, type Mounted } from 'abide/ui'
 import { button, lazy, output, row, stage } from './dom.ts'
 import { LADDER } from './fixtures/hydrate/ladder.ts'
 import { META } from './SUITES.ts'
@@ -34,6 +34,43 @@ async function served(view: () => TemplateResult): Promise<HTMLElement> {
     mount(warm, view).dispose()
     const host = container()
     host.innerHTML = await renderToString(view(), { hydratable: true })
+    return host
+}
+
+/** A shell with a hole in it, which is what makes the hydration root an element rather than the body. */
+const SHELL = shell('<!doctype html><html><head></head><body><slot></slot></body></html>')
+
+/**
+ * The same, but through the DOCUMENT lane — the whole of what a browser is handed, patches included.
+ *
+ * `served` above renders a fragment, which is the right substrate for every other case here and the
+ * wrong one for this claim: a deferred region is not markup the walk wrote. It is a placeholder, a
+ * `<template>` and a `<script>` that arrive after the walk is done and swap themselves in, so what is
+ * left INSIDE the hydration root is decided by the document lane and nowhere else.
+ *
+ * The swap is spelled out rather than run: a `<script>` set through `innerHTML` never executes, in a
+ * browser or here. These are `PATCH_SWAP`'s two lines, and the script element is left behind exactly
+ * as a browser leaves it — which is the node the claim is about.
+ */
+async function servedDocument(view: () => TemplateResult): Promise<HTMLElement> {
+    const warm = document.createElement('div')
+    mount(warm, view).dispose()
+
+    let text = ''
+    for await (const chunk of renderDocument(SHELL, view, { hydratable: true })) text += chunk
+
+    const host = container()
+    host.innerHTML = text.slice(text.indexOf('<body>') + '<body>'.length, text.lastIndexOf('</body>'))
+    for (const script of Array.from(host.querySelectorAll('script'))) {
+        const call = /^\$p\((\d+)\)$/.exec(script.textContent ?? '')
+        if (call === null) continue
+        const patch = host.querySelector(`#t${call[1]}`) as HTMLTemplateElement | null
+        const placeholder = host.querySelector(`#s${call[1]}`)
+        if (patch !== null && placeholder !== null) {
+            placeholder.replaceWith(patch.content)
+            patch.remove()
+        }
+    }
     return host
 }
 
@@ -74,14 +111,39 @@ const spacedListView = (rows: () => Item[]) => (): TemplateResult =>
 // Detached, and the markup is rendered ONCE at module scope: an arm that re-renders the string on
 // every iteration is timing the server, not the adoption.
 
-const ROWS_200 = build(200)
-const rowsCell = state(ROWS_200)
-const BENCH_VIEW = listView(() => rowsCell())
+/** One SIZE of the same list, with everything three arms need to start from the same bytes. */
+interface Sized {
+    n: number
+    rows: Item[]
+    view: () => TemplateResult
+    /** What the server wrote, rendered once. An arm that re-renders it is timing the server. */
+    served: string
+    /** The same document by hand, so the vanilla arm parses the same bytes rather than similar ones. */
+    byHand: string
+}
 
-// The markup both arms start from. Rendering it is the SERVER's half of this suite and touches no
-// document, so it stays where it is: at module scope, once.
-const SERVED_MARKUP = await renderToString(BENCH_VIEW(), { hydratable: true })
-const VANILLA_MARKUP = vanilla.rowsToString(ROWS_200)
+async function sized(n: number): Promise<Sized> {
+    const rows = build(n)
+    // Through a cell rather than the array, so the list slot has the same reactive shape a real page
+    // gives it — an arm reading a constant subscribes to nothing and skips work every size pays.
+    const cell = state(rows)
+    const view = listView(() => cell())
+    return {
+        n,
+        rows,
+        view,
+        served: await renderToString(view(), { hydratable: true }),
+        byHand: vanilla.rowsToString(rows),
+    }
+}
+
+// Three sizes, because ONE size cannot tell a per-row cost from a fixed one — both look like a
+// constant. 10000 is the one that matters: the round trip costs about 1.3 µs a row and holds that
+// across all three, so a frame arrives at roughly twelve thousand rows and nothing below it is
+// perceptible however the ratio reads.
+const SMALL = await sized(100)
+const MEDIUM = await sized(1000)
+const LARGE = await sized(10000)
 
 /**
  * Where the arms' hosts hang, made on FIRST USE rather than at import.
@@ -93,16 +155,98 @@ const VANILLA_MARKUP = vanilla.rowsToString(ROWS_200)
  */
 const detached = lazy((): HTMLElement => {
     const warm = document.createElement('div')
-    mount(warm, BENCH_VIEW).dispose()
+    mount(warm, SMALL.view).dispose()
     return document.createElement('div')
 })
 
+/**
+ * The one live mount an arm is allowed to leave behind, so a run does not retain every iteration.
+ *
+ * Dropping the host is not enough and that is the whole of this: a mount's list slot is SUBSCRIBED to
+ * the cell it reads, so the effect outlives the nodes and holds the entire part tree with it. Twenty
+ * undisposed mounts wake twenty readers on one write — measured, and the number this suite would
+ * report is right either way. At 10000 rows over a calibrated run it is more than a million nodes the
+ * collector cannot touch, which is enough for Safari to reload the tab out from under the run. That
+ * is how it was found, and no assertion in the repo could have: the arms all reported correctly right
+ * up until the page died.
+ */
+let held: Mounted | null = null
+
+function hold(mounted: Mounted): void {
+    held = mounted
+}
+
+// `replaceChildren` rather than `append`, and that is a measurement decision rather than tidiness: an
+// arm makes a host per iteration, so appending retains every one of them for the length of the run.
+// The dispose beside it is the same act for the part graph — an iteration takes down the one before
+// it, which is symmetric across every arm and bounds the heap to two trees whatever the size.
 function benchHost(markup: string): HTMLElement {
+    held?.dispose()
+    held = null
     const host = document.createElement('div')
     host.innerHTML = markup
-    detached().append(host)
+    detached().replaceChildren(host)
     return host
 }
+
+/**
+ * The round trip at ONE size — six arms, three times, differing by a number.
+ *
+ * A function rather than three written out, because what the three sizes are for is the DIFFERENCE
+ * between them: an arm list that drifted between sizes would make a per-row cost and a fixed cost
+ * indistinguishable, which is the whole reason there is more than one card.
+ */
+function roundTrip(size: Sized, note: string): Case {
+    return {
+        title: `the whole round trip at ${size.n} rows: render, parse, adopt`,
+        note,
+        bench: {
+            kind: 'time',
+            per: { n: size.n, label: 'row' },
+            arms: [
+                {
+                    label: 'abide — the whole trip: render + parse + adopt',
+                    run: async () => {
+                        const markup = await renderToString(size.view(), { hydratable: true })
+                        hold(hydrate(benchHost(markup), size.view))
+                    },
+                },
+                {
+                    label: '…of which the server: renderToString({ hydratable: true })',
+                    run: async () => keep(await renderToString(size.view(), { hydratable: true })),
+                },
+                {
+                    label: '…of which the parse: innerHTML, no adoption',
+                    run: () => keep(benchHost(size.served)),
+                },
+                {
+                    label: '…of which the client: parse + adopt',
+                    run: () => hold(hydrate(benchHost(size.served), size.view)),
+                },
+                {
+                    label: 'abide — no server at all: build into an empty host',
+                    run: () => hold(mount(benchHost(''), size.view)),
+                },
+                {
+                    label: 'vanilla — concat + parse + walk and keep',
+                    run: () => {
+                        const host = benchHost(vanilla.rowsToString(size.rows))
+                        keep(vanilla.adoptRows(host.firstElementChild as Element))
+                    },
+                },
+            ],
+        },
+    }
+}
+
+const ROUND_TRIP_NOTE =
+    'Every other bench in this suite starts from markup rendered once at module scope, which is the right substrate for pricing adoption ALONE and hides what a served page costs end to end. This one is the sum, with the share named under it, because an optimisation is capped by the fraction of the op it touches: the first arm is the whole thing, the second is the server’s half, the fourth is the client’s — and those two are what the first adds up to. The third is INSIDE the fourth rather than beside it: the parser is a large part of what the client pays, and no arrangement of the server avoids it, so a change to the adopt walk is working on the remainder rather than on the number above it. The fifth arm is the one that stops the card being read as a win — building on the client with no server render at all is LESS total work than rendering it, parsing it and adopting it. What the round trip buys is a page that is readable before any of that runs, and the ratio to weigh it against is the last arm: the same trip by hand. This size is well under a frame, so read the two cards below it before quoting any of these ratios as something a person would feel.'
+
+const MEDIUM_NOTE =
+    'The same six arms, five times the rows, and the two cards are meant to be read TOGETHER — one size cannot tell a per-row cost from a fixed one, because both look like a constant. The per-row column is where the answer is, and here it is FLAT: every arm holds its per-row number across the two sizes, so there is no fixed cost the smaller list was failing to amortise and no crossover to find. That is worth having measured rather than assumed — the client suite’s cold build does NOT hold flat over the same jump — and it is what makes the shares on the card above survive a change of n.'
+
+const LARGE_NOTE =
+    'A hundred times the first card, and the size that changes what the number MEANS rather than what it is: the per-row cost is the same as at 100, so what this card adds is WHERE it starts to matter. Click to paint is frame quantised, so every implementation under one frame reads alike and a ratio at 100 rows is a fact about a cost nobody perceives — at this per-row cost the whole trip crosses a frame at about twelve thousand rows, which is the n to design against and the only place a change to the adopt walk moves something a reader would notice. Run it in a FRESH page — an op that makes tens of thousands of nodes leaves enough garbage that whatever runs next measures this instead of itself — and run it twice, because one run cannot tell a real difference from a collection that landed inside a batch.'
 
 export default suite({
     ...META.hydrate,
@@ -432,18 +576,18 @@ export default suite({
                 kind: 'work',
                 arms: [
                     {
-                        label: 'abide — hydrate over the server’s 200 rows',
-                        prepare: () => void benchHost(SERVED_MARKUP),
-                        run: () => void hydrate(benchHost(SERVED_MARKUP), BENCH_VIEW),
+                        label: 'abide — hydrate over the server’s 100 rows',
+                        prepare: () => void benchHost(SMALL.served),
+                        run: () => hold(hydrate(benchHost(SMALL.served), SMALL.view)),
                     },
                     {
                         label: 'abide — mount, throwing the server’s rows away',
-                        run: () => void mount(benchHost(SERVED_MARKUP), BENCH_VIEW),
+                        run: () => hold(mount(benchHost(SMALL.served), SMALL.view)),
                     },
                     {
                         label: 'vanilla — walk the rows and keep their text nodes',
                         run: () =>
-                            void vanilla.adoptRows(benchHost(VANILLA_MARKUP).firstElementChild as Element),
+                            void vanilla.adoptRows(benchHost(SMALL.byHand).firstElementChild as Element),
                     },
                 ],
             },
@@ -474,28 +618,65 @@ export default suite({
         },
 
         {
-            title: 'hydrating 200 rows against building them',
+            title: 'hydrating 100 rows against building them',
             note: 'The ratio, not the milliseconds. Adoption walks the markup the parser already built; a mount builds a second copy of it and then discards the first. The vanilla arm is the floor: it walks the same nodes and keeps references, without having to recover from the markup what the author already knew.',
             bench: {
                 kind: 'time',
-                per: { n: 200, label: 'row' },
+                per: { n: 100, label: 'row' },
                 arms: [
                     {
                         label: 'abide — hydrate',
-                        run: () => void hydrate(benchHost(SERVED_MARKUP), BENCH_VIEW),
+                        run: () => hold(hydrate(benchHost(SMALL.served), SMALL.view)),
                     },
                     {
                         label: 'abide — mount (build it again)',
-                        run: () => void mount(benchHost(SERVED_MARKUP), BENCH_VIEW),
+                        run: () => hold(mount(benchHost(SMALL.served), SMALL.view)),
                     },
                     {
                         label: 'vanilla — walk and keep',
                         run: () =>
-                            void vanilla.adoptRows(benchHost(VANILLA_MARKUP).firstElementChild as Element),
+                            void vanilla.adoptRows(benchHost(SMALL.byHand).firstElementChild as Element),
                     },
                 ],
             },
         },
+
+        {
+            title: 'a bench arm takes down the iteration before it',
+            note: 'The claim is about the HARNESS, and it is here because the benches below are what broke without it. Dropping an arm’s host does not free what it built: the list slot is subscribed to the cell it reads, so the effect outlives the nodes and holds the whole part tree. Every iteration then retains one more, the numbers stay correct throughout, and at 10000 rows over a calibrated run it is upwards of a million nodes the collector cannot touch — Safari reloads the tab and the run dies with it. Nothing about a duration could show that, and neither could a DOM counter: what grows is the number of readers still subscribed, so the assertion is wake-ups. One live mount is what a page has; the rest is a leak with no symptom until the tab is gone.',
+            async run({ is, log }) {
+                const rows = state([1, 2, 3])
+                let runs = 0
+                const view = (): TemplateResult =>
+                    html`<ul>${() => {
+                        runs++
+                        return rows().map((n) => keyed(n, html`<li>${n}</li>`))
+                    }}</ul>`
+
+                // Exactly what an arm does: build, drop the host, keep going. `benchHost` is the one
+                // that disposes, so going through it is what makes this the arms' own path.
+                for (let i = 0; i < 20; i++) hold(mount(benchHost(''), view))
+                await tick()
+                runs = 0
+                rows.set([1, 2, 4])
+                await tick()
+                // ONE, not twenty. With the dispose out this reads 20 — and read 20 for the whole of
+                // the run that killed the tab, while every number the page printed stayed right.
+                is('one live reader after twenty iterations', runs, 1)
+                log('readers woken by one write', runs)
+
+                // And the live one still works, which is the half that stops "dispose everything"
+                // passing: an arm whose mount was torn down measures a mount into nothing.
+                const host = benchHost('')
+                hold(mount(host, view))
+                await tick()
+                is('the mount that is still held painted', host.querySelectorAll('li').length, 3)
+            },
+        },
+
+        roundTrip(SMALL, ROUND_TRIP_NOTE),
+        roundTrip(MEDIUM, MEDIUM_NOTE),
+        roundTrip(LARGE, LARGE_NOTE),
 
         {
             title: 'a deferring block keeps the arm the server painted',
@@ -621,6 +802,45 @@ export default suite({
                 is('and nothing was created from scratch', work.createElement, 0)
                 log('work to rebuild one divergent slot', nonZero(work))
                 host.remove()
+            },
+        },
+
+        {
+            title: 'a served DOCUMENT leaves nothing in the hydration root but the page',
+            note: 'The one thing a fragment render cannot be asked. A page whose content sits behind a deferred region is sent as a placeholder, and the real subtree follows in a `<template>` with a `<script>` that swaps it in — and `renderDocument` wrote all three BEFORE the close of the hydration root, so the top-level part was handed its own markup with a script or two on the end of it. It mismatched and rebuilt the entire page it had been given correct markup for: identical screen, twice the work, and a warning nobody reads. Every served page with a `{#if x.pending()}` over its content did this, `/streaming` since long before the pages that inherited it. Nothing wanted them inside — `$p` finds its placeholder by id from anywhere in the document — so the root now closes ahead of the drain. The counters are the claim, since a rebuild produces the same screen; the assertion that the root holds no script is what says why.',
+            async run({ is, log }) {
+                const arms = {
+                    pending: () => html`<em>waiting</em>`,
+                    then: (value: string) => html`<b>${value}</b>`,
+                }
+                // Unsettled at render time, which is what makes the server DEFER it rather than await
+                // it inline — a resolved promise takes the in-order path and the patch never exists.
+                const view = (): TemplateResult =>
+                    html`<main>${() => awaited(sleep(5).then(() => 'landed'), arms)}</main>`
+
+                const body = await servedDocument(view)
+                const root = body.querySelector('slot') as HTMLElement
+                // Read off the ELEMENT the patch brought rather than off the root, so a leftover
+                // script's own source text cannot fail this line ahead of the one that names it.
+                is('the patch landed', root.querySelector('b')?.textContent, 'landed')
+                is('no script inside the root', root.querySelector('script'), null)
+                is('and no template either', root.querySelector('template'), null)
+                // Both are still in the DOCUMENT — moved out of the root, not dropped.
+                is('the patch script is outside it', body.querySelectorAll('script').length, 2)
+
+                const main = root.querySelector('main')
+                const bold = root.querySelector('b')
+                const work = measure(() => void hydrate(root, view))
+                // The page is adopted, patched subtree and all. A root that rebuilt reads identically
+                // — these are the lines that tell the two apart.
+                is('nothing cloned', work.cloneNode, 0)
+                is('nothing created', work.createElement, 0)
+                is('nothing removed', work.remove, 0)
+                is('one node inserted — the root anchor', work.insert, 1)
+                is('the page is the element the parser made', root.querySelector('main'), main)
+                is('and so is what the patch brought', root.querySelector('b'), bold)
+                log('work to adopt a patched document', nonZero(work))
+                body.remove()
             },
         },
     ],

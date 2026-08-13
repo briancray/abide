@@ -763,15 +763,20 @@ stops being inline. A comment that has to reach the browser is `{html('<!-- … 
 | `renderFragment` | `(body: () => Renderable, options?) => AsyncGenerator<string>` | A `renderDocument` without the shell: the body in order, then its out-of-order patches. What a navigation is answered with — see below. |
 | `fragmentToStream` | `(body: () => Renderable, options?) => ReadableStream<Uint8Array>` | The same fragment as a `ReadableStream`. What `abide start` answers a navigation with. |
 | `shell` | `(html: string) => Shell` | An app's own html as a document with a hole in it. THROWS when it has no `<slot></slot>`. |
-| `Shell` | `{ head: string; open: string; close: string }` | Concatenated as `head` + the scoped styles + `open` + the page + `close`. Cut once, because a document cannot change under a running process. |
+| `Shell` | `{ head: string; open: string; close: string; tail: string }` | Concatenated as `head` + the scoped styles + `open` + the page + `close` + the patches + the seed block + `tail`. Everything between `open` and `close` is what a hydrating client ADOPTS, which is why the last three are outside it. Cut once, because a document cannot change under a running process. |
 | a deferred block | — | THE PENDING ARM IS THE DECISION. `{#if x.pending()}…{/if}` has markup to send now, so a `renderDocument` emits it as a placeholder and patches the settled chain in as it lands. Reading the cell without asking about it first has none, so the walk AWAITS the load and the markup is complete when it arrives — which is what a reader running no scripts needs, since a patch travels in a `<template>` behind a script. A render with nowhere to patch awaits inline either way. A failure arm renders on the deferred path too; without one a failed deferred subtree is a comment and an `abide:render` error, because by then the shell is already on the wire. |
 | `options.hydratable` | `boolean` | Also emit the markers a hydrating client adopts by. Off unless asked for. |
 | `mount` | `(container: Element, view: () => TemplateResult) => Mounted` | Build live DOM and keep it live. Returns `{ dispose }`, which tears the tree down and — for a renderer that was handed `outlet` itself — hands the navigation sink back, so a second `mount` is the live one. |
 | `hydrate` | `(container: Element, view: () => TemplateResult) => Mounted` | The same over markup a hydratable render wrote — every part adopts its range. A divergence rebuilds that subtree and warns. |
 
-The two-line patch script goes out with the FIRST deferred subtree rather than in the shell: a page
-that defers nothing ships neither the script nor a `<script>` node inside the slot a hydrating
-client adopts.
+The two-line patch script goes out with the FIRST deferred subtree rather than in the shell, so a page
+that defers nothing ships no script at all.
+
+Every patch — the `<template>` and the `<script>` that swaps it in — is written AFTER the hydration
+root closes. Everything inside that root is what the client adopts, and a patch is not something its
+own render produces: written inside, it is an extra child on the end of the root, and the part
+claiming that range mismatches and rebuilds the whole page it was handed correct markup for. Nothing
+needs them inside, because `$p` finds its placeholder by id from anywhere in the document.
 
 ### When a load starts
 

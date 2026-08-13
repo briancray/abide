@@ -874,15 +874,18 @@ export async function* renderDocument(
         openSeeding()
         yield `${parts.head}${styleTags(stamp)}${parts.open}`
         yield* stream(body(), context, clock)
-        yield* drain(deferrals, clock, false, stamp)
-        // AFTER the drain, and OUTSIDE the hydration root — two separate requirements that both put
-        // it exactly here. After the drain, because a `{#if x.pending()}` region resolves its reads
-        // long after the shell is on the wire, so a block written beside the styles would carry only
-        // the slots that were already warm. Outside `close`, because everything between `open` and
-        // `close` is what the client ADOPTS: written inside, this is an extra child the client's own
-        // render never produces, and it survived only because hydration happened to read it before
-        // discarding it — leaving a stray script in the content for anyone running no scripts.
+        // The root CLOSES here, before anything the drain writes. Everything between `open` and
+        // `close` is what the client ADOPTS, and a patch is a `<template>` and a `<script>` that the
+        // client's own render never produces — written inside, they are two extra children at the end
+        // of the root, and the top-level part claiming that range mismatches and REBUILDS the whole
+        // page it was handed correct markup for. Nothing needs them inside: the placeholder each one
+        // replaces was written by the walk above, and `$p` finds it by id from anywhere in the
+        // document. Every page whose content sits behind a deferred region hydrated this way.
         yield parts.close
+        yield* drain(deferrals, clock, false, stamp)
+        // AFTER the drain, because a `{#if x.pending()}` region resolves its reads long after the
+        // shell is on the wire, so a block written beside the styles would carry only the slots that
+        // were already warm. Outside the root for the reason the drain now is.
         yield seeds(stamp)
         yield parts.tail
     } finally {
@@ -1041,11 +1044,11 @@ async function* drain(
             resume?.()
         })
     }
-    // The two-line patch script goes out ahead of the FIRST patch rather than in the shell, and
-    // the guard is the whole point: a page that suspends nothing ships neither the script nor a
-    // `<script>` node inside the slot a hydrating client adopts — where an unexpected element is
-    // a mismatch and a rebuilt subtree. Nothing calls `$p` before a patch exists, so a yield here
-    // is early enough, and the loop below then has no state to carry between turns.
+    // The two-line patch script goes out ahead of the FIRST patch rather than in the shell, so a
+    // page that suspends nothing ships no script at all. Nothing calls `$p` before a patch exists,
+    // so a yield here is early enough, and the loop below then has no state to carry between turns.
+    // Where all of this LANDS is `renderDocument`'s to decide, and it is after the hydration root
+    // closes — a patch inside it is an extra child the client's own render never produces.
     if (!framed && pending > 0) yield patchScript(nonce)
     while (pending > 0) {
         if (landed.length === 0) {
