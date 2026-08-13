@@ -8,15 +8,21 @@
      worth a route: a run of eight cases finishes while somebody is still looking at it. -->
 <script module>
 import { memo, state } from 'abide'
-import { type BenchRow, benchRowsOf } from 'abide-kit'
+import { type BenchRow, benchRowsOf, exposeBench } from 'abide-kit'
 import { clockResolution } from 'abide-kit/measure'
 import { SMALL_BUTTON } from '../../../demos/dom.ts'
 import { LOADERS, type SuiteName } from '../../../demos/index.ts'
 import Arms from '../../../site/arms.abide'
+import { BENCH_ROW, FIELD, HEAD, matches, STICKY, TABLE, terms } from '../../../site/table.ts'
 
 const rowsFor = memo(async ({ name }: { name: string }): Promise<BenchRow[] | null> => {
     if (!Object.hasOwn(LOADERS, name)) return null
-    return benchRowsOf([(await LOADERS[name as SuiteName]()).default])
+    const rows = benchRowsOf([(await LOADERS[name as SuiteName]()).default])
+    // The out-of-process profiler's handle on these same arms — see `exposeBench`. Installed here
+    // rather than guarded behind a flag: it is a read of what the page already holds, and a seam
+    // that only exists under a flag is a seam nothing routinely proves still works.
+    exposeBench(rows)
+    return rows
 })
 
 const CLOCK =
@@ -29,6 +35,15 @@ const CLOCK =
 import { route } from 'abide'
 
 const progress = state('')
+const query = state('')
+
+/** The same filter the index has, over one suite's rows. See `matches`. */
+const shownRows = memo((rows: BenchRow[]): BenchRow[] => {
+    const wanted = terms(query)
+    const out: BenchRow[] = []
+    for (const row of rows) if (matches(row, wanted)) out.push(row)
+    return out
+})
 
 async function runEverything(rows: BenchRow[]): Promise<void> {
     for (let i = 0; i < rows.length; i++) {
@@ -49,17 +64,28 @@ async function runEverything(rows: BenchRow[]): Promise<void> {
     {#if rows}
         <div class="mx-auto max-w-6xl px-6 pt-10 pb-2">
             <h1 class="text-3xl font-semibold text-slate-100">{route().params.suite} · bench</h1>
-            <p class="mt-2 text-slate-400 max-w-3xl">Every case in this suite that carries a bench, against a hand-written equivalent. Blue is abide; the last column is abide ÷ that arm.</p>
+            <p class="mt-2 text-slate-400 max-w-3xl">Every case in this suite that carries a bench, against a hand-written equivalent. Open a row for its prose, its other arms and the per-item numbers.</p>
         </div>
 
         <main class="mx-auto max-w-6xl px-6 pb-24 space-y-6">
             <div class="flex flex-wrap items-center gap-3">
-                <button class={SMALL_BUTTON} onclick={() => void runEverything(rows)}>run everything</button>
+                <button class={SMALL_BUTTON} onclick={() => void runEverything(shownRows(rows))}>run everything</button>
+                <input class={FIELD} bind:value={query} placeholder="filter — title or arm"/>
                 <span class="text-sm text-slate-500">{progress}</span>
                 <a href="/bench" class="ml-auto text-sm text-sky-400 hover:text-sky-300">every suite →</a>
             </div>
             <p class="text-xs text-slate-600">{CLOCK}</p>
-            <Arms rows={rows}/>
+            <div class={TABLE}>
+                <div class="{BENCH_ROW} {STICKY}">
+                    <span class={HEAD}>what was measured</span>
+                    <span class="{HEAD} text-right">abide</span>
+                    <span class="{HEAD} text-right">by hand</span>
+                    <span class="{HEAD} text-right">nodes/op</span>
+                    <span class="{HEAD} text-right">abide ÷ by hand</span>
+                    <span class={HEAD}></span>
+                </div>
+                <Arms rows={shownRows(rows)}/>
+            </div>
         </main>
     {:else}
         <div class="mx-auto max-w-6xl px-6 py-16">

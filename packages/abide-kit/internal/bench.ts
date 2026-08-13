@@ -11,6 +11,7 @@
 // across every arm instead of loading it onto whichever ran second, and the per-arm minimum then
 // finds a pass where the tab was quiet. `spread` is what says whether such a pass ever happened.
 
+import { measureFlush, nodesMade } from './dom.ts'
 import { isThenable } from './probes.ts'
 
 export interface Arm {
@@ -22,6 +23,7 @@ export interface Arm {
 }
 
 export interface Timing {
+    /** The MINIMUM across passes — the quietest one, and what every ratio on the page is taken from. */
     nsPerOp: number
     ops: number
     /**
@@ -31,6 +33,29 @@ export interface Timing {
      * representative.
      */
     spread: number
+    /**
+     * The rest of the pass distribution, ns per op. `nsPerOp` is the min, so it is not repeated here.
+     *
+     * `spread` compressed a distribution into one number and then only warned above a threshold; a
+     * reader who wants to know whether the minimum was a fluke or the shape of the thing had nothing
+     * to look at. p90 is INTERPOLATED between the two passes it falls between, because nine samples
+     * cannot rank a ninetieth percentile exactly — by nearest rank it would be the maximum, printed
+     * twice under two headings.
+     */
+    p50: number
+    p90: number
+    max: number
+    /**
+     * DOM nodes made per op — the memory-shaped number, and the only honest one a PAGE can take.
+     *
+     * Not bytes. `performance.memory` reads 9.5 MB against a renderer holding 2.8 GB, because DOM
+     * nodes are not on the JS heap, and no browser exposes the one they are on. A net node count
+     * cannot stand in either: detaching a subtree of ten thousand is ONE `remove`, so the counter
+     * reads the same whether those nodes are collectable or pinned by a live effect. What is left is
+     * what was ALLOCATED per op, which is exact, is the same everywhere, and is one of the three
+     * numbers this project already budgets emitted code in.
+     */
+    nodes: number
 }
 
 // Browsers clamp `performance.now` — 1 ms in Safari, 0.1 ms in Chrome — so the batch has to be long
@@ -53,6 +78,18 @@ const MAX_GROWTH = 32
  * that awaits per op — thirty thousand microtasks in a batch — needs more of them than most.
  */
 const PASSES = 9
+/**
+ * How far off `BATCH_TARGET_MS` a pass may land before its batch is resized.
+ *
+ * A batch is sized once, against the world as it stood before any arm had run — and that world moves.
+ * One bench took TWO MINUTES for want of this: its first arm writes a cell that a later arm's lazy
+ * fixture mounts a thousand-row list onto, so the arm calibrated at 125 ns an op, was 21 µs an op by
+ * the time it was measured, and spent nine passes of 320,000 iterations discovering it. The sample
+ * stays honest either way — it is elapsed ÷ ops whatever the batch — so what the resize buys back is
+ * wall clock, and in the other direction accuracy: a batch that has become too SMALL is a sample
+ * approaching the clock's own resolution, which is the one thing no number of passes can fix.
+ */
+const RESIZE_BEYOND = 4
 
 async function runBatch(arm: Arm, count: number, offset: number): Promise<number> {
     const started = performance.now()
@@ -77,11 +114,19 @@ async function calibrate(arm: Arm, offset: number): Promise<{ batch: number; off
     }
 }
 
-function median(values: number[]): number {
-    const sorted = values.slice().sort((a, b) => a - b)
-    const middle = sorted.length >> 1
-    if (sorted.length % 2 === 1) return sorted[middle] as number
-    return (((sorted[middle - 1] as number) + (sorted[middle] as number)) / 2) as number
+/**
+ * The value at `fraction` through a SORTED list, interpolating between the two it falls between.
+ *
+ * Interpolated rather than nearest-rank because of how few samples there are: at nine passes the
+ * ninetieth percentile by rank IS the maximum, and a table printing one number under two headings
+ * invites exactly the reading it cannot support.
+ */
+function percentile(sorted: number[], fraction: number): number {
+    const at = fraction * (sorted.length - 1)
+    const below = Math.floor(at)
+    const above = Math.ceil(at)
+    if (below === above) return sorted[below] as number
+    return (sorted[below] as number) + ((sorted[above] as number) - (sorted[below] as number)) * (at - below)
 }
 
 /**
@@ -94,29 +139,59 @@ function median(values: number[]): number {
 export async function timeArms(arms: Arm[], settle: () => Promise<void>): Promise<Timing[]> {
     const state = await measureArms(arms, settle, PASSES)
 
-    return state.map((entry) => {
-        const best = Math.min(...entry.samples)
-        return {
+    const timings: Timing[] = []
+    for (const entry of state) {
+        // One counted op per arm, AFTER the timing and outside it: the counters are patched DOM
+        // methods, so counting inside the measured passes would put the tax in the number the passes
+        // exist to take. One op is enough because this is an allocation count, not a sample.
+        const counts = await measureFlush(() => {
+            const produced = entry.arm.run(entry.offset++)
+            if (isThenable(produced)) void produced
+        })
+        await settle()
+
+        const sorted = entry.samples.slice().sort((a, b) => a - b)
+        const best = sorted[0] as number
+        const middle = percentile(sorted, 0.5)
+        timings.push({
             nsPerOp: best * 1e6,
-            ops: entry.batch * PASSES,
-            spread: best === 0 ? 1 : median(entry.samples) / best,
-        }
-    })
+            ops: entry.ops,
+            spread: best === 0 ? 1 : middle / best,
+            p50: middle * 1e6,
+            p90: percentile(sorted, 0.9) * 1e6,
+            max: (sorted[sorted.length - 1] as number) * 1e6,
+            nodes: nodesMade(counts),
+        })
+    }
+    return timings
 }
 
 interface Measured {
+    arm: Arm
     batch: number
+    /** Where the next op's `i` continues from, so the counted op does not repeat a timed one. */
+    offset: number
+    /** Every op run under timing, across all passes — the batch may have been resized between them. */
+    ops: number
     /** Milliseconds per op, one entry per pass. */
     samples: number[]
 }
 
 /** Calibrate every arm, then time them interleaved for `passes` passes. */
 async function measureArms(arms: Arm[], settle: () => Promise<void>, passes: number): Promise<Measured[]> {
-    const state = arms.map((arm) => ({ arm, batch: 1, offset: 3, samples: [] as number[] }))
+    const state = arms.map((arm) => ({ arm, batch: 1, ops: 0, offset: 3, samples: [] as number[] }))
 
+    // EVERY arm is prepared and warmed before ANY of them is sized, which is not tidiness: an arm
+    // that builds its fixture on first use — a mounted list, a cache, a socket — changes what the
+    // arms BESIDE it cost, and one sized ahead of that is sized against a world that no longer
+    // exists. Warming all of them first is what makes the first calibration measure the same world
+    // the ninth pass will.
     for (const entry of state) {
         entry.arm.prepare?.()
         await runBatch(entry.arm, 3, 0) // warm the JIT and any first-call caches
+    }
+
+    for (const entry of state) {
         const calibrated = await calibrate(entry.arm, entry.offset)
         entry.batch = calibrated.batch
         entry.offset = calibrated.offset
@@ -127,7 +202,14 @@ async function measureArms(arms: Arm[], settle: () => Promise<void>, passes: num
         for (const entry of state) {
             const elapsed = await runBatch(entry.arm, entry.batch, entry.offset)
             entry.offset += entry.batch
+            entry.ops += entry.batch
             entry.samples.push(elapsed / entry.batch)
+            // See RESIZE_BEYOND. The sample above is kept — it is a per-op number and stays true at
+            // any batch size — and only what the NEXT pass will cost is corrected.
+            if (elapsed > BATCH_TARGET_MS * RESIZE_BEYOND || elapsed * RESIZE_BEYOND < BATCH_TARGET_MS) {
+                const scaled = Math.round((entry.batch * BATCH_TARGET_MS) / Math.max(elapsed, 0.05))
+                entry.batch = Math.min(MAX_BATCH, Math.max(1, scaled))
+            }
             await settle()
         }
     }
@@ -208,14 +290,21 @@ export function verdict(abide: number, arm: number): 'faster' | 'same' | 'slower
     return ratio <= 1 ? 'faster' : 'slower'
 }
 
-// Always phrased from abide's side, and says so: a bare "1.23× slower" reads as a claim about the
-// hand-written arm rather than about abide.
+/**
+ * abide ÷ arm, as a bare multiple: `4.55×`, and `0.22×` when abide is the faster one.
+ *
+ * It was a sentence — `abide 4.55× slower` — and a sentence is unreadable in a column of forty. The
+ * direction the words were carrying is in the number itself once the axis is fixed: under one is
+ * abide ahead, over one is behind, and the column head names which way the division went. `verdict`
+ * still says which side of the noise floor it landed on, for a page that wants to colour it.
+ *
+ * Both zeroes are reachable and neither divides: an arm that did no work at all is the best result on
+ * the page, and printing it as `NaN×` or `Infinity×` reads as the measurement having failed.
+ */
 export function ratioText(abide: number, arm: number): string {
-    const ratio = abide / arm
-    const which = verdict(abide, arm)
-    if (which === 'same') return 'abide — same, within noise'
-    if (which === 'faster') return `abide ${(1 / ratio).toFixed(2)}× faster`
-    return `abide ${ratio.toFixed(2)}× slower`
+    if (abide === arm) return '1.00×'
+    if (arm === 0) return '∞×'
+    return `${(abide / arm).toFixed(2)}×`
 }
 
 // Yield long enough for the browser to paint what was just written.

@@ -33,7 +33,7 @@ export { type Loopback, loopback } from './internal/loopback.ts'
 // Running a page of cases in a browser: one at a time, because the counters are global.
 export { enqueue, running, type Running, type Status } from './internal/queue.ts'
 // A bench as ROWS — the measuring half of a table, with nothing in it about how a table looks.
-export { type ArmRow, benchRow, type BenchRow, benchRowsOf } from './internal/rows.ts'
+export { type ArmRow, benchRow, type BenchRow, benchRowsOf, exposeBench } from './internal/rows.ts'
 
 // --- what a case says -------------------------------------------------------
 

@@ -1,19 +1,22 @@
-<!-- Rows of measurements: one section per case, one line per arm.
+<!-- The bench page, as ONE table: what was measured, what abide cost, what the hand-written arm cost,
+     and the difference. Four columns, one row per claim, and everything else behind the row.
 
-     Every row is laid on ONE column template, so a number sits directly under every other number of its
-     kind and the eye runs down the page instead of re-entering each card's own little grid.
+     It was a stack of cards — a heading, a paragraph of prose and one line per arm, six deep. Every
+     number on it was correct and the page was unreadable: forty cases at six arms is 240 lines of
+     equal weight, and the two numbers a reader came for sit somewhere inside that. A comparison is
+     read by SCANNING DOWN A COLUMN, which is a thing a page can only offer if the column exists.
 
-     The numbers are cells, so a row repaints when its own measurement lands and no other row hears about
-     it. What arrives from `abide-kit` is FACTS — which arm is the subject, which is the harness floor, how
-     full a bar would be, which way the ratio went — and this file is the only place those become colours.
-     That seam is why the perf app can draw the same rows without a stylesheet. -->
+     So the arms did not go away, they went BEHIND. Opening a row gives back the prose, the other
+     arms, the per-item numbers and the bars — which is the right place for them, because they are the
+     evidence for the line rather than the claim itself.
+
+     What arrives from `abide-kit` is FACTS — which arm is the subject, which is the harness floor, how
+     full a bar would be, which way the ratio went — and this file is the only place those become
+     colours. That seam is why the perf app can draw the same rows without a stylesheet. -->
 <script module>
 import type { ArmRow, BenchRow } from 'abide-kit'
 import { armBar, armTone, armWidth, tailTone } from './bench.ts'
-import { HEAD, NUMBER } from './table.ts'
-
-/** The one column template every row is laid on. */
-const ROW = 'grid grid-cols-[minmax(0,1fr)_6.5rem_7rem_9.5rem] items-center gap-x-4 px-3'
+import { BENCH_ARM as ARM, BENCH_ROW as ROW, HEAD, NUMBER } from './table.ts'
 
 // The kind is a chip rather than a column: it says how to read the rest of the row, and four colours are
 // quicker to skip past than four words in the same grey.
@@ -26,8 +29,24 @@ const KIND_TONE: Record<BenchRow['kind'], string> = {
 
 const SMALL = 'rounded border border-slate-800 px-2 py-0.5 text-xs text-slate-400 hover:text-slate-200'
 
-/** An empty `of` reads as nothing measured rather than as a blank column. */
-const ofText = (arm: ArmRow): string => (arm.of() === '' ? '—' : arm.of())
+/** A bench with no hand-written arm has nothing to put in the column, and says so rather than lying. */
+const NONE = '—'
+
+/** The subject's number, and the hand-written one. `—` where the bench never made that comparison. */
+const armValue = (arm: ArmRow | null): string => (arm === null ? NONE : arm.value())
+const armEach = (arm: ArmRow | null): string => (arm === null ? '' : arm.each())
+/** Nodes made per op. See the memory column below for why this is a count and not bytes. */
+const armNodes = (arm: ArmRow | null): string => (arm === null || arm.nodes() === '' ? NONE : arm.nodes())
+
+/**
+ * The difference column, which carries the row's STATUS until there is a difference to report.
+ *
+ * An unrun row would otherwise be blank in the one column a reader is scanning, which reads as a
+ * measurement that came back empty rather than as one nobody has taken yet.
+ */
+const differenceText = (row: BenchRow): string => row.handWritten?.tail() || row.status()
+const differenceTone = (row: BenchRow): string =>
+    row.handWritten !== null && row.handWritten.tail() !== '' ? tailTone(row.handWritten) : `${HEAD} text-right`
 </script>
 
 <script>
@@ -37,43 +56,95 @@ const { rows } = props<{ rows: BenchRow[] }>()
 </script>
 
 {#for row of rows}
-    <section class="py-1">
-        <div class="{ROW} pt-2 pb-0.5">
+    <details class="group" data-bench={row.title}>
+        <summary class="{ROW} py-2 cursor-pointer hover:bg-slate-900/40 list-none">
             <div class="flex items-baseline gap-2 min-w-0">
-                <span class="text-sm font-medium text-slate-100 truncate" title={row.title}>{row.title}</span>
+                <span class="text-sm text-slate-300 group-open:text-slate-100 truncate" title={row.title}>{row.title}</span>
                 <span class={KIND_TONE[row.kind]}>{row.kind}</span>
+                <!-- What one op IS, beside the title rather than behind the row: without it the two
+                     numbers to its right cannot be read at all, and this is the column a reader
+                     scans. Absent on a bench that does not divide, where an op is just an op. -->
+                {#if row.per}<span class="{HEAD} shrink-0">{row.per}</span>{/if}
+                {#if row.noisy()}<span class="text-xs text-amber-400 shrink-0">noisy</span>{/if}
             </div>
-            <div class="col-span-3 flex items-center justify-end gap-3">
-                {#if row.per}<span class={HEAD}>{row.per}</span>{/if}
-                <span class={HEAD}>{row.status()}</span>
-                <button class={SMALL} onclick={() => void row.run()}>run</button>
+
+            <!-- The two numbers the page exists for, in the same two columns on every row of every
+                 suite. The per-item number rides under each of them rather than in a column of its
+                 own: it is only present on a bench that declared `per`, and an empty column on the
+                 other thirty rows is a column that reads as missing data. -->
+            <div class="text-right">
+                <div class="{NUMBER} {armTone(row.abide)}">{armValue(row.abide)}</div>
+                {#if armEach(row.abide)}<div class="{NUMBER} text-slate-600">{armEach(row.abide)}</div>{/if}
             </div>
-        </div>
+            <div class="text-right">
+                <div class="{NUMBER} {row.handWritten ? armTone(row.handWritten) : 'text-slate-600'}">{armValue(row.handWritten)}</div>
+                {#if armEach(row.handWritten)}<div class="{NUMBER} text-slate-600">{armEach(row.handWritten)}</div>{/if}
+            </div>
 
-        {#if row.note}<p class="px-3 pb-1.5 text-xs text-slate-500 max-w-3xl">{row.note}</p>{/if}
+            <!-- The memory column, and it is a COUNT of DOM nodes made per op rather than bytes.
+                 `performance.memory` reads 9.5 MB against a renderer holding 2.8 GB — nodes are not
+                 on the JS heap — and a net count cannot stand in either, because detaching a subtree
+                 of ten thousand is one `remove`. This is exact, is the same in every engine, and is
+                 one of the three numbers this project already budgets emitted code in. -->
+            <div class="text-right">
+                <div class="{NUMBER} {armTone(row.abide)}">{armNodes(row.abide)}</div>
+                {#if row.handWritten}<div class="{NUMBER} text-slate-600">{armNodes(row.handWritten)}</div>{/if}
+            </div>
 
-        <div class="pb-1">
+            <span class={differenceTone(row)}>{differenceText(row)}</span>
+
+            <!-- Inside the summary, and it needs no `stopPropagation` to stay there: a summary skips
+                 its own toggle when the click landed on an interactive descendant, so the button runs
+                 without closing the row under whoever opened it. Written with one first, then removed
+                 — the e2e passes either way, which is what says the guard was doing nothing. -->
+            <button class={SMALL} onclick={() => void row.run()}>run</button>
+        </summary>
+
+        <div class="pb-3 pt-1 bg-slate-950/40">
+            {#if row.note}<p class="px-3 pb-2 text-xs text-slate-500 max-w-3xl">{row.note}</p>{/if}
+
+            <!-- The DISTRIBUTION, on its own seven columns. `min` is what the summary and every
+                 ratio use — it is the pass where the tab was quiet — and on its own it cannot say
+                 whether that pass was the shape of the thing or a fluke. p90 is interpolated: nine
+                 passes cannot rank a ninetieth percentile, and by nearest rank it would print the
+                 maximum twice under two headings. -->
+            <div class="{ARM} pb-1">
+                <span class={HEAD}>every arm · {row.status()}</span>
+                <span class="{HEAD} text-right">min</span>
+                <span class="{HEAD} text-right">p50</span>
+                <span class="{HEAD} text-right">p90</span>
+                <span class="{HEAD} text-right">max</span>
+                <span class="{HEAD} text-right">nodes</span>
+                <span class="{HEAD} text-right">abide ÷ arm</span>
+            </div>
+
             {#for arm of row.arms}
-                <div class="{ROW} py-1 hover:bg-slate-900/40">
-                    <span class="text-sm truncate {armTone(arm)}" title={arm.label}>{arm.label}</span>
-                    {#if row.kind === 'work'}
-                        <span class="col-span-3 font-mono text-xs text-emerald-300 truncate" title={arm.of()}>{ofText(arm)}</span>
-                    {:else if row.kind === 'time'}
-                        <span class="{NUMBER} text-slate-200">{arm.value()}</span>
-                        <!-- `style=` because the width is a MEASUREMENT: this arm's time against the
-                             slowest arm in its row, which no class can name. -->
-                        <div class="h-1.5 rounded bg-slate-900 overflow-hidden"><div class="h-full {armBar(arm)}" style:width={armWidth(arm)}></div></div>
-                        <span class={tailTone(arm)}>{arm.tail()}</span>
-                    {:else}
-                        <span class="{NUMBER} text-emerald-300">{arm.value()}</span>
-                        <span class="col-span-2 text-xs text-slate-500 truncate" title={arm.of()}>{arm.of()}</span>
-                    {/if}
+                <div class="{ARM} py-1">
+                    <div class="min-w-0">
+                        <span class="block text-sm truncate {armTone(arm)}" title={arm.label}>{arm.label}</span>
+                        {#if row.kind === 'time'}
+                            <!-- `style=` because the width is a MEASUREMENT: this arm's time against
+                                 the slowest arm in its row, which no class can name. -->
+                            <div class="mt-1 h-1.5 rounded bg-slate-900 overflow-hidden"><div class="h-full {armBar(arm)}" style:width={armWidth(arm)}></div></div>
+                        {:else}
+                            <span class="block font-mono text-xs text-slate-500 truncate" title={arm.of()}>{arm.of() || NONE}</span>
+                        {/if}
+                    </div>
+                    <div class="text-right">
+                        <div class="{NUMBER} {row.kind === 'time' ? 'text-slate-200' : 'text-emerald-300'}">{arm.value()}</div>
+                        {#if arm.each()}<div class="{NUMBER} text-slate-600">{arm.each()}</div>{/if}
+                    </div>
+                    <span class="{NUMBER} text-slate-400">{arm.p50() || NONE}</span>
+                    <span class="{NUMBER} text-slate-400">{arm.p90() || NONE}</span>
+                    <span class="{NUMBER} text-slate-500">{arm.max() || NONE}</span>
+                    <span class="{NUMBER} text-slate-400">{arm.nodes() || NONE}</span>
+                    <span class={tailTone(arm)}>{arm.tail()}</span>
                 </div>
             {/for}
-        </div>
 
-        {#if row.noisy()}
-            <p class="px-3 pt-1 text-xs text-amber-400">noisy: most passes were far off the best one. Re-run this case on its own before quoting the ratio.</p>
-        {/if}
-    </section>
+            {#if row.noisy()}
+                <p class="px-3 pt-1 text-xs text-amber-400">noisy: most passes were far off the best one. Re-run this case on its own before quoting the ratio.</p>
+            {/if}
+        </div>
+    </details>
 {/for}

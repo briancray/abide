@@ -137,4 +137,72 @@ describe('Timing.ops — how many operations a number is the average of', () => 
         // arithmetic, not a claim. Making it falsifiable needs pass-to-pass variance a test cannot
         // schedule, so what guards it is `site/bench.ts`'s NOISY_SPREAD warning, on a real run.
     })
+
+    /**
+     * An arm sized against a world that then changed, which is the shape that cost two minutes.
+     *
+     * `/bench/client`'s first arm writes a cell that a LATER arm's lazy fixture mounts a thousand-row
+     * list onto. Sized before that fixture existed it calibrated at 125 ns an op, was 21 µs an op by
+     * the time it was measured, and spent nine passes of 320,000 iterations finding out — 112 seconds
+     * for a row beside others that take three. Nothing about the reported number was wrong, which is
+     * why only the WORK can catch it: `ops` is the count, and the count was 168x what it needed.
+     *
+     * This gates the WARM-UP half — every arm prepared and run before any of them is sized. Removing
+     * it puts this test itself at 46 seconds, which is the same failure at a smaller scale. The other
+     * half has its own test below, because the two fix different causes and one covers for the other
+     * here: a warm-up cannot reach a world that changes for a reason no first call can trigger.
+     */
+    test('an arm that gets dearer after it was sized does not run the old batch nine times', async () => {
+        let dear = false
+        const timings = await timeArms(
+            [
+                {
+                    label: 'cheap until the arm below has run once',
+                    run: () => {
+                        if (!dear) return undefined
+                        let sum = 0
+                        for (let i = 0; i < 20_000; i++) sum += i % 7
+                        return sum
+                    },
+                },
+                {
+                    label: 'the one that changes the world',
+                    run: () => {
+                        dear = true
+                    },
+                },
+            ],
+            () => Promise.resolve(),
+        )
+        // ~40 ms a pass over nine passes at roughly 20 µs an op is a few thousand ops per pass. The
+        // unfixed harness sized this arm while it was a no-op — hundreds of thousands per pass — so
+        // the bound is far under that and far over an honest count.
+        expect((timings[0] as { ops: number }).ops).toBeLessThan(200_000)
+    })
+
+    /**
+     * The other half: an arm that gets dearer as it runs, for a reason no warm-up can see.
+     *
+     * Cost rising with the call index is not a world that changed — the arm is honest at every point,
+     * it is simply never the same price twice, and a growing buffer, a growing DOM or a filling cache
+     * all do it. Sized once at the front, the batch is wrong by more the longer the run goes on:
+     * 294,912 ops over 33 seconds, against 43,144 over 2 with the resize in. The bound sits between
+     * the two rather than near either, because both ends move with the machine.
+     */
+    test('a batch is resized when the arm gets dearer as it runs', async () => {
+        const timings = await timeArms(
+            [
+                {
+                    label: 'dearer every call',
+                    run: (i: number) => {
+                        let sum = 0
+                        for (let j = 0; j < i; j++) sum += j % 7
+                        return sum
+                    },
+                },
+            ],
+            () => Promise.resolve(),
+        )
+        expect((timings[0] as { ops: number }).ops).toBeLessThan(150_000)
+    })
 })

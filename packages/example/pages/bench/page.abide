@@ -1,26 +1,37 @@
-<!-- Every capability against a hand-written equivalent, one row per arm.
+<!-- Every capability against a hand-written equivalent: ONE ROW PER CLAIM, four columns wide.
 
-     A table rather than a stack of cards, because forty-odd benches are read by SCANNING. Every row
-     on the page is laid on ONE column template, so a number sits directly under every other number of
-     its kind and the eye runs down the page instead of re-entering each card's own little grid.
+     A table rather than a stack of cards, because forty-odd benches are read by SCANNING — and the
+     row is the claim rather than the arm, which is the correction this page needed. One line per arm
+     put the two numbers a reader came for inside 240 lines of equal weight, so the comparison the
+     whole page exists to make could not be run down a column. Every arm is still here; opening a row
+     is what shows them, along with the prose and the per-item numbers.
 
      The numbers are cells, so a row repaints when its own measurement lands and no other row hears
      about it — and the filter drops rows from the list rather than hiding them with a class, so a
      kind nobody is reading is a row that is not on the page at all. -->
 <script module>
 import { memo, state } from 'abide'
-import type { Bench } from 'abide-kit'
+import { type Bench, exposeBench } from 'abide-kit'
 import { clockResolution } from 'abide-kit/measure'
 import { SMALL_BUTTON } from '../../demos/dom.ts'
 import Arms from '../../site/arms.abide'
 import { type BenchRow, benchRows } from '../../site/bench.ts'
-import { CHIP, CHIP_ON, GROUP, grouped, HEAD, STICKY, TABLE } from '../../site/table.ts'
+import {
+    BENCH_ROW,
+    CHIP,
+    CHIP_ON,
+    FIELD,
+    GROUP,
+    grouped,
+    HEAD,
+    matches,
+    STICKY,
+    TABLE,
+    terms,
+} from '../../site/table.ts'
 
 const KINDS = ['all', 'time', 'work', 'wake', 'budget'] as const
 type Kind = (typeof KINDS)[number]
-
-/** The one column template every row is laid on. */
-const ROW = 'grid grid-cols-[minmax(0,1fr)_6.5rem_7rem_9.5rem] items-center gap-x-4 px-3'
 
 const CLOCK =
     `This browser reports time in steps of ${clockResolution().toFixed(3)} ms; each batch is sized ` +
@@ -37,6 +48,7 @@ const AFTERWORD =
 
 <script>
 const kind = state<Kind>('all')
+const query = state('')
 const progress = state('')
 
 /**
@@ -49,7 +61,10 @@ const progress = state('')
 const failure = state('')
 const loaded = memo(async (): Promise<BenchRow[]> => {
     try {
-        return await benchRows()
+        const rows = await benchRows()
+        // See `exposeBench` — the profiler reads the rows this page is drawing, not a second set.
+        exposeBench(rows)
+        return rows
     } catch (error: unknown) {
         failure = `the benches did not load — ${String(error)}`
         return []
@@ -63,15 +78,32 @@ const loaded = memo(async (): Promise<BenchRow[]> => {
  * is a row that is not on the page at all — and `grouped` then leaves no heading for a suite it emptied.
  */
 const groups = memo((): { suite: string; rows: BenchRow[] }[] => {
+    // Taken apart ONCE, outside the loop: sixty rows per keystroke is sixty re-parses of the same
+    // string otherwise, and this body re-runs on every character.
+    const wanted = terms(query)
     const showing: BenchRow[] = []
     // No cold check: this body is re-run, so a read of a load that has not landed signals out of
     // here rather than handing back `undefined`.
     for (const row of loaded()) {
         if (kind !== 'all' && row.kind !== kind) continue
+        if (!matches(row, wanted)) continue
         showing.push(row)
     }
     return grouped(showing)
 })
+
+
+/**
+ * How many rows the filter is showing, out of how many there are.
+ *
+ * A function rather than a memo because one slot reads it and nothing else does — there is no second
+ * reader for a cell to serve, and the slot it is called from already tracks everything it touches.
+ */
+function shownCount(): string {
+    let total = 0
+    for (const group of groups) total += group.rows.length
+    return `${total} of ${loaded.length}`
+}
 
 async function runEverything(): Promise<void> {
     const showing: BenchRow[] = []
@@ -87,12 +119,16 @@ async function runEverything(): Promise<void> {
 
 <div class="mx-auto max-w-6xl px-6 pt-10 pb-2">
     <h1 class="text-3xl font-semibold text-slate-100">bench</h1>
-    <p class="mt-2 text-slate-400 max-w-3xl">Every capability against a hand-written equivalent, one row per arm. Blue is abide; the last column is abide ÷ that arm. Time cases are best-of-many batches, so they are comparable within a run and meaningless between machines — read the ratio, not the number.</p>
+    <p class="mt-2 text-slate-400 max-w-3xl">Every capability against a hand-written equivalent, one row per claim. The last column is abide divided by the hand-written arm, so <span class="text-emerald-400">under 1.00×</span> is abide ahead and <span class="text-amber-400">over</span> is behind. Open a row for its prose, its other arms and the per-item numbers. Time cases are best-of-many batches, so they are comparable within a run and meaningless between machines — read the ratio, not the number.</p>
 </div>
 
 <main class="mx-auto max-w-6xl px-6 pb-24 space-y-6">
     <div class="flex flex-wrap items-center gap-3">
         <button class={SMALL_BUTTON} onclick={() => void runEverything()}>run everything</button>
+        <!-- The filter narrows what `run everything` runs, which is most of why it earns its place:
+             sixty cases is two minutes and the four a reader is looking at is seconds. -->
+        <input class={FIELD} bind:value={query} placeholder="filter — title, suite or arm"/>
+        <span class="text-sm text-slate-500">{shownCount()}</span>
         <span class="text-sm text-slate-500">{progress}</span>
         <div class="flex flex-wrap items-center gap-1.5 ml-auto">
             {#for name of KINDS}<button class={kind === name ? CHIP_ON : CHIP} onclick={() => (kind = name)}>{name}</button>{/for}
@@ -104,12 +140,18 @@ async function runEverything(): Promise<void> {
     {#if failure}<p class="text-sm text-rose-400">{failure}</p>{/if}
 
     <div class={TABLE}>
-        <div class="{ROW} {STICKY}">
-            <span class={HEAD}>case · arm</span>
-            <span class="{HEAD} text-right">per op</span>
+        <div class="{BENCH_ROW} {STICKY}">
+            <span class={HEAD}>what was measured</span>
+            <span class="{HEAD} text-right">abide</span>
+            <span class="{HEAD} text-right">by hand</span>
+            <span class="{HEAD} text-right">nodes/op</span>
+            <span class="{HEAD} text-right">abide ÷ by hand</span>
             <span class={HEAD}></span>
-            <span class="{HEAD} text-right">abide ÷ arm</span>
         </div>
+
+        {#if groups.length === 0}
+            <p class="px-3 py-6 text-sm text-slate-500">Nothing matches “{query}”.</p>
+        {/if}
 
         {#for group of groups}
             <div class={GROUP}>

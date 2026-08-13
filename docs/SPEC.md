@@ -969,9 +969,17 @@ A CASE has three faces, and a SUITE has a fourth:
 | `collector` | `() => { sink: Sink; lines: LogLine[] }` | A sink that collects instead of rendering — what the headless runner writes into. |
 | `loopback` | `(base?: string) => Loopback` | `dispatch` and the websocket half called IN-PROCESS: a `fetch` and an `open` for `remote`/`remoteSocket`, plus `requests`, `connected` and `close()`. |
 
+A bench becomes ONE ROW on `/bench`: what was measured, what abide cost, what the hand-written arm
+cost, and the difference. The hand-written arm is found by its `vanilla — ` label — by convention,
+because every bench in the repo already names its arms that way and the alternative is a field ninety
+labels would repeat — and is `null` where a bench compares two abide spellings and no comparison was
+ever made. Every other arm, the case's prose and the per-item numbers are behind the row: they are the
+evidence for the claim rather than the claim, and forty cases at six arms each is a page read by
+hunting rather than by scanning.
+
 | Bench kind | The claim |
 | --- | --- |
-| `time` | How long an operation takes, as a RATIO against a hand-written arm in the same substrate. The first arm is always abide; `per` divides for a per-row number; `floor: 'flush'` puts the effect flush inside the number |
+| `time` | How long an operation takes, as a RATIO against a hand-written arm in the same substrate. The first arm is always abide; `floor: 'flush'` puts the effect flush inside the number. A row reports the WHOLE op — the thing somebody waits on, and the only number a frame budget can be read against — with `per` naming what one op is made of (`{ n: 200, label: 'row' }`) and adding the divided-down number beside it |
 | `work` | How much DOM work it does. Counted, never timed |
 | `wake` | How many times a reader RE-RAN. In a reactive system this is the contract, and values cannot show it |
 | `budget` | What the emitted code costs: DOM nodes per list item, microtask turns per row |
@@ -985,7 +993,8 @@ JS allocations per template node is deliberately absent — no engine this runs 
 | `nodesMade` | `(counts: Counts) => number` | Every node the region made — the per-item budget in one number. |
 | `total` | `(counts: Counts) => number` | How much the region CHANGED the document, as opposed to what it merely built. |
 | `nonZero` | `(counts: Counts) => string` | Only the counters that moved, as `label: n` pairs. |
-| `timeArms` / `duration` / `ratioText` / `verdict` | — | The timing half: run the arms, and say whether a ratio is real or inside the noise (`NOISE`, `NOISY_SPREAD`, `clockResolution`). |
+| `exposeBench` | `(rows: BenchRow[]) => void` | Hangs the rows on `globalThis.abideBench` as `list()` and `run(title, arm, ops)`, for an out-of-process profiler. A GLOBAL because the driver is a `page.evaluate` on the far side of a bundle and can reach nothing else; the same rows the page draws, so a profiler is never measuring a different program. `BenchRow.profile` is what it calls — one arm, alone, untimed, because `run()`'s interleaving is load-bearing and a forced collection between its passes would wreck it. Driven by `bun run profile`. |
+| `timeArms` / `duration` / `ratioText` / `verdict` | — | The timing half: run the arms, and say whether a ratio is real or inside the noise (`NOISE`, `NOISY_SPREAD`, `clockResolution`). `ratioText` is abide ÷ arm as a bare multiple — `4.55×`, `0.22×` where abide is ahead — because a sentence is unreadable in a column of forty; `verdict` is the same division bucketed for colour. A batch is re-sized between passes when a pass lands well off `BATCH_TARGET_MS`, so an arm whose cost changed after it was sized cannot spend nine passes at the old size. |
 | `nsPerOp` | `(arms: Arm[], settle?) => Promise<number[]>` | ns per op for each arm, calibrated and interleaved — for a `run` that asserts a ratio without a bench card. A fixed loop cannot: a 1 ms clock clamp reads a fast op as 0. |
 | `quiesce` / `settled` / `frame` / `tick` | `() => Promise<void>` | Waiting primitives, so a bench measures the work rather than the harness. |
 | `microtasks` | `(work: () => Promise<unknown>) => Promise<number>` | How many microtask TURNS a piece of work takes — the second of the three numbers emitted code is budgeted in. Subtract `floorTicks()`. |
