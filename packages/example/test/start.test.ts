@@ -633,6 +633,35 @@ test('a document hands the client what the render already resolved', async () =>
     expect(seeded[key]).toEqual(overTheWire)
 })
 
+test('a declaration can decline to be handed over, and the page still renders it', async () => {
+    // The OFF arm of `RpcOptions.seed`, which had never run: nothing in either app passed the option,
+    // so `options.seed !== false` had one live value and a sweep reading "an option nothing passes"
+    // would have deleted it — leaving SPEC describing a knob that was gone.
+    const markup = await (await fetch(`${app.base}users/42`)).text()
+    const seeded = seedsIn(markup)
+
+    // Both endpoints ran during this render. The proof for the unseeded one is its VALUE in the
+    // markup: an endpoint that was simply never called would also be absent from the table, and that
+    // is the reading this has to rule out. Markers stripped because a child slot puts a comment
+    // between the static text and the value, so the two are not adjacent in the source.
+    const rendered = markup.replace(/<!--[\s\S]*?-->/g, '')
+    expect(rendered).toContain('visits: 7')
+    expect(Object.keys(seeded).some((name) => name.startsWith('users/getUser?'))).toBe(true)
+    expect(Object.keys(seeded).some((name) => name.startsWith('users/userActivity'))).toBe(false)
+
+    // And the fields the page did not render are in NEITHER — which is the exposure half, and the
+    // reason the shape SPEC names for turning it off is "an answer carrying fields the page did not
+    // render" rather than "a big answer".
+    expect(markup).not.toContain('renamed themselves')
+
+    // Still reachable, because `seed: false` is about the document and not about the endpoint: the
+    // client's first read goes to the wire and gets the whole answer.
+    const overTheWire = (await (await fetch(`${app.base}__abide/rpc/users/userActivity?id=42`)).json()) as {
+        trail: string[]
+    }
+    expect(overTheWire.trail).toContain('renamed themselves')
+})
+
 test('a navigation carries them too, as its last piece', async () => {
     // The same recall, on every navigation after the first: the fragment is rendered by calling the
     // handler, the client adopts that markup, and its slot is cold. What differs is WHERE the block

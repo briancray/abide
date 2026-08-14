@@ -37,6 +37,25 @@ export const slowUser = GET(async ({ id }: { id: number }) => {
     return findUser(id)
 })
 
+/**
+ * The OTHER side of `seed`, in the shape SPEC names for turning it off: an answer carrying FIELDS
+ * THE PAGE DID NOT RENDER.
+ *
+ * Seeding puts the whole value in the document, not the part the markup showed. The page prints
+ * `visits` and nothing else, so seeding this would write every row of `trail` into the HTML of every
+ * user page to save a fetch that page may never make — bytes for an answer nobody asked for, and an
+ * exposure besides. Off, the client's slot starts cold and its first read goes to the wire, which is
+ * exactly the round trip seeding exists to remove and exactly the one worth keeping here.
+ */
+export const userActivity = GET(
+    ({ id }: { id: number }) => ({
+        id,
+        visits: 7,
+        trail: ['signed in', 'opened settings', 'renamed themselves', 'signed out'],
+    }),
+    { seed: false },
+)
+
 /** A handler that YIELDS. The compiler reads that off the syntax, so the stub knows to stream. */
 export const countdown = GET(async function* ({ from }: { from: number }) {
     for (let n = from; n > 0; n--) yield n

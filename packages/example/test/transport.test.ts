@@ -113,6 +113,7 @@ test('both laws meet over a real wire', async () => {
         [
             'users/getUser',
             'users/slowUser',
+            'users/userActivity',
             'users/countdown',
             'users/add',
             'users/rename',

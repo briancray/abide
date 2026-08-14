@@ -1889,6 +1889,151 @@ export default suite({
         },
 
         {
+            title: 'an over-size body is 413 BEFORE it is buffered',
+            note: 'The point of this door is WHERE it stands: the declared `content-length` is read and refused before `request.json()` or `.formData()` is ever reached, so a body too large to accept is also one abide never holds. Reading it after buffering would be a check that costs exactly what it exists to avoid. Two arms because there are two knobs and one is not the other’s default — a declaration’s `maxBodySize` is the endpoint’s own, and `ABIDE_MAX_REQUEST_BODY_SIZE` is the process floor an endpoint that declared nothing falls through to, resolved at the DOOR because a declaration runs at import and could not have seen an `onConfig` registered after it. The default is `Infinity`, which is the reading under which the branch never executes at all — so a case asserting the floor asserts nothing about this.',
+            async run({ is }) {
+                const tight = POST(({ text }: { text: string }) => ({ length: text.length }), {
+                    maxBodySize: 16,
+                })
+                const open = POST(({ text }: { text: string }) => ({ length: text.length }))
+                register(
+                    'rpc',
+                    [
+                        ['demo/size/tight', 'tight'],
+                        ['demo/size/open', 'open'],
+                    ],
+                    { tight, open },
+                )
+
+                const big = JSON.stringify({ text: 'x'.repeat(200) })
+                const small = JSON.stringify({ text: 'ok' })
+
+                // `content-length` is spelled out because that is literally what this door reads —
+                // SPEC says an over-size DECLARED length is refused, and a sender that declares none
+                // is the arm below. A real client's runtime writes it; a loopback `Request` built
+                // from a string does not, which is itself the reason the absent case is asserted.
+                const sized = (body: string): RequestInit => ({
+                    method: 'POST',
+                    headers: {
+                        'content-type': 'application/json',
+                        'content-length': String(new TextEncoder().encode(body).length),
+                    },
+                    body,
+                })
+
+                const refused = await wire.fetch('/__abide/rpc/demo/size/tight', sized(big))
+                is('over the declared ceiling is 413', refused.status, 413)
+                is('and the refusal says the ceiling', (await refused.text()).includes('16'), true)
+
+                // Nothing DECLARED is nothing to compare, so this door lets it by — the ceiling is
+                // not a buffering limit and does not pretend to be one.
+                const undeclared = await wire.fetch('/__abide/rpc/demo/size/tight', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: big,
+                })
+                is('a body that declares no length is not refused here', undeclared.status, 200)
+
+                const accepted = await wire.fetch('/__abide/rpc/demo/size/tight', sized(small))
+                is('under it is served', accepted.status, 200)
+
+                // The endpoint that declared nothing: unbounded until the process says otherwise,
+                // and then bounded by the process without being redeclared.
+                const unbounded = await wire.fetch('/__abide/rpc/demo/size/open', sized(big))
+                is('an endpoint with no ceiling takes it', unbounded.status, 200)
+
+                const off = onConfig(() => ({ ABIDE_MAX_REQUEST_BODY_SIZE: 16 }))
+                try {
+                    const floored = await wire.fetch('/__abide/rpc/demo/size/open', sized(big))
+                    is('until the process declares one, at the door', floored.status, 413)
+                } finally {
+                    off()
+                }
+            },
+        },
+
+        {
+            title: 'a call that stops making progress FAILS, and per chunk when it yields',
+            note: 'This is the one knob that is armed on the DEFAULT path: `ABIDE_RPC_TIMEOUT` floors at 300000, so `limitOf()` never answers `NO_LIMIT` and every async handler is inside a `race` — a streaming one per chunk, a settling one once. It had no assertion anywhere, which is the shape CLAUDE.md’s "an option nothing passes" rule would have read as dead. The two arms fail with different words because they are different questions: a handler that never settles `did not settle`, and one that yielded twice and then stopped `stopped producing` — the second is what a whole-settle timeout cannot see, since a stream that keeps yielding forever settles never and is fine. The knob is read PER CALL and not at declaration, because a declaration runs at import and could not have seen `onConfig`; the third arm is what makes that ordering claim testable.',
+            async run({ is }) {
+                const stuck = GET(async () => {
+                    await sleep(200)
+                    return 'never seen'
+                }, { timeout: 20 })
+                const stalls = GET(
+                    async function* () {
+                        yield 'a'
+                        yield 'b'
+                        await sleep(200)
+                        yield 'c'
+                    },
+                    { timeout: 20 },
+                )
+                register(
+                    'rpc',
+                    [
+                        ['demo/limit/stuck', 'stuck'],
+                        ['demo/limit/stalls', 'stalls'],
+                    ],
+                    { stuck, stalls },
+                )
+
+                const remoteStuck = client<void, string>('demo/limit/stuck')
+                let settleFailure: unknown
+                try {
+                    await remoteStuck()
+                } catch (failure) {
+                    settleFailure = failure
+                }
+                is('a handler that never settles fails', remoteStuck().isError(settleFailure, 'AbideTimeoutError'), true)
+                is('and says which half it was', String(settleFailure).includes('did not settle'), true)
+
+                // The per-CHUNK arm: the first two land, so this is not a call that failed to start.
+                const remoteStalls = client<void, string>('demo/limit/stalls', { stream: true })
+                const landed: string[] = []
+                let chunkFailure: unknown
+                try {
+                    for await (const chunk of remoteStalls()) landed.push(chunk)
+                } catch (failure) {
+                    chunkFailure = failure
+                }
+                is('the chunks before the stall arrived', landed, ['a', 'b'])
+                is(
+                    'and the stall between chunks is what failed',
+                    remoteStalls().isError(chunkFailure, 'AbideTimeoutError'),
+                    true,
+                )
+                is('with the other half of the wording', String(chunkFailure).includes('stopped producing'), true)
+
+                // The DOOR, not the declaration. This endpoint declares no timeout and the hook is
+                // registered AFTER it, which is the ordering `declare` refuses to capture a limit
+                // for — `limitOf()` is called per request precisely so a knob set later is honoured.
+                const drifts = GET(async () => {
+                    await sleep(200)
+                    return 'never seen'
+                })
+                register('rpc', [['demo/limit/drifts', 'drifts']], { drifts })
+                const remoteDrifts = client<void, string>('demo/limit/drifts')
+                const off = onConfig(() => ({ ABIDE_RPC_TIMEOUT: 20 }))
+                try {
+                    let knobFailure: unknown
+                    try {
+                        await remoteDrifts()
+                    } catch (failure) {
+                        knobFailure = failure
+                    }
+                    is(
+                        'a knob set after the declaration still reaches it',
+                        remoteDrifts().isError(knobFailure, 'AbideTimeoutError'),
+                        true,
+                    )
+                } finally {
+                    off()
+                }
+            },
+        },
+
+        {
             title: 'what an option can cross the wire as, and what a signal abandons',
             note: "`GET(fn, opts)` is server-side text, and an option may reference a server-only import — so the stub cannot copy one. What crosses is the CONSEQUENCE: a `ttl` arrives as a response header, in milliseconds, and the client's slot goes cold on the server's schedule. `{ signal }` abandons the AWAIT and not the load, so everyone else waiting on the same slot is unaffected.",
             async run({ is }) {

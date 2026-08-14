@@ -7,10 +7,13 @@
      build test looks for the ADDRESS in what shipped and for the driver's marker in every byte. -->
 <script>
 import { memo, route } from 'abide'
-import { getUser } from '../../../server/rpc/users.ts'
+import { getUser, userActivity } from '../../../server/rpc/users.ts'
 
 // The id is a SEGMENT, so it arrives as a string and the endpoint declares a number.
 const found = memo(() => getUser({ id: Number(route().params.id) }))
+// Declared `seed: false`, and read here so the difference is a fact about this page rather than
+// about an endpoint nothing calls: both run during the render, and only one is handed over.
+const activity = memo(() => userActivity({ id: Number(route().params.id) }))
 </script>
 
 <h1>user {route().params.id}</h1>
@@ -19,3 +22,6 @@ const found = memo(() => getUser({ id: Number(route().params.id) }))
      shape are in the handler's TYPE, and the schema that checks the data is server-side text this
      bundle never sees. -->
 {#try}<p>{found?.name}</p>{:catch e}<p>no user {route().params.id}</p>{/try}
+
+<!-- One field of an answer that carries four. The rest is what `seed: false` keeps out of the page. -->
+<p>visits: {activity?.visits}</p>

@@ -212,9 +212,15 @@ export interface ClientManifest {
     /** Every file written, keyed by its path relative to `CLIENT_DIR`. */
     assets: Record<string, ClientAsset>
     /**
-     * Optional because a manifest WRITTEN BY AN OLDER BUILD does not carry one, and a server that
-     * demanded it would refuse to serve a build that is otherwise fine. Absent simply means nothing
-     * is preloaded, which is what every build did before.
+     * Optional because this whole interface is a CLAIM rather than a guarantee: the manifest is read
+     * off disk and `JSON.parse(text) as ClientManifest`, with nothing validating it. So the field can
+     * be missing at runtime whatever the type says, and this is the one where absence has a sane
+     * meaning — preload nothing — which is why the reader in `layers.ts` branches on it rather than
+     * trusting it. Making it required would enforce on readers a promise the parse cannot keep, and
+     * the guard would then read as dead code to whoever next tidies that file.
+     *
+     * `clientGraph` also answers `undefined` when the bundler recorded no metafile, which is the only
+     * way a build abide itself wrote gets here without one.
      */
     graph?: ClientGraph | undefined
 }
