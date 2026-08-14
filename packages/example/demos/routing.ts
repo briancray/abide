@@ -442,7 +442,37 @@ export default suite({
                     button('/routing/files/a/b.md', () => void navigate('/routing/files/a/b.md')),
                     button('back', () => history.back()),
                 )
-                host.append(links, el('p', 'text-xs text-slate-500', 'The address bar is the state.'))
+                // The two options, which no HEADLESS case can make a claim about: one is a fact about
+                // the history STACK and the other about the scroll position, and a DOM emulator has
+                // neither in the sense that matters. So these are a driver for a reader, not a gate.
+                //
+                // NOT gated in `e2e/` yet, and the reason is about this page rather than about the
+                // options: any navigation re-renders the suite and collapses the `<details>` these
+                // buttons live in, so the second click has nothing to hit and the document's height
+                // changes under any scroll assertion. Moving to the query instead of the path fixes
+                // neither. Gating them wants a quiet page whose controls stay put across a
+                // navigation, which is a page this app does not have.
+                const here = (): string => location.pathname
+                const push = button('push (grows the stack)', () => void navigate(`${here()}?nav=push`))
+                const replace = button(
+                    'replace (does not)',
+                    () => void navigate(`${here()}?nav=replace`, { replace: true }),
+                )
+                const keepScroll = button('keepScroll', () => void navigate(`${here()}?nav=keep`, { keepScroll: true }))
+                const toTop = button('plain (scrolls to top)', () => void navigate(`${here()}?nav=top`))
+                // Ids rather than button TEXT, because a playwright text match is a case-insensitive
+                // substring by default — `keepScroll` would match the plain button's label too, and
+                // a green test against the wrong button is the failure mode this project has hit.
+                push.id = 'nav-push'
+                replace.id = 'nav-replace'
+                keepScroll.id = 'nav-keepscroll'
+                toTop.id = 'nav-totop'
+                const options = row(push, replace, keepScroll, toTop)
+                host.append(
+                    links,
+                    options,
+                    el('p', 'text-xs text-slate-500', 'The address bar is the state.'),
+                )
 
                 // An ordinary effect over the ambient: the log wakes exactly when the page does.
                 watch(() => {
