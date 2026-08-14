@@ -1521,6 +1521,17 @@ class Instance {
         cursor.node = close.nextSibling
     }
 
+    /**
+     * The writer for one slot, made once per slot per instance — so once per ROW of a list.
+     *
+     * A CLOSURE rather than a `{ write(value) }` object, which is the usual reading of the hot-path
+     * rule against closures, and the share says not to: one binder is 7-8 ns against 1.09-1.13 µs for
+     * the thousand-row build that allocates it, so the whole layer is 0.6-0.7% of the op it sits in
+     * and an object cannot win more than that. Nor is there retention to buy — `part` is already held
+     * by `children`, and the `EventSlot` and the `element`/`kind.name` the other arms capture are
+     * exactly the fields an object would carry. Measured in a browser, twice; JSC was not asked,
+     * because a ceiling this far under the noise floor does not need a second engine to settle it.
+     */
     private bind(kind: SlotKind, target: globalThis.Node): (value: unknown) => void {
         if (kind.kind === 'child') {
             const part = new ChildPart(target as Comment)
