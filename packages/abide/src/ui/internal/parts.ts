@@ -30,7 +30,7 @@ import {
     type TemplateResult,
 } from '$shared/html.ts'
 import { type Node, rerun, type State, swallowed, untrack, untrackCall, watchNode } from '$shared/internal/graph.ts'
-import { CLOSE_FORM, closeData, PLACEHOLDER_TAG, SLOT_OPEN } from '$shared/internal/MARKERS.ts'
+import { CLOSE_FORM, closeData, PLACEHOLDER_TAG, SLOT_CLOSE, SLOT_OPEN } from '$shared/internal/MARKERS.ts'
 import { isAsyncIterable, isThenable } from '$shared/internal/probes.ts'
 import { unwrap } from '$shared/internal/slots.ts'
 import { abideLog } from '$shared/log.ts'
@@ -1440,7 +1440,7 @@ class Instance {
             if (type === 8) {
                 walk.index++
                 const data = (node as Comment).data
-                if (!data.startsWith('$')) {
+                if (!data.startsWith(SLOT_CLOSE)) {
                     // A comment the author wrote. The server emitted it too.
                     if (cursor.node === null || cursor.node.nodeType !== 8) {
                         mismatch(`expected the comment <!--${data}-->, found ${describe(cursor.node)}`)

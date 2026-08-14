@@ -2,7 +2,7 @@
 //
 // A REGISTRATION is the primitive and the module export is sugar over it: `abide dev` and `abide
 // start` import an app's module and hand each export to the function of the same name — the `HOOKS`
-// table in `cli/internal/layers.ts`, which covers `onHealth` and `onIdentity` too. So an app run by
+// table in `cli/internal/layers.ts`, which covers `onConfig`, `onHealth` and `onIdentity` too. So an app run by
 // the binary and a hand-written entry point that registers them itself mean the same thing, and
 // nothing here waits for a bundler: a boot is a socket and four hooks, and only one needs a build.
 //
@@ -68,7 +68,7 @@ const FAILING = new HookSlot<ErrorHook>()
 /**
  * Register app-level rungs, outermost first. Returns the way back off.
  *
- * APPENDS where `onStart` and the other three REPLACE, and the asymmetry is the shape of the export
+ * APPENDS where `onStart`, `onStop` and `onError` REPLACE, and the asymmetry is the shape of the export
  * rather than an inconsistency: `middleware` is declared as an array because a chain is plural, so
  * two registrations are two rungs in call order. There is one boot, one teardown and one account of
  * a failure, so a second registration of any of those is a correction rather than an addition.

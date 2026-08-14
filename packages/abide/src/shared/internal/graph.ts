@@ -67,7 +67,8 @@ let outstanding: Pending | null = null
  * reads one cell, in one order, forever — and the subscription it wants is already the one it has.
  * Detaching from every source and re-collecting them was therefore a remove and an add per source
  * per wake, all of it to arrive back where it started: on a thousand rows reading one cell it was
- * the single largest item in the wake, and abideclean skips it and runs `select row` at 0.40 ms
+ * the single largest item in the wake, and `abideclean` — the separate checkout the cross-repo
+ * comparison runs against, not anything in this tree — skips it and runs `select row` at 0.40 ms
  * against 1.50.
  *
  * So a matching read only advances `sourceIndex`, and `collected` stays null. The first read that

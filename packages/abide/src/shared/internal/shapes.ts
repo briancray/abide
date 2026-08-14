@@ -32,11 +32,13 @@ export type Kind = 'rpc' | 'socket'
 
 export type JsonType = 'object' | 'array' | 'string' | 'number' | 'integer' | 'boolean' | 'null'
 
-// The four fields an OBJECT schema has take an explicit `undefined` as well as being optional: under
-// `exactOptionalPropertyTypes` those are different types, and the compiler's `objectOf` writes all
-// four so that every object schema it derives is one hidden class for the per-member and
-// per-alternative walks in `assemble.ts`. Nothing at RUNTIME sees that: a schema reaches the
-// validator through `JSON.stringify`, which drops an undefined value.
+// The fields a DERIVED schema is built with take an explicit `undefined` as well as being optional —
+// the four `objectOf` writes and the `items` `arrayOf` writes: under `exactOptionalPropertyTypes`
+// those are different types, and each constructor writes all of its own so that every schema it
+// derives is one hidden class for the per-member and per-alternative walks in `assemble.ts`. Stated
+// for objects alone once, and `arrayOf` is the sibling that was missed when it was. Nothing at
+// RUNTIME sees any of it: a schema reaches the validator through `JSON.stringify`, which drops an
+// undefined value.
 export interface JsonSchema {
     /** One type, or the several a union of them derives to. */
     type?: JsonType | JsonType[] | undefined

@@ -16,7 +16,7 @@
 // 500 ns for the clone alone — a TreeWalker costs more to construct than a row costs to build.
 
 import type { SlotKind, TemplateResult } from '$shared/html.ts'
-import { closeMarker } from '$shared/internal/MARKERS.ts'
+import { closeMarker, SLOT_CLOSE, SLOT_CLOSE_CODE } from '$shared/internal/MARKERS.ts'
 import { planOf } from '$shared/internal/slots.ts'
 
 export interface PreparedPart {
@@ -121,7 +121,7 @@ export function prepare(result: TemplateResult): Prepared {
 function opensWithSlot(content: ParentNode): boolean {
     for (let node = content.firstChild; node !== null; node = node.nextSibling) {
         if (node.nodeType === 3 && (node as Text).data === '') continue
-        return node.nodeType === 8 && (node as Comment).data.startsWith('$')
+        return node.nodeType === 8 && (node as Comment).data.startsWith(SLOT_CLOSE)
     }
     return false
 }
@@ -149,7 +149,7 @@ function record(
         path.push(childIndex)
         if (type === 8) {
             const data = (node as Comment).data
-            if (data.charCodeAt(0) === 36 /* $ */) {
+            if (data.charCodeAt(0) === SLOT_CLOSE_CODE) {
                 const slot = Number(data.slice(1))
                 parts.push({
                     slot,

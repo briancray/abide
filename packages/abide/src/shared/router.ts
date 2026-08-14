@@ -595,7 +595,7 @@ function literalPath(path: string): boolean {
     return true
 }
 
-/** Only a real PATTERN is cached — see `url`, which is the only caller and does the dispatch. */
+/** Only a real PATTERN is cached — see `pathFor`, its only caller, which does the dispatch. */
 function heldPattern(path: string): Pattern {
     let held = PARSED.get(path)
     if (held === undefined) {

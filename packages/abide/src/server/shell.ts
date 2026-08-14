@@ -11,9 +11,11 @@
 // one element in HTML that is `display: contents` by default, so the container abide hydrates into
 // costs the page no box and no layout.
 //
-// Split ONCE, into three pieces, because two of them are where abide has something to insert: the
+// Split ONCE, into four pieces, because two of the cuts are where abide has something to insert: the
 // scoped `<style>` blocks go at the end of the head, and everything else the render writes goes
-// inside the slot. Splitting per request would be re-parsing a file that cannot have changed.
+// inside the slot. The third cut is the close of the hydration root, which is a boundary rather than
+// an insertion point — see `close`. Splitting per request would be re-parsing a file that cannot
+// have changed.
 
 /**
  * An app's document, cut at the two places a render writes into.

@@ -976,7 +976,10 @@ export default suite({
                     const mounted = mount(host, () => html`<ul>${() => streamed(source(), row)}</ul>`)
                     // Waits for the WHOLE expectation rather than for the last row's text: the
                     // numbers arm renders no character the source yielded, so there is nothing else
-                    // here that says both rows have arrived.
+                    // here that says both rows have arrived. This is also why no arm may expect the
+                    // EMPTY string — `until` would return on the first poll, before anything
+                    // streamed, and the `is` below it would re-read the same nothing and pass with
+                    // `append` deleted outright.
                     await until(() => (host.querySelector('ul')?.textContent ?? '') === expected)
                     const text = host.querySelector('ul')?.textContent ?? ''
                     mounted.dispose()
@@ -992,6 +995,11 @@ export default suite({
                     await landed((item) => (item === 'a' ? html`<li>${item}</li>` : item), 'ab'),
                     'ab',
                 )
+                // The arm a compiled `{#for await x of s by x.id}` actually takes, and the one the
+                // other four cannot distinguish: `templateOf`'s keyed branch reads `.template` off
+                // the row instead of probing it, so writing the fix as `templateOf(item, false)`
+                // passes every arm above and renders `[object Object]` for every keyed stream.
+                is('keyed rows', await landed((item) => keyed(item, html`<li>${item}</li>`), 'ab'), 'ab')
             },
         },
 

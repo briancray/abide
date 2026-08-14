@@ -24,9 +24,10 @@ const SOURCE = Symbol.for('abide.source')
 
 /**
  * Stamp a callable as a source. Every maker calls this FIRST, before any other member is assigned,
- * so all three source shapes gain the brand at the same point and stay monomorphic.
+ * so all five — the cell `makeCell` builds, `memo`'s argless facade, `channel`, `remoteSocket` and a
+ * socket `Connection` — gain the brand at the same point and stay monomorphic.
  *
- * A helper rather than the cast written out per maker: the cast is what a fourth source type would
+ * A helper rather than the cast written out per maker: the cast is what a SIXTH source type would
  * silently forget, and forgetting it is not a type error — it is the client rendering the function's
  * own text where the server rendered its value.
  */

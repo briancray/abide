@@ -151,7 +151,7 @@ ITSELF, where they are a pattern.
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `x()` | `() => T` | The current value, filling in on its own once it arrives. THROWS if the last load failed, and SIGNALS if a first load has not landed yet — see below. On a stream, the latest chunk. |
-| `x.chunks` | `() => T[]` | Everything a stream produced, in order. On a CELL it is the LIVE transcript, not a copy: the same array across chunks as well as between them, so its identity moving means the transcript was replaced (a reset, or an overflow drop), never appended to. A `channel` with `tail > 0` is the exception — its retention carries a dead head, so the window is a fresh array after every publish and the same one between them, bounded by `tail`. Either way a reader wakes on the VERSION rather than on the identity and re-reads it; do not hold it across an await expecting it frozen. The same empty array on a source that never streamed. |
+| `x.chunks` | `() => T[]` | Everything a stream produced, in order. On a CELL it is the LIVE transcript, not a copy: the same array across chunks as well as between them, so its identity moving means the transcript was replaced (a reset, or an overflow drop), never appended to. A `channel` is the exception, in two ways: with `tail > 0` its retention carries a dead head, so the window is a fresh array after every publish and the same one between them, bounded by `tail`; with `tail === 0`, which is the default, nothing is retained at all and this is always the same empty array however many messages arrived. Either way a reader wakes on the VERSION rather than on the identity and re-reads it; do not hold it across an await expecting it frozen. The same empty array on a source that never streamed. |
 | `for await (… of x)` | `AsyncIterable<T>` | The cursor face of the same transcript, for a consumer that reads each chunk once: everything already produced, then everything that comes next. A second consumer replays the whole of it, because the transcript is retained on the cell. A cell that never streamed yields its value once and ends. |
 | `x.peek` | `() => T \| undefined` | Exactly what is RETAINED now, subscribing to nothing, starting nothing, never throwing and never signalling — so `undefined` here means nothing has landed yet. `State<T>` narrows it to `T`: a cell handed a value was never cold, which is what keeps `x += 1` from needing a narrowing that cannot fail. |
 | `await x` | `PromiseLike<T>` | The settled value. Its type is the one `x()` has; the two differ in HOW they wait, not in what they hand back. Awaiting a cold slot starts it. |
@@ -532,7 +532,7 @@ operator declared — so the environment wins, which is what makes the app's lay
 | coercion | A value out of the environment is coerced to the type of the default it overrides; a value that will not coerce keeps the default. Anything richer stays the raw string for a schema to convert |
 | the native JSON Schema form | Deliberately does not coerce — it refuses rather than guessing |
 | a Standard Schema | Refused by name here: this is the one place abide cannot await a `validate` |
-| only VARIABLES | A conclusion drawn from one has its own export: `NODE_ENV` → `isProduction()`, `ABIDE_DATA_DIR` → `appDataDir()`, `ABIDE_APP_NAME` → `appName()` |
+| only VARIABLES | A conclusion drawn from one is not a field: `ABIDE_DATA_DIR` → `appDataDir()` and `ABIDE_APP_NAME` → `appName()` are both on `abide/server`. `NODE_ENV` → `isProduction()` is the same shape but is INTERNAL — `config()` publishes `NODE_ENV` verbatim and an app draws the conclusion itself |
 | called ONCE | A second `onConfig` REPLACES the first, schema included, and warns on `abide:config` |
 | a hook that throws | Fails HARD: the read carries the throw, and `boot` asks before it binds |
 | memoised | Resolved once for the process; a variable changed after something already asked needs `config.invalidate()` |
@@ -664,7 +664,7 @@ the room form, and an import cannot say which one it is.
 | `{#switch expr}` | `{:case v}`, `{:default}` |
 | `{#try}` | `{:catch e}`, `{:finally}` — JS-semantics error boundary, so SYNCHRONOUS. The body is one unit rather than one thunk per expression, so a dep inside re-runs the whole body |
 | `{#component Name(pattern)}` | **Inline component** — a reusable builder. TitleCase required. Invoked as `<Name/>`, passable as a value. The parameter is the pattern written in the parens; children arrive through `<slot/>`, which is why one written with no parameter still binds `args`. Nested inside `<Foo>…</Foo>` it becomes Foo's `X` prop |
-| body whitespace | Every block body drops its leading and its trailing text node when that node renders nothing and carries a NEWLINE — the file's own indentation, which would otherwise become a permanent member of the instance's movable range. Only those two ends, only newline-bearing runs, and whitespace OUTSIDE a body is untouched. The case it changes: two blocks back to back with no whitespace between them — `{/if}{#if b}` — whose bodies each held an inline node, where `x y` now renders `xy` |
+| formatting whitespace | Two rules, and neither keeps a text node that renders nothing. A run of pure NEWLINES — no space and no tab in it — is dropped wherever it stands, so `<b>a</b>` and `<b>b</b>` on their own lines at column 0 render `ab`. A run that renders nothing but carries a newline AND indentation is dropped at the two ENDS of every block body and of the file's own top-level template, since it would otherwise be a permanent member of the instance's movable range. An indented run in the MIDDLE of a body survives, which is what keeps the ordinary shape spaced. The case this changes: two blocks back to back with no whitespace between them — `{/if}{#if b}` — whose bodies each held an inline node, where `x y` now renders `xy` |
 
 ## Components
 
@@ -752,8 +752,8 @@ An `<!-- html comment -->` in the markup is for whoever opens the file and is NO
 component ships one copy of its own commentary per INSTANCE, and a file's header comment is the
 biggest one it has. Whitespace around a dropped comment is left alone, so nothing that was inline
 stops being inline — except at a block body's two ends, where the comment and the indentation
-holding it go together (see the body-whitespace row under Control flow). A comment that has to reach
-the browser is `{html('<!-- … -->')}`.
+holding it go together (see the formatting-whitespace row under Control flow). A comment that has to
+reach the browser is `{html('<!-- … -->')}`.
 
 ## Rendering
 

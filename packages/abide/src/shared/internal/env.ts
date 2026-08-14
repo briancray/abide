@@ -34,10 +34,11 @@ export function envNumber(name: string, fallback: number): number {
 /**
  * `NODE_ENV === 'production'`.
  *
- * Here rather than beside either reader, because the two who ask are the cookie (`Secure`, and the
- * hard requirement for a signing key) and `config()`, which PUBLISHES the answer — and a document
- * saying `production: false` while the cookie was sealed as though it were true is the one lie an
- * operator has no way to catch.
+ * Here rather than beside its reader because it is a conclusion rather than a field, and `config()`
+ * publishes `NODE_ENV` VERBATIM rather than this — a document saying `production: false` while the
+ * cookie was sealed as though it were true is the one lie an operator has no way to catch, so the
+ * document carries the variable and the conclusion is drawn where it is acted on. Both readers are
+ * `identity.ts`: the cookie's `Secure`, and the hard requirement for a signing key.
  */
 export function isProduction(): boolean {
     return env('NODE_ENV') === 'production'

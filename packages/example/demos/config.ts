@@ -60,8 +60,10 @@ export default suite({
                 // `null` for a thing that was genuinely not said, where a NUMBER's absence has a
                 // number to mean it. A secret that defaulted to a string would be a signing key.
                 is('a secret nobody declared is null', settings.ABIDE_IDENTITY_SECRET, null)
-                // The derived facts are NOT fields — they are conclusions, and each has its own
-                // export. Keeping one here would be a second spelling of the same answer.
+                // The derived facts are NOT fields — they are conclusions, and keeping one here
+                // would be a second spelling of the same answer. Two of them have their own export
+                // on `abide/server`, asserted below; `NODE_ENV`'s conclusion is drawn internally by
+                // `identity.ts` and is not public, so what an app gets is the variable.
                 is('a name is an accessor, not a field', typeof appName(), 'string')
                 is('and so is the data directory', typeof appDataDir(), 'string')
             },

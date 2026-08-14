@@ -33,8 +33,9 @@ let BASE = ''
 /**
  * `''` when the app is at the root of its origin, which is the default and the overwhelming case.
  *
- * Exported for the one caller that needs the value rather than a crossing: the shell, which writes it
- * into the document for the client to read back.
+ * Exported for the callers that need the VALUE rather than a crossing: the shell writes it into the
+ * document for the client to read back, `abide dev` re-spells `APP_URL` from the bound origin, and
+ * `router.ts`'s `lookup` and `mountedTarget` each ask "is there a mount at all" before doing work.
  */
 export function mountBase(): string {
     return BASE

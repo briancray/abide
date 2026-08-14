@@ -11,12 +11,17 @@
 // is the input or the output of one of those values — so `Route` is here and `RouteEntry` is not,
 // since `route()` is the call an app makes and the table is written by `abide build`.
 //
-// Three other entry points hold what that leaves, so nothing arrives here by being in the same folder
+// Four other entry points hold what that leaves, so nothing arrives here by being in the same folder
 // as something that belongs:
 //
-//   abide/runtime — what only the COMPILER writes, plus the predicates that read what it wrote
-//   abide/ui      — the DOM substrate: `mount`, `hydrate`
-//   abide/server  — the SSR substrate, the request scope, and the declaring half of both transports
+//   abide/runtime           — what only the COMPILER writes, plus the predicates that read what it
+//                             wrote
+//   abide/runtime/transport — what a server module elides to: `remote`, `remoteSocket` and the shapes
+//                             describing one. Its own specifier because it is otherwise the chunk
+//                             every page loads — see `runtime.ts`'s own closing note
+//   abide/ui                — the DOM substrate: `mount`, `hydrate`
+//   abide/server            — the SSR substrate, the request scope, and the declaring half of both
+//                             transports
 //
 // What is on NONE of them is still reachable at `$shared/*` — `scope`, `untrack` and `isolate` came
 // off this file because no page or handler in the example types one. A suite that tests the graph
@@ -93,5 +98,6 @@ export {
     url,
 } from './src/shared/router.ts'
 // Which app a call is addressed to, which `health()` takes. The rest of the transport types are on
-// `abide/runtime` with the `remote` / `remoteSocket` they describe.
+// `abide/runtime/transport` with the `remote` / `remoteSocket` they describe — its own specifier, so
+// the call-and-decode path is the chunk of whoever imports it rather than of every page.
 export type { WireOptions } from './src/shared/transport.ts'
