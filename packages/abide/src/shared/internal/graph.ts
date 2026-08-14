@@ -894,7 +894,8 @@ function attachAsync(read: Cell<unknown>, node: Node): void {
 // to be kept in agreement. These are the operations a slot needs beyond the public surface, and
 // every one is UNTRACKED on purpose: a slot's own bookkeeping — is a load in flight, subscribe me to
 // the value — must not subscribe whoever triggered it, or a reader of the slot would wake on
-// transitions it never asked about. Deliberately not re-exported from `$shared/index.ts`.
+// transitions it never asked about. Deliberately on neither front door — not `abide.ts`, which is
+// the `.` export, and not `src/shared/runtime.ts`, which is `./runtime`.
 
 // Where a cell keeps its node. Graph-internal and deliberately NOT the brand a renderer checks: the
 // brand answers "should a slot read this?", which is a wider question than "does this have a node"

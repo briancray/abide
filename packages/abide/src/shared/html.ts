@@ -379,10 +379,14 @@ export function settledArms(branches: Branches, failed: boolean, settled: unknow
  * thunk, so both passes produce the same template from the same call site; agreeing on the shape is
  * what lets the settle be the patch the emit has always described it as.
  *
- * Conditional because a list ROW must be a template — `ListPart` reads `.strings` off every item
- * without probing, which is correct for a path walked per row and is why the array is not simply
- * always right. `Branches.pending` is typed `() => unknown` and a hand-written `awaited()` may
- * answer with a string, so anything that could not be a row stays exactly as bare as it is today.
+ * Conditional to keep `null` — the common case, a block with no `pending` at all — from building a
+ * `ListPart` and an instance to paint nothing. `Branches.pending` is typed `() => unknown`, so a
+ * hand-written `awaited()` may also answer with a string; that stays bare too, and it is the one
+ * arm where this function does not get what it wants: the settle still lands as an array, so a
+ * STRING pending arm crosses the two arms of `ChildPart.set` exactly as the paragraph above
+ * describes. Wrapping it instead trades that crossing for a per-block instance, and which is
+ * cheaper is unmeasured. `templateOf` is what makes the choice available — a wrapped row no longer
+ * has to be a template, so `ListPart` is no longer what decides this.
  *
  * `finally` is absent on purpose: it belongs to a settle that has not happened, and the array
  * growing by one is how it arrives.

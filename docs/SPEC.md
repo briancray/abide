@@ -151,7 +151,7 @@ ITSELF, where they are a pattern.
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `x()` | `() => T` | The current value, filling in on its own once it arrives. THROWS if the last load failed, and SIGNALS if a first load has not landed yet — see below. On a stream, the latest chunk. |
-| `x.chunks` | `() => T[]` | Everything a stream produced, in order — the LIVE transcript, not a copy. The same array across chunks as well as between them; its identity moving means the transcript was replaced (a reset, or an overflow drop), never appended to. A reader wakes on the version and re-reads it; do not hold it across an await expecting it frozen. The same empty array on a source that never streamed. |
+| `x.chunks` | `() => T[]` | Everything a stream produced, in order. On a CELL it is the LIVE transcript, not a copy: the same array across chunks as well as between them, so its identity moving means the transcript was replaced (a reset, or an overflow drop), never appended to. A `channel` with `tail > 0` is the exception — its retention carries a dead head, so the window is a fresh array after every publish and the same one between them, bounded by `tail`. Either way a reader wakes on the VERSION rather than on the identity and re-reads it; do not hold it across an await expecting it frozen. The same empty array on a source that never streamed. |
 | `for await (… of x)` | `AsyncIterable<T>` | The cursor face of the same transcript, for a consumer that reads each chunk once: everything already produced, then everything that comes next. A second consumer replays the whole of it, because the transcript is retained on the cell. A cell that never streamed yields its value once and ends. |
 | `x.peek` | `() => T \| undefined` | Exactly what is RETAINED now, subscribing to nothing, starting nothing, never throwing and never signalling — so `undefined` here means nothing has landed yet. `State<T>` narrows it to `T`: a cell handed a value was never cold, which is what keeps `x += 1` from needing a narrowing that cannot fail. |
 | `await x` | `PromiseLike<T>` | The settled value. Its type is the one `x()` has; the two differ in HOW they wait, not in what they hand back. Awaiting a cold slot starts it. |
@@ -420,8 +420,10 @@ Otherwise a `memo` the handler read and the body reads again finds a cache torn 
 builds the same answer a second time: the right value, twice the work, and nothing to say so. The
 ambients need no such help: they ride the async context an `await` already carries.
 
-`heldStream` is that hold on its own, for a body abide did not build. `page`, `jsonl`, `sse` and a
-streaming rpc all call it, so a body answered through any of them is held whoever wrote it; a
+`heldStream` is that hold on its own, for a body abide did not build. `page` calls it; `jsonl`, `sse`
+and a streaming rpc call `heldFrames`, which is the same hold with the framing INSIDE the pump rather
+than in a second `ReadableStream` wrapped around it. So a body answered through any of them is held
+whoever wrote it; a
 hand-written `new Response(stream)` calls it itself, because nothing abide owns sits between that
 stream and the socket. It is IDEMPOTENT — a body that already holds comes back untouched — so it is
 a fact about the stream rather than a rule about which layer is allowed to ask.

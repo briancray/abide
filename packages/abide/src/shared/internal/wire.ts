@@ -8,7 +8,7 @@
 import type { WireOptions } from '../transport.ts'
 import { mounted } from './mount.ts'
 import { ARGS_PARAM } from './PATHS.ts'
-import { hasFile, isFile, isThenable } from './probes.ts'
+import { isFile, isThenable } from './probes.ts'
 import type { JsonSchema } from './shapes.ts'
 import { traceHeaders } from './trace.ts'
 
@@ -85,7 +85,7 @@ function carry(_key: string, value: unknown): unknown {
  * is what `decodeArgs` maps back — otherwise an in-process call and a wire call would hand the
  * handler different args.
  */
-export function encodeArgs(args: unknown, carriesFile: boolean = hasFile(args)): Encoded {
+export function encodeArgs(args: unknown, carriesFile: boolean): Encoded {
     // Asked before encoding rather than answered during it: a replacer takes `JSON.stringify` off
     // its native serializer for every key in the graph, and a call carrying a file is the exception.
     //
