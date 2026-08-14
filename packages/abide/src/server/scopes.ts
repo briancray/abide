@@ -20,6 +20,7 @@ import {
     settling,
     useScopeSource,
 } from '$shared/internal/scopes.ts'
+import { isThenable } from '$shared/internal/probes.ts'
 import { useTraceSources } from '$shared/internal/trace.ts'
 import { framedBody, framedSteps } from '$shared/internal/wire.ts'
 import { useHrefSource } from '$shared/router.ts'
@@ -179,6 +180,32 @@ interface Step {
 }
 
 /**
+ * One chunk written out, and the release the throw owes.
+ *
+ * Out of `pull` and not a closure over it: it is called once per chunk from both arms of the guard
+ * below, and a closure built per `pull` would be the allocation that guard is saving.
+ */
+function settleChunk(
+    controller: ReadableStreamDefaultController<Uint8Array>,
+    step: Step,
+    release: (() => void) | null,
+): void {
+    try {
+        if (step.done !== true) {
+            const chunk = step.value as string | Uint8Array
+            return void controller.enqueue(
+                typeof chunk === 'string' ? ENCODER.encode(chunk) : chunk,
+            )
+        }
+    } catch (failure) {
+        release?.()
+        throw failure
+    }
+    controller.close()
+    release?.()
+}
+
+/**
  * The hold, the bind, and the three ways a body ends — once, over whatever produces the next chunk.
  *
  * A held body comes in two shapes: `heldStream` pumps a stream somebody else built, and `bytes` in
@@ -200,21 +227,29 @@ export function heldPump(
 ): ReadableStream<Uint8Array> {
     return markHeld(
         new ReadableStream<Uint8Array>({
-            pull: bound(async (controller: ReadableStreamDefaultController<Uint8Array>) => {
+            pull: bound((controller: ReadableStreamDefaultController<Uint8Array>) => {
+                let stepped: Step | Promise<Step>
                 try {
-                    const step = await read()
-                    if (step.done !== true) {
-                        const chunk = step.value as string | Uint8Array
-                        return void controller.enqueue(
-                            typeof chunk === 'string' ? ENCODER.encode(chunk) : chunk,
-                        )
-                    }
+                    stepped = read()
                 } catch (failure) {
                     release?.()
                     throw failure
                 }
-                controller.close()
-                release?.()
+                // Guarded, not awaited, and `pull` is not `async` for the same reason: `framedSteps`
+                // settles a sync source IN the call and returns `Step | Promise<Step>` to say so, so
+                // an unconditional await would cost a microtask tick per chunk to learn what the
+                // value already is. `framedBody` guards the same read — this is its held twin, and
+                // `heldFrames` picks between them on whether a request is open, so awaiting here is
+                // the guard holding on the path nothing serves and dropped on the path every served
+                // `jsonl` and `sse` takes.
+                if (!isThenable(stepped)) return settleChunk(controller, stepped as Step, release)
+                return (stepped as Promise<Step>).then(
+                    (step) => settleChunk(controller, step, release),
+                    (failure: unknown) => {
+                        release?.()
+                        throw failure
+                    },
+                )
             }),
             // Bound too: a source's own cleanup is the app's, and it should see the caller it was opened
             // for rather than whoever cancelled.

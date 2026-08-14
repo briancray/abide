@@ -136,6 +136,67 @@ test('a held streaming body is ONE ReadableStream, not a framed one wrapped in a
     }
 })
 
+/**
+ * How many microtask turns had passed when the read resolved.
+ *
+ * A BOUNDED ladder, and it has to be: `microtasks()` in `abide-kit/measure` re-schedules itself for
+ * as long as the work is in flight, which never terminates around a stream — the queue is never
+ * empty, so the event loop the read is waiting on never gets a turn. This asks a smaller question
+ * that a fixed chain can answer.
+ */
+async function turnsBeforeFirstChunk(body: ReadableStream<Uint8Array>): Promise<number> {
+    const reader = body.getReader()
+    let turns = 0
+    let landed = -1
+    const rung = (left: number): void => {
+        if (left === 0) return
+        turns++
+        queueMicrotask(() => rung(left - 1))
+    }
+    const read = reader.read().then((step) => {
+        landed = turns
+        return step
+    })
+    rung(40)
+    await read
+    await reader.cancel()
+    return landed
+}
+
+test('a served body does not await a chunk its source already had', async () => {
+    // The contract is "does less work" again, and again the bytes are identical — so the turn is the
+    // only thing that can fail. `framedSteps` settles a SYNC iterable in the call and returns
+    // `Step | Promise<Step>` to say so; `framedBody` guards on that and `heldPump` did not, and
+    // `heldFrames` picks between those two on whether a request is open. So the guard held on the
+    // path nothing serves and was dropped on the path every served `jsonl` and `sse` takes — which
+    // is why no existing case could see it: `jsonl([1, 2, 3]).text()` in `demos/transport.ts` runs
+    // OUTSIDE a request and takes the guarded shell.
+    //
+    // The async arm is the control rather than decoration: it is what says the ladder still measures
+    // the same thing, since a source that genuinely waits must be unaffected by a guard on a source
+    // that does not.
+    //
+    // Verified by reverting: with `await read()` back, the sync arm reads 3 and the async arm stays
+    // at 5. Both numbers move together if Bun's stream internals do, so it is the GAP that carries
+    // the claim; re-baseline both if that day comes.
+    const rows = Array.from({ length: 8 }, (_, index) => ({ index }))
+    async function* streamed(): AsyncGenerator<{ index: number }> {
+        for (const row of rows) yield row
+    }
+
+    const sync = await turnsBeforeFirstChunk(
+        serve(new Request('https://x.test/rows'), () => jsonl(rows)).body as ReadableStream<Uint8Array>,
+    )
+    const async_ = await turnsBeforeFirstChunk(
+        serve(new Request('https://x.test/rows'), () => jsonl(streamed())).body as ReadableStream<
+            Uint8Array
+        >,
+    )
+    expect(sync).toBe(2)
+    expect(async_).toBe(5)
+    expect(async_ - sync).toBe(3)
+})
+
 test('page() holds a body the app wrote itself, and holds it only once', async () => {
     let builds = 0
     const seat = memo(() => {
