@@ -16,9 +16,18 @@ export const SLOT_OPEN = '['
 
 export const OPEN_MARKER = `<!--${SLOT_OPEN}-->`
 
+/**
+ * A close marker's comment DATA on its own — what the adopt walk compares a found comment against,
+ * and the half `prepare` and the server both build their markup from. Split out for the reason
+ * `SLOT_OPEN`/`OPEN_MARKER` are: the data and the markup are one fact, so neither is spelled twice.
+ */
+export function closeData(slot: number): string {
+    return `$${slot}`
+}
+
 /** The close marker IS the anchor `prepare` already puts in the client's template, verbatim. */
 export function closeMarker(slot: number): string {
-    return `<!--$${slot}-->`
+    return `<!--${closeData(slot)}-->`
 }
 
 /** What a close marker's comment data looks like, for the depth scan. */

@@ -6,7 +6,7 @@
 // flush — the effect is what touches the DOM, not the write.
 
 import { html, memo, state, type State, type TemplateResult } from 'abide'
-import { awaited, component, keyed } from 'abide/runtime'
+import { awaited, component, keyed, streamed } from 'abide/runtime'
 import { container, sleep, suite, until } from 'abide-kit'
 import {
     countCalls,
@@ -960,6 +960,38 @@ export default suite({
                             ),
                     },
                 ],
+            },
+        },
+
+        {
+            title: 'every ROW KIND a STREAM can produce lands, not just a template',
+            note: 'A streamed row reaches `ListPart.append`, which is a separate entry point from `set` — `{#for await}` appends and never reorders, so the caller is what knows that. Both of `set`’s paths ask `templateOf` what a row is; `append` was left spelling the old `item as TemplateResult` cast, so a row function returning a string threw where the identical row inside an ARRAY renders. The row function is typed `(item, index) => unknown` and the server walks a streamed row with its general emit, so this is the same isomorphism break the array matrix in `hydrate` was written for, one entry point along. The assertion is on the TEXT rather than the markup, because a wrapped row carries no `<li>` of its own — what is being claimed is that it lands at all.',
+            async run({ is }) {
+                const landed = async (row: (item: string) => unknown, expected: string): Promise<string> => {
+                    const source = async function* (): AsyncGenerator<string> {
+                        yield 'a'
+                        yield 'b'
+                    }
+                    const host = container()
+                    const mounted = mount(host, () => html`<ul>${() => streamed(source(), row)}</ul>`)
+                    // Waits for the WHOLE expectation rather than for the last row's text: the
+                    // numbers arm renders no character the source yielded, so there is nothing else
+                    // here that says both rows have arrived.
+                    await until(() => (host.querySelector('ul')?.textContent ?? '') === expected)
+                    const text = host.querySelector('ul')?.textContent ?? ''
+                    mounted.dispose()
+                    host.remove()
+                    return text
+                }
+
+                is('templates', await landed((item) => html`<li>${item}</li>`, 'ab'), 'ab')
+                is('strings', await landed((item) => item, 'ab'), 'ab')
+                is('numbers', await landed(() => 1, '11'), '11')
+                is(
+                    'a template and a string',
+                    await landed((item) => (item === 'a' ? html`<li>${item}</li>` : item), 'ab'),
+                    'ab',
+                )
             },
         },
 

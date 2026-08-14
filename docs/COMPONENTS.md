@@ -127,7 +127,10 @@ Four things fall out, and three are deletions:
 - **The declared-type rule GOES.** "declared `State<T>` → live, declared `T` → snapshot" no longer
   decides anything about liveness, because every prop is live. It decides only whether `bind:` may
   write, which is what it was always really about.
-- **A prop that did not move wakes nobody**, free, from the cell's own identity check.
+- **A prop that did not move wakes nobody** — from the cell's own identity check for every prop but
+  a `TemplateResult`, which the caller's own thunk rebuilds per pass so identity alone could never
+  dedup it. That one is compared structurally and KEEPS the old identity. `children` is the prop
+  this is about.
 - **`state()` inside the body needs no change**, because the body is not re-run. This is where the
   design diverges from React's: nothing has to match cells by call order.
 

@@ -30,7 +30,7 @@ import {
     type TemplateResult,
 } from '$shared/html.ts'
 import { type Node, rerun, type State, swallowed, untrack, untrackCall, watchNode } from '$shared/internal/graph.ts'
-import { CLOSE_FORM, PLACEHOLDER_TAG, SLOT_OPEN } from '$shared/internal/MARKERS.ts'
+import { CLOSE_FORM, closeData, PLACEHOLDER_TAG, SLOT_OPEN } from '$shared/internal/MARKERS.ts'
 import { isAsyncIterable, isThenable } from '$shared/internal/probes.ts'
 import { unwrap } from '$shared/internal/slots.ts'
 import { abideLog } from '$shared/log.ts'
@@ -327,12 +327,12 @@ export class ChildPart {
      *
      * `set` clears `holding` on every path that paints, because an ordinary value replaces whatever
      * block was showing. A block painting its own arm is the exception, and this is the only spelling
-     * of it: the seven callers below are the enumeration the rule asks for, rather than seven separate
-     * `this.holding = operand // set cleared it` lines that an eighth path could silently forget.
+     * of it: the six callers below are the enumeration the rule asks for, rather than six separate
+     * `this.holding = operand // set cleared it` lines that a seventh path could silently forget.
      * That failure is invisible — the arm still renders, and then re-enters and rebuilds its whole
      * subtree on every re-run of the enclosing effect, per row for a block inside a list.
      *
-     * Callers: `settle`'s two painted landings, the pending-then-settled pair `await_` runs when the
+     * Callers: `settle`'s two painted landings, the single settled paint `await_` runs when the
      * operand is not thenable and the pending arm it runs when it is, and `stream_`'s start and
      * failure arms. `set`'s `Awaited` arm is not one — it delegates to `await_`.
      * `take` does not go through here either: it claims rather than paints, and never clears
@@ -889,8 +889,7 @@ class ListPart {
      */
     append(item: unknown): void {
         const keyed = isKeyed(item)
-        const template = keyed ? item.template : (item as TemplateResult)
-        const instance = instantiate(template)
+        const instance = instantiate(templateOf(item, keyed))
         this.rows.push({ key: keyed ? item[KEY] : undefined, instance, usedAt: this.pass })
         // The anchor is what every row sits BEFORE, so appending there is the end of the list. No
         // placement walk: nothing below this row moved, because there is nothing below it.
@@ -1516,7 +1515,7 @@ class Instance {
             claimed.push(node)
         }
         if (close === null) mismatch(`slot ${slot} was opened but never closed`)
-        if (close.data !== `$${slot}`) mismatch(`slot ${slot} is closed by <!--${close.data}-->`)
+        if (close.data !== closeData(slot)) mismatch(`slot ${slot} is closed by <!--${close.data}-->`)
 
         const part = new ChildPart(close)
         part.adopt(claimed, open as Comment)
@@ -1724,17 +1723,6 @@ function writeAttribute(element: Element, name: string, value: unknown): void {
 }
 
 /**
- * The next pass's props, written into the cells the instance already has.
- *
- * Identity-deduped by the cell, so a prop that did not move wakes nobody — which is what makes a
- * parent re-render cost a comparison per prop instead of a rebuilt child. A prop that arrived as a
- * SOURCE was never wrapped, so there is nothing here to write: the child already reads it.
- *
- * A name with no cell can only come from a `...spread` whose key set grew, and the child bound its
- * locals at setup — so the cell it would be written into does not exist and never will. Reported
- * rather than skipped, because the output is simply one prop behind and nothing else says so.
- */
-/**
  * Two templates that say the same thing: one call site, and every slot holding what it held.
  *
  * `strings` is a pointer compare and settles it for almost nothing — a tagged template's array is
@@ -1752,6 +1740,19 @@ function sameTemplate(previous: unknown, next: TemplateResult): boolean {
     return true
 }
 
+/**
+ * The next pass's props, written into the cells the instance already has.
+ *
+ * Deduped so a prop that did not move wakes nobody — which is what makes a parent re-render cost a
+ * comparison per prop instead of a rebuilt child. The cell's own identity check answers it for every
+ * prop but a `TemplateResult`, which the caller's thunk rebuilds per pass; that one is compared
+ * structurally below. A prop that arrived as a SOURCE was never wrapped, so there is nothing here to
+ * write: the child already reads it.
+ *
+ * A name with no cell can only come from a `...spread` whose key set grew, and the child bound its
+ * locals at setup — so the cell it would be written into does not exist and never will. Reported
+ * rather than skipped, because the output is simply one prop behind and nothing else says so.
+ */
 function writeProps(held: Record<string, unknown>, next: Record<string, unknown>): void {
     for (const name in next) {
         const value = next[name]
@@ -1764,7 +1765,7 @@ function writeProps(held: Record<string, unknown>, next: Record<string, unknown>
         // `children` is the one prop the compiler guarantees is FRESH: the emit builds the literal
         // inside the caller's own thunk, so a component in a `{#for}` is handed a new
         // `TemplateResult` per row per pass whether or not anything in it moved — and the cell's
-        // identity dedup, which the comment above promises, can never once fire for it. Comparing
+        // identity dedup, which the docblock above promises, can never once fire for it. Comparing
         // structurally and KEEPING the old identity is what makes that promise true. It is
         // `router.ts`'s params shape, chosen for the same reason: reads dominate, so the compare is
         // cheaper than the wake it saves. A prop that is not a template pays one `typeof`.
