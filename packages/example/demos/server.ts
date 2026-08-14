@@ -16,6 +16,7 @@ import {
     renderDocument,
     renderDocumentToString,
     renderToString,
+    server,
     shell,
     toStream,
 } from 'abide/server'
@@ -104,6 +105,31 @@ export default suite({
                     '',
                 )
                 is('…while zero and empty string are values', await renderToString([0, '']), '0')
+            },
+        },
+
+        {
+            title: '`server.peek` observes where `server()` insists',
+            note: 'The same split every source in abide makes, on the one piece of process state: a READ is a demand — `server()` throws with the two ways to fix it, because code that needs the instance cannot carry on without one — and a PROBE only observes. That is what lets a library ask "am I inside a served process?" without either throwing or being the thing that decides. This case runs where the answer is genuinely nothing, which is the arm `server()` cannot be asked on at all and the reason the two are not one function with a flag.',
+            run({ is }) {
+                // `null`, not `undefined`, and not a throw: nothing has served in a demo card or
+                // under `bun test`, and that is an answer rather than a failure to have one.
+                is('null before anything served', server.peek(), null)
+                is('and the demanding form refuses instead', isServing(), false)
+
+                const pretend = { url: new URL('http://demo.invalid/') } as unknown as Parameters<
+                    typeof server.set
+                >[0]
+                try {
+                    is('set hands back what it was given', server.set(pretend) === pretend, true)
+                    is('…and the probe now sees it', server.peek(), pretend)
+                } finally {
+                    // Put back, because this is PROCESS state and every case after this one shares
+                    // it — a demo that left a fake server standing would be the reason a later case
+                    // measured something else.
+                    server.set(null as unknown as Parameters<typeof server.set>[0])
+                }
+                is('put back', server.peek(), null)
             },
         },
 

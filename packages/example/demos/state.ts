@@ -536,6 +536,21 @@ export default suite({
                     is('…so ITS initial is the one that lands', mine(), 'zenburn')
                 })
                 is('and the first caller is untouched', one(), 'solarized')
+
+                // The third argument, which nothing had ever passed. It belongs to the FIRST call
+                // for the same reason `initial` does — there is one cell, so there is one transform,
+                // and a second caller naming a different one is asking a question the cell has
+                // already answered. Asserted through a WRITE, because a transform that only ran on
+                // `initial` would look identical at the read above it.
+                const clamped = state.shared('demo:volume', 11, (n: number) => Math.min(n, 10))
+                is('the first caller’s transform runs on its initial', clamped(), 10)
+                clamped.set(99)
+                is('and on every write after it', clamped(), 10)
+
+                const again = state.shared('demo:volume', 0, (n: number) => n * -1)
+                is('a later caller gets the same cell', again === clamped, true)
+                again.set(7)
+                is('…so the FIRST transform is still the one applied', again(), 7)
             },
         },
 

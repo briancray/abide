@@ -9,10 +9,57 @@
 // being papered over by a path.
 
 import { expect, test } from 'bun:test'
-import { COMMANDS, LineEditor, suggest } from 'abide/cli'
+import { CLI_EXIT_CODES, COMMANDS, exitForStatus, LineEditor, suggest } from 'abide/cli'
 import { abide, BINARY, type Ended, ended, firstLine, linesUntil, spawn } from 'abide-kit/spawn'
 
 const LOGS_APP = `${import.meta.dir}/cli-logs-app.ts`
+
+// NOT spawned, and the one thing in this file that is not. `exitForStatus` is a pure function of one
+// number, so a process around it would test the process; and it cannot go in `packages/example/demos`
+// the way the rest of the dogfood does, because `abide/cli` is bun-only and a demo is bundled for the
+// browser too — the same reason `abide/runtime/transport` has its own specifier. Table-driven because
+// this is a SHELL CONTRACT: a script branching on `4` breaks the day two builds disagree about what
+// `4` meant, and five of these eight codes were reachable from no test at all — abide itself never
+// answers 504, so `timeout` is only ever produced by an intermediary in front of the app.
+test('an HTTP answer is the code the shell sees, for every code in the table', () => {
+    const table: [number, number][] = [
+        [200, CLI_EXIT_CODES.ok],
+        [204, CLI_EXIT_CODES.ok],
+        // A redirect is not an outcome: one the fetch followed is invisible, and one it did not is a
+        // response the command chose not to follow. Neither is the command failing.
+        [301, CLI_EXIT_CODES.ok],
+        [399, CLI_EXIT_CODES.ok],
+        [401, CLI_EXIT_CODES.denied],
+        [403, CLI_EXIT_CODES.denied],
+        [404, CLI_EXIT_CODES.missing],
+        [422, CLI_EXIT_CODES.invalid],
+        [504, CLI_EXIT_CODES.timeout],
+        [500, CLI_EXIT_CODES.server],
+        [503, CLI_EXIT_CODES.server],
+        // Ordered against `>= 500`: 504 is a timeout before it is a server error, and the two 4xx
+        // that are not `denied`/`missing`/`invalid` fall through to `client` rather than to `failed`.
+        [400, CLI_EXIT_CODES.client],
+        [418, CLI_EXIT_CODES.client],
+        [429, CLI_EXIT_CODES.client],
+    ]
+    for (const [status, code] of table) {
+        expect([status, exitForStatus(status)]).toEqual([status, code])
+    }
+
+    // The numbers themselves, because renumbering the table is the silent break — every assertion
+    // above would still pass with `denied` and `invalid` swapped.
+    expect(CLI_EXIT_CODES).toEqual({
+        ok: 0,
+        failed: 1,
+        usage: 2,
+        invalid: 3,
+        denied: 4,
+        missing: 5,
+        timeout: 6,
+        server: 7,
+        client: 8,
+    })
+})
 
 test('the usage screen is the command table, and asking for it is a success', async () => {
     const asked = await abide(['--help'])
