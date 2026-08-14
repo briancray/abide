@@ -616,7 +616,7 @@ export function socket<T, Args>(options: SocketOptions<T, Args> = {}): Channel<T
         crossOrigin: options.crossOrigin ?? null,
     }
     // After the policy exists, because the gate reads the address off it at the throw — it is the
-    // same object `nameSocket` writes to when the module registers.
+    // same object `describeSocket` writes to when the module registers.
     policy.checkMessage = gate(options.schema as Schema<unknown> | undefined, 'message', 422, policy)
     SOCKET_POLICY.set(stream, policy)
     return stream

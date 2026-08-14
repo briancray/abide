@@ -208,8 +208,10 @@ function settleChunk(
 /**
  * The hold, the bind, and the three ways a body ends — once, over whatever produces the next chunk.
  *
- * A held body comes in two shapes: `heldStream` pumps a stream somebody else built, and `bytes` in
- * `index.ts` pumps a render walk. What differs is where a chunk comes from; what must not differ is
+ * A held body comes in three shapes: `heldStream` pumps a stream somebody else built, `heldFrames`
+ * pumps an iterable it frames as it goes, and `bytes` in `index.ts` pumps a render walk. `heldFrames`
+ * is the one the guard below is for, since a sync iterable settles in the call.
+ * What differs is where a chunk comes from; what must not differ is
  * the RELEASE, which has three exits — the close, the throw and the cancel — and a scope leaks
  * silently when any one of them is missed. So the source is the argument and the protocol is here,
  * rather than the protocol being written once per producer.

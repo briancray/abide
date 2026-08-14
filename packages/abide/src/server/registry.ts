@@ -193,9 +193,10 @@ function crossOrigin(request: Request, url: URL, allowed: string[] | null): Reco
 
 // --- the entry point ---------------------------------------------------------
 
-// What is fixed at the UPGRADE and carried for the connection's lifetime is the endpoint `id` and its
-// `policy`. The declaration and the room it selects are resolved at `open` instead — see `channel`
-// below for why. `message` runs per inbound frame and re-resolves neither.
+// Four of these are fixed at the UPGRADE and carried for the connection's lifetime: the endpoint
+// `id`, its `policy`, the `request`, and `room` — which is the decoded QUERY, the args that say which
+// room, not the room. `channel` alone is resolved at `open` — see its own comment below for why.
+// `message` runs per inbound frame and re-resolves neither.
 interface SocketData {
     id: string
     room: unknown
