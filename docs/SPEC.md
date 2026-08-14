@@ -662,6 +662,7 @@ the room form, and an import cannot say which one it is.
 | `{#switch expr}` | `{:case v}`, `{:default}` |
 | `{#try}` | `{:catch e}`, `{:finally}` — JS-semantics error boundary, so SYNCHRONOUS. The body is one unit rather than one thunk per expression, so a dep inside re-runs the whole body |
 | `{#component Name(pattern)}` | **Inline component** — a reusable builder. TitleCase required. Invoked as `<Name/>`, passable as a value. The parameter is the pattern written in the parens; children arrive through `<slot/>`, which is why one written with no parameter still binds `args`. Nested inside `<Foo>…</Foo>` it becomes Foo's `X` prop |
+| body whitespace | Every block body drops its leading and its trailing text node when that node renders nothing and carries a NEWLINE — the file's own indentation, which would otherwise become a permanent member of the instance's movable range. Only those two ends, only newline-bearing runs, and whitespace OUTSIDE a body is untouched. The case it changes: two blocks back to back with no whitespace between them — `{/if}{#if b}` — whose bodies each held an inline node, where `x y` now renders `xy` |
 
 ## Components
 
@@ -748,7 +749,9 @@ written outside the body it was declared in.
 An `<!-- html comment -->` in the markup is for whoever opens the file and is NOT emitted: a
 component ships one copy of its own commentary per INSTANCE, and a file's header comment is the
 biggest one it has. Whitespace around a dropped comment is left alone, so nothing that was inline
-stops being inline. A comment that has to reach the browser is `{html('<!-- … -->')}`.
+stops being inline — except at a block body's two ends, where the comment and the indentation
+holding it go together (see the body-whitespace row under Control flow). A comment that has to reach
+the browser is `{html('<!-- … -->')}`.
 
 ## Rendering
 

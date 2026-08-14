@@ -4,7 +4,7 @@
 // screen and keeps it live, and `hydrate` does the same over markup the server already wrote.
 // Everything else — the parse-once cache, the child/list parts, the per-slot effects — is in
 // `internal/` and is reached only through these. `keyed` used to be re-exported here as authoring
-// vocabulary; it is on `abide/runtime`, because `key={...}` on a `{#for}` is what an author writes.
+// vocabulary; it is on `abide/runtime`, because `by` on a `{#for}` is what an author writes.
 
 import type { TemplateResult } from '$shared/html.ts'
 import { scope, watch } from '$shared/reactive.ts'

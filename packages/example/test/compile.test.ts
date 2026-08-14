@@ -171,7 +171,7 @@ test('every .abide in the example package parses', async () => {
 // The compiler shares ONE TypeScript scanner across every `Lexer` — see `SCANNER` in
 // `compiler/internal/lex.ts` — because a `Lexer` is built per AST node and `createScanner` hands
 // back several dozen closures each time. Sharing is safe only while no two `Lexer`s are alive at
-// once, which is a property of the four `new Lexer` call sites rather than of that file.
+// once, which is a property of the three `new Lexer` call sites rather than of that file.
 //
 // This is the failure that sharing INTRODUCES and nothing else here would see: a compile that throws
 // abandons its lexer mid-scan, and if the next one inherited that state the output would be wrong

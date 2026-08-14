@@ -1830,7 +1830,7 @@ export default suite({
 
         {
             title: 'the header splits by who WRITES the name, not by what it does',
-            note: '`abide` is what an author types and `abide/runtime` is what only the emitter does, so a name appearing in generated output and never in a source file is off the surface an app reads. `html` is the only name on both sides: it is the template TAG a hand-written `.ts` component also writes, so it stays on `abide` and merges with the author’s own import of it — which is why no cross-module dedupe is needed. `raw` and `keyed` read like authoring vocabulary and are not: the escape hatch is spelled `{html(...)}` and a key is spelled `key={...}`, and each of those is a SPELLING the emitter translates.',
+            note: '`abide` is what an author types and `abide/runtime` is what only the emitter does, so a name appearing in generated output and never in a source file is off the surface an app reads. `html` is the only name on both sides: it is the template TAG a hand-written `.ts` component also writes, so it stays on `abide` and merges with the author’s own import of it — which is why no cross-module dedupe is needed. `raw` and `keyed` read like authoring vocabulary and are not: the escape hatch is spelled `{html(...)}` and a key is spelled `by` on a `{#for}`, and each of those is a SPELLING the emitter translates.',
             run({ is, log }) {
                 // Every emit-only name in one file: class: → classes, style: → styles, <style> →
                 // adopt, {#if x.pending()} → awaited, {#try} → boundary, {#for await} → streamed,

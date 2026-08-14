@@ -123,7 +123,7 @@ type Runtime =
  * The one of those an author also types, so the header keeps it on `abide`.
  *
  * `raw` and `keyed` are NOT authored, despite reading like it: the escape hatch is spelled
- * `{html(...)}` and a key is spelled `key={...}` on a `{#for}`. Both are what this emitter writes for
+ * `{html(...)}` and a key is spelled `by` on a `{#for}`. Both are what this emitter writes for
  * those spellings, never what a source file says.
  */
 const AUTHORED_RUNTIME: ReadonlySet<string> = new Set<Runtime>(['html'])
@@ -2252,10 +2252,10 @@ export function emit(
     // The same reasoning, for the static arrays a `class:`/`style:` toggle lifted out of its thunk.
     for (const [literal, name] of context.lifted) adopted += `const ${name} = ${literal}\n`
 
-    const setupBody = indent(desugarBody(blocks.setup, lifted.body, reactive))
+    const setupBody = indent(desugarBody(lifted.body, reactive))
     const assembled =
         mergeImports([...header, ...moduleImports.imports, ...setup.imports], ERASED_IMPORTS) +
-        `${desugarBody(blocks.module, moduleImports.rest, reactive)}\n${adopted}` +
+        `${desugarBody(moduleImports.rest, reactive)}\n${adopted}` +
         (lifted.declarations === '' ? '' : `${lifted.declarations}\n`) +
         `export default function ${name}(${args}): TemplateResult {\n` +
         `${setupBody}${started}${defines}` +
@@ -2337,12 +2337,8 @@ function liftTypes(rest: string, found: Declared[]): { declarations: string; bod
  * BLOCK, not an object literal, and `once` because these statements are the setup: a read among them
  * peeks, and gets the honest possibly-undefined type for it.
  */
-function desugarBody(
-    block: { body: string; start: number } | null,
-    rest: string,
-    reactive: Reactive,
-): string {
-    if (block === null || rest.trim() === '') return rest
+function desugarBody(rest: string, reactive: Reactive): string {
+    if (rest.trim() === '') return rest
     // The import-lifted text no longer lines up with the file, so it is desugared as its own region.
     return desugar(rest, 0, rest.length, reactive.cells, {
         expression: false,

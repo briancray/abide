@@ -117,7 +117,7 @@ export class Lexer {
      * `compile('{#')` hung the process. `{#i` throws, because `#i` is a whole private identifier and the
      * scan after it does reach the end.
      *
-     * The guard is here rather than in that one loop because all four `Lexer` call sites walk until this
+     * The guard is here rather than in that one loop because all three `Lexer` call sites walk until this
      * returns null, so any of them could have been the one to spin. A token that consumes no characters
      * cannot be followed by one that does.
      */
