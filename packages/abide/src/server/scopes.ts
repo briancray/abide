@@ -21,6 +21,7 @@ import {
     useScopeSource,
 } from '$shared/internal/scopes.ts'
 import { useTraceSources } from '$shared/internal/trace.ts'
+import { framedBody, framedSteps } from '$shared/internal/wire.ts'
 import { useHrefSource } from '$shared/router.ts'
 
 interface Serving {
@@ -168,8 +169,8 @@ function markHeld<T>(body: ReadableStream<T>): ReadableStream<T> {
     return body
 }
 
-/** Stateless, so one for the process rather than one per response. */
-const ENCODER = new TextEncoder()
+/** Stateless, so one for the process rather than one per response — `identity.ts` seals with it too. */
+export const ENCODER = new TextEncoder()
 
 /** One chunk, however its producer spells one — a generator's step and a reader's agree here. */
 interface Step {
@@ -193,7 +194,7 @@ interface Step {
  * request too, and there is then nothing to hold and no branch to pay for it.
  */
 export function heldPump(
-    read: () => Promise<Step>,
+    read: () => Step | Promise<Step>,
     end: (reason: unknown) => void,
     release: (() => void) | null,
 ): ReadableStream<Uint8Array> {
@@ -250,6 +251,28 @@ export function heldStream(body: ReadableStream<Uint8Array>): ReadableStream<Uin
         (reason) => void reader.cancel(reason),
         release,
     )
+}
+
+/**
+ * A FRAMED sequence as a held body — one stream, not a framed one wrapped in a held one.
+ *
+ * This is `heldStream(framedBody(…))` with the second `ReadableStream` taken out, and it is the same
+ * choice `bytes` in `index.ts` already made for the render walk: the framing is a source of chunks,
+ * so it belongs on the inside of the pump rather than behind a reader feeding it. Wrapping cost a
+ * second stream and its queue per response, a second `TextEncoder`, and a `getReader()` — and every
+ * chunk crossed both queues.
+ *
+ * Outside a request there is nothing to hold, and a plain `framedBody` is already one stream.
+ */
+export function heldFrames<T>(
+    source: AsyncIterable<T> | Iterable<T>,
+    frame: (value: T) => string,
+    failed?: (error: unknown) => string,
+): ReadableStream<Uint8Array> {
+    const release = holdScope()
+    if (release === null) return framedBody(source, frame, failed)
+    const framed = framedSteps(source, frame, failed)
+    return heldPump(framed.read, framed.cancel, release)
 }
 
 /**
@@ -450,12 +473,15 @@ function tracing(): Tracing {
 /**
  * Random bytes as hex — the shape the standard names, off the web crypto both lanes have.
  *
- * `Uint8Array.prototype.toHex`, the same spelling `identity.ts` mints its secret with. A 256-entry
- * lookup table was here first, measured against `toString(16).padStart(2, '0')` per byte — which was
- * the wrong arm: against the native method the table LOSES, 100 ns per 24-byte id to 39 ns. Minting
- * happens on every request that answers, so that is the number that decided it.
+ * `Uint8Array.prototype.toHex`. A 256-entry lookup table was here first, measured against
+ * `toString(16).padStart(2, '0')` per byte — which was the wrong arm: against the native method the
+ * table LOSES, 100 ns per 24-byte id to 39 ns. Minting happens on every request that answers, so that
+ * is the number that decided it.
+ *
+ * Exported because `identity.ts` mints its per-process secret the same way — one spelling of "random
+ * bytes as hex" for the seam rather than one per file that needs some.
  */
-function randomHex(bytes: number): string {
+export function randomHex(bytes: number): string {
     return crypto.getRandomValues(new Uint8Array(bytes)).toHex()
 }
 

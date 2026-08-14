@@ -4,7 +4,7 @@
 // The WALK stays in `$server/index.ts` — `emit` and `emitTemplate` recurse into each other, and
 // separating them would buy nothing but an import cycle.
 
-import { attributeText, escape } from '$shared/html.ts'
+import { attributeText, escape, nonceAttribute } from '$shared/html.ts'
 import { PATCH_SWAP } from '$shared/internal/MARKERS.ts'
 
 export interface Deferred {
@@ -43,16 +43,6 @@ export function attribute(name: string, value: unknown): string {
     if (text === null) return ''
     if (text === true) return ` ${name}`
     return ` ${name}="${escape(text)}"`
-}
-
-/**
- * ` nonce="…"`, or nothing at all when this render has no policy to satisfy.
- *
- * The value is base64url out of `nonce()`, so there is nothing in it that needs escaping — which is
- * also why the quoting here can be a plain interpolation rather than `attribute()`.
- */
-export function nonceAttribute(nonce: string | null): string {
-    return nonce === null ? '' : ` nonce="${nonce}"`
 }
 
 /**

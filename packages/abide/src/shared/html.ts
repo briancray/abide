@@ -510,3 +510,16 @@ export function escape(value: string): string {
     if (!ESCAPABLE.test(value)) return value
     return value.replace(ESCAPABLE_ALL, (c) => ESCAPES[c] as string)
 }
+
+/**
+ * ` nonce="…"`, or nothing at all when this render has no policy to satisfy.
+ *
+ * The value is base64url out of `nonce()`, so there is nothing in it that needs escaping — which is
+ * also why the quoting here can be a plain interpolation rather than `attribute()`.
+ *
+ * Here rather than beside either writer because both lanes stamp one: the server's patch and deferred
+ * scripts, and the seed block the client reads back.
+ */
+export function nonceAttribute(nonce: string | null): string {
+    return nonce === null ? '' : ` nonce="${nonce}"`
+}

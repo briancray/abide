@@ -27,13 +27,12 @@
 import { anonymous, type Identity, type IdentitySource, useIdentitySource } from '$shared/identity.ts'
 import { isProduction } from '$shared/internal/env.ts'
 import { isThenable } from '$shared/internal/probes.ts'
-import { errorPayload } from '$shared/internal/wire.ts'
 import { abideLog } from '$shared/log.ts'
 import { knobOf } from './config.ts'
-import { merged } from './internal/merge.ts'
-import { json } from './responses.ts'
-import { refuse } from './rpc.ts'
-import { cookies, heldIdentity, holdIdentity, isServing, writeCookie } from './scopes.ts'
+import { HookSlot } from './internal/hooks.ts'
+import { failedInto, merged } from './internal/merge.ts'
+import { json, refuse } from './responses.ts'
+import { cookies, ENCODER, heldIdentity, holdIdentity, isServing, randomHex, writeCookie } from './scopes.ts'
 
 const identityLog = abideLog.channel('identity')
 
@@ -49,7 +48,6 @@ const COOKIE = 'abide-identity'
  */
 const REFRESH_AFTER = 0.5
 
-const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 
 /** A cookie value carries none of `+`, `/` or `=`, which is the whole of why the alphabet differs. */
@@ -83,7 +81,7 @@ function secret(): string {
         )
     }
     if (minted === null) {
-        minted = crypto.getRandomValues(new Uint8Array(32)).toHex()
+        minted = randomHex(32)
         identityLog.warning(
             'no ABIDE_IDENTITY_SECRET — sealing with a per-process random key, so sessions will not survive a restart',
         )
@@ -107,7 +105,7 @@ interface Sealed {
 }
 
 function seal(claims: unknown, expiry: number): string {
-    const body = encoder.encode(JSON.stringify({ c: claims ?? null, e: expiry })).toBase64(SEAL_ENCODING)
+    const body = ENCODER.encode(JSON.stringify({ c: claims ?? null, e: expiry })).toBase64(SEAL_ENCODING)
     return `${body}.${mac(body)}`
 }
 
@@ -189,7 +187,7 @@ export type IdentityResolver = (claims: unknown) => unknown
 
 // One app, one answer to "who is this", so a second registration REPLACES the first — the same rule
 // `onHealth` follows, and for the same reason: two resolvers need an order nobody declared.
-let resolver: IdentityResolver | null = null
+const RESOLVER = new HookSlot<IdentityResolver>()
 
 /**
  * How this app turns what a caller presented into a principal.
@@ -202,10 +200,7 @@ let resolver: IdentityResolver | null = null
  * one a test cannot register twice.
  */
 export function onIdentity(resolve: IdentityResolver): () => void {
-    resolver = resolve
-    return () => {
-        if (resolver === resolve) resolver = null
-    }
+    return RESOLVER.set(resolve)
 }
 
 function resolve(): Identity | Promise<Identity> {
@@ -240,7 +235,7 @@ function principal(opened: Sealed | null): Identity | Promise<Identity> {
     // The string names which of the two sources this was, because an app with no resolver reaches
     // here with its own `set()` argument and a warning about `onIdentity` would name a hook it never
     // registered.
-    const hook = resolver
+    const hook = RESOLVER.held
     if (hook === null) return merged(document, claims, identityLog, 'what the seal carried')
 
     let reported: unknown
@@ -264,11 +259,7 @@ function principal(opened: Sealed | null): Identity | Promise<Identity> {
  * half-filled document being carried over with `error` bolted onto it.
  */
 function failing(failure: unknown): Identity {
-    const error = errorPayload(failure).error
-    identityLog.warning(`onIdentity threw: ${error.name}: ${error.message} — resolving anonymous`)
-    const document = anonymous()
-    document.error = error
-    return document
+    return failedInto(anonymous(), failure, identityLog, 'onIdentity', ' — resolving anonymous')
 }
 
 /**

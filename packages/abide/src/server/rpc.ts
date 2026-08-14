@@ -15,12 +15,12 @@ import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
 import { NO_LIMIT, race, timeoutError } from '$shared/internal/timers.ts'
 import {
     type Answer,
-    chunkedBody,
     errorPayload,
+    failedLine,
     JSON_TYPE,
+    jsonLine,
     NDJSON_TYPE,
     type Refusals,
-    TRANSPORT_ERROR,
     TTL_HEADER,
 } from '$shared/internal/wire.ts'
 import { abideLog } from '$shared/log.ts'
@@ -29,8 +29,7 @@ import { asRpc, type Method, type Rpc } from '$shared/transport.ts'
 import { knobOf } from './config.ts'
 import { failed, headersFor } from './responses.ts'
 import { type Gate, gate, publishable, type Schema, type SchemaRefusal } from './schema.ts'
-import { recordSeed, seedsTable } from './scopes.ts'
-import { heldStream } from './scopes.ts'
+import { heldFrames, recordSeed, seedsTable } from './scopes.ts'
 
 /**
  * The chain that authorizes and observes every call, INCLUDING an in-process one.
@@ -139,22 +138,25 @@ export function bodyCeiling(policy: RpcPolicy | undefined): number {
     return policy?.maxBodySize ?? knobOf('ABIDE_MAX_REQUEST_BODY_SIZE')
 }
 
-/** What the registry calls once it knows where a declaration lives, so a failure names the endpoint. */
-export function nameRpc(rpc: object, address: string): void {
-    const policy = RPC_POLICY.get(rpc)
-    if (policy !== undefined) policy.address = address
-}
-
 /**
- * The shapes the compiler derived from the declaration's TYPE, handed over when the module registers.
+ * Where a declaration lives, and the shapes the compiler derived from its TYPE — both handed over
+ * when the module registers.
  *
- * They FILL IN rather than override: a declared schema is an author saying something the type does
- * not, so the derivation loses. What it still supplies in that case is the published shape, because
- * a validator and a library schema both answer "does this match" and neither answers "what is it".
+ * One call rather than a name and a describe, because there is no moment a declaration should be
+ * half-registered: the address is what a failure names, and the gate built below reads it off the
+ * policy at the throw. `describeSocket` is the same call for the other lane, and the two stay apart
+ * because their policies are genuinely different records — see the note there.
+ *
+ * The shapes FILL IN rather than override: a declared schema is an author saying something the type
+ * does not, so the derivation loses. What it still supplies in that case is the published shape,
+ * because a validator and a library schema both answer "does this match" and neither answers "what is
+ * it".
  */
-export function describeRpc(rpc: object, shapes: Shapes | undefined): void {
+export function describeRpc(rpc: object, address: string, shapes: Shapes | undefined): void {
     const policy = RPC_POLICY.get(rpc)
-    if (policy === undefined || shapes === undefined) return
+    if (policy === undefined) return
+    policy.address = address
+    if (shapes === undefined) return
     const input = shapes.input
     if (input !== undefined) {
         policy.input ??= input
@@ -301,7 +303,10 @@ function declare<Args, T>(
                 yield (isThenable(gated) ? await gated : gated) as T
             }
         } finally {
-            await iterator.return?.()
+            // Guarded like the chunk above: a generator with no `return` at all, and a `return` that
+            // answers synchronously, both settle in the call rather than costing a wrap and a tick.
+            const ending = iterator.return?.()
+            if (isThenable(ending)) await ending
         }
     }
 
@@ -353,7 +358,7 @@ function declare<Args, T>(
             table.set(seedKey(policy.address, args), produced)
             return produced
         }
-        // `recordSeed` rather than the table above: `takeSeeds` DETACHES it when the document
+        // `recordSeed` rather than the table above: `closeSeeding` DETACHES it when the document
         // serialises, so a load landing after that must find nothing to write to.
         return (produced as Promise<T>).then((value) => {
             recordSeed(seedKey(policy.address, args), value)
@@ -403,16 +408,6 @@ function wireHeaders(ttl: number, type: string, extra: Record<string, string> | 
 const NO_STORE = 'private, no-store'
 
 /**
- * A refusal from the mount point itself, under the one name every `/__abide/**` lane refuses with.
- *
- * The message does NOT name abide: it is wrapped as `abide: <address> — <message>` when it reaches a
- * caller, and a reader of the raw body has the address in the URL bar already.
- */
-export function refuse(message: string, status: number, headers?: Record<string, string>): Response {
-    return failed(TRANSPORT_ERROR, message, status, headers)
-}
-
-/**
  * One call, as a response. What `dispatch` writes and what `fn.raw` hands back in-process, so the
  * two cannot disagree about what a failure or a stream looks like.
  */
@@ -441,7 +436,7 @@ export function respond<Args, T>(
         // when this returns, and a duration covering work that has not happened is a number that
         // means nothing. What the line reports is that the call became a stream and how fast.
         if (watching) told(policy, 'streaming', started)
-        return new Response(heldStream(chunkedBody(handle)), {
+        return new Response(heldFrames(handle, jsonLine, failedLine), {
             headers: wireHeaders(ttl, NDJSON_TYPE, extra),
         })
     }
@@ -583,16 +578,20 @@ export function socketPolicyOf(stream: object): SocketPolicy | undefined {
     return SOCKET_POLICY.get(stream)
 }
 
-/** The socket half of `nameRpc`, called by the registry once it knows where the declaration lives. */
-export function nameSocket(stream: object, address: string): void {
+/**
+ * The socket half of `describeRpc`. A socket's `input` is its MESSAGE; it answers nothing.
+ *
+ * Its own function rather than a `kind` branch inside that one, because the two POLICIES are
+ * different records: a socket has `clientPublish` and no output, an rpc has a method, a ttl and both
+ * halves. One `WeakMap` holding the union would make `policyOf` return it, and every one of the
+ * registry's reads would narrow to get back what it already knew. What the two share is this shape —
+ * name it, then fill in what the type said — and that is stated rather than abstracted.
+ */
+export function describeSocket(stream: object, address: string, shapes: Shapes | undefined): void {
     const policy = SOCKET_POLICY.get(stream)
-    if (policy !== undefined) policy.address = address
-}
-
-/** The socket half of `describeRpc`. A socket's `input` is its MESSAGE; it answers nothing. */
-export function describeSocket(stream: object, shapes: Shapes | undefined): void {
-    const policy = SOCKET_POLICY.get(stream)
-    if (policy === undefined || shapes?.input === undefined) return
+    if (policy === undefined) return
+    policy.address = address
+    if (shapes?.input === undefined) return
     policy.message ??= shapes.input
     policy.checkMessage ??= gate(shapes.input, 'message', 422, policy) as Gate<unknown>
 }

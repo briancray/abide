@@ -13,6 +13,7 @@
 // Shared rather than per-lane because the KEY has to be, and the two halves either side of it are
 // small enough that splitting them would cost an import to save nothing.
 
+import { nonceAttribute } from '../html.ts'
 import { keyOf } from './keys.ts'
 
 /** Where the document carries it. A data block, never executed — the client parses it. */
@@ -31,8 +32,7 @@ export function seedKey(address: string, args: unknown): string {
  */
 export function seedScript(json: string, nonce: string | null): string {
     const safe = json.replace(/</g, '\\u003c')
-    const stamped = nonce === null ? '' : ` nonce="${nonce}"`
-    return `<script type="application/json" id="${SEED_ELEMENT_ID}"${stamped}>${safe}</script>`
+    return `<script type="application/json" id="${SEED_ELEMENT_ID}"${nonceAttribute(nonce)}>${safe}</script>`
 }
 
 /**

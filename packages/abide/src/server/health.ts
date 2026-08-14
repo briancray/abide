@@ -13,12 +13,11 @@
 
 import { type Health, useHealthSource } from '$shared/health.ts'
 import { isThenable } from '$shared/internal/probes.ts'
-import { errorPayload } from '$shared/internal/wire.ts'
 import { abideLog } from '$shared/log.ts'
 import { appVersion } from './app.ts'
-import { merged } from './internal/merge.ts'
-import { json } from './responses.ts'
-import { refuse } from './rpc.ts'
+import { HookSlot } from './internal/hooks.ts'
+import { failedInto, merged } from './internal/merge.ts'
+import { json, refuse } from './responses.ts'
 
 const healthLog = abideLog.channel('health')
 
@@ -28,7 +27,7 @@ export type HealthReporter = () => unknown
 // One app, one account, so a second registration REPLACES the first rather than being merged with
 // it: two reporters answering the same question would need an order, and an order nobody declared is
 // one the import graph decides.
-let reporter: HealthReporter | null = null
+const REPORTER = new HookSlot<HealthReporter>()
 
 /**
  * The app's own account of whether it is working.
@@ -38,12 +37,7 @@ let reporter: HealthReporter | null = null
  * module scope — while a hook that cannot be taken off again is one a test cannot register twice.
  */
 export function onHealth(report: HealthReporter): () => void {
-    reporter = report
-    return () => {
-        // Only if it is still ours: a later registration already replaced it, and clearing that one
-        // would be this disposer reaching past its own hook.
-        if (reporter === report) reporter = null
-    }
+    return REPORTER.set(report)
 }
 
 /**
@@ -75,7 +69,7 @@ function baseline(): Health {
  * at all, and an unconditional await would cost a promise and a tick to learn that.
  */
 function compose(): Health | Promise<Health> {
-    const report = reporter
+    const report = REPORTER.held
     if (report === null) return baseline()
     let reported: unknown
     try {
@@ -96,13 +90,7 @@ function over(reported: unknown): Health {
 }
 
 function failing(failure: unknown): Health {
-    // The same reduction every other abide failure gets, so what a reporter threw reads the same as
-    // what a handler threw rather than being a second rule for the same job.
-    const error = errorPayload(failure).error
-    healthLog.warning(`onHealth threw: ${error.name}: ${error.message}`)
-    const document = baseline()
-    document.error = error
-    return document
+    return failedInto(baseline(), failure, healthLog, 'onHealth')
 }
 
 useHealthSource(compose)

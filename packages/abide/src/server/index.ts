@@ -28,6 +28,7 @@ import {
     type Keyed,
     Raw,
     Streamed,
+    nonceAttribute,
     settledArms,
     settledBoundary,
     started,
@@ -55,7 +56,6 @@ import {
     attribute,
     type Deferred,
     type DocumentContext,
-    nonceAttribute,
     PLAIN,
     patchScript,
     type RenderContext,
@@ -974,7 +974,7 @@ export async function renderDocumentToString(
  * neither of which was ever waiting on data of its own.
  *
  * Two things differ from the document form, and both are forced by who does the parsing. There is no
- * `PATCH_SCRIPT` and no `<script>` per patch, because a script the client injects does not execute;
+ * `patchScript` and no `<script>` per patch, because a script the client injects does not execute;
  * the client swaps the placeholder itself. And every piece is followed by `PIECE_END`, because HTML
  * cannot be parsed halfway — the sentinel is what tells a reader that what it holds is a complete
  * tree it may parse now rather than a prefix of one.
@@ -1041,12 +1041,12 @@ async function* drain(
     // patch, and nothing detaches those — N deferrals cost N²/2 reaction records retained on the
     // promises.
     //
-    // `d.html` cannot reject: `emitSuspend` builds it around a `try`, and a failed subtree settles as
+    // `d.html` cannot reject: `emitDeferred` builds it around a `try`, and a failed subtree settles as
     // a comment. So there is no rejection path to route through the queue.
     const landed: { id: number; text: string }[] = []
     let wake: (() => void) | null = null
     // The list is CLOSED before this is entered, so it is walked once and there is no cursor to
-    // keep: the only `deferred.push` is `emitSuspend`'s, it happens only when `context.document` is
+    // keep: the only `deferred.push` is `emitDeferred`'s, it happens only when `context.document` is
     // set, and a deferred subtree is rendered by `renderToString`, whose context always carries
     // `document: null`. A `suspend` nested inside a suspended subtree therefore awaits INLINE — it
     // delays its parent's patch rather than registering a patch of its own — and the walk this

@@ -669,15 +669,72 @@ function stepsOf<T>(source: AsyncIterable<T> | Iterable<T>): AsyncIterator<T> | 
     return (source as Iterable<T>)[Symbol.iterator]()
 }
 
+/** One framed chunk: the text to write, or the end of the sequence. Both fields always set. */
+export interface FramedStep {
+    done: boolean
+    value: string
+}
+
+const ENDED: FramedStep = { done: true, value: '' }
+
+/**
+ * The FRAMING, apart from the stream that carries it: a source, a frame per value, and the three ways
+ * a sequence ends.
+ *
+ * Separate from `framedBody` because the server has two shells for it and they must not disagree
+ * about when a body closes. A response inside a request scope is pumped by `heldPump`, which holds
+ * the caller's scope for the life of the body; one outside a request has nothing to hold and is the
+ * plain `framedBody` below. Written as a stream plus a WRAPPER, the held case cost a second
+ * `ReadableStream` and its queue per response, and every chunk crossed both.
+ *
+ * A source that throws with a `failed` framer in hand ends the sequence with one more frame rather
+ * than erroring it — the client half of this file decodes every chunk, so it has somewhere to be
+ * told. Without one the throw propagates and the body ERRORS: the status line is already out, so a
+ * truncated chunked response is the only thing HTTP itself has left to say.
+ */
+export function framedSteps<T>(
+    source: AsyncIterable<T> | Iterable<T>,
+    frame: (value: T) => string,
+    failed?: (error: unknown) => string,
+): { read: () => FramedStep | Promise<FramedStep>; cancel: (reason: unknown) => void } {
+    const steps = stepsOf(source)
+    let ended = false
+    const framing = (step: IteratorResult<T>): FramedStep => {
+        if (step.done === true) {
+            ended = true
+            return ENDED
+        }
+        return { done: false, value: frame(step.value) }
+    }
+    // The failure is the LAST frame, so the read after it is the end — without this flag a consumer
+    // that pulls again would call `next()` on an iterator that already threw.
+    const failing = (error: unknown): FramedStep => {
+        if (failed === undefined) throw error
+        ended = true
+        return { done: false, value: failed(error) }
+    }
+    return {
+        read(): FramedStep | Promise<FramedStep> {
+            if (ended) return ENDED
+            try {
+                // Guarded, not awaited: a sync iterable settles in the call, and an unconditional
+                // await would cost a microtask tick per value to learn that.
+                const stepped = steps.next()
+                if (!isThenable(stepped)) return framing(stepped as IteratorResult<T>)
+                return (stepped as Promise<IteratorResult<T>>).then(framing, failing)
+            } catch (error) {
+                return failing(error)
+            }
+        },
+        cancel: (reason: unknown) => void steps.return?.(reason),
+    }
+}
+
 /**
  * A sequence as the bytes of a response body, one frame per value.
  *
  * `pull` rather than a loop: the source is asked for its next value only once the consumer has taken
  * the last one, so back-pressure reaches a generator as its own `next()` not being called yet.
- *
- * Without `failed`, a source that throws ERRORS the body — the status line is already out, so a
- * truncated chunked response is the only thing HTTP itself has left to say. A lane with a decoder of
- * its own passes one in and says it in the body instead.
  */
 export function framedBody<T>(
     source: AsyncIterable<T> | Iterable<T>,
@@ -685,29 +742,18 @@ export function framedBody<T>(
     failed?: (error: unknown) => string,
 ): ReadableStream<Uint8Array> {
     const encoder = new TextEncoder()
-    const steps = stepsOf(source)
+    const framed = framedSteps(source, frame, failed)
     return new ReadableStream<Uint8Array>({
         async pull(controller) {
-            try {
-                // Guarded, not awaited: a sync iterable settles in the call, and an unconditional
-                // await would cost a microtask tick per value to learn that.
-                const stepped = steps.next()
-                const step = isThenable(stepped) ? await stepped : (stepped as IteratorResult<T>)
-                if (step.done === true) {
-                    controller.close()
-                    return
-                }
-                controller.enqueue(encoder.encode(frame(step.value)))
-            } catch (error) {
-                if (failed === undefined) {
-                    controller.error(error)
-                    return
-                }
-                controller.enqueue(encoder.encode(failed(error)))
+            const stepped = framed.read()
+            const step = isThenable(stepped) ? await stepped : (stepped as FramedStep)
+            if (step.done) {
                 controller.close()
+                return
             }
+            controller.enqueue(encoder.encode(step.value))
         },
-        cancel: (reason) => void steps.return?.(reason),
+        cancel: (reason) => framed.cancel(reason),
     })
 }
 
@@ -716,9 +762,13 @@ export function jsonLine(value: unknown): string {
     return `${JSON.stringify(value)}\n`
 }
 
-/** The other half of the rpc wire: chunks as the bytes of a response body. */
-export function chunkedBody(chunks: AsyncIterable<unknown>): ReadableStream<Uint8Array> {
-    // A failure mid-stream goes out as one more LINE, and the consumer throws on reading it: the
-    // client half of this file decodes every chunk, so it has somewhere to be told.
-    return framedBody(chunks, jsonLine, (error) => jsonLine({ [FAILED]: errorPayload(error).error }))
+/**
+ * A failure mid-stream as one more LINE, and the consumer throws on reading it: the client half of
+ * this file decodes every chunk, so it has somewhere to be told.
+ *
+ * The framer rather than a body built around it — the rpc wire pumps its chunks through the request
+ * scope, so the stream is `heldFrames`'s to build and this is the only part of it the wire decides.
+ */
+export function failedLine(error: unknown): string {
+    return jsonLine({ [FAILED]: errorPayload(error).error })
 }

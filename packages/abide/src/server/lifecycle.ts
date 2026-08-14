@@ -16,6 +16,7 @@ import type { Server } from 'bun'
 import { isThenable, messageOf } from '$shared/internal/probes.ts'
 import { abideLog } from '$shared/log.ts'
 import { config } from './config.ts'
+import { HookSlot } from './internal/hooks.ts'
 import { dispatch } from './registry.ts'
 import { failed, HttpError } from './responses.ts'
 import { server as running } from './running.ts'
@@ -57,9 +58,12 @@ export type Route = (
 // Empty rather than null, because the read is per REQUEST: `RUNGS.length === 0` is one property load
 // on the hot path, where a null check plus a length would be two.
 let RUNGS: Middleware[] = []
-let STARTING: StartHook | null = null
-let STOPPING: StopHook | null = null
-let FAILING: ErrorHook | null = null
+// The three singular registrations, each the same slot: replace, and hand back a disposer that only
+// clears what it installed. `middleware` above is the plural one and stays its own — a chain's
+// disposer takes off the rungs THIS call added, which is a different question.
+const STARTING = new HookSlot<StartHook>()
+const STOPPING = new HookSlot<StopHook>()
+const FAILING = new HookSlot<ErrorHook>()
 
 /**
  * Register app-level rungs, outermost first. Returns the way back off.
@@ -84,26 +88,17 @@ export function middleware(...rungs: Middleware[]): () => void {
 
 /** The app's own boot, wrapped around abide's. Returns the way back off. */
 export function onStart(hook: StartHook): () => void {
-    STARTING = hook
-    return () => {
-        if (STARTING === hook) STARTING = null
-    }
+    return STARTING.set(hook)
 }
 
 /** The app's own teardown, wrapped around abide's. Returns the way back off. */
 export function onStop(hook: StopHook): () => void {
-    STOPPING = hook
-    return () => {
-        if (STOPPING === hook) STOPPING = null
-    }
+    return STOPPING.set(hook)
 }
 
 /** What an unexpected failure means to this app. Returns the way back off. */
 export function onError(hook: ErrorHook): () => void {
-    FAILING = hook
-    return () => {
-        if (FAILING === hook) FAILING = null
-    }
+    return FAILING.set(hook)
 }
 
 function noop(): void {}
@@ -248,7 +243,7 @@ function onion(
 function failing(failure: unknown): Response {
     if (failure instanceof HttpError) return failed(failure.name, failure.message, failure.status)
 
-    const hook = FAILING
+    const hook = FAILING.held
     if (hook !== null) {
         try {
             const answered = hook(failure)
@@ -306,7 +301,7 @@ export async function boot<T>(bind: () => T | Promise<T>): Promise<T | null> {
     // stream. A `boot` is exactly where a startup cost belongs.
     config()
 
-    const hook = STARTING
+    const hook = STARTING.held
     let bound: T | null = null
     let started = false
 
@@ -376,7 +371,7 @@ export function shutdown(): Promise<void> {
 }
 
 async function tearDown(): Promise<void> {
-    const hook = STOPPING
+    const hook = STOPPING.held
     let closed = false
     const stop = async (): Promise<void> => {
         if (closed) return

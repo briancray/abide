@@ -21,14 +21,14 @@ import {
     errorFrame,
     type Failed,
     type FailureOptions,
-    framedBody,
     HttpError,
     JSON_TYPE,
     JSONL_TYPE,
     jsonLine,
+    TRANSPORT_ERROR,
 } from '$shared/internal/wire.ts'
 import { gate, type Schema } from './schema.ts'
-import { heldStream, pendingCookies, traceResponse } from './scopes.ts'
+import { heldFrames, heldStream, pendingCookies, traceResponse } from './scopes.ts'
 
 export type { Failed, FailureOptions } from '$shared/internal/wire.ts'
 // The class itself lives on the wire seam, because the browser lane builds one too: `wireError`
@@ -93,7 +93,7 @@ export function json(data: unknown, init?: ResponseInit): Response {
 
 /** A sequence as one JSON value per line, written as the consumer asks for it. */
 export function jsonl<T>(values: Values<T>, init?: ResponseInit): Response {
-    return new Response(heldStream(framedBody(values, jsonLine)), {
+    return new Response(heldFrames(values, jsonLine), {
         ...init,
         headers: headersFor(init?.headers, { 'content-type': JSONL_TYPE }),
     })
@@ -108,7 +108,7 @@ export function jsonl<T>(values: Values<T>, init?: ResponseInit): Response {
  * stream that arrives all at once at the end is not a stream.
  */
 export function sse<T>(values: Values<T>, init?: ResponseInit): Response {
-    return new Response(heldStream(framedBody(values, sseFrame)), {
+    return new Response(heldFrames(values, sseFrame), {
         ...init,
         headers: headersFor(init?.headers, {
             'content-type': SSE_TYPE,
@@ -392,4 +392,18 @@ export function failed(
         // — and a cached one is answered to the next caller, who may be someone else entirely.
         headers: headersFor(extra, { 'content-type': JSON_TYPE, 'cache-control': 'private, no-store' }),
     })
+}
+
+/**
+ * A refusal from the mount point itself, under the one name every `/__abide/**` lane refuses with.
+ *
+ * The message does NOT name abide: it is wrapped as `abide: <address> — <message>` when it reaches a
+ * caller, and a reader of the raw body has the address in the URL bar already.
+ *
+ * Beside `failed` rather than in `rpc.ts`, where it was declared and never called: the health
+ * document, the identity document and the log feed all refuse with it, and none of them has anything
+ * to do with the rpc declaration machinery they were importing it through.
+ */
+export function refuse(message: string, status: number, headers?: Record<string, string>): Response {
+    return failed(TRANSPORT_ERROR, message, status, headers)
 }

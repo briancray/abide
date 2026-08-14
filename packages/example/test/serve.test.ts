@@ -102,6 +102,40 @@ test('a line-delimited body is the caller’s for every line, not just the first
     expect(builds).toBe(1)
 })
 
+test('a held streaming body is ONE ReadableStream, not a framed one wrapped in a held one', async () => {
+    // The contract is "does less work", and the bytes are identical either way — so the count is the
+    // only thing that can fail. `heldStream(framedBody(…))` built two: the framing stream, then the
+    // hold reading it back out through `getReader()`, with every chunk crossing both queues and a
+    // `TextEncoder` on each side. `heldFrames` puts the framing INSIDE the pump, which is the choice
+    // `bytes` in the render walk already made.
+    //
+    // Verified by reverting: with the wrapper back this reads 2.
+    const Native = globalThis.ReadableStream
+    let built = 0
+    // Counting constructions is the whole assertion, so the substitute has to build the REAL class —
+    // a proxy on `construct` rather than a subclass, which `ReadableStream`'s generic constructor
+    // overloads will not accept as a base.
+    globalThis.ReadableStream = new Proxy(Native, {
+        construct(target, args: ConstructorParameters<typeof Native>) {
+            built++
+            return Reflect.construct(target, args) as ReadableStream
+        },
+    })
+
+    try {
+        async function* rows(): AsyncGenerator<unknown> {
+            yield { row: 1 }
+            yield { row: 2 }
+        }
+        const answered = serve(new Request('https://x.test/rows'), () => jsonl(rows()))
+        // The bytes too: a count that dropped to one by not streaming would pass on its own.
+        expect(await answered.text()).toBe('{"row":1}\n{"row":2}\n')
+        expect(built).toBe(1)
+    } finally {
+        globalThis.ReadableStream = Native
+    }
+})
+
 test('page() holds a body the app wrote itself, and holds it only once', async () => {
     let builds = 0
     const seat = memo(() => {
@@ -636,6 +670,32 @@ test('clear expires the cookie rather than dropping it', async () => {
 
     // A cookie the server merely stops mentioning is one the browser keeps sending.
     expect(line).toContain('Max-Age=0')
+})
+
+test('a stale disposer does not reach past itself and clear the registration that replaced it', async () => {
+    // The one subtle line in `HookSlot`, which `onHealth`, `onIdentity`, `onStart`, `onStop` and
+    // `onError` now all share: a disposer clears only if the slot still holds ITS hook. Written
+    // unconditionally it takes a LATER registration off, and the symptom is a hook that silently
+    // stops running — no throw, no wrong value, just an app whose resolver is suddenly not consulted.
+    //
+    // The identity lane is the one that can SHOW it: a resolver's effect is a field on the document.
+    // `demos/identity.ts` walks this sequence but asserts `typeof second === 'function'`, which is
+    // true however the slot behaves — so this is the assertion that half was missing.
+    const cookie = cookieOf(await login({ id: 'u1' }))
+
+    const stale = onIdentity(() => ({ role: 'first' }))
+    const current = onIdentity(() => ({ role: 'second' }))
+    // Out of order on purpose: the first registration's disposer, run while the second owns the slot.
+    stale()
+
+    try {
+        expect((await as(cookie, () => identity())).role).toBe('second')
+    } finally {
+        current()
+    }
+
+    // And the current one's own disposer still works, so the guard has not made the slot un-clearable.
+    expect((await as(cookie, () => identity())).role).toBeUndefined()
 })
 
 test('a resolver turns claims into a principal, and fails CLOSED', async () => {

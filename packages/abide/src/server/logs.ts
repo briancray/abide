@@ -16,8 +16,7 @@ import type { Channel } from '$shared/channel.ts'
 import { channel } from '$shared/channel.ts'
 import { type LogRecord, useLogSink } from '$shared/log.ts'
 import { knobOf } from './config.ts'
-import { jsonl } from './responses.ts'
-import { refuse } from './rpc.ts'
+import { jsonl, refuse } from './responses.ts'
 
 // Built on the first line recorded rather than at import, so an app that never opts in never
 // allocates the ring — and so the size is read after an app has had a chance to declare one.

@@ -28,16 +28,13 @@ import { config } from './config.ts'
 import { serveHealth } from './health.ts'
 import { serveIdentity } from './identity.ts'
 import { logs } from './logs.ts'
-import { headersFor, json } from './responses.ts'
+import { headersFor, json, refuse } from './responses.ts'
 import {
     authorize,
     bodyCeiling,
     describeRpc,
     describeSocket,
-    nameRpc,
-    nameSocket,
     policyOf,
-    refuse,
     respond,
     type SocketEvent,
     type SocketPolicy,
@@ -72,12 +69,10 @@ export function register(
         const declared = module[name]
         if (declared === undefined) continue
         if (kind === 'rpc') {
-            nameRpc(declared as object, id)
-            describeRpc(declared as object, shapes?.[name])
+            describeRpc(declared as object, id, shapes?.[name])
             RPCS.set(id, declared as AnyRpc)
         } else {
-            nameSocket(declared as object, id)
-            describeSocket(declared as object, shapes?.[name])
+            describeSocket(declared as object, id, shapes?.[name])
             SOCKETS.set(id, declared as AnySocket)
         }
     }
