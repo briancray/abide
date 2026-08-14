@@ -14,8 +14,7 @@ import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
 import { COMMANDS, commandNamed, usage, usageOf } from './COMMANDS.ts'
 
 // The binary's own module face. What a caller wants from here is the same table the screen is built
-// from — a test asserting the two agree, and one day an `abide compile` putting the same commands
-// behind an app's own name.
+// from, so a test can assert the two agree.
 export { CLI_EXIT_CODES, type CliExitCode, exitForStatus } from './CLI_EXIT_CODES.ts'
 // What `abide build` wrote, as a shape — so a server serving the bundle reads the manifest without
 // importing the bundler that produced it. Nothing heavy behind it, for the same reason as above: its

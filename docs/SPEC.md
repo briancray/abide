@@ -1306,7 +1306,7 @@ Arguments are the command's own, and the rules are one set rather than one per c
 | `usage` | `() => string` | The screen, aligned from the same rows. |
 | `exitForStatus` | `(status: number) => CliExitCode` | An HTTP answer as the code the shell sees. A 2xx and a 3xx are both `ok`. |
 
-Exit codes (`CLI_EXIT_CODES`, shared verbatim with the compiled binary): `0` ok · `1`
+Exit codes (`CLI_EXIT_CODES`, the one table both the dispatch and `exitForStatus` read): `0` ok · `1`
 failed/unreachable · `2` usage · `3` 422 · `4` 401/403 · `5` 404 · `6` 504 · `7` 5xx · `8` other 4xx.
 
 `abide start` and `abide dev` assemble the same four layers from the same code, and differ in three
@@ -1336,7 +1336,12 @@ fixed. A file rather than an inline `<script>` because a document is served unde
 policy: `csp()` allows no unstamped inline script, and a shell head cut once at boot has no
 per-request nonce to carry, where a script on this origin is already `'self'`. Reload is that socket
 and no message on it — a "reload now" frame could only be written by a process that is about to stop
-being the one serving the page, so the CONNECTION is the signal. The watcher ignores dotted directories — which is what tells `.abide/`
+being the one serving the page. So the connection is the TRIGGER and not the answer: reopening it
+makes the page re-fetch `/__abide/reload.js?boot` and compare the boot id it gets back against the
+one the document was served with. A laptop that slept, a proxy that timed out and a browser
+reclaiming an idle socket all reopen against a server that never moved, and a page whose boot id is
+unchanged is left alone. The tag is `async`, not `defer`: a document severed mid-body never finishes
+parsing, and a `defer` script in one never runs at all. The watcher ignores dotted directories — which is what tells `.abide/`
 apart from `counter.abide`, and covers the bundle and the generated type tree alike — plus
 `node_modules/`, and the worker force-closes its socket before draining, since a socket
 never ends and `shutdown()`'s graceful close would otherwise wait out every open tab on every restart.
@@ -1360,7 +1365,8 @@ line editor takes its terminal as HOOKS, so a test drives it with a string of ke
 | `CLIENT_DIR` | `'.abide/client'` | Where `abide build` writes. CLEANED rather than merged, since a content hash means a build never overwrites the last one's files. |
 | `MANIFEST_FILE` | `'.abide/client/manifest.json'` | The one file in there without a hash, because it is what tells you the others'. |
 | `CLIENT_ROUTE` | `'/__abide/client/'` | Where `abide start` serves that directory FROM — under the reserved prefix, so an operator proxies or caches the bundle with the one pattern they already have. What a page's `<script src>` is built from. |
-| `ClientManifest` | `{ entries: Record<string, string>; assets: Record<string, ClientAsset> }` | Entry source path → the file it produced, and every file written keyed by its path relative to `CLIENT_DIR`. |
+| `ClientManifest` | `{ entries: Record<string, string>; assets: Record<string, ClientAsset>; graph?: ClientGraph }` | Entry source path → the file it produced, and every file written keyed by its path relative to `CLIENT_DIR`. `graph` is what a per-route preload is built from; absent means nothing is preloaded. |
+| `ClientGraph` | `{ modules: Record<string, string>; imports: Record<string, string[]> }` | Source path → the output file holding it, and output name → the names it imports, so a preload reaches a whole subtree rather than a face of it. Neither half is derivable from the filenames. |
 | `ClientAsset` | `{ kind: 'entry' \| 'chunk' \| 'asset'; size: number; type: string; encodings: Sidecar[] }` | The identity form's size and content type, plus what was written beside it. |
 | `Sidecar` | `{ encoding: 'br' \| 'gzip'; file: string; size: number }` | A precompressed form written BESIDE the identity bytes, never instead. Listed SMALLEST first, so "best available" costs no comparison at request time. |
 | entry | — | The files named on the command line, or — with none named — the lane generated from `pages/` at `.abide/client.entry.ts`. The manifest keys the generated lane as `client.ts`, so an `app.html` naming that source resolves it without a document having to know where the file sits. |

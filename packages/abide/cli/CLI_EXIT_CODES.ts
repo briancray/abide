@@ -1,8 +1,7 @@
 // What the shell learns from a command that ended.
 //
-// One table, shared verbatim by the CLI and by anything an `abide compile` puts in a binary, because
-// an exit code is an API: a script that branches on `4` is a script that breaks the day two builds of
-// this disagree about what `4` meant.
+// One table, because an exit code is an API: a script that branches on `4` is a script that breaks
+// the day two builds of this disagree about what `4` meant.
 //
 // The codes past `2` are HTTP outcomes, and they are HTTP outcomes because the commands that talk to
 // a running app are the ones a script wraps — a caller that has to grep stderr to tell "not there"

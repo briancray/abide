@@ -76,11 +76,12 @@ export interface Said {
 /**
  * Nothing is ever published on it, and that is the design.
  *
- * The signal is the CONNECTION, not a message: this worker being torn down is what closes every
- * subscriber's socket, and the next one accepting a connection is what says the app is back. A
- * message would need a live server to send it, which is exactly what a restart does not have — a
- * "reload now" frame can only be written by a process that is about to stop being the one serving
- * the page.
+ * The connection is the TRIGGER, not the answer: this worker being torn down is what closes every
+ * subscriber's socket, and the next one accepting a connection is what makes the page ASK. What says
+ * the app moved is the boot id — see `reload.ts`, where reopening the socket is exactly what was
+ * taken as proof and is not one. A message would need a live server to send it, which is what a
+ * restart does not have: a "reload now" frame can only be written by a process that is about to stop
+ * being the one serving the page. So nothing is published here, and the question is asked over HTTP.
  */
 const reload = socket<never>()
 register('socket', [[RELOAD_ID, 'reload']], { reload })
