@@ -84,21 +84,6 @@ function isOpen(node: ChildNode | null): boolean {
 }
 
 /**
- * Does this template's top level START with a slot rather than with markup?
- *
- * Empty text nodes are stepped over for the same reason `level` skips them: they carry nothing, and
- * the adopt walk never consumes a live node for one, so counting them here would put the opening
- * position one node off the one the server wrote.
- */
-function opensWithSlot(content: ParentNode): boolean {
-    for (let node = content.firstChild; node !== null; node = node.nextSibling) {
-        if (node.nodeType === 3 && (node as Text).data === '') continue
-        return node.nodeType === 8 && (node as Comment).data.startsWith('$')
-    }
-    return false
-}
-
-/**
  * What a plain value renders as. Nullish and BOTH booleans are nothing, not their spelling.
  *
  * The CHILD-position twin of `$shared`'s `attributeText`, and the same hydration mismatch is what the
@@ -224,18 +209,7 @@ export class ChildPart {
                 this.holding = NOTHING
                 this.generation++
                 this.clearExcept('text')
-                const next = type === 'string' ? (value as string) : String(value)
-                const text = this.text
-                if (text === null) {
-                    const made = document.createTextNode(next)
-                    this.text = made
-                    // Pushed, not re-assigned: `clearExcept` above left `owned` empty, so the array
-                    // the constructor made is the one this row uses.
-                    this.owned.push(made)
-                    this.anchor.before(made)
-                    return
-                }
-                if (text.data !== next) text.data = next
+                this.writeText(type === 'string' ? (value as string) : String(value))
                 return
             }
         }
@@ -319,16 +293,30 @@ export class ChildPart {
             return
         }
 
-        const next = textOf(value)
         this.clearExcept('text')
-        if (this.text === null) {
-            this.text = document.createTextNode(next)
-            this.owned.push(this.text)
-            this.anchor.before(this.text)
+        this.writeText(textOf(value))
+    }
+
+    /**
+     * The text node this slot holds, made or rewritten. Called with `clearExcept('text')` already
+     * done, which is what leaves `this.text` either the node to rewrite or null.
+     *
+     * COMPARED before writing: the fast path above and the general tail both reach here, and the
+     * comparison is what makes a hydrated slot whose text the server already got right cost no DOM
+     * write at all. Spelled once so the two cannot drift apart on it.
+     */
+    private writeText(next: string): void {
+        const text = this.text
+        if (text === null) {
+            const made = document.createTextNode(next)
+            this.text = made
+            // Pushed, not re-assigned: `clearExcept` left `owned` empty, so the array the
+            // constructor made is the one this row uses.
+            this.owned.push(made)
+            this.anchor.before(made)
             return
         }
-        // Compare before writing.
-        if (this.text.data !== next) this.text.data = next
+        if (text.data !== next) text.data = next
     }
 
     /**
@@ -336,14 +324,16 @@ export class ChildPart {
      *
      * `set` clears `holding` on every path that paints, because an ordinary value replaces whatever
      * block was showing. A block painting its own arm is the exception, and this is the only spelling
-     * of it: the nine callers below are the enumeration the rule asks for, rather than nine separate
-     * `this.holding = operand // set cleared it` lines that a tenth path could silently forget.
+     * of it: the seven callers below are the enumeration the rule asks for, rather than seven separate
+     * `this.holding = operand // set cleared it` lines that an eighth path could silently forget.
      * That failure is invisible — the arm still renders, and then re-enters and rebuilds its whole
      * subtree on every re-run of the enclosing effect, per row for a block inside a list.
      *
-     * Callers: the `Awaited` arm of `set` (both settled and in-flight), `settle`'s three landings,
-     * `await_`'s pending and synchronous arms, and `stream_`'s start and failure arms. `take` does
-     * not go through here — it claims rather than paints, and never clears `holding` to begin with.
+     * Callers: `settle`'s two painted landings, the pending-then-settled pair `await_` runs when the
+     * operand is not thenable and the pending arm it runs when it is, and `stream_`'s start and
+     * failure arms. `set`'s `Awaited` arm is not one — it delegates to `await_`.
+     * `take` does not go through here either: it claims rather than paints, and never clears
+     * `holding` to begin with.
      */
     private show(value: unknown, operand: unknown): void {
         this.set(value)
@@ -664,7 +654,7 @@ export class ChildPart {
                 // part can reach here holding something else. Identity is what tells the two apart.
                 if (this.owned === range) this.owned = []
             }
-            nested.dispose(false)
+            nested.dispose()
         }
         // Only when there IS a range: on the build path a fresh part reaches here holding the empty
         // array its constructor made, and replacing that with a second empty one — which the caller
@@ -959,11 +949,13 @@ class ListPart {
             const template = keyed ? item.template : (item as TemplateResult)
             const key = keyed ? item[KEY] : undefined
 
+            // The row standing at this index before the pass. Loaded ONCE: both arms of the fork
+            // below want it, and so does the `changed` test at the bottom of the loop.
+            const standing = previous[i]
             let row: Row | undefined
-            if (key === undefined) row = previous[i]
+            if (key === undefined) row = standing
             else {
-                const at = previous[i]
-                if (at !== undefined && at.key === key) row = at
+                if (standing !== undefined && standing.key === key) row = standing
                 else if (carried < previous.length) {
                     // The NEIGHBOURS before the index. A row that moved usually moved one place —
                     // a swap, an insert, a delete — and the index is a walk of every previous row
@@ -1000,7 +992,7 @@ class ListPart {
                 row = { key, instance: instantiate(template), usedAt: pass }
             }
             next.push(row)
-            if (row === previous[i]) continue
+            if (row === standing) continue
             if (i < firstChanged) firstChanged = i
             lastChanged = i
             changed++
@@ -1016,7 +1008,7 @@ class ListPart {
                 // removal walked an already-detached subtree — 4x the removes of the hand-written arm
                 // on a 500-of-1000 drop, none of them on a connected node.
                 for (const node of row.instance.live()) node.remove()
-                row.instance.dispose(false)
+                row.instance.dispose()
             }
         }
         this.rows = next
@@ -1157,7 +1149,7 @@ class ListPart {
     dispose(detach = true): void {
         for (const row of this.rows) {
             if (detach) for (const node of row.instance.live()) node.remove()
-            row.instance.dispose(false)
+            row.instance.dispose()
         }
         this.rows = []
     }
@@ -1335,9 +1327,7 @@ class Instance {
                 // Read off the PLAN, not off `claimed`: the server's markup for a leading slot is
                 // already sitting in front of that slot's anchor, so the adopted nodes can no longer
                 // say which position the template started with.
-                this.leading = opensWithSlot(plan.element.content)
-                    ? (this.children[0] as ChildPart)
-                    : (claimed[0] ?? null)
+                this.leading = plan.opensWithSlot ? (this.children[0] as ChildPart) : (claimed[0] ?? null)
                 this.trailing = claimed[claimed.length - 1] ?? null
             }
             this.update(result.values)
@@ -1576,29 +1566,11 @@ class Instance {
             return (value) => {
                 const next = (value ?? {}) as Record<string, unknown>
                 for (const name in previous) if (!(name in next)) element.removeAttribute(name)
-                for (const name in next) {
-                    const item = attributeText(next[name])
-                    if (item === null) {
-                        if (element.hasAttribute(name)) element.removeAttribute(name)
-                        continue
-                    }
-                    const text = item === true ? '' : item
-                    // Compare before writing.
-                    if (element.getAttribute(name) !== text) element.setAttribute(name, text)
-                }
+                for (const name in next) writeAttribute(element, name, next[name])
                 previous = next
             }
         }
-        return (value) => {
-            const text = attributeText(value)
-            if (text === null) {
-                if (element.hasAttribute(kind.name)) element.removeAttribute(kind.name)
-                return
-            }
-            const next = text === true ? '' : text
-            // Compare before writing.
-            if (element.getAttribute(kind.name) !== next) element.setAttribute(kind.name, next)
-        }
+        return (value) => writeAttribute(element, kind.name, value)
     }
 
     update(values: readonly unknown[]): void {
@@ -1650,8 +1622,8 @@ class Instance {
             // the commonest row shape there is; every OTHER slot of that row then re-ran for a
             // change in a sibling. Sound for the same reason: a slot whose value is identical was
             // classified identically last pass, so its effect is already the one it wants.
-            if (previous !== null && values[i] === previous[i]) continue
             const value = values[i]
+            if (previous !== null && value === previous[i]) continue
             // A thunk is the reactivity convention: subscribe here, so only THIS slot re-runs.
             // An `@click=${fn}` or `&ref=${fn}` value is a function that IS the value.
             if (typeof value === 'function' && takesRawFunction[i] !== true) {
@@ -1697,7 +1669,13 @@ class Instance {
         this.applied = values
     }
 
-    dispose(detach = true): void {
+    /**
+     * No `detach`, unlike the two parts: an instance never removes its own range. Either the caller
+     * has just removed it by hand off `live()`, or an ancestor detached the whole subtree before
+     * reaching here — so a child part running its own removal would only walk nodes already gone,
+     * which is the 4x the `ListPart` drop loop measured.
+     */
+    dispose(): void {
         const effects = this.slotEffects
         if (effects !== null) {
             for (let i = 0; i < effects.length; i++) effects[i]?.dispose()
@@ -1709,8 +1687,25 @@ class Instance {
             partDisposers.length = 0
         }
         const children = this.children
-        for (let i = 0; i < children.length; i++) (children[i] as ChildPart).dispose(detach)
+        for (let i = 0; i < children.length; i++) (children[i] as ChildPart).dispose(false)
     }
+}
+
+/**
+ * One attribute, written the way `attributeText` decided: absent for null, bare for true, otherwise
+ * the text. Compared before writing, because a write the DOM did not need still invalidates style.
+ *
+ * One spelling for both arms of `bind` — `attr=${x}` and `...${props}` — so the convention for a
+ * bare or absent attribute moves in one place rather than in two that only agree today.
+ */
+function writeAttribute(element: Element, name: string, value: unknown): void {
+    const text = attributeText(value)
+    if (text === null) {
+        if (element.hasAttribute(name)) element.removeAttribute(name)
+        return
+    }
+    const next = text === true ? '' : text
+    if (element.getAttribute(name) !== next) element.setAttribute(name, next)
 }
 
 /**

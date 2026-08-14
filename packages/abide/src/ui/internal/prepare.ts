@@ -42,6 +42,15 @@ export interface Prepared {
      */
     root: Element | null
     /**
+     * Does the top level START with a slot rather than with markup?
+     *
+     * What an ADOPT reads to decide whether its leading position is a part or a node — it cannot ask
+     * the claimed nodes, because the server's markup for a leading slot is already sitting in front
+     * of that slot's anchor. A fact about the STRINGS, so it is derived here with `root` rather than
+     * re-walked per instance: a hydrated list would otherwise pay the walk once per row.
+     */
+    opensWithSlot: boolean
+    /**
      * Per slot: is a function value here the VALUE, rather than a thunk producing one?
      *
      * `@click=${fn}` and `&ref=${fn}` both hand the binder a raw function; every other kind treats a
@@ -96,9 +105,24 @@ export function prepare(result: TemplateResult): Prepared {
         for (const part of parts) part.path.shift()
     }
 
-    const value: Prepared = { element, parts, takesRawFunction, root }
+    const value: Prepared = { element, parts, takesRawFunction, root, opensWithSlot: opensWithSlot(content) }
     prepared.set(result.strings, value)
     return value
+}
+
+/**
+ * Does this template's top level START with a slot rather than with markup?
+ *
+ * Empty text nodes are stepped over for the same reason `record` skips them: they carry nothing, and
+ * the adopt walk never consumes a live node for one, so counting them here would put the opening
+ * position one node off the one the server wrote.
+ */
+function opensWithSlot(content: ParentNode): boolean {
+    for (let node = content.firstChild; node !== null; node = node.nextSibling) {
+        if (node.nodeType === 3 && (node as Text).data === '') continue
+        return node.nodeType === 8 && (node as Comment).data.startsWith('$')
+    }
+    return false
 }
 
 /**

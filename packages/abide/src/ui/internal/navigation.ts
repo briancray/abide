@@ -20,6 +20,13 @@
 // parser, and re-running `innerHTML` over a growing buffer re-parses everything already on screen.
 // So the server frames the response into pieces that are each complete on their own, and this reads
 // to the sentinel between them and parses exactly once per piece.
+//
+// NOT `$shared`'s `chunksOf` (`internal/wire.ts`), which frames a stream the same way and already
+// shares the `STREAMING` constant with this file. The invariant differs at the BOUND: a line there is
+// one NDJSON value, small enough that it can hold a flat buffer and re-slice it, while a piece here is
+// a whole page — which is exactly what makes `held += chunk` quadratic at this size, and what the
+// unjoined rope and the straddle window below exist to avoid. Merging them would put this file's
+// machinery on every rpc line to buy nothing.
 
 import { PATCH_FORM, PIECE_END, placeholderId } from '$shared/internal/MARKERS.ts'
 import { NAVIGATION_HEADER } from '$shared/internal/PATHS.ts'
@@ -72,12 +79,12 @@ class DocumentNavigation implements NavigationSink {
         // resolves on. Everything after it — the panels, as their own loads settle — lands while the
         // caller is already committing, which is the difference between a navigation that waits for
         // the slowest thing on the page and one that waits for the fastest.
-        const painting = await this.pieces(reader, held, true)
-        if (!painting.ok) return this.leave(url)
+        const remainder = await this.pieces(reader, held, true)
+        if (remainder === null) return this.leave(url)
 
         return {
             left: false,
-            complete: this.rest(reader, held, painting.buffer),
+            complete: this.rest(reader, held, remainder),
         }
     }
 
@@ -92,15 +99,18 @@ class DocumentNavigation implements NavigationSink {
      *
      * `first` says whether the piece STANDS in the range or replaces a placeholder in it, and it is
      * also what stops the read: the opening call returns as soon as one piece has landed, handing
-     * back the unread remainder, while a patch read runs to the end of the stream and reports
-     * whether it got there.
+     * back the unread remainder, while a patch read runs to the end of the stream.
+     *
+     * The remainder IS the answer — `null` is the stream ending before a piece landed, which is the
+     * one thing the opening call has to act on. A patch read always reaches the end and always
+     * answers `null`, which is why `rest` ignores what it gets back.
      */
     private async pieces(
         reader: ReadableStreamDefaultReader<Uint8Array>,
         held: Reclaiming,
         first: boolean,
         carried = '',
-    ): Promise<{ ok: boolean; buffer: string }> {
+    ): Promise<string | null> {
         // Chunks are kept UNJOINED. `indexOf` needs a flat receiver, so searching an accumulating
         // `buffer += chunk` re-flattens everything that arrived before it: measured at 23 us per
         // chunk once 1 MB has landed and 244 us at 16 MB, which is O(size²) over a fragment. A
@@ -160,7 +170,7 @@ class DocumentNavigation implements NavigationSink {
                 // whatever pieces did arrive, which is the same partial page a document render would
                 // have left — better than blanking it for a truncation the reader can just reload.
                 if (parts.join('').trim() !== '') navigateLog.warning('the fragment ended mid-piece')
-                return { ok: !first, buffer: '' }
+                return null
             }
             const chunk = DECODER.decode(value, STREAMING)
             // Searched as two pieces rather than as one joined string: `tail + chunk` copied every
@@ -192,7 +202,7 @@ class DocumentNavigation implements NavigationSink {
             const from = text.length - spanned + at
             this.apply(held, text.slice(0, from), first)
             const remainder = text.slice(from + PIECE_END.length)
-            if (first) return { ok: true, buffer: remainder }
+            if (first) return remainder
             const after = drain(remainder)
             tail = ''
             if (after !== '') keep(after)
