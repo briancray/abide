@@ -429,6 +429,52 @@ export default suite({
         },
 
         {
+            title: 'every ROW KIND an array can hold renders the same on both substrates',
+            note: 'The server walks an array with its general emit, so every one of these renders there. The client sends an array to the keyed reconcile, which reads `.strings` off every row — so a row that was not a template threw, and `${() => [\'a\', \'b\']}` was source that renders on the server and crashes in the browser. That is a divergence rather than a missing feature, which is why the expectation here is the SERVER’S OWN OUTPUT rather than a string written by hand: an expectation written twice can be got wrong in the same direction twice. A row that cannot be reconciled is wrapped into one that can, at one call site, so it patches its text on a later pass instead of rebuilding. Adoption of a non-template row falls back to building — the server writes no per-row marker for one — which is the documented recovery and asserted here as such.',
+            async run({ is }) {
+                const kinds: [string, () => TemplateResult][] = [
+                    ['templates', () => html`<ul>${() => [html`<li>x</li>`, html`<li>y</li>`]}</ul>`],
+                    ['strings', () => html`<ul>${() => ['a', 'b']}</ul>`],
+                    ['numbers', () => html`<ul>${() => [1, 2]}</ul>`],
+                    ['a template and a string', () => html`<ul>${() => [html`<li>x</li>`, 'y']}</ul>`],
+                    ['a null hole', () => html`<ul>${() => [html`<li>x</li>`, null]}</ul>`],
+                    ['undefined', () => html`<ul>${() => ['a', undefined]}</ul>`],
+                    ['a nested array', () => html`<ul>${() => [[html`<li>x</li>`]]}</ul>`],
+                    [
+                        'a component',
+                        () =>
+                            html`<ul>${() => [
+                                component(
+                                    (props: { label: unknown }) =>
+                                        html`<b>${() => (props.label as () => unknown)()}</b>`,
+                                    { label: 'x' },
+                                ),
+                                'plain',
+                            ]}</ul>`,
+                    ],
+                ]
+                const strip = (markup: string): string => markup.replace(/<!--[^>]*-->/g, '')
+
+                for (const [name, view] of kinds) {
+                    const expected = strip(await renderToString(view()))
+
+                    const built = container()
+                    mount(built, view)
+                    await tick()
+                    is(`${name} — built matches the server`, strip(built.innerHTML), expected)
+                    built.remove()
+
+                    const adopted = container()
+                    adopted.innerHTML = await renderToString(view(), { hydratable: true })
+                    hydrate(adopted, view)
+                    await tick()
+                    is(`${name} — adopted matches the server`, strip(adopted.innerHTML), expected)
+                    adopted.remove()
+                }
+            },
+        },
+
+        {
             title: 'an adopted row carries the server’s opening marker with it when it moves',
             note: '`claimChild` takes the server’s `<!--[-->` from IN FRONT of the nodes it claims, so an adopted range starts at that marker rather than at the first node the part is holding. A move that began one node late left the marker where it was: three reordered rows piled four of them at the head of the list and the rows arrived with none. The text reads correctly either way — which is why the count is the assertion. An unbalanced run of open markers is what a later depth scan walks into.',
             async run({ is }) {

@@ -369,6 +369,30 @@ export function settledArms(branches: Branches, failed: boolean, settled: unknow
 }
 
 /**
+ * The arm shown WHILE the load runs, in the shape the settle will replace it with — where it can be.
+ *
+ * The SHAPE is the whole of this, and it belongs beside `settledArms` because that is what decides
+ * it. A settle lands as an array; a pending arm handed over bare makes the settle cross from the
+ * template arm of `ChildPart.set` to its ARRAY arm, and those two never meet — the array arm cannot
+ * reach the `strings` identity cutoff, so it tears the nested instance down and rebuilds the whole
+ * region through a list to paint what it already had. The compiler hands all three branches the SAME
+ * thunk, so both passes produce the same template from the same call site; agreeing on the shape is
+ * what lets the settle be the patch the emit has always described it as.
+ *
+ * Conditional because a list ROW must be a template — `ListPart` reads `.strings` off every item
+ * without probing, which is correct for a path walked per row and is why the array is not simply
+ * always right. `Branches.pending` is typed `() => unknown` and a hand-written `awaited()` may
+ * answer with a string, so anything that could not be a row stays exactly as bare as it is today.
+ *
+ * `finally` is absent on purpose: it belongs to a settle that has not happened, and the array
+ * growing by one is how it arrives.
+ */
+export function pendingArm(branches: Branches): unknown {
+    const arm = branches.pending?.() ?? null
+    return isTemplate(arm) ? [arm] : arm
+}
+
+/**
  * What a `{#try}` renders to: the body, or the catch arm if producing it threw.
  *
  * Both substrates run the body the SAME way and differ only in what they do with the result — the

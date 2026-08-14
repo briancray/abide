@@ -2274,6 +2274,131 @@ export default suite({
         },
 
         {
+            title: 'a settle PATCHES the pending arm rather than rebuilding the region',
+            note: 'What `{#if x.pending()}` compiles to hands the SAME arm thunk to `pending`, `then` and `catch`, so both passes produce the same template from the same call site — and the emit says on that basis that the settle is a no-op. It was not one. A settled arm reaches a slot as an ARRAY and a pending arm reached it bare, so the settle crossed from the template arm of `ChildPart.set` to its array arm; those two never meet, the `strings` identity cutoff is never reached, and the region was torn down and rebuilt to paint what it already had. The markup is byte-identical either way — asserted here, because a case that only compared HTML passed with the rebuild in — so the count is the entire claim. The pending arm is wrapped only when it IS a template: a list row must be one, and a hand-written `awaited()` may answer with a string.',
+            async run({ is }) {
+                let resolve: (value: string) => void = () => {}
+                const loading = new Promise<string>((keep) => {
+                    resolve = keep
+                })
+                const rows = state(3)
+                // The compiled shape: one thunk, wrapped in a template, handed to all three arms.
+                const chain = (): unknown =>
+                    html`<section><h2>panel</h2><p>rows ${() => rows()}</p></section>`
+                const arm = (): unknown => html`${chain}`
+                const host = container()
+                mount(
+                    host,
+                    () =>
+                        html`<div>${() => awaited(loading, { pending: arm, then: arm, catch: arm, finally: undefined })}</div>`,
+                )
+                await tick()
+                const before = host.innerHTML
+
+                const counts = await measureFlush(() => resolve('landed'))
+                await tick()
+                // Both halves are owed. The markup says the settle still renders the right thing;
+                // the count says it did not rebuild to get there, and only the count can fail.
+                is('the region is byte-identical across the settle', host.innerHTML, before)
+                is('…and the settle built nothing', nodesMade(counts), 0)
+                is('…and moved nothing', nonZero(counts), 'no DOM work at all')
+                host.remove()
+            },
+        },
+
+        {
+            title: 'a component’s `children` does not wake the child when nothing in it moved',
+            note: 'The one prop the compiler guarantees is FRESH. `children` is emitted as a template literal inside the CALLER’s thunk, so a component in a `{#for}` is handed a newly built `TemplateResult` per row on every pass — and `writeProps` promises in its own comment that "a prop that did not move wakes nobody", which for this prop could never once be true. The output is identical either way, so only a wake counter can tell: the child re-runs the slot that reads `children`, rebuilds it, and paints what was already there. Both halves are owed here. The reorder says the wake is gone; the edit says it did not go by never waking at all, which is what a cutoff comparing the wrong thing would also produce.',
+            async run({ is }) {
+                let slotRuns = 0
+                // The prop type is what a CALLER passes; what the view holds is the cell
+                // `cellProps` wrapped it in. A `.abide` component gets that reconciled by the
+                // compiler, and a hand-written view says it here.
+                const Panel = (props: { children: unknown }): unknown =>
+                    html`<section>${() => {
+                        slotRuns++
+                        return (props.children as () => unknown)()
+                    }}</section>`
+
+                const rows = state([
+                    { id: 1, status: 'ready' },
+                    { id: 2, status: 'ready' },
+                    { id: 3, status: 'ready' },
+                ])
+                const host = container()
+                const view = mount(
+                    host,
+                    () =>
+                        html`<ul>${() =>
+                            rows().map((item) =>
+                                keyed(
+                                    item.id,
+                                    html`<li>${() =>
+                                        component(Panel, {
+                                            children: html`<small>${item.status}</small>`,
+                                        })}</li>`,
+                                ),
+                            )}</ul>`,
+                )
+                await tick()
+                is('one slot run per row to mount', slotRuns, 3)
+
+                // A rotation: every row moves, so the parent thunk re-runs and rebuilds all three
+                // `children` literals. Not one of them says anything different.
+                const reordered = slotRuns
+                rows.set([
+                    { id: 3, status: 'ready' },
+                    { id: 1, status: 'ready' },
+                    { id: 2, status: 'ready' },
+                ])
+                await tick()
+                is('a reorder wakes no child', slotRuns - reordered, 0)
+
+                // The other half. A cutoff that compared identity, or nothing at all, would pass the
+                // assertion above by never waking — and this is the case that tells them apart.
+                const edited = slotRuns
+                rows.set([
+                    { id: 3, status: 'ready' },
+                    { id: 1, status: 'DONE' },
+                    { id: 2, status: 'ready' },
+                ])
+                await tick()
+                is('…but a changed child DOES wake, and only it', slotRuns - edited, 1)
+                is('…and it is on screen', host.querySelector('small:nth-of-type(1)') !== null, true)
+                is('the edit rendered', host.textContent?.includes('DONE'), true)
+                view.dispose()
+                host.remove()
+            },
+        },
+
+        {
+            title: 'an operand that never waits never runs the pending arm',
+            note: 'A block whose operand is not thenable has nothing to wait for, so the settled arm is what it shows — and it used to show `pending` first anyway, built and inserted and then removed inside one synchronous call, for a state no frame could ever contain. The adopt path already declined to do this and says why: showing `pending` over correct markup is a flash back to a state nobody saw. This is the same claim on the BUILD path, and it is a call count rather than a rendering because the rendering was always right — the arm ran, painted and was painted over.',
+            async run({ is }) {
+                let pendingRuns = 0
+                const host = container()
+                mount(
+                    host,
+                    () =>
+                        html`<div>${() =>
+                            awaited('already here', {
+                                pending: () => {
+                                    pendingRuns++
+                                    return html`<i>loading</i>`
+                                },
+                                then: (value: string) => html`<b>${value}</b>`,
+                                catch: undefined,
+                                finally: undefined,
+                            })}</div>`,
+                )
+                await tick()
+                is('the settled arm is what shows', host.querySelector('b')?.textContent, 'already here')
+                is('…and the pending arm never ran', pendingRuns, 0)
+                host.remove()
+            },
+        },
+
+        {
             title: 'the documented example runs',
             note: 'What `/docs/client` shows and mounts. The claim is a COUNT, not a rendering: after a two-row swap the two rows have MOVED and nothing was built — a rebuild produces exactly the same correct list, which is why the assertion is `nodesMade` rather than the list itself. The list is asserted too, because a minimal reconcile that corrupts the order would also make nothing.',
             async run({ is }) {

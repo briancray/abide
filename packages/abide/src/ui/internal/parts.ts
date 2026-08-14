@@ -14,10 +14,13 @@ import {
     type Branches,
     cellProps,
     Component,
+    html,
     isKeyed,
+    type Keyed,
     isTemplate,
     KEY,
     passedThrough,
+    pendingArm,
     Raw,
     type SlotKind,
     Streamed,
@@ -514,7 +517,9 @@ export class ChildPart {
         const operand = block.value
 
         if (!isThenable(operand)) {
-            this.show(branches.pending?.() ?? null, operand)
+            // Straight to the settled arm, the way `take` already goes for the same operand: nothing
+            // suspends between here and the settle, so a pending arm painted first is a state nobody
+            // can observe — built, inserted and removed inside one synchronous call.
             this.show(settledArms(branches, false, operand), operand)
             return
         }
@@ -523,7 +528,7 @@ export class ChildPart {
         // is exactly what `{#if x.pending()}` compiles to, and a probe on a load nobody has begun
         // answers `false`.
         const settling = started(operand)
-        this.show(branches.pending?.() ?? null, operand)
+        this.show(pendingArm(branches), operand)
         // A stamp of its OWN, bumped after the pending arm is on screen rather than read off it.
         // That arm may itself be thenable — a cell is, and a cell is ordinary to put in a slot — in
         // which case `show` above started a settle and stamped it with the generation this settle
@@ -861,10 +866,9 @@ class ListPart {
         this.rows = []
         for (const item of items) {
             const keyed = isKeyed(item)
-            const template = keyed ? item.template : (item as TemplateResult)
             this.rows.push({
                 key: keyed ? item[KEY] : undefined,
-                instance: new Instance(template, cursor),
+                instance: new Instance(templateOf(item, keyed), cursor),
                 usedAt: 0,
             })
         }
@@ -946,7 +950,7 @@ class ListPart {
             // ONE `isKeyed` per item. The symbol probe is a prototype-chain lookup, and asking twice
             // for the template and then the key doubled it on every row of every list.
             const keyed = isKeyed(item)
-            const template = keyed ? item.template : (item as TemplateResult)
+            const template = templateOf(item, keyed)
             const key = keyed ? item[KEY] : undefined
 
             // The row standing at this index before the pass. Loaded ONCE: both arms of the fork
@@ -1730,14 +1734,71 @@ function writeAttribute(element: Element, name: string, value: unknown): void {
  * locals at setup — so the cell it would be written into does not exist and never will. Reported
  * rather than skipped, because the output is simply one prop behind and nothing else says so.
  */
+/**
+ * Two templates that say the same thing: one call site, and every slot holding what it held.
+ *
+ * `strings` is a pointer compare and settles it for almost nothing — a tagged template's array is
+ * identity-cached per call site by the engine, so two results from different literals differ on the
+ * first read.
+ */
+function sameTemplate(previous: unknown, next: TemplateResult): boolean {
+    if (!isTemplate(previous) || previous.strings !== next.strings) return false
+    const before = previous.values
+    const after = next.values
+    if (before.length !== after.length) return false
+    for (let i = 0; i < before.length; i++) {
+        if (before[i] !== after[i]) return false
+    }
+    return true
+}
+
 function writeProps(held: Record<string, unknown>, next: Record<string, unknown>): void {
     for (const name in next) {
         const value = next[name]
         if (passedThrough(value)) continue
         const cell = held[name] as State<unknown> | undefined
-        if (cell !== undefined) cell.set(value)
-        else componentLog.warning(`a spread added the prop \`${name}\` after setup — it is not read`)
+        if (cell === undefined) {
+            componentLog.warning(`a spread added the prop \`${name}\` after setup — it is not read`)
+            continue
+        }
+        // `children` is the one prop the compiler guarantees is FRESH: the emit builds the literal
+        // inside the caller's own thunk, so a component in a `{#for}` is handed a new
+        // `TemplateResult` per row per pass whether or not anything in it moved — and the cell's
+        // identity dedup, which the comment above promises, can never once fire for it. Comparing
+        // structurally and KEEPING the old identity is what makes that promise true. It is
+        // `router.ts`'s params shape, chosen for the same reason: reads dominate, so the compare is
+        // cheaper than the wake it saves. A prop that is not a template pays one `typeof`.
+        if (isTemplate(value) && sameTemplate(cell.peek(), value)) continue
+        cell.set(value)
     }
+}
+
+/**
+ * The template a list row IS, or the one a row that is not a template BECOMES.
+ *
+ * The server walks an array with its general emit, so `${() => ['a', 'b']}` renders there — and here
+ * it threw, because the reconcile reads `.strings` off every row. The same source rendering on one
+ * substrate and not the other is the one thing this project's first goal forbids, so a row that
+ * cannot be reconciled is wrapped into one that can.
+ *
+ * `keyed` is passed IN rather than probed again: `set` computes it for the key as well, and the
+ * comment there records that asking twice doubled a prototype-chain lookup on every row of every
+ * list. `keyed()` takes a `TemplateResult` by signature, so the compiled `{#for … by key}` path —
+ * the one actually walked per row — reaches neither probe below and pays NOTHING: 2.49 against 2.43
+ * ns/row, the arms swapping places between runs. The unkeyed arm pays the `isTemplate` brand check,
+ * 2.19 -> 3.87 ns/row against a whole-row reconcile of about 42, so 4% of the row it is on. Read by
+ * `.strings` instead it would be free, and that was rejected — a plain object carrying a `strings`
+ * property would pass, and a brand check is what the rest of this file tests identity with.
+ *
+ * ONE call site for the wrapper on purpose: the engine caches a tagged template's `strings` per
+ * site, so every row it makes shares an identity and `instance.strings === template.strings` holds
+ * across passes — a row that was `'a'` and is now `'b'` writes text where a fresh template per row
+ * would have rebuilt. Its inner slot is an ordinary `ChildPart`, which is what lands a nested array
+ * and a `null` exactly where the server's walk lands them.
+ */
+function templateOf(item: unknown, keyed: boolean): TemplateResult {
+    if (keyed) return (item as Keyed).template
+    return isTemplate(item) ? item : html`${item}`
 }
 
 function instantiate(result: TemplateResult): Instance {

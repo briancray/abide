@@ -1789,6 +1789,12 @@ function conditional(branches: Branch[], context: Context): string {
     // site with the same value in it, so the settle is a no-op and the chain stays exactly the
     // reactive thunk it would have been — which is what keeps a later write repainting.
     //
+    // That no-op is a fact about the RUNTIME, not about this emit, and it is not free: it holds only
+    // while a pending arm and a settled one reach a slot in the SAME shape. `settledArms` in
+    // `html.ts` decides that, and the two landing on different arms of `ChildPart.set` never reach
+    // the `strings` identity cutoff — so the settle becomes a full rebuild of the region while
+    // producing this same correct output, which is the silent kind.
+    //
     // Wrapped in a template rather than handed over bare: a child slot binds a FUNCTION as a thunk,
     // and a part paints one as text. The nested template is per REGION, not per row.
     const chainLocal = `$${context.counter.n++}`

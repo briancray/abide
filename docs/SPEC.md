@@ -853,6 +853,14 @@ A `.abide` file compiles to an `html` tagged template. Every expression gets its
 A slot inside a tag is one of four sigils or it is an attribute: `.prop` a DOM property, `@event` a
 listener, `&ref` the node itself, `...` a spread.
 
+A CHILD slot renders whatever it is handed, and both substrates agree on all of it: a
+`TemplateResult`, a string or number as text, `null`/`undefined` as nothing, a promise as what it
+resolves to, and an ARRAY as its items in order. An array may hold any of those — it does not have
+to be a list of templates, and a nested one flattens. A `keyed()` row is how a reconcile is told an
+item's identity; an unkeyed item is matched by position. A row that is not a template is wrapped
+into one so the reconcile has something to compare, which is invisible except that such a row
+patches its text on a later pass rather than being rebuilt.
+
 ## The template runtime — `abide/runtime`
 
 The WHOLE set a compiled `.abide` file imports on its own behalf. Not authoring vocabulary: each
