@@ -1,10 +1,8 @@
 // `abide dev` — watch the project, and keep a server running against what the files currently say.
 //
 // ONE process. This thread watches and owns the lifecycle; a worker holds the app, and replacing that
-// worker is the reload. A worker rather than a child process because the thing that has to be thrown
-// away is a MODULE GRAPH, not an operating system process: a graph is cached by resolved path and
-// cannot be evicted, so reloading means discarding a whole isolate — and an isolate is the smallest
-// thing that contains one. See `serve.ts`.
+// worker is the reload. Why a WORKER rather than a child process is `serve.ts`'s header, which is
+// where the isolate argument is made.
 //
 // Everything a second process would have cost is therefore absent rather than handled. There is no
 // stdout to relay and no colour lost to relaying it, no IPC to carry a port back, no exit code to
@@ -18,7 +16,7 @@
 // that is wrong at 2am, and the cost of not having it is a few milliseconds.
 //
 // Argument parsing belongs to the WORKER, all of it. `abide dev --port nope` is refused by the same
-// `portFrom` that refuses `abide start --port nope`, in the code that would have bound the socket —
+// `portAsked` that refuses `abide start --port nope`, in the code that would have bound the socket —
 // so there is one answer to what a port is, and this thread reports the code it was handed.
 
 // `node:fs` for the watcher only: Bun has no file-watch api, and `Bun.file` cannot be subscribed to.

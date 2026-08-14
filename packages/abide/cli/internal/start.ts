@@ -15,21 +15,10 @@ import { messageOf } from '$shared/internal/probes.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { CLIENT_DIR, PAGES } from '../CLIENT_BUILD.ts'
 import { clientAssets, type LoadedClient } from './assets.ts'
-import { assemble, portFrom, report } from './layers.ts'
+import { assemble, portAsked, report } from './layers.ts'
 
 export async function start(argv: string[]): Promise<number> {
-    const asked = portFrom(argv)
-    if (typeof asked === 'string') {
-        console.error(`abide start: ${asked}`)
-        console.error('       usage: abide start [--port <n>]')
-        return CLI_EXIT_CODES.usage
-    }
-    // Spelled as the VARIABLE, before anything resolves the document. `config()` is the one answer to
-    // what this process is running on, so a flag that kept its own number beside it would be a second
-    // one — and the app's own `PORT` default would go on being reported by `config().PORT` while the
-    // socket sat somewhere else. Declared here, the flag beats an app's `onConfig` default exactly as
-    // an operator's variable does, which is the same rule stated once.
-    if (asked !== null) process.env.PORT = String(asked)
+    if (!portAsked(argv, 'start')) return CLI_EXIT_CODES.usage
 
     const root = process.cwd()
 

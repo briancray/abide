@@ -77,10 +77,8 @@ export function mounted(path: string): string {
  * for the caller this has: routing, where an unmatched path is already a 404 and a second failure
  * mode beside it would say nothing new.
  *
- * That is exactly why the two prefix dispatchers do not use this. `/__abide/health` at the origin root
- * of an app mounted at `/v2` comes back unchanged and STILL starts with the reserved prefix — so
- * `dispatch` and the bundle route test `mounted(PREFIX)` instead, where "not under the mount" and
- * "not abide's" are one answer.
+ * That is exactly why the prefix dispatchers do not use this — they use `reserved` below, where "not
+ * under the mount" and "not abide's" are one answer.
  */
 export function unmounted(path: string): string {
     if (BASE === '') return path
@@ -91,4 +89,26 @@ export function unmounted(path: string): string {
     // on the character rather than by re-testing a `${BASE}/` prefix, which would build a string per
     // call on a path walked per request.
     return rest.charCodeAt(0) === 47 ? rest : path
+}
+
+/**
+ * BROWSER SPACE -> APP SPACE for a RESERVED path: the app-space path when the browser asked for one
+ * under the mount AND under `prefix`, else `null`.
+ *
+ * The crossing every prefix dispatcher wants, and the reason it is not `unmounted` plus a test. Those
+ * two answer different questions and only this one folds them: `unmounted` hands a path outside the
+ * mount back UNCHANGED, so `/__abide/reload.js` at the origin root of an app mounted at `/v2` comes
+ * back still starting with the reserved prefix and reads as abide's. Serving it there is a dev client
+ * — or an endpoint — answering at an address the app is not mounted at, which is the failure a mount
+ * has: it is silent, and every route that got it right disagrees with the one that did not.
+ *
+ * Written once for the three callers rather than inline at each, because that divergence is what
+ * having it inline at each produced.
+ */
+export function reserved(pathname: string, prefix: string): string | null {
+    // The mount tested BEFORE the prefix is stripped, which is the whole of the fold: at the root
+    // `BASE` is `''` and this is one always-true compare, so the common app pays nothing for it.
+    if (!pathname.startsWith(BASE)) return null
+    const path = pathname.slice(BASE.length)
+    return path.startsWith(prefix) ? path : null
 }

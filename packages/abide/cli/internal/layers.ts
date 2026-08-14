@@ -2,12 +2,11 @@
 // have in common.
 //
 // An app is four conventions and no wiring: `app.ts` says what this app IS, `app.html` is the
-// document it is served in, `pages/` is what it serves, `server/rpc/**` and `server/sockets/**` are
-// what it answers, and `client.ts` is the lane the browser gets — generated from `pages/` when the app
-// wrote none, because a route table is already on disk and only the browser cannot read it. Nothing in
-// any of them imports a
-// server, calls `Bun.serve`, mounts `dispatch`, installs a signal handler, matches a route, builds a
-// document or imports a handler for its side effect — every one of those is the same code in every
+// document it is served in, `pages/` is what it serves, and `server/rpc/**` and `server/sockets/**`
+// are what it answers. The browser's lane is not a fifth — it is GENERATED from `pages/`, because a
+// route table is already on disk and only the browser cannot read it. Nothing in any of them imports
+// a server, calls `Bun.serve`, mounts `dispatch`, installs a signal handler, matches a route, builds
+// a document or imports a handler for its side effect — every one of those is the same code in every
 // app, and the one an app forgets is the one that matters.
 //
 // So `app.ts` exports HOOKS, and a route only if it wants one — and an app with none of either writes
@@ -69,14 +68,14 @@ import { registered } from '$server/registry.ts'
 import { page } from '$server/responses.ts'
 import type { Schema } from '$server/schema.ts'
 import type { Shell } from '$server/shell.ts'
-import { outlet, type RouteEntry, route as routeAsked, routes } from '$shared/router.ts'
+import { outlet, readying, type RouteEntry, route as routeAsked, routes } from '$shared/router.ts'
 import { mounted } from '$shared/internal/mount.ts'
 import { NAVIGATION_HEADER } from '$shared/internal/PATHS.ts'
 import { isThenable, messageOf } from '$shared/internal/probes.ts'
 import { acceptedEncoding, JSON_TYPE } from '$shared/internal/wire.ts'
 import { appName } from '$shared/log.ts'
-import { readying } from '$shared/router.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
+import { refuse } from '../COMMANDS.ts'
 import { CLIENT_ROUTE, type ClientGraph, type ClientManifest, firstPresent, PAGES } from '../CLIENT_BUILD.ts'
 import type { ClientAssets, LoadedClient } from './assets.ts'
 import { handlers } from './handlers.ts'
@@ -489,27 +488,28 @@ function compressed(request: Request, response: Response): Response | Promise<Re
     if (response.body === null) return response
     // An app that compressed its own answer means it.
     if (response.headers.get('content-encoding') !== null) return response
-    if (!type.startsWith('text/html')) {
-        // An ALLOW-LIST on purpose: `content-length` cannot decide this, because a handler returns a
-        // `Response` built from a string and the runtime writes the length at the socket, so the
-        // header is absent on the object this sees and every buffered answer reads as a stream. The
-        // type is what distinguishes the two — and naming the one that MAY be buffered is safer than
-        // naming the framed ones to exclude, because a framing added later then defaults to being
-        // left alone. `NDJSON_TYPE`, `JSONL_TYPE` and `text/event-stream` are absent for that
-        // reason: each is framed so a browser can read it as it arrives, and buffering one to
-        // measure it would undo the framing.
-        if (!type.startsWith(JSON_TYPE)) return response
-        return buffered(request, response)
-    }
+    // An ALLOW-LIST on purpose: `content-length` cannot decide this, because a handler returns a
+    // `Response` built from a string and the runtime writes the length at the socket, so the header is
+    // absent on the object this sees and every buffered answer reads as a stream. The type is what
+    // distinguishes the two — and naming the one that MAY be buffered is safer than naming the framed
+    // ones to exclude, because a framing added later then defaults to being left alone. `NDJSON_TYPE`,
+    // `JSONL_TYPE` and `text/event-stream` are absent for that reason: each is framed so a browser can
+    // read it as it arrives, and buffering one to measure it would undo the framing.
+    const markup = type.startsWith('text/html')
+    if (!markup && !type.startsWith(JSON_TYPE)) return response
 
     const headers = new Headers(response.headers)
     // Appended rather than set: the navigation branch above already varies on its own header, and a
     // response that varies on two things has to say both or a cache picks one.
     headers.append('vary', 'accept-encoding')
     const init: ResponseInit = { status: response.status, statusText: response.statusText, headers }
+    // Tested BEFORE either arm reads a body: this asks about the REQUEST, so it is settled whatever the
+    // size turns out to be, and a client that cannot read gzip would otherwise pay a full buffer and
+    // copy of every JSON answer to measure something it was never going to act on.
     if (acceptedEncoding(request.headers.get('accept-encoding'), RESPONSE_ENCODINGS) < 0) {
         return new Response(response.body, init)
     }
+    if (!markup) return buffered(response, headers, init)
 
     // SYNC-FLUSHED, which is the whole reason this is `node:zlib` rather than the web standard.
     // `CompressionStream('gzip')` holds its input until the source closes: a document whose head was
@@ -526,7 +526,10 @@ function compressed(request: Request, response: Response): Response | Promise<Re
     // nothing for this to do with it but not become an unhandled rejection.
     void response.body.pipeTo(bridged.writable).catch(() => {})
     headers.set('content-encoding', 'gzip')
-    // The length described the identity bytes and describes nothing now.
+    // The length described the identity bytes and describes nothing now. The runtime drops it for a
+    // chunked body as well, so this is belt-and-braces — kept where the matching `set` on the buffered
+    // arm was dropped, because the two fail in opposite directions: a length the runtime overwrites is
+    // waste, and a length that outlived its bytes is a client waiting for bytes never coming.
     headers.delete('content-length')
     return new Response(bridged.readable as unknown as ReadableStream<Uint8Array>, init)
 }
@@ -539,29 +542,24 @@ function compressed(request: Request, response: Response): Response | Promise<Re
  * `Bun.gzipSync` beats a stream bridge here for the same reason the document needs the opposite: there
  * is no parser waiting on an early first byte, so there is nothing to flush for.
  *
- * The `vary` goes on both arms. A shared cache that stored the identity form of an answer under this
- * threshold, unmarked, would hand those bytes to a caller that asked for gzip — which is fine — but
- * the same URL with different args can land on either side of the threshold, so the header has to
- * describe the answer rather than the rule.
+ * The headers arrive already varied, from the one place `compressed` builds them — its only caller,
+ * and past the point where a caller that cannot read gzip has been answered. The `vary` is on both
+ * arms and on the under-threshold answer too: a shared cache that stored the identity form of an
+ * answer under this threshold, unmarked, would hand those bytes to a caller that asked for gzip —
+ * which is fine — but the same URL with different args can land on either side of the threshold, so
+ * the header has to describe the answer rather than the rule.
  */
-async function buffered(request: Request, response: Response): Promise<Response> {
-    const headers = new Headers(response.headers)
-    headers.append('vary', 'accept-encoding')
-    const init: ResponseInit = { status: response.status, statusText: response.statusText, headers }
-    // Tested BEFORE the body is read: this asks about the REQUEST, so it is settled whatever the
-    // size turns out to be, and a client that cannot read gzip would otherwise pay a full buffer and
-    // copy of every JSON answer to measure something it was never going to act on.
-    if (acceptedEncoding(request.headers.get('accept-encoding'), RESPONSE_ENCODINGS) < 0) {
-        return new Response(response.body, init)
-    }
+async function buffered(response: Response, headers: Headers, init: ResponseInit): Promise<Response> {
+    // The IDENTITY size is measured because it is the DECISION — a branch, not a header — and it is
+    // the whole reason this arm reads the body at all.
     const bytes = new Uint8Array(await response.arrayBuffer())
     if (bytes.byteLength <= COMPRESSIBLE_BYTES) return new Response(bytes, init)
     headers.set('content-encoding', 'gzip')
-    // Set rather than deleted: these bytes are in hand, so the length is known and worth stating —
-    // a caller that can size the body ahead of reading it is what makes a progress bar possible.
-    const zipped = Bun.gzipSync(bytes)
-    headers.set('content-length', String(zipped.byteLength))
-    return new Response(zipped, init)
+    // The COMPRESSED size is not, and stating it here bought nothing: the runtime writes
+    // `content-length` from the bytes it actually sends, overriding whatever these headers carry — a
+    // stale one included. So the progress bar a caller gets is the runtime's doing, and this was a
+    // number formatted into a string per compressed response for a header that was overwritten.
+    return new Response(Bun.gzipSync(bytes), init)
 }
 
 // --- what an app's module says about itself ----------------------------------
@@ -674,10 +672,10 @@ function routeOf(exported: unknown): Route | null | undefined {
  * a container with a port already mapped for it wants. Everything else is checked as a PORT rather
  * than as a number, because `--port 70000` is a typo that would otherwise be found by a bind failing.
  *
- * Shared by `start` and `dev` because the two must not disagree about what a port IS: they differ
- * about what to do when one is TAKEN, which is a decision each makes after this has answered.
+ * Behind `portAsked`, which is what both commands call: they must not disagree about what a port IS.
+ * They differ about what to do when one is TAKEN, which is a decision each makes afterwards.
  */
-export function portFrom(argv: string[]): number | null | string {
+function portFrom(argv: string[]): number | null | string {
     let asked: number | null = null
     for (let at = 0; at < argv.length; at++) {
         const argument = argv[at] as string
@@ -693,6 +691,35 @@ export function portFrom(argv: string[]): number | null | string {
         asked = port
     }
     return asked
+}
+
+/**
+ * The `--port` a command line asked for, APPLIED — or `false` for a refusal already printed.
+ *
+ * Written once for the same reason the assembly messages are: `abide start` and `abide dev` had the
+ * parse, the two message lines and the env spelling each, and the usage line each command printed was
+ * a second copy of the `args` its row in `COMMANDS` already carries. Two commands with one flag
+ * between them is one of them drifting.
+ *
+ * Spelled as the VARIABLE, before anything resolves the document. `config()` is the one answer to what
+ * this process is running on, so a flag that kept its own number beside it would be a second one — and
+ * the app's own `PORT` default would go on being reported by `config().PORT` while the socket sat
+ * somewhere else. Declared here, the flag beats an app's `onConfig` default exactly as an operator's
+ * variable does, which is the same rule stated once.
+ *
+ * The REFUSAL is printed here and the exit code is not, because that is what the two commands differ
+ * about: `abide start` returns one and `abide dev` posts it to a main thread. It goes through `refuse`
+ * so the usage line is the `args` the help screen prints, rather than a second spelling of it beside
+ * the code that reads the flag.
+ */
+export function portAsked(argv: string[], name: string): boolean {
+    const asked = portFrom(argv)
+    if (typeof asked === 'string') {
+        refuse(name, asked)
+        return false
+    }
+    if (asked !== null) process.env.PORT = String(asked)
+    return true
 }
 
 /**

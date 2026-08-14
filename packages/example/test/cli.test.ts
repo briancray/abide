@@ -83,6 +83,46 @@ test('`check` reports a `.abide` type error on the `.abide` line', async () => {
     expect(checked.err).toBe('')
 })
 
+test('a flag no command declares is REFUSED, never silently dropped', async () => {
+    // `check` used to `filter` these out, so `abide check --lint` ran a full check of the working
+    // directory and said nothing about the flag — the failure `build`'s own comment describes, from
+    // the other side. Both take the same `[dir…]` shape and now answer through the same code.
+    const invalid = `${import.meta.dir}/../types/invalid`
+    const checked = await abide(['check', '--lint', '.'], { cwd: invalid })
+    expect(checked.code).toBe(2)
+    expect(checked.err).toContain('unknown option `--lint`')
+    // Nothing RAN: a refused command must not also emit the diagnostics of the check it declined.
+    expect(checked.out).toBe('')
+
+    const built = await abide(['build', '--minify'])
+    expect(built.code).toBe(2)
+    expect(built.err).toContain('unknown option `--minify`')
+
+    // The usage line is the command's own `args` from the table, so a refusal and the help screen
+    // cannot disagree about how the command is spelled.
+    for (const [name, spelling] of [
+        ['check', '[dir…]'],
+        ['build', '[entry…]'],
+    ] as const) {
+        expect(COMMANDS.find((one) => one.name === name)?.args).toBe(spelling)
+    }
+    expect(checked.err).toContain('usage: abide check [dir…]')
+    expect(built.err).toContain('usage: abide build [entry…]')
+})
+
+test('asking a COMMAND for help is a success, and answers with that command', async () => {
+    // `abide dev --help` used to exit `2` with `unknown option --help` — the code that means "you
+    // typed it wrong" answering the request for how to type it.
+    for (const command of COMMANDS) {
+        if (command.name === 'run') continue // opaque arguments; covered by the `run` case above.
+        const asked = await abide([command.name, '--help'])
+        expect(asked.code).toBe(0)
+        expect(asked.err).toBe('')
+        expect(asked.out).toContain(`abide ${command.name}`)
+        expect(asked.out).toContain(command.blurb)
+    }
+})
+
 test('`logs` tails the feed the app is serving, replay first and live after', async () => {
     // Named, and the name is the assertion below: the CHANNEL crosses the wire on the record. A tail
     // that rebuilt it would answer with its own process's app name, which is not the app.

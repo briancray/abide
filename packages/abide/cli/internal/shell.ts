@@ -43,9 +43,21 @@ export async function appShell(
     manifest: ClientManifest | null,
     name: string,
 ): Promise<AppShell> {
-    const file = Bun.file(`${root}/${APP_HTML}`)
-    const own = await file.exists()
-    const parts = shell(built(own ? await file.text() : fallback(name, manifest), manifest))
+    // Read rather than probed-then-read, the rule `lane.ts` states for the same shape: `exists()` is a
+    // second syscall in front of the one that already answers the question, and whether the app wrote
+    // its own shell falls out of whether the read threw.
+    let own = true
+    let text: string
+    try {
+        text = await Bun.file(`${root}/${APP_HTML}`).text()
+    } catch (failure) {
+        // Only NOT THERE means the app wrote none. An `app.html` that is there and cannot be read is a
+        // shell somebody meant to serve, so it throws rather than being quietly replaced by abide's.
+        if ((failure as { code?: string }).code !== 'ENOENT') throw failure
+        own = false
+        text = fallback(name, manifest)
+    }
+    const parts = shell(built(text, manifest))
     // `head` is BY DEFINITION the text before `</head>`, so appending to it puts the links exactly
     // where a second scan for `</head>` would have — found once, by the function that owns where a
     // head ends. An app's own `<link>` is already in there and still comes first.

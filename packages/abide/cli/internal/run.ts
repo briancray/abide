@@ -10,10 +10,8 @@
 // that matters — the script's own flags have to reach the script, including the ones this binary
 // also answers to.
 
+import { PRELOAD_FILE } from '$compiler/PRELOAD_FILE.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
-
-/** The `bunfig.toml` preload, reached as a file: the plugin registration, and nothing else. */
-const PRELOAD = Bun.fileURLToPath(new URL('../../compiler/preload.ts', import.meta.url))
 
 export async function run(argv: string[]): Promise<number> {
     const file = argv[0]
@@ -25,7 +23,7 @@ export async function run(argv: string[]): Promise<number> {
         return CLI_EXIT_CODES.usage
     }
 
-    const child = Bun.spawn(['bun', '--preload', PRELOAD, file, ...argv.slice(1)], {
+    const child = Bun.spawn(['bun', '--preload', PRELOAD_FILE, file, ...argv.slice(1)], {
         // The script's output IS this command's output. Piping it would buy a copy and lose the one
         // thing a script run from a terminal needs, which is a terminal on the other end of it.
         stdio: ['inherit', 'inherit', 'inherit'],

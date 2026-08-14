@@ -42,7 +42,7 @@ import { CLIENT_KEY, clientGraph, entryNames } from '../CLIENT_BUILD.ts'
 import { heldClient, type LoadedClient } from './assets.ts'
 import { clientLane } from './entry.ts'
 import { clientBuild, type Lane } from './lane.ts'
-import { type Answer, assemble, portFrom, report } from './layers.ts'
+import { type Answer, assemble, portAsked, report } from './layers.ts'
 import { RELOAD_ID, reloadClient, reloadSource, reloadTag } from './reload.ts'
 
 /**
@@ -100,17 +100,8 @@ scope.onmessage = (event): void => {
 scope.postMessage({ ready: true } satisfies Said)
 
 async function run(argv: string[], pin: number | null): Promise<void> {
-    const asked = portFrom(argv)
-    if (typeof asked === 'string') {
-        console.error(`abide dev: ${asked}`)
-        console.error('       usage: abide dev [--port <n>]')
-        return scope.postMessage({ refused: CLI_EXIT_CODES.usage } satisfies Said)
-    }
-    // The same rule `abide start` states: the flag is spelled as the VARIABLE, so `config().PORT` is
-    // the one answer to what this process was asked to listen on rather than a second number beside
-    // it.
-    if (asked !== null) process.env.PORT = String(asked)
-    // And the pin beats the flag, for the reason the flag beats an app's own default: it is the more
+    if (!portAsked(argv, 'dev')) return scope.postMessage({ refused: CLI_EXIT_CODES.usage } satisfies Said)
+    // The pin beats the flag, for the reason the flag beats an app's own default: it is the more
     // specific statement about where this SESSION lives. It is the port a previous worker actually
     // bound, so honouring it is what keeps a restart invisible to a page that is already open.
     if (pin !== null) process.env.PORT = String(pin)

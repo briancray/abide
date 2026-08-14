@@ -21,7 +21,7 @@
 
 // `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
 import { basename } from 'node:path'
-import { mountBase } from '$shared/internal/mount.ts'
+import { reserved } from '$shared/internal/mount.ts'
 import { acceptedEncoding } from '$shared/internal/wire.ts'
 import {
     assetOf,
@@ -30,7 +30,6 @@ import {
     type ClientAsset,
     type ClientGraph,
     type ClientManifest,
-    type Encoding,
     MANIFEST_FILE,
 } from '../CLIENT_BUILD.ts'
 
@@ -44,9 +43,12 @@ import {
  */
 interface Form {
     file: Blob
-    headers: Record<string, string>
-    /** `null` on the identity bytes; what an `Accept-Encoding` is matched against on the rest. */
-    encoding: Encoding | null
+    /**
+     * Built as `Headers` rather than kept as a record, because that is what "built ONCE per asset per
+     * encoding" above has to mean: a plain object is re-walked into a header list by every `Response`
+     * constructed from it, so the per-request work was the negotiation plus a parse of the answer.
+     */
+    headers: Headers
 }
 
 /** The identity bytes, and the precompressed forms beside them — smallest first, as the build left them. */
@@ -69,12 +71,8 @@ interface Held {
  * reachable for the whole run, and what answering a request needs is the map.
  */
 export class ClientAssets {
-    /** The name-to-forms allowlist. Everything else about the build was spent building it. */
-    private readonly held: Map<string, Held>
-
-    constructor(held: Map<string, Held>) {
-        this.held = held
-    }
+    /** @param held The name-to-forms allowlist. Everything else about the build was spent building it. */
+    constructor(private readonly held: Map<string, Held>) {}
 
     /** How many files the manifest named. What the command prints, so an operator sees a build arrived. */
     get count(): number {
@@ -87,14 +85,11 @@ export class ClientAssets {
         // substring test for the bundle existing rather than a URL parse. The test is a cheap
         // SUPERSET — a query string could carry the prefix — so the parsed pathname decides.
         if (!request.url.includes(CLIENT_ROUTE)) return undefined
-        // Against the MOUNTED prefix, exactly as `dispatch` does it and for the same reason: the
+        // Against the MOUNTED prefix, exactly as `dispatch` does it and through the same crossing: the
         // document asked for `/v2/__abide/client/x.js`, the file this build wrote is still `x.js`, and
         // the bundle is not also served at the origin root.
-        const at = new URL(request.url).pathname
-        const base = mountBase()
-        if (!at.startsWith(base)) return undefined
-        const path = at.slice(base.length)
-        if (!path.startsWith(CLIENT_ROUTE)) return undefined
+        const path = reserved(new URL(request.url).pathname, CLIENT_ROUTE)
+        if (path === null) return undefined
 
         const asset = this.held.get(path.slice(CLIENT_ROUTE.length))
         // Answered here rather than handed on: past the prefix the request is ours, and a page
@@ -131,9 +126,21 @@ export interface LoadedClient {
  * exists to avoid.
  */
 export async function clientAssets(root: string): Promise<LoadedClient | null> {
-    const file = Bun.file(`${root}/${MANIFEST_FILE}`)
-    if (!(await file.exists())) return null
-    const manifest = (await file.json()) as ClientManifest
+    // Read rather than probed-then-read, the rule `lane.ts` states: `exists()` is a second syscall in
+    // front of the one that already answers the question. The two failures stay apart because they
+    // fail differently — a manifest that is not there throws before `JSON.parse` is reached, and one
+    // that is there and unreadable throws inside it, which is the throw this lets past.
+    let text: string
+    try {
+        text = await Bun.file(`${root}/${MANIFEST_FILE}`).text()
+    } catch (failure) {
+        // Only NOT THERE is a build that has not been run. A manifest that is there and cannot be read
+        // — a permission, a directory in its place — is a build to FIX, and it throws for the caller to
+        // say so, exactly as one that is there and will not parse does.
+        if ((failure as { code?: string }).code === 'ENOENT') return null
+        throw failure
+    }
+    const manifest = JSON.parse(text) as ClientManifest
     const directory = `${root}/${CLIENT_DIR}`
 
     const held = new Map<string, Held>()
@@ -177,12 +184,11 @@ export async function heldClient(
         held.set(name, {
             identity: {
                 file: new Blob([bytes], { type: artifact.type }),
-                headers: {
+                headers: new Headers({
                     'content-type': artifact.type,
                     'cache-control': NEVER,
                     'x-content-type-options': NOSNIFF,
-                },
-                encoding: null,
+                }),
             },
             encoded: NO_FORMS,
             names: NO_NAMES,
@@ -199,7 +205,7 @@ export async function heldClient(
  * and a stack frame survive one. Something has to give, and it is the cache — a stale chunk behind a
  * hash-free address is a bug hunt that ends in a hard refresh.
  */
-const NEVER = 'no-store'
+export const NEVER = 'no-store'
 
 /** Shared because neither is ever written to: every dev asset has exactly the identity form. */
 const NO_FORMS: Form[] = []
@@ -216,12 +222,16 @@ const NO_NAMES: string[] = []
 const FOREVER = 'public, max-age=31536000, immutable'
 
 /**
- * Spelled here as well as in `headersFor`, because this route never reaches it: the bundle is served
- * in FRONT of the request pipeline, so nothing it answers goes through the funnel every other abide
- * response does. This is the route that most needs it — a chunk is JavaScript, and a browser that
- * sniffs one it was handed under the wrong type is executing it on this origin.
+ * Spelled here as well as in `headersFor`, because these routes never reach it: the bundle and the dev
+ * reload client are served in FRONT of the request pipeline, so nothing they answer goes through the
+ * funnel every other abide response does. They are the routes that most need it — a chunk is
+ * JavaScript, and a browser that sniffs one it was handed under the wrong type is executing it on this
+ * origin.
+ *
+ * Exported for `reload.ts`, which is the other route in front of the pipeline: two files answering
+ * with script on the app's own origin is one rule, and it was written out as a literal in both.
  */
-const NOSNIFF = 'nosniff'
+export const NOSNIFF = 'nosniff'
 
 function formsOf(directory: string, name: string, asset: ClientAsset): Held {
     // The identity form's type for every form of it. A `.br` sidecar is the same JavaScript compressed
@@ -237,15 +247,13 @@ function formsOf(directory: string, name: string, asset: ClientAsset): Held {
         vary: 'accept-encoding',
         'x-content-type-options': NOSNIFF,
     }
-    const identity: Form = { file: Bun.file(`${directory}/${name}`), headers: shared, encoding: null }
+    const identity: Form = { file: Bun.file(`${directory}/${name}`), headers: new Headers(shared) }
     const encoded: Form[] = []
     const names: string[] = []
     for (const sidecar of asset.encodings) {
-        encoded.push({
-            file: Bun.file(`${directory}/${sidecar.file}`),
-            headers: { ...shared, 'content-encoding': sidecar.encoding },
-            encoding: sidecar.encoding,
-        })
+        const headers = new Headers(shared)
+        headers.set('content-encoding', sidecar.encoding)
+        encoded.push({ file: Bun.file(`${directory}/${sidecar.file}`), headers })
         names.push(sidecar.encoding)
     }
     return { identity, encoded, names }

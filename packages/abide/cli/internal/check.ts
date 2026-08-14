@@ -8,10 +8,14 @@
 
 import { diagnose } from '$compiler/check.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
+import { pathsOnly } from '../COMMANDS.ts'
 
 export async function check(argv: string[]): Promise<number> {
-    // Roots, not flags: the command IS the check, so there is nothing here for a flag to turn on.
-    const roots = argv.filter((argument) => !argument.startsWith('-'))
+    // Roots, not flags — the same rule `abide build` states, now from the same code. This command used
+    // to FILTER them out, so `abide check --lint` checked the working directory and said nothing.
+    const roots = pathsOnly('check', argv)
+    if (typeof roots === 'number') return roots
+
     const found = await diagnose(roots)
     // stdout, not stderr: a diagnostic list is this command's OUTPUT — the thing somebody pipes into
     // an editor — and the exit code is what says it failed.

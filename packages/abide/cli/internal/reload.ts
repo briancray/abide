@@ -9,8 +9,9 @@
 // The whole mechanism is three decisions, and each one of them was a bug that left a tab spinning:
 // which id is compared, when it is compared, and when this file is allowed to run.
 
-import { mounted, unmounted } from '$shared/internal/mount.ts'
+import { mounted, reserved } from '$shared/internal/mount.ts'
 import { RELOAD_PATH, SOCKET_PREFIX } from '$shared/internal/PATHS.ts'
+import { NEVER, NOSNIFF } from './assets.ts'
 
 /**
  * Where a browser waits to be told the app came back.
@@ -111,24 +112,27 @@ export function reloadClient(request: Request, source: string): Response | undef
     // an app's own request pays one substring test rather than a URL parse.
     if (!request.url.includes(RELOAD_PATH)) return undefined
     const url = new URL(request.url)
-    if (unmounted(url.pathname) !== RELOAD_PATH) return undefined
+    // `reserved` rather than `unmounted`, which is what this used to ask and is the one crossing that
+    // cannot answer it: under a mount it hands a ROOT `/__abide/reload.js` back unchanged, and this
+    // route would then serve the dev client at an address the bundle route refuses.
+    if (reserved(url.pathname, RELOAD_PATH) !== RELOAD_PATH) return undefined
     // Who is answering, for a client deciding whether its socket came back to the SAME process. The
     // same address rather than one of its own: it is already exempt from the app's pipeline, already
     // uncached, and already the one path a page loaded by `abide dev` is guaranteed to be able to
     // reach — a second route would be a second thing to keep in front of `csp()` and the mount.
     if (url.search === BOOT_QUERY) {
         return new Response(BOOT_ID, {
-            headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+            headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': NEVER },
         })
     }
+    // `NEVER` and `NOSNIFF` are `assets.ts`'s, which is the other route answered in FRONT of the
+    // pipeline: the dev caching rule and the sniffing rule are one each, not one per file that skips
+    // `headersFor`. What this hands back is JavaScript on the app's own origin.
     return new Response(source, {
         headers: {
             'content-type': 'text/javascript; charset=utf-8',
-            // Every dev asset's answer: the address is stable, so the bytes behind it are not.
-            'cache-control': 'no-store',
-            // This route never reaches `headersFor` — it is answered in front of the pipeline — and
-            // what it hands back is JavaScript on the app's own origin.
-            'x-content-type-options': 'nosniff',
+            'cache-control': NEVER,
+            'x-content-type-options': NOSNIFF,
         },
     })
 }

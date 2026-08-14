@@ -21,13 +21,17 @@
 
 // `node:vm` for the persistent context: Bun has no api that evaluates in a reusable global scope.
 import vm from 'node:vm'
-import { plugin } from 'bun'
-import { abidePlugin } from '$compiler/plugin.ts'
+// The runtime, which is the whole of what makes this an ABIDE prompt rather than a JavaScript one:
+// `await import('./page.abide')` compiles on the way in, exactly as it does under `run`. Through the
+// module that OWNS the registration rather than by calling `plugin(abidePlugin)` again — this file is
+// reached lazily through its row in `COMMANDS`, so the side effect costs `abide --help` nothing.
+import '$compiler/preload.ts'
 import * as SURFACE from '$abide'
 import { isThenable, messageOf } from '$shared/internal/probes.ts'
 import { isSource } from '$shared/internal/BRANDS.ts'
 import { STREAMING } from '$shared/internal/wire.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
+import { takesNothing } from '../COMMANDS.ts'
 import { LineEditor, suggest } from './editor.ts'
 import { BOLD, colored, DIM, paint, RED } from './paint.ts'
 
@@ -284,14 +288,9 @@ class Session {
 }
 
 export async function repl(argv: string[]): Promise<number> {
-    if (argv.length > 0) {
-        console.error(`abide repl: takes no arguments, got ${argv[0]}`)
-        return CLI_EXIT_CODES.usage
-    }
+    const refusal = takesNothing('repl', argv)
+    if (refusal !== null) return refusal
 
-    // The runtime, which is the whole of what makes this an ABIDE prompt rather than a JavaScript
-    // one: `await import('./page.abide')` compiles on the way in, exactly as it does under `run`.
-    plugin(abidePlugin)
     Object.assign(globalThis, SURFACE, { abide: SURFACE })
 
     const colors = colored()

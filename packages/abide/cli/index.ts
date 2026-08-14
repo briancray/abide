@@ -11,7 +11,7 @@
 // being answered here.
 
 import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
-import { COMMANDS, commandNamed, usage } from './COMMANDS.ts'
+import { COMMANDS, commandNamed, usage, usageOf } from './COMMANDS.ts'
 
 // The binary's own module face. What a caller wants from here is the same table the screen is built
 // from — a test asserting the two agree, and one day an `abide compile` putting the same commands
@@ -56,8 +56,18 @@ export async function cli(argv: string[]): Promise<number> {
         return CLI_EXIT_CODES.usage
     }
 
+    // `abide dev --help` asked this binary something and used to be told `unknown option --help` with
+    // a `2` — the one exit code that means "you typed it wrong" answering the request for how to type
+    // it. The FIRST position only, so `abide run x.ts --help` still reaches the script: a command whose
+    // arguments are opaque has the file in that slot, and everything past it is untouched.
+    const rest = argv.slice(1)
+    if (rest[0] === '-h' || rest[0] === '--help') {
+        console.log(usageOf(command))
+        return CLI_EXIT_CODES.ok
+    }
+
     const body = await command.load()
-    return body(argv.slice(1))
+    return body(rest)
 }
 
 if (import.meta.main) process.exit(await cli(Bun.argv.slice(2)))

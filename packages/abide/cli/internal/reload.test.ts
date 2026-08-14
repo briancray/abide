@@ -10,7 +10,8 @@
 // without a browser, and without touching a global anything else in the suite can see.
 
 import { expect, test } from 'bun:test'
-import { BOOT_ID, reloadSource, reloadTag } from './reload.ts'
+import { useMountBase } from '$shared/internal/mount.ts'
+import { BOOT_ID, reloadClient, reloadSource, reloadTag } from './reload.ts'
 
 /** What the client does to a socket, from the socket's side. */
 interface Stub {
@@ -179,6 +180,31 @@ test('the client runs on ARRIVAL, so a document that never finishes parsing stil
     // page that needs this client is the one page it never runs on.
     expect(reloadTag()).toContain('<script async ')
     expect(reloadTag()).not.toContain('defer')
+})
+
+test('under a mount, this route is the mounted address and NOT the origin root', async () => {
+    // The address is the one claim about this route a rendering page cannot make: a dev client served
+    // at the origin root of an app mounted at `/v2` looks fine — it is the same bytes — while the
+    // bundle route beside it correctly refuses that address. Two routes of one dev server disagreeing
+    // about where the app is, silently.
+    //
+    // Module-global, so it is put back: every other case in this file is written at the root.
+    useMountBase('http://app.test/v2')
+    try {
+        const mounted = reloadClient(new Request('http://app.test/v2/__abide/reload.js'), 'source')
+        expect(mounted?.status).toBe(200)
+
+        // `unmounted` hands a path outside the mount back UNCHANGED, so this used to still read as the
+        // reload path and be answered here.
+        const atRoot = reloadClient(new Request('http://app.test/__abide/reload.js'), 'source')
+        expect(atRoot).toBeUndefined()
+
+        // The boot id moves with it, or a page under the mount asks an address nothing answers.
+        const asking = reloadClient(new Request('http://app.test/v2/__abide/reload.js?boot'), 'source')
+        expect(await asking?.text()).toBe(BOOT_ID)
+    } finally {
+        useMountBase('')
+    }
 })
 
 test('a request for this file that is not a page concludes nothing', () => {

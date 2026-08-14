@@ -1281,7 +1281,9 @@ failure in a line.
 | `abide compile [--target] [--out] [--platforms]` | ONE standalone executable, via `bun build --compile`. `--platforms` cross-compiles a release set for the price of one client build, and makes `--out` name a DIRECTORY. |
 | `abide bundle` | A desktop launcher for the host platform: embedded assets and a first-run setup screen. Native windowing is best-effort — a system webview binary, or the default browser. |
 | `abide lsp` | The `.abide` language server, over stdio. |
-| `abide` · `-h` · `--help` | Usage, GENERATED from `COMMANDS`. Asking for help is a success (stdout, `0`); an unknown subcommand is not (stderr, `2`). |
+| `abide` · `-h` · `--help` | Usage, GENERATED from `COMMANDS`. Asking for help is a success (stdout, `0`); an unknown subcommand is not (stderr, `2`). `abide <command> --help` is the same success, answering with that command's own row — read from the FIRST argument only, so `abide run <file> --help` still belongs to the script. |
+
+Arguments are the command's own, and the rules are one set rather than one per command. A flag no row declares is REFUSED (stderr, `2`) rather than dropped — a `--minify` that was quietly ignored is a build that did not do what was asked and said nothing — and the usage line printed with a refusal is the `args` from the same table the help screen reads, so the two cannot disagree about how a command is spelled.
 
 | Name | Type Signature | Description |
 | --- | --- | --- |

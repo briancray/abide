@@ -9,6 +9,7 @@
 // help screen advertising something, so an unwritten command is one this binary does not know:
 // `abide deploy` exits `2` like any other word it was not given.
 
+import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
 import { BOLD, colored, DIM, paint } from './internal/paint.ts'
 
 /** What a command does with the arguments after its own name. The number it answers is the exit code. */
@@ -80,6 +81,50 @@ export const COMMANDS: Command[] = [
 export function commandNamed(name: string): Command | undefined {
     for (const command of COMMANDS) if (command.name === name) return command
     return undefined
+}
+
+/** One command's own line: how it is spelled, and what it does. What `abide <name> --help` prints. */
+export function usageOf(command: Command): string {
+    const on = colored()
+    const spelled = command.args === '' ? command.name : `${command.name} ${command.args}`
+    return `${paint('usage:', DIM, on)} abide ${spelled}\n  ${paint(command.blurb, DIM, on)}`
+}
+
+/**
+ * A refusal, printed — and the exit code that goes with it.
+ *
+ * The usage line comes off the command's own ROW rather than being retyped beside the code that
+ * refused. Every command had its own copy of these two lines, so `args` was written twice per command
+ * — once for the help screen and once for the refusal — and the two are one fact.
+ */
+export function refuse(name: string, problem: string): number {
+    console.error(`abide ${name}: ${problem}`)
+    const args = commandNamed(name)?.args ?? ''
+    console.error(`       usage: abide ${name}${args === '' ? '' : ` ${args}`}`)
+    return CLI_EXIT_CODES.usage
+}
+
+/**
+ * The roots a `[dir…]`-shaped command was handed, or the code to exit with.
+ *
+ * Shared by `check` and `build` because they have the same argument shape and disagreed about it: a
+ * flag was REFUSED by one and silently DROPPED by the other, and the one that dropped it is the one
+ * whose `args` says `[dir…]`. `abide check --lint` ran a full check of the working directory and said
+ * nothing — which is `build`'s own comment about `--minify`, arrived at from the other side.
+ *
+ * Refused rather than ignored: the command IS the check, or the build, so there is nothing here for a
+ * flag to turn on, and one somebody typed did not do what they asked.
+ */
+export function pathsOnly(name: string, argv: string[]): string[] | number {
+    for (const argument of argv) {
+        if (argument.startsWith('-')) return refuse(name, `unknown option \`${argument}\``)
+    }
+    return argv
+}
+
+/** `null` when a command that takes nothing was given nothing, else the code to exit with. */
+export function takesNothing(name: string, argv: string[]): number | null {
+    return argv.length > 0 ? refuse(name, `takes no arguments, got ${argv[0]}`) : null
 }
 
 /**

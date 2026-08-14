@@ -20,6 +20,8 @@
 // the browser — belongs in `pages/layout.abide`, which is above every route and already isomorphic.
 // One lane with one shape is what lets the routing boilerplate leave every app at once.
 
+// `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
+import { dirname, relative } from 'node:path'
 import { type PageFiles, pageFiles } from '$server/pages.ts'
 import { CLIENT_ENTRIES, firstPresent, PAGES } from '../CLIENT_BUILD.ts'
 
@@ -120,7 +122,15 @@ const HEADER = `// GENERATED from pages/ by \`abide build\` / \`abide dev\`. Edi
 // build — client-side code of your own goes in \`pages/layout.abide\`, which is above every route.
 `
 
-/** A page file as a specifier from `.abide/`, which is one directory below the pages directory. */
+/**
+ * A page file as a specifier from wherever the generated lane lives.
+ *
+ * DERIVED from `GENERATED_ENTRY` rather than counting `../` by hand, because the two are one fact and
+ * the failure of their disagreeing is a build error about a path nobody typed: moving the lane one
+ * directory deeper would leave it importing `../pages/…` from two levels down, resolving to nothing.
+ */
+const TO_PAGES = relative(dirname(GENERATED_ENTRY), PAGES)
+
 function quoted(file: string): string {
-    return JSON.stringify(`../${PAGES}/${file}`)
+    return JSON.stringify(`${TO_PAGES}/${file}`)
 }

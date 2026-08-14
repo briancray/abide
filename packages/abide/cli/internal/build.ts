@@ -20,6 +20,7 @@ import { promisify } from 'node:util'
 import { brotliCompress, constants as ZLIB } from 'node:zlib'
 import { messageOf } from '$shared/internal/probes.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
+import { pathsOnly } from '../COMMANDS.ts'
 import {
     assetOf,
     CLIENT_DIR,
@@ -52,24 +53,17 @@ const SHIPPED: Lane = {
 
 export async function build(argv: string[]): Promise<number> {
     // Entries, not flags — the command IS the build, and a knob here would be a second place the
-    // output shape is decided from. Anything starting with `-` is refused rather than ignored,
-    // because a `--minify` somebody typed and this quietly dropped is a build that did not do what
-    // they asked and said nothing.
-    for (const argument of argv) {
-        if (argument.startsWith('-')) {
-            console.error(`abide build: unknown option \`${argument}\``)
-            console.error('       usage: abide build [entry…]')
-            return CLI_EXIT_CODES.usage
-        }
-    }
+    // output shape is decided from. `pathsOnly` is where that rule now lives, shared with `check`.
+    const named = pathsOnly('build', argv)
+    if (typeof named === 'number') return named
 
     const root = process.cwd()
-    let entries = argv
-    // Reported rather than silent: a lane nobody wrote is a file the next reader will not find in
-    // their own source tree, and the one line that says where it came from is the whole of the fix.
-    let generated = false
-    // The manifest keys, when they are not the entry paths. Only the conventional lane sets them —
-    // an entry somebody NAMED is keyed by what they named, because that is what their document says.
+    let entries = named
+    // The manifest keys, when they are not the entry paths. Only the conventional lane sets them — an
+    // entry somebody NAMED is keyed by what they named, because that is what their document says. So
+    // this having a value is also what says the lane was GENERATED, which `report` says out loud: a
+    // lane nobody wrote is a file the next reader will not find in their own source tree, and the one
+    // line naming where it came from is the whole of the fix.
     let keys: string[] | undefined
     if (entries.length === 0) {
         // The conventional lane when nothing was named, written from `pages/`: a route table is
@@ -79,7 +73,6 @@ export async function build(argv: string[]): Promise<number> {
         if (lane !== null) {
             entries = [lane]
             keys = [CLIENT_KEY]
-            generated = true
         }
     }
     if (entries.length === 0) {
@@ -132,7 +125,7 @@ export async function build(argv: string[]): Promise<number> {
     }
     await Bun.write(`${root}/${MANIFEST_FILE}`, `${JSON.stringify(manifest, null, 4)}\n`)
 
-    report(manifest, generated)
+    report(manifest, keys !== undefined)
     return CLI_EXIT_CODES.ok
 }
 
