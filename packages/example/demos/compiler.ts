@@ -8,7 +8,7 @@
 
 import { html } from 'abide'
 import { styleTags } from 'abide/server'
-import { adopt, streamed } from 'abide/runtime'
+import { adopt, keyed, streamed } from 'abide/runtime'
 import { compile, describe, locate, originalPosition, ParseError } from 'abide/compiler'
 import { renderToString } from 'abide/server'
 import { container, sleep, suite, until } from 'abide-kit'
@@ -577,6 +577,35 @@ export default suite({
                     template('<ul>{#for w, i of ws}<li>{i}</li>{/for}</ul>'),
                     '<ul>${() => (ws ?? []).map((w, i) => html`<li>${i}</li>`)}</ul>',
                 )
+            },
+        },
+
+        {
+            title: 'an EMPTY keyed body emits a template, because a keyed row is the one never probed',
+            note: '`fragment` answers `null` for a body with nothing in it, which is right for a branch arm — nothing to paint is nothing — and wrong for a keyed row. `keyed` takes a `TemplateResult` by signature, and the reconcile reads `.template` off the row WITHOUT probing, deliberately: that is the arm walked per row, and the array-row wrapper was kept off it for exactly that reason. So `{#for w of ws by w.id}{/for}` rendered `<ul></ul>` on the server and threw `null is not an object` in the browser — the same isomorphism break an array of strings had, one arm along. Fixed at the one caller that can produce it, so no keyed row pays a probe for it. The keyless arm is asserted BESIDE it because it must stay `null`: a `ChildPart` handles that, and changing both would have been the easy fix and the wrong one.',
+            async run({ is }) {
+                is(
+                    'an empty keyed body is an empty template',
+                    template('<ul>{#for w of ws by w.id}{/for}</ul>'),
+                    '<ul>${() => (ws ?? []).map((w) => keyed(w.id, html``))}</ul>',
+                )
+                is(
+                    'and an empty KEYLESS body is still null',
+                    template('<ul>{#for w of ws}{/for}</ul>'),
+                    '<ul>${() => (ws ?? []).map((w) => null)}</ul>',
+                )
+
+                // The half the emit assertion cannot make: that the shape it emits survives BOTH
+                // substrates. The server walked this one fine while the client threw, which is why
+                // an emit-only assertion would have gone green with the bug in.
+                const rows = [{ id: 'a' }, { id: 'b' }]
+                const view = () => html`<ul>${() => rows.map((w) => keyed(w.id, html``))}</ul>`
+                const served = await renderToString(view)
+                is('the server renders the empty list', served.includes('<ul>'), true)
+                const host = container()
+                mount(host, view)
+                is('and the client builds it rather than throwing', host.querySelectorAll('ul').length, 1)
+                host.remove()
             },
         },
 

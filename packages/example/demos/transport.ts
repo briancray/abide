@@ -1707,6 +1707,51 @@ export default suite({
         },
 
         {
+            title: 'every PROBE on a remote socket answers without opening the connection',
+            note: 'SPEC says probes never throw and never start work, and a remote socket is where that is hardest to keep: its members are forwarded to a `Connection` that does not exist until something asks, so a member wired to the building arm rather than the cold one opens a socket for a question. `isError` was — and because it is the one probe with no cold value to answer from, it had been given the channel’s implementation through `held()` rather than the pure function that implementation IS. On an address not resolvable yet that did not merely start work, it threw, out of a member the spec says never does. Asserted over the WHOLE probe list rather than over `isError`, because the next member added to this table is the one that will be wired to the wrong arm, and the count is what says the list was not trimmed to what passes.',
+            async run({ is }) {
+                // Registered, so the read at the bottom has something to reach — the claim is that
+                // the probes do not open this, not that they cannot.
+                const quiet = socket<{ n: number }>({ channel: { tail: 2 } })
+                register('socket', [['demo/socket/quiet', 'quiet']], { quiet })
+                const idle = sock<{ n: number }>('demo/socket/quiet')
+                const before = wire.connected
+
+                // Every probe SPEC lists, asked on a socket nothing has read. The answers are the
+                // cold ones; what is under test is that asking produced no connection.
+                is('pending', idle.pending(), false)
+                is('refreshing', idle.refreshing(), false)
+                is('settled', idle.settled(), false)
+                is('done', idle.done(), false)
+                is('streaming', idle.streaming(), true)
+                is('error', idle.error(), undefined)
+                is('peek', idle.peek(), undefined)
+                is('isError says no for an unrelated failure', idle.isError(new Error('x'), 'Nope'), false)
+                const named = new Error('inner')
+                named.name = 'Nope'
+                is(
+                    'and yes for the named one, wrapped as a cause',
+                    idle.isError(new Error('outer', { cause: named }), 'Nope'),
+                    true,
+                )
+
+                // The discriminating assertion, and it has to come AFTER `isError`. `connect` builds
+                // without opening — "opened by the first READ" — so a connection made here moves no
+                // socket count and nothing above would notice. What it does move is `bare` from null
+                // to a `Connection` whose first message is a LOAD, and every probe then reads off
+                // that instead of the cold value: `pending()` answers `true` and never goes back.
+                is('pending is still false after asking isError', idle.pending(), false)
+                is('and settled still false', idle.settled(), false)
+                is('no connection was opened by any of them', wire.connected, before)
+                // And the read still does, so what is asserted above is the probes being quiet
+                // rather than the socket being broken.
+                idle()
+                await until(() => wire.connected > before)
+                idle.close()
+            },
+        },
+
+        {
             title: 'a socket is `channel()` with subscribers that arrived over a wire',
             note: 'The server half is `channel()` UNCHANGED — the transport is not in the channel, it is one `subscribe` on upgrade and one unsubscribe on close. Both sides are a `Channel`, so a component iterating one, calling one, or reading `chunks()` cannot tell which side it is on.',
             async run({ is }) {

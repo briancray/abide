@@ -2050,8 +2050,17 @@ function loop(
     const branch = scoped(node.body, inner)
     const markup = fragment(branch.rest, branch.context)
     // A key makes a reorder MOVE its row instead of rewriting it; without one the list is positional.
+    //
+    // `fragment` answers `null` for an empty body, which is right for a BRANCH arm — nothing to paint
+    // is nothing — and wrong for a keyed row: `keyed` takes a template by signature, and the reconcile
+    // reads `.template` off the row without probing, because that is the arm walked per row. So an
+    // empty keyed body rendered `<ul></ul>` on the server and threw in the browser. Fixed at the one
+    // caller that can produce it rather than by making every keyed row pay a probe.
+    const rowMarkup = markup === 'null' && node.key !== null ? `${need(context, 'html')}\`\`` : markup
     const keyedRow =
-        node.key === null ? markup : `${need(context, 'keyed')}(${code(node.key, branch.context)}, ${markup})`
+        node.key === null
+            ? rowMarkup
+            : `${need(context, 'keyed')}(${code(node.key, branch.context)}, ${rowMarkup})`
     const row =
         branch.statements === ''
             ? `(${parameters}) => ${keyedRow}`

@@ -17,7 +17,7 @@ import { keyOf, matcher } from './internal/keys.ts'
 import { seedKey, takeSeed } from './internal/seed.ts'
 import { mounted } from './internal/mount.ts'
 import { RPC_PREFIX, SOCKET_PREFIX } from './internal/PATHS.ts'
-import { hasFile } from './internal/probes.ts'
+import { hasFile, isNamedError } from './internal/probes.ts'
 import { arm } from './internal/timers.ts'
 import { traceHeaders } from './internal/trace.ts'
 import {
@@ -405,7 +405,11 @@ export function remoteSocket<T, Args = void>(
         error: () => bare?.error(),
         streaming: () => bare?.streaming() ?? true,
         done: () => bare?.done() ?? false,
-        isError: (error, name) => held().isError(error, name),
+        // The one probe with no cold value to answer from, so it answers from the ARGUMENTS — which
+        // is what a channel's own `isError` does too. Through `held()` it was the only probe in this
+        // table that opened a connection, and on a socket whose address is not resolvable yet it did
+        // not merely start work, it THREW, out of a member the spec says never does either.
+        isError: (error, name) => isNamedError(error, name),
         watch: (handler) => held().watch(handler),
         subscribe: (listener) => held().subscribe(listener),
         tail: () => held().tail(),
