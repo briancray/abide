@@ -107,6 +107,13 @@ await ready()
 const root = document.querySelector('slot')
 if (root !== null) hydrate(root, outlet)
 
+// The page is now the CLIENT's. Marked because nothing else says so and the moment is not the one
+// anybody watching from outside would guess: the \`await ready()\` above is a dynamic import, so this
+// line runs after \`load\` has fired and \`document.readyState\` has read \`complete\` for some time. A
+// driver that treats an arrived document as an interactive one is racing every handler on the page —
+// and losing that race is silent, because the markup it is looking at is already correct.
+document.documentElement.dataset.abideHydrated = ''
+
 // An ordinary link, intercepted. \`navigate\` does not commit the route until the page's chunk has
 // arrived, which is the whole of what \`route().navigating\` reports.
 document.addEventListener('click', (event) => {

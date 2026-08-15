@@ -20,8 +20,8 @@
         // resolves by walking up for a `node_modules` rather than through anything here. An app
         // outside a workspace writes the one pair, `[".", "./.abide/types"]`.
         "rootDirs": [
-            "packages/example",
-            "packages/example/.abide/types",
+            "packages/dogfood",
+            "packages/dogfood/.abide/types",
             "packages/perf",
             "packages/perf/.abide/types"
         ],
@@ -37,8 +37,8 @@
         //
         // `$shared` is the only one that carries real traffic, and that is the architecture showing
         // through: `$ui` and `$server` may import shared, never each other, and nothing may import a
-        // renderer except through its public entry point. The kit has no alias because it is not in
-        // this package at all: it is `packages/abide-kit`, and it reaches the framework by the same
+        // renderer except through its public entry point. The harness has no alias because it is not in
+        // this package at all: it is `packages/harness`, and it reaches the framework by the same
         // public specifiers an app does.
         // `$abide` is the CURATED front door — the file `.` resolves to, and the one place the
         // author-facing surface is enumerated. It has exactly one consumer, the REPL, which puts that
@@ -53,7 +53,7 @@
             "$abide": ["./packages/abide/abide.ts"]
         }
         // The public specifiers — `abide`, `abide/ui`, `abide/server`, `abide/compiler`, and the
-        // kit's own `abide-kit` / `abide-kit/measure` — are deliberately NOT aliased here: every
+        // harness's own `harness` / `harness/measure` — are deliberately NOT aliased here: every
         // consumer resolves them through the workspace link and the exports map, so a broken public
         // entry point fails in a typecheck rather than being papered over.
     },
@@ -61,12 +61,12 @@
         "packages/abide/src/**/*.ts",
         "packages/abide/compiler/**/*.ts",
         "packages/abide/cli/**/*.ts",
-        "packages/abide-kit/**/*.ts",
-        "packages/example/**/*.ts",
+        "packages/harness/**/*.ts",
+        "packages/dogfood/**/*.ts",
         // What every `.abide` compiled to. The MODULE is where a template's expressions actually are,
         // so a config that only resolved the declarations would check the types a page exports and
         // nothing inside it.
-        "packages/example/.abide/types/**/*.ts",
+        "packages/dogfood/.abide/types/**/*.ts",
         // The perf app and its mirror. Absent until a `details?: boolean` prop that should have been
         // `State<boolean>` shipped through `abide check packages/perf` reporting clean — the checker
         // emits the named package's mirror and then runs `tsc` over whatever THIS file covers, so a
@@ -75,7 +75,7 @@
         "packages/perf/.abide/types/**/*.ts"
     ],
     // The type fixtures under `types/invalid` are SUPPOSED to fail. They are checked deliberately by
-    // `packages/example/test/types.test.ts`, through their own config, and a repo whose own typecheck
+    // `packages/dogfood/test/types.test.ts`, through their own config, and a repo whose own typecheck
     // is red says nothing at all — so they are not part of it.
     //
     // A pattern rather than the one path, because the fixtures are now in two trees: the `.abide`

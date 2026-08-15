@@ -15,7 +15,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { env } from '$shared/internal/env.ts'
 import { appName, useAppNameSource } from '$shared/log.ts'
-import { knobOf } from './config.ts'
+import { knobOf, useAppFactsSource } from './config.ts'
 
 /** What the climb below is looking for: the two facts an app is identified by. */
 interface Manifest {
@@ -73,6 +73,9 @@ function nearestManifest(): Manifest {
 }
 
 useAppNameSource(() => nearestManifest().name)
+// The two facts `config()` publishes as `APP_VERSION` and `APP_DATA_DIR`. Installed rather than
+// imported, so this file keeps its `node:` imports out of `config.ts` — see `useAppFactsSource`.
+useAppFactsSource(() => ({ version: appVersion(), dataDir: appDataDir() }))
 
 /**
  * What this app is called a version of, for the health document.

@@ -91,8 +91,11 @@ const DIRECTORIES: Record<Kind, string> = { rpc: RPC_DIRECTORY, socket: SOCKET_D
  * MESSAGE shape on a socket, and `output` is per CHUNK on a handler that yields.
  */
 export interface Endpoint extends Declared {
+    /** The LOCAL binding, which is what the appended registration names. */
     name: string
     method: Method
+    /** `export default NAME`, which is addressed by the module path with no export on the end. */
+    asDefault: boolean
 }
 
 /** A positioned compile failure, like every other one — so `describe` places it with no new branch. */
@@ -127,6 +130,16 @@ function joinId(address: string, exportName: string): string {
     return `${address}/${exportName}`
 }
 
+/**
+ * Where one endpoint answers: `users/getUser`, or `users` when it is the module's default.
+ *
+ * The default drops the segment rather than spelling `users/default`, because the module IS the
+ * endpoint then and a path segment naming a keyword reads as one an author chose.
+ */
+function addressOf(address: string, endpoint: Endpoint): string {
+    return endpoint.asDefault ? address : joinId(address, endpoint.name)
+}
+
 /** `users/getUser` — the module under its transport directory, then the export. */
 export function endpointId(modulePath: string, exportName: string): string {
     const kind = kindOf(modulePath)
@@ -151,6 +164,7 @@ export function endpointsOf(source: string, filename: string, kind: Kind, resolv
     // from is opened once for the whole file rather than once per declaration.
     const types = new TypeReader(tokens, filename, resolve === undefined ? null : crossing(resolve))
     const endpoints: Endpoint[] = []
+    let defaultBinding: Token | null = null
 
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i] as Token
@@ -163,6 +177,29 @@ export function endpointsOf(source: string, filename: string, kind: Kind, resolv
         // Erased before anything runs, so neither lane has to account for it.
         if (what.text === 'type' || what.text === 'interface') continue
 
+        // `export default handler` — the module's endpoint, addressed by the module path alone.
+        //
+        // A BINDING and never `export default POST(…)` directly, which reads better and cannot be
+        // made to work: the server lane is the module UNCHANGED plus an appended registration, and
+        // that registration maps an address to a local name. A bare default declares no name for it
+        // to reference, and a module cannot reach its own default export.
+        if (what.kind === SyntaxKind.DefaultKeyword) {
+            const target = tokens[i + 2]
+            if (target === undefined) break
+            if (target.kind !== SyntaxKind.Identifier || (tokens[i + 3] as Token | undefined)?.kind === SyntaxKind.OpenParenToken) {
+                throw new ElisionError(
+                    `abide: ${filename} exports \`${target.text}(…)\` as its default directly — bind it first, \`const NAME = ${legal[0]}(…)\` and then \`export default NAME\`, because the registration this module gets appended has to name something`,
+                    target.start,
+                )
+            }
+            if (defaultBinding !== null) {
+                throw new ElisionError(`abide: ${filename} has two default exports`, target.start)
+            }
+            defaultBinding = target
+            i += 2
+            continue
+        }
+
         if (what.kind !== SyntaxKind.ConstKeyword) {
             throw new ElisionError(
                 `abide: ${filename} exports \`${what.text}\`, which is not an endpoint — a module under a transport directory may export only \`export const NAME = ${legal.join(' / ')}(…)\`, because everything else has no client form`,
@@ -170,46 +207,93 @@ export function endpointsOf(source: string, filename: string, kind: Kind, resolv
             )
         }
 
-        const name = tokens[i + 2]
-        if (name === undefined) break
-        let equals = i + 3
-        // A type annotation is SKIPPED rather than read: an endpoint naming its own —
-        // `export const rooms: KeyedChannel<…> = socket(…)` — is ordinary authoring, and the DECLARATION
-        // is what says the shape. The type arguments on `socket<…>` below are the same fact where it
-        // can be read.
-        if ((tokens[equals] as Token | undefined)?.kind === SyntaxKind.ColonToken) {
-            // Through the type reader rather than by scanning for the first `=`: a generic default
-            // in the annotation — `KeyedChannel<Args, T = Tick>` — puts an `=` inside the type, and a
-            // scan that stopped there would read the method off a type token.
-            equals = types.extent(equals + 1)
-        }
-        const method = tokens[equals + 1]
-        // `method === undefined` alone: past the end, the read above is already undefined.
-        if (method === undefined) break
-        if (
-            name.kind !== SyntaxKind.Identifier ||
-            (tokens[equals] as Token).kind !== SyntaxKind.EqualsToken
-        ) {
-            throw new ElisionError(
-                `abide: ${filename} exports \`${name.text}\`, which is not an endpoint — expected \`export const ${name.text} = ${legal[0]}(…)\``,
-                name.start,
-            )
-        }
-        if (!legal.includes(method.text)) {
-            throw new ElisionError(
-                `abide: ${filename} declares \`${name.text}\` with \`${method.text}\`, but a ${kind} module may only declare ${legal.join(' / ')} — move it, or change it`,
-                method.start,
-            )
-        }
-        const at = equals + 1
-        endpoints.push({
+        const found = declarationAt(tokens, types, i + 1, filename, kind, legal, true)
+        if (found === null) break
+        endpoints.push(found.endpoint)
+        i = found.at
+    }
+
+    if (defaultBinding === null) return endpoints
+
+    // The binding is looked up AFTER the walk, because `export default handler` may sit above the
+    // `const` it names — hoisting is the reader's expectation and a one-pass rule would forbid it.
+    const name = defaultBinding.text
+    if (endpoints.some((endpoint) => endpoint.name === name)) {
+        throw new ElisionError(
+            `abide: ${filename} exports \`${name}\` and also defaults to it, which would address one endpoint twice — as \`…/${name}\` and as the module. Drop the \`export\` on the const, or drop the default`,
+            defaultBinding.start,
+        )
+    }
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i] as Token
+        if (token.depth !== 0 || token.kind !== SyntaxKind.ConstKeyword) continue
+        if ((tokens[i + 1] as Token | undefined)?.text !== name) continue
+        const found = declarationAt(tokens, types, i, filename, kind, legal, false)
+        if (found === null) break
+        endpoints.push({ ...found.endpoint, asDefault: true })
+        return endpoints
+    }
+    throw new ElisionError(
+        `abide: ${filename} defaults to \`${name}\`, which is not declared here — a default export must name a \`const ${name} = ${legal[0]}(…)\` in this module`,
+        defaultBinding.start,
+    )
+}
+
+/**
+ * One `const NAME = METHOD(…)`, read from the index of its `const`.
+ *
+ * Shared by the two callers so an exported declaration and a defaulted one cannot disagree about what
+ * an endpoint IS — the only difference between them is the address, which is `registration`'s and
+ * `stub`'s to decide. `null` means the token stream ended mid-declaration.
+ */
+function declarationAt(
+    tokens: Token[],
+    types: TypeReader,
+    constIndex: number,
+    filename: string,
+    kind: Kind,
+    legal: readonly string[],
+    exported: boolean,
+): { endpoint: Endpoint; at: number } | null {
+    const name = tokens[constIndex + 1]
+    if (name === undefined) return null
+    let equals = constIndex + 2
+    // A type annotation is SKIPPED rather than read: an endpoint naming its own —
+    // `export const rooms: KeyedChannel<…> = socket(…)` — is ordinary authoring, and the DECLARATION
+    // is what says the shape. The type arguments on `socket<…>` below are the same fact where it
+    // can be read.
+    if ((tokens[equals] as Token | undefined)?.kind === SyntaxKind.ColonToken) {
+        // Through the type reader rather than by scanning for the first `=`: a generic default
+        // in the annotation — `KeyedChannel<Args, T = Tick>` — puts an `=` inside the type, and a
+        // scan that stopped there would read the method off a type token.
+        equals = types.extent(equals + 1)
+    }
+    const method = tokens[equals + 1]
+    // `method === undefined` alone: past the end, the read above is already undefined.
+    if (method === undefined) return null
+    if (name.kind !== SyntaxKind.Identifier || (tokens[equals] as Token).kind !== SyntaxKind.EqualsToken) {
+        const how = exported ? `export const ${name.text}` : `const ${name.text}`
+        throw new ElisionError(
+            `abide: ${filename} exports \`${name.text}\`, which is not an endpoint — expected \`${how} = ${legal[0]}(…)\``,
+            name.start,
+        )
+    }
+    if (!legal.includes(method.text)) {
+        throw new ElisionError(
+            `abide: ${filename} declares \`${name.text}\` with \`${method.text}\`, but a ${kind} module may only declare ${legal.join(' / ')} — move it, or change it`,
+            method.start,
+        )
+    }
+    const at = equals + 1
+    return {
+        endpoint: {
             name: name.text,
             method: method.text as Method,
+            asDefault: false,
             ...shapesAt(types, at, kind === 'rpc'),
-        })
-        i = at
+        },
+        at,
     }
-    return endpoints
 }
 
 /** What the browser gets: the same export names, none of the module they came from. */
@@ -228,7 +312,7 @@ export function stub(modulePath: string, kind: Kind, endpoints: Endpoint[]): str
         ? `import { remoteSocket as __socket } from "abide/runtime/transport"\n`
         : `import { remote as __remote } from "abide/runtime/transport"\n`
     for (const endpoint of endpoints) {
-        const id = JSON.stringify(joinId(address, endpoint.name))
+        const id = JSON.stringify(addressOf(address, endpoint))
         // A socket stub takes no options at all: the method is the directory, and a socket never
         // streams-or-not — it always does.
         let options = ''
@@ -236,7 +320,9 @@ export function stub(modulePath: string, kind: Kind, endpoints: Endpoint[]): str
             const stream = endpoint.streams ? ', stream: true' : ''
             options = `, { method: ${JSON.stringify(endpoint.method)}${stream} }`
         }
-        out += `export const ${endpoint.name} = ${build}(${id}${options})\n`
+        out += endpoint.asDefault
+            ? `export default ${build}(${id}${options})\n`
+            : `export const ${endpoint.name} = ${build}(${id}${options})\n`
     }
     return out
 }
@@ -253,7 +339,7 @@ export function registration(modulePath: string, kind: Kind, endpoints: Endpoint
     let names = ''
     let derived = false
     for (const endpoint of endpoints) {
-        pairs.push([joinId(address, endpoint.name), endpoint.name])
+        pairs.push([addressOf(address, endpoint), endpoint.name])
         names += names === '' ? endpoint.name : `, ${endpoint.name}`
         if (endpoint.input === undefined && endpoint.output === undefined) continue
         derived = true
@@ -266,7 +352,9 @@ export function registration(modulePath: string, kind: Kind, endpoints: Endpoint
     // exactly the text it emitted before there was a derivation at all.
     const carried = derived ? `, ${JSON.stringify(shapes)}` : ''
     return (
-        `\nimport { register as __register } from "abide/server"\n` +
+        // `abide/server/internal`, not `abide/server`: registering is the SERVING half, which
+        // `abide start` does and an app never types. What an app writes is the `GET(…)` above.
+        `\nimport { register as __register } from "abide/server/internal"\n` +
         `__register(${JSON.stringify(kind)}, ${JSON.stringify(pairs)}, { ${names} }${carried})\n`
     )
 }

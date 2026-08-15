@@ -27,6 +27,7 @@ import {
     jsonLine,
     TRANSPORT_ERROR,
 } from '$shared/internal/wire.ts'
+import { ALWAYS_POLICY } from './csp.ts'
 import { gate, type Schema } from './schema.ts'
 import { heldFrames, heldStream, pendingCookies, traceResponse } from './scopes.ts'
 
@@ -118,6 +119,23 @@ export function sse<T>(values: Values<T>, init?: ResponseInit): Response {
     })
 }
 
+/**
+ * The three things a page body can be, as one stream.
+ *
+ * The async-iterable arm is what lets `page(render(view))` be written at all: `render` IS the
+ * generator, and requiring `page(toStream(view))` made the one composition an app reaches for the one
+ * that needed a second import. Framed through `heldFrames` rather than a `ReadableStream` built here,
+ * so a generator body takes the same scope hold `jsonl` and `sse` already take — a page whose walk
+ * reads `cookies()` after the handler returned is the failure that hold exists for.
+ *
+ * `identity` as the frame: a render already yields the strings, so there is nothing to encode.
+ */
+function bodyOf(body: string | ReadableStream<Uint8Array> | Values<string>): string | ReadableStream<Uint8Array> {
+    if (typeof body === 'string') return body
+    if (body instanceof ReadableStream) return heldStream(body)
+    return heldFrames(body, (chunk) => chunk)
+}
+
 function sseFrame(value: unknown): string {
     return `data: ${JSON.stringify(value)}\n\n`
 }
@@ -134,17 +152,20 @@ function sseFrame(value: unknown): string {
  * carried no `traceresponse`. A hole in the correlation is a hole in exactly the request a user is
  * complaining about.
  */
-export function page(body: string | ReadableStream<Uint8Array>, init?: ResponseInit): Response {
+export function page(
+    body: string | ReadableStream<Uint8Array> | Values<string>,
+    init?: ResponseInit,
+): Response {
     // Asked of every body, answered once: a render's stream already holds and comes straight back,
     // and an app streaming its own HTML through here gets the same guarantee without knowing there
     // was one to ask for. A string has no body to outlive the handler.
     //
-    // Nothing here compresses. This entry point is BUNDLED FOR THE BROWSER — the example's server
+    // Nothing here compresses. This entry point is BUNDLED FOR THE BROWSER — the dogfood app's server
     // suite renders in a card to compare the two substrates — so it cannot reach a compressor, and a
     // response that leaves an app's own route uncompressed would be a second rule to remember anyway.
     // `compressing` in the cli's `layers.ts` is the one place, and it reaches every `text/html`
     // answer rather than only the ones built here.
-    return new Response(typeof body === 'string' ? body : heldStream(body), {
+    return new Response(bodyOf(body), {
         ...init,
         headers: headersFor(init?.headers, PAGE_HEADERS),
     })
@@ -163,11 +184,15 @@ export function page(body: string | ReadableStream<Uint8Array>, init?: ResponseI
  *
  * `referrer-policy` is the browsers' own default, written down: an older agent that defaults to
  * `no-referrer-when-downgrade` leaks a full authenticated path to every cross-origin image and link.
+ *
+ * `content-security-policy` is the half of the policy that cannot blank an app — see `ALWAYS_POLICY`.
+ * `csp()` sets the whole header when an app installs it, and `set` there replaces this.
  */
 const PAGE_HEADERS: Record<string, string> = {
     'content-type': HTML_TYPE,
     'cache-control': 'private, no-store',
     'referrer-policy': 'strict-origin-when-cross-origin',
+    'content-security-policy': ALWAYS_POLICY,
 }
 
 // --- navigate ----------------------------------------------------------------

@@ -391,7 +391,7 @@ export function bag(): Map<string, unknown> {
  * form exists for a reader with no scripts, where the markup is complete when the string is and a
  * data block would be bytes nobody reads.
  *
- * Silent outside a request, because this substrate renders in a browser too — the example's server
+ * Silent outside a request, because this substrate renders in a browser too — the dogfood app's server
  * suite draws a card through it — and a demo has no scope to collect into.
  */
 export function openSeeding(): void {

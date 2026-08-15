@@ -45,7 +45,7 @@ import { useConfigSource } from '$shared/internal/knobs.ts'
 import { useMountBase } from '$shared/internal/mount.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { NO_LIMIT } from '$shared/internal/timers.ts'
-import { abideLog } from '$shared/log.ts'
+import { abideLog, appName } from '$shared/log.ts'
 import { type Gate, gate, type Schema } from './schema.ts'
 
 /**
@@ -110,6 +110,23 @@ export interface Env {
  * spelling `server<WebSocketData>()` uses, for the same reason: only the caller knows.
  */
 export interface Config extends Env {
+    /**
+     * What this app is called: `ABIDE_APP_NAME` when it is set, and the nearest package.json's `name`
+     * under that, falling back to `abide`.
+     *
+     * A CONCLUSION rather than a variable, and the one place all three of these break the rule the
+     * table above follows — `ABIDE_APP_NAME` is what an operator sets, and this is it resolved. They
+     * are fields anyway because an app asks "what am I called" far more often than it asks "which
+     * variable said so", and three accessors beside the document were three more names to learn for
+     * answers the document already had to compute. There is still exactly ONE answer: these are
+     * resolved inside `resolve()`, from the same functions that used to be the accessors, so nothing
+     * can publish one value and honour another.
+     */
+    APP_NAME: string
+    /** The `version` beside that `name`, or empty. Empty rather than absent: see `appVersion`. */
+    APP_VERSION: string
+    /** `ABIDE_DATA_DIR` when set, else the platform's per-user directory under `APP_NAME`. */
+    APP_DATA_DIR: string
     [field: string]: unknown
 }
 
@@ -128,7 +145,7 @@ export interface Config extends Env {
  * secrets come from a vault fetches them in `onStart` and registers this before it calls `start()`,
  * which is the one place in the lifecycle where waiting is already the point.
  */
-export type ConfigDefaults = (env: Env) => unknown
+export type ConfigDefaults = (env: Config) => unknown
 
 /**
  * What else a registration may say, beside its defaults.
@@ -320,6 +337,11 @@ function resolve(): Config {
     const declared = declaredEnv()
     const assembled = { ...FLOOR, ...declared } as Config
     RESOLVING_DOCUMENT = assembled
+    // Resolved once BEFORE the hook, so a default may be computed from the app's own name — and
+    // again below, because a hook may DEFAULT `ABIDE_APP_NAME` and the name has to follow it. Twice
+    // rather than once because either single position is wrong for one of those two, and both are
+    // cheap: the filesystem climb behind them is cached after the first.
+    resolved(assembled)
     const registered = REGISTERED
     if (registered === null) return checked(assembled, null)
     // `undefined` from a registration that only declared a shape fails the object test below, which
@@ -333,6 +355,7 @@ function resolve(): Config {
         // the operator with one object rather than two.
         Object.assign(assembled, defaults, declared)
         overridden(assembled, defaults as Record<string, unknown>)
+        resolved(assembled)
     }
     return checked(assembled, registered.gate)
 }
@@ -434,6 +457,39 @@ function coerced(raw: string, exemplar: unknown): unknown {
  * validation is caught so an app that shipped one does not also get an unhandled rejection on top of
  * the message telling it what to do instead.
  */
+/**
+ * The two facts a FILESYSTEM answers, installed by `app.ts` rather than imported from it.
+ *
+ * A seam and not an import because `app.ts` reads `knobOf` from this file, and the two importing
+ * each other is a cycle whose initialisation order decides whether a field is empty. It is also what
+ * keeps this file free of `node:` — a browser bundle carries `config()` and has no filesystem to
+ * climb, and `null` here is exactly the right answer there.
+ */
+let appFactsSource: (() => { version: string; dataDir: string }) | null = null
+
+export function useAppFactsSource(source: () => { version: string; dataDir: string }): void {
+    appFactsSource = source
+}
+
+/**
+ * The three conclusions, laid on AFTER the schema ran.
+ *
+ * After, because an app's schema describes what an app declared: a gate that refused the document
+ * for carrying `APP_NAME` would be refusing abide's own field. And after the `onConfig` merge for the
+ * same reason the merge re-applies `declared` — a default may be COMPUTED from the environment, and
+ * `ABIDE_APP_NAME` has to have settled before the name is resolved off it.
+ *
+ * `RESOLVING_DOCUMENT` is still this document while this runs — `config()` clears it in its own
+ * `finally` — so `appName()` asking across the config seam reads what was just assembled.
+ */
+function resolved(document: Config): Config {
+    const facts = appFactsSource?.() ?? { version: '', dataDir: '' }
+    document.APP_NAME = appName()
+    document.APP_VERSION = facts.version
+    document.APP_DATA_DIR = facts.dataDir
+    return document
+}
+
 function checked(document: Config, gated: Gate<unknown> | null): Config {
     if (!isPort(document.PORT)) document.PORT = FLOOR.PORT
     if (gated === null) return mounting(document)

@@ -10,6 +10,6 @@
     },
     "dependencies": {
         "abide": "workspace:*",
-        "abide-kit": "workspace:*"
+        "harness": "workspace:*"
     }
 }

@@ -10,10 +10,12 @@
 // What the ops are PRICED at is the cross-repo comparison's job, against other frameworks on the same
 // input; what this file says is that the op happens at all.
 
-import { expect, test } from 'abide-kit/e2e'
+import { expect, interactive, test } from 'harness/e2e'
 
 test('the simple page counts', async ({ page }) => {
     await page.goto('/')
+    // `#inc` is the client's, and `goto` resolves before it adopts. See `interactive`.
+    await interactive(page)
     await expect(page.locator('#count')).toHaveText('count 0')
     await page.locator('#inc').click()
     await expect(page.locator('#count')).toHaveText('count 1')
@@ -21,6 +23,7 @@ test('the simple page counts', async ({ page }) => {
 
 test('the complex page creates, updates and swaps a thousand rows', async ({ page }) => {
     await page.goto('/complex')
+    await interactive(page)
 
     await page.locator('#create').click()
     const rows = page.locator('#rows tr')
@@ -49,6 +52,7 @@ test('the complex page creates, updates and swaps a thousand rows', async ({ pag
 
 test('the data page answers over an rpc, and filtering it re-runs the work', async ({ page }) => {
     await page.goto('/data')
+    await interactive(page)
 
     // It starts COLD and over a wire, which is the shape the async work is for: a pending arm the server
     // streams, then the answer.
@@ -64,6 +68,7 @@ test('the data page answers over an rpc, and filtering it re-runs the work', asy
 
 test('the wake ladder runs, and each rung reports a number', async ({ page }) => {
     await page.goto('/wake')
+    await interactive(page)
 
     await page.locator('#wake-run').click()
     const out = page.locator('#wake-out')

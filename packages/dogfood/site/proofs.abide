@@ -1,0 +1,61 @@
+<!-- What is KNOWN about a rung, on the rung.
+
+     `/docs` used to say nothing about whether its examples hold, and `reference.abide` argued for that:
+     a title-and-note copy of what `/tests` asserts would be a third view that could go stale against
+     both. The objection was to COPYING, and this copies nothing — it is the same `Case`, run here,
+     through the same queue `/tests` runs one through. There is no stored result to go stale.
+
+     LIVE ONLY, and that is the other half of the same rule. What a browser can prove, it proves here;
+     what it cannot, it says so about. Nothing on this page is a number from somewhere else.
+
+     Collapsed by default, and set like the source pane rather than like a table: a rung's job is the
+     DIFF against the rung before it, and a metrics block that out-shouts `adds` has taken the page over
+     for a fact that is usually "yes". -->
+<script module>
+import { state, watch } from 'abide'
+import { type Case, enqueue, type Profile, profileOf, type Running, running } from 'harness'
+import ProfileView from './profile.abide'
+import { TONE } from './table.ts'
+
+/** Whole-value in, whole-value out — the shape that keeps the read inside the slot's own thunk. */
+const profileFor = (found: Case | null, held: Running): Profile | null =>
+    found === null ? null : profileOf(found, held, 'docs')
+</script>
+
+<script>
+import { props } from 'abide'
+
+// `null` is a rung with nothing to mount, and it arrives here rather than being branched on at the
+// call site: `{#if}` does not narrow into a slot's own thunk, so the caller cannot hand over a
+// narrowed value even when it has just tested one.
+const { spec } = props<{ spec: Case | null }>()
+
+// The same shape `case-row.abide` uses, and for the same reason: `bind:element` is client-only, so a
+// server render writes the pane and starts nothing, and the browser that adopts it is what queues the
+// proof. A closed `<details>` still holds a connected host, so collapsed is not "not run".
+const stage = state<HTMLElement | null>(null)
+const held = running()
+
+watch(() => {
+    const node = stage()
+    const found = spec()
+    if (node !== null && found !== null) enqueue(found, held, node)
+})
+</script>
+
+{#if spec}
+<details class="source proofs">
+    <summary>
+        what is known about this rung
+        <span class="badge {TONE[held.status()]}">{held.status()}</span>
+    </summary>
+
+    <!-- The whole record rather than its lines: the same component a demo app's profile view mounts,
+         so a rung's card and a demo's page cannot come to show different things about one case. -->
+    <ProfileView profile={profileFor(spec(), held)}/>
+
+    <!-- The live area the queue needs, and it is the case's own scratch space rather than anything a
+         reader looks at: `proofsOf` builds its own containers and takes them down again. -->
+    <div bind:element={stage}></div>
+</details>
+{/if}

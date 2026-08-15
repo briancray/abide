@@ -1,0 +1,105 @@
+<!-- A page that WAITS, which is the one shape the streaming machinery exists for.
+
+     Every other page in this app renders in one pass, so nothing here was ever exercised by being
+     served: `renderDocument` sends a block's PENDING arm now and patches the rest in as the load
+     settles, and until this page there was no route that did. A capability with no served page behind
+     it is a capability whose regressions nobody sees.
+
+     TWO panels, slow then fast, because ONE cannot tell the two lanes apart. Both flush what they
+     have written before waiting, so a single deferred panel looks nearly identical either way — the
+     difference only shows when something FAST sits below something SLOW.
+
+     A document render defers both: every placeholder and all the static markup goes out at once, and
+     each panel is patched in when its own load settles, so the fast one lands first. A navigation has
+     nowhere to patch, so each block is awaited INLINE, in document order — the fast panel is
+     head-of-line blocked behind the slow one, and so is every byte below it. The loads themselves run
+     concurrently in both lanes; what differs is the order the markup may be EMITTED in.
+
+     The spelling is an ordinary `{#if}` chain over the cell's own probes. Asking about `.pending()`
+     IS having something to show while the load runs, which is the whole of what says defer.
+
+     `test/start.test.ts` reads both off the wire and asserts that ordering rather than describing it.
+
+     The slow delay is a query parameter because the point is the WAIT, and a fixed one would make
+     this a page about 300ms. The fast one is fixed: it is a control, not a subject. -->
+<script module>
+import { route, state } from 'abide'
+
+const DEFAULT_MS = 300
+
+/** Bounded, because this is a public page and an unbounded sleep is a held connection per caller. */
+const MOST_MS = 2000
+
+/**
+ * The control panel's wait — fixed, and deliberately much shorter than the default above.
+ *
+ * It sits BELOW the slow one, which is the whole of what makes this page able to tell the two lanes
+ * apart: out of order, it settles first; in document order, it cannot.
+ */
+const FAST_MS = 50
+
+const CARD = 'panel'
+const NOTE = 'card-blurb'
+
+/**
+ * A load that takes a knowable amount of time.
+ *
+ * `setTimeout` rather than `Bun.sleep` — this module renders on BOTH sides, and a page is the one
+ * kind of module where that is not a stylistic choice: the same file is bundled for the browser, so
+ * a Bun API here is a page that does not build.
+ */
+function slowly<T>(ms: number, value: T): Promise<T> {
+    return new Promise((settle) => setTimeout(() => settle(value), ms))
+}
+
+</script>
+
+<script>
+/**
+ * Read off the REQUEST when this renders on a server, and off the address bar when it renders here.
+ * One call, because `route()` is an ambient — which is what lets this page take a parameter without
+ * the two lanes reading it two ways.
+ */
+const asked = Number(route().url.searchParams.get('ms'))
+const ms = Number.isFinite(asked) && asked > 0 ? Math.min(asked, MOST_MS) : DEFAULT_MS
+
+// One load per render, held in a cell, because a chain over the PROBES is what defers — and a probe
+// needs something to ask about. A promise written inline in the markup would be a fresh one on every
+// pass of the thunk that made it.
+const slow = state(slowly(ms, 'the load settled'))
+const fast = state(slowly(FAST_MS, 'the fast load settled'))
+</script>
+
+<div class="page-head">
+    <h1 class="page-title">streaming</h1>
+    <p class="page-blurb">Two panels: the first waits {ms}ms, the second {FAST_MS}ms. Reload and the placeholders and everything below them arrive at once, then each panel is patched in as its own load settles — so the fast one lands first even though it is second on the page. Navigate here instead and the order is the document's: the fast panel waits behind the slow one, and so does this paragraph's neighbour below.</p>
+</div>
+
+<!-- The PENDING ARM is what says "send something now and patch the rest in": there is markup to put on
+     the wire, so the server does, and the settled body follows as a patch. Read the cell without asking
+     about it first — `<p>{slow}</p>` on its own — and there is nothing to send, so the walk blocks here
+     until the load lands and the markup is complete when it arrives. That choice is the whole of the
+     difference between the two lanes below, and it is made in the markup. -->
+<div class={CARD}>
+    {#if slow.pending()}
+        <p class="note">waiting {ms}ms…</p>
+    {:else if slow.error()}
+        <p class="error">the load failed: {String(slow.error())}</p>
+    {:else}
+        <p class="is-ahead">{slow}</p>
+        <p class={NOTE}>Rendered after the wait. On a document render this arrived as a patch, after the shell was already on screen.</p>
+    {/if}
+</div>
+
+<div class={CARD}>
+    {#if fast.pending()}
+        <p class="note">waiting {FAST_MS}ms…</p>
+    {:else if fast.error()}
+        <p class="error">the load failed: {String(fast.error())}</p>
+    {:else}
+        <p class="is-ahead">{fast}</p>
+        <p class={NOTE}>Rendered after the wait. On a document render this arrived as a patch, after the shell was already on screen.</p>
+    {/if}
+</div>
+
+<p class="note">Static markup below both panels. A document render sends this with the shell; a navigation sends it after the slowest block above it has settled.</p>

@@ -31,15 +31,15 @@ client it means the region fills in. Same file, both lanes.
 | | |
 | --- | --- |
 | `packages/abide` | the framework: the reactive core, both renderers, the `.abide` compiler, the CLI |
-| `packages/abide-kit` | the harness everything is tested and measured with. `abide-kit/measure` has **no abide in its graph**, which is what lets a hand-written arm be timed by the same clock as an abide one |
-| `packages/example` | the dogfood: one app, three views of every capability |
+| `packages/harness` | the harness everything is tested and measured with. `harness/measure` has **no abide in its graph**, which is what lets a hand-written arm be timed by the same clock as an abide one |
+| `packages/dogfood` | the dogfood: one app, three views of every capability |
 | `packages/perf` | full use cases at scale, on a shell that ships no stylesheet |
 
 ## Running it
 
 ```sh
 bun install
-bun run dev          # the example app
+bun run dev          # the dogfood app
 bun run typecheck    # from the repo root
 bun test             # from the repo root — the preload lives in its bunfig
 ```

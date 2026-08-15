@@ -1,0 +1,17 @@
+<script module>
+import { state } from 'abide'
+
+export const row = state('<b>ada</b> lovelace')
+</script>
+
+<!-- A slot ESCAPES, which is why the first line shows the tags instead of the bold. `raw(…)` is the
+     one spelling that says a string is already markup, and it has its own name so that one grep finds
+     every string this app does not escape — including the ones in hand-written `.ts` components, which
+     import the same `raw` from `abide`.
+
+     `raw(row)`, not `raw(row())`: naming a cell inside an expression READS it. The explicit spelling
+     compiles to the same `raw(row())` and is never wrong, but the sugar is what this is sugar for. -->
+<ul>
+    <li>escaped: {row}</li>
+    <li>trusted: {raw(row)}</li>
+</ul>

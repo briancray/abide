@@ -89,3 +89,23 @@ export const ARGS_PARAM = '__abide_args'
  * It also has to reach `Vary`, because two callers asking for one URL get two different bodies.
  */
 export const NAVIGATION_HEADER = 'x-abide-navigation'
+
+/**
+ * The route the client is LEAVING, so the server can skip the layouts it is already showing.
+ *
+ * A route NAME — the pattern, not the path — because that is what a layout stack hangs off, and it is
+ * the only thing the server needs to compare. It is a HINT and is treated as one: the answer is a
+ * smaller fragment, so a client that lies about where it is gets markup missing the layouts it
+ * claimed to have, and nothing else. Every rung of the onion still runs, at the target url, exactly
+ * as it does without this.
+ */
+export const NAVIGATION_FROM_HEADER = 'x-abide-navigation-from'
+
+/**
+ * How many layouts the answer LEFT OFF, which is what says where the client has to put it.
+ *
+ * Written by the server rather than assumed by the client, because the server is what decided: the
+ * two route entries it compared are the ones it has, and a client computing the same number from its
+ * own table would be a second implementation of one rule to keep in step.
+ */
+export const NAVIGATION_DEPTH_HEADER = 'x-abide-navigation-depth'

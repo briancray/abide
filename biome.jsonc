@@ -27,11 +27,37 @@
             "trailingCommas": "none"
         }
     },
+    "css": {
+        "parser": {
+            // `packages/dogfood/app.css` is Tailwind v4 source: `@theme` for the tokens, `@layer` for
+            // the structure/look split. Without this biome cannot parse the file at all and reports
+            // the whole token block as one syntax error.
+            "tailwindDirectives": true
+        }
+    },
+    "files": {
+        // `brand/` is design scratch — the mockups and the contact sheet the system was worked out on.
+        // The gallery holds a PASTE of `packages/dogfood/app.css`, so linting it reports every finding
+        // in the sheet a second time, against a copy nobody edits.
+        "includes": ["**", "!brand"]
+    },
     "linter": {
         "enabled": true,
         "rules": {
             "preset": "recommended",
+            "complexity": {
+                // The `prefers-reduced-motion` block in `packages/dogfood/app.css` has to beat every
+                // author animation on the page, including ones set on more specific selectors. That is
+                // the case `!important` exists for, and there is no cascade-safe way to say "nothing
+                // moves" from a single rule — which is exactly what a reader who asked for it expects.
+                "noImportantStyles": "off"
+            },
             "style": {
+                // The sheet is LAYERED — `@layer base` then `@layer components` — and layer order is
+                // settled before specificity is even looked at. A base rule appearing after a more
+                // specific components rule is the arrangement working, not a hazard, so the rule has
+                // nothing true to say about this file.
+                "noDescendingSpecificity": "off",
                 // `noUncheckedIndexedAccess` is on, so `!` is how indexed reads that the surrounding
                 // loop already bounds get narrowed. Re-checking them in hot paths costs a branch.
                 "noNonNullAssertion": "off"
@@ -54,7 +80,7 @@
         }
     },
     // No per-file overrides. There used to be one for the bench, which assigned to a module-level
-    // sink inside an expression to defeat dead-code elimination; `keep()` in `abide-kit/measure`
+    // sink inside an expression to defeat dead-code elimination; `keep()` in `harness/measure`
     // names that intent instead, so the rule no longer has anything to be turned off for.
     "overrides": []
 }

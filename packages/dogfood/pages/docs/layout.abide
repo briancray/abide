@@ -1,0 +1,23 @@
+<!-- The docs section's frame: every public name down the side, the page beside it.
+
+     A layout rather than a line on each page, for the reason the root layout exists — `/docs` and
+     `/docs/<callable>` are one section and neither should have to remember its own nav. It is also what
+     makes the nav a PRESERVED node across a move between two callables: the layout stays, the body is
+     what the router swaps, and forty-five links are not rebuilt to move one mark. -->
+<script module>
+import { CALLABLE_ORDER } from '../../demos/CALLABLES.ts'
+import type { NavItem } from '../../site/sidebar.ts'
+import Sidebar from '../../site/sidebar.abide'
+
+/** Built once, at module scope: the list is the same on every page in this section. */
+const ITEMS: NavItem[] = CALLABLE_ORDER.map((name) => ({ href: `/docs/${name}`, label: name }))
+
+const TITLE = `callables · ${CALLABLE_ORDER.length}`
+</script>
+
+<div class="with-sidebar">
+    <Sidebar title={TITLE} items={ITEMS}/>
+    <div class="with-sidebar-body">
+        <slot/>
+    </div>
+</div>

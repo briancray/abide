@@ -1,0 +1,89 @@
+<!-- One `Profile`, shown. The consumer half of the harness's record.
+
+     FACTS come from the harness and become classes here — the seam `bench.ts` already states — and this
+     is that rule applied to the whole record rather than to a bench row. Nothing in `profile.ts` knows
+     what a badge looks like; nothing here decides what is true.
+
+     Three things a status alone cannot say, and each of them is a question a reader actually has:
+
+       the SUBSTRATE   a count from happy-dom and a count from a real engine are not the same claim,
+                       so the lane is on the card rather than implied by which page you opened
+       the FACES       what this case could be asked, including what THIS lane could not run. A
+                       `visit` on a `bun test` profile is visible and greyed rather than absent
+       the METRICS     when a case carries a bench, its headline number and the ratio it exists to
+                       state — the same two `/bench` puts in a table, without the table
+
+     Handed a record rather than a case, so a demo app's own profile view mounts this same component. -->
+<script module>
+import type { Face, Profile } from 'harness'
+import { LINE, TONE } from './table.ts'
+
+/** The lane, as a word a reader can check against what they are looking at. */
+const SUBSTRATE: Record<Profile['substrate'], string> = {
+    bun: 'bun · happy-dom',
+    browser: 'this browser',
+}
+
+/**
+ * Which faces this LANE could actually run, so the rest can be shown as what they are.
+ *
+ * Not a fact about the case — a fact about where the profile was produced — which is why it is
+ * derived here from `substrate` rather than carried on the record.
+ */
+function ran(profile: Profile, face: Face): boolean {
+    if (face === 'bench') return true
+    if (profile.substrate === 'bun') return face === 'run' || face === 'server'
+    return face === 'run' || face === 'visit' || face === 'interact'
+}
+</script>
+
+<script>
+import { props } from 'abide'
+
+// `Profile | null`, and not because a null profile is meaningful: `{#if}` does not narrow into a
+// slot's own thunk, so a caller holding a nullable cannot hand over a narrowed one however recently
+// it tested it. The branch belongs on this side either way — see `proofs.abide`.
+const { profile } = props<{ profile: Profile | null }>()
+</script>
+
+{#if profile}
+<div class="profile">
+    <p class="profile-head">
+        <span class="badge {TONE[profile.status]}">{profile.status}</span>
+        <span class="profile-where">{SUBSTRATE[profile.substrate]}</span>
+        <span class="profile-faces">
+            {#for face of profile.faces}<span class="face {ran(profile, face) ? 'is-run' : 'is-elsewhere'}" title={ran(profile, face) ? 'run here' : 'not this lane'}>{face}</span>{/for}
+        </span>
+    </p>
+
+    {#if profile.metrics.length > 0}
+        <div class="profile-metrics">
+            {#for metric of profile.metrics}
+                <div class="profile-metric">
+                    <!-- The LABEL first: it is what the number is a number of, and a column of values
+                         with no names on them is a column nobody can read. It was in the record and
+                         not on the card for one revision, which is exactly how long it took to notice. -->
+                    <p class="metric-label">{metric.label}</p>
+                    <p class="metric-value">
+                        <span class="kind is-{metric.kind}">{metric.kind}</span>
+                        <span class="number">{metric.value}</span>
+                        {#if metric.ratio}<span class="tail">{metric.ratio}</span>{/if}
+                    </p>
+                    {#if metric.per}<p class="metric-per">{metric.per}</p>{/if}
+                </div>
+            {/for}
+        </div>
+    {/if}
+
+    <div class="console">
+        {#for line of profile.lines}
+            <div class="console-line">
+                <span class="console-label">{line.label === '' ? ' ' : line.label}</span>
+                {#if line.value !== ''}
+                    <span class="console-value {LINE[line.kind]}">{line.value}</span>
+                {/if}
+            </div>
+        {/for}
+    </div>
+</div>
+{/if}

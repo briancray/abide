@@ -1,0 +1,94 @@
+<!-- One public name as a reference page: how to import it, and the LADDER of examples that use it.
+
+     A ladder rather than one example, because a file that shows five things is a large example of none:
+     the reader cannot tell which line is responsible for which behaviour. Each rung adds exactly one
+     thing and says which, so the lesson is the diff between two adjacent rungs.
+
+     MOST PAGES HAVE ONE RUNG, and that is a fact being shown rather than hidden. Forty-five names
+     across seventy-one rungs cannot be two-deep everywhere, and a page with one rung is a legible
+     request for a second — where the old suite pages, being twenty-one pages for the same rungs, made
+     the thin ones invisible by averaging.
+
+     Every rung is rendered rather than described. `rung.view` is a compiled `.abide` component, so
+     interpolating what it returns is ordinary content in a slot — which means the preview
+     server-renders with the page instead of waiting for a client to mount it. About half the rungs have
+     no `view`: a lifecycle hook and a config declaration are examples with nothing to show, and there
+     the source IS the example.
+
+     What the repo ASSERTS about the name is not listed here at all. The cases run on `/tests/<suite>`
+     and are priced on `/bench/<suite>`, so a title-and-note copy of them on this page was a third view
+     that could go stale against both. -->
+<script module>
+import type { Example } from 'harness'
+import type { CallableMeta } from '../demos/CALLABLES.ts'
+import { proofsOf } from '../demos/proofs.ts'
+import Code from './code.abide'
+import Proofs from './proofs.abide'
+
+/* The frame styles whatever the example renders, once, here — see `.rung-preview` in `app.css`,
+   which reaches the buttons and inputs inside with descendant selectors so the examples themselves
+   stay class-free. Their SOURCE is the artifact a reader copies. */
+const PREVIEW = 'rung-preview'
+
+/**
+ * The import a reader copies before anything else on the page is useful.
+ *
+ * Built here rather than written per entry, so a name that MOVES specifier cannot leave a page telling
+ * people to import it from where it used to be.
+ */
+const importOf = (name: string, from: string): string => `import { ${name} } from '${from}'`
+</script>
+
+<script>
+import { props } from 'abide'
+
+// Two props rather than a `CallableMeta` that carries its own rungs: the metadata is prose and static,
+// the rungs are what an `import()` produced, and joining them into one record here would mean the page
+// could not send its shell out before the ladder had loaded.
+const { callable, rungs } = props<{ callable: CallableMeta; rungs: Example[] }>()
+</script>
+
+<div class="page-head">
+    <p class="crumb"><a href="/docs">docs</a></p>
+    <h1 class="page-title">{callable.name}</h1>
+    <p class="page-blurb">{callable.blurb}</p>
+    <div class="import-line">
+        <Code source={importOf(callable.name, callable.from)}/>
+    </div>
+</div>
+
+<div class="ladder">
+    <!-- The ladder, smallest rung first. Each is numbered and labelled with the ONE thing it adds, so
+         what a reader compares is two adjacent rungs rather than one file against a paragraph. -->
+    {#for rung, at of rungs}
+        <!-- `data-rung` names the rung for whoever is counting or clicking it, and carries its number,
+             which is what a browser test locates one rung by. -->
+        <section class="rung panel" data-rung={at + 1}>
+            <div class="rung-title">
+                <h2 class="rung-head">
+                    <span class="rung-number">{at + 1}</span>
+                    <span class="rung-adds">{rung.adds}</span>
+                </h2>
+                <!-- The names this rung is `of`, which is also what put it on this page. Written out
+                     rather than implied by the address: a rung claiming two names is on two pages, and
+                     the reader should be able to see that from either. -->
+                <p class="rung-of">of {#for name of rung.of}<code>{name}</code> {/for}</p>
+            </div>
+            <!-- The RESULT first and the source beside it, which is the order the two columns are sized
+                 in: a rung with no `view` collapses to one column and the source takes the width. -->
+            {#if rung.view}
+                <!-- `?.` for the TYPE, not the runtime: the `{#if}` above has already proved it, but a
+                     slot is its own thunk and the narrowing does not cross into one. -->
+                <div class={PREVIEW}>{rung.view?.({})}</div>
+            {/if}
+            <div class="code-block">
+                <Code source={rung.source}/>
+            </div>
+            <!-- `null` for a rung with nothing to mount — a lifecycle hook, a config declaration —
+                 and the component draws nothing for one, because "the source is the example" is not a
+                 claim to paint a badge on. Branched INSIDE rather than here: `{#if}` does not narrow
+                 into a slot's thunk, so a test here would not give the prop a narrowed type. -->
+            <Proofs spec={proofsOf(rung)}/>
+        </section>
+    {/for}
+</div>

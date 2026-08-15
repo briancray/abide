@@ -23,7 +23,7 @@
 
 import { markSource } from './internal/BRANDS.ts'
 import { admit, Bounded, release, touch } from './internal/ceilings.ts'
-import { type Cell, derive, internals, isPending, type Memo, untrack } from './internal/graph.ts'
+import { caught, type Cell, derive, internals, isPending, lastly, type Memo, untrack } from './internal/graph.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { isAsyncIterable, isThenable } from './internal/probes.ts'
 import { disposeWith, storeFor } from './internal/scopes.ts'
@@ -468,6 +468,12 @@ function scopedArgless<T>(fallback: Memo<T>, build: () => Memo<T>): Memo<T> {
                 onFulfilled,
                 onRejected,
             )) as Memo<T>['then'],
+        // The SAME pair every other cell carries, not a forwarder of their own: both reach this
+        // facade through `this`, and its `then` above is what puts the scoped instance behind them.
+        // A closure here would be two more allocations per caller AND a different function object,
+        // which is the thing the identity assertion in `demos/memo.ts` is watching for.
+        catch: caught as Memo<T>['catch'],
+        finally: lastly as Memo<T>['finally'],
     }
     Object.assign(facade, forward)
     return facade

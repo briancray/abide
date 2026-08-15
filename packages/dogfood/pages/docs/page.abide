@@ -1,0 +1,40 @@
+<!-- The whole public surface, on one page, grouped by the specifier you import it from.
+
+     This page is prose only — `CALLABLES.ts` carries no ladder, just names, lines and `import()` thunks
+     — so listing every name costs nothing that listing one would not. The rungs arrive on the page
+     a name links to.
+
+     THE LIST IS THE DEFINITION. A name with no entry here is not public, and a name here that no rung
+     demonstrates fails `test/docs.test.ts`, so this page cannot describe a surface the app does not
+     actually have. -->
+<script module>
+import { CALLABLE_ORDER, CALLABLES, type CallableName, SPECIFIERS } from '../../demos/CALLABLES.ts'
+
+const CARD = 'card'
+
+/** The names on one entry point, in index order. `CALLABLE_ORDER` is the sort; this only partitions it. */
+const on = (specifier: string): CallableName[] => CALLABLE_ORDER.filter((name) => CALLABLES[name].from === specifier)
+</script>
+
+<div class="page-head">
+    <h1 class="page-title">docs</h1>
+    <p class="page-blurb">Every name abide exports, one page each. A page is that name’s ladder: each rung is the one before it plus exactly one new thing, and every rung is a real file this app compiles and tests.</p>
+</div>
+
+<!-- The same names the sidebar lists, grouped by the specifier you import them from — which is the one
+     thing the flat list beside it cannot say, and the reason this index still earns a page. -->
+{#for specifier of SPECIFIERS}
+    <section data-specifier={specifier}>
+        <h2 class="head">{specifier} · {on(specifier).length}</h2>
+        <div class="name-grid">
+            {#for name of on(specifier)}
+                <a href="/docs/{name}" class={CARD} data-callable={name}>
+                    <code class="name">{name}</code>
+                    <p class="card-blurb">{CALLABLES[name].blurb}</p>
+                </a>
+            {/for}
+        </div>
+    </section>
+{/for}
+
+<p class="note">What each of these is asserted to DO runs on <a href="/tests" class="link">/tests</a>, and what it costs is measured against a hand-written arm on <a href="/bench" class="link">/bench</a>.</p>

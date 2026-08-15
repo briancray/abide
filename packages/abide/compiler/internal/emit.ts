@@ -1,6 +1,6 @@
 // The node tree becomes the file a careful author would have written by hand.
 //
-// Not a pre-scanned `TemplateResult`: an `html` tagged template, the shape `packages/example/counter.ts`
+// Not a pre-scanned `TemplateResult`: an `html` tagged template, the shape `packages/dogfood/counter.ts`
 // already is. `planOf` and `prepare` are keyed on the `strings` identity a tagged template gives
 // for free, so the scan and the parse happen once per call site whatever the compiler does — and
 // what pre-scanning would buy is one scan per call site per process, against a stack trace that no
@@ -120,13 +120,16 @@ type Runtime =
     | 'start'
 
 /**
- * The one of those an author also types, so the header keeps it on `abide`.
+ * The two an author also types, so the header keeps them on `abide`.
  *
- * `raw` and `keyed` are NOT authored, despite reading like it: the escape hatch is spelled
- * `{html(...)}` and a key is spelled `by` on a `{#for}`. Both are what this emitter writes for
- * those spellings, never what a source file says.
+ * `keyed` is NOT authored, despite reading like it: a key is spelled `by` on a `{#for}`, which is
+ * what this emitter writes `keyed` for and never what a source file says.
+ *
+ * `raw` used to be on that side, reached by spelling it `{html(...)}` — and that made `html` mean
+ * ESCAPE as a tag and INSERT-RAW as a call, one public name with two opposite answers about trust,
+ * told apart only by a backtick. The hatch is now spelled with its own name.
  */
-const AUTHORED_RUNTIME: ReadonlySet<string> = new Set<Runtime>(['html'])
+const AUTHORED_RUNTIME: ReadonlySet<string> = new Set<Runtime>(['html', 'raw'])
 
 /** The absent region — a file with no `<script module>`, or no `<script>`. Shared, never written. */
 const NO_TOKENS: Token[] = []
@@ -1199,18 +1202,18 @@ function child(node: Node, context: Context): string {
     switch (node.kind) {
         case 'text':
             // A `.abide` file's own commentary is for whoever opens the file, and emitting it ships
-            // one copy PER INSTANCE: the example's card and source panes were 22.7 kB of a single
+            // one copy PER INSTANCE: the dogfood app's card and source panes were 22.7 kB of a single
             // 88 kB page that way, against 1.9 kB for every hydration marker on it. Dropped here
             // rather than in the parser, so `check` still points a diagnostic at what a human wrote —
             // and dropped ONCE, so both lanes agree: the two substrates read this one emitted
             // template, and a comment absent from the client's markup is absent from the server's.
             return literal(node.value.replace(HTML_COMMENT, ''))
         case 'expression': {
-            const text = code(node.value, context, 'slot')
-            // `{html(...)}` is SPEC's raw escape hatch; the runtime spells it `raw(...)`.
-            const value = node.raw
-                ? `${need(context, 'raw')}(${text.replace(/^html\s*\(/, '').replace(/\)$/, '')})`
-                : text
+            const value = code(node.value, context, 'slot')
+            // `{raw(...)}` is SPEC's escape hatch, and the author wrote the call — so nothing is
+            // rewritten here. `need` is only what puts `raw` in the header for a file that reached
+            // for the hatch without importing it, the same way `html` is handled.
+            if (node.raw) need(context, 'raw')
             // Parenthesised BEFORE the marker goes on, since the marker is a prefix and `body` reads
             // the first character of the expression.
             const marked = mark(node.value.start, body(value))
@@ -1508,10 +1511,45 @@ function toggled(
     return ` ${attribute}=\${${reads ? `() => ${call}` : call}}`
 }
 
-const ELEMENT_TYPES: Record<string, string> = {
-    input: 'HTMLInputElement',
-    select: 'HTMLSelectElement',
-    textarea: 'HTMLTextAreaElement',
+/**
+ * Where each `bind:` is legal, and what says the user changed it.
+ *
+ * A bind is a read AND a write, so it needs BOTH halves to exist on the element it is written on —
+ * and this table is what makes that a compile error rather than a listener that never fires. It used
+ * to be a bare tag→type map with one hand-written refusal beside it for `bind:selected`, so every
+ * other wrong pairing compiled: `bind:open` on a `<details>` emitted an `@input` listener for an
+ * event `<details>` does not have, cast to `HTMLElement`, which has no `.open` — three defects, none
+ * of them reported here. The `selected` refusal was the shape of the answer; it was one row of it.
+ *
+ * `element` is deliberately absent: it is a node ref rather than a value, so it has no event and is
+ * legal anywhere.
+ */
+const BINDABLE: Record<string, Record<string, { dom: string; event: string }>> = {
+    value: {
+        input: { dom: 'HTMLInputElement', event: 'input' },
+        textarea: { dom: 'HTMLTextAreaElement', event: 'input' },
+        // `change` and not `input`: a select fires `input` too, but `change` is the one that means
+        // the selection settled, and it is what every arm of this ever emitted.
+        select: { dom: 'HTMLSelectElement', event: 'change' },
+    },
+    checked: { input: { dom: 'HTMLInputElement', event: 'change' } },
+    group: { input: { dom: 'HTMLInputElement', event: 'change' } },
+    open: { details: { dom: 'HTMLDetailsElement', event: 'toggle' } },
+}
+
+/** A boolean PROPERTY mirrored as a boolean attribute: present iff truthy, never stringified. */
+const BOOLEAN_BINDS = new Set(['checked', 'open'])
+
+/**
+ * What to write INSTEAD, for the spellings somebody reaches for before the one that works.
+ *
+ * A refusal that only says no makes the author guess, and the guess for `bind:selected` is to give
+ * up on the select. Kept as a table rather than as an arm inside `bind` so that the next one is a
+ * line here and not a fourth special case — see the rule about three of them.
+ */
+const INSTEAD: Record<string, string> = {
+    selected:
+        ' — a selection belongs to the `<select>`: write `bind:value` there and give each `<option>` its own `value="…"`',
 }
 
 /** `reads` is whether ANY hole is live — one is enough to make the joined string move. */
@@ -1554,10 +1592,33 @@ function bind(
     // The node itself, not a value — nothing to serialise, so SSR emits nothing for it.
     if (key_ === 'element') return ` &ref=\${${source}}`
 
+    // BOTH halves have to exist on this element, and the message says which one does not: a bind
+    // nothing can write back from is a control that reads correctly and then never moves again.
+    const where = BINDABLE[key_]
+    const at = attribute.value?.start ?? 0
+    if (where === undefined) {
+        const known = Object.keys(BINDABLE).join('`, `bind:')
+        throw new ParseError(
+            `abide: there is no \`bind:${key_}\`${INSTEAD[key_] ?? ''}. The binds are ` +
+                `\`bind:${known}\`, and \`bind:element\` for the node itself`,
+            at,
+        )
+    }
+    const legal = where[tag]
+    if (legal === undefined) {
+        const tags = Object.keys(where)
+            .map((name) => `<${name}>`)
+            .join(', ')
+        throw new ParseError(
+            `abide: \`bind:${key_}\` is for ${tags}${INSTEAD[key_] ?? ''} — a <${tag}> has no ` +
+                `\`${key_}\` to read and no event to write one back from`,
+            at,
+        )
+    }
+
     // The emitted listener is type-checked like any other code, so its parameter carries the type
     // the element actually has — an untyped `event` here is an implicit `any` in the author's build.
-    const dom = ELEMENT_TYPES[tag] ?? 'HTMLElement'
-    const target = (property: string): string => `(event.currentTarget as ${dom}).${property}`
+    const target = (property: string): string => `(event.currentTarget as ${legal.dom}).${property}`
 
     // `{get, set}` — an explicit accessor pair rather than a cell.
     const accessor = source.startsWith('{')
@@ -1565,25 +1626,15 @@ function bind(
     const write = (value: string): string =>
         accessor ? `(${source}).set(${value})` : `${source}.set(${value})`
 
-    if (key_ === 'selected') {
-        // Refused rather than emitted: a selection belongs to the `<select>`, not to an `<option>`.
-        // `change` does not fire on an option, so the write-back half was dead, and `option` is not in
-        // `ELEMENT_TYPES` — so the read half was `HTMLElement.selected`, a type error in the author's
-        // own build. The default arm below already binds a select, which is the whole feature.
-        throw new ParseError(
-            'abide: a selection is bound on the `<select>` — write `bind:value` there and give each ' +
-                '`<option>` its own `value="…"`',
-            attribute.value?.start ?? 0,
-        )
-    }
-
-    if (key_ === 'checked') {
+    if (BOOLEAN_BINDS.has(key_)) {
         // A boolean DOM property mirrored as a boolean ATTRIBUTE: present iff truthy, never
-        // stringified — which is why the attribute slot is handed the raw boolean.
+        // stringified — which is why the attribute slot is handed the raw boolean, and what makes
+        // the state survive SSR. `checked` and `open` differ only in the event, which the table
+        // above already carries, so this is one arm rather than the second copy of one.
         return (
             ` .${key_}=\${() => !!${read}}` +
             ` ${key_}=\${() => !!${read}}` +
-            ` @change=\${(event: Event) => ${write(target(key_))}}`
+            ` @${legal.event}=\${(event: Event) => ${write(target(key_))}}`
         )
     }
 
@@ -1608,19 +1659,18 @@ function bind(
             ` : ${mine}`
         return (
             ` .checked=\${() => { const held = ${read}; return Array.isArray(held) ? held.includes(${mine}) : held === ${mine} }}` +
-            ` @change=\${(event: Event) => { const held = ${read}; ${write(next)} }}`
+            ` @${legal.event}=\${(event: Event) => { const held = ${read}; ${write(next)} }}`
         )
     }
 
-    const listener = tag === 'select' ? 'change' : 'input'
     // The CELL itself where the source is one, not a thunk that reads it: a property slot's function
     // value goes through `unwrap`, which reads a source one step further, so the two are the same
     // write on both substrates — and the thunk was a fresh closure per bound input per row. The
     // exceptions are the arms above and are exactly why they are arms: an accessor pair is not a
-    // cell, and `checked` needs the `!!` coercion for the attribute half. A `<select>` lands HERE —
-    // `.value` plus a `change` listener — which is why there is no arm of its own for one.
+    // cell, and a boolean needs the `!!` coercion for the attribute half. A `<select>` lands HERE —
+    // `.value` plus the `change` the table names for it — which is why it has no arm of its own.
     const value = accessor ? `() => ${read}` : source
-    return ` .${key_}=\${${value}}` + ` @${listener}=\${(event: Event) => ${write(target(key_))}}`
+    return ` .${key_}=\${${value}}` + ` @${legal.event}=\${(event: Event) => ${write(target(key_))}}`
 }
 
 // --- components ------------------------------------------------------------

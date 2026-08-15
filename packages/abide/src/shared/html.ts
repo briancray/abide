@@ -65,6 +65,29 @@ export function attributeText(value: unknown): string | null | true {
     return String(value)
 }
 
+// An ALLOWLIST rather than a list of what breaks out, because the two lanes have to agree and only
+// one of them is a string: the client's `setAttribute` validates against XML's `Name`, so a denylist
+// wide enough to stop the injection still lets `1abc` through the server and throws in the browser.
+// This is `Name` restricted to ASCII — every attribute a real app writes, `data-*` and `aria-*`
+// included — and a name outside it is absent from BOTH lanes rather than written by one of them.
+const ATTRIBUTE_NAME = /^[A-Za-z_:][A-Za-z0-9_.:-]*$/
+
+/**
+ * Whether a name may be WRITTEN as an attribute — the second rule both substrates render by.
+ *
+ * Only a `...spread` carries a name from runtime data; every other attribute name is the compiler's
+ * own, out of the template. So this is asked once per spread KEY rather than once per attribute, and
+ * the per-node path pays nothing for it.
+ *
+ * What it is holding: the server concatenates ` ${name}="…"`, so a name carrying a space or a quote
+ * closes that attribute and opens whatever follows it — `x onload=alert(1) y` is an event handler on
+ * the page. The client could never write that same name, which is why this was a hydration mismatch
+ * as well as an injection, and why the rule is here rather than in either renderer.
+ */
+export function isAttributeName(name: string): boolean {
+    return ATTRIBUTE_NAME.test(name)
+}
+
 // --- list keys ------------------------------------------------------------
 //
 // A key is a plain data marker, not a renderer concept: it says WHICH row this is, and only the

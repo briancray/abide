@@ -1,0 +1,67 @@
+<!-- Every capability against a hand-written equivalent: ONE ROW PER CLAIM, four columns wide.
+
+     A table rather than a stack of cards, because forty-odd benches are read by SCANNING — and the
+     row is the claim rather than the arm, which is the correction this page needed. One line per arm
+     put the two numbers a reader came for inside 240 lines of equal weight, so the comparison the
+     whole page exists to make could not be run down a column. Every arm is still here; opening a row
+     is what shows them, along with the prose and the per-item numbers.
+
+     The table itself — the filter, the chips, the header, `run everything` — is `bench-table.abide`,
+     which `/bench/<name>` mounts too. What is left here is what is only true of the INDEX: it loads
+     every suite, and it says what the clock under the numbers is worth. -->
+<script module>
+import { memo, state } from 'abide'
+import { exposeBench } from 'harness'
+import { clockResolution } from 'harness/measure'
+import Table from '../../site/bench-table.abide'
+import { type BenchRow, benchRows } from '../../site/bench.ts'
+
+const CLOCK =
+    `This browser reports time in steps of ${clockResolution().toFixed(3)} ms; each batch is sized ` +
+    'to take about 40 ms, so that clamp is the noise floor under every number below. A 1.05× ' +
+    'difference is not a difference.'
+
+const AFTERWORD =
+    'What the ratios do not show: the vanilla arms above are ~250 lines that each do one of these ' +
+    'jobs and none of the others. The failure behaviour — a stale load landing on top of a newer ' +
+    'one, a throwing effect stranding the batch, a status record waking every reader on every ' +
+    'settle — is where the hand-written versions actually lose, and it is measured on this page as ' +
+    'wakes and DOM calls rather than as time.'
+</script>
+
+<script>
+/**
+ * Every benched case, loaded once — and the failure, if the load is what failed.
+ *
+ * A page whose whole content is one load has to say when the load did not happen: a silent empty
+ * table reads as "there are no benches", which is the one thing it never means. The `catch` is the
+ * page's, not the console's.
+ */
+const failure = state('')
+const loaded = memo(async (): Promise<BenchRow[]> => {
+    try {
+        const rows = await benchRows()
+        // See `exposeBench` — the profiler reads the rows this page is drawing, not a second set.
+        exposeBench(rows)
+        return rows
+    } catch (error: unknown) {
+        failure = `the benches did not load — ${String(error)}`
+        return []
+    }
+})
+</script>
+
+<div class="page-head">
+    <h1 class="page-title">bench</h1>
+    <p class="page-blurb">Every capability against a hand-written equivalent, one row per claim. The last column is abide divided by the hand-written arm, so <span class="is-ahead">under 1.00×</span> is abide ahead and <span class="is-behind">over</span> is behind. Open a row for its prose, its other arms and the per-item numbers. Time cases are the median of many batches, so they are comparable within a run and meaningless between machines — read the ratio, not the number.</p>
+</div>
+
+<p class="note">{CLOCK}</p>
+
+{#if failure}<p class="error">{failure}</p>{/if}
+
+<!-- No cold check: this body is re-run, so a read of a load that has not landed signals out of here
+     rather than handing back `undefined`. -->
+<Table rows={loaded()}>
+    <p class="note">{AFTERWORD}</p>
+</Table>

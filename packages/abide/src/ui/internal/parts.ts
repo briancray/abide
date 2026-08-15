@@ -15,6 +15,7 @@ import {
     cellProps,
     Component,
     html,
+    isAttributeName,
     isKeyed,
     type Keyed,
     isTemplate,
@@ -142,7 +143,7 @@ export class ChildPart {
      */
     private holding: unknown = NOTHING
 
-    /** The last `Raw` html this part painted, so re-running a `{html(...)}` slot does not reparse it. */
+    /** The last `Raw` html this part painted, so re-running a `{raw(...)}` slot does not reparse it. */
     private rawHtml: string | null = null
 
     /** Server nodes waiting to be interpreted, until the first value says what they are. */
@@ -159,6 +160,27 @@ export class ChildPart {
     /** Whether `node` is this part's anchor — how an instance finds the part sitting at a position. */
     isAnchor(node: ChildNode): boolean {
         return this.anchor === node
+    }
+
+    /**
+     * The child part inside this one that is showing `result`, or `null` when none is.
+     *
+     * ONE caller: a navigation whose answer belongs inside a layout the reader already has on screen,
+     * walking down to the `<slot/>` that layout renders its children into. Read-only and called once
+     * per navigation, so nothing here is on a path walked per row.
+     *
+     * Identity of the VALUES array is the test, and it is exact rather than heuristic: `html` builds a
+     * fresh `values` per evaluation, so the array in one `TemplateResult` is in exactly one instance.
+     * Comparing `strings` instead would name the TEMPLATE, and a layout that renders its child's
+     * template twice would have two answers.
+     */
+    partShowing(result: TemplateResult): ChildPart | null {
+        return this.nested === null ? null : this.nested.partShowing(result)
+    }
+
+    /** Whether this part's own instance was rendered from `result`. `Instance.partShowing` asks. */
+    showing(result: TemplateResult): boolean {
+        return this.nested?.renderedFrom(result) === true
     }
 
     /**
@@ -906,7 +928,7 @@ class ListPart {
         // produces, and the one a thousand-row update walks — never asks. A keyed list whose order
         // did not change, which is what a keyed feed does on every edit, would have paid a `Map.set`
         // and a `Map.get` per row to be told what `previous[i]` already said: 0.165 vs 0.234 ms on
-        // the thousand-row same-order edit benched in the example package.
+        // the thousand-row same-order edit benched in the dogfood package.
         //
         // The `carried` half is what keeps the two ends honest. A cold build has no previous rows at
         // all, and an APPEND has claimed every one of them by position before it reaches the new
@@ -1032,7 +1054,7 @@ class ListPart {
         // That is the trade, and it is deliberate: on a REAL reorder (a re-sort, a filter) this
         // already moves ~n rows against the ~n−2√n an uncorrelated permutation needs, so a
         // minimal-move (LIS) reconcile is worth about 5% for a whole second pass and an array per
-        // update. The example package benches both directions.
+        // update. The dogfood package benches both directions.
         //
         // The WALK, though, no longer costs n. Rows after `lastChanged` are the same objects at the
         // same indices and were in order already, so the walk starts against the first of them
@@ -1246,6 +1268,21 @@ class Instance {
      * re-application on the next pass and nothing more.
      */
     private applied: readonly unknown[] | null = null
+
+    /** Whether this instance is the one `result` was rendered into. See `ChildPart.partShowing`. */
+    renderedFrom(result: TemplateResult): boolean {
+        return this.lastValues === result.values
+    }
+
+    /** The child part of this instance showing `result`. Walked once per navigation, never per row. */
+    partShowing(result: TemplateResult): ChildPart | null {
+        const children = this.children
+        for (let i = 0; i < children.length; i++) {
+            const part = children[i] as ChildPart
+            if (part.showing(result)) return part
+        }
+        return null
+    }
 
     /** The child part anchored at `node`, if a slot sits at that position rather than static markup. */
     private partAt(node: ChildNode): ChildPart | null {
@@ -1574,14 +1611,26 @@ class Instance {
             }
         }
         if (kind.kind === 'spread') {
-            // Which attributes this slot owns is only known from the value, so the PREVIOUS object is
-            // the record of what to take back: anything it set and no longer names is removed.
-            let previous: Record<string, unknown> = {}
+            // Which attributes this slot owns is only known from the value, so the PREVIOUS names are
+            // the record of what to take back: anything it set and no longer names is removed. What was
+            // WRITTEN rather than what was handed over, so a name the guard rejected is never handed to
+            // `removeAttribute` either.
+            let previous: string[] = []
             return (value) => {
                 const next = (value ?? {}) as Record<string, unknown>
-                for (const name in previous) if (!(name in next)) element.removeAttribute(name)
-                for (const name in next) writeAttribute(element, name, next[name])
-                previous = next
+                const names = Object.keys(next)
+                const written: string[] = []
+                for (let i = 0; i < names.length; i++) {
+                    const name = names[i] as string
+                    if (!isAttributeName(name)) continue
+                    writeAttribute(element, name, next[name])
+                    written.push(name)
+                }
+                for (let i = 0; i < previous.length; i++) {
+                    const name = previous[i] as string
+                    if (!written.includes(name)) element.removeAttribute(name)
+                }
+                previous = written
             }
         }
         return (value) => writeAttribute(element, kind.name, value)

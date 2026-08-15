@@ -1,0 +1,26 @@
+{
+    "name": "harness",
+    "version": "0.0.0",
+    "type": "module",
+    "private": true,
+    "exports": {
+        ".": "./harness.ts",
+        "./measure": "./measure.ts",
+        "./spawn": "./spawn.ts",
+        "./e2e": "./e2e.ts",
+        "./engine": "./engine.ts",
+        "./server": "./server.ts",
+        "./fleet": "./fleet.ts"
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit",
+        "test": "bun test"
+    },
+    "dependencies": {
+        "abide": "workspace:*"
+    },
+    "devDependencies": {
+        "@happy-dom/global-registrator": "^20.10.6",
+        "@playwright/test": "^1.62.1"
+    }
+}

@@ -16,7 +16,8 @@ import { expect, test } from 'bun:test'
 import { isolate } from '$shared/internal/scopes.ts'
 import { outlet, routes } from 'abide/runtime'
 import { navigate } from 'abide'
-import { pages, renderToString } from 'abide/server'
+import { renderToString } from 'abide/server/internal'
+import { pages } from 'abide/server/internal'
 
 const HERE = new URL('../pages/', import.meta.url)
 

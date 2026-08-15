@@ -1,0 +1,23 @@
+<!-- The bench section's frame, and `/tests`'s opposite number: the same capabilities down the side,
+     pointing at what each one COSTS rather than at whether it works.
+
+     The two sections are deliberately the same nav in the same place. A reader comparing a suite's
+     measurements against its claims moves between the two by the `tests →` / `bench →` link in the
+     chrome, and the column they were reading down does not move under them when they do. -->
+<script module>
+import { CAPABILITIES } from '../../demos/SUITES.ts'
+import type { NavItem } from '../../site/sidebar.ts'
+import Sidebar from '../../site/sidebar.abide'
+
+/** Built once, at module scope: the list is the same on every page in this section. */
+const ITEMS: NavItem[] = CAPABILITIES.map((entry) => ({ href: `/bench/${entry.name}`, label: entry.name }))
+
+const TITLE = `capabilities · ${CAPABILITIES.length}`
+</script>
+
+<div class="with-sidebar">
+    <Sidebar title={TITLE} items={ITEMS}/>
+    <div class="with-sidebar-body">
+        <slot/>
+    </div>
+</div>

@@ -54,9 +54,9 @@ export const TYPES_DIR = '.abide/types'
 const PROJECTS = new Map<string, Promise<string>>()
 
 /**
- * The package `path` belongs to — where its mirror hangs, and where its bare specifiers resolve from.
+ * The package `from` sits in — where its mirror hangs, and where its bare specifiers resolve from.
  *
- * Derived from the FILE rather than taken from the caller, because a `tsconfig` has to name the
+ * Derived from the TREE rather than taken from the caller, because a `tsconfig` has to name the
  * mirror in `rootDirs` and a config cannot name a directory that moves with the cwd somebody ran
  * `abide check` in. A `package.json` is the same boundary the module resolver stops at, so this is
  * that rule read rather than a rule invented for the mirror.
@@ -67,8 +67,7 @@ const PROJECTS = new Map<string, Promise<string>>()
  * where `rootDirs` and bare-specifier resolution start. Aligning them would break whichever was
  * changed.
  */
-function projectOf(path: string): Promise<string> {
-    const from = dirname(resolve(path))
+function projectOf(from: string): Promise<string> {
     const held = PROJECTS.get(from)
     if (held !== undefined) return held
 
@@ -99,7 +98,7 @@ async function walkToPackage(from: string): Promise<string> {
  */
 export async function emitFor(path: string): Promise<EmitResult> {
     // Independent — the read does not wait on the climb, and `emitAll` starts every file at once.
-    const [source, root] = await Promise.all([Bun.file(path).text(), projectOf(path)])
+    const [source, root] = await Promise.all([Bun.file(path).text(), projectOf(dirname(resolve(path)))])
     const mirrored = `${root}/${TYPES_DIR}/${relative(root, resolve(path))}`
     const modulePath = `${mirrored}.ts`
     const declarationPath = mirrored.replace(/\.abide$/, '.d.abide.ts')
@@ -128,15 +127,98 @@ export async function emitFor(path: string): Promise<EmitResult> {
     return { source: path, module: modulePath, declaration: declarationPath, segments: compiled.segments }
 }
 
+/**
+ * The generated paths a mirror entry can be, mapped back to the source they were emitted from.
+ *
+ * `null` for anything else in the tree, which is left alone: the mirror is only allowed to delete
+ * what it wrote. Maps are not here because the scan below is `**\/*.ts` and never offers one — they
+ * are deleted alongside the module they are named off.
+ */
+function sourceOf(mirrored: string): string | null {
+    if (mirrored.endsWith('.d.abide.ts')) return `${mirrored.slice(0, -'.d.abide.ts'.length)}.abide`
+    if (mirrored.endsWith('.abide.ts')) return mirrored.slice(0, -'.ts'.length)
+    return null
+}
+
+/**
+ * Delete mirror entries whose `.abide` source is gone.
+ *
+ * Nothing used to, and the mirror is what `allowArbitraryExtensions` resolves against — so a deleted
+ * or MOVED `.abide` left a declaration behind that went on answering `import './x.abide'` forever.
+ * That makes the gate pass on a program that does not exist, and it passes only HERE: the mirror is
+ * gitignored, so a fresh clone regenerates it from the sources that remain and fails on the same
+ * import. A stale artifact making the checker agree is the one failure the checker cannot report,
+ * and the tell is a typecheck that is green locally and red on a machine that has never run it.
+ *
+ * Keyed on the SOURCE existing rather than on what this run emitted, which is what makes it safe for
+ * a partial root: `abide check packages/dogfood/pages` leaves the `demos/` mirror alone because those
+ * sources are still there, and removes an orphan wherever it finds one.
+ */
+async function pruneOrphans(packages: Iterable<string>): Promise<void> {
+    const removing: Promise<void>[] = []
+    for (const root of packages) {
+        const mirror = `${root}/${TYPES_DIR}`
+        // A package whose mirror has never been written has nothing to sweep, and scanning a
+        // directory that is not there throws rather than yielding nothing. `stat` and not `exists`:
+        // `Bun.file(dir).exists()` is FALSE for a directory, so the obvious spelling reads as "no
+        // mirror" every time and turns the whole sweep off with every test still green.
+        try {
+            await Bun.file(mirror).stat()
+        } catch {
+            continue
+        }
+        // One `exists` per SOURCE rather than per mirror entry. A source has both a module and a
+        // declaration in here and `sourceOf` maps them to the same path, so asking per entry stat'd
+        // every `.abide` in the tree twice.
+        const present = new Map<string, Promise<boolean>>()
+        const glob = new Bun.Glob('**/*.ts')
+        for await (const found of glob.scan({ cwd: mirror, absolute: false })) {
+            const source = sourceOf(found)
+            if (source === null) continue
+            let asked = present.get(source)
+            if (asked === undefined) {
+                asked = Bun.file(`${root}/${source}`).exists()
+                present.set(source, asked)
+            }
+            const exists = asked
+            removing.push(
+                (async () => {
+                    if (await exists) return
+                    await Bun.file(`${mirror}/${found}`).delete()
+                    // The map is named off the MODULE, which shares the source and therefore the
+                    // answer. The declaration has none, and asking would be a stat per orphan.
+                    if (found.endsWith('.d.abide.ts')) return
+                    const map = Bun.file(`${mirror}/${found}.map`)
+                    if (await map.exists()) await map.delete()
+                })(),
+            )
+        }
+    }
+    await Promise.all(removing)
+}
+
 export async function emitAll(roots: string[]): Promise<EmitResult[]> {
     // Files are independent, so the scan only collects paths and the compiles run together — this is
     // on the `typecheck` path a developer waits on.
     const pending: Promise<EmitResult>[] = []
+    // Where each root's mirror hangs. The same memoised walk `emitFor` makes per file — a root with
+    // no `.abide` under it at all still has a mirror to sweep, which is exactly the case emitting
+    // alone can never reach. Not awaited in the loop: the climb has no bearing on the next scan.
+    const climbing: Promise<string>[] = []
     for (const root of roots) {
+        climbing.push(projectOf(resolve(root)))
         const glob = new Bun.Glob('**/*.abide')
         for await (const path of glob.scan({ cwd: root, absolute: true })) pending.push(emitFor(path))
     }
-    return Promise.all(pending)
+    const [written, climbed] = await Promise.all([Promise.all(pending), Promise.all(climbing)])
+    // A SET, because two roots inside one package share one mirror and sweeping it twice races two
+    // deletes onto the same orphan.
+    const packages = new Set(climbed)
+    // AFTER the emit, not beside it. The two touch disjoint sets — one writes where a source exists,
+    // the other deletes where one does not — but the mirror is created BY the emit, so a concurrent
+    // sweep of a package being written for the first time scans a directory that is not there yet.
+    await pruneOrphans(packages)
+    return written
 }
 
 // `file(line,col): error TSxxxx: message` — tsc's one-line form, which is what `--pretty false` gives.

@@ -18,6 +18,7 @@ import {
     errorPayload,
     failedLine,
     JSON_TYPE,
+    OCTET_TYPE,
     jsonLine,
     NDJSON_TYPE,
     type Refusals,
@@ -447,6 +448,15 @@ export function respond<Args, T>(
     return handle.then(
         (settled) => {
             if (watching) told(policy, 'ok', started)
+            // A handler that built its own `Response` has already said what its answer IS — a
+            // rendered page, a redirect, a file — and encoding that into a JSON envelope would be
+            // abide deciding for it. Passed through with the wire's own headers merged UNDER what the
+            // handler set, so it still carries `traceresponse` and its own `content-type` survives.
+            //
+            // The browser lane needs nothing for this: `payloadOf` already hands back the body as a
+            // STRING when the content-type is not JSON, so a `text/html` answer decodes to its markup
+            // and a caller does what it likes with it.
+            if (settled instanceof Response) return carried(settled, ttl, extra)
             return value(settled, ttl, extra)
         },
         (error: unknown) => {
@@ -472,7 +482,41 @@ function told(policy: RpcPolicy | undefined, outcome: string, started: number): 
     rpcLog.debug(`${policy?.address ?? 'rpc'} ${outcome} ${elapsed}ms`)
 }
 
+/**
+ * A handler's own `Response`, with what the wire has to add.
+ *
+ * `headersFor` is `has`-rather-than-overwrite, so the handler's `content-type` and `cache-control`
+ * win and only the headers it did not set are filled in. The body is untouched — a streamed page
+ * already took its hold in `page()`.
+ */
+function carried(answer: Response, ttl: number, extra: Record<string, string> | undefined): Response {
+    const headers = new Headers(answer.headers)
+    for (const [name, over] of wireHeaders(ttl, headers.get('content-type') ?? JSON_TYPE, extra)) {
+        if (!answer.headers.has(name)) headers.set(name, over)
+    }
+    return new Response(answer.body, { status: answer.status, statusText: answer.statusText, headers })
+}
+
+/**
+ * Bytes a handler returned, as a body and the type to send them under — or `null` for anything else.
+ *
+ * Four shapes because all four reach here and all four used to be destroyed silently: `JSON.stringify`
+ * turns a `Uint8Array` into `{"0":137,"1":80,…}` — 11.6x the size, and an index-keyed object at the
+ * other end — and an `ArrayBuffer`, a `Blob` and a `DataView` each into `{}`, which is a 200 with the
+ * payload simply gone. A `Blob` carries its own type and keeps it; nothing else knows what it is.
+ */
+function binaryOf(held: unknown): { body: BodyInit; type: string } | null {
+    if (held instanceof Blob) return { body: held, type: held.type === '' ? OCTET_TYPE : held.type }
+    if (held instanceof ArrayBuffer) return { body: held, type: OCTET_TYPE }
+    // Covers every typed array and `DataView` in one test, which is what stops this being a list
+    // that grows a line the next time somebody returns a `Float64Array`.
+    if (ArrayBuffer.isView(held)) return { body: held as unknown as BodyInit, type: OCTET_TYPE }
+    return null
+}
+
 function value(held: unknown, ttl: number, extra: Record<string, string> | undefined): Response {
+    const bytes = binaryOf(held)
+    if (bytes !== null) return new Response(bytes.body, { headers: wireHeaders(ttl, bytes.type, extra) })
     return new Response(JSON.stringify(held ?? null), { headers: wireHeaders(ttl, JSON_TYPE, extra) })
 }
 

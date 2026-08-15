@@ -144,6 +144,8 @@ let ENTRIES: RouteEntry[] = []
 const NO_ARGS: { children?: unknown } = Object.freeze({})
 const NO_WRAPS: View[] = []
 const NO_LAYOUTS: Loader[] = []
+// No layouts rendered yet. Shared and empty, so a caller that never renders an outlet allocates none.
+const NO_CHAIN: TemplateResult[] = []
 // Renders nothing: no route matched, or its module has not arrived. ONE call site, so the identity a
 // renderer keys its parsed template on stays stable across every route that has nothing to show.
 const NOTHING = html``
@@ -300,6 +302,17 @@ export function ready(): Promise<void> {
  * place instead of being torn down and rebuilt.
  */
 export function outlet(): TemplateResult {
+    return outletFrom(0)
+}
+
+/**
+ * The same, with the OUTERMOST `from` layouts left off — what a navigation is answered with when the
+ * caller is already showing them.
+ *
+ * Only the server passes anything but 0. A fragment rendered from depth 2 is the tree that belongs
+ * inside layout 1's `<slot/>`, and `chain` below is how the client finds the part sitting there.
+ */
+export function outletFrom(from: number): TemplateResult {
     const cells = cellsFor()
     // Both, and in this order, because they are two different facts: the route changed, or a range
     // arrived for the route already showing. They are written in one commit, so a navigation that
@@ -322,8 +335,52 @@ export function outlet(): TemplateResult {
     const view = held.view()
     if (view === null) return NOTHING
     let node = view(NO_ARGS)
-    for (let i = held.wraps.length - 1; i >= 0; i--) node = (held.wraps[i] as View)({ children: node })
+    // What each layout was handed as its children, kept so the client can find the PART showing it.
+    // A `TemplateResult`'s `values` array is freshly allocated per evaluation, so one of these
+    // identifies exactly one slot in exactly one instance — which is what makes the descent in
+    // `$ui/internal/navigation.ts` a lookup rather than a guess about which slot a `<slot/>` is.
+    //
+    // On the cells rather than at module scope, because a server renders two callers at once and this
+    // is a fact about ONE of them. Rebuilt per run, never appended to.
+    const chain: TemplateResult[] = []
+    for (let i = held.wraps.length - 1; i >= from; i--) {
+        chain[i] = node
+        node = (held.wraps[i] as View)({ children: node })
+    }
+    cells.chain = chain
     return node
+}
+
+/** What each layout of the current render was handed as children. Indexed by DEPTH. */
+export function outletChain(): TemplateResult[] {
+    return cellsFor().chain
+}
+
+/** The pattern the caller is standing on, without subscribing to it. */
+export function currentRouteName(): string {
+    return cellsFor().name.peek()
+}
+
+/**
+ * How many of the TARGET route's layouts a caller on `fromName` is already showing.
+ *
+ * Compared by LOADER identity rather than by path, because that is what decides whether the module on
+ * screen is the module the target would use — two routes naming the same layout file resolve to one
+ * thunk, and two thunks that merely look alike are two different layouts.
+ *
+ * The prefix stops at the first difference and never resumes: layouts nest, so a shared layout below
+ * a changed one is inside a subtree that is being replaced anyway.
+ */
+export function sharedLayoutDepth(fromName: string): number {
+    const target = BY_NAME.get(cellsFor().name.peek())
+    const from = BY_NAME.get(fromName)
+    if (target === undefined || from === undefined) return 0
+    const wanted = target.layouts
+    const held = from.layouts
+    const limit = wanted.length < held.length ? wanted.length : held.length
+    let shared = 0
+    while (shared < limit && wanted[shared] === held[shared]) shared++
+    return shared
 }
 
 // --- where the caller is ------------------------------------------------------
@@ -343,6 +400,13 @@ interface Cells {
      * standing there", which is a different fact from "the route changed".
      */
     adopted: State<number>
+    /**
+     * What each layout of the last `outletFrom` run was handed as its children, indexed by depth.
+     *
+     * Not a cell and never read to render — it is a lookup key, handed to `$ui` so a served fragment
+     * can be put inside the layout it belongs in rather than over the whole outlet.
+     */
+    chain: TemplateResult[]
     /**
      * Which served navigation is the LIVE one. A plain counter, not a cell: nothing reads it to
      * render, it is read back across the awaits in `enter` to ask "am I still the newest?".
@@ -472,6 +536,7 @@ function cellsFor(fallback?: string): Cells {
         url: state(url),
         navigating: state(false),
         adopted: state(0),
+        chain: NO_CHAIN,
         entering: 0,
     }
     here.cells = made
@@ -775,6 +840,44 @@ function land(cells: Cells, url: URL, options: NavigateOptions | undefined, foun
 }
 
 /**
+ * Whether this move is one the client can already paint, so the round trip buys nothing.
+ *
+ * The route ALREADY SHOWING, with its module resolved: the page is on screen, the params are cells,
+ * and the render that follows therefore PATCHES. `outlet` reads the name and not the params, so it
+ * does not even re-run — the page's own reads move and its nodes keep their identity, which is the
+ * whole point. A carousel keeps its scroll offset, an open `<details>` stays open, and focus stays
+ * where the reader put it.
+ *
+ * The served path can do none of that however identical the markup it returns, because it refills the
+ * outlet's whole range from the wire and a refill is a rebuild. Measured on this repo's own suite
+ * page: a query-only move replaced all 28 `<details>` on it, none still open.
+ *
+ * This is NOT a second rendering path — it is the local one every server render and every headless
+ * case already runs on, reached by a condition rather than by a second implementation.
+ *
+ * The TRADE, stated because it is real: this move does not run the app's middleware onion, so a
+ * redirect a rung would have issued for the new params does not fire. It is not an authorization
+ * hole — every `rpc` is still answered by the server, and a client cannot render data it was never
+ * given — but a login redirect on a same-route move reaches the reader as failed calls instead.
+ * Crossing to another route is unchanged and still goes through the onion.
+ */
+function paintsLocally(cells: Cells, found: Match | null): boolean {
+    if (found === null) return false
+    if (found.held.pattern.path !== cells.name.peek()) return false
+    // A route can be the one showing and still have nothing to render with — an async loader whose
+    // first module has not landed. Then the server is the faster answer as well as the only one.
+    //
+    // The other way to reach it is not obvious and cost an afternoon to find: `routes(table)` REBUILDS
+    // every record, so a caller that borrows the table and gives it back resets every resolved view.
+    // Nothing then asks for it again — `outlet` reads the route's NAME, which a restore does not move,
+    // so it never re-runs and never kicks the load — and the view stays null for the life of the page.
+    // A borrower's answer is to `ready()` after restoring, which is one line where it belongs; two
+    // attempts to carry views across the install instead were dropped, both because the borrow has
+    // already replaced what they compare against by the time the restore runs.
+    return found.held.view.peek() !== null
+}
+
+/**
  * A navigation the SERVER answers: the page arrives as markup, and the client's copy of its module is
  * what CLAIMS that markup rather than what draws it.
  *
@@ -871,14 +974,12 @@ export function navigate(target: string, options?: NavigateOptions): Promise<voi
     const url = mountedTarget(new URL(target, cells.url.peek().href), cells.url.peek())
     const found = lookup(url.pathname)
 
-    // Where there is a document showing the outlet, a navigation is the SERVER's to answer — every
-    // navigation, including one that stays on the route it is on. A page is rendered by the app's own
-    // middleware onion once, at the URL being asked for, and this side claims what comes back; a
-    // second rendering path for "the pattern did not change" would be the same page assembled two
-    // ways, which is the one thing this arrangement exists to not have.
+    // Where there is a document showing the outlet, a navigation the client cannot already paint is
+    // the SERVER's to answer: the page is rendered by the app's own middleware onion once, at the URL
+    // being asked for, and this side claims what comes back.
     //
     // A request being served and a test driving a route on the side each render locally.
-    const sink = drivesDocument() ? NAVIGATION_SINK : null
+    const sink = drivesDocument() && !paintsLocally(cells, found) ? NAVIGATION_SINK : null
     if (sink !== null) return enter(cells, url, options, found, sink)
 
     const loading = found === null ? null : loadFor(found.held)

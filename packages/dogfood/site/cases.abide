@@ -1,0 +1,239 @@
+<!-- Suites as one table of cases: a heading per suite, a row per case, and the status in a column.
+
+     Handed the suites it should show rather than reaching for them, which is what lets one component be
+     both `/tests` (all of them) and `/tests/<name>` (one), with no branch inside it for which page it is
+     on. Whatever is nested inside lands under the table.
+
+     The filter is here for the same reason: three hundred and forty rows are read by NARROWING, and the
+     narrowing is the table's rather than either page's. It matches `/bench`'s — the same field, the same
+     chips, the same all-terms rule — and it DROPS rows rather than hiding them with a class, so a face
+     nobody is reading is a row that is not on the page at all.
+
+     It searches the CLAIM TITLE and nothing else — not the note, not the suite name — which is what
+     makes the second half of it possible: every row still here says why in the column a reader is
+     already scanning, painted with a `<mark>` on the runs the terms matched. A filter that also read
+     the note kept rows whose reason was behind a disclosure, so the page answered a query with sixty
+     rows that looked exactly like the three hundred it cut. Dropping says WHICH rows, marking says WHY
+     each one, and both halves read one `wanted` — two splits of the same string is a row lit for a term
+     it was not kept by. `/bench` searches wider and paints nothing, which is the drift to close next.
+
+     TWO chip groups, because they ask about different halves of a row. The FACES are what a case
+     carries, which is the axis nothing else on the site offers: `/docs/<callable>` is a name's ladder and
+     `/bench` is its measurements, but a case's `interact` half — the part that needs a click — appears
+     nowhere but here. There is deliberately no `bench` chip: that page exists. The OUTCOMES are what a
+     case did, which is the axis a page of three hundred green rows is read by — the one red row is the
+     whole reason anybody opened it.
+
+     Every case that is ON the page runs. `<details>` decides who is LOOKING, not what happened — and
+     dropping a row is what STOPS it, since the queue skips a case whose live area has left the document.
+     See `case-row.abide` and `enqueue`. -->
+<script module>
+import { memo, state } from 'abide'
+import { type Case, running, type Running, type Status, type Suite } from 'harness'
+import Row from './case-row.abide'
+import {
+    CASE_ROW,
+    CHIP,
+    CHIP_ON,
+    FIELD,
+    GROUP,
+    grouped,
+    HEAD,
+    HEAD_ROW,
+    matches,
+    TABLE,
+    terms,
+} from './table.ts'
+
+/** Which face a chip asks for. `all` is every case, whatever it carries. */
+const FACES = ['all', 'run', 'server', 'interact'] as const
+type Face = (typeof FACES)[number]
+
+/**
+ * Which outcome a chip asks for.
+ *
+ * `any` rather than a second `all`: two chips reading the same word in one toolbar is a control nobody
+ * can name, and a browser test asking for "the button called all" would have two answers.
+ */
+const OUTCOMES = ['any', 'passing', 'failing'] as const
+type Outcome = (typeof OUTCOMES)[number]
+
+/** A case, the suite it came from, and the state its row reports. */
+interface CaseRow {
+    suite: string
+    spec: Case
+    held: Running
+}
+
+function hasFace(spec: Case, face: Face): boolean {
+    if (face === 'run') return spec.run !== undefined
+    if (face === 'server') return spec.server !== undefined
+    if (face === 'interact') return spec.interact !== undefined
+    return true
+}
+
+/**
+ * Does this status answer the outcome chip?
+ *
+ * `waiting` and `running` answer BOTH of them, and that one line is the whole of what keeps this
+ * filter from fulfilling itself. Dropping a row skips its case — see `enqueue` — so a page opened on
+ * `failing` that dropped the undecided rows would run nothing, fail nothing, and report an empty table
+ * about a suite it never started. Undecided rows stay and settle instead: `failing` begins as the whole
+ * suite and empties down to the red ones as the queue works through it.
+ *
+ * `interactive`, `benched` and `server` are settled and are neither, so both chips drop them.
+ */
+function hasOutcome(status: Status, outcome: 'passing' | 'failing'): boolean {
+    if (status === 'waiting' || status === 'running') return true
+    return outcome === 'passing' ? status === 'passing' : status === 'failed'
+}
+</script>
+
+<script>
+import { props } from 'abide'
+
+const { suites, title, blurb } = props<{ suites: Suite[]; title: string; blurb: string }>()
+
+const face = state<Face>('all')
+const outcome = state<Outcome>('any')
+const query = state('')
+
+/**
+ * The status and log behind a row, kept across the filtering that removes it and puts it back.
+ *
+ * Out here rather than inside the row for one reason: `shown` decides which rows exist, so a chip
+ * asking about an OUTCOME has to read a status from outside the component that paints it. What it also
+ * buys is that a row dropped by one chip and returned by the next comes back with the result it already
+ * had — `queued` is still set, `enqueue` returns, and nothing re-runs.
+ */
+const heldByCase = new Map<Case, Running>()
+
+/** Every case as a row. Rebuilt whenever `suites` changes; the state per case is not. */
+const rows = memo((): CaseRow[] => {
+    const out: CaseRow[] = []
+    for (const suite of suites) {
+        for (const spec of suite.cases) {
+            let held = heldByCase.get(spec)
+            if (held === undefined) {
+                held = running()
+                heldByCase.set(spec, held)
+            }
+            out.push({ suite: suite.name, spec, held })
+        }
+    }
+    return out
+})
+
+/**
+ * The query, as the terms it is made of. A cell rather than a local inside `shown`, because the rows
+ * need it too: `matches` decides which rows are here and `marked` paints WHY inside each of them, and
+ * the two answering off different splits of the same string is a row lit for a term it was not kept by.
+ *
+ * Taken apart once per keystroke rather than once per row — see `terms`.
+ */
+const wanted = memo(() => terms(query))
+
+/**
+ * The rows this filter is showing, grouped by suite — and no heading left over a suite it emptied.
+ *
+ * A status is read only when a chip is asking about one. On `any` — which is every page load — this
+ * body subscribes to no case's status at all, so three hundred cases settling one after another do not
+ * re-filter the table three hundred times on a page nobody asked to filter.
+ */
+const shown = memo((): { suite: string; rows: CaseRow[] }[] => {
+    const asked = outcome
+    const showing: CaseRow[] = []
+    for (const row of rows) {
+        if (!hasFace(row.spec, face)) continue
+        if (asked !== 'any' && !hasOutcome(row.held.status(), asked)) continue
+        if (!matches(row.spec.title, wanted)) continue
+        showing.push(row)
+    }
+    return grouped(showing)
+})
+
+/**
+ * How many cases are on the page, out of how many there are.
+ *
+ * A function rather than a memo because one slot reads it and nothing else does — there is no second
+ * reader for a cell to serve, and the slot it is called from already tracks everything it touches.
+ */
+function shownCount(): string {
+    let showing = 0
+    for (const group of shown) showing += group.rows.length
+    const total = rows.length
+    return showing === total ? `${total}` : `${showing} of ${total}`
+}
+
+/**
+ * Why the table is empty, which the outcome chips are what made worth asking.
+ *
+ * `failing` with nothing left is the BEST result this page has, and saying "nothing matches" about it
+ * reads as a broken filter. The query is tested first because it is the narrower claim: a query that
+ * matches nothing is empty whatever the chips say.
+ */
+function emptyBecause(): string {
+    if (query !== '') return `Nothing matches “${query}”.`
+    if (outcome === 'failing') return 'Nothing failed.'
+    if (outcome === 'passing') return 'No case here is passing.'
+    return 'Nothing to show.'
+}
+</script>
+
+<div class="page-head">
+    <h1 class="page-title">{title}</h1>
+    <p class="page-blurb">{blurb}</p>
+</div>
+
+<!-- One card holding the filter and the rows it decides, because they are one control: `.is-table` is
+     what takes the panel's padding off so the rules run edge to edge and the card head pins against
+     the page rather than against a scrollport of its own.
+
+     The filter and the column names are ONE element, `.table-top`, because they pin as one block and a
+     sticky offset cannot be chained — see `app.css`. -->
+<div class="panel is-table">
+    <div class="table-top">
+        <div class="toolbar">
+            <input class={FIELD} bind:value={query} placeholder="filter — what is claimed"/>
+            <span class="toolbar-count">{shownCount()} cases</span>
+            <div class="chips">
+                {#for name of FACES}<button class={face === name ? CHIP_ON : CHIP} onclick={() => (face = name)}>{name}</button>{/for}
+            </div>
+            <div class="chips">
+                {#for name of OUTCOMES}<button class={outcome === name ? CHIP_ON : CHIP} onclick={() => (outcome = name)}>{name}</button>{/for}
+            </div>
+        </div>
+
+        <div class="{CASE_ROW} {HEAD_ROW}">
+            <span></span>
+            <span class={HEAD}>what is claimed</span>
+            <span class="head head-right">status</span>
+        </div>
+    </div>
+
+    <div class={TABLE}>
+        {#if shown.length === 0}
+            <p class="table-empty">{emptyBecause()}</p>
+        {/if}
+
+        <!-- KEYED, both levels, and it is load-bearing rather than tidy: a row holds a running case, and
+             a positional match hands the row at index 3 the case that used to be at index 4 as soon as
+             anything above it is dropped. What that cost was a stalled page — the queue is holding the
+             live area a rebuilt row no longer owns, so every case behind the drop waited forever on a
+             node the document had already replaced. The key is the spec OBJECT, which is what
+             `heldByCase` is keyed by too, so a row and its state agree about which case they are. -->
+        {#for group of shown by group.suite}
+            <!-- Not painted, and that follows from what the filter reads: a suite name is not searched,
+                 so a heading lit for a term would be claiming a match that had nothing to do with why
+                 its rows are here. The suite is a place, and the query is about claims. -->
+            <div class={GROUP}>
+                <a href="/tests/{group.suite}">{group.suite}</a> · {group.rows.length}
+            </div>
+            {#for row of group.rows by row.spec}
+                <Row spec={row.spec} suite={group.suite} held={row.held} wanted={wanted}/>
+            {/for}
+        {/for}
+    </div>
+</div>
+
+<slot/>

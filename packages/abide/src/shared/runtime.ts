@@ -2,7 +2,7 @@
 //
 // Nothing here is a name an author types. Fourteen of them are emitted — eleven by the template
 // header in `$compiler/internal/emit.ts`, three by `abide build` into the generated client entry —
-// and the five predicates below are how the two renderers and the test kit read the shapes those
+// and the five predicates below are how the two renderers and the harness read the shapes those
 // calls produce.
 //
 // Each of the eleven is what the compiler writes for a SPELLING, except `start`, which is written for
@@ -23,8 +23,10 @@
 
 // `class:` / `style:` toggles.
 export { classes, styles } from './attrs.ts'
-// The blocks, the `{html(...)}` escape hatch, and `by` on a `{#for}` — plus the shapes those build,
-// and the predicates that read them back.
+// The blocks and `by` on a `{#for}` — plus the shapes those build, and the predicates that read them
+// back. `raw` is NOT here: the escape hatch is spelled with its own name now, so it is a name an author
+// types and it lives on `abide` beside `html`. `Raw` stays, because it is the shape the walk matches on
+// and both renderers read it back.
 export {
     type Awaited,
     awaited,
@@ -43,7 +45,6 @@ export {
     keyed,
     propCell,
     type Raw,
-    raw,
     type SlotKind,
     start,
     type Streamed,

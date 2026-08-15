@@ -1,0 +1,22 @@
+{
+    "name": "dogfood",
+    "version": "0.0.0",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "dev": "bun ../abide/cli/index.ts dev",
+        "start": "bun ../abide/cli/index.ts start",
+        "build": "bun ../abide/cli/index.ts build",
+        "typecheck": "tsc --noEmit",
+        "fleet": "bun fleet.ts"
+    },
+    "dependencies": {
+        "abide": "workspace:*",
+        "harness": "workspace:*",
+        "marked": "^18.0.9"
+    },
+    "devDependencies": {
+        "bun-plugin-tailwind": "^0.1.2",
+        "tailwindcss": "^4.3.3"
+    }
+}

@@ -50,7 +50,7 @@ import { TRANSPORT_ROOTS } from '$compiler/internal/elide.ts'
 import { type Config, type ConfigDefaults, isPort, onConfig } from '$server/config.ts'
 import { type HealthReporter, onHealth } from '$server/health.ts'
 import { type IdentityResolver, onIdentity } from '$server/identity.ts'
-import { documentToStream, fragmentToStream } from '$server/index.ts'
+import { documentToStream, fragmentToStream } from '$server/render.ts'
 import {
     type ErrorHook,
     handle,
@@ -68,15 +68,23 @@ import { registered } from '$server/registry.ts'
 import { page } from '$server/responses.ts'
 import type { Schema } from '$server/schema.ts'
 import type { Shell } from '$server/shell.ts'
-import { outlet, readying, type RouteEntry, route as routeAsked, routes } from '$shared/router.ts'
 import { mounted } from '$shared/internal/mount.ts'
-import { NAVIGATION_HEADER } from '$shared/internal/PATHS.ts'
+import { NAVIGATION_DEPTH_HEADER, NAVIGATION_FROM_HEADER, NAVIGATION_HEADER } from '$shared/internal/PATHS.ts'
 import { isThenable, messageOf } from '$shared/internal/probes.ts'
 import { acceptedEncoding, JSON_TYPE } from '$shared/internal/wire.ts'
 import { appName } from '$shared/log.ts'
+import {
+    outlet,
+    outletFrom,
+    type RouteEntry,
+    readying,
+    route as routeAsked,
+    routes,
+    sharedLayoutDepth,
+} from '$shared/router.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
-import { refuse } from '../COMMANDS.ts'
 import { CLIENT_ROUTE, type ClientGraph, type ClientManifest, firstPresent, PAGES } from '../CLIENT_BUILD.ts'
+import { refuse } from '../COMMANDS.ts'
 import type { ClientAssets, LoadedClient } from './assets.ts'
 import { handlers } from './handlers.ts'
 import { BOLD, colored, DIM, paint, plural } from './paint.ts'
@@ -403,7 +411,23 @@ function renderer(
         // app's middleware exactly as a full page load is, because it IS a full page load as far as
         // everything above here is concerned — same path, same scope, same onion.
         if (request.headers.get(NAVIGATION_HEADER) !== null) {
-            return page(fragmentToStream(outlet, HYDRATABLE), { headers: NAVIGATION_HEADERS })
+            // How much of this page's layout stack the caller is already showing. The client says
+            // where it is; the SERVER decides what that is worth, because it is the side holding both
+            // route entries — a client computing the same number off its own table would be one rule
+            // implemented twice. Absent header means a caller that cannot place a fragment, so 0.
+            const from = request.headers.get(NAVIGATION_FROM_HEADER)
+            const depth = from === null ? 0 : sharedLayoutDepth(from)
+            return page(
+                fragmentToStream(() => outletFrom(depth), HYDRATABLE),
+                {
+                    // The depth is written only when it is not 0 — an answer that left nothing off has
+                    // nothing to say about depth, and the shared record is then handed over untouched.
+                    headers:
+                        depth === 0
+                            ? NAVIGATION_HEADERS
+                            : { ...NAVIGATION_HEADERS, [NAVIGATION_DEPTH_HEADER]: String(depth) },
+                },
+            )
         }
 
         // This route's own document — the shell with its chunks named in the head. One map lookup,
@@ -422,7 +446,11 @@ function renderer(
  */
 const NAVIGATION_HEADERS: Record<string, string> = {
     [NAVIGATION_HEADER]: '1',
-    vary: NAVIGATION_HEADER,
+    // BOTH, because two different request headers now change the body: the mark says fragment rather
+    // than document, and the from-route says how much of the fragment was left off. A cache keyed on
+    // only the first would serve a depth-2 answer to a caller standing somewhere else, which is a page
+    // with its outer layouts missing.
+    vary: `${NAVIGATION_HEADER}, ${NAVIGATION_FROM_HEADER}`,
 }
 
 // --- compressing what the app answered ---------------------------------------
@@ -434,7 +462,7 @@ const RESPONSE_ENCODINGS = ['gzip']
  * The answer, compressed when it is markup and the caller takes it.
  *
  * Here rather than in `page()` for two reasons that point the same way: `$server/responses.ts` is
- * bundled for the BROWSER — the example's server suite renders in a card — so it cannot reach a
+ * bundled for the BROWSER — the dogfood app's server suite renders in a card — so it cannot reach a
  * compressor at all, and a rule that only covered the documents abide itself builds would leave an
  * app's own `text/html` route uncompressed for no reason a reader could name.
  *

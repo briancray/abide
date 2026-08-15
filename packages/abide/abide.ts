@@ -6,7 +6,7 @@
 //
 // Curated rather than collected. This file is not the barrel for a directory — every line is a
 // decision that a name belongs on the surface an app reads, and there are two tests it has to pass.
-// A VALUE is here because a user-facing app types it; the standard is `packages/example`'s own pages
+// A VALUE is here because a user-facing app types it; the standard is `packages/dogfood`'s own pages
 // and server, not its demos, which test the framework rather than use it. A TYPE is here because it
 // is the input or the output of one of those values — so `Route` is here and `RouteEntry` is not,
 // since `route()` is the call an app makes and the table is written by `abide build`.
@@ -24,7 +24,7 @@
 //                             transports
 //
 // What is on NONE of them is still reachable at `$shared/*` — `scope`, `untrack` and `isolate` came
-// off this file because no page or handler in the example types one. A suite that tests the graph
+// off this file because no page or handler in the dogfood app types one. A suite that tests the graph
 // imports them from the module directly, which is the seam it is actually testing.
 //
 // The two RENDERERS are separate because only one of them ships to a browser. Nothing here imports
@@ -35,14 +35,17 @@ export { type Channel, type ChannelOptions, channel, type KeyedChannel } from '.
 // is deliberately absent: it is how `abide/server` installs the LOCAL answer — the same shape as the
 // app-name source under `log` — and a caller installing one would be answering for an app it is not.
 export { type Health, health } from './src/shared/health.ts'
-// `html` is the one name on both sides of the authored/emitted line: the compiler writes it as the
-// template tag, and a hand-written `.ts` component writes the same tag. `raw` and `keyed` are NOT
-// here despite reading like they belong — the escape hatch is spelled `{html(...)}` and a key is
-// spelled `by` on a `{#for}`, so each is a SPELLING the emitter translates rather than a name.
+// `html` and `raw` are the two names on both sides of the authored/emitted line: the compiler writes
+// the template tag, and a hand-written `.ts` component writes the same one. `raw` is here rather than
+// on `abide/runtime` because it is the ESCAPE HATCH and a hatch has to be greppable — one name, said
+// the same way in both kinds of file, so one search finds every string this app does not escape. It
+// was spelled `{html(...)}` and that made `html` mean escape as a tag and insert-raw as a call, which
+// is the one place a reader had to know the syntax to know the trust. `keyed` is still NOT here: a key
+// is spelled `by` on a `{#for}`, which is a SPELLING the emitter translates rather than a name.
 // `Props` is here for the same reason `props` is: it is the type the emitted parameter is written
 // in, so a `.abide` file's own compiled text names it, and an author reading that text can look it up
 // where the call it belongs to lives.
-export { html, type Props, props, type TemplateResult } from './src/shared/html.ts'
+export { html, type Props, props, raw, type TemplateResult } from './src/shared/html.ts'
 // Who the server decided this caller is, asked the same way on both sides. `useIdentitySource` is
 // absent for the reason `useHealthSource` is, and the two WRITERS on `identity` throw in a browser
 // rather than being missing from it: a client that could set its own principal is a client that

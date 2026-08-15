@@ -1,0 +1,10 @@
+<script>
+import { props } from 'abide'
+
+// Rung 5's row, lifted out into a component of its own. `props<T>()` is the parameter a compiled
+// component is written in, and naming a prop READS it — exactly as naming a cell does — so the
+// template below says `{row}` and never `{props().row}`.
+const { row = 'alpha' } = props<{ row?: string }>()
+</script>
+
+<li>{row}</li>

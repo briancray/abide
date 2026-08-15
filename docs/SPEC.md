@@ -8,14 +8,15 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 
 | Specifier | Holds |
 | --- | --- |
-| `abide` | What an author TYPES — **16 values and 22 types**, and the file behind it is CURATED rather than collected: `./abide.ts`, one line per decision, not a barrel over a directory. `state` / `memo` / `channel`, `watch`, `html` / `props` (with `Props`, the type a compiled component's parameter is written in), `log`, `online()` / `health()` / `identity()`, `route()` / `navigate()` / `url()`, `invalidate` / `refresh`, `isPending` (the one predicate about the signal, for an author's own `catch` — see "a read that signals"). A VALUE is here because a user-facing app types it — the standard is the example's own pages and server, never its demos, which test the framework rather than use it. A TYPE is here because it is the input or output of one of those values, which is why `Route` is here and `RouteEntry` is not. `scope`, `untrack` and `isolate` are on no entry point at all: nothing an app writes calls one, so the suites that test the graph reach `$shared/*` directly |
-| `abide/runtime` | What only the COMPILER writes, plus the predicates that read what it wrote. Emitted: `classes` / `styles` (a `class:` / `style:` toggle), `adopt` (a `<style>` block), `awaited` / `boundary` / `streamed` (the blocks), `component` / `propCell` (a `<Name/>` tag and the props it binds), `raw` (`{html(...)}`), `keyed` (`by` on a `{#for}`), and `routes` / `outlet` / `ready` (what `abide build` writes into the client entry). Read-back: `isTemplate`, `isKeyed`, `classifySlots`, `escape`, `cellProps`. Each emitted name is what the compiler writes for a SPELLING, never a name a source file says — with one exception, `start`, which is written for a POSITION rather than a spelling: the memos an unconditional plain slot reads, started before the walk reaches any of them. `html` is the one exception and stays on `abide`: it is the template tag, which a hand-written `.ts` component writes too. Nothing here may import a renderer, which is why `hydrate` is on `abide/ui` |
-| `abide/runtime/transport` | What a server module ELIDES TO in the client lane — `remote` / `remoteSocket` and the shapes describing one (`Rpc`, `RpcHandle`, `RemoteOptions`, `RemoteSocket`, `RemoteSocketOptions`, `CallOptions`, `Kind`, `Method`, `Wire`). Split off `abide/runtime` for a BUNDLING reason and no other: that module is what the generated client entry imports for `routes` / `outlet` / `ready`, so anything re-exported from it sits in the chunk every page loads, and one lazy route with one rpc put the whole call-and-decode path in front of every page — 4,066 bytes of the perf app's shared entry, on a page that calls nothing. Reached by its own specifier it lands in the chunk of whatever page imports it |
-| `abide/ui` | The DOM substrate: `mount`, `hydrate` |
-| `abide/server` | The SSR substrate, the request scope and its ambients, `server()`, `appDataDir()`, `config()`, `pages()`, the process lifecycle, and the declaring half of both transports |
-| `abide-kit` | Its own PACKAGE, not an entry point of this one. The `Case` shape, the assertions, the headless runner and `loopback()`; `abide-kit/measure` is the half with no abide in its graph (timing, ratios, DOM counters) and `abide-kit/spawn` is the bun-only half. See "The kit" below |
+| `abide` | What an author TYPES — **17 values and 22 types**, and the file behind it is CURATED rather than collected: `./abide.ts`, one line per decision, not a barrel over a directory. `state` / `memo` / `channel`, `watch`, `html` / `raw` / `props` (with `Props`, the type a compiled component's parameter is written in), `log`, `online()` / `health()` / `identity()`, `route()` / `navigate()` / `url()`, `invalidate` / `refresh`, `isPending` (the one predicate about the signal, for an author's own `catch` — see "a read that signals"). A VALUE is here because a user-facing app types it — the standard is the dogfood app's own pages and server, never its demos, which test the framework rather than use it. A TYPE is here because it is the input or output of one of those values, which is why `Route` is here and `RouteEntry` is not. `scope`, `untrack` and `isolate` are on no entry point at all: nothing an app writes calls one, so the suites that test the graph reach `$shared/*` directly |
+| `abide/runtime` | What only the COMPILER writes, plus the predicates that read what it wrote. Emitted: `classes` / `styles` (a `class:` / `style:` toggle), `adopt` (a `<style>` block), `awaited` / `boundary` / `streamed` (the blocks), `component` / `propCell` (a `<Name/>` tag and the props it binds), `keyed` (`by` on a `{#for}`), and `routes` / `outlet` / `ready` (what `abide build` writes into the client entry). Read-back: `isTemplate`, `isKeyed`, `classifySlots`, `escape`, `cellProps`. Each emitted name is what the compiler writes for a SPELLING, never a name a source file says — with one exception, `start`, which is written for a POSITION rather than a spelling: the memos an unconditional plain slot reads, started before the walk reaches any of them. `html` and `raw` are the two that stay on `abide`: the template tag and the escape hatch, both of which a hand-written `.ts` component writes too. Nothing here may import a renderer, which is why `hydrate` is on `abide/ui` |
+| `abide/runtime/transport` | What a server module ELIDES TO in the client lane — `remote` / `remoteSocket` / `asRpc` and the shapes describing one (`Rpc`, `RpcHandle`, `RemoteOptions`, `RemoteSocket`, `RemoteSocketOptions`, `CallOptions`, `Kind`, `Method`, `Wire`). Split off `abide/runtime` for a BUNDLING reason and no other: that module is what the generated client entry imports for `routes` / `outlet` / `ready`, so anything re-exported from it sits in the chunk every page loads, and one lazy route with one rpc put the whole call-and-decode path in front of every page — 4,066 bytes of the perf app's shared entry, on a page that calls nothing. Reached by its own specifier it lands in the chunk of whatever page imports it |
+| `abide/ui` | The DOM substrate: `mount`, `hydrate`. Reached by `abide build`'s GENERATED client entry and by benches, never by an app's own pages — so it is a real entry point that is NOT on `/docs`, which lists what an author types. The `client` and `hydrate` ladders document these two and claim no name; `dogfood/test/docs.test.ts` holds that exclusion in both directions |
+| `abide/server` | What a SERVER-SIDE author types — the declaring half of both transports (`GET` / `POST` / `PUT` / `PATCH` / `DELETE` / `socket`), what a route answers with (`error` / `json` / `jsonl` / `page` / `redirect` / `sse` / `HttpError`), `render`, the process lifecycle as an app DECLARES it (`server()` / `middleware` / `onError` / `onStart` / `onStop`), the request scope as an app READS it (`request()` / `bag()` / `cookies()` / `nonce()` / `trace()`), `config()` / `onConfig`, the server half of the two ambients (`onHealth` / `onIdentity` / `identity`), and `csp()`. Curated by the same rule as `abide` and one more: **what the docs app covers is what is public** — every name here has its own page at `/docs/<name>` with at least one rung on it, and a name with no page belongs on the entry point below. Asserted in both directions in `dogfood/test/docs.test.ts`, against `Object.keys` of the module rather than against prose |
+| `abide/server/internal` | The server surface an APP does not type: what `abide start` does on its behalf. Running the process rather than declaring it (`boot`, `handle`, `shutdown`), INSTALLING the request scope rather than reading it (`serve`, plus the `heldStream` / `isServing` probes only a body-building path asks), the SERVING half of the transport seam (`dispatch`, `endpoints`, `register`, `registered`, `websocket` — `register` is what a compiled transport module imports), the route table read off a directory (`pages`), the document pages are served IN (`shell`, `Shell`, `styleTags`), and running a declared shape check (`validateJson`, `SCHEMA_ERROR`). A specifier rather than a comment because the apps may not use abide's `$server` alias: without it a demoted name would be unreachable from the suites that test it, and the split would rest on prose. Anyone hand-rolling a `Bun.serve` reaches here and gets the same functions the CLI uses — there is no second implementation |
+| `harness` | Its own PACKAGE, not an entry point of this one. The `Case` shape, the assertions, the headless runner and `loopback()`; `harness/measure` is the half with no abide in its graph (timing, ratios, DOM counters) and `harness/spawn` is the bun-only half. See "The harness" below |
 | `abide/compiler` | `compile()`, `elide()`, and their diagnostics. Pure: text in, text out, no filesystem |
-| `abide/compiler/check` | `emitFor`, `remap`, `diagnose` — the lane `abide check` runs |
+| `abide/compiler/check` | `emitFor`, `emitAll`, `remap`, `diagnose` and `TYPES_DIR` — the lane `abide check` runs |
 | `abide/compiler/shapes` | `deriveShapes` — the real checker over a project, for the shapes tokens cannot read |
 | `abide/compiler/assemble` | `NAMED_FORMATS` and the JSON Schema assembler — the closed set of `format` names abide will publish, so what `deriveShapes` emits and what `validateJson` accepts cannot drift |
 | `abide/compiler/plugin` | The Bun plugin: compiles `.abide` on import, elides a transport module per lane |
@@ -287,7 +288,10 @@ ever consume them.
 | Rule | Detail |
 | --- | --- |
 | directory is the kind | `server/rpc/**` is rpc; `server/sockets/**` is a socket |
-| syntactic recognition | `export const NAME = GET(…)`. Any other export in those directories is a compile error naming the export |
+| syntactic recognition | `export const NAME = GET(…)`, or `const NAME = GET(…)` with `export default NAME`. Any other export in those directories is a compile error naming the export |
+| the module as the endpoint | `export default NAME` addresses by the module PATH ALONE — `server/rpc/users.ts` answers at `users`, not `users/default` — so a route whose whole job is one endpoint does not repeat itself in its own address. The stub is a default too, so the import side is unchanged |
+| a default needs a BINDING | `export default GET(…)` inline is refused, and the message says how to bind it. The server lane is the module UNCHANGED plus an appended registration, and that registration maps an address to a local name; a bare default declares no name, and a module cannot reach its own default export to supply one. The `const` may sit above or below the `export default` that names it |
+| addressed ONCE | `export const h = …` plus `export default h` is a compile error: it would answer at both `…/h` and the module |
 | reserved prefix | Everything abide serves is under `/__abide/`; `dispatch` returns `undefined` for anything outside it |
 | who imports it | The BOOT does. A handler is reachable once its module has been imported, and `abide start` / `abide dev` scan `server/rpc/**` and `server/sockets/**` from the project root and import each — anchored there, so a transport directory nested elsewhere in the tree is not this app's. An app importing one for its side effect is a list kept in step by hand |
 | no hash | The module's path IS the address, so it is legible in a stack trace and a network panel |
@@ -305,6 +309,8 @@ ever consume them.
 
 | Wire fact | Detail |
 | --- | --- |
+| bytes are a VALUE | A handler answering with binary RETURNS it — `Uint8Array`, `ArrayBuffer`, `Blob`, `DataView` — and abide sends it as `application/octet-stream`, or as a `Blob`'s own `type` where it has one. The client decodes it back to a `Uint8Array`, so the same callable answers the same value in-process and over the wire. Building a `Response` instead is allowed and passes through, but it is NOT isomorphic: read in-process it is a `Response` the caller must unwrap, read over the wire it is the payload |
+| what decodes as text | Everything else, and anything with no `content-type` at all. The allowlist points that way on purpose: the bodies abide did not write are a proxy's error page and a gateway's plain-text refusal, and reading one as bytes turns a diagnostic a human can read into a byte array |
 | a read | HTTP GET with ONE QUERY PARAMETER PER ARGUMENT — `?id=7&q=ada`, so the URL is the call and anyone can type it. Past a URL length ceiling it falls back to a POST body, accepted for a read only |
 | a mutation | Its own method with a JSON body |
 | the query | A value JSON would read as something other than a string travels as its JSON text (`42`, `true`, `{"from":1}`); a STRING that would be misread that way travels quoted (`"42"`). At the door the declared shape decides — `?name=42` on a `name: string` is the string — and without one the text speaks for itself. `?tag=a&tag=b` is a list, and one `?tag=a` against a declared list is a list of one. A socket's ROOM travels the same way, with no shape to consult — a socket's derived one is its message |
@@ -532,7 +538,7 @@ operator declared — so the environment wins, which is what makes the app's lay
 | coercion | A value out of the environment is coerced to the type of the default it overrides; a value that will not coerce keeps the default. Anything richer stays the raw string for a schema to convert |
 | the native JSON Schema form | Deliberately does not coerce — it refuses rather than guessing |
 | a Standard Schema | Refused by name here: this is the one place abide cannot await a `validate` |
-| only VARIABLES | A conclusion drawn from one is not a field: `ABIDE_DATA_DIR` → `appDataDir()` and `ABIDE_APP_NAME` → `appName()` are both on `abide/server`. `NODE_ENV` → `isProduction()` is the same shape but is INTERNAL — `config()` publishes `NODE_ENV` verbatim and an app draws the conclusion itself |
+| variables, plus THREE conclusions | A conclusion drawn from a variable is not normally a field. `APP_NAME`, `APP_VERSION` and `APP_DATA_DIR` are the exception, and the only one: an app asks what it is called far more often than it asks which variable said so. What makes the pair safe is that there is one ANSWER — each is computed inside `resolve()` from the same function that used to be the accessor, so a document publishing one value while the app honoured another is unreachable rather than discouraged. Resolved TWICE, before the `onConfig` hook so a default may be computed from `APP_NAME`, and again after it so a hook that defaults `ABIDE_APP_NAME` moves the name. The accessors (`appName()`, `appVersion()`, `appDataDir()`) are on `abide/server/internal`: they are what the fields are computed from, and an app reads the field. `NODE_ENV` → `isProduction()` is NOT one of the three — it stays internal, `config()` publishes `NODE_ENV` verbatim, and an app draws that conclusion itself |
 | called ONCE | A second `onConfig` REPLACES the first, schema included, and warns on `abide:config` |
 | a hook that throws | Fails HARD: the read carries the throw, and `boot` asks before it binds |
 | memoised | Resolved once for the process; a variable changed after something already asked needs `config.invalidate()` |
@@ -639,13 +645,15 @@ the room form, and an import cannot say which one it is.
 | Form | Meaning |
 | --- | --- |
 | `{expr}` | Reactive text (escaped) |
-| `{html(...)}` | Raw HTML |
+| `{raw(...)}` | Raw HTML |
 | `name={expr}` | Reactive attribute or property (whole-value expression) |
 | `on<event>={fn}` | Native listener on an ELEMENT. On a **component** the same syntax is an ordinary prop named `onclick` |
 | `name="…{expr}…"` | Quoted values interpolate too, also on component props; a literal brace is `{'{'}` |
 | `bind:value` | Two-way bind — read the property, write back on input/change. On a **component** it hands over the cell ITSELF rather than a copy, which is what lets the child write back; declaring the prop as a `State<…>` is what says it may |
-| `bind:checked` | Boolean bind — a boolean DOM property mirrored as a boolean attribute, never stringified |
-| a `<select>` | `bind:value` on the SELECT, with a plain `value="…"` on each `<option>`. `bind:selected` on an option is refused: `change` does not fire there, so only the select has both halves |
+| `bind:checked` | Boolean bind on an `<input>` — a boolean DOM property mirrored as a boolean attribute, never stringified. Writes back on `change` |
+| `bind:open` | The same, on a `<details>`, written back from `toggle`. The attribute half is what makes a row that is open on the server open in the markup it sends |
+| where each is legal | A TABLE, not a habit: `value` on `<input>` / `<textarea>` / `<select>`, `checked` and `group` on `<input>`, `open` on `<details>`, `element` anywhere. A bind is a read AND a write, so a pairing with no event to write back from — `bind:selected` on an `<option>`, `bind:open` on a `<div>` — is a compile error naming the elements that do answer it, rather than a listener that never fires |
+| a `<select>` | `bind:value` on the SELECT, with a plain `value="…"` on each `<option>`. `bind:selected` is the refusal above, and its message names this spelling |
 | `bind:group` | Radio/checkbox membership, compared against the input's own `value`; never emitted as a `group` attribute |
 | `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair |
 | `bind:element={state \| fn}` | Node ref (state) or per-instance handler with the node as argument. Client-only |
@@ -658,7 +666,7 @@ the room form, and an import cannot say which one it is.
 | Block | Branches / notes |
 | --- | --- |
 | `{#if cond}` | `{:else if cond}`, `{:else}` |
-| `{#if x.pending()}` | An `{#if}` chain whose FIRST test is a `pending()` probe is the DEFERRING form: the first arm is the placeholder a document render sends now, and the rest is patched in when the cell settles. The whole chain is one arm, handed over three times, so the probe picks what shows on each pass and the region stays the ordinary reactive thunk. The block asks the cell for its settle before the arm runs, so a LAZY handle — a keyed memo slot, which starts nothing until something asks for its value — is in flight by the time the probe is asked |
+| `{#if x.pending()}` | An `{#if}` chain whose FIRST test is a `pending()` probe is the DEFERRING form: the first arm is the placeholder a document render sends now, and the rest is patched in when the cell settles. The whole chain is one arm, handed over three times, so the probe picks what shows on each pass and the region stays the ordinary reactive thunk. The block asks the cell for its settle before the arm runs, so a LAZY handle — a keyed memo slot, which starts nothing until something asks for its value — is in flight by the time the probe is asked. **A FAILURE NEEDS ITS OWN ARM**: `pending()` is false once a load rejects, so a chain with only an `{:else}` falls into a READ, and the read throws the failure it was called to report. `{:else if x.error()}` is what asks. Without it the region is empty and the reason is a console throw, never markup — `{#try}` cannot stand in, since the boundary is synchronous and the failure arrives from a settle |
 | `{#for item, i of list by key}` | Keyless → positional (dev-warns if the body is stateful) |
 | `{#for await item of source}` | Streaming list; `{:catch}`. REACTIVE: a `refresh()`/`invalidate()` or a changed dep re-streams it. Rows go to the same list part, so a key still MOVES a row |
 | `{#switch expr}` | `{:case v}`, `{:default}` |
@@ -753,7 +761,7 @@ component ships one copy of its own commentary per INSTANCE, and a file's header
 biggest one it has. Whitespace around a dropped comment is left alone, so nothing that was inline
 stops being inline — except at a block body's two ends, where the comment and the indentation
 holding it go together (see the formatting-whitespace row under Control flow). A comment that has to
-reach the browser is `{html('<!-- … -->')}`.
+reach the browser is `{raw('<!-- … -->')}`.
 
 ## Rendering
 
@@ -769,7 +777,7 @@ reach the browser is `{html('<!-- … -->')}`.
 | `fragmentToStream` | `(body: () => Renderable, options?) => ReadableStream<Uint8Array>` | The same fragment as a `ReadableStream`. What `abide start` answers a navigation with. |
 | `shell` | `(html: string) => Shell` | An app's own html as a document with a hole in it. THROWS when it has no `<slot></slot>`. |
 | `Shell` | `{ head: string; open: string; close: string; tail: string }` | Concatenated as `head` + the scoped styles + `open` + the page + `close` + the patches + the seed block + `tail`. Everything between `open` and `close` is what a hydrating client ADOPTS, which is why the last three are outside it. Cut once, because a document cannot change under a running process. |
-| a deferred block | — | THE PENDING ARM IS THE DECISION. `{#if x.pending()}…{/if}` has markup to send now, so a `renderDocument` emits it as a placeholder and patches the settled chain in as it lands. Reading the cell without asking about it first has none, so the walk AWAITS the load and the markup is complete when it arrives — which is what a reader running no scripts needs, since a patch travels in a `<template>` behind a script. A render with nowhere to patch awaits inline either way. A failure arm renders on the deferred path too; without one a failed deferred subtree is a comment and an `abide:render` error, because by then the shell is already on the wire. |
+| a deferred block | — | THE PENDING ARM IS THE DECISION. `{#if x.pending()}…{/if}` has markup to send now, so a `renderDocument` emits it as a placeholder and patches the settled chain in as it lands. Reading the cell without asking about it first has none, so the walk AWAITS the load and the markup is complete when it arrives — which is what a reader running no scripts needs, since a patch travels in a `<template>` behind a script. A render with nowhere to patch awaits inline either way. A failure arm renders on the deferred path too; without one — and equally when the arm itself THROWS, which the compiled chain does on a rejected load unless it asks `{:else if x.error()}` — a failed deferred subtree is a comment and an `abide:render` error, because by then the shell is already on the wire and there is nothing left to fail into. Every path out returns markup: a subtree whose markup never settles is one the drain waits on forever, so the response would never end. |
 | `options.hydratable` | `boolean` | Also emit the markers a hydrating client adopts by. Off unless asked for. |
 | `mount` | `(container: Element, view: () => TemplateResult) => Mounted` | Build live DOM and keep it live. Returns `{ dispose }`, which tears the tree down and — for a renderer that was handed `outlet` itself — hands the navigation sink back, so a second `mount` is the live one. |
 | `hydrate` | `(container: Element, view: () => TemplateResult) => Mounted` | The same over markup a hydratable render wrote — every part adopts its range. A divergence rebuilds that subtree and warns. |
@@ -868,17 +876,17 @@ patches its text on a later pass rather than being rebuilt.
 
 ## The template runtime — `abide/runtime`
 
-The WHOLE set a compiled `.abide` file imports on its own behalf. Not authoring vocabulary: each
-emitted name is what the compiler writes for a SPELLING — `{html(...)}` becomes `raw`, `by` on a
-`{#for}` becomes `keyed`, a `class:` toggle becomes `classes` — so none of them is a name a source
-file says. `html` is the exception and is imported from `abide`, because a hand-written `.ts`
-component writes the same tag; that is also what keeps the emitted header free of a cross-module
-dedupe, since the author's own import of it merges into the same statement.
+The WHOLE set a compiled `.abide` file imports on its own behalf. Mostly not authoring vocabulary:
+an emitted name is what the compiler writes for a SPELLING — `by` on a `{#for}` becomes `keyed`, a
+`class:` toggle becomes `classes` — so none of those is a name a source file says. `html` and `raw`
+are the exceptions and are imported from `abide`, because a hand-written `.ts` component writes the
+same tag and reaches the same hatch; that is also what keeps the emitted header free of a
+cross-module dedupe, since the author's own import of either merges into the same statement.
 
 | Name | Type Signature | Emitted for | Description |
 | --- | --- | --- | --- |
-| `html` | `(strings: TemplateStringsArray, ...values: unknown[]) => TemplateResult` | every template | The one tagged template both substrates consume. Renders nothing by itself. |
-| `raw` | `(html: string) => Raw` | `{html(…)}` | Marks a string as already-HTML so the escape is skipped. The `.abide` spelling is `html(…)`. |
+| `html` | `(strings: TemplateStringsArray, ...values: unknown[]) => TemplateResult` | every template | The one tagged template both substrates consume. ESCAPES every slot. Renders nothing by itself. |
+| `raw` | `(html: string) => Raw` | `{raw(…)}` | Marks a string as already-HTML so the escape is skipped. Imported from `abide`, not `abide/runtime`: it is the escape hatch, and a hatch is greppable by one name in both kinds of file. |
 | `keyed` | `(key: unknown, template: TemplateResult) => Keyed` | `{#for … by key}` | Tags a row with its identity, so a reconcile MOVES it instead of rebuilding it. |
 | `classes` | `(base: string, names: readonly string[], ...conditions: unknown[]) => string \| null` | `class:name={c}` | Merges a static class list and any number of toggles into one value. `null` when nothing survives. The names are static, so the compiler lifts that array to module scope and only the conditions travel per wake. |
 | `styles` | `(base: string, names: readonly string[], ...values: unknown[]) => string \| null` | `style:prop={v}` | The same, one style property at a time, into one `style` attribute. Names lifted the same way. |
@@ -892,7 +900,7 @@ dedupe, since the author's own import of it merges into the same statement.
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `escape` | `(value: string) => string` | The text escape both substrates use. Probes before it replaces. |
-| `styleTags` | `(nonce?: string \| null) => string` | On **`abide/server`**, not here: writing a stylesheet as markup is something only a server render does, and the client lane adopts into the document instead. Every registered block as its own `<style data-abide="…">`, in registration order — what a server render puts in `<head>` and what `adopt` recognises. Under a nonce the answer is not memoized and an empty `<style nonce data-abide="">` carrier is prepended, which is what `adopt` reads the nonce off — see "Styles under a policy". |
+| `styleTags` | `(nonce?: string \| null) => string` | On **`abide/server/internal`**, not here: writing a stylesheet as markup is something only a server render does, and the client lane adopts into the document instead. Every registered block as its own `<style data-abide="…">`, in registration order — what a server render puts in `<head>` and what `adopt` recognises. Under a nonce the answer is not memoized and an empty `<style nonce data-abide="">` carrier is prepended, which is what `adopt` reads the nonce off — see "Styles under a policy". |
 | `classifySlots` | `(strings: readonly string[]) => SlotKind[]` | THE one slot classifier, shared by both substrates. One of `child`, `attr`, `event`, `property`, `ref`, `spread` per hole. |
 | `isTemplate` / `isKeyed` | `(v: unknown) => boolean` | The brands, for a renderer deciding what it was handed. `KEY`, the symbol behind the second, is not exported: `keyed()` writes it and `isKeyed()` reads it. |
 
@@ -940,38 +948,86 @@ list alike. The `<` ambiguity is resolved by speculative parse.
 | component props | The type argument to `props<T>()` in a `<script>` types them, through `Props<T>` — the same members with every one that is data behind a cell — and a type declared there is lifted to module scope so the signature can name it. The call site is checked against the AUTHORED type, since `component()` inverts the mapping back. Without the call the component accepts none of its own |
 | writes | `count = v` keeps the cell's type through the `set` it desugars to |
 
-## The kit — `abide-kit`
+## The harness — `harness`
 
 A separate package, and split by DEPENDENCY rather than by topic:
 
 | Entry | Holds | Imports |
 | --- | --- | --- |
-| `abide-kit` | The `Case` / `Suite` shape, `suite()`, the assertions, `runHeadless`, `collector`, `reader`, `container`, `until` / `sleep`, `loopback()` | `abide` |
-| `abide-kit/measure` | Timing (`timeArms`, `nsPerOp`, `duration`, `ratioText`, `verdict`, `NOISE`), the waits (`quiesce` / `settled` / `frame` / `tick` / `microtasks`), the DOM work counters, and `keep` | **nothing** |
-| `abide-kit/spawn` | The binary as a child process: `abide()`, `spawn`, `started`, the line readers | bun |
+| `harness` | The `Case` / `Suite` shape, `suite()`, the assertions, `runHeadless`, `collector`, `reader`, `container`, `until` / `sleep`, `loopback()` | `abide` |
+| `harness/measure` | Timing (`timeArms`, `nsPerOp`, `duration`, `ratioText`, `verdict`, `NOISE`), the waits (`quiesce` / `settled` / `frame` / `tick` / `microtasks`), the DOM work counters, and `keep` | **nothing** |
+| `harness/spawn` | The binary as a child process: `abide()`, `spawn`, `started`, the line readers | bun |
+| `harness/engine` | What BLINK did: `engine(page)`, `EngineWork`, `shares()` | playwright |
+| `harness/server` | What a server render cost: `serverWork()`, `serverWorkOver()` | bun |
 
-`abide-kit/measure` importing nothing is the invariant the split exists for. Every performance claim
+`harness/measure` importing nothing is the invariant the split exists for. Every performance claim
 here is a RATIO against hand-written code in the same substrate, so the vanilla arm has to be timed by
 the same clock, batch sizing and quiesce as the abide arm — and an `abide` import from that layer would
 put the framework in the graph of the arm that exists to have none. It is also what makes the layer
 importable by a browser page and by the cross-repo comparison harness, both of which time arms that
 are not abide's. The two probes it needs (`isThenable`, `messageOf`) are its own six lines for the same
-reason. Assertions are on `abide-kit` rather than in `measure`: an assertion is how a case states a
+reason. Assertions are on `harness` rather than in `measure`: an assertion is how a case states a
 claim, not how a number is taken.
 
-A CASE has three faces, and a SUITE has a fourth:
+### Measuring work — three lanes, because three substrates answer different questions
+
+`harness/measure` counts the DOM CALLS a piece of work made, by patching the document from inside. It
+is the only lane available in both substrates, which is why the `work` bench kind lives there. It
+cannot see what the engine did with those calls: style, layout and paint happen after the script
+yields, and no page API reports them.
+
+| Ask | Lane | How |
+| --- | --- | --- |
+| Did it move rows or rebuild them? | `harness/measure` | `measure(fn)` → `Counts`: 14 DOM call counters. Both substrates |
+| What did the engine DO? | `harness/engine` | CDP. Chromium only, driven from the playwright side |
+| What did a server render cost? | `harness/server` | `bun:jsc` + a microtask counter |
+
+`harness/engine` has TWO TIERS because they cost differently:
+
+| Tier | Fills in | Cost |
+| --- | --- | --- |
+| default | `recalcStyle` `layout` `nodes` `layoutObjects` `listeners`, the durations (`scriptMs` `recalcStyleMs` `layoutMs` `taskMs`), `heapBytes` | one `Performance.getMetrics` round trip |
+| `{ paint: true }` | `paint`, `forcedLayout` | a TRACE. The only way to count paints — `LayerTree.layerPainted` never fires for ordinary content |
+| `{ collect: true }` | turns `nodes` / `heapBytes` from not-yet-swept into RETAINED | a forced collection per reading |
+
+Absent rather than zero: `paint` and `forcedLayout` are `undefined` on the default tier, so "not
+measured" and "measured, none" are different answers.
+
+Two facts the API documents rather than hides. `nodes` counts LIVE nodes, so a removal reads 0 until
+something collects — `{ collect: true }` is what makes the same removal read −1,164, and the
+difference between the two IS the leak. And `taskMs` is the whole window including the driver's own
+round trips, so a share from `shares()` is a floor on what a layer cost and never a ceiling.
+
+`shares(work)` divides the durations by `taskMs` into `script` / `recalcStyle` / `layout` / `other`,
+summing to 1. This is "NAME THE SHARE BEFORE CHANGING THE LAYER" made one call: an optimisation is
+capped by the fraction of the op it touches, and two rewrites of the reactive core landed as no-ops
+for want of that number. `page.evaluate` work is NOT attributed to `ScriptDuration` — the same 20M
+loop reads 0.005 ms under `evaluate` and 16.9 ms under a real click — so drive the work the way a user
+does or the answer is all `other`.
+
+| `harness/server` field | Contaminant | Which is why `serverWorkOver` takes |
+| --- | --- | --- |
+| `bytes` | none — a property of the markup | the first, and THROWS if two runs disagree |
+| `ms` | every interruption makes it longer | the MIN |
+| `microtasks` | nothing can inflate it; a timer cannot interleave microtask awaits | the MAX |
+| `allocated` | a collection between readings, downwards only | the MAX per type |
+
+A CASE has four faces. The LADDER used to be one, on the suite, and is not: `/docs` is keyed by
+callable, so the rungs are read from `fixtures/<suite>/ladder.ts` by whatever needs them. `server` and
+`interact` are mirror images — each carries assertions the OTHER substrate cannot make, so which one a
+body needs is declared by which face it is written as rather than by a flag on `run`:
 
 | Face | Type Signature | Where it runs |
 | --- | --- | --- |
 | `run` | `(ctx: Ctx) => void \| Promise<void>` | Headless AND in the browser row. Carries the assertions. |
+| `server` | `(ctx: Ctx) => void \| Promise<void>` | Server only — a request scope is an `AsyncLocalStorage`, which a browser has none of. Asserted under `bun test`; the browser row reports `server`. |
 | `interact` | `(ctx: Ctx) => void` | Browser only — buttons and inputs. Skipped by the runner. |
 | `bench` | `Bench` | Measurement arms. Smoke-run headless to prove they still run. |
-| `examples` | `Example[]` — on the SUITE | The ladder. Rendered as the reference; never run by the runner. |
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `suite` | `(spec: { name, title, blurb, examples?, cases }) => Suite` | Identity, and the one place a suite naming nothing — or carrying a one-rung ladder — is caught. `name` is the route segment and test-file name. |
-| `Example` | `{ adds: string; source: string; view?: (args) => TemplateResult }` | One RUNG: the one thing it introduces that the rung before it did not, the file's own text (through `?source`, so it is what an author wrote in every lane), and what to mount when the capability has something to show. About half do not — a lifecycle hook and a config declaration are examples with nothing to render. Order is the content: each rung is the one before it plus one new thing. |
+| `suite` | `(spec: { name, title, blurb, cases }) => Suite` | Identity, and the one place a suite naming nothing is caught. `name` is the route segment and test-file name. A suite does NOT carry its ladder: `/docs` is keyed by callable, so the rungs are read from `fixtures/<suite>/ladder.ts` by whatever needs them. |
+| `Example` | `{ adds: string; of: readonly string[]; source: string; view?: (args) => TemplateResult }` | One RUNG: the one thing it introduces that the rung before it did not, the PUBLIC NAMES it introduces (which is what `/docs/<callable>` is keyed by — almost always one, more only when the names are one idea spelled several ways), the file's own text (through `?source`, so it is what an author wrote in every lane), and what to mount when the capability has something to show. About half do not — a lifecycle hook and a config declaration are examples with nothing to render. Order is the content: each rung is the one before it plus one new thing. |
 | `ctx.host` | `HTMLElement` | The live area — a detached element headless, the row's own in the browser. |
 | `ctx.is` | `<T>(label: string, actual: T, expected: T) => void` | Structural equality. Records the line either way; throws on a mismatch. |
 | `ctx.throws` | `(label: string, fn: () => unknown, match?: string \| RegExp) => void` | Asserts the call throws, matching the message by substring or pattern. |
@@ -1042,8 +1098,8 @@ none of them. The TYPES stay on `abide`, because `pages()` hands back a `RouteEn
 | `pages` | `(dir: string \| URL) => Promise<RouteEntry[]>` | A pages directory as a route table. The one part of routing that is not isomorphic — a browser has no directory to scan — so the CLIENT half is generated instead: `abide build` writes the same table into `.abide/client.entry.ts` as a static `import()` per row, at build time, where the tree still is. What either hands back is the table `routes()` takes. |
 | `route` | `() => Route` | `.url`, `.params`, `.name`, `.kind`, `.navigating` — each its own read, over four small cells rather than one record. |
 | `url` | `(path: string, params?, query?) => string` | Build an in-app href. Takes every TARGET `navigate` takes, and agrees with it — see below. A root-absolute pattern is NORMALISED: a trailing slash goes. A missing required segment, or a param the pattern has no segment for, THROWS. Under a mount the result carries the base — see below. |
-| `navigate` | `(target: string, options?: { replace?, keepScroll? }) => Promise<void>` | Move to one. In a document this is a REQUEST for the target url, so the app's middleware runs — see below. Every navigation, including one that stays on the route it is on: a different `[id]` is a different page to render, and the rule has no exceptions. Accepts a target in either space under a mount — see below. |
-| `outlet` | `() => TemplateResult` | The current route's page wrapped in its layouts. Reads the route's NAME, and whether a range has been ADOPTED off the wire — two different facts, since a served navigation can land on the route already showing. Nothing else, so a param-only move re-runs it once and no more. |
+| `navigate` | `(target: string, options?: { replace?, keepScroll? }) => Promise<void>` | Move to one. In a document a move to another route is a REQUEST for the target url, so the app's middleware runs — see below. A move that stays on the route already showing is painted HERE instead, which is what keeps an open `<details>`, a scroll offset and the focus ring across it. Accepts a target in either space under a mount — see below. |
+| `outlet` | `() => TemplateResult` | The current route's page wrapped in its layouts. Reads the route's NAME, and whether a range has been ADOPTED off the wire — two different facts, since a served navigation can land on the route already showing. Nothing else, so a param-only move re-runs it once and no more. A server answering a navigation renders it from a DEPTH — see "answered from the first layout that changed" — which is the same function and not a second one. |
 | `ready` | `() => Promise<void>` | Resolve the current route's modules, so the render that follows is a snapshot. What a server render calls before `renderToString` and what a client awaits before `hydrate` — a page adopted before its chunk arrives is a tree the server did not write. `navigate` awaits it for you. |
 
 | Pattern | Meaning |
@@ -1115,21 +1171,75 @@ bundle was fetched from, which would name the CDN when there is one.
 
 ### A navigation is a request
 
-In a document, `navigate` asks the server for the page it is navigating to. That is what puts a
-client-side navigation through the app's `middleware`, and it is why auth on a PAGE is middleware:
-the alternative is a route that is authorized on the first load and reachable without a rung for
-every navigation after it.
+In a document, `navigate` asks the server for any page the client cannot already paint. That is what
+puts a client-side navigation through the app's `middleware`, and it is why auth on a PAGE is
+middleware: the alternative is a route that is authorized on the first load and reachable without a
+rung for every navigation after it.
+
+The exception is the route ALREADY SHOWING, with its module already resolved — a different `[id]`, a
+different query. There the client has everything, and asking would buy markup it can draw. See "a
+same-route move is painted here" below.
 
 | Rule | Detail |
 | --- | --- |
 | the address | The TARGET url, marked with `x-abide-navigation`. Not an endpoint under `/__abide/**`, which `handle` dispatches in FRONT of the onion — a rung would never see one. Same path, same cookies, same request scope a full page load has, so there is one chain and no authorization written twice |
-| what comes back | The outlet alone, in the same hydratable markup the document was served in — no second head, no shell, no `<script>` the browser has already run. Marked with `x-abide-navigation` and `Vary`-ing on it, so a shared cache never hands a fragment to a browser opening the page cold |
+| what comes back | The outlet alone, in the same hydratable markup the document was served in — no second head, no shell, no `<script>` the browser has already run. Less than the outlet when the caller already has some of it, which is the next section. Marked with `x-abide-navigation` and `Vary`-ing on that AND on `x-abide-navigation-from`, since two request headers now change the body |
 | a refusal | A rung short-circuiting with a `Response` — a redirect, a 403 — hands the url to the BROWSER, so the server's own answer is what renders. There is no second refusal protocol, and nothing for an app to spell twice |
 | the paint | The part showing the outlet ADOPTS the fragment, so a navigation costs the same near-nothing hydration does. The page's own module is then what makes it interactive rather than what makes it visible |
 | the commit | On the MODULE, not on the markup: committing earlier re-runs `outlet()` against a view that has not arrived, which renders nothing over markup that was already right. The address bar moves with the screen, so `route()` catches up within the window `navigating` already reports |
 | an overtaken one | Only the NEWEST navigation commits, and only it clears `navigating` — an older one that lands second returns before `commit` rather than writing its params over the newer page. Its response is still read to the end rather than cancelled, so the stream's own bookkeeping is not left half-done |
 | who installs it | `abide/ui`, when `mount`/`hydrate` is handed `outlet` ITSELF. A renderer showing something else is not the part a navigation repaints, and an app that never puts the outlet on screen installs nothing. `dispose()` UNINSTALLS it, so the renderer driving the screen is the one driving navigation |
-| where it does not apply | A caller with a SCOPE — a request being served, a test driving a route inside an `isolate`. Neither has a screen to repaint or an onion to pass through |
+| where it does not apply | A caller with a SCOPE — a request being served, a test driving a route inside an `isolate`. Neither has a screen to repaint or an onion to pass through. And the route already showing — see below |
+
+### A navigation is answered from the first layout that CHANGED
+
+Two routes under one layout are two pages with the same chrome. The reader has that chrome on screen
+already, so the answer leaves it off and the client puts what arrives INSIDE it.
+
+| Rule | Detail |
+| --- | --- |
+| the ask | `x-abide-navigation-from`, carrying the route NAME the client is leaving. A HINT: the answer is a smaller body, so a client that lies gets markup missing the layouts it claimed to have, and nothing else. Every rung still runs, at the target url |
+| the depth | The server compares the two routes' `layouts` by LOADER IDENTITY and takes the common prefix. Two entries naming one layout file share a thunk; two thunks that merely look alike are two layouts. The prefix stops at the first difference and never resumes — a shared layout below a changed one is inside a subtree being replaced anyway |
+| the answer | `outletFrom(depth)` — the page wrapped in the layouts from `depth` down — and `x-abide-navigation-depth` saying how many were left off. The server says it rather than the client computing it, so the rule has one implementation |
+| where it lands | The `<slot/>` of the innermost layout the reader already has. The client walks down one level per depth, asking each instance for the child part holding what that layout was handed as children — an identity lookup on a `TemplateResult`'s `values`, which is freshly allocated per evaluation and so names exactly one slot |
+| a miss | The url goes to the BROWSER. The body has already had those layouts left out of it, so there is no arrangement in which the outlet's own range is the right place for it — standing it there paints a page with its chrome missing, which is worse than the rebuild this avoids |
+| what it is worth | On the dogfood app: 717-927 B per navigation, and the `<header>` node, its links and the focus ring all SURVIVE. The bytes are the small half — chrome is 0.5% of a fragment — and the DOM state is the point. Both grow with the layout |
+
+### A navigation may cross-fade
+
+Nothing to call. An app that wrote view-transition CSS gets view transitions; one that did not is
+unchanged.
+
+| Rule | Detail |
+| --- | --- |
+| how it is decided | The document's own stylesheets are asked whether any rule names `::view-transition*` or sets `view-transition-name`. That IS the app saying it — the standard puts the entire control surface in CSS, so a boolean elsewhere would be the same intent spelled twice. Same shape as `installNavigation`, chosen by `view === outlet` rather than by an option |
+| what it costs | One walk over the document's rules, cached against `document.styleSheets.length` and re-asked only when that moves — so a lazily added stylesheet is picked up on the next navigation. Selectors and declarations are read directly rather than through `cssText`, which serialises every rule |
+| what it cannot see | A CROSS-ORIGIN stylesheet, whose `cssRules` throws by design. Transition CSS served from a CDN is invisible here, and such an app has to name its transition from a same-origin sheet as well |
+| what is wrapped | The piece that STANDS in the range — the visible change, and only it. Deferred panels patch in afterwards, outside the transition, so a slow panel does not hold the animation open |
+| the ordering | The first piece is read to completion BEFORE the transition starts. `startViewTransition` snapshots the old state when it is called and holds rendering until its callback resolves, so a callback that awaited the body would freeze the page for the whole download. The reclaim is inside the callback for the mirror of that reason: a page emptied first snapshots as empty and crossfades from nothing |
+| how long it waits | `updateCallbackDone`, not `finished`. The page is on screen when the DOM is written; waiting for the animation to END would hold the address bar and the commit behind it |
+| a browser without it | Navigates exactly as it does now, so an app feature-detects nothing |
+
+### A same-route move is painted here
+
+`navigate` takes the LOCAL path — the one a server render and every headless case already run on —
+when the target is the route already showing and that route's module has resolved. No request, no
+fragment, no refill.
+
+This is a claim about NODES, not about speed. A served navigation refills the outlet's whole range,
+and a refill is a rebuild however identical the markup: every open `<details>` shuts, every carousel
+returns to offset zero, and focus lands back on `<body>`. Measured on a suite page before this
+existed: a query-only move replaced all 28 `<details>` on it, none still open. `outlet()` reads the
+route's NAME and not its params, so it does not even re-run — the page's own reads move and its nodes
+keep their identity.
+
+| Rule | Detail |
+| --- | --- |
+| when | The matched route's pattern is the one committed, AND its `view` has resolved. A route whose async loader has not landed cannot be drawn here, so the server answers that one |
+| what still runs | The page's own reads. A different `[id]` wakes a reader of `params`, and the `rpc` behind it is answered by the server exactly as before — this changes what renders the page, not where its data comes from |
+| the TRADE | The app's `middleware` does NOT run for this move. It is not an authorization hole: every `rpc` is still answered server-side, and a client cannot render data it was never given. What is lost is a rung REDIRECTING on the new params — a login redirect reaches the reader as failed calls instead |
+| crossing a route | Unchanged. A different pattern is a page the client may not have, so it goes through the onion and comes back as a fragment |
+| borrowing the table | `routes()` rebuilds every record, so a caller that borrows the table and gives it back resets every resolved view — and nothing asks again, since `outlet` reads the route's NAME and a restore does not move it. A borrower `ready()`s after restoring; without that, every same-route move on its page goes back to the server |
 
 ### A navigation streams out of order
 
@@ -1184,7 +1294,10 @@ and the app's own `onConfig` defaults beneath that. An app's own fields join on 
 | `APP_URL` | `string \| null` | The app's public URL. Its ORIGIN is what both gates compare against (WS CSWSH, CSRF) — undeclared, they fall back to the REQUEST's own, which is the weaker answer, since a caller controls its own `Host`, and the wrong one behind TLS termination, where that origin is the proxy's. Its PATH is the app's mount base: `https://abide.com/v2` serves every page, endpoint and asset under `/v2`. See "Mounted under a sub-path". |
 | `NODE_ENV` | `string \| null` | Verbatim. `isProduction()` is the conclusion drawn from it, and is not a field. |
 | `ABIDE_APP_NAME` | `string \| null` | The app's name, and therefore `log`'s default channel. Falls back to the nearest package.json `name`, then `abide`. |
-| `ABIDE_DATA_DIR` | `string \| null` | Overrides the per-user directory backing `appDataDir()`. |
+| `ABIDE_DATA_DIR` | `string \| null` | Overrides the per-user directory. `APP_DATA_DIR` is this resolved against the platform's convention when it is unset. |
+| `APP_NAME` | `string` | **A conclusion, not a variable.** `ABIDE_APP_NAME`, else the nearest package.json's `name`, else `abide`. |
+| `APP_VERSION` | `string` | The `version` beside that `name`, or empty. Empty rather than absent, so no consumer branches on the field existing. |
+| `APP_DATA_DIR` | `string` | `ABIDE_DATA_DIR`, else the platform's per-user data directory under `APP_NAME`. A path — nothing is created. |
 | `ABIDE_IDENTITY_SECRET` | `string \| null` | Seals the `abide-identity` cookie. Required in production for `identity.set()`; a dev process mints a random key and says so on `abide:identity`. |
 | `ABIDE_IDENTITY_TTL` | `number` | Identity cookie life in ms (default 30d), rolling — re-sealed on the first resolve past half of it. |
 | `ABIDE_APP_TOKEN` | `string \| null` | Bearer the remote CLI sends, for whatever an operator put in FRONT of the app. |

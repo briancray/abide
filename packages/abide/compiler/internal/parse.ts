@@ -144,7 +144,7 @@ export function parse(source: string): Blocks {
         template += ' '.repeat(open.bodyStart - open.start)
         // Blanked a RUN at a time rather than a character at a time. The common shape of a lifted
         // `<script>` is a line with no newline in it, and `/[^\n]/g` visits every character of every
-        // one of them — 51% of all source bytes across the example app, and the largest single
+        // one of them — 51% of all source bytes across the dogfood app, and the largest single
         // self-time line in a compile. Same idiom `parseNodes` uses one function away.
         for (let at = open.bodyStart; at < open.bodyEnd; ) {
             const line = source.indexOf('\n', at)
@@ -440,8 +440,9 @@ function parseHole(reader: Reader): Node {
         )
     }
 
-    // `{html(...)}` is the raw escape hatch (SPEC), which the runtime spells `raw(...)`.
-    const raw = /^html\s*\(/.test(trimmed)
+    // `{raw(...)}` is the escape hatch (SPEC). Syntactic, like every other decision on this path: the
+    // name is what marks the slot, so nothing here needs to know what the expression evaluates to.
+    const raw = /^raw\s*\(/.test(trimmed)
     return { kind: 'expression', raw, value: { source: trimmed, start: at } }
 }
 

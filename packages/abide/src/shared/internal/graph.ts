@@ -26,6 +26,12 @@ const CHECK: number = 1
 const DIRTY: number = 2
 const DEAD: number = 3
 
+// Where an EFFECT is in its own body, which `status` cannot say: it is DIRTY for the whole of the
+// run it is answering, so a mark arriving mid-run is indistinguishable from that one. See `mark`.
+const NOT_RUNNING: number = 0
+const RUNNING: number = 1
+const REMARKED: number = 2
+
 /** The empty every node starts and ends on. Only `run`'s own array is ever pushed into — see below. */
 const NO_SOURCES: Node[] = []
 
@@ -120,6 +126,11 @@ export class Node {
     // DIRTY with no value behind it. Read by `mark`, and false on every node that has never met a
     // load. See the note there for why the distinction has to exist.
     signalled = false
+    /**
+     * `NOT_RUNNING` / `RUNNING` / `REMARKED` — an effect's position in its OWN body, and whether a
+     * source moved while it was in there. Never leaves `NOT_RUNNING` on a derivation or a state.
+     */
+    runState = NOT_RUNNING
 
     constructor(payload: unknown, fn: (() => unknown) | null, isEffect = false) {
         this.fn = fn
@@ -159,6 +170,17 @@ export class Node {
     }
 
     mark(next: number): void {
+        // A source moved while this effect's own body was RUNNING, so the run underway answered the
+        // value that source had before the move: an `{#if}` reading `pending()` false and then, on
+        // its else arm, kicking the load that flips it true. It is DIRTY for the whole of that run,
+        // so absorbing this as "the mark the run is already answering" is what lost the flip;
+        // `finishRun` re-marks it instead. Only a `mark` counts — a derivation recomputed by a read
+        // INSIDE the run writes its observers' status directly, and THAT one is consumed in place,
+        // by the very read that pulled it. Effects have no observers, so nothing travels past here.
+        if (this.runState !== NOT_RUNNING) {
+            this.runState = REMARKED
+            return
+        }
         if (this.status >= next) {
             // Already at least this dirty, so there is nothing to raise — but a node left DIRTY by a
             // SIGNAL has produced no value and told its observers nothing, and absorbing the mark
@@ -207,6 +229,7 @@ export class Node {
             // An EFFECT keeps throwing out of here: `flush` resets it to CLEAN and rethrows from a
             // fresh microtask, which is what keeps the throw observable.
             if (this.isEffect) {
+                this.runState = RUNNING
                 try {
                     this.run()
                 } catch (error) {
@@ -214,7 +237,14 @@ export class Node {
                     // nothing to undo. The signalling read subscribed this node to the flip that ends
                     // the load, so the body runs again the moment it can.
                     if (!(error instanceof Pending)) throw error
+                } finally {
+                    // In a `finally`, because a body that THROWS has still left the run: left
+                    // `RUNNING`, every later mark would be recorded for a run that is over and the
+                    // effect would be dead for the life of the page — which is the thing `flush`'s
+                    // reset to CLEAN exists to prevent.
+                    this.finishRun()
                 }
+                return
             } else {
                 // Cleared BEFORE the run and set only by the signal below, so any run that reaches a
                 // value clears it — including the one this pull is about to make.
@@ -292,6 +322,20 @@ export class Node {
             this.unsubscribeFrom(sourceIndex)
             this.sources.length = sourceIndex
         }
+    }
+
+    /**
+     * Leave the body: CLEAN, unless something moved under the run — in which case it is marked NOW,
+     * from outside the run, so the ordinary queueing applies and the effect runs again in this flush.
+     */
+    finishRun(): void {
+        const moved = this.runState === REMARKED
+        this.runState = NOT_RUNNING
+        // An effect that disposed itself from inside its own body stays DEAD: re-marking it here
+        // would queue a node whose teardown has already run.
+        if (this.status === DEAD) return
+        this.status = CLEAN
+        if (moved) this.mark(DIRTY)
     }
 
     run(): void {
@@ -384,6 +428,19 @@ export class Node {
         }
         this.unsubscribeFrom(0)
         this.sources = NO_SOURCES
+        // Whoever was reading this has to ASK AGAIN, because the answer is no longer here. An argless
+        // `memo` is a facade over one instance PER CALLER — see `scopedArgless` — so a read taken
+        // while somebody else's scope is installed binds the reader to that caller's instance, and
+        // the caller then takes it away. Dropping the observers silently left the reader holding a
+        // DEAD node, which `mark` can never wake: on `/tests` a page-level memo stopped propagating
+        // for good the moment the `scope` suite held an async `isolate` open across one flush, and
+        // every derived thing on the page froze while the cells under it went on moving.
+        //
+        // Marked BEFORE the list is dropped, and free for the node nobody read — the common case is
+        // an empty `observers`. A reader being torn down in the same teardown absorbs this in `mark`,
+        // which returns early on a status already at DEAD.
+        const observers = this.observers
+        for (let i = 0; i < observers.length; i++) (observers[i] as Node).mark(DIRTY)
         // A fresh empty rather than `length = 0`: this may be the SHARED one, which a node that
         // nothing ever read still holds.
         this.observers = NO_OBSERVERS
@@ -887,6 +944,29 @@ function attachAsync(read: Cell<unknown>, node: Node): void {
     }
     target.then = (onFulfilled, onRejected) =>
         settledPromise(node).then(onFulfilled as never, onRejected as never)
+    // The SAME two function objects on every cell — see `Cell.catch`. Assigned here rather than left
+    // to a prototype because a cell is a function and mutating a function's prototype deoptimises it.
+    const verbs = read as unknown as { catch: unknown; finally: unknown }
+    verbs.catch = caught
+    verbs.finally = lastly
+}
+
+/**
+ * `catch` and `finally`, in terms of `then` and through `this`.
+ *
+ * Module scope, so the two are allocated once for the process rather than per cell. `then()` with no
+ * arguments already hands back a real promise, which is what makes `finally` one line and what makes
+ * both agree with the native semantics they are named after.
+ */
+export function caught(
+    this: PromiseLike<unknown>,
+    onRejected?: ((reason: unknown) => unknown) | null,
+): Promise<unknown> {
+    return this.then(undefined, onRejected) as Promise<unknown>
+}
+
+export function lastly(this: PromiseLike<unknown>, onFinally?: (() => void) | null): Promise<unknown> {
+    return (this.then() as Promise<unknown>).finally(onFinally)
 }
 
 // --- the seam a keyed `memo` slot sits on -----------------------------------
@@ -1070,6 +1150,21 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
 // `refresh` is the one verb that is NOT here, because re-running requires a body to re-run; it lives
 // on `Memo` and on a keyed handle. `dispose` likewise: only a derivation owns subscriptions.
 export interface Cell<T> extends PromiseLike<T> {
+    /**
+     * The other two thenable verbs, so `x.catch(…)` is not a `TypeError` on a value `await` accepts.
+     *
+     * A cell is a PromiseLike and not a Promise — there is no `[[PromiseState]]` under it — so these
+     * are the two `Promise.prototype` gives a real one, and nothing else. `instanceof Promise` stays
+     * FALSE on purpose: an object claiming to be one and then failing a native fast path is worse
+     * than a thenable that says what it is.
+     *
+     * Both are ONE shared function each, not a closure per cell. They reach the cell through `this`,
+     * which is what keeps them free on an object allocated per keyed slot — per row, in a list.
+     */
+    catch<Rejected = never>(
+        onRejected?: ((reason: unknown) => Rejected | PromiseLike<Rejected>) | null,
+    ): Promise<T | Rejected>
+    finally(onFinally?: (() => void) | null): Promise<T>
     /**
      * The value. THROWS if the last load failed — a caller that ignores it is not handling it — and
      * SIGNALS where re-running is the recovery, which is why the type carries no `| undefined` for a
@@ -1367,6 +1462,7 @@ export function watchNode(fn: () => void | (() => void)): Node {
 /** Run an effect node NOW, as `pull` would. Its sources are re-collected, so a new body is adopted. */
 export function rerun(node: Node): void {
     if (node.status === DEAD) return
+    node.runState = RUNNING
     try {
         node.run()
     } catch (error) {
@@ -1374,8 +1470,9 @@ export function rerun(node: Node): void {
         // to what ends the load. `rerun` is the one path into an effect that does not go through
         // `pull`, so the catch is owed here too.
         if (!(error instanceof Pending)) throw error
+    } finally {
+        node.finishRun()
     }
-    node.status = CLEAN
 }
 
 export function untrack<T>(fn: () => T): T {

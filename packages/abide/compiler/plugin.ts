@@ -4,7 +4,7 @@
 // preload` for `bun test`, an `import '$compiler/preload.ts'` in `cli/internal/layers.ts` and
 // `cli/internal/repl.ts` (and a `--preload` in `cli/internal/run.ts`) for the server lane, and
 // `cli/internal/lane.ts`'s plugin list for the browser bundle. So the SAME compiler output runs in
-// every lane — there is no build step whose result could differ from what the tests loaded. An APP never names it: see the example's
+// every lane — there is no build step whose result could differ from what the tests loaded. An APP never names it: see the dogfood app's
 // `bunfig.toml`, where `[serve.static] plugins` is the app's own plugins and this one is deliberately
 // absent, because naming it again would be the same plugin set up twice.
 

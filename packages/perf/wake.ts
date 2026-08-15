@@ -23,9 +23,9 @@
 import { html, state, watch } from 'abide'
 import { keyed } from 'abide/runtime'
 import { mount } from 'abide/ui'
-// The kit's measurement half, which has no abide in its graph — so the hand-written floor below is timed
+// The harness's measurement half, which has no abide in its graph — so the hand-written floor below is timed
 // by the same clock, the same batch sizing and the same quiesce as the arms it is the control for.
-import { quiesce, tick, timeArms } from 'abide-kit/measure'
+import { quiesce, tick, timeArms } from 'harness/measure'
 
 const ROWS = 1000
 
@@ -140,7 +140,7 @@ function vanillaRung(host: HTMLElement): Rung {
  *
  * A body whose only effect is a counter nobody reads is a body an engine may prove dead, and this rung's
  * whole point is that the graph ran. `observedWakes` is the reader that makes the increment survive —
- * the same trick as the kit's `keep` / `keptValue` pair.
+ * the same trick as the harness's `keep` / `keptValue` pair.
  */
 let observed = 0
 
@@ -232,7 +232,7 @@ export async function profileWakePath(attached: boolean): Promise<{ arms: Arm[];
 
     // Every rung BUILT before any of them is timed, which is the change that made this file honest.
     // It used to build one, time it to completion, then build the next — and an arm timed after another
-    // inherits whatever that one left behind. The kit's own note prices that mistake: the same
+    // inherits whatever that one left behind. The harness's own note prices that mistake: the same
     // hand-written emitter measured 38.6 ns alone and 8.84 µs after abide's arm had run, which reads as
     // "abide 121x faster" instead of "2.21x slower". `timeArms` interleaves one batch per arm per pass,
     // so the drift is spread across all of them rather than loaded onto whichever ran second.

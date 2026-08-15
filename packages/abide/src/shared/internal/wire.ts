@@ -15,6 +15,8 @@ import { traceHeaders } from './trace.ts'
 /** A stream of chunks, one JSON value per line — what a handler that YIELDS is served as. */
 export const NDJSON_TYPE = 'application/x-ndjson'
 export const JSON_TYPE = 'application/json'
+/** What bytes travel as when the handler did not say — `Blob.type` wins where it did. */
+export const OCTET_TYPE = 'application/octet-stream'
 /**
  * One JSON value per line. JSON has no unescaped newline, so the delimiter needs no length prefix.
  *
@@ -510,11 +512,46 @@ function text(payload: unknown): string {
     return ` — ${payload}`
 }
 
-/** A response body as JSON, or as the text it turned out to be. Never throws on a malformed body. */
+/**
+ * Is this body TEXT? Everything abide sends is, and so is nearly everything in front of it.
+ *
+ * An allowlist read in the safe direction: a type nobody named is text, because the bodies with no
+ * `content-type` are the ones abide did not write — a proxy's error page, a gateway's plain-text
+ * refusal — and reading one as bytes would turn a diagnostic a human can read into a byte array.
+ * A type that IS named and is not textual is the deliberate case, and that one decodes as bytes.
+ */
+function isTextual(type: string): boolean {
+    if (type === '') return true
+    return (
+        type.startsWith('text/') ||
+        type.includes(JSON_TYPE) ||
+        type.includes(JSONL_TYPE) ||
+        type.includes(NDJSON_TYPE) ||
+        type.includes('+json') ||
+        type.includes('xml') ||
+        type.includes('javascript')
+    )
+}
+
+/**
+ * A response body as JSON, as the text it turned out to be, or as BYTES. Never throws on a malformed
+ * body.
+ *
+ * The binary arm is what makes an image an answer rather than a corruption: `.text()` on bytes that
+ * are not valid UTF-8 is LOSSY and silent, so a handler answering with a PNG used to hand its caller
+ * a mangled string with nothing to say so. A `Uint8Array` rather than an `ArrayBuffer`, because that
+ * is the shape a handler returned and the one every other byte path in this package already speaks.
+ */
 export async function payloadOf(response: Response): Promise<unknown> {
+    const type = response.headers.get('content-type') ?? ''
+    if (!isTextual(type)) {
+        const bytes = new Uint8Array(await response.arrayBuffer())
+        // The same "an empty body is nothing" rule the text arm has, so a caller branches once.
+        return bytes.length === 0 ? null : bytes
+    }
     const body = await response.text()
     if (body === '') return null
-    if (!(response.headers.get('content-type') ?? '').includes(JSON_TYPE)) return body
+    if (!type.includes(JSON_TYPE)) return body
     try {
         return JSON.parse(body) as unknown
     } catch {
@@ -586,7 +623,12 @@ export async function askWire<T>(
         const traced = traceHeaders()
         const answered = await send(address, traced === null ? init : { ...init, headers: traced })
         const document = await payloadOf(answered)
-        if (document !== null && typeof document === 'object') return document as T
+        // `ArrayBuffer.isView` as well as the object test: a typed array IS an object, so something
+        // in front of the app answering `/__abide/health` with an image would otherwise be taken for
+        // a health document. It is not one, and the floor is the right answer.
+        if (document !== null && typeof document === 'object' && !ArrayBuffer.isView(document)) {
+            return document as T
+        }
     } catch {
         // Nothing answered. Fall through to the one thing the caller knows.
     }
@@ -621,37 +663,40 @@ export async function* chunksOf(id: string, response: Response): AsyncGenerator<
     // the portable spelling is the one that works in every lane this runs in.
     const reader = body.getReader()
     const decoder = new TextDecoder()
-    let held = ''
-    // A CURSOR rather than re-slicing the buffer per line: dropping the head of a k-line read copies
-    // what is left of it k times, and a stream's whole point is that the buffer is not small.
-    let from = 0
-    // ...and a second cursor for the SCAN, which is not the same position: `from` only moves when a
-    // line is consumed, so a line spanning k reads had every read re-search the bytes the previous
-    // one already proved newline-free — quadratic in the length of one line, not in the stream.
-    // `scanned >= from` always: it is set to `from` on consuming a line and only grows from there.
-    let scanned = 0
+    // The tail of the current line, as the PIECES it arrived in — joined only when the line ends.
+    //
+    // One accumulating buffer with a scan cursor searches each character exactly once too, and is
+    // STILL quadratic in the length of a line on V8: `held += piece` builds a cons string and the
+    // `indexOf` that follows flattens it, copying everything held so far on every read. Both readers
+    // over the same 512 KiB line in 513 reads: 9.26 ms buffered against 0.46 ms pieced in chromium,
+    // and 0.23 against 0.30 under JSC, where the cons string costs nothing and this shape is a small
+    // loss. So the substrate `bun test` runs on is the one substrate the quadratic is invisible in.
+    // Each piece is searched where it is flat, and the only copy is one `join` per line.
+    const pending: string[] = []
     for (;;) {
         const step = await reader.read()
         if (step.done === true) break
-        if (from > 0) {
-            held = held.slice(from)
-            scanned -= from
-            from = 0
-        }
-        held += decoder.decode(step.value, STREAMING)
+        const piece = decoder.decode(step.value, STREAMING)
+        // A cursor INSIDE the read, for the reason the old buffer had one: dropping the head of a
+        // k-line read copies what is left of it k times. The piece is flat, so a search from an
+        // offset copies nothing.
+        let from = 0
         for (;;) {
-            const at = held.indexOf('\n', scanned)
-            if (at < 0) {
-                scanned = held.length
-                break
-            }
-            const line = held.slice(from, at)
+            const at = piece.indexOf('\n', from)
+            if (at < 0) break
+            const head = piece.slice(from, at)
             from = at + 1
-            scanned = from
+            let line = head
+            if (pending.length !== 0) {
+                pending.push(head)
+                line = pending.join('')
+                pending.length = 0
+            }
             if (line !== '') yield chunk(id, line)
         }
+        if (from < piece.length) pending.push(from === 0 ? piece : piece.slice(from))
     }
-    const rest = held.slice(from) + decoder.decode()
+    const rest = pending.join('') + decoder.decode()
     if (rest.trim() !== '') yield chunk(id, rest)
 }
 
