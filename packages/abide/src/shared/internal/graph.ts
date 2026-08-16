@@ -970,8 +970,14 @@ function kicker(node: Node, beforeRead: (() => void) | null): () => void {
                 kickedBy = previous
             }
         }
+        // PENDING or STREAMING: the fact a caller wants is "asked about something that has not
+        // finished arriving", and a stream mid-flight is that as much as a cold load is. It matters
+        // at hydration — the server DRAINED the stream and this side restarts it, so a region holding
+        // one has fewer rows than the markup under it and must keep that markup rather than adopt it.
         const track = node.asyncTrack
-        if (track !== null && track.pending.value === true) probedPending = node
+        if (track !== null && (track.pending.value === true || track.streaming.value === true)) {
+            probedPending = node
+        }
     }
 }
 

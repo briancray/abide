@@ -553,25 +553,27 @@ export default suite({
                     template('<p>{load()}</p>'),
                     '<p>${() => load()}</p>',
                 )
-                // And the chain over a cell's probes, which is what has something to SHOW while the
-                // load runs — the pending arm a document render sends now.
-                const pendingOf = (source: string): string =>
-                    /pending: ([^,]+)/.exec(template(source))?.[1] ?? 'none'
+                // A chain that asks about a load used to be MATCHED here — `{#if <cell>.pending()}`
+                // as the whole of a first test — and wrapped in `awaited(cell, { pending, … })` so
+                // the walk knew to defer it. Nothing recognises a spelling now: every chain is the
+                // same plain thunk, and the walk defers whichever one PROBED, which it learns from
+                // the probe rather than from the source. That is asserted where it is true, in the
+                // `server` suite — "a region that PROBED defers, whatever the spelling".
+                const wrapped = (source: string): boolean => template(source).includes('awaited(')
                 is(
-                    'a chain that asks about the load defers',
-                    pendingOf('<script>const p = state(0)</script><p>{#if p.pending()}x{:else}y{/if}</p>'),
-                    '$1',
+                    'a chain that asks about a load is a plain thunk',
+                    wrapped('<script>const p = state(0)</script><p>{#if p.pending()}x{:else}y{/if}</p>'),
+                    false,
                 )
                 is(
-                    '…and one that does not is a plain thunk',
-                    pendingOf('<script>const p = state(0)</script><p>{#if p}x{:else}y{/if}</p>'),
-                    'none',
+                    '…and so is one that does not ask',
+                    wrapped('<script>const p = state(0)</script><p>{#if p}x{:else}y{/if}</p>'),
+                    false,
                 )
-                // Only the FIRST test counts: the first arm is what goes out in front of the load.
                 is(
-                    'a probe in a later arm is not the placeholder',
-                    pendingOf('<script>const p = state(0)</script><p>{#if p}x{:else if p.pending()}y{/if}</p>'),
-                    'none',
+                    'the two are the SAME shape, which is the whole change',
+                    template('<script>const p = state(0)</script><p>{#if p.pending()}x{:else}y{/if}</p>'),
+                    '<p>${() => p.pending() ? html`x` : html`y`}</p>',
                 )
             },
         },
@@ -935,12 +937,12 @@ export default suite({
                 )
                 is(
                     'a keyed memo is read by its CALL, not by its name',
-                    code.includes('const $2 = details({ title })()'),
+                    code.includes('const $0 = details({ title })()'),
                     true,
                 )
                 is(
                     '…and the branch narrows off that local, so `.pages` needs no `?.`',
-                    code.includes('if ($2) return html`${$2.pages} pages`'),
+                    code.includes('if ($0) return html`${$0.pages} pages`'),
                     true,
                 )
                 is(
@@ -1154,10 +1156,10 @@ export default suite({
                     true,
                 )
                 is(
-                    'a pending head now DEFERS, which is the point of knowing',
+                    'a pending head reads through the CALL, which is the point of knowing',
                     compile(page('{#if orders({ id: 1 }).pending()}<p>wait</p>{:else}<p>ok</p>{/if}'), {
                         filename: 'Case.abide',
-                    }).code.includes('awaited('),
+                    }).code.includes('orders({ id: 1 }).pending()'),
                     true,
                 )
                 is(
@@ -1499,19 +1501,14 @@ export default suite({
         },
 
         {
-            title: '{#if x.pending()} defers, and the operand is the CELL — so nothing can re-make it',
-            note: 'The whole chain is ONE arm, handed over three times: `pending` is what a document render sends now, `then`/`catch` is what it patches in, and the probe in the chain’s own head is what picks an arm on each pass. The operand is the cell, so choosing a branch can never make a second load — the shape that loops when a thunk reads `pending()` and re-evaluates an inline promise. Counting the body runs is the only way to see that; the output looks right either way. The handle here is LAZY, which is the other half: a probe starts nothing, so the block asks the operand for its settle first and the pending arm is then asking about a load that exists.',
+            title: '{#if x.pending()} is a plain chain, and the probe is what starts the load',
+            note: 'This chain used to be wrapped in `awaited(cell, { pending, then, catch })` — one arm handed over three times — so that a document render knew to defer the region and the client’s settle landed on the same template. Neither is the wrapper’s to carry now: the walk defers whatever PROBED, and the settle rebuilt the region either way, because a compiled chain’s arms are different templates and only the same shape reached the identity cutoff. Measured identical, wrapper and none. What is left is the ordinary thunk, and the claim that matters is the one below it — the handle is LAZY, and the probe in the head is what starts the load it then reports, so the pending arm is asking about a load that exists.',
             async run({ is }) {
                 const emitted = compile('<script>const p = state(0)</script><p>{#if p.pending()}a{:else}b{/if}</p>', {
                     filename: 'A.abide',
                 }).code
-                is(
-                    'one arm for all three, and it is the whole chain',
-                    emitted.includes(
-                        'awaited(p, { pending: $1, then: $1, catch: $1, finally: undefined })',
-                    ),
-                    true,
-                )
+                is('no wrapper around the chain', emitted.includes('awaited('), false)
+                is('the probe is in the head, untouched', emitted.includes('p.pending() ? html`a` : html`b`'), true)
 
                 const before = calls()
                 const host = container()
@@ -1909,7 +1906,7 @@ export default suite({
                 is(
                     'everything the emitter alone writes comes from `abide/runtime`',
                     from('abide/runtime'),
-                    "import { adopt, awaited, boundary, classes, keyed, streamed, styles } from 'abide/runtime'",
+                    "import { adopt, boundary, classes, keyed, streamed, styles } from 'abide/runtime'",
                 )
                 log('emitted', code)
             },

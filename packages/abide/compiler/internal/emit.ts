@@ -1828,58 +1828,18 @@ function childrenOf(parameters: string): string | null {
  * condition still does not run when an earlier one matched.
  */
 function conditional(branches: Branch[], context: Context): string {
-    const chain = chained(branches, context)
-    const operand = deferrable(branches, context)
-    if (operand === null) return chain
-    // ONE arm handed over three times, and it is the WHOLE chain — the same thunk asked twice.
+    // The chain, and nothing around it. A `{#if x.pending()}` head used to be matched here and
+    // wrapped in `awaited(cell, { pending, then, catch })` — one arm handed over three times — so
+    // that the SERVER knew to defer this region and the client's settle landed on the same template.
     //
-    // `pending` is what a document render sends now, and `then`/`catch` is what it patches in; the
-    // probe in the chain's own head is what picks the arm on each pass, so nothing here has to know
-    // which one that was. On the client the two passes produce the same template from the same call
-    // site with the same value in it, so the settle is a no-op and the chain stays exactly the
-    // reactive thunk it would have been — which is what keeps a later write repainting.
-    //
-    // That no-op is a fact about the RUNTIME, not about this emit, and it is not free: it holds only
-    // while a pending arm and a settled one reach a slot in the SAME shape. `settledArms` in
-    // `html.ts` decides that, and the two landing on different arms of `ChildPart.set` never reach
-    // the `strings` identity cutoff — so the settle becomes a full rebuild of the region while
-    // producing this same correct output, which is the silent kind.
-    //
-    // Wrapped in a template rather than handed over bare: a child slot binds a FUNCTION as a thunk,
-    // and a part paints one as text. The nested template is per REGION, not per row.
-    const chainLocal = `$${context.counter.n++}`
-    const armLocal = `$${context.counter.n++}`
-    return (
-        `() => { const ${chainLocal} = ${chain}; const ${armLocal} = () => ${need(context, 'html')}\`\${${chainLocal}}\`; ` +
-        `return ${need(context, 'awaited')}(${operand}, { pending: ${armLocal}, then: ${armLocal}, catch: ${armLocal}, finally: undefined }) }`
-    )
+    // The walk decides deferral now, off the probe rather than off the spelling, so the wrapper was
+    // carrying only the second half. It was not carrying it: the no-op held only while both arms
+    // reached a slot in the SAME shape, and a compiled chain's arms are different templates, so the
+    // settle rebuilt the region either way. Measured on a gated load — inserted 2, removed 1,
+    // created 1 element · 1 text · 1 comment, cloned 2, IDENTICAL with the wrapper and without it.
+    return chained(branches, context)
 }
 
-/**
- * `{#if <source>.pending()}` — the chain that DEFERS, and the cell it defers on.
- *
- * Asking about a load is HAVING SOMETHING TO SHOW while it runs, and having something to show is the
- * whole of what says defer. Only the chain's FIRST test counts, because only the first arm is what
- * goes out in front of the load.
- *
- * Null for every other chain, which stays the plain thunk it was.
- */
-function deferrable(branches: Branch[], context: Context): string | null {
-    const test = branches[0]?.test
-    if (test == null) return null
-    const match = PENDING_HEAD.exec(test.source)
-    if (match === null) return null
-    const head = (match[1] as string).trim()
-    // A cell is named; a keyed handle is CALLED, and the call is the cell. Anything else — a probe on
-    // a plain object, a shadowed name — is not a source and does not defer.
-    const plain = IDENTIFIER.test(head)
-    const name = plain ? head : (KEYED_CALL.exec(head)?.[1] ?? '')
-    if (!(plain ? liveCell(context, name) : liveKeyed(context, name))) return null
-    return code({ source: head, start: test.start }, context, 'cell')
-}
-
-const PENDING_HEAD = /^([\s\S]+?)\s*\.\s*pending\(\s*\)$/
-const KEYED_CALL = /^([A-Za-z_$][\w$]*)\s*\(/
 
 /**
  * The cells an UNCONDITIONAL child slot reads, so setup can start their loads before the walk reaches

@@ -26,10 +26,25 @@ export interface RenderContext {
      */
     hydratable: boolean
     document: DocumentContext | null
+    /**
+     * This walk is building a PLACEHOLDER, so a region that probes an unlanded load neither defers
+     * nor waits — it renders what it made and stops.
+     *
+     * The third answer to "what does a probe mean here", and it needs its own field because the other
+     * two are already spoken for: with a document a probing region defers, and without one it BLOCKS,
+     * since a placeholder is half an answer and a reader running no scripts would keep it forever.
+     * Inside a placeholder both are wrong. Deferring is circular — the region would stand in for
+     * itself — and waiting is worse: the arm would block on the very load it was written to cover,
+     * which is the shell held back by the thing it was supposed to render around.
+     */
+    placeholder: boolean
 }
 
 /** What a render with no options is. One shared object, so the walk stays monomorphic. */
-export const PLAIN: RenderContext = { hydratable: false, document: null }
+export const PLAIN: RenderContext = { hydratable: false, document: null, placeholder: false }
+
+/** The same, inside a placeholder. Shared for the same reason `PLAIN` is. */
+export const IN_PLACEHOLDER: RenderContext = { hydratable: false, document: null, placeholder: true }
 
 export interface RenderOptions {
     hydratable?: boolean

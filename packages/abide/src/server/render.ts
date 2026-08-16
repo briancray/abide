@@ -69,6 +69,7 @@ import {
     attribute,
     type Deferred,
     type DocumentContext,
+    IN_PLACEHOLDER,
     PLAIN,
     patchScript,
     type RenderContext,
@@ -444,16 +445,61 @@ function emitProduced(produce: () => Renderable, context: RenderContext, out: Ou
     // spelling; a ternary, a negated probe and a `memo` over one all arrive here identically.
     //
     // A plain read does not reach this: it signals, and `awaitPending` above blocks as it always did.
-    // The document check comes FIRST, and not for speed: `probedLoad` builds the settle promise, and
-    // on a rejecting load that promise rejects. Asked for where there is nowhere to patch — a PLAIN
-    // walk, which is what a placeholder and every `renderToString` are — nothing would await it, and
-    // a load that fails takes the process down with an unhandled rejection instead of rendering the
-    // failure arm it was built to render.
-    if (context.document !== null) {
+    // Three answers, and `probedLoad` is asked for only where one of them consumes the promise it
+    // BUILDS — an unawaited one is an unhandled rejection the moment the load fails.
+    if (!context.placeholder) {
         const settling = probedLoad()
-        if (settling !== null) return emitProbed(produce, produced, settling, context, out)
+        if (settling !== null) {
+            // With nowhere to patch — `renderToString`, `renderDocumentToString` — the walk WAITS, so
+            // the markup is complete when it arrives. The placeholder is half an answer and it is the
+            // half a reader running no scripts would keep forever.
+            return context.document === null
+                ? awaitProbed(produce, settling, context, out)
+                : emitProbed(produce, produced, settling, context, out)
+        }
     }
     return emit(produced, context, out)
+}
+
+/**
+ * A region that probed an unlanded load, with nowhere to patch: WAIT for it and call the producer
+ * again, so the markup is the settled one.
+ *
+ * The signal's `awaitPending` twin. Looping rather than recursing because the re-run may probe a
+ * SECOND load — a region asking about two — and each pass waits for the one it just learned about.
+ * Termination is the wall budget the whole walk is raced against, exactly as it is there.
+ */
+async function awaitProbed(
+    produce: () => Renderable,
+    settling: Promise<unknown>,
+    context: RenderContext,
+    out: Out,
+): Promise<void> {
+    const handed = handOver(out)
+    if (handed !== null) await handed
+    let waiting = settling
+    let produced: Renderable
+    for (;;) {
+        try {
+            await waiting
+        } catch {
+            // Waited out, not handled: a FAILED load is reported by the read in the re-run below,
+            // with the author's own expression under it.
+        }
+        forgetProbedLoad()
+        try {
+            produced = retryable(produce)
+        } catch (error) {
+            if (!isPending(error)) throw error
+            produced = (await awaitedProduce(error, produce, out)) as Renderable
+            break
+        }
+        const again = probedLoad()
+        if (again === null) break
+        waiting = again
+    }
+    const rest = emit(produced, context, out)
+    if (rest !== null) await rest
 }
 
 /**
@@ -500,7 +546,7 @@ function emitProbed(
     // PLAIN: the placeholder is markup the client adopts as one piece and replaces whole, so it must
     // not defer again from inside itself. Already produced, so this emits the VALUE rather than
     // calling the thunk a second time.
-    const waiting = emit(placeholder, PLAIN, out)
+    const waiting = emit(placeholder, IN_PLACEHOLDER, out)
     if (waiting !== null) {
         return then_(waiting, () => {
             out.text += PLACEHOLDER_CLOSE
@@ -695,7 +741,7 @@ function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
     // PLAIN, because a placeholder must not itself defer: it is markup the client adopts as one
     // piece and replaces whole. Through `emitProduced` because the arm is a BODY like every other —
     // a `{#if x.pending()}` chain reads the very cell this block is waiting for.
-    const waiting = emitProduced(node.branches.pending as () => Renderable, PLAIN, out)
+    const waiting = emitProduced(node.branches.pending as () => Renderable, IN_PLACEHOLDER, out)
     if (waiting !== null) {
         return then_(waiting, () => {
             out.text += PLACEHOLDER_CLOSE
@@ -915,7 +961,7 @@ export function render(node: Renderable, options?: RenderOptions): AsyncGenerato
 
 function contextFor(options: RenderOptions | undefined): RenderContext {
     if (options === undefined || options.hydratable !== true) return PLAIN
-    return { hydratable: true, document: null }
+    return { hydratable: true, document: null, placeholder: false }
 }
 
 // Returning `Promise.resolve(out.text)` by hand instead of being `async` was tried and reverted:
@@ -976,7 +1022,7 @@ export async function* renderDocument(
 ): AsyncGenerator<string> {
     const parts = typeof document === 'string' ? shellAround(document) : document
     const deferrals = { nextId: 0, deferred: [] as Deferred[] }
-    const context: RenderContext = { hydratable: options?.hydratable === true, document: deferrals }
+    const context: RenderContext = { hydratable: options?.hydratable === true, document: deferrals, placeholder: false }
     // ONE clock for the whole document. A deferred block does not hold the walk — it
     // defers into the drain below — so a budget that only reached the walk would miss the very case
     // it exists for: the page that suspends. Read here rather than inside `stream`, because this is
@@ -1100,7 +1146,7 @@ export async function* renderFragment(
     options?: RenderOptions,
 ): AsyncGenerator<string> {
     const deferrals = { nextId: 0, deferred: [] as Deferred[] }
-    const context: RenderContext = { hydratable: options?.hydratable === true, document: deferrals }
+    const context: RenderContext = { hydratable: options?.hydratable === true, document: deferrals, placeholder: false }
     const limit = renderBudget()
     const clock = limit === NO_LIMIT ? null : new Budget(limit)
     try {
