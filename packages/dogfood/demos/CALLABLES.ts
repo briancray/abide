@@ -18,6 +18,14 @@
 // and a bench harness, so they are surface the framework writes for itself rather than surface anybody
 // is asked to learn. The `client` and `hydrate` LADDERS still exist and still run — they are just not
 // about a name a reader types, so their rungs claim nothing.
+//
+// `html` is off the list for the same reason, and it had a page for a reason that has since gone away:
+// the escape hatch used to be spelled `html(…)`, so the name meant the TAG and the hatch at once and
+// the page was really about the hatch. The hatch is `raw` now — renamed so a reader never has to know
+// the syntax to know the trust — which leaves `html` as the tag the compiler EMITS into every `.abide`
+// file. It is on `abide` rather than `abide/runtime` so the emitted import merges with an author's own
+// (see `emit.ts`), not because a page, server or site here types it: none does. Its rungs are in the
+// `template` ladder and claim nothing, the way `client`'s and `hydrate`'s do.
 
 import type { Example } from 'harness'
 import type { SuiteName } from './SUITES.ts'
@@ -130,14 +138,6 @@ export const CALLABLES = {
         from: 'abide',
         blurb: 'The one predicate about the signal — for handing it back when your own `catch` swallowed it.',
         ladders: ['memo'],
-    },
-    html: {
-        name: 'html',
-        from: 'abide',
-        blurb:
-            'The template tag both substrates consume — the one a hand-written `.ts` component writes ' +
-            'and the one a `.abide` file compiles to. It ESCAPES every slot; the hatch is `raw`.',
-        ladders: ['template'],
     },
     raw: {
         name: 'raw',
@@ -412,7 +412,6 @@ export const CALLABLE_ORDER: CallableName[] = [
     'invalidate',
     'refresh',
     'isPending',
-    'html',
     'raw',
     'props',
     'route',

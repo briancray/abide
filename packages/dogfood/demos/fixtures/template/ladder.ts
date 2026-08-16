@@ -1,4 +1,8 @@
-// The `html` ladder — one rung per PLACE a `${}` can sit, because where it sits is what it means.
+// The template ladder — one rung per PLACE a slot can sit, because where it sits is what it means.
+//
+// Most of it claims NO callable. The tag is `html`, but `html` is what the compiler emits into a
+// `.abide` file rather than a name a page here types, so it is off `/docs` — see `CALLABLES.ts`. What
+// is left claiming a name is the component's `props` and the `raw` hatch, which an author does write.
 import type { Example } from 'harness'
 import One from './1-content.abide'
 import ONE from './1-content.abide?source'
@@ -18,15 +22,15 @@ import Eight from './8-trust-a-string-as-markup.abide'
 import EIGHT from './8-trust-a-string-as-markup.abide?source'
 
 export const LADDER: Example[] = [
-    { adds: 'a slot in child position is CONTENT', of: ['html'], source: ONE, view: One },
-    { adds: 'inside a tag it is a WHOLE attribute value, unquoted', of: ['html'], source: TWO, view: Two },
-    { adds: '`class:` is a toggle, not a string', of: ['html'], source: THREE, view: Three },
-    { adds: 'a branch, and its arms', of: ['html'], source: FOUR, view: Four },
-    { adds: 'a list, and `by` is its key', of: ['html'], source: FIVE, view: Five },
+    { adds: 'a slot in child position is CONTENT', of: [], source: ONE, view: One },
+    { adds: 'inside a tag it is a WHOLE attribute value, unquoted', of: [], source: TWO, view: Two },
+    { adds: '`class:` is a toggle, not a string', of: [], source: THREE, view: Three },
+    { adds: 'a branch, and its arms', of: [], source: FOUR, view: Four },
+    { adds: 'a list, and `by` is its key', of: [], source: FIVE, view: Five },
     { adds: "that list's row as a component, which TAKES it as a prop", of: ['props'], source: SIX, view: Six },
     {
         adds: 'the same component hand-written — `html` is the tag the compiler was emitting',
-        of: ['html'],
+        of: [],
         source: SEVEN,
         view: Row,
     },

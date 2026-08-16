@@ -48,16 +48,36 @@ for (const specifier of SPECIFIERS) {
     for (const name of Object.keys(module)) if (!EXPORTED.has(name)) EXPORTED.set(name, specifier)
 }
 
+/**
+ * The names on an authored door that the COMPILER writes rather than an author.
+ *
+ * `html` is the whole list. It is on `abide` and not `abide/runtime` so that the import `emit.ts`
+ * writes merges with an author's own — a deliberate placement, and the reason this cannot be expressed
+ * by walking one door fewer the way `abide/ui` is. It had a `/docs` page while the escape hatch was
+ * spelled `html(…)` and the page was really about the hatch; the hatch is `raw` now, and what is left
+ * is the tag every `.abide` file compiles to, which no page, server or site in this app types.
+ *
+ * Asserted in BOTH directions below, so this is a record of a decision rather than a hole: a name here
+ * that stops being exported fails, and a name here that reappears on `/docs` fails too.
+ */
+const EMITTED = new Set(['html'])
+
 test('the docs list IS the public surface — nothing exported is missing, nothing listed is invented', () => {
     const listed = new Set<string>(CALLABLE_ORDER)
 
     const undocumented: string[] = []
-    for (const name of EXPORTED.keys()) if (!listed.has(name)) undocumented.push(name)
+    for (const name of EXPORTED.keys()) if (!listed.has(name) && !EMITTED.has(name)) undocumented.push(name)
     expect(undocumented.sort(), 'exported by abide and absent from /docs').toEqual([])
 
     const invented: string[] = []
     for (const name of listed) if (!EXPORTED.has(name)) invented.push(name)
     expect(invented.sort(), '/docs lists a name nothing exports').toEqual([])
+
+    const stale = [...EMITTED].filter((name) => !EXPORTED.has(name))
+    expect(stale.sort(), 'excused from /docs and no longer exported at all').toEqual([])
+
+    const both = [...EMITTED].filter((name) => listed.has(name))
+    expect(both.sort(), 'excused from /docs and listed on it anyway').toEqual([])
 })
 
 test('every callable says the specifier it is really on', () => {
@@ -119,17 +139,23 @@ test('every rung claims a name that exists', () => {
 })
 
 /**
- * The ladders whose rungs are about no name an author types, and are therefore on no `/docs` page.
+ * The ladders holding rungs about no name an author types, which are therefore on no `/docs` page.
  *
- * Both are about `abide/ui`: `mount` and `hydrate` are called by `abide build`'s GENERATED client entry
+ * Two are about `abide/ui`: `mount` and `hydrate` are called by `abide build`'s GENERATED client entry
  * and by nothing in either app's pages, server or site. The rungs still compile, still run and are
  * still priced — they simply document a mechanism rather than a call.
+ *
+ * `template` is the third and is MIXED: six of its rungs are about the tag `html`, which is on `EMITTED`
+ * above for the same reason — the compiler writes it — while `props` and `raw` are names an author does
+ * type and their rungs still claim them. So this list means "some rung here claims nothing", not "no
+ * rung here claims anything", and the price of that is that a future `template` rung can go silent
+ * without failing. The suite imports each of those rungs directly, which is what still runs them.
  *
  * Asserted in BOTH directions, which is what makes it a record of a decision rather than a place to put
  * failures: a ladder that quietly stops claiming its names fails, and so does one listed here that has
  * started claiming them.
  */
-const UNCLAIMED: LadderName[] = ['client', 'hydrate']
+const UNCLAIMED: LadderName[] = ['client', 'hydrate', 'template']
 
 test('an empty `of` is a decision, not a way to disappear', () => {
     const silent = new Set<string>()
