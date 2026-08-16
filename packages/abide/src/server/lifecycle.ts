@@ -1,4 +1,6 @@
-// The app's lifecycle: the four hooks a process has, and the two functions that run them.
+// The app's lifecycle: the four hooks a process has, and the four places that run them — `boot`
+// runs `onStart`, `tearDown` runs `onStop`, `answering` runs the middleware chain and `failing` runs
+// `onError`. Two of the four are per PROCESS and two are per REQUEST, which is why it is not a pair.
 //
 // A REGISTRATION is the primitive and the module export is sugar over it: `abide dev` and `abide
 // start` import an app's module and hand each export to the function of the same name — the `HOOKS`

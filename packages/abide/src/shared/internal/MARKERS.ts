@@ -19,7 +19,7 @@ export const OPEN_MARKER = `<!--${SLOT_OPEN}-->`
 /**
  * The sigil a close marker's data opens with.
  *
- * Exported because four places ask "is this comment one of ours?" by testing this one character —
+ * Exported because three places ask "is this comment one of ours?" by testing this one character —
  * `prepare`'s `opensWithSlot` and its record walk, and the adopt walk in `parts.ts` — and they test
  * it rather than `CLOSE_FORM` on purpose: they are the LOOSER question, since an author's own
  * `<!--$foo-->` reaching the template has to be recognised as not-content before anything reads a
@@ -48,7 +48,7 @@ export function closeMarker(slot: number): string {
 
 /**
  * What a close marker's comment data looks like, for the depth scan — the STRICT form, where the
- * four `SLOT_CLOSE` tests are the loose one. A regex literal cannot interpolate, so this is the one
+ * three `SLOT_CLOSE` tests are the loose one. A regex literal cannot interpolate, so this is the one
  * place the sigil is written twice; changing `SLOT_CLOSE` means changing this too.
  */
 export const CLOSE_FORM = /^\$\d+$/

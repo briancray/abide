@@ -496,15 +496,17 @@ function resetChunks(track: Async): void {
  * Put a value through the node's `transform` before it is stored, reading nothing under tracking —
  * a transform is UNTRACKED by definition, and `set` is routinely called from inside an effect.
  *
- * Applied at exactly the five places a value becomes the node's own: `state`'s initial, a sync write
- * on a cell with no tracker, a settle, a derivation's sync result, and each CHUNK a stream keeps —
- * a chunk lands through `hold` rather than through a settle, so it is its own site and not one of
- * the other four. `resetNode` deliberately is NOT one of them — dropping to `undefined` is
+ * Applied at exactly the six places a value becomes the node's own: `state`'s initial, a sync write
+ * on a cell with no tracker, a settle, a derivation's sync result, each CHUNK a live stream keeps,
+ * and each chunk `adoptTranscript` replays from a SEEDED one — a chunk lands through `hold` rather
+ * than through a settle, so it is its own site and not one of the other five, and a replay is its
+ * own again because the stream it carries already happened. `resetNode` deliberately is NOT one of
+ * them — dropping to `undefined` is
  * un-settling, not a write, and a clamp that turned it back into a number would make `invalidate`
  * unable to go cold.
  */
 function transformed(node: Node, value: unknown): unknown {
-    // A non-null `transform` is the caller's precondition. Each of the five tests it before calling,
+    // A non-null `transform` is the caller's precondition. Each of the six tests it before calling,
     // which is what keeps a cell WITHOUT one from paying a call at all — so re-testing here would be
     // a second guard on every settle, every chunk and every sync write of the cells that do have one.
     const fn = node.transform as (value: unknown) => unknown
