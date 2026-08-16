@@ -823,6 +823,42 @@ export default suite({
         },
 
         {
+            title: 'what LIFTS is decided by the token after `import`, so `import.meta` stays put',
+            note: 'A `<script>` body is inlined into the component setup, so a static import has to be lifted out to module scope. Which statements those are is read off the token FOLLOWING the keyword — a `(` is a dynamic import and a `.` is `import.meta`, and both are expressions that belong exactly where they were written. Reading it as an OFFSET instead — a `(` at `start + 6` — let the dot through, and the half-open statement then closed on the next string literal after any `from` in the body: an `Array.from(…(\'.row\'))` was enough to lift a line to module scope and leave its own tail behind in the setup.',
+            run({ is }) {
+                is(
+                    '`import.meta` is left in the body',
+                    setup('<script>const here = import.meta.url</script><p>{here}</p>'),
+                    'const here = import.meta.url',
+                )
+                // The tail of the bug: a later `from` is what closed the span, so the case needs one
+                // AND a string after it. Without the string this passes with the offset read still in.
+                is(
+                    '…even with a later `from` and a string literal after it',
+                    setup(
+                        '<script>const here = import.meta.url\nconst rows = Array.from(document.querySelectorAll(".row"))</script><p>{here}</p>',
+                    ),
+                    'const here = import.meta.url\nconst rows = Array.from(document.querySelectorAll(".row"))',
+                )
+                is(
+                    'a dynamic import is an expression and stays too',
+                    setup('<script>const load = () => import("./late.ts")</script><p>{load}</p>'),
+                    'const load = () => import("./late.ts")',
+                )
+                // All five static forms still lift, including the side-effect one, which is matched by
+                // TOKEN position rather than by the whitespace it was written with.
+                is(
+                    'every static form still reaches module scope',
+                    compile(
+                        '<script>import { state } from "abide"\nimport type { T } from "./t.ts"\nimport * as ns from "./n.ts"\nimport D from "./d.abide"\nimport "./s.ts"\nconst c = state(1)</script><p>{c}</p>',
+                        { filename: 'C.abide' },
+                    ).code.includes("import './s.ts'"),
+                    true,
+                )
+            },
+        },
+
+        {
             title: '`export` in a <script> is a compile error, and says where to put it',
             note: 'A `<script>` body is inlined into the component setup, so an export there has nowhere to go. `<script module>` IS module scope, so the same statement is fine one block over — the error names that.',
             run({ is, throws }) {

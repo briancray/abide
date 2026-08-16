@@ -796,23 +796,29 @@ function splitImports(
 ): { imports: string[]; rest: string } {
     const spans: { start: number; end: number }[] = []
     let pending: number | null = null
+    let pendingAt = -1
     let sawFrom = false
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i] as Token
         if (pending === null) {
-            // `import(` is a dynamic import — an expression, which stays where it is.
-            if (token.kind === SyntaxKind.ImportKeyword) {
-                pending = token.start
-                sawFrom = false
-            }
-            continue
-        }
-        if (token.kind === SyntaxKind.OpenParenToken && token.start === pending + 6) {
-            pending = null
+            if (token.kind !== SyntaxKind.ImportKeyword) continue
+            // The token AFTER the keyword decides, not an offset from it. `import(` is a dynamic
+            // import and `import.meta` is an expression; both stay where they are. Read as offsets
+            // — `(` at exactly `start + 6` — the dot slipped past, `pending` outlived the line, and
+            // the next `from` in the body (an `Array.from` will do) closed a span on the next
+            // string: the statement was lifted to module scope with its own tail left behind.
+            const next = tokens[i + 1]
+            if (next === undefined) continue
+            if (next.kind === SyntaxKind.DotToken || next.kind === SyntaxKind.OpenParenToken) continue
+            pending = token.start
+            pendingAt = i
+            sawFrom = false
             continue
         }
         if (token.kind === SyntaxKind.FromKeyword) sawFrom = true
-        else if (token.kind === SyntaxKind.StringLiteral && (sawFrom || token.start === pending + 7)) {
+        // `i === pendingAt + 1` is the side-effect form, `import 'x'` — by TOKEN, so the whitespace
+        // it was written with cannot change the answer.
+        else if (token.kind === SyntaxKind.StringLiteral && (sawFrom || i === pendingAt + 1)) {
             spans.push({ start: pending, end: token.end })
             pending = null
         }
