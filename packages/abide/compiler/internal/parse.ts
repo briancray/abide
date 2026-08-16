@@ -74,7 +74,12 @@ export interface Blocks {
 }
 
 // Blocks whose body ends at `{/name}`, and the branch keywords each accepts.
-const BRANCHES: Record<string, Set<string>> = {
+//
+// Exported because it is the closed set of BLOCKS, and `/docs/syntax` claims to document all of them:
+// `dogfood/test/docs.test.ts` compares `SPELLINGS.ts` against this in both directions, so a sixth block
+// is a red gate until it has a page and a rung. Nothing else reads it from outside — the compiler's own
+// use is the two lookups below.
+export const BRANCHES: Record<string, Set<string>> = {
     if: new Set(['else']),
     for: new Set(['catch']),
     switch: new Set(['case', 'default']),

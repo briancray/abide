@@ -1,0 +1,16 @@
+<script>
+import { state } from 'abide'
+
+const picked = state('ada')
+</script>
+
+<!-- The same spelling with a SCALAR cell. Radios are exclusive, so what the group holds is the ONE
+     value that matched rather than a list of them, and the compare is unchanged — each input against
+     its own `value`. Which shape a group cell has is decided by what it was initialised with, and the
+     emit hedges over the two at runtime rather than asking a type-checker.
+
+     `name` is the DOM's own grouping and abide never writes it: a browser enforces exclusivity by
+     name, the cell is what the app reads, and the two agree because both are the input's `value`. -->
+<label><input type="radio" name="who" value="ada" bind:group={picked} /> ada</label>
+<label><input type="radio" name="who" value="alan" bind:group={picked} /> alan</label>
+<p>picked {picked}</p>

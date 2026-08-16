@@ -1,0 +1,36 @@
+<script module>
+import { state } from 'abide'
+
+const name = state('ada')
+
+/**
+ * A load that REFUSES, so the third arm has something real to report.
+ *
+ * MODULE scope, which for a refusing load is the difference between a demonstration and a page that
+ * throws. `state.shared` takes its initial EAGERLY and does not consult it once the key is filled, so
+ * every evaluation after the first builds a promise the cell never adopts — and a rejecting promise
+ * nobody adopted is an unhandled rejection, once per instance beyond the first. Here the binding is
+ * the wrap's thunk: the promise is built once per caller and the cell holds it.
+ */
+const record = state<string>(
+    new Promise((_, refuse) => setTimeout(() => refuse(new Error('no such row')), 100)),
+)
+</script>
+
+<!-- The three-arm shape, and it is one arm handed over three times rather than three blocks: the probe
+     picks what shows on each pass, so a settle that lands on the same shape is a no-op instead of a
+     rebuild. The probe is also what STARTS the load, which is what puts a lazy handle in flight by the
+     time an arm is chosen.
+
+     A FAILURE NEEDS ITS OWN ARM. `pending()` is false once a load rejects, so a chain with only an
+     `{:else}` falls into the READ — and a read throws the failure it was called to report. The region
+     is then empty and the reason is a console throw, never markup. `{:else if record.error()}` is what
+     asks. `{#try}` cannot stand in: that boundary is synchronous, and this failure arrives from a
+     settle. -->
+{#if record.pending()}
+    <p>loading {name}…</p>
+{:else if record.error()}
+    <p>could not load {name}</p>
+{:else}
+    <p>{record}</p>
+{/if}

@@ -290,6 +290,47 @@ export default suite({
         },
 
         {
+            title: 'a `{:finally}` arm is part of what the body PRODUCED, so its nodes adopt too',
+            note: 'The server writes the body and the `{:finally}` arm into ONE range, because `settledArms` returns both and the renderer walks the pair. `take` claimed only the body: `finally` was applied a layer up in `settledBoundary`, which the adopt path deliberately does not go through, so the arm’s nodes were left over inside the claimed range — a mismatch, and a rebuild of a region the server got exactly right. Every `{#try}` with the arm paid it, and NOTHING about the output could show it: the rebuild paints the same screen. What says so is the count below, which is 0 removals and 0 creations against 5 and 4 with the fix out.',
+            async run({ is, log }) {
+                const arms = {
+                    pending: undefined,
+                    then: undefined,
+                    catch: (() => html`<b>caught</b>`) as (error: unknown) => unknown,
+                    // The arm under test. Shown either way, which is what puts its nodes in the
+                    // server's range beside the body's.
+                    finally: () => html`<small>asked either way</small>`,
+                }
+                const view = (): TemplateResult =>
+                    html`${boundary(() => html`<p id="body">the row is alpha</p>`, arms, false)}`
+
+                // A call site is PARSED once, and parsing builds the elements a template is cloned
+                // from — three of them here, which would otherwise read as three the adoption built.
+                // That cost belongs to the template cache, so it is paid before the measurement, the
+                // way `proofsOf` pays it.
+                const warm = container()
+                mount(warm, view).dispose()
+                warm.remove()
+
+                const host = container()
+                host.innerHTML = await renderToString(view(), { hydratable: true })
+                is('the server wrote both arms', host.querySelector('small')?.textContent, 'asked either way')
+                const before = host.querySelector('#body')
+
+                const work = measure(() => void hydrate(host, view))
+                log('work to adopt', nonZero(work))
+                // The four that mean REBUILT, and the element identity beside them: a rebuild replaces
+                // the node with an identical one, so the count and the identity are the same claim
+                // asked twice — and neither is visible in the markup.
+                is('nothing removed', work.remove, 0)
+                is('nothing built', work.createElement, 0)
+                is('the SAME body element is still there', host.querySelector('#body') === before, true)
+                is('…and the arm is still beside it', host.querySelector('small')?.textContent, 'asked either way')
+                host.remove()
+            },
+        },
+
+        {
             title: 'a frame is its own realm — counting inside one needs its own install',
             note: 'A document of its own is what an isolated demo needs: its own shell, its own stylesheet, its own hydration, none of it entangled with the page around it. What it costs is this — the counters patch PROTOTYPES, and chromium gives a frame a fresh set, so a frame’s work is invisible to a page’s install and every claim about it reads zero while passing. Under happy-dom the frame is handed the SAME prototypes, so this case passes here whether or not the install below happened — which is exactly why the number that matters is the browser’s, on `/tests/hydrate`. Keyed by prototype rather than by document so the emulator does not patch its one set twice and bill everything twice.',
             async run({ is, log }) {

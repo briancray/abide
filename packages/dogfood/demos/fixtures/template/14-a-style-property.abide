@@ -1,0 +1,17 @@
+<script>
+import { state } from 'abide'
+
+const name = state('ada')
+const warn = state(false)
+const width = state(40)
+</script>
+
+<p class="line" class:danger={warn}>hello {name}</p>
+
+<!-- One style PROPERTY, by the same rule as `class:` and with the same refusal on a component: both
+     decorate an ELEMENT, and a component has no single element to put one on.
+
+     A computed value is what a style is for at all — a measured width, a transform from state. A colour
+     that never moves is a class. -->
+<div style:width={`${width}%`} style:opacity={warn ? 0.5 : 1}>a bar</div>
+<button onclick={() => (width = width === 40 ? 80 : 40)}>wider</button>

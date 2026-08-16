@@ -1,0 +1,18 @@
+<script>
+import { state } from 'abide'
+
+const rows = state(['alpha', 'beta'])
+</script>
+
+<!-- A component written where it is used, invoked as `<Row/>` and passable as a value. TitleCase is
+     required, which is the same rule that makes a capitalised tag a component at all.
+
+     It is CALLED where it stands rather than carried, and the reason is that it has no setup block:
+     nothing runs once and nothing is kept, so its props stay ordinary values. The parameter is whatever
+     is written in the parens, and children arrive through `<slot/>` — which is why one written with no
+     parameter still binds `args`. -->
+{#component Row(row: { at: number; text: string; children?: unknown })}
+    <li>{row.at}. {row.text}</li>
+{/component}
+
+<ul>{#for text, at of rows by text}<Row at={at + 1} text={text}/>{/for}</ul>

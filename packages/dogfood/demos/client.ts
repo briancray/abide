@@ -22,7 +22,7 @@ import {
 import { mount } from 'abide/ui'
 import { button, field, lazy, row, stage } from './dom.ts'
 // The rung the case at the bottom asserts — the one whose `adds` it is about.
-import Example, { rows as exampleRows, swapFirstTwo } from './fixtures/client/2-key-it-so-a-move-is-a-move.abide'
+import Example from './fixtures/client/2-key-it-so-a-move-is-a-move.abide'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -2176,6 +2176,40 @@ export default suite({
         },
 
         {
+            title: 'a DIFFERENT view at the position is a different component, not a new pass',
+            note: 'What a compiled `<Shown/>` is when `Shown` is a cell: naming one in a tag position READS it, so the slot is handed a different view whenever it changes. The instance is therefore keyed by the VIEW and not by the position alone — reusing it because something is already there would write the new component’s props into the old one’s cells and repaint nothing, which is the keyed-list failure one concept over. The counts are the claim, because an instance that was rebuilt and one that was resumed paint the same characters: the view that left does not run again, the one that arrived runs once, and coming back is a THIRD call over an instance whose edit is gone.',
+            async run({ is }) {
+                let plains = 0
+                const Plain = (props: { id: State<number>; n: State<number> }): TemplateResult => {
+                    plains++
+                    return html`<b>${() => `${props.n()}/plain`}</b>`
+                }
+                const editing = state(true)
+                const Shown = memo(() => (editing() ? Editor : Plain))
+                const host = container()
+                const before = editors.bodies
+                const view = mount(host, () => html`<div>${() => component(Shown(), { id: 4, n: 4 })}</div>`)
+                await tick()
+                editors.edit(4, 'EDITED')
+                await tick()
+                is('the cell chose the first view', host.textContent, '4/EDITED')
+
+                editing.set(false)
+                await tick()
+                is('a change re-mounts the other one', host.textContent, '4/plain')
+                is('…which ran once', plains, 1)
+                is('…and the view that left did not run again', editors.bodies - before, 1)
+
+                editing.set(true)
+                await tick()
+                is('coming back is a NEW instance, not the edited one', host.textContent, '4/initial')
+                is('…which is that view running a second time', editors.bodies - before, 2)
+                view.dispose()
+                host.remove()
+            },
+        },
+
+        {
             title: 'dispose tears the tree down and stops updates',
             note: '`mount` returns a handle. Everything created under it — every slot effect, every nested part, every list row — disposes together, because they were all created inside one `scope`.',
             async run({ is }) {
@@ -2447,11 +2481,8 @@ export default suite({
             title: 'the documented example runs',
             note: 'What `/docs/client` shows and mounts. The claim is a COUNT, not a rendering: after a two-row swap the two rows have MOVED and nothing was built — a rebuild produces exactly the same correct list, which is why the assertion is `nodesMade` rather than the list itself. The list is asserted too, because a minimal reconcile that corrupts the order would also make nothing.',
             async run({ is }) {
-                exampleRows.set([
-                    { id: 1, label: 'alpha' },
-                    { id: 2, label: 'beta' },
-                    { id: 3, label: 'gamma' },
-                ])
+                // The rung's cell is its own — a setup block is per INSTANCE — so the list starts at the
+                // three rows it declares, and the swap is made the way a reader makes it: the button.
                 const host = scratch(() => Example({}))
                 const shown = (): string[] => {
                     const out: string[] = []
@@ -2460,7 +2491,8 @@ export default suite({
                 }
                 is('the list rendered', shown(), ['alpha', 'beta', 'gamma'])
 
-                const counts = await measureFlush(() => swapFirstTwo())
+                const swap = host.querySelector('button') as HTMLButtonElement
+                const counts = await measureFlush(() => swap.click())
                 is('the two rows swapped', shown(), ['beta', 'alpha', 'gamma'])
                 // The whole of what `by item.id` buys: a keyed move builds nothing. Without the key this
                 // is three text writes and the same correct list.

@@ -1,0 +1,14 @@
+<script>
+import { state } from 'abide'
+
+const name = state('ada')
+const loud = state(false)
+</script>
+
+<input bind:value={name} />
+
+<!-- A BOOLEAN property mirrored as a boolean attribute, never stringified — so `false` is the attribute
+     being ABSENT rather than the string "false", which is what an HTML boolean attribute means. It
+     writes back on `change` rather than `input`, because that is the event a checkbox settles on. -->
+<label><input type="checkbox" bind:checked={loud} /> shout</label>
+<p>hello {loud ? name.toUpperCase() : name}</p>

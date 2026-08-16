@@ -37,4 +37,9 @@ const on = (specifier: string): CallableName[] => CALLABLE_ORDER.filter((name) =
     </section>
 {/for}
 
+<!-- The other axis. Last rather than first because a name is what most readers arrive with, but it is a
+     LINK on this page and not only a group in the sidebar: everything a `.abide` file says that you did
+     not import is over there, and a reader holding `{#for}` has nothing to look up in the grid above. -->
+<p class="note"><a href="/docs/syntax" class="link">The template’s own spellings →</a> — <code>{'{#for}'}</code>, <code>bind:value</code>, <code>&lt;slot/&gt;</code> and the rest, which are typed rather than imported and so are keyed by how they are WRITTEN.</p>
+
 <p class="note">What each of these is asserted to DO runs on <a href="/tests" class="link">/tests</a>, and what it costs is measured against a hand-written arm on <a href="/bench" class="link">/bench</a>.</p>

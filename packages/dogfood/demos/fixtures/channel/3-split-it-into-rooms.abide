@@ -1,0 +1,20 @@
+<script>
+import { channel, state } from 'abide'
+
+// A second type parameter makes it KEYED: the same channel split into independent rooms addressed by
+// args. `feed({ room })` SELECTS one and hands back an ordinary channel, so everything the bare form
+// carries is on it unchanged.
+const feed = channel<string, { room: string }>({ tail: 5 })
+const room = state('lobby')
+
+let sent = 0
+const send = (): void => feed({ room }).publish(`message ${++sent}`)
+</script>
+
+<!-- Rooms are named by the CALLER, which is why a room is FORGOTTEN when its last subscriber leaves,
+     with whatever it retained: a table that only ever grew is one an arriving connection could grow
+     without bound. Selecting the same args again builds a fresh room. -->
+<p>room: {room} · latest: {feed({ room }) ?? 'nothing yet'}</p>
+<ul>{#for message of feed({ room }).chunks()}<li>{message}</li>{/for}</ul>
+<button onclick={send}>publish here</button>
+<button onclick={() => (room = room === 'lobby' ? 'attic' : 'lobby')}>switch rooms</button>

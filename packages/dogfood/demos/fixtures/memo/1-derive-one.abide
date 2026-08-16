@@ -1,10 +1,10 @@
-<script module>
+<script>
 import { memo, state } from 'abide'
 
-export const query = state('ab')
+const query = state('ab')
 
 // No arguments, so the dependency set is whatever the body read.
-export const shouted = memo(() => query.toUpperCase())
+const shouted = memo(() => query.toUpperCase())
 </script>
 
 <input bind:value={query} />

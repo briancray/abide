@@ -1,0 +1,19 @@
+<script>
+import { channel } from 'abide'
+
+const feed = channel<string>({ tail: 5 })
+
+let sent = 0
+const send = (): void => feed.publish(`message ${++sent}`)
+</script>
+
+<!-- `invalidate` forgets what has ARRIVED — the latest and the transcript together — without closing
+     anything: the channel is still open and the next publish lands as normal. That is the difference
+     from a channel that ended.
+
+     On the ROOM form it takes the same pattern its verbs take: every room matching a subset of the
+     args, and no pattern at all reaches every room and the bare stream. -->
+<p>latest: {feed ?? 'nothing yet'}</p>
+<ul>{#for message of feed.chunks()}<li>{message}</li>{/for}</ul>
+<button onclick={send}>publish</button>
+<button onclick={() => feed.invalidate()}>forget it all</button>

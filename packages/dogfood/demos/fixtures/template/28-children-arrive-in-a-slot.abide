@@ -1,0 +1,9 @@
+<script>
+import { props } from 'abide'
+
+// `children` is never declared and is always accepted: whatever is written between the tags arrives at
+// `<slot/>`, and a component that renders one is the whole of what "takes children" means.
+const { row = 'alpha' } = props<{ row?: string }>()
+</script>
+
+<li>{row}: <slot/></li>

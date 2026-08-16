@@ -1,0 +1,15 @@
+<script>
+import { state } from 'abide'
+
+// A second argument is a TRANSFORM, and every write goes through it before storage — the `initial`
+// included, so there is no first value that escaped the rule.
+//
+// Untracked, so reading a cell inside one subscribes nobody. A throw is a FAILED WRITE rather than a
+// stored error, which is what makes it a place to refuse a value rather than a place to log one.
+const count = state(0, (n) => Math.max(0, Math.min(10, n)))
+</script>
+
+<p>count {count} — held between 0 and 10, however it is written</p>
+<button onclick={() => count++}>add one</button>
+<button onclick={() => (count -= 1)}>take one</button>
+<button onclick={() => (count = 99)}>write 99</button>

@@ -1,22 +1,37 @@
-<!-- The docs section's frame: every public name down the side, the page beside it.
+<!-- The docs section's frame: everything the reference is keyed by down the side, the page beside it.
 
-     A layout rather than a line on each page, for the reason the root layout exists — `/docs` and
-     `/docs/<callable>` are one section and neither should have to remember its own nav. It is also what
-     makes the nav a PRESERVED node across a move between two callables: the layout stays, the body is
-     what the router swaps, and forty-five links are not rebuilt to move one mark. -->
+     A layout rather than a line on each page, for the reason the root layout exists — `/docs`,
+     `/docs/<callable>` and `/docs/syntax/<spelling>` are one section and none should have to remember
+     its own nav. It is also what makes the nav a PRESERVED node across a move between two entries: the
+     layout stays, the body is what the router swaps, and sixty links are not rebuilt to move one mark.
+
+     TWO VOCABULARIES in one list, which is the shape of the reference rather than a compromise: a name
+     is imported and a spelling is typed, and a reader arrives holding one or the other. They are two
+     groups and not two sidebars because they are one question — "what is this thing I am looking at" —
+     and a reader who guessed the wrong axis would otherwise have to find the other nav to recover. -->
 <script module>
 import { CALLABLE_ORDER } from '../../demos/CALLABLES.ts'
-import type { NavItem } from '../../site/sidebar.ts'
+import { SPELLING_ORDER, SPELLINGS } from '../../demos/SPELLINGS.ts'
+import type { NavGroup } from '../../site/sidebar.ts'
 import Sidebar from '../../site/sidebar.abide'
 
 /** Built once, at module scope: the list is the same on every page in this section. */
-const ITEMS: NavItem[] = CALLABLE_ORDER.map((name) => ({ href: `/docs/${name}`, label: name }))
-
-const TITLE = `callables · ${CALLABLE_ORDER.length}`
+const GROUPS: NavGroup[] = [
+    {
+        title: `callables · ${CALLABLE_ORDER.length}`,
+        items: CALLABLE_ORDER.map((name) => ({ href: `/docs/${name}`, label: name })),
+    },
+    {
+        // Labelled by how it is TYPED rather than by its slug, because the spelling is what a reader
+        // recognises: somebody looking for `{#for}` is not looking for the word "for".
+        title: `syntax · ${SPELLING_ORDER.length}`,
+        items: SPELLING_ORDER.map((slug) => ({ href: `/docs/syntax/${slug}`, label: SPELLINGS[slug].name })),
+    },
+]
 </script>
 
 <div class="with-sidebar">
-    <Sidebar title={TITLE} items={ITEMS}/>
+    <Sidebar groups={GROUPS}/>
     <div class="with-sidebar-body">
         <slot/>
     </div>

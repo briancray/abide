@@ -1,0 +1,25 @@
+<script>
+import { state, watch } from 'abide'
+
+const name = state('ada')
+const other = state('grace')
+const runs = state(0)
+
+// The dependency DECLARED rather than discovered: only the first function is read under tracking, so
+// the handler may read whatever it likes without subscribing to any of it.
+//
+// That is the whole difference from the two rungs above, where reading WAS the subscription — and it is
+// what an effect wants when it needs a value it must not be woken by, which is otherwise the one thing
+// the discovered form cannot express.
+watch(
+    () => name,
+    () => {
+        other
+        runs += 1
+    },
+)
+</script>
+
+<p>body runs: {runs}</p>
+<button onclick={() => (name = name === 'ada' ? 'alan' : 'ada')}>write the declared one</button>
+<button onclick={() => (other = other === 'grace' ? 'hedy' : 'grace')}>write the undeclared one</button>

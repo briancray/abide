@@ -1,10 +1,12 @@
 <script module>
 import { memo, state } from 'abide'
 
-export const query = state('ab')
+// Module scope for the reason rung 2's is: one cache per caller, so the two substrates agree about
+// `pending()` instead of each starting a cold load. See `demos/proofs.ts`.
+const query = state('ab')
 
-export const hits = memo(async ({ text }: { text: string }) => {
-    await new Promise((settle) => setTimeout(settle, 400))
+const hits = memo(async ({ text }: { text: string }) => {
+    await new Promise((settle) => setTimeout(settle, 200))
     return text === '' ? [] : [`${text}-one`, `${text}-two`]
 })
 </script>

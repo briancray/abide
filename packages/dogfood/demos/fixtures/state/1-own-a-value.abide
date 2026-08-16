@@ -1,8 +1,9 @@
-<script module>
+<script>
 import { state } from 'abide'
 
-// At module scope, so the cell outlives any one render.
-export const count = state(0)
+// One cell, created once when this component sets up. `{count}` reads it and `count = n` writes it —
+// there is nothing else to import and no hook to be inside.
+const count = state(0)
 </script>
 
 <p>count {count}</p>

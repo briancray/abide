@@ -9,8 +9,9 @@ import { channel, invalidate, memo, refresh, state } from 'abide'
 import { reader, scratch, sleep, suite, until } from 'harness'
 import { tick } from 'harness/measure'
 import { button, el, row } from './dom.ts'
-// The rung the case at the bottom asserts — the one whose `adds` it is about.
-import Example, { quote as exampleQuote, refreshEverything } from './fixtures/verbs/3-reach-it-by-tag.abide'
+// The rungs the two cases at the bottom assert — one per verb, which is how they are documented.
+import InvalidateByTag from './fixtures/verbs/3-invalidate-by-tag.abide'
+import RefreshByTag from './fixtures/verbs/4-refresh-by-tag.abide'
 import { META } from './SUITES.ts'
 
 function stamp(): string {
@@ -726,25 +727,33 @@ export default suite({
         },
 
         {
-            title: 'the documented example runs',
-            note: 'What `/docs/verbs` shows and mounts, mounted here and asserted — including the one claim the two verbs exist to make: after `refresh` the OLD value is still on screen while the new one loads, and after `invalidate` there is nothing to show at all.',
+            title: 'the documented `refresh` rung runs',
+            note: 'What `/docs/refresh` shows and mounts, mounted here and asserted — including the claim that verb exists to make: the OLD value is still on screen while the new one loads. The rung\'s memo is its own, a setup block being per INSTANCE, so the verb is reached the way a reader reaches it: through the button the rung renders.',
             async run({ is }) {
-                const host = scratch(() => Example({}))
+                const host = scratch(() => RefreshByTag({}))
                 const line = (): string => host.querySelector('p')?.textContent ?? ''
                 is('the placeholder arm is what a cold load shows', line(), 'loading…')
 
                 await until(() => line().startsWith('ABC @'), 'the first load')
                 const first = line()
 
-                // `refresh` KEEPS serving: the value does not blink, and the row says it is refreshing.
-                refreshEverything()
+                host.querySelector('button')?.click()
                 await tick()
                 is('refresh keeps the old value on screen', line(), first)
-                is('…and says so', exampleQuote({ symbol: 'ABC' }).refreshing(), true)
                 await until(() => line() !== first, 'the refreshed load')
+                host.remove()
+            },
+        },
 
-                // `invalidate` DROPS it: the region is back to its placeholder, with nothing started.
-                exampleQuote({ symbol: 'ABC' }).invalidate()
+        {
+            title: 'the documented `invalidate` rung runs',
+            note: 'What `/docs/invalidate` shows and mounts. The claim is the other half of the split: `invalidate` DROPS the data, so the region is back to its placeholder with nothing started — which is what tells this rung apart from the `refresh` one it is otherwise identical to.',
+            async run({ is }) {
+                const host = scratch(() => InvalidateByTag({}))
+                const line = (): string => host.querySelector('p')?.textContent ?? ''
+                await until(() => line().startsWith('ABC @'), 'the first load')
+
+                host.querySelector('button')?.click()
                 await tick()
                 is('invalidate leaves nothing to show', line(), 'loading…')
                 host.remove()

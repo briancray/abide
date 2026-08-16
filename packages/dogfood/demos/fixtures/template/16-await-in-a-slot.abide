@@ -1,0 +1,28 @@
+<script>
+import { state } from 'abide'
+
+const name = state('ada')
+
+/**
+ * A promise, and deliberately NOT a cell holding one — one const, so the thunks below await the same
+ * promise on every pass rather than making a new one.
+ *
+ * A promise handed to `state` is a LOAD, and reading a load that has not landed SIGNALS instead of
+ * returning. Inside an `await` the thunk is async, so that signal is thrown into a promise nobody is
+ * holding: the region still fills in, and the console gets an unhandled `Pending`. Waiting for a load
+ * is what the probe two rungs down is for — `{await}` is for an ordinary promise.
+ */
+const later = Promise.resolve('the answer')
+</script>
+
+<!-- An `await` makes that hole's thunk `async`, and a promise in a hole renders what it resolves to.
+     Legal in every position with something to resolve one — a child slot, an attribute quoted or not, a
+     spread, a toggle, a component prop, and the three block heads.
+
+     REFUSED in the three that have none: a `bind:` hands over the cell and emits no thunk, a `by` key
+     is an identity compared per row and a fresh promise never matches one, and a `{#try}` body is
+     evaluated as one unit so `{:catch}` can see a throw — which a rejection is not.
+
+     What WAITING looks like is the next rung but one: a read that has not landed signals, and a probe
+     is what picks the arm to show meanwhile. -->
+<p title={await later}>hello {name} · {await later}</p>

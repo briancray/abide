@@ -22,6 +22,7 @@
 
 import { expect, interactive, test } from 'harness/e2e'
 import { CALLABLE_ORDER } from '../demos/CALLABLES.ts'
+import { SPELLING_ORDER } from '../demos/SPELLINGS.ts'
 import { CAPABILITIES } from '../demos/SUITES.ts'
 
 /** Pages that render in one pass. */
@@ -42,8 +43,12 @@ const DEFERRED = ['/streaming', '/tests', '/tests/state', '/docs/state', '/docs/
  * callable added to the app is covered without anybody remembering to come here.
  */
 const SWEEPS: { section: string; paths: string[] }[] = [
-    { section: 'the app’s own pages', paths: ['/', '/docs', '/tests', '/bench', '/streaming', '/users/42'] },
+    {
+        section: 'the app’s own pages',
+        paths: ['/', '/docs', '/docs/syntax', '/tests', '/bench', '/streaming', '/users/42'],
+    },
     { section: 'every callable', paths: CALLABLE_ORDER.map((name) => `/docs/${name}`) },
+    { section: 'every spelling', paths: SPELLING_ORDER.map((slug) => `/docs/syntax/${slug}`) },
     {
         section: 'every capability, running',
         // `hydrate` is the one suite excluded, and it is excluded for what it IS rather than because

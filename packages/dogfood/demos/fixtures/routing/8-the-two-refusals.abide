@@ -1,0 +1,20 @@
+<script>
+import { url } from 'abide'
+
+/** Caught, so the MESSAGES are the demonstration rather than a claim about them. */
+const refused = (build: () => string): string => {
+    try {
+        return build()
+    } catch (thrown) {
+        return thrown instanceof Error ? thrown.message : String(thrown)
+    }
+}
+</script>
+
+<!-- Both refusals throw HERE, at the call, rather than producing a path that 404s later — which is the
+     argument for `url` over a template literal in one line. They are the same wherever the pattern came
+     from, so an external target refuses on the same terms as an in-app one. -->
+<ul>
+    <li><code>{refused(() => url('/users/[id]', {}))}</code></li>
+    <li><code>{refused(() => url('/about', { id: 7 }))}</code></li>
+</ul>

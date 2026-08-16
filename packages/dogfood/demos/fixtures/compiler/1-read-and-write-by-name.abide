@@ -1,7 +1,7 @@
-<script module>
+<script>
 import { state } from 'abide'
 
-export const count = state(0)
+const count = state(0)
 </script>
 
 <!-- `{count}` is the value and `count = n` is the write. The explicit `count()` / `count.set(n)`

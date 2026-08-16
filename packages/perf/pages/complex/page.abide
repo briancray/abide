@@ -9,40 +9,40 @@ let selected = state(-1)
 let next = SIZE + 1
 
 function create(): void {
-    rows.set(buildRows(next, SIZE))
+    rows = buildRows(next, SIZE)
     next += SIZE
 }
 
 function append(): void {
-    rows.set(rows().concat(buildRows(next, SIZE)))
+    rows = rows.concat(buildRows(next, SIZE))
     next += SIZE
 }
 
 function update(): void {
-    const held = rows().slice()
+    const held = rows.slice()
     for (let i = 0; i < held.length; i += 10) {
         const row = held[i] as Row
         held[i] = { id: row.id, label: `${row.label} !!!` }
     }
-    rows.set(held)
+    rows = held
 }
 
 function swap(): void {
-    const held = rows().slice()
+    const held = rows.slice()
     if (held.length < 999) return
     const a = held[1] as Row
     const b = held[998] as Row
     held[1] = b
     held[998] = a
-    rows.set(held)
+    rows = held
 }
 
 function clear(): void {
-    rows.set([])
+    rows = []
 }
 
 function remove(id: number): void {
-    rows.set(rows().filter((row) => row.id !== id))
+    rows = rows.filter((row) => row.id !== id)
 }
 </script>
 

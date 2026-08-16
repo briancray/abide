@@ -1,8 +1,8 @@
-<script module>
+<script>
 import { state } from 'abide'
 
-export const name = state('ada')
-export const warn = state(false)
+const name = state('ada')
+const warn = state(false)
 </script>
 
 <p>hello {name}</p>

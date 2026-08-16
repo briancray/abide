@@ -21,6 +21,23 @@
 // what is new is the subject. A shape list is chosen by whoever wrote it and a ladder is chosen by
 // what the framework actually documents, so this covers the surface rather than a sample of it.
 //
+// A rung whose load has NO ENDPOINT behind it must declare that load in `<script module>`, and the
+// reason is worth stating because the obvious two mechanisms are both the wrong place to look.
+//
+// It is not `component()`: `render` below calls the compiled view directly, so there is no part
+// holding an instance. Three calls into three containers are three instances, and that is correct —
+// instance identity is the POSITION, or two `<Counter/>` on a page would share a count.
+//
+// It is not the seed either, which is what carries a server-settled answer to a cold client for real
+// (SPEC, "Seeding"). The seed is keyed by an endpoint's ADDRESS, and these rungs fake their loads
+// with `setTimeout` because what they demonstrate is `invalidate` / `refresh` / `ttl` rather than
+// fetching. Nothing addresses them, so nothing seeds them — here or in a browser.
+//
+// So module scope is the only thing left that makes the two arms agree: it hoists the memo out of
+// per-call scope, and `renderToString` and `mount` then read one slot instead of two. Per-instance
+// setup gives each its own cold one, they disagree on `pending()`, and the rung goes red — four
+// ladders did, while `bun test` and `typecheck` stayed green. Sync rungs are free to use either.
+//
 // A `Case` rather than a bespoke runner, and that is the whole reason this file is short: the queue,
 // the status, the log lines and the failure handling are the harness's already, and a rung's proofs
 // therefore paint on `/docs` through the same machinery a case paints with on `/tests`. It also means

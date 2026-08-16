@@ -1,7 +1,7 @@
-<script module>
+<script>
 import { memo, state } from 'abide'
 
-export const count = state(0)
+const count = state(0)
 
 // `count * 2` inside the body is a READ, so the dependency needs no declaring anywhere.
 const doubled = memo(() => count * 2)

@@ -424,7 +424,8 @@ export function pendingArm(branches: Branches): unknown {
  * claim to handle it, so the throw passes through and this boundary catches nothing.
  */
 /**
- * The body's result and the promises it left behind, WITHOUT collapsing the two together.
+ * What the body PRODUCED — its `{:finally}` arm included — and the promises it left behind, without
+ * collapsing the two together.
  *
  * The split exists for hydration. A boundary body runs synchronously even when it awaits — the holes
  * are what defer, not the body — so the STRUCTURE is knowable the moment the body returns, and only
@@ -432,6 +433,12 @@ export function pendingArm(branches: Branches): unknown {
  * renderer that just wants the answer and wrong for `take`, which would then see an opaque promise
  * and replace server nodes it could have adopted. `waiting` is empty for every `{#try}` with no
  * await in it.
+ *
+ * `finally` is applied HERE and not one layer up, and that is a fix rather than a tidy: it used to be
+ * `settledBoundary`'s, so `take` claimed the body alone and the arm's nodes — which the server had
+ * already written into the same range — were left over. The adopt then reported a mismatch and rebuilt
+ * a region it had been handed correct markup for, on every `{#try}` in the repo that has the arm. The
+ * output was identical either way, which is why only the hydrate COUNTERS could see it.
  */
 export function producedBoundary(block: Boundary): { produced: unknown; waiting: PromiseLike<unknown>[] } {
     let produced: unknown
@@ -444,8 +451,11 @@ export function producedBoundary(block: Boundary): { produced: unknown; waiting:
         return { produced: settledArms(block.branches, true, error), waiting: [] }
     }
     const waiting: PromiseLike<unknown>[] = []
+    // Collected off the BODY rather than off what is returned: the `{:finally}` arm is not what the
+    // boundary is waiting on, and walking it would put its holes into the same `Promise.all`.
     if (block.awaiting) collectThenables(produced, waiting, 0)
-    return { produced, waiting }
+    const settled = block.branches.finally
+    return { produced: settled === undefined ? produced : [produced, settled()], waiting }
 }
 
 export function settledBoundary(block: Boundary): unknown {
@@ -456,19 +466,14 @@ export function settledBoundary(block: Boundary): unknown {
     // result or the catch arm is what gets rendered.
     if (waiting.length > 0) {
         return Promise.all(waiting).then(
-            () => withFinally(block, produced),
+            () => produced,
             (error: unknown) => {
                 if (isPending(error) || block.branches.catch === undefined) throw error
                 return settledArms(block.branches, true, error)
             },
         )
     }
-    return withFinally(block, produced)
-}
-
-function withFinally(block: Boundary, produced: unknown): unknown {
-    const settled = block.branches.finally
-    return settled === undefined ? produced : [produced, settled()]
+    return produced
 }
 
 /**

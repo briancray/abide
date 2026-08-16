@@ -1,9 +1,9 @@
 <!-- The nav down the side of a section: every page in it, and which one you are on.
 
-     One component for three sections that are keyed by two different vocabularies — `/docs` by CALLABLE,
-     `/tests` and `/bench` by CAPABILITY — because the shape is the same and only the list differs. It is
-     handed the list rather than reaching for it, which is what keeps `CALLABLES.ts` out of the chunk a
-     `/tests` page ships.
+     One component for three sections keyed by three different vocabularies — `/docs` by CALLABLE and by
+     SPELLING, `/tests` and `/bench` by CAPABILITY — because the shape is the same and only the list
+     differs. It is handed the list rather than reaching for it, which is what keeps `CALLABLES.ts` out
+     of the chunk a `/tests` page ships.
 
      WHICH ITEM IS CURRENT IS NOT A PROP. It is read off the address inside the slot that draws the
      class, so a navigation from one callable to the next moves the mark without rebuilding the list —
@@ -12,7 +12,7 @@
      One level only, and `sidebar.ts` says why that is a hydration fact rather than a taste. -->
 <script module>
 import { route } from 'abide'
-import type { NavItem } from './sidebar.ts'
+import type { NavGroup } from './sidebar.ts'
 
 const ITEM = 'sidebar-item'
 const ITEM_HERE = 'sidebar-item is-here'
@@ -24,12 +24,19 @@ const isHere = (at: string): boolean => at === route().url.pathname
 <script>
 import { props } from 'abide'
 
-const { title, items } = props<{ title: string; items: NavItem[] }>()
+const { groups } = props<{ groups: NavGroup[] }>()
 </script>
 
 <aside class="sidebar panel">
-    <p class="sidebar-title">{title}</p>
-    <nav class="sidebar-nav" aria-label={title}>
-        {#for item of items}<a href={item.href} class={isHere(item.href) ? ITEM_HERE : ITEM}>{item.label}</a>{/for}
-    </nav>
+    <!-- One `<nav>` per group rather than one holding every link: the heading is what says which
+         vocabulary the links under it are from, and a landmark labelled by it is how that reaches
+         somebody who is not looking at it. -->
+    {#for group of groups}
+        <div class="sidebar-group">
+            <p class="sidebar-title">{group.title}</p>
+            <nav class="sidebar-nav" aria-label={group.title}>
+                {#for item of group.items}<a href={item.href} class={isHere(item.href) ? ITEM_HERE : ITEM}>{item.label}</a>{/for}
+            </nav>
+        </div>
+    {/for}
 </aside>

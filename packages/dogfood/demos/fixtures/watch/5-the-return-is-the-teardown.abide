@@ -1,0 +1,25 @@
+<script>
+import { state, watch } from 'abide'
+
+const room = state('lobby')
+const joined = state('')
+const left = state('none')
+
+// What the handler RETURNS is the teardown: it runs before every re-run and once when the watch is
+// disposed. There is no `onMount`/`onDestroy` pair, and that is the point rather than an omission — a
+// subscription and its cancellation are one thing, so writing them in one place is what stops the two
+// drifting apart when the subscription grows an argument.
+//
+// It closes over the run that made it, which is why `here` below is the room being LEFT and not the one
+// just joined.
+watch(() => {
+    const here = room
+    joined = here
+    return () => {
+        left = here
+    }
+})
+</script>
+
+<p>joined {joined} · last left {left}</p>
+<button onclick={() => (room = room === 'lobby' ? 'attic' : 'lobby')}>move</button>

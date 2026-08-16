@@ -1,0 +1,14 @@
+<script>
+import { state } from 'abide'
+
+const rows = state(['alpha', 'beta', 'gamma'])
+</script>
+
+<!-- `by` is the KEY — a spelling the compiler translates, not a function to import. With one, a row that
+     MOVES is moved: its node, its state and anything typed into it travel with it, and the reconcile
+     does the smallest number of moves rather than rewriting every row in place.
+
+     Reverse is the case that shows it. A two-row swap cannot: positional and keyed produce the same
+     screen there, and only the count of what MOVED tells them apart. -->
+<ul>{#for row of rows by row}<li>{row}</li>{/for}</ul>
+<button onclick={() => (rows = [...rows].reverse())}>reverse</button>

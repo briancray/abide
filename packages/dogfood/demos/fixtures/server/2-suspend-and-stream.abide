@@ -1,7 +1,7 @@
-<script module>
+<script>
 import { memo } from 'abide'
 
-export const report = memo(async ({ month }: { month: string }): Promise<string[]> => {
+const report = memo(async ({ month }: { month: string }): Promise<string[]> => {
     await new Promise((settle) => setTimeout(settle, 400))
     return [`${month}: 41 open`, `${month}: 7 closed`]
 })

@@ -11,8 +11,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { type Bench, benchRow, runHeadless } from 'harness'
-import { count as compiledCount } from '../counter.abide'
-import { count } from '../counter.ts'
+import { count as compiledCount } from '../demos/fixtures/counter.abide'
+import { count } from '../demos/fixtures/counter.ts'
 import { allSuites } from '../demos/index.ts'
 
 // Every suite module, loaded up front. The pages load them one at a time — that is the whole point

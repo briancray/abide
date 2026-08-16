@@ -1,7 +1,7 @@
-<script module>
+<script>
 import { state } from 'abide'
 
-export const name = state('ada')
+const name = state('ada')
 </script>
 
 <!-- In CHILD position a slot is content. -->

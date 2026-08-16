@@ -1,0 +1,17 @@
+<script>
+import { route } from 'abide'
+</script>
+
+<!-- The other three, and they are FOUR SMALL CELLS rather than one record — which is the point of the
+     shape rather than a detail of it. A move that changes only the segments wakes a reader of `params`
+     and leaves a reader of `name` asleep, so a same-route move republishes instead of remounting.
+
+     `url` is a real `URL`, in BROWSER space: it carries the mount base where the pattern does not.
+     `kind` says how you got here. `navigating` is set only where there is an in-flight window — a route
+     is committed once its page has arrived, and a move to one already loaded has none. In a document
+     there is always one, because the request is the window. -->
+<ul>
+    <li>url: <code>{route().url.pathname}</code></li>
+    <li>kind: <code>{route().kind}</code></li>
+    <li>navigating: <code>{String(route().navigating)}</code></li>
+</ul>

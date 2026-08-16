@@ -1,0 +1,25 @@
+<script module>
+// MODULE scope: one of these for the whole module, so it outlives any one render — and the only block
+// an `export` may go in, because a plain `<script>`'s body is inlined into the setup function.
+//
+// What may NOT go here is a CELL. `state(…)` builds one node in the call, so the binding is the
+// instance, and module scope on a server is one instance per PROCESS — every visitor reading what the
+// last one wrote. The compiler refuses it and names the spelling that means what this looks like it
+// means: `state.shared(key, …)` in the setup block, which is one cell per caller.
+export const GREETING = 'hello'
+</script>
+
+<script>
+import { state } from 'abide'
+
+// Per INSTANCE, and it runs ONCE. A capitalised tag is carried to the position that shows it, so a
+// parent re-rendering writes new props into this instance's cells rather than running this again —
+// which is what makes a counter here survive anything the parent does.
+//
+// Names from the module block are in scope here; the reverse is not true, and `export` here is a
+// compile error rather than a silent no-op.
+const clicks = state(0)
+</script>
+
+<p>{GREETING} · {clicks} clicks</p>
+<button onclick={() => clicks++}>click</button>

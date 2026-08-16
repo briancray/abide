@@ -20,3 +20,15 @@ export interface NavItem {
     href: string
     label: string
 }
+
+/**
+ * One VOCABULARY: a heading, and the pages keyed by it.
+ *
+ * Plural because `/docs` is keyed by two — a name you import and a spelling you type — and a reader
+ * arrives holding one of them. `/tests` and `/bench` pass a list of one, which is the same shape and
+ * not a special case: a section with one vocabulary still has a heading saying which it is.
+ */
+export interface NavGroup {
+    title: string
+    items: NavItem[]
+}

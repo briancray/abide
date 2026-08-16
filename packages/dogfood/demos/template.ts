@@ -14,12 +14,13 @@ import { install, keep, measureFlush, tick } from 'harness/measure'
 import { button, el, lazy, output, row, stage } from './dom.ts'
 // The rungs the case at the bottom asserts, one mount each: what a slot MEANS is decided by where it
 // sits, so a single mount over one file could not say which position each claim was about.
-import Attribute, { name as attributeName } from './fixtures/template/2-an-attribute.abide'
-import Toggle, { warn as toggleWarn } from './fixtures/template/3-a-class-toggle.abide'
-import List, { rows as listRows } from './fixtures/template/5-a-list.abide'
-import RowComponent from './fixtures/template/6-a-component-takes-props.abide'
-import { Row as HandWrittenRow } from './fixtures/template/7-the-same-tag-hand-written.ts'
-import Trusted, { row as trustedRow } from './fixtures/template/8-trust-a-string-as-markup.abide'
+import Attribute from './fixtures/template/02-an-attribute.abide'
+import Accessors from './fixtures/template/12-bind-an-accessor-pair.abide'
+import Toggle from './fixtures/template/13-a-class-toggle.abide'
+import Trusted from './fixtures/template/17-trust-a-string-as-markup.abide'
+import List from './fixtures/template/21-a-list.abide'
+import RowComponent from './fixtures/template/27-a-component-takes-props.abide'
+import { Row as HandWrittenRow } from './fixtures/template/30-the-same-tag-hand-written.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -1093,10 +1094,9 @@ export default suite({
 
         {
             title: 'the documented example runs',
-            note: 'What `/docs/template` shows and mounts: every place a `${}` can sit, in one component. Asserted per POSITION rather than as one blob of markup, because what a slot means is decided by where it is — and a toggle that silently became a class string would still render something plausible.',
+            note: 'What `/docs/syntax` shows and mounts: every place a `${}` can sit, in one component. Asserted per POSITION rather than as one blob of markup, because what a slot means is decided by where it is — and a toggle that silently became a class string would still render something plausible.',
             async run({ is }) {
                 // Rung 2 — content, and a whole attribute value.
-                attributeName.set('ada')
                 const attribute = scratch(() => Attribute({}))
                 is('child position is content', attribute.querySelector('p')?.textContent, 'hello ada')
                 const link = attribute.querySelector('a') as HTMLAnchorElement
@@ -1104,27 +1104,42 @@ export default suite({
                 is('…and one written bare is too', link.getAttribute('title'), 'ada')
                 attribute.remove()
 
-                // Rung 3 — a toggle, which is the claim a rendering cannot make on its own: what matters
+                // Rung 11 — a toggle, which is the claim a rendering cannot make on its own: what matters
                 // is that the REST of the attribute is untouched.
-                toggleWarn.set(false)
+                //
+                // Driven by CLICKING it rather than by writing a cell this file imported. The cells are
+                // the rung's own now — a `.abide` file may not bind one at module scope, since module
+                // scope on a server is one instance for every visitor — so the button is the handle,
+                // which is the one a reader has too.
                 const toggled = scratch(() => Toggle({}))
                 const styled = toggled.querySelector('p.line') as HTMLElement
                 is('a toggle leaves the rest of the attribute alone', styled.className, 'line')
-                toggleWarn.set(true)
+                toggled.querySelector('button')?.click()
                 await tick()
                 is('…and adds only its own class', styled.className, 'line danger')
-                toggleWarn.set(false)
                 toggled.remove()
 
-                // Rung 5 — a keyed list.
-                listRows.set(['alpha', 'beta'])
+                // Rung 12 — a bind over a `{get, set}` pair. Both directions are asserted because the
+                // failure this catches moved only ONE of them: the pair is hoisted into a name, the
+                // emit read that name as a cell and handed the OBJECT to the property slot, and the
+                // input said `[object Object]` while every edit still went through `set` correctly.
+                const pair = scratch(() => Accessors({}))
+                const field = pair.querySelector('input') as HTMLInputElement
+                is('the value is READ through get', field.value, 'ada')
+                field.value = '  grace  '
+                field.dispatchEvent(new Event('input'))
+                await tick()
+                is('…and the edit is written through set', pair.querySelector('p')?.textContent, 'hello grace · 1 edits')
+                pair.remove()
+
+                // Rung 19 — a list.
                 const list = scratch(() => List({}))
                 const rows: string[] = []
                 for (const item of list.querySelectorAll('li')) rows.push(item.textContent ?? '')
-                is('a keyed {#for}', rows, ['alpha', 'beta'])
+                is('a {#for} over a cell', rows, ['alpha', 'beta'])
                 list.remove()
 
-                // Rungs 6 and 7 — the same row, compiled and hand-written. Asserted as a PAIR and
+                // Rungs 25 and 28 — the same row, compiled and hand-written. Asserted as a PAIR and
                 // compared to each other rather than to a literal, because the claim the two rungs
                 // make together is that the compiled component and the `html` one are the same kind
                 // of value. Two assertions against the same string would both pass with one of them
@@ -1143,12 +1158,11 @@ export default suite({
                 compiled.remove()
                 written.remove()
 
-                // Rung 8 — the escape, and the one spelling that skips it. Asserted as a PAIR from one
+                // Rung 15 — the escape, and the one spelling that skips it. Asserted as a PAIR from one
                 // cell, because either half alone passes for the wrong reason: `textContent` on the
                 // escaped line is the same string whether the markup was escaped or parsed, and the
                 // trusted line renders SOMETHING either way. What distinguishes them is whether a `<b>`
                 // is an element or four characters, so the claim is about the node.
-                trustedRow.set('<b>ada</b> lovelace')
                 const trusted = scratch(() => Trusted({}))
                 const [escapedLine, trustedLine] = trusted.querySelectorAll('li')
                 is('a slot ESCAPES — the markup arrived as text', escapedLine?.querySelector('b'), null)

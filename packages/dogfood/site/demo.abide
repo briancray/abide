@@ -87,9 +87,9 @@ function profile(): Profile {
         suite: app().name,
         substrate: 'browser',
         faces: ['visit', 'bench'],
-        status: trouble() !== '' ? 'failed' : priced().length > 0 ? 'benched' : 'running',
-        lines: trouble() === '' ? [] : [{ label: 'trouble', value: trouble(), kind: 'fail' }],
-        metrics: priced(),
+        status: trouble !== '' ? 'failed' : priced.length > 0 ? 'benched' : 'running',
+        lines: trouble === '' ? [] : [{ label: 'trouble', value: trouble, kind: 'fail' }],
+        metrics: priced,
     }
 }
 </script>

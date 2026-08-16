@@ -4,6 +4,8 @@
 import { channel, memo, state, watch } from 'abide'
 import { reader, sleep, suite } from 'harness'
 import { keep, tick } from 'harness/measure'
+import { scopedEffect } from 'abide/runtime'
+import { isolate } from '$shared/internal/scopes.ts'
 import { scope, untrack } from '$shared/reactive.ts'
 import { button, el, row } from './dom.ts'
 import { META } from './SUITES.ts'
@@ -816,5 +818,42 @@ export default suite({
                 )
             },
         },
+
+        {
+            title: 'a watch in a <script module> runs once per CALLER, not once per process',
+            note: 'The third module-scope spelling that meant "once for the server process", and the one a lazy wrap could not fix: a cell can wait for somebody to read it, and an effect has no read to wait for. So the component that declared it is what asks — its setup kicks, the first instance in a caller runs the body, and every instance after it finds the effect already running. A component nobody renders in this request runs no effect in it, which is the honest reading of per-caller. Asserted as BODY RUNS, because an effect that runs three times instead of once produces exactly the same values.',
+            async run({ is }) {
+                let bodyRuns = 0
+                const cell = state.scoped(() => state(0))
+                // What the compiler writes for `watch(…)` in a `<script module>`.
+                const kick = scopedEffect(() =>
+                    watch(() => {
+                        cell()
+                        bodyRuns++
+                    }),
+                )
+                is('declaring it runs nothing', bodyRuns, 0)
+
+                const perRequest: number[] = []
+                for (let request = 0; request < 2; request++) {
+                    await isolate(async () => {
+                        const before = bodyRuns
+                        kick() // the first instance of this component in this caller…
+                        kick() // …and two more, which must find the effect already running
+                        kick()
+                        perRequest.push(bodyRuns - before)
+                    })
+                }
+                is('three instances in one caller are one effect', perRequest, [1, 1])
+
+                // And it goes with the caller: the scope above is gone, so a write reaches no effect
+                // either request left behind.
+                const settled = bodyRuns
+                cell.set(cell.peek() + 1)
+                await tick()
+                is('a disposed caller leaves nothing running', bodyRuns, settled)
+            },
+        },
+
     ],
 })

@@ -1,0 +1,11 @@
+<script>
+import { state } from 'abide'
+
+const name = state('ada')
+const where = state('/who/ada')
+</script>
+
+<!-- Inside a tag, a slot is a WHOLE attribute value, written unquoted — the value itself and not a
+     string being built around it. Nothing here is concatenation. -->
+<p>hello {name}</p>
+<a href={where} title={name}>link</a>

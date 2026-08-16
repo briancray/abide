@@ -42,6 +42,8 @@ const SOURCE_SURFACE = new Set([
     'invalidate',
     'refresh',
     'publish',
+    'subscribe',
+    'tail',
     'dispose',
     'chunks',
     'pending',
@@ -277,8 +279,21 @@ export interface DesugarOptions {
     /**
      * Leave the outermost read alone when it is the WHOLE region, so the cell itself is handed over.
      * The caller decides: a child slot and a prop hold, a class toggle reads.
+     *
+     * WHICH held position it is decides exactly one case — a name that is the whole region AND has a
+     * hoisted local under it:
+     *
+     *   `slot`  the local wins. `unwrap` reads a slot's cell one step further, so the two spellings
+     *           render the same thing and the local is one subscription rather than two.
+     *   `cell`  holding wins. A prop, a `bind:` and an `&ref` need the CELL, and a local is a value —
+     *           a child handed one has nothing left to subscribe to, which is dead on the first write
+     *           rather than merely coarser.
+     *
+     * Everything that is NOT the whole region — a member path, a call, an expression — takes the
+     * local in both, because reaching the member has already read the cell and the enclosing
+     * condition is already subscribed to it.
      */
-    hold?: boolean
+    hold?: 'slot' | 'cell' | undefined
     /**
      * Reads already performed into a local, by `key`. A read found here becomes that local instead of
      * calling again — which is what makes narrowing work: TypeScript narrows a `const`, and never a
@@ -299,6 +314,35 @@ export interface DesugarOptions {
      * conservative arm, since the other way round silently unsubscribes a derivation.
      */
     once?: boolean
+}
+
+/**
+ * Where `names` are CALLED as statements in `source` — not inside any function body.
+ *
+ * `watch` is what needs this and a cell does not: a cell is recognised by its BINDING, and an effect
+ * has none to recognise. What separates `watch(…)` at module scope from `const make = () => watch(…)`
+ * beside it is only whose body the call sits in, which is the question `functionBodies` already
+ * answers for the `once` region — so this is that answer handed out rather than a second rule that
+ * would have to agree with it.
+ *
+ * Offsets are of the NAME, relative to `source`. A call in a type is not a call.
+ */
+export function statementCalls(source: string, names: ReadonlySet<string>): number[] {
+    const cursor = tokenize(source, 0, source.length)
+    const { tokens, nesting } = cursor
+    const inType = typeRegions(tokens, nesting, false).marks
+    const insideFunction = functionBodies(cursor, inType)
+    const found: number[] = []
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i] as Token
+        if (token.kind !== SyntaxKind.Identifier || !names.has(token.text)) continue
+        if (insideFunction[i] === 1 || inType[i] === 1) continue
+        // `x.watch(…)` is somebody's member, and `watch` alone is the name being read.
+        if (tokens[i - 1]?.kind === SyntaxKind.DotToken) continue
+        if (tokens[i + 1]?.kind !== SyntaxKind.OpenParenToken) continue
+        found.push(token.start)
+    }
+    return found
 }
 
 export function desugar(
@@ -571,22 +615,24 @@ export function desugar(
                 const key = source.slice(token.start, end).replace(/\s+/g, ' ')
                 reads.push({ key, start: token.start, end, keyed: true })
                 const local = hoisted.get(key)
-                if (local !== undefined) {
-                    // A hoisted read wins over holding the handle, even when the call IS the whole
-                    // expression: the enclosing condition already subscribed to it, so handing the
-                    // handle over here would only subscribe a second time for the same change.
+                // Held alone as the whole region, the handle itself is what the caller wants — and in
+                // a `cell` position that beats a hoisted local, which is a VALUE. See `hold`.
+                const wholeRegion = token.start === (tokens[0] as Token).start && after === undefined
+                const handedOver =
+                    options.hold !== undefined && wholeRegion && (local === undefined || options.hold === 'cell')
+                if (handedOver) {
+                    // Nothing to write: the call already spells the handle.
+                } else if (local !== undefined) {
+                    // A hoisted read wins over reading again: the enclosing condition already
+                    // subscribed to it, so a second read here would only subscribe twice for one
+                    // change.
                     //
                     // The local holds the whole read, arguments included, so the walk skips the
                     // call's own tokens — rewriting inside a span that has been replaced produces
                     // overlapping edits, which is garbage rather than a wrong answer.
                     edits.push({ start: token.start, end, replacement: local })
                     i = close
-                } else if (
-                    // Held alone as the whole region, the handle itself is what the caller wants.
-                    options.hold !== true ||
-                    token.start !== (tokens[0] as Token).start ||
-                    after !== undefined
-                ) {
+                } else {
                     const peeks = insideFunction !== null && insideFunction[i] === 0
                     edits.push({ start: end, end, replacement: peeks ? '.peek()' : '()' })
                 }
@@ -722,8 +768,9 @@ export function desugar(
         reads.push({ key: name, start: token.start, end: token.end, keyed: false })
         const local = hoisted.get(name)
         // Held alone as the whole region, the cell itself is what the caller wants — `bind:`, `&ref`
-        // and a component prop need the cell and not its value. A hoisted read still wins, for the
-        // reason the keyed branch gives: the enclosing condition already subscribed to it.
+        // and a component prop need the cell and not its value, which is why a `cell` position holds
+        // even over a hoisted local. A `slot` takes the local: the enclosing condition already
+        // subscribed to it and `unwrap` reads a slot's cell one step further either way.
         //
         // This is what `hold` says it does, and the keyed branch has asked it since it was written.
         // The plain branch never did: `code`'s `IDENTIFIER.test` fast path in `emit.ts` was standing
@@ -731,7 +778,13 @@ export function desugar(
         // a comment, a paren, a `!` — fell through to a read. `<Child value={count /* note */}/>`
         // handed the child a number, `cellProps` made a fresh `state()` out of it, and no write on
         // either side ever reached the other. Correct on the first paint, dead after it.
-        if (local === undefined && options.hold === true && namesWholeRegion(tokens, i, inType)) continue
+        if (
+            options.hold !== undefined &&
+            (local === undefined || options.hold === 'cell') &&
+            namesWholeRegion(tokens, i, inType)
+        ) {
+            continue
+        }
         const peeking = selfReads.has(i) || (insideFunction !== null && insideFunction[i] === 0)
         const read = local ?? (peeking ? `${name}.peek()` : `${name}()`)
         edits.push({

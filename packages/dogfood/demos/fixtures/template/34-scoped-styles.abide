@@ -1,0 +1,15 @@
+<script>
+import { state } from 'abide'
+
+const rows = state(['alpha', 'beta'])
+</script>
+
+<style>
+    /* Component-scoped, and mechanically so: every element in this file carries a `data-a<hash>`, and
+       every selector gets that attribute required on its RIGHTMOST compound. So this rule cannot reach
+       an `li` anywhere else in the app, and no rule elsewhere reaches these without asking for the
+       scope. Registered once at module scope rather than per instance. */
+    li { color: rebeccapurple; }
+</style>
+
+<ul>{#for row of rows by row}<li>{row}</li>{/for}</ul>

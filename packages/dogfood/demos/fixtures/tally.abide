@@ -12,7 +12,7 @@ export const runs = state(0)
  * way — and shows only as a wake this effect never asked for, which is what the case asserts.
  */
 watch(() => {
-    name()
+    name
     runs = runs + 1
 })
 </script>

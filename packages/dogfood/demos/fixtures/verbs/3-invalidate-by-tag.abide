@@ -1,10 +1,11 @@
 <script module>
-import { memo, refresh } from 'abide'
+import { invalidate, memo } from 'abide'
 
+// Module scope for the reason rung 1's is — one cache per caller. See `demos/proofs.ts`.
 let served = 0
 
 // Tags name the DATA, not the memo holding it.
-export const quote = memo(
+const quote = memo(
     async ({ symbol }: { symbol: string }) => {
         await new Promise((settle) => setTimeout(settle, 400))
         return `${symbol} @ ${++served}`
@@ -12,8 +13,8 @@ export const quote = memo(
     { tags: ['quotes'] },
 )
 
-// So this reaches every slot carrying the tag, from anywhere, knowing no memo's name.
-export const refreshEverything = (): void => refresh({ tags: ['quotes'] })
+// So this drops every slot carrying the tag, from anywhere, knowing no memo's name.
+const dropEverything = (): void => invalidate({ tags: ['quotes'] })
 </script>
 
 {#if quote({ symbol: 'ABC' }).pending()}
@@ -22,4 +23,4 @@ export const refreshEverything = (): void => refresh({ tags: ['quotes'] })
     <p>{quote({ symbol: 'ABC' })()}</p>
 {/if}
 
-<button onclick={refreshEverything}>refresh by tag</button>
+<button onclick={dropEverything}>invalidate by tag</button>

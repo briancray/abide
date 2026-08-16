@@ -210,6 +210,20 @@ export interface Example {
      * directions, so a rung that stops claiming its name fails there.
      */
     of: readonly string[]
+    /**
+     * The template SPELLINGS this rung introduces — what `/docs/syntax/<slug>` is keyed by.
+     *
+     * The second claim a rung can make, and it exists because the first one cannot reach the template:
+     * `of` is keyed by a name an author IMPORTS, and `{#for}`, `bind:value` and `<slot/>` import
+     * nothing. A reader who met one of those in a file has no name to look up, so a rung about one used
+     * to be reachable from no page at all.
+     *
+     * ABSENT rather than empty on the ladders that demonstrate no syntax, which is most of them — a
+     * server-side rung would otherwise carry `spells: []` for the same reason a template rung does not
+     * carry `of: []` about the modules it never mentions. The two claims are independent: a rung can
+     * make both (`props` and `<Name/>`), either, or — on `client` and `hydrate` — neither.
+     */
+    spells?: readonly string[]
     source: string
     /** A compiled `.abide` default export, which is exactly this signature. */
     view?: (args: { children?: unknown }) => TemplateResult

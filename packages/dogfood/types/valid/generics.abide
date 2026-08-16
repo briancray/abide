@@ -31,7 +31,7 @@ assertType<Exact<typeof held, Map<string, Book[]>>>()
 </script>
 
 <ul>
-    {#for book, i of page().items by book.title}
+    {#for book, i of page.items by book.title}
         <li>{i + 1}. {book.title} — {book.author.name}</li>
     {/for}
     <li>{pair.left} / {pair.right}</li>

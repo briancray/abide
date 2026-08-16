@@ -1,0 +1,16 @@
+<script>
+import { state } from 'abide'
+
+const name = state('ada')
+const runs = state(0)
+
+// The same effect spelled off the SOURCE. Which source you asked IS the declaration, so the handler is
+// untracked exactly as in the two-argument form — this is that form with the dependency moved to the
+// front, not a third set of rules.
+name.watch(() => {
+    runs += 1
+})
+</script>
+
+<p>body runs: {runs}</p>
+<button onclick={() => (name = name === 'ada' ? 'alan' : 'ada')}>write it</button>

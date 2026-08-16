@@ -27,6 +27,7 @@ import {
     parameterNames,
     REACTIVE_CONSTRUCTORS,
     REACTIVE_TYPES,
+    statementCalls,
 } from './desugar.ts'
 import { kindOf } from './elide.ts'
 import { type Token, tokensOf } from './lex.ts'
@@ -79,6 +80,13 @@ interface Context {
      */
     lifted: Map<string, string>
     reactive: Reactive
+    /**
+     * Names bound to a `{get, set}` pair, which a `bind:` reads through instead of handing over.
+     *
+     * Beside `reactive` rather than inside it: `Reactive` is the vocabulary `desugar` is handed, and
+     * a pair is not read by name anywhere — only `bind` asks. See `accessorBindings`.
+     */
+    accessors: Set<string>
     /** Names bound by a `{#for}` or a branch, which shadow a reactive name of the same spelling. */
     shadow: Set<string>
     /** Reads a `{#if}` or `{#switch}` already took into a local, so the body narrows off it. */
@@ -130,6 +138,7 @@ type Runtime =
     | 'streamed'
     | 'adopt'
     | 'start'
+    | 'scopedEffect'
 
 /**
  * The two an author also types, so the header keeps them on `abide`.
@@ -142,6 +151,9 @@ type Runtime =
  * told apart only by a backtick. The hatch is now spelled with its own name.
  */
 const AUTHORED_RUNTIME: ReadonlySet<string> = new Set<Runtime>(['html', 'raw'])
+
+/** Effects a `<script module>` may declare, which a caller has to be given its own of. */
+const MODULE_EFFECTS: ReadonlySet<string> = new Set(['watch'])
 
 /** The absent region — a file with no `<script module>`, or no `<script>`. Shared, never written. */
 const NO_TOKENS: Token[] = []
@@ -279,6 +291,53 @@ function reactiveBindings(tokens: Token[], into: Reactive, memos?: Map<string, r
             memos?.set(name.text, memosReferenced(tokens, i, memos))
         }
         else into.keyed.add(name.text)
+    }
+}
+
+/**
+ * `NAME = { get: …, set: … }` — the names bound to an accessor pair.
+ *
+ * The pair is the escape hatch a `bind:` takes when the thing on screen is not the thing you keep,
+ * and it reads as an object rather than as a cell: the value slot has to CALL `get`, where a cell is
+ * handed over whole. `bind` used to decide that from the source text starting with a `{`, so only the
+ * pair written INLINE in the tag was recognised — and the hoisted spelling, which is the one anybody
+ * writes once the two bodies are more than a line, compiled to `.value=${pair}` and put
+ * `[object Object]` in the input. Nothing failed: the write half is `pair.set(…)` either way, so the
+ * control took edits and only the reading was wrong.
+ *
+ * Syntactic like every other classification here — the shape at the declaration, no checker. Both
+ * halves are required, because a bind needs both; the property spellings are the three an object
+ * literal has (`get: …`, `get() {}`, and the `{ get, set }` shorthand).
+ */
+function accessorBindings(tokens: Token[], into: Set<string>): void {
+    for (let i = 1; i < tokens.length; i++) {
+        const brace = tokens[i] as Token
+        if (brace.kind !== SyntaxKind.OpenBraceToken) continue
+        if (tokens[i - 1]?.kind !== SyntaxKind.EqualsToken) continue
+        const name = declaredNameBefore(tokens, i - 1)
+        if (name === undefined) continue
+        // The literal's OWN depth. A `get`/`set` nested one object deeper belongs to that object, and
+        // `{ a: { get, set } }` binds an `a` no bind can read.
+        const own = brace.depth
+        let get = false
+        let set = false
+        for (let at = i + 1; at < tokens.length; at++) {
+            const token = tokens[at] as Token
+            if (token.depth < own) break
+            if (token.depth > own) continue
+            if (token.text !== 'get' && token.text !== 'set') continue
+            const next = tokens[at + 1]?.kind
+            if (
+                next !== SyntaxKind.ColonToken &&
+                next !== SyntaxKind.OpenParenToken &&
+                next !== SyntaxKind.CommaToken &&
+                next !== SyntaxKind.CloseBraceToken
+            )
+                continue
+            if (token.text === 'get') get = true
+            else set = true
+        }
+        if (get && set) into.add(name.text)
     }
 }
 
@@ -766,6 +825,133 @@ function checkNoProps(source: string, tokens: Token[], filename: string): void {
 }
 
 /**
+ * A cell bound in a `<script module>`, rewritten to the per-caller form: `state.scoped(() => …)`.
+ *
+ * The block's scope and the value's scope disagreed, and this is where they are put back together.
+ * Module scope on a server is one instance per PROCESS, so `const count = state(0)` there is one cell
+ * for every visitor — while everything beside it in the same block already resolves per caller, an
+ * argless `memo` through `scopedArgless` and a keyed one through its own cache. Wrapping the binding
+ * is that mechanism reaching the two spellings it never covered.
+ *
+ * A THUNK rather than the value, because the initial has to be built per caller: sharing the `0` in
+ * `state(0)` is harmless and sharing the generator in `state(ticking())` is the same bug one level in.
+ *
+ * The BINDING is what is recognised, the same shape `reactiveBindings` reads — so a factory
+ * (`const make = () => state(0)`) is left alone, since what it builds is already one cell per call.
+ */
+/**
+ * A `watch` written as a STATEMENT in a `<script module>`, made per caller.
+ *
+ * The last of the three module-scope spellings that meant "once for the server process", and the one
+ * that could not be done the way the other two were. A cell is wrapped in place and stays lazy
+ * because something eventually reads it; an effect has no read to wait for, so the wrap has to be
+ * ASKED — which is what the returned kicks are, spliced into the component setup so the first
+ * instance in a caller runs the body and the rest find it already running.
+ *
+ * Recognised by `statementCalls`, which is the desugar's own function-body map rather than a second
+ * rule beside it: that is what tells `watch(…)` at module scope from `const make = () => watch(…)`.
+ *
+ * A bare statement only. `const stop = watch(…)` binds the DISPOSER, and a wrap that handed back a
+ * kick instead would silently change what that name is — it has the same leak and it needs its own
+ * answer rather than this one bent to fit.
+ */
+function scopeEffects(rest: string): { text: string; kicks: string[] } {
+    const at = statementCalls(rest, MODULE_EFFECTS)
+    if (at.length === 0) return { text: rest, kicks: [] }
+    const tokens = tokensOfBody(rest)
+    const kicks: string[] = []
+    let out = rest
+    // Back to front, so an earlier splice cannot move a later one's offsets.
+    for (let i = at.length - 1; i >= 0; i--) {
+        const from = at[i] as number
+        let open = -1
+        for (let j = 0; j < tokens.length; j++) {
+            if ((tokens[j] as Token).start === from) {
+                open = j + 1
+                break
+            }
+        }
+        if (open < 0) continue
+        let close = -1
+        let level = 0
+        for (let j = open; j < tokens.length; j++) {
+            const kind = (tokens[j] as Token).kind
+            if (kind === SyntaxKind.OpenParenToken) level++
+            else if (kind === SyntaxKind.CloseParenToken && --level === 0) {
+                close = j
+                break
+            }
+        }
+        if (close < 0) continue
+        const to = (tokens[close] as Token).end
+        const name = `$effect${i}`
+        kicks.unshift(name)
+        out = `${out.slice(0, from)}const ${name} = scopedEffect(() => ${out.slice(from, to)})${out.slice(to)}`
+    }
+    return { text: out, kicks }
+}
+
+function scopeCells(rest: string): string {
+    const tokens = tokensOfBody(rest)
+    // Collected then applied BACK TO FRONT, so an earlier splice cannot move a later one's offsets.
+    const spans: { from: number; to: number; wrap: string }[] = []
+    for (let i = 1; i < tokens.length; i++) {
+        const open = tokens[i] as Token // the call being wrapped
+        if (open.kind !== SyntaxKind.OpenParenToken) continue
+        const callee = calleeBefore(tokens, i)
+        if (callee < 1) continue
+        let at = callee
+        let maker = (tokens[callee] as Token).text
+        // `state.shared(key, …)` scopes its LOOKUP and not its binding, so at module scope it holds
+        // the one cell the first evaluation built — the same leak, and the same wrap closes it.
+        if (
+            maker === 'shared' &&
+            tokens[at - 1]?.kind === SyntaxKind.DotToken &&
+            tokens[at - 2]?.text === 'state'
+        ) {
+            at -= 2
+            maker = 'state'
+        }
+        // A channel gets its OWN wrapper rather than the cell one: its surface is not a cell's —
+        // `publish`, `subscribe`, and a room form read by CALL — so the cell's forward table would
+        // drop half of it silently.
+        if (maker !== 'state' && maker !== 'channel') continue
+        if (tokens[at - 1]?.kind === SyntaxKind.DotToken) continue
+        if (tokens[at - 1]?.kind !== SyntaxKind.EqualsToken) continue
+        if (declaredNameBefore(tokens, at - 1) === undefined) continue
+        // The call's own close, counted rather than read off `depth` — a token's `depth` is BRACE
+        // depth (see `lex.ts`), which says nothing about the parens an argument list nests.
+        let close = -1
+        let level = 0
+        for (let j = i; j < tokens.length; j++) {
+            const kind = (tokens[j] as Token).kind
+            if (kind === SyntaxKind.OpenParenToken) level++
+            else if (kind === SyntaxKind.CloseParenToken && --level === 0) {
+                close = j
+                break
+            }
+        }
+        if (close < 0) continue
+        spans.push({
+            from: (tokens[at] as Token).start,
+            to: (tokens[close] as Token).end,
+            wrap: maker === 'channel' ? 'channel.scoped' : 'state.scoped',
+        })
+    }
+    if (spans.length === 0) return rest
+    let out = rest
+    for (let i = spans.length - 1; i >= 0; i--) {
+        const span = spans[i] as { from: number; to: number; wrap: string }
+        out =
+            out.slice(0, span.from) +
+            `${span.wrap}(() => ${out.slice(span.from, span.to)})` +
+            out.slice(span.to)
+    }
+    return out
+}
+
+
+/**
  * Specifiers the emit compiles away, as `mergeImports` takes them: `${module} ${name}`.
  *
  * `props` and nothing else so far. `props<T>()` IS the parameter — the call is replaced by `args` and
@@ -1023,6 +1209,10 @@ function liveKeyed(context: Context, name: string): boolean {
     return context.reactive.keyed.has(name) && !context.shadow.has(name)
 }
 
+function liveAccessor(context: Context, name: string): boolean {
+    return context.accessors.has(name) && !context.shadow.has(name)
+}
+
 /**
  * Where an expression is going, which decides what it may become.
  *
@@ -1035,24 +1225,39 @@ function liveKeyed(context: Context, name: string): boolean {
  *   slot  a child slot, which renders whatever it is given. The cell is fine, but an enclosing
  *         condition's hoisted local is BETTER: the outer thunk already subscribes to that cell, so a
  *         second subscription inside the branch only wakes twice for one change
- *   cell  `bind:`, `&ref`, a component prop — these need the cell ITSELF, so a hoisted value would be
- *         the wrong thing entirely, not merely a coarser one
+ *   prop  a component prop, which needs the cell ITSELF when the expression NAMES one alone — a child
+ *         handed a value has nothing left to subscribe to. Anything bigger has already read the cell
+ *         to reach the member, so there the hoisted local is the same value and one subscription
+ *         instead of two — and it is also what the branch narrows off, which a second call is not
+ *   bind  `bind:` and `&ref`, which never take a local at all: a bind WRITES back through the path it
+ *         was given, and a local is nowhere to write
  */
-type Position = 'read' | 'slot' | 'cell'
+type Position = 'read' | 'slot' | 'prop' | 'bind'
+
+const HELD: Record<Position, 'slot' | 'cell' | undefined> = {
+    read: undefined,
+    slot: 'slot',
+    prop: 'cell',
+    bind: 'cell',
+}
 
 function code(expr: Expr, context: Context, position: Position = 'read'): string {
-    const hoisted = position === 'cell' ? NO_HOIST : context.hoisted
+    const hoisted = position === 'bind' ? NO_HOIST : context.hoisted
     // The bare-cell case — `{count}`, the common slot — answers off two `has` calls and never
-    // reaches `desugar`, so the sets it would have taken are not built for it.
+    // reaches `desugar`, so the sets it would have taken are not built for it. Its source IS the
+    // name, so it is the whole region by construction and a held position hands the cell over —
+    // the same answer `desugar` reaches for every spelling this does not catch.
     if (IDENTIFIER.test(expr.source) && liveCell(context, expr.source)) {
-        const local = hoisted.get(expr.source)
-        if (local !== undefined) return local
+        if (position === 'read' || position === 'slot') {
+            const local = hoisted.get(expr.source)
+            if (local !== undefined) return local
+        }
         return position === 'read' ? `${expr.source}()` : expr.source
     }
     const names = live(context)
     return desugar(context.source, expr.start, expr.start + expr.source.length, names.cells, {
         keyed: names.keyed,
-        hold: position !== 'read',
+        hold: HELD[position],
         hoisted,
     }).text
 }
@@ -1096,7 +1301,7 @@ function hoistReads(
         if (scope.has(read.key)) continue
         const local = `$${context.counter.n++}`
         const code = read.keyed
-            ? `${desugar(context.source, read.start, read.end, names.cells, { keyed: names.keyed, hold: true, hoisted: context.hoisted }).text}()`
+            ? `${desugar(context.source, read.start, read.end, names.cells, { keyed: names.keyed, hold: 'cell', hoisted: context.hoisted }).text}()`
             : `${read.key}()`
         declarations.push(`const ${local} = ${code}`)
         scope.set(read.key, local)
@@ -1108,9 +1313,14 @@ function withHoists(context: Context, scope: Map<string, string>): Context {
     return { ...context, hoisted: scope }
 }
 
-/** The positions that need the cell itself: `bind:`, `&ref`, a component prop. */
+/** A component prop — the cell itself when the expression names one alone, its value otherwise. */
 function held(expr: Expr, context: Context): string {
-    return code(expr, context, 'cell')
+    return code(expr, context, 'prop')
+}
+
+/** `bind:` and `&ref` — the cell itself, and never a hoisted local. See `Position`. */
+function bound(expr: Expr, context: Context): string {
+    return code(expr, context, 'bind')
 }
 
 const PLAIN_PATH = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/
@@ -1546,11 +1756,14 @@ function scoped(nodes: Node[], context: Context): Scoped {
     // `rate` source would look like a name that is already reactive, and the shadow would be dropped.
     const own: Reactive = { cells: new Set(), keyed: new Set() }
     reactiveBindings(tokens, own)
+    const ownAccessors = new Set<string>()
+    accessorBindings(tokens, ownAccessors)
 
     const reactive: Reactive = {
         cells: new Set(context.reactive.cells),
         keyed: new Set(context.reactive.keyed),
     }
+    const accessors = new Set(context.accessors)
     const shadow = new Set(context.shadow)
     for (const name of declaredNames(tokens)) {
         if (own.cells.has(name)) {
@@ -1559,13 +1772,17 @@ function scoped(nodes: Node[], context: Context): Scoped {
         } else if (own.keyed.has(name)) {
             reactive.keyed.add(name)
             shadow.delete(name)
+        } else if (ownAccessors.has(name)) {
+            accessors.add(name)
+            shadow.delete(name)
         } else {
-            // A plain binding. It hides whatever the name meant outside, source or not.
+            // A plain binding. It hides whatever the name meant outside, source or not — an accessor
+            // pair included, which is why this arm does not delete from `accessors`.
             shadow.add(name)
         }
     }
 
-    const inner: Context = { ...context, reactive, shadow }
+    const inner: Context = { ...context, reactive, accessors, shadow }
     const statements = desugar(context.source, from, to, reactive.cells, {
         expression: false,
         keyed: reactive.keyed,
@@ -1738,8 +1955,12 @@ function toggled(
  *
  * `element` is deliberately absent: it is a node ref rather than a value, so it has no event and is
  * legal anywhere.
+ *
+ * Exported for the reason `BRANCHES` is: it is the closed set of bind TARGETS, and `/docs/syntax/bind`
+ * claims to show every one of them. `dogfood/test/docs.test.ts` asks that each key here appears in a
+ * rung on that page, so a sixth target lands red rather than undocumented.
  */
-const BINDABLE: Record<string, Record<string, { dom: string; event: string }>> = {
+export const BINDABLE: Record<string, Record<string, { dom: string; event: string }>> = {
     value: {
         input: { dom: 'HTMLInputElement', event: 'input' },
         textarea: { dom: 'HTMLTextAreaElement', event: 'input' },
@@ -1815,7 +2036,7 @@ function bind(
             ? key_
             : IDENTIFIER.test(attribute.value.source)
               ? attribute.value.source
-              : held(attribute.value, context)
+              : bound(attribute.value, context)
 
     // The node itself, not a value — nothing to serialise, so SSR emits nothing for it.
     if (key_ === 'element') return ` &ref=\${${source}}`
@@ -1848,8 +2069,10 @@ function bind(
     // the element actually has — an untyped `event` here is an implicit `any` in the author's build.
     const target = (property: string): string => `(event.currentTarget as ${legal.dom}).${property}`
 
-    // `{get, set}` — an explicit accessor pair rather than a cell.
-    const accessor = source.startsWith('{')
+    // `{get, set}` — an explicit accessor pair rather than a cell, written inline in the tag or
+    // hoisted out of it into a name. See `accessorBindings` for why the second spelling is asked
+    // about rather than inferred from the text.
+    const accessor = source.startsWith('{') || liveAccessor(context, source)
     const read = accessor ? `(${source}).get()` : `${source}()`
     const write = (value: string): string =>
         accessor ? `(${source}).set(${value})` : `${source}.set(${value})`
@@ -1885,9 +2108,15 @@ function bind(
             `Array.isArray(held)` +
             ` ? (${target('checked')} ? [...held, ${mine}] : held.filter((v: unknown) => v !== ${mine}))` +
             ` : ${mine}`
+        // One runtime hedge over the two legal shapes of a group cell — an ARRAY for checkboxes, a
+        // SCALAR for radios — and for any one cell only one arm can be reached. TypeScript proves that
+        // by narrowing the other to `never`, and then refuses the write, because `Array.isArray` is
+        // what it narrowed on and the emit has no type-checker to have written just one arm. So the
+        // cast is on the whole expression rather than on either half: it says "the runtime already
+        // chose", and the wrong arm cannot be reached to be wrong.
         return (
             ` .checked=\${() => { const held = ${read}; return Array.isArray(held) ? held.includes(${mine}) : held === ${mine} }}` +
-            ` @${legal.event}=\${(event: Event) => { const held = ${read}; ${write(next)} }}`
+            ` @${legal.event}=\${(event: Event) => { const held = ${read}; ${write(`(${next}) as never`)} }}`
         )
     }
 
@@ -1926,7 +2155,7 @@ function invoke(node: { name: string; attributes: Attribute[]; children: Node[] 
                 spread = true
                 break
             case 'bind': {
-                const source = attribute.value === null ? attribute.target : held(attribute.value, context)
+                const source = attribute.value === null ? attribute.target : bound(attribute.value, context)
                 props.push(`${key(attribute.target)}: ${source}`)
                 break
             }
@@ -1994,7 +2223,10 @@ function define(node: { name: string; parameters: string; body: Node[] }, contex
         children: childrenOf(node.parameters),
     }
     for (const name of parameterNames(node.parameters)) inner.shadow.add(name)
-    return `(${node.parameters || 'args'}) => ${fragment(node.body, inner)}`
+    // A parameter written by hand types itself. One written as `()` still BINDS `args` — that is what
+    // `childrenOf` answers with — and an untyped binding is an implicit `any`, which the app's own
+    // typecheck refuses: `{#component Loud()}` was a documented spelling that could not compile.
+    return `(${node.parameters || 'args: { children?: unknown }'}) => ${fragment(node.body, inner)}`
 }
 
 /** Split on a character at the TOP level — outside every bracket, brace and string. */
@@ -2437,11 +2669,15 @@ export function emit(
         if (kind === 'cell') reactive.cells.add(local)
         else if (kind === 'keyed') reactive.keyed.add(local)
     }
+    const accessors = new Set<string>()
+    accessorBindings(moduleTokens, accessors)
+    accessorBindings(setupRegion, accessors)
 
     const context: Context = {
         source,
         filename: options.filename,
         reactive,
+        accessors,
         scope: null,
         sheets: new Map(),
         lifted: new Map(),
@@ -2498,6 +2734,16 @@ export function emit(
 
     // `html` and the return type are always needed; everything else is imported only if the file
     // turned out to use it, so a component that never toggles a class does not import `classes`.
+    // The module block, per caller: cell bindings wrapped where they stand, and an effect wrapped
+    // with a KICK for the setup below — an effect has no read to be lazy behind, so the component
+    // that declared it is what asks for this caller's one. Before the import header is split, since
+    // an effect here is what puts `scopedEffect` on it.
+    const moduleBlock = scopeEffects(scopeCells(desugarBody(moduleImports.rest, reactive)))
+    let kicked = ''
+    if (moduleBlock.kicks.length > 0) {
+        need(context, 'scopedEffect')
+        kicked = `    ${moduleBlock.kicks.join('()\n    ')}()\n`
+    }
     context.used.add('html')
     // Two statements, because the two specifiers mean different things: `abide` is what an author
     // types, and `abide/runtime` is what only this emitter does. The split falls where
@@ -2525,10 +2771,10 @@ export function emit(
     const setupBody = indent(desugarBody(lifted.body, reactive))
     const assembled =
         mergeImports([...header, ...moduleImports.imports, ...setup.imports], ERASED_IMPORTS) +
-        `${desugarBody(moduleImports.rest, reactive)}\n${adopted}` +
+        `${moduleBlock.text}\n${adopted}` +
         (lifted.declarations === '' ? '' : `${lifted.declarations}\n`) +
         `export default function ${name}(${args}): TemplateResult {\n` +
-        `${setupBody}${started}${defines}` +
+        `${setupBody}${kicked}${started}${defines}` +
         `    return html\`${markup}\`\n` +
         `}\n`
 

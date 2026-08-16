@@ -651,7 +651,7 @@ is sugar over it, not a replacement.
 | `source(a, b)` | A read takes NO arguments, so a call carrying some is a call of what the cell **holds**: `source()(a, b)`. This is what lets a callback prop work in a lane where no type said it was a callback. A **keyed** memo is the exception and is answered before this — `m(args)` selects a slot |
 | `{await p}` | The hole's thunk is emitted **`async`**, so it hands back a promise — and a promise in a hole renders what it resolves to. Every position whose thunk lands in a consumer that resolves one: a child slot, an attribute (quoted or not), a spread, a `class:`/`style:` toggle, a component prop, and the three block HEADS. **Refused** in the three that have no such consumer, because there an async thunk would trade a compile error for a silently wrong value — `bind:` hands over the CELL and emits no thunk at all; a `by` key is emitted inside the row callback and is an IDENTITY compared per row, which a fresh promise never matches; and a `{#try}` body is evaluated as ONE unit so `{:catch}` can see a throw, which a rejection is not. Whose `await` it is decides nothing: one belonging to a nested `async` arrow is ordinary code that compiles either way, and it only buys an `async` the expression did not need. `obj.await` is a property, not an await. The thunk is re-run per pass, so it does not cache — a load that should run once goes in a cell. Sources it reads must be read BEFORE the `await`, which is the rule every async body has — see "Known limits" |
 | shadowing | A `const`/`let`/parameter/`{#for}` binding of the same name shadows, so a loop variable is never read as a cell |
-| narrowing | A `{#if}`/`{:else if}`/`{#switch}` condition reads ONCE into a local and its branch narrows off that. The body's other reads keep their own thunks |
+| narrowing | A `{#if}`/`{:else if}`/`{#switch}` condition reads ONCE into a local and its branch narrows off that. The body's other reads keep their own thunks. A HELD position takes the local too, and what decides it is what the expression NAMES rather than where it sits: a prop naming the cell alone hands the CELL over — a child given a value has nothing left to subscribe to — while a prop reaching a member has already read the cell to get there, so the local is the same value, one subscription instead of two, and the thing the branch narrowed. `bind:` and `&ref` take no local at all, because a bind WRITES back through the path it was handed |
 | position | A read among a `<script>`'s STATEMENTS emits `peek()`, and is typed `T \| undefined` for it. A read inside a FUNCTION body there emits `()` |
 
 What counts as a cell is decided **syntactically**: `const x = state(…)` or `state.shared(key, …)` in
@@ -684,7 +684,7 @@ the room form, and an import cannot say which one it is.
 | where each is legal | A TABLE, not a habit: `value` on `<input>` / `<textarea>` / `<select>`, `checked` and `group` on `<input>`, `open` on `<details>`, `element` anywhere. A bind is a read AND a write, so a pairing with no event to write back from — `bind:selected` on an `<option>`, `bind:open` on a `<div>` — is a compile error naming the elements that do answer it, rather than a listener that never fires |
 | a `<select>` | `bind:value` on the SELECT, with a plain `value="…"` on each `<option>`. `bind:selected` is the refusal above, and its message names this spelling |
 | `bind:group` | Radio/checkbox membership, compared against the input's own `value`; never emitted as a `group` attribute |
-| `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair |
+| `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair, for when the thing on screen is not the thing you keep. Written inline as above, or HOISTED into a name and bound as `bind:value={pair}` — which of the two a name holds is read off its declaration, the same syntactic rule that decides what is a cell |
 | `bind:element={state \| fn}` | Node ref (state) or per-instance handler with the node as argument. Client-only |
 | `class:name={cond}` | Toggle a class. **ELEMENTS ONLY** — a compile error on a component |
 | `style:prop={value}` | Set one style property. **ELEMENTS ONLY**, same rule |
@@ -780,10 +780,27 @@ written outside the body it was declared in.
 | Block | Scope |
 | --- | --- |
 | `<script>` | Per-instance (component setup). `export` is a compile error — the body is inlined into the setup |
-| `<script module>` | Module scope, so `export` belongs here |
+| `<script module>` | Module scope, so `export` belongs here. A CELL declared here is one per CALLER — one per request on a server, one per page in a browser — shared by every instance inside that one. See below |
 | nested `<script>` | Branch-local (per-ITEM in a `{#for}`). Must be the FIRST node of a block body, carries no `import`, and resolves off the level's scope. A `{#for}` splices it into the row closure; every other body pays one call |
 | `<style>` | Component-scoped: every element carries `data-a<hash>` and every selector requires it on its rightmost compound. Registered once at module scope |
 | nested `<style>` | Subtree-scoped — an element carries every scope in force, so an outer rule reaches in and an inner one cannot reach out |
+
+### A cell in a `<script module>`
+
+Module scope is per CALLER, not per process. The compiler wraps the binding — `const count = state(0)`
+emits as `state.scoped(() => state(0))`, a `channel` as `channel.scoped(…)` — and the facade resolves
+it on every member: the request scope on a server, and on a client a scope that never exists, so the
+one cell is built on first access and kept for the page.
+
+| | |
+| --- | --- |
+| what varies | The NODE, never the binding — which is why the wrap is needed at all. `state.shared` scopes the lookup instead, so a declaration that runs once still holds the cell its first evaluation built, and it is wrapped here like anything else |
+| a thunk, not a value | The initial is built per caller. Sharing the `0` in `state(0)` is harmless; sharing the generator in `state(ticking())` is the same bug one level in |
+| built lazily | The declaration alone builds nothing. An eager fallback would start a promise or a stream at module load — on a server, once for the process, before any request exists |
+| what is NOT wrapped | A factory (`const make = () => state(0)`) builds one per call already. A keyed or argless `memo` is per caller through its own cache and `scopedArgless`. A constant, a helper and a type are the same for every visitor, which is what module scope is for |
+| a `<script>` cell | Untouched: per instance, already inside whatever scope the caller has |
+| where it is applied | AFTER the desugar, never before — the sugar decides cell reads over the same text, and a wrapper spliced in first stops `query.toUpperCase()` becoming `query().toUpperCase()` |
+| a `watch` statement | Also per caller, and it cannot be lazy the way a cell is — an effect has no read to wait behind. It is wrapped as `scopedEffect(() => watch(…))` and KICKED from the setup of the component that declared it, so the first instance in a caller runs the body and the rest find it already running. **A component nobody renders in a request runs no effect in it** — it used to run once at import, which is once for the process. The disposer goes with the caller. A `const stop = watch(…)` binds the disposer and is left alone |
 
 An `<!-- html comment -->` in the markup is for whoever opens the file and is NOT emitted: a
 component ships one copy of its own commentary per INSTANCE, and a file's header comment is the
@@ -878,6 +895,16 @@ itself changes.
 A block NESTED inside a deferred subtree awaits inline rather than deferring again: the subtree
 is rendered with nowhere to patch, so the inner one delays its parent's patch instead of registering
 a patch of its own. Deferral is one level deep by construction.
+
+**A probed STREAM patches its FIRST CHUNK.** It is the one source where "there is something to show"
+and "the load is over" are different moments — `pending` stands down at the first chunk while the
+settle waits for the last — and a probe asked the first question. Waiting for the settle held the
+page for the whole length of the stream, and held it for markup nobody keeps: a client mounting over
+a streamed region drops those rows and restarts from the top, because what is under them is a
+different point in the same stream and no later chunk makes it match. So the patch carries the first
+chunk and the client carries the rest. The lane with NOWHERE to patch is the exception and drains as
+it always did — `renderToString` and `renderDocumentToString` serve a reader running no scripts, and
+half a transcript is what that reader would keep forever.
 
 Only a CHILD slot carries markers: an opening comment before its value and the anchor after it. Other
 slot kinds are found positionally and a list row delimits itself. A chunk boundary is a SUSPENSION,

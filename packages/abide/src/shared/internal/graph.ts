@@ -15,7 +15,7 @@
 import { markSource } from './BRANDS.ts'
 import { chunkCharge, reportOverflow, streamCeiling } from './ceilings.ts'
 import { isAsyncIterable, isNamedError, isThenable } from './probes.ts'
-import { storeFor } from './scopes.ts'
+import { disposeWith, storeFor, storeForLazy } from './scopes.ts'
 import { NO_LIMIT } from './timers.ts'
 
 // Annotated `number` rather than left as literal types: `status` is mutated re-entrantly (a source's
@@ -559,7 +559,18 @@ class Async {
     // A later write must win even when an earlier promise settles after it. Without the stamp a slow
     // first load lands on top of the fast second one and the cell reports the value nobody asked for.
     generation = 0
-    waiters: { resolve(value: unknown): void; reject(reason: unknown): void }[] | null = null
+    /**
+     * Who is waiting, and WHICH moment each of them asked for.
+     *
+     * `atFirstChunk` is the difference between "there is something to show" and "the load is over",
+     * and those are the same moment for everything but a STREAM: `pending` stands down at the first
+     * chunk while the settle waits for the last. One list rather than two, so the four paths that
+     * end a load — settle, failure, invalidate, dispose — go on draining every waiter through
+     * `finish` and there is no second list for them to keep in step with.
+     */
+    waiters:
+        | { resolve(value: unknown): void; reject(reason: unknown): void; atFirstChunk: boolean }[]
+        | null = null
 
     constructor(settled: boolean) {
         this.settled = new Node(settled, null)
@@ -701,6 +712,7 @@ function consume(node: Node, source: AsyncIterable<unknown>): void {
     const ceiling = streamCeiling()
     let charged = 0
     let keeping = true
+    let showed = false
 
     void (async () => {
         try {
@@ -732,6 +744,12 @@ function consume(node: Node, source: AsyncIterable<unknown>): void {
                 // in-flight one takes over — the same pair a warm reload reports.
                 track.pending.write(false)
                 track.refreshing.write(true)
+                // And a region that PROBED was asking exactly that question, so this is its answer
+                // rather than the end of the stream — see `probedLoad`.
+                if (!showed) {
+                    showed = true
+                    showFirstChunk(track, chunk)
+                }
             }
         } catch (error) {
             if (generation !== track.generation) return
@@ -784,6 +802,28 @@ function finish(track: Async, value: unknown, failed: boolean): void {
         if (failed) waiter.reject(value)
         else waiter.resolve(value)
     }
+}
+
+/**
+ * The first chunk of a stream: tell whoever asked for something to SHOW, and leave the rest waiting.
+ *
+ * Called once per stream rather than per chunk — after this the list holds waiters on the settle
+ * alone, and walking it again for every chunk would be a cost per chunk for a question already
+ * answered.
+ */
+function showFirstChunk(track: Async, value: unknown): void {
+    const waiters = track.waiters
+    if (waiters === null) return
+    let waiting: typeof waiters | null = null
+    for (const waiter of waiters) {
+        if (waiter.atFirstChunk) {
+            waiter.resolve(value)
+            continue
+        }
+        if (waiting === null) waiting = []
+        waiting.push(waiter)
+    }
+    track.waiters = waiting
 }
 
 // --- a read that is not ready yet -------------------------------------------
@@ -909,7 +949,10 @@ function readCell(node: Node): unknown {
 
 // Backing for `then`: the promise of the SETTLED value. Reads untracked — awaiting a cell inside an
 // effect must not subscribe the effect to it, since nothing can be tracked through an await anyway.
-function settledPromise(node: Node): Promise<unknown> {
+//
+// `atFirstChunk` asks for the moment `pending` stands down instead, which is the same moment for
+// everything but a stream — see `Async.waiters` and `probedLoad`.
+function settledPromise(node: Node, atFirstChunk = false): Promise<unknown> {
     if (node.fn !== null) {
         // Awaiting an async memo starts its load — and `await` is a CATCHER, in the same shape the
         // server walk is: a body that could not read yet is waited out and run again. Without this
@@ -920,18 +963,20 @@ function settledPromise(node: Node): Promise<unknown> {
         } catch (error) {
             if (!(error instanceof Pending)) throw error
             // The retry re-reads the cell, so a FAILED load is thrown by the read rather than here.
-            return settledOf(error).then(
-                () => settledPromise(node),
-                () => settledPromise(node),
+            return settledPromise(error.node, atFirstChunk).then(
+                () => settledPromise(node, atFirstChunk),
+                () => settledPromise(node, atFirstChunk),
             )
         }
     }
     const track = node.asyncTrack
     if (track === null) return Promise.resolve(node.value)
-    if (track.pending.value === true || track.refreshing.value === true) {
+    // A stream past its first chunk is `refreshing` with something to show, so a caller that asked
+    // for the flip is already served and must not park behind the last chunk.
+    if (track.pending.value === true || (track.refreshing.value === true && !atFirstChunk)) {
         return new Promise((resolve, reject) => {
             if (track.waiters === null) track.waiters = []
-            track.waiters.push({ resolve, reject })
+            track.waiters.push({ resolve, reject, atFirstChunk })
         })
     }
     if (track.error.value !== undefined) return Promise.reject(track.error.value)
@@ -991,9 +1036,15 @@ export function hasProbedStream(): boolean {
  * an exported signature. Separate from `hasProbedLoad` because asking BUILDS that promise, and on a
  * rejecting load a promise nobody awaits is an unhandled rejection — so a caller that only wants the
  * FACT must have a way to ask that costs nothing. Both callers want one or the other, never both.
+ *
+ * `atFirstChunk` is what a walk with SOMEWHERE TO PATCH asks for, and it only ever differs for a
+ * stream. The probe asked whether there was anything to show; the first chunk is the answer, and
+ * everything after it is the client's, which drops the server's rows and restarts from the top
+ * whatever they say — see `hasProbedStream`. A walk with nowhere to patch asks for the settle
+ * instead, because a reader running no scripts keeps what the markup holds.
  */
-export function probedLoad(): Promise<unknown> | null {
-    return probedPending === null ? null : settledPromise(probedPending)
+export function probedLoad(atFirstChunk: boolean): Promise<unknown> | null {
+    return probedPending === null ? null : settledPromise(probedPending, atFirstChunk)
 }
 
 /**
@@ -1576,6 +1627,69 @@ state.shared = <T>(key: string, initial: T, transform?: (value: T) => T): State<
     return made as State<T>
 }
 
+/**
+ * A cell declared at MODULE scope, resolved per caller on every member — what a `<script module>`
+ * binding compiles to.
+ *
+ * `state.shared` cannot serve this and that is the whole reason this exists: it scopes the LOOKUP,
+ * so a declaration that runs once still closes over the one cell the first evaluation built, and
+ * every request afterwards reads that. Here the BINDING is the facade and the node behind it varies,
+ * which is the same answer `scopedArgless` gives an argless `memo` — this is that mechanism reaching
+ * the one reactive spelling it never covered.
+ *
+ * `make` is a thunk rather than a value because the initial has to be built PER CALLER: `state(0)`
+ * would share the zero harmlessly and `state(ticking())` would hand every request the same generator,
+ * which is the bug wearing a different hat.
+ *
+ * The fallback is built eagerly, as `scopedArgless` builds its own: where there is no caller scope —
+ * a client, a script, a test — there is one caller forever, and a lazy one would put a null check on
+ * the hot path to save an allocation that a client makes exactly once per module.
+ */
+// Generic over the CELL rather than its value: `state(0)` is a `State<T>` whose `peek` cannot miss
+// and `state(promise)` is a `Cell<T>` whose can, and collapsing the two here would put a
+// `T | undefined` under every `count += 1` the desugar writes.
+state.scoped = <C extends Cell<unknown>>(make: () => C): C => {
+    // LAZY where `scopedArgless` is eager, and the difference is what the two BUILD: constructing a
+    // memo runs nothing, and constructing a cell runs its initial. An eager fallback here starts a
+    // promise or a stream at module load, on a server, once for the PROCESS and before any request
+    // exists — which is the thing being scoped in the first place.
+    let fallback: C | undefined
+    const ofNobody = (): C => (fallback ??= make())
+    const pick = (): C => storeForLazy(pick, make, ofNobody)
+    // The facade is a SOURCE like the cell it stands for, so a slot reads it rather than rendering a
+    // function. Deliberately no `abide.cell`: that symbol names one node and the node varies here,
+    // which is the same reason `scopedArgless` withholds it.
+    const facade = markSource((() => pick()()) as unknown as C)
+    // A TABLE typed by `keyof Cell`, so a member added to the cell surface is a type error HERE
+    // rather than an `undefined` that only shows up on a server.
+    const forward: { [K in keyof Cell<unknown>]: Cell<unknown>[K] } = {
+        peek: () => pick().peek(),
+        set: (value) => pick().set(value),
+        invalidate: () => pick().invalidate(),
+        chunks: () => pick().chunks(),
+        pending: () => pick().pending(),
+        refreshing: () => pick().refreshing(),
+        streaming: () => pick().streaming(),
+        error: () => pick().error(),
+        settled: () => pick().settled(),
+        done: () => pick().done(),
+        isError: (error, name) => pick().isError(error, name),
+        watch: (handler) => pick().watch(handler),
+        [Symbol.asyncIterator]: () => pick()[Symbol.asyncIterator](),
+        then: ((onFulfilled: unknown, onRejected: unknown) =>
+            (pick() as unknown as { then: (a?: unknown, b?: unknown) => Promise<unknown> }).then(
+                onFulfilled,
+                onRejected,
+            )) as Cell<unknown>['then'],
+        // The SAME shared pair every cell carries rather than forwarders of their own: both reach
+        // this facade through `this`, and its `then` above is what puts the caller's cell behind them.
+        catch: caught as Cell<unknown>['catch'],
+        finally: lastly as Cell<unknown>['finally'],
+    }
+    Object.assign(facade, forward)
+    return facade
+}
+
 // The ARGLESS form of abide's `memo`: auto-tracked derivation, lazy, memoised on identity. A body
 // that returns a promise becomes a load — its dependencies are the ones read BEFORE the first
 // `await`, which is everything tracking can honestly see. Args-keyed memoisation lives in `memo.ts`.
@@ -1674,6 +1788,31 @@ export function watchNode(fn: () => void | (() => void)): Node {
     // wrapper closure allocated per reactive slot per row solely to dispose something twice. `watch`
     // pushes the function it had to allocate for its return value anyway.
     return node
+}
+
+/**
+ * An effect declared at MODULE scope, run once per CALLER — what a `<script module>` `watch` compiles
+ * to, and the last of the three spellings that meant "once for the server process".
+ *
+ * A cell can be lazy because something eventually READS it; an effect has no read to wait for, so
+ * something has to ask. The component whose module block declared it is what asks: its setup calls
+ * this, and the first instance in a caller runs the body while every instance after it gets the
+ * disposer already made. A component nobody renders in this request runs no effect in it, which is
+ * the honest reading of "per caller" and is what module scope could never say before.
+ *
+ * The disposer is registered with the caller, so an effect goes when the request does. Where there is
+ * no caller scope — a client, a script, a test — `disposeWith` is a no-op and the effect lives for
+ * the page, which is exactly how a module-level `watch` behaved there already.
+ */
+export function scopedEffect(make: () => () => void): () => void {
+    let ofNobody: (() => void) | undefined
+    const start = (): (() => void) => {
+        const stop = make()
+        disposeWith(stop)
+        return stop
+    }
+    const pick = (): (() => void) => storeForLazy(pick, start, () => (ofNobody ??= start()))
+    return () => void pick()
 }
 
 /** Run an effect node NOW, as `pull` would. Its sources are re-collected, so a new body is adopted. */

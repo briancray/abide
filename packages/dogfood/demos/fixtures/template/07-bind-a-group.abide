@@ -1,0 +1,15 @@
+<script>
+import { state } from 'abide'
+
+const name = state('ada')
+const picked = state<string[]>([])
+</script>
+
+<!-- Membership rather than a single value: the cell holds the checked ones, and each input is compared
+     against its OWN `value`. That is why the element needs one, and it is a compile error without it —
+     a group with nothing to compare against would silently never match.
+
+     `group` is never emitted as an attribute. It is a spelling, not a property the DOM has. -->
+<label><input type="checkbox" value="ada" bind:group={picked} /> ada</label>
+<label><input type="checkbox" value="alan" bind:group={picked} /> alan</label>
+<p>hello {name} · picked {picked.join(', ')}</p>

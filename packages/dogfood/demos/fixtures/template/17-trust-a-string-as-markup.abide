@@ -1,7 +1,7 @@
-<script module>
+<script>
 import { state } from 'abide'
 
-export const row = state('<b>ada</b> lovelace')
+const row = state('<b>ada</b> lovelace')
 </script>
 
 <!-- A slot ESCAPES, which is why the first line shows the tags instead of the bold. `raw(…)` is the

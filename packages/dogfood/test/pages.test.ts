@@ -44,6 +44,11 @@ test('a directory is a pattern and a filename is a kind', async () => {
         '/demos',
         '/docs',
         '/docs/[callable]',
+        // The second vocabulary, and the reason precedence is load-bearing twice over: `syntax` is a
+        // literal sitting where `[callable]` matches anything, so the index below it is reachable only
+        // because the literal outranks the parameter at that segment.
+        '/docs/syntax',
+        '/docs/syntax/[spelling]',
         '/files/[...path]',
         '/streaming',
         '/tests',

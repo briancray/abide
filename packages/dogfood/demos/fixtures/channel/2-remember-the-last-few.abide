@@ -1,12 +1,12 @@
-<script module>
+<script>
 import { channel } from 'abide'
 
 // `tail` is what the channel REMEMBERS. The default is 0 — latest only — because a channel that
 // remembered everything by default would be a leak nobody asked for.
-export const feed = channel<string>({ tail: 5 })
+const feed = channel<string>({ tail: 5 })
 
 let sent = 0
-export const send = (): void => feed.publish(`message ${++sent}`)
+const send = (): void => feed.publish(`message ${++sent}`)
 </script>
 
 <p>latest: {feed ?? 'nothing yet'}</p>

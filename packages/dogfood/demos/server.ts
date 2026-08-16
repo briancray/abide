@@ -1010,6 +1010,45 @@ export default suite({
         },
 
         {
+            title: 'a probed STREAM patches its first chunk and hands the rest over',
+            note: 'The one place `pending` and `settled` are different moments. A probe asks whether there is anything to SHOW, and a stream answers yes at its first chunk while its settle waits for the last — so a walk that took the settle held the page for the whole length of the stream. It held it for markup nobody keeps: a client mounting over a streamed region drops those rows and restarts from the top, because what is under them is a different point in the same stream and no later chunk makes it match. So the patch carries the first chunk and the client carries the rest. The lane with NOWHERE to patch is the exception and keeps draining — a reader running no scripts has only what the markup holds, and half a transcript is what it would keep forever.',
+            async run({ is }) {
+                async function* ticking(): AsyncGenerator<number> {
+                    for (let n = 1; n <= 4; n++) {
+                        await sleep(5)
+                        yield n
+                    }
+                }
+                // What `{#if ticks.pending()}` compiles to: a thunk that probes, and therefore has
+                // something to show while the stream runs.
+                const streaming = (): TemplateResult => {
+                    const ticks = state(ticking())
+                    return html`<p>shell</p>${() =>
+                        ticks.pending()
+                            ? html`<em>waiting</em>`
+                            : html`<b>latest ${ticks()} of ${ticks.chunks().length}</b>`}`
+                }
+
+                let patched = ''
+                for await (const chunk of renderDocument('', streaming)) patched += chunk
+                is('the placeholder went out', patched.includes('<em>waiting</em>'), true)
+                // THE COUNT is the claim, and it has to be the transcript's rather than the value's:
+                // a walk that drained the stream and patched at the end renders `latest 4 of 4`, and
+                // both documents are otherwise identical.
+                is('…and the patch carries the FIRST chunk', patched.includes('latest 1 of 1'), true)
+                is('…not the whole transcript', patched.includes('of 4'), false)
+
+                // Nowhere to patch: the same body, drained, because this is the lane whose reader
+                // runs no scripts. Asserted through `renderDocumentToString` rather than by reverting
+                // the probe — the two lanes take different branches on the SAME spelling, which is
+                // the distinction this case exists to hold.
+                const mailed = await renderDocumentToString(streaming())
+                is('a string render drains it instead', mailed.includes('latest 4 of 4'), true)
+                is('…so it never shows the placeholder', mailed.includes('<em>waiting</em>'), false)
+            },
+        },
+
+        {
             title: 'a deferred load that FAILS renders its failure arm',
             note: 'The gap the one-marker rewrite closed. `suspend(value, body, fallback)` had no error arm at all, so a deferred load that rejected wrote an HTML comment: the reader got a blank panel and was told nothing. A block has always carried a failure arm, and carrying it through the deferred path is most of why there is one marker now rather than two. With no `{:catch}` it is still a comment — the author did not say what to show — but it is reported on abide’s own channel rather than only to somebody viewing source, because by the time a deferred subtree fails the shell is already on the wire and there is nothing left to fail INTO.',
             async run({ is }) {

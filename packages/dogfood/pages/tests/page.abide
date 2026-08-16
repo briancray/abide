@@ -42,7 +42,7 @@ const loaded = memo(async (): Promise<Suite[]> => {
     {#if failure}
         <p class="error">{failure}</p>
     {:else}
-        <Cases suites={loaded()} title="tests" blurb={BLURB}>
+        <Cases suites={loaded} title="tests" blurb={BLURB}>
             <p class="note">Measurements are on <a href="/bench" class="link">/bench</a>; what each name looks like written is under <a href="/docs" class="link">/docs</a>.</p>
         </Cases>
     {/if}

@@ -1,0 +1,27 @@
+<script>
+import { channel, state } from 'abide'
+
+const feed = channel<string>({ tail: 5 })
+const seen = state<string[]>([])
+
+/**
+ * The transcript replayed, then every message after it — and the snapshot and the subscribe happen in
+ * ONE synchronous run, which is the whole reason this exists beside `chunks()` and `subscribe`.
+ *
+ * Read them separately and there is a gap between taking the snapshot and attaching the listener, so a
+ * message published in it is lost by a consumer that has no way to know it happened.
+ */
+async function follow(): Promise<void> {
+    for await (const message of feed.tail()) {
+        seen = [...seen, message]
+        if (seen.length >= 4) return
+    }
+}
+
+let sent = 0
+const send = (): void => feed.publish(`message ${++sent}`)
+</script>
+
+<p>followed: {seen.join(', ') || 'nothing yet'}</p>
+<button onclick={() => void follow()}>start following</button>
+<button onclick={send}>publish</button>

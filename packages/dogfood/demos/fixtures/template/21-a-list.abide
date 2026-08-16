@@ -1,0 +1,13 @@
+<script>
+import { state } from 'abide'
+
+const rows = state(['alpha', 'beta'])
+</script>
+
+<!-- A list, and its head is a read like any other — writing `rows` re-runs the block. Each row is the
+     body, once per item.
+
+     With no key rows match by POSITION, which is enough while a list only ever grows at the end. What
+     that costs the moment one MOVES is the next rung. -->
+<ul>{#for row of rows}<li>{row}</li>{/for}</ul>
+<button onclick={() => (rows = [...rows, `row ${rows.length + 1}`])}>append</button>

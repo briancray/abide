@@ -1,0 +1,17 @@
+<script>
+import { url } from 'abide'
+</script>
+
+<!-- A relative target is resolved against `route().url`, which makes this the one form that READS:
+     a relative href in a template moves when the route does. That is why the pattern form above is the
+     fast path and this one is not.
+
+     `''` is where the caller already is, which is the shape a "reload this page with a different query"
+     link wants. `?tab=x` is the same idea spelled as a query alone. -->
+<ul>
+    <li><code>{url('sibling')}</code> — beside where you are</li>
+    <li><code>{url('./sibling')}</code> — the same thing, said explicitly</li>
+    <li><code>{url('../up')}</code> — one level out</li>
+    <li><code>{url('?tab=posts')}</code> — this page, another query</li>
+    <li><code>{url('')}</code> — exactly where the caller is</li>
+</ul>

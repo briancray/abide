@@ -1,0 +1,20 @@
+<script>
+import { channel, state } from 'abide'
+
+const feed = channel<string>({ tail: 5 })
+const heard = state(0)
+
+// A plain listener, outside the graph entirely: it returns its OWN unsubscribe rather than joining a
+// scope, so it is what non-reactive code reaches for — a logger, a metric, a bridge to something that
+// is not abide. Nothing about it subscribes a component.
+const stop = feed.subscribe(() => {
+    heard += 1
+})
+
+let sent = 0
+const send = (): void => feed.publish(`message ${++sent}`)
+</script>
+
+<p>the listener has heard {heard}</p>
+<button onclick={send}>publish</button>
+<button onclick={stop}>unsubscribe it</button>

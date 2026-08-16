@@ -9,8 +9,20 @@ async function* ticking(): AsyncGenerator<number> {
 }
 
 // The cell holds the LATEST chunk; `chunks()` holds the transcript.
-export const ticks = state(ticking())
+//
+// MODULE scope for the reason rung 3 is: nothing addresses this stream, so nothing seeds it, and two
+// cold ones disagree about how far along they are. The thunk is what the wrap keeps per caller — the
+// generator is built per caller with it, which sharing `ticking()` would not do.
+const ticks = state(ticking())
 </script>
 
-<p>latest {ticks ?? 0}</p>
-<ul>{#for tick of ticks.chunks()}<li>{tick}</li>{/for}</ul>
+<!-- The same probe rung 3 introduced, and a stream needs it more than a promise does: a server render
+     of one waits for the LAST chunk, so a rung reading it without asking holds the whole page for the
+     length of the stream. Asking defers this region instead — the ladder around it goes out now and
+     the transcript is patched in. -->
+{#if ticks.pending()}
+    <p>latest 0</p>
+{:else}
+    <p>latest {ticks ?? 0}</p>
+    <ul>{#for tick of ticks.chunks()}<li>{tick}</li>{/for}</ul>
+{/if}

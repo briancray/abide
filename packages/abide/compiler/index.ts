@@ -10,6 +10,11 @@
 // `originalPosition`/`Segment` move a position the other way, from emitted code back to the
 // `.abide` source. `ParseError` is exported so a caller can tell a compile failure from any other
 // throw — `SyntaxError_` deliberately is not, because a lexer error is one the shells only format.
+//
+// `BRANCHES` and `BINDABLE` are neither. They are the two CLOSED SETS of the template language, and
+// they are here so that the pages claiming to document all of them can be checked against the tables
+// that DECIDE them rather than against a second list kept by hand beside them. One reader —
+// `dogfood/test/docs.test.ts` — because this door pulls TypeScript's scanner and a page may not.
 
 import type { Shapes } from '$shared/internal/shapes.ts'
 import type { Kind } from '$shared/transport.ts'
@@ -34,8 +39,9 @@ export { ElisionError, type Endpoint, endpointId, kindOf, TRANSPORT_MODULE } fro
  */
 export const SHAPES_FILE = '.abide/shapes.json'
 
+export { BINDABLE } from './internal/emit.ts'
 export { original as originalPosition, type Segment } from './internal/map.ts'
-export { ParseError } from './internal/parse.ts'
+export { BRANCHES, ParseError } from './internal/parse.ts'
 export type { ImportedModule, TypeSource } from './internal/shape.ts'
 
 export interface CompileOptions {

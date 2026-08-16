@@ -6,17 +6,20 @@
      chrome, and the column they were reading down does not move under them when they do. -->
 <script module>
 import { CAPABILITIES } from '../../demos/SUITES.ts'
-import type { NavItem } from '../../site/sidebar.ts'
+import type { NavGroup } from '../../site/sidebar.ts'
 import Sidebar from '../../site/sidebar.abide'
 
 /** Built once, at module scope: the list is the same on every page in this section. */
-const ITEMS: NavItem[] = CAPABILITIES.map((entry) => ({ href: `/bench/${entry.name}`, label: entry.name }))
-
-const TITLE = `capabilities · ${CAPABILITIES.length}`
+const GROUPS: NavGroup[] = [
+    {
+        title: `capabilities · ${CAPABILITIES.length}`,
+        items: CAPABILITIES.map((entry) => ({ href: `/bench/${entry.name}`, label: entry.name })),
+    },
+]
 </script>
 
 <div class="with-sidebar">
-    <Sidebar title={TITLE} items={ITEMS}/>
+    <Sidebar groups={GROUPS}/>
     <div class="with-sidebar-body">
         <slot/>
     </div>

@@ -1,7 +1,7 @@
-<script module>
+<script>
 import { state } from 'abide'
 
-export const warn = state(false)
+const warn = state(false)
 </script>
 
 <!-- A block is an ordinary expression once the compiler is done with it. -->

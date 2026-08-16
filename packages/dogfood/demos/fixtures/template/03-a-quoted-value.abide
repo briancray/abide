@@ -1,0 +1,15 @@
+<script>
+import { state } from 'abide'
+
+const name = state('ada')
+</script>
+
+<p>hello {name}</p>
+
+<!-- A QUOTED value interpolates, so this one IS concatenation and what lands is always a string. That
+     is the whole difference from the rung above, and it is why `title={name}` and `title="{name}"` are
+     not two spellings of one thing.
+
+     A literal brace inside one is `{'{'}` — a hole holding the character, since an unescaped `{` is
+     where a hole starts. -->
+<a href="/who/{name}" title="{name}’s page">link</a>

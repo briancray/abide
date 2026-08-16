@@ -11,6 +11,7 @@
 
 import { expect, interactive, test } from 'harness/e2e'
 import { CALLABLE_ORDER, CALLABLES, SPECIFIERS } from '../demos/CALLABLES.ts'
+import { SPELLING_ORDER, SPELLINGS } from '../demos/SPELLINGS.ts'
 
 test('/docs indexes the whole surface', async ({ page, complaints }) => {
     await page.goto('/docs')
@@ -81,6 +82,62 @@ for (const name of CALLABLE_ORDER) {
         expect(complaints.errors, `${name} logged errors`).toEqual([])
     })
 }
+
+test('/docs/syntax indexes the whole language', async ({ page, complaints }) => {
+    await page.goto('/docs/syntax')
+
+    const cards = page.locator('[data-spelling]')
+    expect(await cards.count(), '/docs/syntax does not list every spelling').toBe(SPELLING_ORDER.length)
+    expect(complaints.errors, '/docs/syntax logged errors').toEqual([])
+})
+
+for (const slug of SPELLING_ORDER) {
+    test(`/docs/syntax/${slug} renders its ladder`, async ({ page, complaints }) => {
+        await page.goto(`/docs/syntax/${slug}`)
+
+        // The heading is the SPELLING as it is typed — `{#for}`, not `for` — because that is what a
+        // reader arrived holding. Exact, since `toHaveText` on a substring would pass `for` against it.
+        await expect(page.locator('.page-title')).toHaveText(SPELLINGS[slug].name)
+
+        // And there is NO import line, which is the one way this page differs from a callable's: a
+        // block imports nothing, and a `<pre>` telling somebody to import `{#for}` would be a lie the
+        // shared component is one prop away from telling.
+        expect(await page.locator('.import-line').count(), 'a spelling is not imported from anywhere').toBe(0)
+
+        const rungs = page.locator('[data-rung]')
+        await expect(rungs.first()).toBeVisible()
+        const count = await rungs.count()
+
+        const panes = page.locator('[data-rung] pre')
+        expect(await panes.count(), `${slug} shows no source`).toBe(count)
+        for (let at = 0; at < count; at++) {
+            const text = (await panes.nth(at).innerText()).trim()
+            expect(text.length, `${slug} rung ${at + 1} shows an empty pane`).toBeGreaterThan(20)
+        }
+
+        // The same per-rung sweep the callable pages get — see `demos/proofs.ts`. It matters more here:
+        // this axis is where the template rungs live, so every mountable example in the language is
+        // built, server-rendered and hydrated over on one of these fifteen pages.
+        const badges = page.locator('[data-rung] .proofs .badge')
+        const proven = await badges.count()
+        if (proven > 0) {
+            await expect(badges.nth(proven - 1)).not.toHaveText('waiting', { timeout: 30_000 })
+            const written = await badges.allInnerTexts()
+            const red: string[] = []
+            for (let at = 0; at < written.length; at++) {
+                if (written[at]?.trim().toLowerCase() === 'failed') red.push(`${slug} rung ${at + 1}`)
+            }
+            expect(red, 'a documented example the two substrates disagree about').toEqual([])
+        }
+
+        expect(complaints.errors, `${slug} logged errors`).toEqual([])
+    })
+}
+
+test('a spelling a `.abide` file does not have is a 404, not an apology', async ({ page }) => {
+    const answered = await page.goto('/docs/syntax/nonsense')
+    expect(answered?.status()).toBe(404)
+})
 
 test('a mounted rung is live, not a picture of itself', async ({ page }) => {
     // `state`'s first rung is a counter, which is the smallest thing that can prove the preview is

@@ -8,7 +8,7 @@ import { keep, settled, tick } from 'harness/measure'
 import { isolate } from '$shared/internal/scopes.ts'
 import { button, el, field, row, stage } from './dom.ts'
 // The rung the case at the bottom asserts — the one whose `adds` it is about.
-import Example, { count as exampleCount } from './fixtures/state/2-derive-from-it.abide'
+import Example from './fixtures/state/2-derive-from-it.abide'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -862,23 +862,56 @@ export default suite({
         },
 
         {
+            title: 'a cell at MODULE scope is one per caller, never one per process',
+            note: 'What `<script module>` means: one cell per REQUEST on a server, one per page in a browser, shared by every instance inside that one. It used to mean one per server process — so a cell in a module block was shared by every visitor, rendered perfectly, and no test could see it because the output is right either way. The compiler wraps a module-scope binding and the facade below resolves it per caller on every member. Asserted as WORK across two isolated scopes rather than as a value, because the value is what stays right while the sharing goes wrong.',
+            async run({ is }) {
+                let built = 0
+                const perCaller = state.scoped(() => {
+                    built++
+                    return state(0)
+                })
+
+                // Nothing is built until somebody asks — a module-scope binding must not start a load
+                // or a stream at import, which on a server is once for the process before any request.
+                is('the declaration alone builds nothing', built, 0)
+
+                const seen: number[] = []
+                for (let request = 0; request < 2; request++) {
+                    await isolate(async () => {
+                        perCaller.set(perCaller.peek() + 7)
+                        seen.push(perCaller.peek())
+                    })
+                }
+                is('each caller writes its own', seen, [7, 7])
+                is('…and each built exactly one', built, 2)
+
+                // The no-scope answer — a client, a script, this test — where there IS one caller
+                // forever and the module-level cell is the right one. Built once more, then kept.
+                perCaller.set(perCaller.peek() + 1)
+                perCaller.set(perCaller.peek() + 1)
+                is('with no caller scope there is one cell', perCaller.peek(), 2)
+                is('…built once, not once per read', built, 3)
+            },
+        },
+
+        {
             title: 'the documented example runs',
             note: 'The file `/docs/state` shows and mounts, mounted here and asserted. A reference example nothing runs is one that rots quietly: it stays plausible, and nobody finds out it stopped compiling until somebody copies it. This is the whole of why the example is a real `.abide` file rather than a fenced block in a markdown document.',
             async run({ is }) {
-                // Set FIRST, and put back at the end. The dogfood app's cell is module-level — the same one
-                // the docs page renders — so a case that asserted its starting value would be asserting
-                // that nothing had touched the page yet, which is true under `bun test` and not true in
-                // a browser where somebody has already clicked the button.
-                exampleCount.set(0)
+                // The rung's cell is its own — a setup block is per INSTANCE — so this mount starts at
+                // the declared value however many times the docs page has been clicked, and the write is
+                // made the way a reader makes it, through the button the rung renders.
                 const host = scratch(() => Example({}))
                 const line = (): string | undefined => host.querySelector('p')?.textContent ?? undefined
 
                 is('the cell is on the page', line(), 'count 0 · doubled 0')
-                exampleCount.set(3)
+                const add = host.querySelector('button') as HTMLButtonElement
+                add.click()
+                add.click()
+                add.click()
                 await tick()
                 is('a write by name reaches the DOM', line(), 'count 3 · doubled 6')
 
-                exampleCount.set(0)
                 host.remove()
             },
         },

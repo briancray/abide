@@ -1,0 +1,22 @@
+<script>
+import { memo, state } from 'abide'
+
+const query = state('ab')
+
+// `ttl` is how long a SETTLED slot is served before the next read recomputes it. The default is
+// forever, which is the right default because a memo that expired on its own would make "how many
+// requests does this page make" a question about the clock.
+//
+// It is a READ-TRIGGERED recompute and not a timer: nothing re-runs while nobody is asking, so an idle
+// tab costs nothing. That is the whole difference between a ttl and a poll.
+const hits = memo(
+    async ({ text }: { text: string }) => {
+        await new Promise((settle) => setTimeout(settle, 200))
+        return text === '' ? [] : [`${text}-one`, `${text}-two`]
+    },
+    { ttl: 5_000 },
+)
+</script>
+
+<input bind:value={query} />
+<ul>{#for hit of hits({ text: query })}<li>{hit}</li>{/for}</ul>

@@ -1,0 +1,14 @@
+<script>
+import { route } from 'abide'
+</script>
+
+<!-- Where you are, as a REACTIVE ambient. The PATTERN is what `name` gives you — `/users/[id]` for
+     every `/users/42` — because that is the thing an app writes down and compares against; the path is
+     `url` below.
+
+     `params` is what the segments matched. An absent OPTIONAL segment is OMITTED rather than present
+     and empty, so `?? ` is the check and `=== ''` is not. -->
+<ul>
+    <li>name: <code>{route().name}</code></li>
+    <li>params: <code>{JSON.stringify(route().params)}</code></li>
+</ul>

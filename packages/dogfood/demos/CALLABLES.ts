@@ -24,14 +24,16 @@
 // the page was really about the hatch. The hatch is `raw` now — renamed so a reader never has to know
 // the syntax to know the trust — which leaves `html` as the tag the compiler EMITS into every `.abide`
 // file. It is on `abide` rather than `abide/runtime` so the emitted import merges with an author's own
-// (see `emit.ts`), not because a page, server or site here types it: none does. Its rungs are in the
-// `template` ladder and claim nothing, the way `client`'s and `hydrate`'s do.
+// (see `emit.ts`), not because a page, server or site here types it: none does.
+//
+// THIS IS NOT THE ONLY LIST. Taking `html` off left thirty rungs about the template reachable from no
+// page at all, and that is a fact about the KEY rather than about those rungs: `{#for}`, `bind:value`
+// and `<slot/>` import nothing, so a reader who met one has no name to look up here. `SPELLINGS.ts` is
+// the second axis and `/docs/syntax` is where it lands — same shape, same gates, keyed by how a thing
+// is TYPED. A rung claims into either list, or both.
 
 import type { Example } from 'harness'
-import type { SuiteName } from './SUITES.ts'
-
-/** A suite whose fixtures directory holds a ladder. `overview` is the hub and has none. */
-export type LadderName = Exclude<SuiteName, 'overview'>
+import { claimed, type LadderName } from './LADDERS.ts'
 
 export interface CallableMeta {
     /** Route segment and import name: `cookies` → `/docs/cookies`. */
@@ -57,36 +59,6 @@ export interface CallableMeta {
      * quietly comes up short.
      */
     ladders: LadderName[]
-}
-
-/**
- * Every ladder, absent until asked for.
- *
- * Keyed by `LadderName`, so a suite with a fixtures directory and no entry here is a type error rather
- * than a ladder nothing can reach.
- */
-export const LADDERS: Record<LadderName, () => Promise<{ LADDER: Example[] }>> = {
-    state: () => import('./fixtures/state/ladder.ts'),
-    memo: () => import('./fixtures/memo/ladder.ts'),
-    verbs: () => import('./fixtures/verbs/ladder.ts'),
-    channel: () => import('./fixtures/channel/ladder.ts'),
-    watch: () => import('./fixtures/watch/ladder.ts'),
-    scope: () => import('./fixtures/scope/ladder.ts'),
-    routing: () => import('./fixtures/routing/ladder.ts'),
-    template: () => import('./fixtures/template/ladder.ts'),
-    client: () => import('./fixtures/client/ladder.ts'),
-    server: () => import('./fixtures/server/ladder.ts'),
-    hydrate: () => import('./fixtures/hydrate/ladder.ts'),
-    transport: () => import('./fixtures/transport/ladder.ts'),
-    responses: () => import('./fixtures/responses/ladder.ts'),
-    request: () => import('./fixtures/request/ladder.ts'),
-    logging: () => import('./fixtures/logging/ladder.ts'),
-    health: () => import('./fixtures/health/ladder.ts'),
-    identity: () => import('./fixtures/identity/ladder.ts'),
-    config: () => import('./fixtures/config/ladder.ts'),
-    lifecycle: () => import('./fixtures/lifecycle/ladder.ts'),
-    ceilings: () => import('./fixtures/ceilings/ladder.ts'),
-    compiler: () => import('./fixtures/compiler/ladder.ts'),
 }
 
 export const CALLABLES = {
@@ -465,19 +437,10 @@ export const SPECIFIERS = ['abide', 'abide/server'] as const
 /**
  * One callable's rungs, in ladder order, from the one or two ladders that hold them.
  *
- * The rungs of a ladder stay in THAT ladder's order, because the order is the content: rung 4 of
- * `request` is rung 3 plus one thing, and reordering them by anything else would break the only
- * property that makes a rung small enough to read.
+ * The walk itself is `LADDERS.ts`'s, because `/docs/syntax` makes the same one against the other claim
+ * — same ladders, same order, `spells` instead of `of`. Two copies of it is how the two vocabularies
+ * would start disagreeing about what a rung list is.
  */
 export async function rungsOf(callable: CallableMeta): Promise<Example[]> {
-    // Opened together rather than one after the next: the ladders of a callable on two of them have no
-    // dependency on each other, so awaiting inside the loop serialised two chunk loads for nothing.
-    const opened = await Promise.all(callable.ladders.map((ladder) => LADDERS[ladder]()))
-    const found: Example[] = []
-    for (const { LADDER } of opened) {
-        for (const rung of LADDER) {
-            if (rung.of.includes(callable.name)) found.push(rung)
-        }
-    }
-    return found
+    return claimed(callable.ladders, (rung) => rung.of, callable.name)
 }

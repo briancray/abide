@@ -14,6 +14,7 @@
 // `m(args)` is a slot.
 
 import { markSource } from './internal/BRANDS.ts'
+import { storeForLazy } from './internal/scopes.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { isNamedError } from './internal/probes.ts'
 import { arm } from './internal/timers.ts'
@@ -426,4 +427,52 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
     self.tail = () => follow(true)
     self[Symbol.asyncIterator] = () => follow(false)
     return self
+}
+
+/**
+ * A channel declared at MODULE scope, resolved per caller — what a `<script module>` binding compiles
+ * to, and the same answer `state.scoped` gives a cell.
+ *
+ * A channel is a BUS, so the leak is louder than a cell's: at module scope on a server one process
+ * holds every visitor's subscribers, and a publish for one of them wakes all the rest. Per caller it
+ * is one bus per request and one per client page, which is what "module scope" already means to
+ * whoever wrote it.
+ *
+ * One facade for BOTH forms, because the channel it stands in front of is already one callable for
+ * both — `(args?) => args !== undefined ? roomFor(args) : latest`, see `channel` above. So the room
+ * form needs nothing here beyond passing the argument through.
+ *
+ * The fallback is LAZY for the reason `state.scoped`'s is: building a channel arms its expiry timer
+ * and allocates its listener set, and doing that at module load is the process-level thing being
+ * scoped away.
+ */
+channel.scoped = <C extends Channel<unknown>>(make: () => C): C => {
+    let fallback: C | undefined
+    const ofNobody = (): C => (fallback ??= make())
+    const pick = (): C => storeForLazy(pick, make, ofNobody)
+    // Passed straight through: `undefined` selects the channel itself and anything else selects a
+    // room, which is the distinction the callable behind this already draws.
+    const facade = markSource(((args?: unknown) =>
+        (pick() as unknown as (a?: unknown) => unknown)(args)) as unknown as C)
+    // A TABLE typed by `keyof Channel`, so a member added to the channel surface is a type error
+    // HERE rather than an `undefined` that only shows up on a server.
+    const forward: { [K in keyof Channel<unknown>]: Channel<unknown>[K] } = {
+        publish: (message) => pick().publish(message),
+        peek: () => pick().peek(),
+        chunks: () => pick().chunks(),
+        settled: () => pick().settled(),
+        invalidate: () => pick().invalidate(),
+        pending: () => pick().pending(),
+        refreshing: () => pick().refreshing(),
+        error: () => pick().error(),
+        streaming: () => pick().streaming(),
+        done: () => pick().done(),
+        isError: (error, name) => pick().isError(error, name),
+        watch: (handler) => pick().watch(handler),
+        subscribe: (listener) => pick().subscribe(listener),
+        tail: () => pick().tail(),
+        [Symbol.asyncIterator]: () => pick()[Symbol.asyncIterator](),
+    }
+    Object.assign(facade, forward)
+    return facade
 }

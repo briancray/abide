@@ -1,0 +1,11 @@
+<script>
+import { state } from 'abide'
+
+const rows = state(['alpha', 'beta', 'gamma'])
+</script>
+
+<!-- A second binding after the item is the INDEX. It is a position and not an identity, so it is the
+     one thing that must never be the key: `by at` would say row 2 is row 2 however the contents moved,
+     which is exactly the positional matching a key exists to replace. -->
+<ol>{#for row, at of rows by row}<li>{at + 1}. {row}</li>{/for}</ol>
+<button onclick={() => (rows = [...rows].reverse())}>reverse</button>

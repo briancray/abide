@@ -1,4 +1,5 @@
-// Every public name has a page, every page has a rung, and every rung is a real file.
+// Every public name has a page, every SPELLING has a page, every page has a rung, and every rung is a
+// real file.
 //
 // THE DOCS APP DECIDES WHAT AN AUTHOR TYPES — that is the rule `SURFACE-CUT.md` set, and this file is
 // where it stopped being prose. `CALLABLES.ts` is the list, checked against the modules themselves
@@ -13,9 +14,12 @@
 
 import { expect, test } from 'bun:test'
 import * as frontDoor from 'abide'
+import { BINDABLE, BRANCHES } from 'abide/compiler'
 import type { Example } from 'harness'
 import * as serverDoor from 'abide/server'
-import { CALLABLE_ORDER, CALLABLES, LADDERS, type LadderName, SPECIFIERS } from '../demos/CALLABLES.ts'
+import { CALLABLE_ORDER, CALLABLES, SPECIFIERS } from '../demos/CALLABLES.ts'
+import { LADDERS, type LadderName } from '../demos/LADDERS.ts'
+import { SPELLING_ORDER, SPELLINGS, type SpellingName } from '../demos/SPELLINGS.ts'
 
 /** Every rung in the repo, with the ladder it is in and its place in it. Loaded once. */
 const LADDER_NAMES = Object.keys(LADDERS) as LadderName[]
@@ -138,31 +142,127 @@ test('every rung claims a name that exists', () => {
     expect(bogus.sort(), 'a rung says it demonstrates a name nothing exports').toEqual([])
 })
 
+// ─── THE SECOND AXIS ────────────────────────────────────────────────────────────────────────────────
+//
+// `/docs/syntax` is keyed by how something is TYPED rather than by a name imported, and the checks
+// below are the same four the callable list gets — the list is the whole surface, the order is the
+// list, every page has a rung, and `ladders` says where those rungs are. What differs is the standard
+// on the left: `Object.keys(abide)` is what decides a callable, and for a spelling it is the
+// COMPILER'S OWN TABLES, because they are what decides whether a file compiles at all.
+//
+// Only half of it is a closed set. Five blocks and five bind targets are enumerable and are compared
+// in both directions; `class:x`, `style:p`, a spread and an `on<event>` take any name there is, so the
+// strongest honest gate for those is that the page exists and has a rung — which is the test after.
+
 /**
- * The ladders holding rungs about no name an author types, which are therefore on no `/docs` page.
+ * The bind targets, which is `BINDABLE` plus the one it deliberately leaves out.
  *
- * Two are about `abide/ui`: `mount` and `hydrate` are called by `abide build`'s GENERATED client entry
- * and by nothing in either app's pages, server or site. The rungs still compile, still run and are
- * still priced — they simply document a mechanism rather than a call.
+ * `element` has no row in that table because it is a NODE REF: there is no property to read and no
+ * event to write back from, so it is legal on any element and the table's question does not apply to
+ * it. It is a spelling an author types either way, so it is added here rather than left as the one
+ * target with no page — which is the same reason `EMITTED` exists on the other axis.
+ */
+const BIND_TARGETS = [...Object.keys(BINDABLE), 'element']
+
+/** `bind-checked` → `checked`. The slug is a path and the name is what a file says; the target is in both. */
+const targetOf = (name: string): string => name.slice('bind:'.length)
+
+test('the syntax list IS the compiler’s closed sets — in both directions', () => {
+    const blocks: string[] = SPELLING_ORDER.filter((slug) => SPELLINGS[slug].gate === 'block')
+    // Sorted rather than compared as sets: a list of five is small enough that the failure should print
+    // the two lists side by side, which is what makes a sixth block obvious.
+    expect([...blocks].sort(), 'the blocks with a page are not the blocks the parser has').toEqual(
+        Object.keys(BRANCHES).sort(),
+    )
+
+    // ONE PAGE PER TARGET, because the target is what a reader arrives with. It was one page for all
+    // five, titled `bind:value`, and that page then claimed to be about a spelling four of its rungs
+    // do not write — the same mistake as keying `/docs` by capability. Compared as a set for the same
+    // reason the blocks are: a sixth target is red until it has a page.
+    const binds = SPELLING_ORDER.filter((slug) => SPELLINGS[slug].gate === 'bind')
+    expect(binds.map((slug) => targetOf(SPELLINGS[slug].name)).sort(), 'the bind pages are not the table').toEqual(
+        [...BIND_TARGETS].sort(),
+    )
+
+    // And each page's rungs WRITE the target it is named after. Having a rung is not enough here: the
+    // pages are one edit away from all pointing at the same one, and every one of them would still be
+    // green on a count.
+    const missing: string[] = []
+    for (const slug of binds) {
+        const target = targetOf(SPELLINGS[slug].name)
+        const shown = RUNGS.some(({ rung }) => rung.spells?.includes(slug) && rung.source.includes(`bind:${target}`))
+        if (!shown) missing.push(slug)
+    }
+    expect(missing.sort(), 'a bind page whose rungs never write its own target').toEqual([])
+})
+
+test('the syntax index is the whole list, once each', () => {
+    expect(SPELLING_ORDER.length, 'the order and the record are different sizes').toBe(Object.keys(SPELLINGS).length)
+    expect(new Set(SPELLING_ORDER).size, 'a spelling is in the order twice').toBe(SPELLING_ORDER.length)
+    const stray = SPELLING_ORDER.filter((slug) => !Object.hasOwn(SPELLINGS, slug))
+    expect(stray, 'the order names something the record does not have').toEqual([])
+})
+
+test('every spelling has at least one rung, and it is where the list says', () => {
+    const empty: string[] = []
+    const missing: string[] = []
+    const spurious: string[] = []
+    for (const slug of SPELLING_ORDER) {
+        const declared = new Set<string>(SPELLINGS[slug].ladders)
+        const actual = new Set<string>()
+        let found = 0
+        for (const { ladder, rung } of RUNGS) {
+            if (!rung.spells?.includes(slug)) continue
+            actual.add(ladder)
+            if (declared.has(ladder)) found++
+        }
+        if (found === 0) empty.push(slug)
+        for (const ladder of actual) if (!declared.has(ladder)) missing.push(`${slug}: rungs in ${ladder}`)
+        for (const ladder of declared) if (!actual.has(ladder)) spurious.push(`${slug}: no rungs in ${ladder}`)
+    }
+    expect(empty, 'a spelling with no rung — its page would be blank').toEqual([])
+    expect(missing.sort(), 'a rung is in a ladder the spelling does not list').toEqual([])
+    expect(spurious.sort(), 'a spelling lists a ladder with nothing of its own in it').toEqual([])
+})
+
+test('every rung spells something the language has', () => {
+    // What `site/reference.abide` relies on to print a claim as `{#for}` rather than as its slug: it
+    // looks the slug up unchecked, because a slug that is not one of these fails here first.
+    const bogus: string[] = []
+    for (const { ladder, at, rung } of RUNGS) {
+        for (const slug of rung.spells ?? []) {
+            if (!Object.hasOwn(SPELLINGS, slug as SpellingName)) bogus.push(`${ladder} rung ${at + 1}: "${slug}"`)
+        }
+    }
+    expect(bogus.sort(), 'a rung says it demonstrates a spelling with no page').toEqual([])
+})
+
+/**
+ * The ladders holding rungs that claim NEITHER a name nor a spelling, and are therefore on no page.
  *
- * `template` is the third and is MIXED: six of its rungs are about the tag `html`, which is on `EMITTED`
- * above for the same reason — the compiler writes it — while `props` and `raw` are names an author does
- * type and their rungs still claim them. So this list means "some rung here claims nothing", not "no
- * rung here claims anything", and the price of that is that a future `template` rung can go silent
- * without failing. The suite imports each of those rungs directly, which is what still runs them.
+ * Both are about `abide/ui`: `mount` and `hydrate` are called by `abide build`'s GENERATED client entry
+ * and by nothing in either app's pages, server or site, and they are not template syntax either. The
+ * rungs still compile, still run and are still priced — they simply document a mechanism rather than
+ * anything a reader could look up.
+ *
+ * `template` was a third entry here for as long as `/docs` had one axis, and it is the reason the
+ * second one exists: thirty of its rungs are about a spelling rather than about a name, so under a
+ * list keyed by callable they were silent by construction and a future one could go silent unnoticed.
+ * Keyed by both, no rung in the repo is excused except these two.
  *
  * Asserted in BOTH directions, which is what makes it a record of a decision rather than a place to put
- * failures: a ladder that quietly stops claiming its names fails, and so does one listed here that has
- * started claiming them.
+ * failures: a ladder that quietly stops claiming fails, and so does one listed here that has started.
  */
-const UNCLAIMED: LadderName[] = ['client', 'hydrate', 'template']
+const UNCLAIMED: LadderName[] = ['client', 'hydrate']
 
-test('an empty `of` is a decision, not a way to disappear', () => {
+test('claiming nothing is a decision, not a way to disappear', () => {
     const silent = new Set<string>()
-    for (const { ladder, rung } of RUNGS) if (rung.of.length === 0) silent.add(ladder)
+    for (const { ladder, rung } of RUNGS) {
+        if (rung.of.length === 0 && (rung.spells?.length ?? 0) === 0) silent.add(ladder)
+    }
 
     const unexpected = [...silent].filter((ladder) => !UNCLAIMED.includes(ladder as LadderName))
-    expect(unexpected.sort(), 'a rung claims no name and its ladder is not one of the known two').toEqual([])
+    expect(unexpected.sort(), 'a rung claims neither a name nor a spelling, and its ladder is not excused').toEqual([])
 
     const stale = UNCLAIMED.filter((ladder) => !silent.has(ladder))
     expect(stale.sort(), 'a ladder is listed as claiming nothing but every rung on it claims something').toEqual([])

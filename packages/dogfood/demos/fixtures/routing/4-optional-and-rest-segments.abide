@@ -1,0 +1,18 @@
+<script>
+import { url } from 'abide'
+</script>
+
+<!-- The two segment kinds that are not simply required. An OPTIONAL one left out is omitted from the
+     path rather than left as an empty segment, so there is no `//` to strip afterwards; a REST one
+     takes the remaining path already joined, and is terminal because there is nothing after "the rest".
+
+     The same shapes a `pages/` directory writes as `[[name]]` and `[...name]` — one vocabulary for the
+     table and for the links into it, so a route that gains an optional segment does not need every
+     caller rewritten. -->
+<ul>
+    <li><code>{url('/users/[[tab]]', {})}</code> — an absent optional segment is omitted</li>
+    <li><code>{url('/users/[[tab]]', { tab: 'posts' })}</code> — and present when given</li>
+    <li>
+        <code>{url('/files/[...path]', { path: 'notes/august.md' })}</code> — the rest, already joined
+    </li>
+</ul>

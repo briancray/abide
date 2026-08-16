@@ -1,0 +1,11 @@
+<script>
+import { url } from 'abide'
+</script>
+
+<!-- A third argument is the QUERY, and it MERGES with one the target already carried rather than
+     replacing it — which is what lets a caller add `page` to a target it did not write and does not
+     want to parse. -->
+<ul>
+    <li><code>{url('/users/[id]', { id: 42 }, { tab: 'posts' })}</code></li>
+    <li><code>{url('/users?sort=name', undefined, { page: '2' })}</code> — merged, not replaced</li>
+</ul>

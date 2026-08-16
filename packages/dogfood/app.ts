@@ -15,6 +15,7 @@
 import { log, route } from 'abide'
 import { csp, type Middleware } from 'abide/server'
 import { CALLABLES } from './demos/CALLABLES.ts'
+import { SPELLINGS } from './demos/SPELLINGS.ts'
 import { META } from './demos/SUITES.ts'
 
 /**
@@ -44,16 +45,17 @@ export default function notFound(): Response | undefined {
  * The patterns whose one segment is a NAME, and the vocabulary each is a name from — a route's NAME is
  * its pattern.
  *
- * TWO vocabularies, which is the shape of the site rather than an accident: `/docs` is keyed by the
- * callable you import, and `/tests` and `/bench` by the capability whose cases run and are priced. A
- * suite is not an address under `/docs` and a callable is not one under `/bench`, so asking one list
- * about both would 404 half the site.
+ * THREE vocabularies, which is the shape of the site rather than an accident: `/docs` is keyed by the
+ * callable you import AND by the spelling you type, and `/tests` and `/bench` by the capability whose
+ * cases run and are priced. A suite is not an address under `/docs` and a callable is not one under
+ * `/bench`, so asking one list about another would 404 a third of the site.
  *
  * Enumerated rather than matched on a prefix, so a route added under one of these sections is a name
  * this does not claim to know about until somebody puts it here.
  */
 const PARAMETERISED = new Map<string, { parameter: string; kind: string; known: object }>([
     ['/docs/[callable]', { parameter: 'callable', kind: 'callable', known: CALLABLES }],
+    ['/docs/syntax/[spelling]', { parameter: 'spelling', kind: 'spelling', known: SPELLINGS }],
     ['/tests/[suite]/[...rest]', { parameter: 'suite', kind: 'suite', known: META }],
     ['/bench/[suite]', { parameter: 'suite', kind: 'suite', known: META }],
 ])

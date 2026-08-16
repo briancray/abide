@@ -1,0 +1,15 @@
+<script>
+import { state } from 'abide'
+
+const name = state('ada')
+const clicks = state(0)
+</script>
+
+<p>hello {name} · {clicks} clicks</p>
+
+<!-- A native listener on an ELEMENT. The hole is the FUNCTION itself, not a string anything evaluates,
+     so there is nothing here a content security policy has to be widened for.
+
+     On a COMPONENT the same spelling means something else and deliberately so: `<Card onclick={f}/>`
+     is an ordinary prop named `onclick`, which the child decides what to do with. -->
+<button onclick={() => clicks++}>click</button>

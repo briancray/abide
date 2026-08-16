@@ -1,0 +1,21 @@
+<script>
+import { state } from 'abide'
+
+const rows = state(['alpha', 'beta'])
+</script>
+
+<style>
+    li { color: rebeccapurple; }
+</style>
+
+<ul>
+    {#for row of rows by row}
+        <li>
+            <!-- A nested style block scopes a SUBTREE. An element carries every scope in force, so the
+                 outer rule still reaches this `<b>` while this one cannot reach out of the row — the
+                 direction a scope opens is in, never out. -->
+            <style>b { font-style: italic; }</style>
+            {row} · <b>{row}</b>
+        </li>
+    {/for}
+</ul>

@@ -1,19 +1,19 @@
-<script module>
+<script>
 import { state } from 'abide'
 
-export interface Row {
+interface Row {
     id: number
     label: string
 }
 
-export const rows = state<Row[]>([
+const rows = state<Row[]>([
     { id: 1, label: 'alpha' },
     { id: 2, label: 'beta' },
     { id: 3, label: 'gamma' },
 ])
 
 /** The distinguishing case: two rows swap and nothing else may be touched. */
-export const swapFirstTwo = (): void => {
+const swapFirstTwo = (): void => {
     const held = rows().slice()
     if (held.length < 2) return
     const first = held[0] as Row

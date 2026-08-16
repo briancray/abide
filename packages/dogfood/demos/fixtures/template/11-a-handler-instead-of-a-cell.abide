@@ -1,0 +1,19 @@
+<script>
+import { state } from 'abide'
+
+const shown = state(true)
+const fate = state('still here')
+</script>
+
+<!-- The same bind handed a FUNCTION rather than a cell: it is called with the node once per instance,
+     and what it RETURNS is the teardown — `watch`'s contract rather than a second lifecycle spelling.
+     So the `{#if}` is the point of the rung: the teardown runs when the arm goes.
+
+     Nothing is written on the way IN, and that is the client-only rule from the rung before biting
+     once more: a handler that writes into the markup makes a hydrating client disagree with the
+     server it is adopting. The teardown is safe because a removal is something only a client does. -->
+<button onclick={() => (shown = !shown)}>remove it</button>
+{#if shown}
+    <p bind:element={(node: HTMLElement) => () => (fate = `the ${node.tagName.toLowerCase()} went away`)}>hello</p>
+{/if}
+<p>{fate}</p>

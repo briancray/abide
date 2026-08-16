@@ -1,0 +1,16 @@
+<script>
+import { state } from 'abide'
+
+const room = state('lobby')
+</script>
+
+<!-- One expression against many arms, where a chain of `{:else if}` would repeat the subject on each
+     line. `{:default}` is the arm for everything unnamed, and it narrows the same way an `{#if}` does —
+     the head reads ONCE into a local and each `{:case}` narrows off that. -->
+{#switch room}
+    {:case 'lobby'}<p>everyone is here</p>
+    {:case 'bad'}<p>nobody is here</p>
+    {:default}<p>somewhere else: {room}</p>
+{/switch}
+
+<button onclick={() => (room = room === 'lobby' ? 'attic' : 'lobby')}>move</button>

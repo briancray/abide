@@ -1,9 +1,10 @@
 <script module>
 import { memo } from 'abide'
 
+// Module scope for the reason rung 1's is — one cache per caller. See `demos/proofs.ts`.
 let served = 0
 
-export const quote = memo(async ({ symbol }: { symbol: string }) => {
+const quote = memo(async ({ symbol }: { symbol: string }) => {
     await new Promise((settle) => setTimeout(settle, 400))
     return `${symbol} @ ${++served}`
 })

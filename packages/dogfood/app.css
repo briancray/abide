@@ -467,6 +467,8 @@
     text-transform: uppercase;
     color: var(--color-brass);
   }
+  /* The aside's own gap is what separates two vocabularies; this is what holds a title to its nav. */
+  .sidebar-group { display: grid; gap: var(--s-2); }
   .sidebar-nav { gap: var(--s-1); }
   .sidebar-item {
     font-family: var(--font-display);

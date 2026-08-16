@@ -1,9 +1,12 @@
 <script module>
 import { memo } from 'abide'
 
+// MODULE scope, which is about this PAGE rather than about the verb: nothing addresses this load, so
+// nothing seeds it, and per-instance setup hands each substrate its own cold memo. A memo's cache is
+// per CALLER, so here the three renders behind one page read one slot. See `demos/proofs.ts`.
 let served = 0
 
-export const quote = memo(async ({ symbol }: { symbol: string }) => {
+const quote = memo(async ({ symbol }: { symbol: string }) => {
     await new Promise((settle) => setTimeout(settle, 400))
     return `${symbol} @ ${++served}`
 })

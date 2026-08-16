@@ -1,0 +1,16 @@
+<script>
+import { state } from 'abide'
+
+const name = state('ada')
+const looking = state(false)
+</script>
+
+<!-- The same boolean rule on a `<details>`, written back from `toggle` — the one event that says a
+     disclosure changed.
+
+     The ATTRIBUTE half is what earns this over an `ontoggle` handler: a row that is open on the server
+     arrives open in the markup, rather than snapping open a frame after hydration. -->
+<details bind:open={looking}>
+    <summary>about {name}</summary>
+    <p>{looking ? 'open' : 'shut'}</p>
+</details>

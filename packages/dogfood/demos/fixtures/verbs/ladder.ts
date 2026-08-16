@@ -1,16 +1,20 @@
-// The two verbs, and the third rung is what only one of them can do.
+// The two verbs, one strand each. A rung claims ONE of them, because `/docs/invalidate` and
+// `/docs/refresh` are separate pages and a rung showing both puts the wrong verb under a name.
 import type { Example } from 'harness'
 import One from './1-invalidate-this-is-wrong.abide'
 import ONE from './1-invalidate-this-is-wrong.abide?source'
 import Two from './2-refresh-this-may-be-stale.abide'
 import TWO from './2-refresh-this-may-be-stale.abide?source'
-import Three from './3-reach-it-by-tag.abide'
-import THREE from './3-reach-it-by-tag.abide?source'
+import Three from './3-invalidate-by-tag.abide'
+import THREE from './3-invalidate-by-tag.abide?source'
+import Four from './4-refresh-by-tag.abide'
+import FOUR from './4-refresh-by-tag.abide?source'
 
+// Interleaved rather than grouped, so the two strands stay adjacent in the file — and each page
+// filters to its own, which is why rung 3 reads as rung 1 plus tags and rung 4 as rung 2 plus tags.
 export const LADDER: Example[] = [
     { adds: '`invalidate` — this data is WRONG, so drop it and start nothing', of: ['invalidate'], source: ONE, view: One },
     { adds: '`refresh` — it may be STALE, so keep serving it and re-run', of: ['refresh'], source: TWO, view: Two },
-    // A tag is an address BOTH verbs take, so this rung belongs on both pages rather than on whichever
-    // one the file happened to import.
-    { adds: 'tags, so the verb reaches the DATA without naming a memo', of: ['invalidate', 'refresh'], source: THREE, view: Three },
+    { adds: 'tags, so `invalidate` reaches the DATA without naming a memo', of: ['invalidate'], source: THREE, view: Three },
+    { adds: 'tags, so `refresh` reaches the DATA without naming a memo', of: ['refresh'], source: FOUR, view: Four },
 ]

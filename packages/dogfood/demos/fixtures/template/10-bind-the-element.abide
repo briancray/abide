@@ -1,0 +1,17 @@
+<script>
+import { state } from 'abide'
+
+const name = state('ada')
+const box = state<HTMLElement | null>(null)
+const seen = state('nothing yet')
+</script>
+
+<!-- A node REF rather than a value, which is why it is the one target with no row in the compiler's
+     table of where a bind is legal: there is no property to read and no event to write back from, so
+     it is legal on any element.
+
+     CLIENT ONLY. A server render has no node to hand over, so the cell stays null there and whatever
+     reads it must cope — which is what the button below is, rather than a `{seen}` computed in setup. -->
+<p bind:element={box}>hello {name}</p>
+<button onclick={() => (seen = box?.tagName ?? 'none')}>read the node</button>
+<p>{seen}</p>

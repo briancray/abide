@@ -62,6 +62,6 @@ const loaded = memo(async (): Promise<BenchRow[]> => {
 
 <!-- No cold check: this body is re-run, so a read of a load that has not landed signals out of here
      rather than handing back `undefined`. -->
-<Table rows={loaded()}>
+<Table rows={loaded}>
     <p class="note">{AFTERWORD}</p>
 </Table>

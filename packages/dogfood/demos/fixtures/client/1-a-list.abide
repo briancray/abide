@@ -1,12 +1,12 @@
-<script module>
+<script>
 import { state } from 'abide'
 
-export interface Row {
+interface Row {
     id: number
     label: string
 }
 
-export const rows = state<Row[]>([
+const rows = state<Row[]>([
     { id: 1, label: 'alpha' },
     { id: 2, label: 'beta' },
     { id: 3, label: 'gamma' },

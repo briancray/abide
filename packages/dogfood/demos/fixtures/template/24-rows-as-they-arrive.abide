@@ -1,0 +1,28 @@
+<script>
+import { state } from 'abide'
+
+const room = state('lobby')
+
+async function* lines(from: string): AsyncGenerator<string> {
+    for (let at = 1; at <= 3; at++) {
+        await new Promise((settle) => setTimeout(settle, 60))
+        yield `${from} ${at}`
+    }
+    if (from === 'bad') throw new Error('the stream failed')
+}
+</script>
+
+<!-- The same block over something still ARRIVING: rows are appended as they come rather than the whole
+     list waiting for the last one. `{:catch}` is the arm for a source that fails part way, which a
+     plain `{#for}` has no need of.
+
+     REACTIVE, like every other block head: `room` is read here, so writing it tears the list down and
+     re-streams from the top. A key still MOVES a row, because the rows go to the same list part. -->
+<ul>
+    {#for await line of lines(room)}
+        <li>{line}</li>
+    {:catch failure}
+        <li>stopped: {String(failure)}</li>
+    {/for}
+</ul>
+<button onclick={() => (room = room === 'lobby' ? 'bad' : 'lobby')}>switch rooms</button>

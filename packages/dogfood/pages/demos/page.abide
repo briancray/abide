@@ -34,7 +34,7 @@ const status = memo(() => fleetStatus({}))
     <p class="note">asking which demos are up…</p>
 {:else}
     {#for app of APPS}
-        <Demo app={app} up={status()?.up[app.name] === true}/>
+        <Demo app={app} up={status?.up[app.name] === true}/>
     {/for}
 {/if}
 

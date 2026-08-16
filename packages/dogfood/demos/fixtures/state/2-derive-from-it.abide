@@ -1,7 +1,7 @@
-<script module>
+<script>
 import { state } from 'abide'
 
-export const count = state(0)
+const count = state(0)
 </script>
 
 <!-- Using a cell in an EXPRESSION reads it, so nothing here has to be declared as a dependency. -->

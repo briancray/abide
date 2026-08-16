@@ -1,0 +1,17 @@
+<script module>
+import { state } from 'abide'
+
+// The same cell at MODULE scope, which is the one thing this rung adds: it is created once for the
+// CALLER rather than once per instance, so it outlives any one render and every position showing this
+// component reads and writes the same count.
+//
+// The caller is a request on a server and a page in a browser — never the server process, so what is
+// shared here is shared with your other tabs and with nobody else's.
+//
+// It is also the only block an `export` may go in — a plain setup block is inlined into a function, and
+// a function has nothing to export. That is what lets a test and a sibling page reach this cell.
+export const count = state(0)
+</script>
+
+<p>count {count}</p>
+<button onclick={() => count++}>add one</button>

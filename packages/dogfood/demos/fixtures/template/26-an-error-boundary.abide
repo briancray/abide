@@ -1,0 +1,28 @@
+<script>
+import { state } from 'abide'
+
+const row = state('alpha')
+
+/** Throws on demand, so the boundary has something real to catch. */
+const nameOf = (text: string): string => {
+    if (text === 'bad') throw new Error('that row has no name')
+    return text
+}
+</script>
+
+<!-- JavaScript semantics, and therefore SYNCHRONOUS. The body is evaluated as ONE unit rather than one
+     thunk per expression, which is what lets `{:catch}` see a throw from anywhere inside it — and what
+     makes a dep read in there re-run the whole body rather than one hole.
+
+     What it does NOT catch is a pending read. That signal is how the graph says "run me again", and a
+     boundary that swallowed it would turn waiting into a permanent error — which is why an unlanded
+     load needs the probe chain from rung 18 rather than this. -->
+{#try}
+    <p>the row is {nameOf(row)}</p>
+{:catch failure}
+    <p>could not name it: {String(failure)}</p>
+{:finally}
+    <small>asked either way</small>
+{/try}
+
+<button onclick={() => (row = row === 'alpha' ? 'bad' : 'alpha')}>break it</button>

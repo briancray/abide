@@ -1,4 +1,10 @@
-<!-- One public name as a reference page: how to import it, and the LADDER of examples that use it.
+<!-- One entry in the reference: what it is, and the LADDER of examples that use it.
+
+     TWO VOCABULARIES, one page. `/docs/<callable>` is keyed by a name an author imports and
+     `/docs/syntax/<spelling>` by how something is TYPED in a file, and what they have in common is
+     everything on this page: a heading, a line under it, and rungs. So the difference between them is
+     two props — the crumb a reader came through, and whether there is an import line at all, which a
+     `{#for}` has none of because it imports nothing.
 
      A ladder rather than one example, because a file that shows five things is a large example of none:
      the reader cannot tell which line is responsible for which behaviour. Each rung adds exactly one
@@ -20,10 +26,24 @@
      that could go stale against both. -->
 <script module>
 import type { Example } from 'harness'
-import type { CallableMeta } from '../demos/CALLABLES.ts'
 import { proofsOf } from '../demos/proofs.ts'
+import { type SpellingName, SPELLINGS } from '../demos/SPELLINGS.ts'
 import Code from './code.abide'
 import Proofs from './proofs.abide'
+import type { NavItem } from './sidebar.ts'
+
+/**
+ * What both vocabularies have: a name, a line, and — for one of them — a specifier.
+ *
+ * Structural, so `CallableMeta` and `SpellingMeta` satisfy it without either being written in terms of
+ * this. They carry different rest — `ladders`, a `gate`, a slug — and none of it belongs on a page.
+ */
+export interface ReferenceHead {
+    name: string
+    blurb: string
+    /** Absent for a spelling: `{#for}` is not imported from anywhere. */
+    from?: string
+}
 
 /* The frame styles whatever the example renders, once, here — see `.rung-preview` in `app.css`,
    which reaches the buttons and inputs inside with descendant selectors so the examples themselves
@@ -37,24 +57,39 @@ const PREVIEW = 'rung-preview'
  * people to import it from where it used to be.
  */
 const importOf = (name: string, from: string): string => `import { ${name} } from '${from}'`
+
+/**
+ * How a slug is TYPED, for the claim line — a rung claiming `for` says `{#for}`, which is what a reader
+ * would recognise and what the page it links to is titled.
+ *
+ * The cast is what `test/docs.test.ts` gates: every slug in a rung's `spells` is asserted to be one of
+ * these, so a lookup that could miss would be a branch nothing can reach.
+ */
+const spelt = (slug: string): string => SPELLINGS[slug as SpellingName].name
 </script>
 
 <script>
 import { props } from 'abide'
 
-// Two props rather than a `CallableMeta` that carries its own rungs: the metadata is prose and static,
-// the rungs are what an `import()` produced, and joining them into one record here would mean the page
-// could not send its shell out before the ladder had loaded.
-const { callable, rungs } = props<{ callable: CallableMeta; rungs: Example[] }>()
+// Props rather than one record that carries its own rungs: the metadata is prose and static, the rungs
+// are what an `import()` produced, and joining them into one record here would mean the page could not
+// send its shell out before the ladder had loaded.
+const { head, crumb, rungs } = props<{ head: ReferenceHead; crumb: NavItem; rungs: Example[] }>()
 </script>
 
 <div class="page-head">
-    <p class="crumb"><a href="/docs">docs</a></p>
-    <h1 class="page-title">{callable.name}</h1>
-    <p class="page-blurb">{callable.blurb}</p>
-    <div class="import-line">
-        <Code source={importOf(callable.name, callable.from)}/>
-    </div>
+    <p class="crumb"><a href={crumb.href}>{crumb.label}</a></p>
+    <h1 class="page-title">{head.name}</h1>
+    <p class="page-blurb">{head.blurb}</p>
+    <!-- The import a reader copies — and only where there is one. A spelling is not imported, and an
+         empty `<pre>` saying so is a line of furniture claiming to be an answer. -->
+    {#if head.from}
+        <div class="import-line">
+            <!-- `??` for the TYPE, not the runtime, the way `rung.view?.({})` below is: the `{#if}` has
+                 proved it, and a slot is its own thunk that the narrowing does not cross into. -->
+            <Code source={importOf(head.name, head.from ?? '')}/>
+        </div>
+    {/if}
 </div>
 
 <div class="ladder">
@@ -69,10 +104,13 @@ const { callable, rungs } = props<{ callable: CallableMeta; rungs: Example[] }>(
                     <span class="rung-number">{at + 1}</span>
                     <span class="rung-adds">{rung.adds}</span>
                 </h2>
-                <!-- The names this rung is `of`, which is also what put it on this page. Written out
-                     rather than implied by the address: a rung claiming two names is on two pages, and
-                     the reader should be able to see that from either. -->
-                <p class="rung-of">of {#for name of rung.of}<code>{name}</code> {/for}</p>
+                <!-- What this rung CLAIMS, in both vocabularies, which is also what put it on this
+                     page. Written out rather than implied by the address, and linked: a rung claiming
+                     a name and a spelling is on two pages, and either one should be able to say so. -->
+                <p class="rung-of">of
+                    {#for name of rung.of}<a href="/docs/{name}" class="link"><code>{name}</code></a> {/for}
+                    {#for slug of rung.spells}<a href="/docs/syntax/{slug}" class="link"><code>{spelt(slug)}</code></a> {/for}
+                </p>
             </div>
             <!-- The RESULT first and the source beside it, which is the order the two columns are sized
                  in: a rung with no `view` collapses to one column and the source takes the width. -->

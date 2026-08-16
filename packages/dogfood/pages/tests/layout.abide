@@ -6,17 +6,20 @@
      them, so moving from one suite to the next meant going back to `/`. -->
 <script module>
 import { CAPABILITIES } from '../../demos/SUITES.ts'
-import type { NavItem } from '../../site/sidebar.ts'
+import type { NavGroup } from '../../site/sidebar.ts'
 import Sidebar from '../../site/sidebar.abide'
 
 /** Built once, at module scope: the list is the same on every page in this section. */
-const ITEMS: NavItem[] = CAPABILITIES.map((entry) => ({ href: `/tests/${entry.name}`, label: entry.name }))
-
-const TITLE = `capabilities · ${CAPABILITIES.length}`
+const GROUPS: NavGroup[] = [
+    {
+        title: `capabilities · ${CAPABILITIES.length}`,
+        items: CAPABILITIES.map((entry) => ({ href: `/tests/${entry.name}`, label: entry.name })),
+    },
+]
 </script>
 
 <div class="with-sidebar">
-    <Sidebar title={TITLE} items={ITEMS}/>
+    <Sidebar groups={GROUPS}/>
     <div class="with-sidebar-body">
         <slot/>
     </div>

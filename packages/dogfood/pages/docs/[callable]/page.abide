@@ -7,11 +7,15 @@
      Keyed by CALLABLE rather than by capability because a callable is what a reader arrives with —
      somebody who met `cookies()` in a codebase is looking up `cookies`, and a suite page made them read
      five neighbouring rungs to find it. -->
-<script module>
+<script>
 import { memo, route } from 'abide'
 import type { Example } from 'harness'
 import { CALLABLES, type CallableMeta, type CallableName, rungsOf } from '../../../demos/CALLABLES.ts'
 import Reference from '../../../site/reference.abide'
+import type { NavItem } from '../../../site/sidebar.ts'
+
+/** Where a reader came from, which for this vocabulary is the index of names. */
+const CRUMB: NavItem = { href: '/docs', label: 'docs' }
 
 interface Found {
     callable: CallableMeta
@@ -31,19 +35,18 @@ const ladderOf = memo(async ({ name }: { name: string }): Promise<Found | null> 
     const callable = CALLABLES[name as CallableName]
     return { callable, rungs: await rungsOf(callable) }
 })
+const found = memo(() => ladderOf({ name: route().params.callable ?? '' }))
 </script>
 
 <!-- Asking about `.pending()` is what sends the shell out now with the placeholder in it. The call
      stays in the markup rather than being hoisted into setup: it reads `route()`, so it belongs in the
-     slot's own thunk, where a navigation re-runs it. -->
-{#if ladderOf({ name: route().params.callable ?? '' }).pending()}
-    <p class="note">loading…</p>
-{:else}
-    <script>
-    const found = ladderOf({ name: route().params.callable ?? '' })
-    </script>
+     slot's own thunk, where a navigation re-runs it.
+
+     It is also what gives the answer a CONST to be narrowed by. A read in a template is a call, and
+     TypeScript narrows a const and never a call, so the settled arm binds one in a nested setup block,
+     which is legal as the first node of a block body. -->
     {#if found}
-        <Reference callable={found.callable} rungs={found.rungs}/>
+        <Reference head={found.callable} crumb={CRUMB} rungs={found.rungs}/>
     {:else}
         <div class="page-head">
             <h1 class="page-title">nothing here</h1>
@@ -51,4 +54,3 @@ const ladderOf = memo(async ({ name }: { name: string }): Promise<Found | null> 
             <p class="note"><a href="/docs" class="link">Every name it does export →</a></p>
         </div>
     {/if}
-{/if}

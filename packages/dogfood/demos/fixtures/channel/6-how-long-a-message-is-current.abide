@@ -1,0 +1,15 @@
+<script>
+import { channel } from 'abide'
+
+// `maxAge` is how long a message counts as CURRENT. It is not a cleanup pass: expiry WAKES readers of
+// both the latest and the transcript, so a stale price or a stale presence line disappears on its own
+// rather than sitting there looking live until the next publish.
+const feed = channel<string>({ tail: 5, maxAge: 3_000 })
+
+let sent = 0
+const send = (): void => feed.publish(`message ${++sent}`)
+</script>
+
+<p>latest: {feed ?? 'nothing current'}</p>
+<ul>{#for message of feed.chunks()}<li>{message}</li>{/for}</ul>
+<button onclick={send}>publish — and watch it age out in three seconds</button>

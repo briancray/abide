@@ -43,6 +43,7 @@ import { abideLog } from '$shared/log.ts'
 import { numberKnob } from '$shared/internal/knobs.ts'
 import {
     forgetProbedLoad,
+    hasProbedLoad,
     isPending,
     type Pending,
     probedLoad,
@@ -503,16 +504,14 @@ function emitProduced(produce: () => Renderable, context: RenderContext, out: Ou
     // A plain read does not reach this: it signals, and `awaitPending` above blocks as it always did.
     // Three answers, and `probedLoad` is asked for only where one of them consumes the promise it
     // BUILDS — an unawaited one is an unhandled rejection the moment the load fails.
-    if (!context.placeholder) {
-        const settling = probedLoad()
-        if (settling !== null) {
-            // With nowhere to patch — `renderToString`, `renderDocumentToString` — the walk WAITS, so
-            // the markup is complete when it arrives. The placeholder is half an answer and it is the
-            // half a reader running no scripts would keep forever.
-            return context.document === null
-                ? awaitProbed(produce, settling, context, out)
-                : emitProbed(produce, produced, settling, context, out)
-        }
+    if (!context.placeholder && hasProbedLoad()) {
+        // With nowhere to patch — `renderToString`, `renderDocumentToString` — the walk WAITS for the
+        // SETTLE, so the markup is complete when it arrives. The placeholder is half an answer and it
+        // is the half a reader running no scripts would keep forever. A walk that can patch asks for
+        // the first chunk instead, which is a different moment only for a stream — see `probedLoad`.
+        return context.document === null
+            ? awaitProbed(produce, probedLoad(false) as Promise<unknown>, context, out)
+            : emitProbed(produce, produced, probedLoad(true) as Promise<unknown>, context, out)
     }
     return emit(produced, context, out)
 }
@@ -550,7 +549,8 @@ async function awaitProbed(
             produced = (await awaitedProduce(error, produce, out)) as Renderable
             break
         }
-        const again = probedLoad()
+        // The SETTLE again: this is the lane with nowhere to patch, so a stream is drained here.
+        const again = probedLoad(false)
         if (again === null) break
         waiting = again
     }

@@ -8,7 +8,7 @@ import { reader, scratch, sleep, suite, until } from 'harness'
 import { duration, nsPerOp, quiesce, tick } from 'harness/measure'
 import { button, el, field, row, stage } from './dom.ts'
 // The rung the case at the bottom asserts — the one whose `adds` it is about.
-import Example, { feed as exampleFeed, send as exampleSend } from './fixtures/channel/2-remember-the-last-few.abide'
+import Example from './fixtures/channel/2-remember-the-last-few.abide'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -567,22 +567,27 @@ export default suite({
             title: 'the documented example runs',
             note: 'What `/docs/channel` shows and mounts, mounted here and asserted. The claim a reader most needs from it is the one about `tail`: nothing subscribes, and the transcript still fills — reading the channel IS the subscription.',
             async run({ is }) {
-                // Every claim here is RELATIVE, and that is forced rather than chosen: a published
-                // message cannot be un-published — a transcript is a record of what happened — so unlike
-                // a cell this example cannot be put back to a known value. Asserting `message 1` would
-                // be asserting that this case is the first thing that ever ran against the channel.
-                const before = exampleFeed.chunks().length
+                // The rung's channel is its own — a setup block is per INSTANCE — so this mount starts
+                // with an empty transcript however many times the docs page has been published into.
+                // That is what lets the claim about `tail` be absolute rather than relative to whatever
+                // ran before it: a published message cannot be un-published.
                 const host = scratch(() => Example({}))
+                const send = host.querySelector('button') as HTMLButtonElement
+                is('nothing has arrived yet', host.querySelector('p')?.textContent, 'latest: nothing yet')
 
-                exampleSend()
+                for (let i = 0; i < 7; i++) send.click()
                 await tick()
-                const latest = exampleFeed.peek() as string
-                is('the latest message is on the page', host.querySelector('p')?.textContent, `latest: ${latest}`)
+                is('the latest message is on the page', host.querySelector('p')?.textContent, 'latest: message 7')
 
                 const kept: string[] = []
                 for (const item of host.querySelectorAll('li')) kept.push(item.textContent ?? '')
-                is('the transcript is on the page too', kept, exampleFeed.chunks())
-                is('…one longer, up to the cap', kept.length, Math.min(5, before + 1))
+                is('the transcript is on the page too, and `tail` is what it stops at', kept, [
+                    'message 3',
+                    'message 4',
+                    'message 5',
+                    'message 6',
+                    'message 7',
+                ])
                 host.remove()
             },
         },

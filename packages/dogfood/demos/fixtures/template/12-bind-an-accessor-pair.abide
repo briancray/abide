@@ -1,0 +1,28 @@
+<script>
+import { state } from 'abide'
+
+const name = state('ada')
+const seen = state(0)
+
+/**
+ * The pair, hoisted out of the tag rather than written inline in it — it is an ordinary object either
+ * way, and one line holding two function bodies is not a shape anybody can read.
+ *
+ * Both halves are the sugar: inside a function body `name` is a read and `name = …` is the write, so
+ * an accessor pair needs no different spelling from anywhere else. Only the `{cell}` handed to a
+ * `bind:` or a prop is the cell itself, and that is exactly what this pair is standing in for.
+ */
+const trimmed = {
+    get: () => name,
+    set: (typed: string) => {
+        seen += 1
+        name = typed.trim()
+    },
+}
+</script>
+
+<!-- The escape hatch for a bind: an explicit `{get, set}` pair instead of a cell, for when the thing on
+     screen is not the thing you keep. Here the field is trimmed on the way in and counted, so the two
+     directions are not the same value in both — which a cell alone cannot express. -->
+<input bind:value={trimmed} />
+<p>hello {name} · {seen} edits</p>

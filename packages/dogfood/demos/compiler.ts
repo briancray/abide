@@ -14,15 +14,16 @@ import { renderToString } from 'abide/server/internal'
 import { container, scratch, sleep, suite, until } from 'harness'
 import { duration, install, keep, measureFlush, nonZero, nsPerOp, tick } from 'harness/measure'
 import { mount } from 'abide/ui'
+import { button, row, stage } from './dom.ts'
+import Card from './fixtures/card.abide'
+// The parity pair: the same component in both spellings, which is what this suite is for.
 import Compiled, {
     count as compiledCount,
     filter as compiledFilter,
     search as compiledSearch,
     session as compiledSession,
-} from '../counter.abide'
-import { count, filter, search as handSearch, App as handWritten, session } from '../counter.ts'
-import { button, row, stage } from './dom.ts'
-import Card from './fixtures/card.abide'
+} from './fixtures/counter.abide'
+import { count, filter, search as handSearch, App as handWritten, session } from './fixtures/counter.ts'
 import Library, { details, query, shelf, summary } from './fixtures/library.abide'
 // The same file's own text, inlined by the loader — a browser has no `Bun` to read it with.
 import LIBRARY from './fixtures/library.abide?source'
@@ -30,7 +31,7 @@ import Loader, { calls, label } from './fixtures/loader.abide'
 import Narrow, { session as narrowSession } from './fixtures/narrow.abide'
 import Rows, { items, rate } from './fixtures/rows.abide'
 import Stream, { failing, room } from './fixtures/stream.abide'
-import { name as tallyName, runs as tallyRuns } from './fixtures/tally.abide'
+import Tally, { name as tallyName, runs as tallyRuns } from './fixtures/tally.abide'
 import Widget, { text as widgetText } from './fixtures/widget.abide'
 import { META } from './SUITES.ts'
 
@@ -156,6 +157,8 @@ export default suite({
                     'invalidate',
                     'refresh',
                     'publish',
+                    'subscribe',
+                    'tail',
                     'dispose',
                     'peek',
                     'chunks',
@@ -425,10 +428,13 @@ export default suite({
 
         {
             title: 'and what that peek buys is a wake-up the effect never asked for',
-            note: 'The emitted text above is the shape; this is the cost. `tally.abide` runs a real `watch` whose body writes `runs = runs + 1`, and the contract is that ANOTHER writer of `runs` does not wake it. No assertion on a value can see the difference — the counter reads the same either way — so what is asserted is the run count, and the second half is owed too: an effect that woke for nothing would pass a gate that only checks it stayed asleep.',
+            note: 'The emitted text above is the shape; this is the cost. `tally.abide` runs a real `watch` whose body writes `runs = runs + 1`, and the contract is that ANOTHER writer of `runs` does not wake it. No assertion on a value can see the difference — the counter reads the same either way — so what is asserted is the run count, and the second half is owed too: an effect that woke for nothing would pass a gate that only checks it stayed asleep. The component is MOUNTED first, and that is not scaffolding: a `<script module>` effect belongs to a caller and is started by the setup of the component that declared it, so an effect nobody rendered is an effect this caller does not have.',
             async run({ is }) {
-                // Read rather than assumed: the module-level effect ran at import, and this case may
-                // not be the first thing in the process to have written the cell.
+                // The mount is what starts this caller's effect. It used to run at import, which is
+                // the same thing as saying it ran once for the server process.
+                const host = scratch(() => Tally({}))
+                // Read rather than assumed: this case may not be the first thing in the process to
+                // have written the cell.
                 const before = tallyRuns.peek()
 
                 tallyRuns.set(before + 100) // somebody ELSE writes the cell the effect writes
@@ -438,6 +444,7 @@ export default suite({
                 tallyName.set(tallyName.peek() === 'ada' ? 'alan' : 'ada')
                 await tick()
                 is('and the cell it READS still does', tallyRuns.peek(), before + 101)
+                host.remove()
             },
         },
 
@@ -656,12 +663,25 @@ export default suite({
 
         {
             title: 'bind:value is a read AND a write, so it compiles to two slots',
-            note: 'One spelling, two bindings on the same element: a property slot for the value and a listener that writes back. The value slot is handed the CELL, not a thunk that reads it — `unwrap` reads a slot’s source one step further, so the two write the same thing and the thunk was a fresh closure per bound input per row. The arms that cannot do that are the ones with something to compute: an accessor pair is not a cell, a boolean needs `!!` for the attribute half, and `bind:group` compares against the input’s own value. A `<select>` needs no arm at all — `.value` plus the `change` the table names for it IS the default one — so a selection is bound there and each `<option>` carries a plain `value="…"`. The listener carries the element’s own type, because the emitted file is type-checked like any other — an untyped `event` there is an implicit `any` in the author’s build. `bind:checked` and `bind:open` also emit the boolean ATTRIBUTE, so the state survives SSR. WHERE each bind is legal is a table rather than a habit: both halves have to exist on the element it is written on, so a pairing with no event to write back from is refused instead of compiling into a listener that never fires.',
+            note: 'One spelling, two bindings on the same element: a property slot for the value and a listener that writes back. The value slot is handed the CELL, not a thunk that reads it — `unwrap` reads a slot’s source one step further, so the two write the same thing and the thunk was a fresh closure per bound input per row. The arms that cannot do that are the ones with something to compute: an accessor pair is not a cell, a boolean needs `!!` for the attribute half, and `bind:group` compares against the input’s own value. Which of the two a name holds is read off its DECLARATION rather than off the text at the bind, so a `{get, set}` hoisted out of the tag — the spelling anybody writes once the two bodies are longer than a line — is read through `get` like the inline one, instead of being handed over as the object it is. A `<select>` needs no arm at all — `.value` plus the `change` the table names for it IS the default one — so a selection is bound there and each `<option>` carries a plain `value="…"`. The listener carries the element’s own type, because the emitted file is type-checked like any other — an untyped `event` there is an implicit `any` in the author’s build. `bind:checked` and `bind:open` also emit the boolean ATTRIBUTE, so the state survives SSR. WHERE each bind is legal is a table rather than a habit: both halves have to exist on the element it is written on, so a pairing with no event to write back from is refused instead of compiling into a listener that never fires.',
             async run({ is, throws }) {
                 is(
                     'value',
                     template('<script>const f = state("")</script><input bind:value={f} />'),
                     '<input .value=${f} @input=${(event: Event) => f.set((event.currentTarget as HTMLInputElement).value)} />',
+                )
+                // An accessor pair HOISTED out of the tag, which is the spelling anybody reaches for
+                // once the two bodies are longer than a line. Which shape a name holds is decided at
+                // its DECLARATION: the source text here is a bare identifier, indistinguishable from
+                // a cell, and reading it as one emitted `.value=${trimmed}` — the object itself into
+                // the property, `[object Object]` on screen, with the write half still working, so
+                // the control took edits and only the reading was wrong.
+                is(
+                    'a hoisted accessor pair is READ through get, not handed over',
+                    template(
+                        '<script>const n = state("")\nconst trimmed = { get: () => n, set: (v: string) => { n = v.trim() } }</script><input bind:value={trimmed} />',
+                    ),
+                    '<input .value=${() => (trimmed).get()} @input=${(event: Event) => (trimmed).set((event.currentTarget as HTMLInputElement).value)} />',
                 )
                 is(
                     'checked mirrors an attribute too',
@@ -715,13 +735,20 @@ export default suite({
                 // `group` is membership, so both halves have something to compute — and each reads
                 // the cell ONCE into a local. `sources` has no dedupe, so a thunk reading it twice
                 // subscribed the slot's effect twice, and a group is N inputs on one cell.
+                //
+                // The write is CAST, and that is the one thing in this emit no runtime behaviour
+                // explains: the ternary is a hedge over the two legal shapes of a group cell — an
+                // array for checkboxes, a scalar for radios — and only one arm is reachable for any
+                // one cell. `Array.isArray` is what TypeScript narrows on, so it types the other arm
+                // as `never` and then refuses the write. The emit has no type-checker and cannot
+                // write just the reachable arm, so the cast says the runtime already chose.
                 is(
-                    'group reads the cell once per half',
+                    'group reads the cell once per half, and the write is cast past the unreachable arm',
                     template(
                         '<script>const many = state([])</script><input type="checkbox" value="x" bind:group={many} />',
                     ),
                     '<input type="checkbox" value="x" .checked=${() => { const held = many(); return Array.isArray(held) ? held.includes("x") : held === "x" }}' +
-                        ' @change=${(event: Event) => { const held = many(); many.set(Array.isArray(held) ? ((event.currentTarget as HTMLInputElement).checked ? [...held, "x"] : held.filter((v: unknown) => v !== "x")) : "x") }} />',
+                        ' @change=${(event: Event) => { const held = many(); many.set((Array.isArray(held) ? ((event.currentTarget as HTMLInputElement).checked ? [...held, "x"] : held.filter((v: unknown) => v !== "x")) : "x") as never) }} />',
                 )
 
                 // The round trip, live: the cell writes the property, and typing writes the cell.
@@ -1172,6 +1199,29 @@ export default suite({
                         }),
                     'no children to render',
                 )
+                // Written as `()`, so nothing typed the binding and the app's own typecheck refused
+                // the file: TS7006 on a parameter the AUTHOR never wrote. The children type is the
+                // one it can always carry, and it is what `<slot/>` inside one reaches for anyway.
+                is(
+                    'a parameter written as `()` still binds `args`, and is TYPED',
+                    compile('{#component Loud()}<b>x</b>{/component}<Loud/>', {
+                        filename: 'C.abide',
+                    }).code.includes('(args: { children?: unknown }) => html`<b>x</b>`'),
+                    true,
+                )
+                // A tag names a VALUE, and which value is the ordinary cell question: a memo-named tag
+                // is a READ, so the position is handed a different view when it changes and re-mounts.
+                // Nothing here is a mechanism of its own — `liveCell` is the same test `{Shown}` makes
+                // one position over.
+                is(
+                    'a cell-named tag is READ, so a change re-mounts it',
+                    compile(
+                        "<script>\nimport { memo, state } from 'abide'\nconst loud = state(true)\n" +
+                            'const Shown = memo(() => (loud ? Loud : Quiet))\n</script>\n<Shown/>',
+                        { filename: 'C.abide' },
+                    ).code.includes('component(Shown(), { children: undefined })'),
+                    true,
+                )
             },
         },
 
@@ -1285,8 +1335,77 @@ export default suite({
         },
 
         {
+            title: 'a cell in a <script module> is scoped to the CALLER, not to the process',
+            note: 'Module scope means one per REQUEST on a server and one per page in a browser — never one per server process, which is what it silently meant before. The compiler wraps the binding and the facade resolves it per caller on every member, which is the answer `scopedArgless` already gave an argless `memo`; a cell and a channel were the two spellings that never had it. Wrapped AFTER the desugar and not before: the sugar decides cell reads over this same text, so a wrapper spliced in first made `query.toUpperCase()` stop becoming `query().toUpperCase()`. Only a BINDING is wrapped, so a factory is left alone — what it builds is already one per call.',
+            run({ is }) {
+                const moduleBlock = (body: string): string =>
+                    compile(`<script module>\n${body}\n</script>\n<p>ok</p>`).code
+                is(
+                    'a cell binding is wrapped',
+                    moduleBlock('const count = state(0)').includes('const count = state.scoped(() => state(0))'),
+                    true,
+                )
+                is(
+                    'a channel binding gets its own wrapper, not the cell one',
+                    moduleBlock('const feed = channel<string>({ tail: 5 })').includes(
+                        'const feed = channel.scoped(() => channel<string>({ tail: 5 }))',
+                    ),
+                    true,
+                )
+                // `state.shared` scopes its LOOKUP and not its binding, so a declaration that runs once
+                // still holds the one cell the first evaluation built. Wrapped like any other.
+                is(
+                    'state.shared is wrapped too, because the binding is what ran once',
+                    moduleBlock("const count = state.shared('count', 0)").includes(
+                        "state.scoped(() => state.shared('count', 0))",
+                    ),
+                    true,
+                )
+                // The three shapes that are already per caller, or are not a cell at all.
+                is(
+                    'a keyed memo is untouched — its cache is per caller already',
+                    moduleBlock('const rows = memo(async ({ q }: { q: string }) => q)').includes(
+                        'const rows = memo(async',
+                    ),
+                    true,
+                )
+                is(
+                    'a factory is untouched — it builds one per call',
+                    moduleBlock('const make = () => state(0)').includes('const make = () => state(0)'),
+                    true,
+                )
+                is(
+                    'a constant is untouched',
+                    moduleBlock("const LINKS = [{ href: '/' }]").includes("const LINKS = [{ href: '/' }]"),
+                    true,
+                )
+                // A `<script>` cell is per INSTANCE and already inside whatever scope the caller has,
+                // so wrapping it would buy nothing and cost a facade on every component.
+                is(
+                    'a cell in <script> is left as it was written',
+                    compile('<script>\nconst count = state(0)\n</script>\n<p>{count}</p>').code.includes(
+                        'const count = state(0)',
+                    ),
+                    true,
+                )
+                // The trap `props()` fell into one check over: a regex over the region's raw text reads
+                // a comment as a call. This is read off the region's TOKENS for exactly that reason.
+                is(
+                    'a comment naming a cell is not a binding',
+                    moduleBlock('// const count = state(0)\nconst A = 1').includes('const A = 1'),
+                    true,
+                )
+                is(
+                    '…and nothing was wrapped in it',
+                    moduleBlock('// const count = state(0)\nconst A = 1').includes('state.scoped'),
+                    false,
+                )
+            },
+        },
+
+        {
             title: 'counter.abide and counter.ts render identically, on both substrates',
-            note: 'The parity claim, and the whole point: `counter.ts` is the hand-written arm — the file someone would actually write — and `counter.abide` is the same component in the sugared spelling. Same markup from the server, same DOM from the client. A difference here means the compiler is not emitting what a person would.',
+            note: 'The parity claim, and the whole point: `counter.ts` is the hand-written arm — the file someone would actually write, in the unsugared `count()` / `count.set(n)` spelling — and `counter.abide` is the same component sugared. Not a vanilla arm in the sense the rest of the benches mean it: both sides are abide, so what the ratio prices is the SUGAR, not the framework. Same markup from the server, same DOM from the client. A difference here means the compiler is not emitting what a person would.',
             async run({ is }) {
                 count.set(0)
                 filter.set('')
@@ -1325,7 +1444,7 @@ export default suite({
                         run: () => compiledCount.set(compiledCount.peek() + 1),
                     },
                     {
-                        label: 'vanilla — the hand-written counter.ts, one count write',
+                        label: 'hand-written — the unsugared counter.ts, one count write',
                         prepare: () => {
                             scratch(() => handWritten())
                         },
@@ -1784,6 +1903,44 @@ export default suite({
                 is(
                     'only the condition’s own reads are hoisted',
                     body('<p>{#if s}{other}{/if}</p>').includes('html`${other}`'),
+                    true,
+                )
+
+                // A HELD position takes the local too, and the line between the two is what the
+                // expression NAMES rather than where it sits. A prop that names the cell alone hands
+                // the cell over — a child given a value has nothing left to subscribe to — and a prop
+                // that reaches a member has already read the cell to get there, so the local is the
+                // same value, one subscription instead of two, and the thing the branch narrowed.
+                // Without it the props were a second `s()` call the narrowing never reached, and an
+                // ordinary `{#if found}<Child head={found.name}/>` needed a `!` to compile at all.
+                const withChild = "<script>import Child from './child.abide'\nconst s = state({ name: 'a' })</script>"
+                const child = (source: string): string => {
+                    const emitted = compile(withChild + source, { filename: 'Case.abide' }).code
+                    const start = emitted.indexOf('return html`')
+                    return emitted.slice(start + 12, emitted.lastIndexOf('`')).trim()
+                }
+                is(
+                    'a prop reaching a member takes the branch’s local',
+                    child('{#if s}<Child head={s.name}/>{/if}'),
+                    '${() => { const $0 = s(); if ($0) return html`${() => component(Child, { head: $0.name, children: undefined })}`; return null }}',
+                )
+                // The other direction, and the one that bites: a prop NAMING the cell hands the cell
+                // over even with a local in scope, because a local is a VALUE and a child given one
+                // is dead after the first write. The bare spelling is answered by `code`'s fast path
+                // in `emit.ts`, so the wrappers are what actually reach the rule — and each of them
+                // handed `$0` over until `desugar`'s `hold` learned WHICH held position it was in.
+                for (const hole of ['s', 's /* note */', '(s)', 's!']) {
+                    is(
+                        `a prop naming the cell hands it over: ${hole}`,
+                        child(`{#if s}<Child head={${hole}}/>{/if}`).includes(`head: ${hole},`),
+                        true,
+                    )
+                }
+                // `bind:` is the position that takes no local at all: it WRITES back through the path
+                // it was handed, and a local is nowhere to write.
+                is(
+                    'a bind reads through the cell, local or no local',
+                    child('{#if s}<input bind:value={s.name}/>{/if}').includes('.value=${s().name}'),
                     true,
                 )
 

@@ -1,7 +1,7 @@
-<script module>
+<script>
 import { state } from 'abide'
 
-export const month = state('may')
+const month = state('may')
 </script>
 
 <!-- One walk in document order, SYNCHRONOUS until the tree genuinely waits. A render is a SNAPSHOT, so

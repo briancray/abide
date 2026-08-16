@@ -1,0 +1,18 @@
+<script>
+import { props, type State } from 'abide'
+
+// A prop declared `State<…>` is passed through rather than wrapped twice, so the child holds THE VERY
+// CELL the parent does — which is what `bind:` on a component needs, and the only thing the declared
+// type still decides.
+//
+// Every other prop is a cell too (`Props<T>` is that mapping), but a cell the PARENT writes: the
+// position showing this component writes each pass's props into them. Declaring `State` is how a
+// component says the traffic goes both ways.
+const { note, count = 0 } = props<{ note: State<string>; count?: number }>()
+</script>
+
+<!-- `note` is the parent's cell, so this input edits what the parent is holding. `count` is a plain
+     prop and a default is lifted onto the cell rather than left in the pattern — a caller that omitted
+     it would otherwise satisfy the default with a value and never see it again. -->
+<input bind:value={note} />
+<p>{note} · seen {count} times</p>
