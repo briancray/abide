@@ -117,6 +117,11 @@ export default suite({
                             label: 'vanilla — object field',
                             run: (i: number): void => {
                                 bare.value = i
+                                // HANDED somewhere the engine cannot prove dead, the rule the read
+                                // bench above already follows: `bare` never escapes and nothing loads
+                                // the field, so a bare store is what dead-store elimination deletes —
+                                // and the floor this whole card divides by would read as call overhead.
+                                keep(bare.value)
                             },
                         },
                     ]
@@ -644,12 +649,27 @@ export default suite({
                             // The shape everyone reaches for: { value, pending, refreshing } in one
                             // cell. Rebuilt per settle, so the identity check never holds.
                             const store = vanilla.cell({ value: 'a', pending: false, refreshing: false })
-                            let runs = 0
-                            store.subscribe(() => runs++)
+                            // TWO readers, mirroring the two watchers the abide arm installs. With
+                            // one, the arm had no reader-whose-answer-did-not-move to wake — which is
+                            // the entire claim — and the card reported a tie on the case that exists
+                            // to show the split signals winning.
+                            let valueRuns = 0
+                            let coldRuns = 0
+                            store.subscribe(() => {
+                                void store.get().value
+                                valueRuns++
+                            })
+                            store.subscribe(() => {
+                                void store.get().pending
+                                coldRuns++
+                            })
                             store.set({ value: 'a', pending: false, refreshing: true })
                             await Promise.resolve()
                             store.set({ value: 'a', pending: false, refreshing: false })
-                            return { count: runs, of: 'wakes — a rebuilt record is always a new value' }
+                            return {
+                                count: valueRuns + coldRuns,
+                                of: 'wakes — a rebuilt record is always a new value, for both readers',
+                            }
                         },
                     },
                 ],

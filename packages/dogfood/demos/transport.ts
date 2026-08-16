@@ -1012,6 +1012,12 @@ export default suite({
                     // In-process on both arms, so what is measured is the GATE and not a round trip.
                     // The claim is that there is nothing to measure: the gate is one closure built at
                     // the declaration, so it costs what the same check costs written by hand.
+                    //
+                    // NOT a vanilla arm in the sense the rest of the benches mean it — both sides are
+                    // abide, exactly as `compiler.ts`'s unsugared arm is. Labelled `abide` on purpose:
+                    // `rows.ts` promotes the first arm whose label starts with `vanilla` into the
+                    // card's hand-written comparator, so the old label had the page reporting a ratio
+                    // against hand-written code for a second `GET`.
                     const check = (value: unknown): { id: number } => {
                         const id = (value as { id?: unknown }).id
                         if (typeof id !== 'number' || !Number.isInteger(id)) {
@@ -1032,7 +1038,7 @@ export default suite({
                             },
                         },
                         {
-                            label: 'vanilla — the same check at the top of the handler',
+                            label: 'abide — the same check at the top of the handler',
                             run: () => {
                                 byHand.invalidate()
                                 return byHand({ id: 1 })()

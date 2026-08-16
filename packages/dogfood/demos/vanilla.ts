@@ -269,9 +269,20 @@ export function remoteByHand<Args, T>(path: string, handler: (args: Args) => T):
 
 // --- a router, by hand ------------------------------------------------------
 
-/** Filling a pattern the way anyone would, with one pass of `replace`. */
+/**
+ * Filling a pattern the way anyone would, with one pass of `replace`.
+ *
+ * The slot regex is HOISTED, and that is the arm's honesty rather than tidiness: a regex literal
+ * inside the function is a fresh `RegExp` per call, and abide's side of this ratio parses its pattern
+ * once and caches it. Left inline, the denominator was paying a construction the numerator does not,
+ * on the one card whose claim is "parsed once, against a regex".
+ */
+const PATTERN_SLOT = /\[([^\]]+)\]/g
+
 export function hrefFor(pattern: string, params: Record<string, string | number>): string {
-    return pattern.replace(/\[([^\]]+)\]/g, (_, name: string) => encodeURIComponent(String(params[name])))
+    // The replacer captures `params`, so it cannot be hoisted with the regex without threading the
+    // record through a module-level mutable — which is not what someone would write by hand.
+    return pattern.replace(PATTERN_SLOT, (_, name: string) => encodeURIComponent(String(params[name])))
 }
 
 export interface VanillaRoute {
