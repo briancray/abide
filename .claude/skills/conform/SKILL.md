@@ -64,7 +64,7 @@ those fail silently and no test in this repo can catch them. Launch that round's
 single message so they run concurrently. Agents are **read-only finders**; they report, you
 apply. Parallel editors collide on `$shared`, which every other seam imports.
 
-Read the round's units from `checks.sh --units`, not from memory. `example/demos` is read by
+Read the round's units from `checks.sh --units`, not from memory. `dogfood/demos` is read by
 FACE, not whole — CLUSTERS.md says which face each round gets.
 
 ## Phase 3 — Apply

@@ -30,22 +30,26 @@ this table is stale and so is whatever else it says.
 
 | unit | files | lines |
 |---|---|---|
-| `packages/abide/compiler` | 19 | 7.4k |
+| `packages/abide/compiler` | 19 | 7.5k |
 | `packages/abide/cli` | 22 | 4.2k |
-| `packages/abide/src/shared` | 32 | 7.9k |
-| `packages/abide/src/server` | 19 | 6.2k |
-| `packages/abide/src/ui` | 5 | 2.4k |
-| `packages/harness` | 13 | 2.8k |
-| `packages/dogfood/demos` | 102 | 19.4k |
-| `packages/dogfood/demos/fixtures` | 76 | 1.2k |
-| `packages/dogfood/test` | 25 | 5.9k |
-| `packages/dogfood/pages` + `site` | 21 | 1.8k |
+| `packages/abide/src/shared` | 32 | 8.3k |
+| `packages/abide/src/server` | 21 | 6.6k |
+| `packages/abide/src/ui` | 5 | 2.7k |
+| `packages/harness` | 18 | 3.9k |
+| `packages/dogfood/demos` | 134 | 21.6k |
+| `packages/dogfood/test` | 28 | 6.9k |
+| `packages/dogfood/pages` | 16 | 0.7k |
+| `packages/dogfood/site` | 16 | 1.9k |
 | `packages/perf` | 38 | 2.0k |
+
+`demos/fixtures` is no longer its own row — `checks.sh --units` counts it inside
+`packages/dogfood/demos`, which is why that number jumped. The 103 fixture files are ~1.7k of
+the 21.6k; the 31 suite files at the top level are the other 19.9k.
 
 Every unit here fits in one agent's context whole, with one exception. Read it entirely; do not
 sample.
 
-**`example/demos` is the one exception and it must be stated, not fudged.** 19.4k lines over 26
+**`dogfood/demos` is the one exception and it must be stated, not fudged.** 19.9k lines over 31
 suite files does not fit the way the others do, so it is read BY FACE: round F reads the `bench`
 faces and `vanilla.ts`, round G reads `run` / `interact` / `examples`. An agent told to read it
 "whole" will sample and not say so.
@@ -85,7 +89,7 @@ duplicate sitting in `$server`. It gets its own agent and reads the seams togeth
 ## Prompt template
 
 > You are checking `<unit>` in the abide repo against a specific set of rules from its CLAUDE.md.
-> Read every file in the unit. Do not sample. <or, for example/demos: Read the `<face>` face of
+> Read every file in the unit. Do not sample. <or, for dogfood/demos: Read the `<face>` face of
 > every suite; you are not being asked for the other faces.>
 >
 > The rules, verbatim:
