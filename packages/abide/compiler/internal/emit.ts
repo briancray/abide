@@ -198,6 +198,34 @@ interface Reactive {
  * already has a binding in hand and is only asking whether it declares rather than shadows. Merging
  * them would mean one walk that does both, which is more machinery than the predicate they share.
  */
+/**
+ * The NAME a declaration binds, reading back from its `=` over an annotation if one is written.
+ *
+ * `const n = state(0)` puts the name next to the `=` and `const n: State<number> = state(0)` puts a
+ * type there instead — the same declaration, and both are what an author writes, since `State` and
+ * `Memo` are exported for exactly this. Read as "the token before the `=`", the annotated spelling
+ * found a `>` and registered no cell at all, so every use of the name stayed bare: `{n + 1}` emitted
+ * the CELL added to a number, which type-checks nowhere and renders a function's source.
+ *
+ * The annotation is found by its `:` at the DECLARATION's own depth, so a `{ a: 1 }` initializer or
+ * a ternary's colon inside one cannot be mistaken for it.
+ */
+function declaredNameBefore(tokens: Token[], equalsAt: number): Token | undefined {
+    const direct = tokens[equalsAt - 1]
+    if (direct !== undefined && direct.kind === SyntaxKind.Identifier) return direct
+    const depth = (tokens[equalsAt] as Token).depth
+    for (let i = equalsAt - 1; i > 0; i--) {
+        const token = tokens[i] as Token
+        if (token.depth < depth) return undefined
+        if (token.depth > depth) continue
+        if (token.kind === SyntaxKind.SemicolonToken || token.kind === SyntaxKind.EqualsToken) return undefined
+        if (token.kind !== SyntaxKind.ColonToken) continue
+        const named = tokens[i - 1]
+        return named !== undefined && named.kind === SyntaxKind.Identifier ? named : undefined
+    }
+    return undefined
+}
+
 function reactiveBindings(tokens: Token[], into: Reactive, memos?: Map<string, readonly string[]>): void {
     for (let i = 1; i < tokens.length; i++) {
         // `NAME = state(` — or `NAME = state<T>(`, whose type argument list sits between the two.
@@ -219,8 +247,8 @@ function reactiveBindings(tokens: Token[], into: Reactive, memos?: Map<string, r
         }
         if (!REACTIVE_CONSTRUCTORS.has(maker)) continue
         if (tokens[at - 1]?.kind !== SyntaxKind.EqualsToken) continue
-        const name = tokens[at - 2]
-        if (name === undefined || name.kind !== SyntaxKind.Identifier) continue
+        const name = declaredNameBefore(tokens, at - 1)
+        if (name === undefined) continue
 
         if (maker === 'channel') {
             // `channel<T, Args>()` is the ROOM form, and the second type argument is the only place

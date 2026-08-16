@@ -286,6 +286,54 @@ export default suite({
         },
 
         {
+            title: 'an ANNOTATED declaration is the same declaration',
+            note: '`State` and `Memo` are exported for authors to write, so `const n: State<number> = state(0)` is a spelling the app itself invites. The registration read the token before the `=` to find the name, and an annotation puts a `>` there — so the declaration registered NO cell, every use of the name stayed bare, and `{n + 1}` emitted the cell added to a number. It renders a function’s source and type-checks nowhere near the line that caused it. The name is now read back over the annotation, found by the `:` at the declaration’s own depth so an object initializer or a ternary cannot be mistaken for one.',
+            run({ is }) {
+                const head = "import { state, memo, type Memo, type State } from 'abide'\n"
+                is(
+                    'annotated reads exactly as bare does',
+                    template(`<script>${head}const n: State<number> = state(0)</script><p>{n + 1}</p>`),
+                    template(`<script>${head}const n = state(0)</script><p>{n + 1}</p>`),
+                )
+                is(
+                    'a memo too',
+                    template(`<script>${head}const m: Memo<number> = memo(() => 1)</script><p>{m + 1}</p>`),
+                    '<p>${() => m() + 1}</p>',
+                )
+                is(
+                    'and `state.shared`, whose callee is already stepped back over',
+                    template(`<script>${head}const s: State<number> = state.shared('k', 0)</script><p>{s + 1}</p>`),
+                    '<p>${() => s() + 1}</p>',
+                )
+                // A hold position too, since the registration is what both sides read.
+                is(
+                    'the cell is still handed over where one is wanted',
+                    template(
+                        `<script>${head}import C from './c.abide'\nconst n: State<number> = state(0)</script><C value={n}/>`,
+                    ),
+                    '${() => component(C, { value: n, children: undefined })}',
+                )
+                // The `:` has to be the DECLARATION's own, which is what these three would break if
+                // the walk simply searched backwards for one.
+                is(
+                    'an object initializer is not an annotation',
+                    template(`<script>${head}const o = { a: 1 }\nconst n = state(0)</script><p>{o.a + n}</p>`),
+                    '<p>${() => o.a + n()}</p>',
+                )
+                is(
+                    'nor is a ternary’s colon',
+                    template(`<script>${head}const n = state(0)\nconst x = true ? 1 : 2</script><p>{x + n}</p>`),
+                    '<p>${() => x + n()}</p>',
+                )
+                is(
+                    'and an annotated NON-source declares no cell',
+                    template(`<script>${head}const q: number = 1\nconst n = state(0)</script><p>{q + n}</p>`),
+                    '<p>${() => q + n()}</p>',
+                )
+            },
+        },
+
+        {
             title: 'a read in setup PEEKS, because nothing would run setup again',
             note: 'A cold read SIGNALS where re-running is the recovery — a slot thunk, a `memo` body, an effect body — and the type says so: `T`, no narrowing. Setup runs once, so a read among its statements peeks instead and is honestly `T | undefined`. The split is syntactic: statements peek, function bodies read, because nothing separates a `memo` body from an event handler.',
             run({ is }) {
