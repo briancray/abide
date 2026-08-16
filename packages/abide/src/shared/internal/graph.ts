@@ -648,7 +648,6 @@ function hold(node: Node, track: Async, value: unknown): void {
     }
 }
 
-/** Nothing is in flight any more, and it ended without a failure. */
 /**
  * A stream that ALREADY HAPPENED — the whole transcript at once, settled in the call.
  *
@@ -676,6 +675,7 @@ function adoptTranscript(node: Node, chunks: readonly unknown[]): void {
     finish(track, node.value, false)
 }
 
+/** Nothing is in flight any more, and it ended without a failure. */
 function markSettled(track: Async): void {
     track.error.write(undefined)
     track.pending.write(false)

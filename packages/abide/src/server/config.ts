@@ -436,28 +436,6 @@ function coerced(raw: string, exemplar: unknown): unknown {
 }
 
 /**
- * The last pass over the assembled document — abide's own range, then the declared shape. Every path
- * out of `resolve` comes through here, which is what makes "by construction" a true word below.
- *
- * The RANGE is `PORT`, and it is checked on the assembled document rather than only on the variable
- * because an operator is not the only one who can name a number: `declaredEnv` speaks for `PORT=…`,
- * and an app's own `onConfig` default is the other way one arrives. A port that is not one is the
- * floor, so `config().PORT` is a port for every reader with nothing downstream flooring it a third
- * way.
- *
- * `READERS.PORT` floors the VARIABLE too, and that second flooring is deliberate rather than
- * redundant: it makes a malformed `PORT=70000` a DECLARED 3000, which out-ranks an app's `onConfig`
- * default the way any declared value does. Withdrawing instead — the convention `ABIDE_LOG_FORMAT`
- * follows — would let a typo in an operator's environment silently hand the port back to the app.
- *
- * The SHAPE goes last, because one that ran before the merge would be checking a layer rather than
- * the answer. A Standard Schema may validate ASYNCHRONOUSLY, and this is the one place in abide that
- * cannot wait for one: `config()` is synchronous so that reading a field is never a read somebody has
- * to await. Refused by name rather than by silently taking the promise as a value, and the pending
- * validation is caught so an app that shipped one does not also get an unhandled rejection on top of
- * the message telling it what to do instead.
- */
-/**
  * The two facts a FILESYSTEM answers, installed by `app.ts` rather than imported from it.
  *
  * A seam and not an import because `app.ts` reads `knobOf` from this file, and the two importing
@@ -490,6 +468,28 @@ function resolved(document: Config): Config {
     return document
 }
 
+/**
+ * The last pass over the assembled document — abide's own range, then the declared shape. Every path
+ * out of `resolve` comes through here, which is what makes "by construction" a true word below.
+ *
+ * The RANGE is `PORT`, and it is checked on the assembled document rather than only on the variable
+ * because an operator is not the only one who can name a number: `declaredEnv` speaks for `PORT=…`,
+ * and an app's own `onConfig` default is the other way one arrives. A port that is not one is the
+ * floor, so `config().PORT` is a port for every reader with nothing downstream flooring it a third
+ * way.
+ *
+ * `READERS.PORT` floors the VARIABLE too, and that second flooring is deliberate rather than
+ * redundant: it makes a malformed `PORT=70000` a DECLARED 3000, which out-ranks an app's `onConfig`
+ * default the way any declared value does. Withdrawing instead — the convention `ABIDE_LOG_FORMAT`
+ * follows — would let a typo in an operator's environment silently hand the port back to the app.
+ *
+ * The SHAPE goes last, because one that ran before the merge would be checking a layer rather than
+ * the answer. A Standard Schema may validate ASYNCHRONOUSLY, and this is the one place in abide that
+ * cannot wait for one: `config()` is synchronous so that reading a field is never a read somebody has
+ * to await. Refused by name rather than by silently taking the promise as a value, and the pending
+ * validation is caught so an app that shipped one does not also get an unhandled rejection on top of
+ * the message telling it what to do instead.
+ */
 function checked(document: Config, gated: Gate<unknown> | null): Config {
     if (!isPort(document.PORT)) document.PORT = FLOOR.PORT
     if (gated === null) return mounting(document)

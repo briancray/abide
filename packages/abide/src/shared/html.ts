@@ -416,14 +416,6 @@ export function pendingArm(branches: Branches): unknown {
 }
 
 /**
- * What a `{#try}` renders to: the body, or the catch arm if producing it threw.
- *
- * Both substrates run the body the SAME way and differ only in what they do with the result — the
- * client claims server nodes with it or writes it into a part, the server emits it — so the decision
- * lives here and each substrate keeps only its continuation. Without a `{:catch}` the author did not
- * claim to handle it, so the throw passes through and this boundary catches nothing.
- */
-/**
  * What the body PRODUCED — its `{:finally}` arm included — and the promises it left behind, without
  * collapsing the two together.
  *
@@ -458,6 +450,14 @@ export function producedBoundary(block: Boundary): { produced: unknown; waiting:
     return { produced: settled === undefined ? produced : [produced, settled()], waiting }
 }
 
+/**
+ * What a `{#try}` renders to: the body, or the catch arm if producing it threw.
+ *
+ * Both substrates run the body the SAME way and differ only in what they do with the result — the
+ * client claims server nodes with it or writes it into a part, the server emits it — so the decision
+ * lives here and each substrate keeps only its continuation. Without a `{:catch}` the author did not
+ * claim to handle it, so the throw passes through and this boundary catches nothing.
+ */
 export function settledBoundary(block: Boundary): unknown {
     const { produced, waiting } = producedBoundary(block)
     // An `{await …}` in the body left a promise in a slot, and a promise rejecting later is the

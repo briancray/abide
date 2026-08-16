@@ -200,17 +200,6 @@ interface Reactive {
 }
 
 /**
- * The same grammar `desugar`'s binding walk reads, from the other end.
- *
- * Both ask "is the initializer at this `=` a source constructor", and the VOCABULARY is shared —
- * `REACTIVE_CONSTRUCTORS` is declared once, in `desugar.ts`, so neither can drift about what
- * constructs a source. What is not shared is the walk, because the two anchor differently: this one
- * starts at a `(` and steps BACK to find the callee and the name, since it is looking for every
- * declaration in a region; `desugar`'s starts at the declarer keyword and steps FORWARD, since it
- * already has a binding in hand and is only asking whether it declares rather than shadows. Merging
- * them would mean one walk that does both, which is more machinery than the predicate they share.
- */
-/**
  * The NAME a declaration binds, reading back from its `=` over an annotation if one is written.
  *
  * `const n = state(0)` puts the name next to the `=` and `const n: State<number> = state(0)` puts a
@@ -238,6 +227,17 @@ function declaredNameBefore(tokens: Token[], equalsAt: number): Token | undefine
     return undefined
 }
 
+/**
+ * The same grammar `desugar`'s binding walk reads, from the other end.
+ *
+ * Both ask "is the initializer at this `=` a source constructor", and the VOCABULARY is shared —
+ * `REACTIVE_CONSTRUCTORS` is declared once, in `desugar.ts`, so neither can drift about what
+ * constructs a source. What is not shared is the walk, because the two anchor differently: this one
+ * starts at a `(` and steps BACK to find the callee and the name, since it is looking for every
+ * declaration in a region; `desugar`'s starts at the declarer keyword and steps FORWARD, since it
+ * already has a binding in hand and is only asking whether it declares rather than shadows. Merging
+ * them would mean one walk that does both, which is more machinery than the predicate they share.
+ */
 function reactiveBindings(tokens: Token[], into: Reactive, memos?: Map<string, readonly string[]>): void {
     for (let i = 1; i < tokens.length; i++) {
         // `NAME = state(` — or `NAME = state<T>(`, whose type argument list sits between the two.
@@ -825,21 +825,6 @@ function checkNoProps(source: string, tokens: Token[], filename: string): void {
 }
 
 /**
- * A cell bound in a `<script module>`, rewritten to the per-caller form: `state.scoped(() => …)`.
- *
- * The block's scope and the value's scope disagreed, and this is where they are put back together.
- * Module scope on a server is one instance per PROCESS, so `const count = state(0)` there is one cell
- * for every visitor — while everything beside it in the same block already resolves per caller, an
- * argless `memo` through `scopedArgless` and a keyed one through its own cache. Wrapping the binding
- * is that mechanism reaching the two spellings it never covered.
- *
- * A THUNK rather than the value, because the initial has to be built per caller: sharing the `0` in
- * `state(0)` is harmless and sharing the generator in `state(ticking())` is the same bug one level in.
- *
- * The BINDING is what is recognised, the same shape `reactiveBindings` reads — so a factory
- * (`const make = () => state(0)`) is left alone, since what it builds is already one cell per call.
- */
-/**
  * A `watch` written as a STATEMENT in a `<script module>`, made per caller.
  *
  * The last of the three module-scope spellings that meant "once for the server process", and the one
@@ -891,6 +876,21 @@ function scopeEffects(rest: string): { text: string; kicks: string[] } {
     return { text: out, kicks }
 }
 
+/**
+ * A cell bound in a `<script module>`, rewritten to the per-caller form: `state.scoped(() => …)`.
+ *
+ * The block's scope and the value's scope disagreed, and this is where they are put back together.
+ * Module scope on a server is one instance per PROCESS, so `const count = state(0)` there is one cell
+ * for every visitor — while everything beside it in the same block already resolves per caller, an
+ * argless `memo` through `scopedArgless` and a keyed one through its own cache. Wrapping the binding
+ * is that mechanism reaching the two spellings it never covered.
+ *
+ * A THUNK rather than the value, because the initial has to be built per caller: sharing the `0` in
+ * `state(0)` is harmless and sharing the generator in `state(ticking())` is the same bug one level in.
+ *
+ * The BINDING is what is recognised, the same shape `reactiveBindings` reads — so a factory
+ * (`const make = () => state(0)`) is left alone, since what it builds is already one cell per call.
+ */
 function scopeCells(rest: string): string {
     const tokens = tokensOfBody(rest)
     // Collected then applied BACK TO FRONT, so an earlier splice cannot move a later one's offsets.
