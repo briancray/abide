@@ -37,7 +37,6 @@ import {
     nonceAttribute,
     settledArms,
     settledBoundary,
-    started,
     type TemplateResult,
 } from '$shared/html.ts'
 import { abideLog } from '$shared/log.ts'
@@ -648,11 +647,11 @@ function deferralFailed(id: number, error: unknown, what: string): string {
 function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
     const document = context.document as DocumentContext
     const id = document.nextId++
-    // STARTED here, synchronously, and awaited below — see `started`. The pending arm is arbitrary
-    // code that may probe or read this very operand, which is exactly what `{#if x.pending()}`
-    // compiles to, and `await` would not have reached a lazy operand's `then` until after that arm
-    // had already run and been told there was no load.
-    const settling = started(node.value as PromiseLike<unknown>)
+    // The operand itself, awaited below. It used to go through `started`, which reached a lazy
+    // cell's `then` synchronously so the load was running before the pending arm asked about it —
+    // `await` alone would not have, and the arm would have been told there was no load. The arm
+    // starts it now, because a probe starts what it reports.
+    const settling = node.value as PromiseLike<unknown>
     document.deferred.push({
         id,
         html: (async () => {

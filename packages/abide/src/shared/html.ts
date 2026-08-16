@@ -191,25 +191,6 @@ export function start(sources: readonly (() => unknown)[]): void {
     }
 }
 
-/**
- * Ask a thenable operand for its settle NOW, and hand back the promise of it.
- *
- * `await x` and `Promise.resolve(x)` both reach `x.then` from a microtask JOB, and a cell's `then` is
- * what STARTS a lazy load — a keyed memo slot starts nothing until something asks for its value. So a
- * block that renders its pending arm before that job runs is asking a probe about a load nobody has
- * begun, and gets `false`: the arm falls through to a read, which starts the load and signals, to an
- * effect whose next pass finds the block already claimed. One `then`, made where the ordering
- * matters, and both substrates await what it returns rather than the operand.
- */
-export function started<T>(operand: PromiseLike<T>): Promise<T> {
-    return Promise.resolve(operand.then(SAME))
-}
-
-// The extra promise and tick are the point of `started`; a fresh identity closure per call is not.
-function SAME<T>(value: T): T {
-    return value
-}
-
 // --- components -----------------------------------------------------------
 //
 // A component call, CARRIED rather than made. `<Card n={r.n}/>` used to emit `Card({ n: r.n })`, so

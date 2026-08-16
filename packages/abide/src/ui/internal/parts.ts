@@ -27,7 +27,6 @@ import {
     Streamed,
     settledArms,
     settledBoundary,
-    started,
     type TemplateResult,
 } from '$shared/html.ts'
 import {
@@ -303,7 +302,7 @@ export class ChildPart {
         if (isThenable(value)) {
             // Keep showing what is there until it lands — the server awaits the same value, so a
             // promise in a slot means the same thing on both sides.
-            this.settle(started(value), value, null)
+            this.settle(value, value, null)
             return
         }
         if (Array.isArray(value)) {
@@ -427,7 +426,7 @@ export class ChildPart {
             // an opaque range and let the settle replace them.
             this.owned = claimed
             this.holding = operand
-            this.settle(started(operand), operand, value.branches)
+            this.settle(operand, operand, value.branches)
             return
         }
 
@@ -444,7 +443,7 @@ export class ChildPart {
             // Same shape as the awaited case: the server has the answer, this side does not yet.
             this.owned = claimed
             this.generation++
-            this.settle(started(value), value, null)
+            this.settle(value, value, null)
             return
         }
 
@@ -511,7 +510,7 @@ export class ChildPart {
      * so a block stamps once for the whole of itself, including the arm it paints synchronously.
      *
      */
-    private settle(settling: Promise<unknown>, operand: unknown, branches: Branches | null): void {
+    private settle(settling: PromiseLike<unknown>, operand: unknown, branches: Branches | null): void {
         const generation = this.generation
         settling.then(
             (value) => {
@@ -565,11 +564,11 @@ export class ChildPart {
             this.show(settledArms(branches, false, operand), operand)
             return
         }
-        // STARTED before the pending arm runs, and the promise kept for the settle below — see
-        // `started`. The arm is arbitrary code that may itself probe or read this very operand, which
-        // is exactly what `{#if x.pending()}` compiles to, and a probe on a load nobody has begun
-        // answers `false`.
-        const settling = started(operand)
+        // The operand IS the settle — nothing has to be asked of it first. It used to be handed to
+        // `started`, whose whole job was reaching a lazy cell's `then` synchronously before the arm
+        // ran, because the arm is arbitrary code that probes this very operand and a probe on a load
+        // nobody had begun answered `false`. A probe starts what it reports now, so the arm kicks it.
+        const settling = operand
         this.show(pendingArm(branches), operand)
         // A stamp of its OWN, bumped after the pending arm is on screen rather than read off it.
         // That arm may itself be thenable — a cell is, and a cell is ordinary to put in a slot — in
