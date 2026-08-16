@@ -279,7 +279,8 @@ read reaches the network, exactly as it would have.
 | | |
 | --- | --- |
 | keyed by | the endpoint's ADDRESS and `keyOf(args)` — what the compiler wrote into the stub, and what a keyed memo already addresses its slot by. Neither side is told about the other |
-| never seeded | a handler that YIELDS (its value is the latest chunk and the transcript is the point, so there is no one answer to write down), and `renderDocumentToString`, whose whole reason to exist is a reader that runs no scripts |
+| a handler that YIELDS | seeded by its TRANSCRIPT, not by its value — the value is the latest chunk, so there is no one answer while it runs, and by the time the block is written there is. Without it the browser re-streams from the top: duplicated rows for a list, and for a generated answer the whole generation, paid twice and watched restarting. The client hands the transcript to `set` as one rather than replaying it, so the slot is settled in the call and a hydrating region adopts its rows instead of rebuilding them against a half-filled one |
+| never seeded | `renderDocumentToString`, whose whole reason to exist is a reader that runs no scripts |
 | costs nothing when off | a request that is not rendering a page opens no table, so an endpoint answering a fetch records nothing and builds no key |
 | turn it off for | a payload big enough that inlining costs more than fetching it, and an answer carrying FIELDS THE PAGE DID NOT RENDER — seeding writes the whole value into the document, not just the part the markup showed |
 

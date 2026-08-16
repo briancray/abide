@@ -87,6 +87,11 @@ export interface RpcOptions<Args = unknown, T = unknown> {
      * network — which is what you want for exactly two shapes. A payload big enough that inlining it
      * costs more than fetching it, and an answer carrying FIELDS THE PAGE DID NOT RENDER, since
      * seeding puts the whole value in the document and not just the part the markup showed.
+     *
+     * A handler that YIELDS is seeded by its transcript, so the first shape is the one to weigh: the
+     * answer goes in the document twice, once as markup and once as JSON. Off, the browser re-streams
+     * from the top — which for a list is duplicated rows and for a generated answer is the whole
+     * generation a second time.
      */
     seed?: boolean
 }
@@ -346,16 +351,25 @@ function declare<Args, T>(
     /**
      * Hand what this resolved to the document being rendered, if one is being rendered.
      *
-     * A STREAM is never seeded: its value is the latest chunk and its transcript is the point, so
-     * there is no one answer to write down. The address is `policy.address`, which the registry set
-     * when it learned where this declaration lives — the same string the client's stub was built
-     * with, which is what makes the two sides agree without either being told about the other.
+     * A STREAM is seeded by its TRANSCRIPT. Its value is the latest chunk, so there is no one answer
+     * while it runs — but by the time the document serialises there is, because the seed block is
+     * written after every deferred region settles and a streamed region drains before that. Without
+     * it the browser re-streams from the top, which for a list is duplicated work and for a generated
+     * answer is the whole generation, paid a second time and watched restarting.
+     *
+     * The cost is that the answer is in the document twice, once as markup and once as JSON — which
+     * is what `seed: false` is for on a transcript big enough that fetching it again is cheaper.
+     *
+     * The address is `policy.address`, which the registry set when it learned where this declaration
+     * lives — the same string the client's stub was built with, which is what makes the two sides
+     * agree without either being told about the other.
      */
-    const seeds = options.seed !== false && !streams
+    const seeds = options.seed !== false
     function collected(args: Args, produced: Produced<T>): Produced<T> {
         if (!seeds) return produced
         const table = seedsTable()
         if (table === null) return produced
+        if (streams) return recorded(args, produced as AsyncIterable<T>) as Produced<T>
         if (!isThenable(produced)) {
             table.set(seedKey(policy.address, args), produced)
             return produced
@@ -366,6 +380,26 @@ function declare<Args, T>(
             recordSeed(seedKey(policy.address, args), value)
             return value
         }) as Produced<T>
+    }
+
+    /**
+     * The same, for a stream: pass every chunk through and write the transcript down when it ends.
+     *
+     * A generator wrapper rather than a `.then`, because a stream has no one moment to hang the
+     * record on until it has none left. Recorded on COMPLETION only — a stream that failed or was
+     * abandoned mid-flight has a partial transcript, and seeding one would hand the browser a short
+     * answer it would never ask to complete.
+     *
+     * `recordSeed` and not the table directly, for the reason the promise arm gives: the document may
+     * already have serialised, and a stream ending after that must find nothing to write to.
+     */
+    async function* recorded(args: Args, produced: AsyncIterable<T>): AsyncIterable<T> {
+        const transcript: T[] = []
+        for await (const chunk of produced) {
+            transcript.push(chunk)
+            yield chunk
+        }
+        recordSeed(seedKey(policy.address, args), transcript)
     }
 
     const cache: MemoOptions<Args> = { ...retention, ttl }

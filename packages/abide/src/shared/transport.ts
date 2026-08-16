@@ -13,6 +13,7 @@
 
 import { type Channel, type ChannelOptions, channel, type KeyedChannel } from './channel.ts'
 import { markSource } from './internal/BRANDS.ts'
+import { Transcript } from './internal/graph.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { seedKey, takeSeed } from './internal/seed.ts'
 import { mounted } from './internal/mount.ts'
@@ -311,15 +312,26 @@ export function remote<Args, T, F extends Failed = never>(
      * arm paints straight away rather than showing a `pending()` placeholder for one network round
      * trip over markup that is already on screen and correct.
      *
-     * A STREAM is never seeded — see `RpcOptions.seed` — so that arm does not look.
+     * A STREAM looks too, and what it finds is the whole TRANSCRIPT the server drained. Handed over
+     * as one rather than replayed through the cell's `for await`, which costs a tick per chunk and
+     * would leave the slot `streaming` for as many microtasks as the answer has chunks — long enough
+     * for a hydrating region to read a partial transcript and rebuild rows against markup that
+     * already holds all of them. Settled in the call, the region adopts instead.
      */
     const load = streams
-        ? (args: Args): AsyncIterable<T> => chunks(args)
+        ? (args: Args): AsyncIterable<T> | Transcript => {
+              const held = takeSeed(seedKey(id, args))
+              return held === null ? chunks(args) : new Transcript(held.value as readonly T[])
+          }
         : (args: Args): Promise<T> | T => {
               const held = takeSeed(seedKey(id, args))
               return held === null ? value(args) : (held.value as T)
           }
-    const call = memo(load) as unknown as KeyedMemo<Args, T>
+    // Cast because a seeded stream hands back a `Transcript`, which `set` understands and the public
+    // body type deliberately does not name: it is what a server render already drained, never
+    // something an app writes. Widening `T | Promise<T> | AsyncIterable<T>` for it would put an
+    // internal shape on the surface every `memo` body is typed by.
+    const call = memo(load as (args: Args) => T) as unknown as KeyedMemo<Args, T>
 
     // The refusals are a claim about the TYPE and nothing else — a stub written by hand says what
     // the endpoint it addresses refuses with, the same way it says what it answers with. A stub the

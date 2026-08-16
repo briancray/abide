@@ -8,10 +8,11 @@
 
 import { channel, html, memo, raw, state, type TemplateResult } from 'abide'
 import { awaited, boundary, streamed } from 'abide/runtime'
-import { type Renderable, render, server } from 'abide/server'
-import { renderDocument, renderDocumentToString, renderToString, toStream } from 'abide/server/internal'
+import { GET, type Renderable, render, server } from 'abide/server'
+import { register, renderDocument, renderDocumentToString, renderToString, serve, toStream } from 'abide/server/internal'
+import { remote } from 'abide/runtime/transport'
 import { heldStream, isServing, shell } from 'abide/server/internal'
-import { container, sleep, suite } from 'harness'
+import { container, loopback, sleep, suite } from 'harness'
 import { floorTicks, keep, microtasks, settled, tick } from 'harness/measure'
 import { hydrate, mount } from 'abide/ui'
 import { button, el, output, row } from './dom.ts'
@@ -1350,6 +1351,44 @@ export default suite({
                 }
                 is('a plain read blocks instead', blocking.includes('READ'), true)
                 is('…with no placeholder to patch', blocking.includes('<slot-s'), false)
+            },
+        },
+        {
+            title: 'a stream the render drained is seeded by its TRANSCRIPT',
+            note: 'The handover a long stream used to lose. A server render drains the stream to build the markup, and the browser then re-streamed from the top — duplicated rows for a list, and for a generated answer the WHOLE generation, paid a second time and watched restarting. A stream has no one answer to seed WHILE it runs, since its value is the latest chunk; by the time the document serialises there is one, because the seed block is written after every deferred region settles and a streamed region drains before that. The transcript is what goes down, and the client hands it to `set` as a whole rather than replaying it chunk by chunk — a `for await` costs a tick each, and a hydrating region reading a half-filled transcript rebuilds its rows against markup already holding all of them. What it costs is the answer in the document twice, once as markup and once as JSON, which is what `seed: false` is for on a transcript too big to say twice.',
+            async server({ is }) {
+                const wire = loopback()
+                const tokens = GET(async function* ({ prompt }: { prompt: string }) {
+                    for (const word of prompt.split(' ')) yield word
+                })
+                register('rpc', [['demo/render/tokens', 'tokens']], { tokens })
+                const remoteTokens = remote<{ prompt: string }, string>('demo/render/tokens', {
+                    base: wire.base,
+                    fetch: wire.fetch,
+                    stream: true,
+                })
+
+                // A `server` face, and the request scope is the whole reason: seeding is COLLECTED
+                // on the scope, so `openSeeding` finds nothing to open without one and the block is
+                // never written. A browser has no `AsyncLocalStorage` to give it one.
+                let markup = ''
+                const rendering = renderDocument('<title>t</title>', () =>
+                    html`<article>${() =>
+                        streamed(remoteTokens({ prompt: 'the quick brown fox' }), (word: string) =>
+                        html`<span>${word}</span>`)}</article>`)
+                await serve(new Request('http://x/'), async () => {
+                    for await (const chunk of rendering) markup += chunk
+                })
+
+                is('every chunk is in the markup', /the[\s\S]*quick[\s\S]*brown[\s\S]*fox/.test(markup), true)
+                is('the document carries a seed block', markup.includes('id="abide-seed"'), true)
+                // The TRANSCRIPT, not the latest chunk — the thing that lets the browser skip the
+                // whole stream rather than replay its tail.
+                const block = /id="abide-seed"[^>]*>([\s\S]*?)<\/script>/.exec(markup)
+                const seeded = JSON.parse((block as RegExpExecArray)[1] as string) as Record<string, unknown>
+                const key = Object.keys(seeded).find((name) => name.startsWith('demo/render/tokens'))
+                is('…keyed by the address the stub was built with', key !== undefined, true)
+                is('…holding the whole transcript', seeded[key as string], ['the', 'quick', 'brown', 'fox'])
             },
         },
     ],

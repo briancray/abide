@@ -636,6 +636,33 @@ function hold(node: Node, track: Async, value: unknown): void {
 }
 
 /** Nothing is in flight any more, and it ended without a failure. */
+/**
+ * A stream that ALREADY HAPPENED — the whole transcript at once, settled in the call.
+ *
+ * `consume` is a `for await` and costs a tick per chunk however the chunks arrive, so replaying a
+ * seeded transcript through it would leave the cell `streaming` for as many microtasks as there are
+ * chunks. A hydrating region reading it in that window sees a partial transcript and rebuilds its
+ * rows against markup already holding all of them — which is the whole thing seeding a stream is for.
+ *
+ * The version moves ONCE and the value is written ONCE, from the last chunk. Pushing through `hold`
+ * per chunk would wake every reader n times for a transcript that was complete before any of them
+ * looked.
+ */
+function adoptTranscript(node: Node, chunks: readonly unknown[]): void {
+    const track = trackerFor(node)
+    track.generation++ // whatever was in flight is no longer wanted
+    resetChunks(track)
+    if (track.buffer === NO_CHUNKS) track.buffer = []
+    for (let i = 0; i < chunks.length; i++) {
+        track.buffer.push(node.transform === null ? chunks[i] : transformed(node, chunks[i]))
+    }
+    track.chunks.write((track.chunks.value as number) + 1)
+    track.streaming.write(false)
+    if (chunks.length > 0) hold(node, track, track.buffer[track.buffer.length - 1])
+    markSettled(track)
+    finish(track, node.value, false)
+}
+
 function markSettled(track: Async): void {
     track.error.write(undefined)
     track.pending.write(false)
@@ -920,6 +947,17 @@ let probedStream = false
 export function forgetProbedLoad(): void {
     probedPending = null
     probedStream = false
+}
+
+/**
+ * A whole transcript, handed to `set` as one — what a server render already drained.
+ *
+ * A class rather than a plain array, because an array IS a legitimate value for a cell to hold and
+ * the two must not be the same write. `set([1, 2])` holds an array; `set(transcript([1, 2]))` is a
+ * stream of two chunks that is already over.
+ */
+export class Transcript {
+    constructor(readonly chunks: readonly unknown[]) {}
 }
 
 /** Did the producer just probe a load that has not landed? */
@@ -1434,6 +1472,14 @@ function makeCell(node: Node, beforeRead: (() => void) | null): State<unknown> {
         }
         if (isAsyncIterable(value)) {
             consume(node, value)
+            return
+        }
+        // The third shape, and the rule reads the same as the other two: a promise is a LOAD, an
+        // async iterable is a STREAM, and a `Transcript` is a stream that already happened. Third
+        // rather than first so the two live shapes reach their arms on the checks they always did;
+        // what it costs is one `instanceof` on the plain-value path.
+        if (value instanceof Transcript) {
+            adoptTranscript(node, value.chunks)
             return
         }
         const track = node.asyncTrack
