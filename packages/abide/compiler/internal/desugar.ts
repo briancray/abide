@@ -610,14 +610,19 @@ export function desugar(
         if (tokens[accessAt]?.kind === SyntaxKind.ExclamationToken) accessAt++
         const access = tokens[accessAt]
 
-        // `source(…)` and `source?.(…)` — the author wrote the read.
-        if (access?.kind === SyntaxKind.OpenParenToken) continue
-        if (
-            access?.kind === SyntaxKind.QuestionDotToken &&
-            tokens[accessAt + 1]?.kind === SyntaxKind.OpenParenToken
-        ) {
-            continue
-        }
+        // `source()` and `source?.()` — the author wrote the read. WITH ARGUMENTS it is not one: a
+        // cell read takes none, so the arguments belong to whatever the cell HOLDS, and the read has
+        // to be emitted for them to reach it. That is what carries a CALLBACK prop through a lane
+        // where no type said it was a callback — `onpick(row.id)` becomes `onpick()(row.id)`.
+        // Keyed names never reach here: `m(args)` selects a slot and is answered above.
+        const opensAt =
+            access?.kind === SyntaxKind.OpenParenToken
+                ? accessAt
+                : access?.kind === SyntaxKind.QuestionDotToken &&
+                    tokens[accessAt + 1]?.kind === SyntaxKind.OpenParenToken
+                  ? accessAt + 1
+                  : -1
+        if (opensAt >= 0 && tokens[opensAt + 1]?.kind === SyntaxKind.CloseParenToken) continue
         // `source.set(…)` and the rest of the reserved surface. Matched on TEXT, not kind: `set` and
         // `get` scan as contextual keywords rather than identifiers.
         const member = tokens[accessAt + 1]

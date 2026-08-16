@@ -580,6 +580,41 @@ export default suite({
                     template(`${source}<p>{name + 1}</p>`),
                     '<p>${() => name() + 1}</p>',
                 )
+                // `x()` is the read. `x(a)` is not one — a cell read takes NO arguments, so they
+                // belong to what the cell holds and the read has to be emitted for them to reach it.
+                is('a call WITH arguments reads first', template(`${source}<p>{f(1)}</p>`), '<p>${() => f()(1)}</p>')
+                is(
+                    'a keyed memo is untouched, because its call selects',
+                    template("<script>import { memo } from 'abide'\nconst m = memo(({ id }) => id)</script><p>{m({ id: 1 })}</p>"),
+                    '<p>${() => m({ id: 1 })}</p>',
+                )
+            },
+        },
+
+        {
+            title: 'the JavaScript lane: a callback prop reaches the handler with no type to say so',
+            note: 'A `.abide` may carry no types at all, and then `props()` has no type argument for `classifyMember` to read — every prop classifies as a cell, `propCell` wraps the callback, and `onpick(row.id)` used to call the CELL and discard the handler. The rule that fixes it needs no classification: a cell read takes no arguments, so a call carrying some is a call of what the cell HOLDS. The two lanes then agree about behaviour while differing in text, which is the honest parity claim — the typed lane knows it is a callback and passes it through, the untyped one wraps it and reads it back.',
+            run({ is }) {
+                const js = "<script>import { props } from 'abide'\nconst { onpick } = props()</script><button onclick={() => onpick(1)}>x</button>"
+                const ts =
+                    "<script>import { props } from 'abide'\nconst { onpick } = props<{ onpick: (n: number) => void }>()</script><button onclick={() => onpick(1)}>x</button>"
+                is('untyped: the cell is read, then the handler called', template(js), '<button @click=${() => onpick()(1)}>x</button>')
+                is('typed: the handler is passed through as it always was', template(ts), '<button @click=${() => onpick(1)}>x</button>')
+                // The shapes the two lanes DO emit identically, so a future divergence has somewhere
+                // to fail. The setup text differs by construction — the typed source contains the
+                // type argument — so it is the TEMPLATE the lanes are compared on.
+                const lanes: [string, string, string][] = [
+                    ['a cell read', 'const n = state(0)', 'const n = state<number>(0)'],
+                    ['a value prop', 'const { row } = props()', 'const { row } = props<{ row: { n: number } }>()'],
+                ]
+                for (const [label, untyped, typed] of lanes) {
+                    const head = "import { state, props } from 'abide'\n"
+                    is(
+                        `both lanes emit one template: ${label}`,
+                        template(`<script>${head}${untyped}</script><p>{n ?? row.n}</p>`),
+                        template(`<script>${head}${typed}</script><p>{n ?? row.n}</p>`),
+                    )
+                }
             },
         },
 

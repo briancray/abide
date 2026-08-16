@@ -648,6 +648,7 @@ is sugar over it, not a replacement.
 | `source = v` | A write |
 | `source += v`, `source++`, `source = source + v` | Read through `peek` then write — a write must not subscribe, so an effect is never woken by its own write. All three spellings agree, and only the TARGET peeks: `a = a + b` still subscribes to `b`. `++`/`--` are statement position only |
 | `source()`, `source.set(v)`, `.peek`, `.pending`, … | Untouched. The shared surface is **reserved**; every other property belongs to the value. This is also how a write that DOES mean to subscribe is written — `x = x() + 1` — so there is no `untrack` to reach for. Punctuation between the name and the access comes with it: `source?.()`, `source!()` and `source!.set(v)` are the author's own spelling too |
+| `source(a, b)` | A read takes NO arguments, so a call carrying some is a call of what the cell **holds**: `source()(a, b)`. This is what lets a callback prop work in a lane where no type said it was a callback. A **keyed** memo is the exception and is answered before this — `m(args)` selects a slot |
 | `{await p}` | **Refused.** A slot is a thunk and a thunk is not async. A promise in a slot renders what it resolves to; a load to say something ABOUT goes in a cell |
 | shadowing | A `const`/`let`/parameter/`{#for}` binding of the same name shadows, so a loop variable is never read as a cell |
 | narrowing | A `{#if}`/`{:else if}`/`{#switch}` condition reads ONCE into a local and its branch narrows off that. The body's other reads keep their own thunks |
