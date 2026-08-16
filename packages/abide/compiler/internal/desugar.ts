@@ -602,13 +602,27 @@ export function desugar(
         // by one too, and skipping `b` in `a ? b : c` left the cell unread — rendered as its own
         // function in a slot, and unconditionally truthy in a condition, so the true arm always won.
         if (next?.kind === SyntaxKind.ColonToken && !closingColons.has(i + 1)) continue
-        // `source(…)` — the author wrote the read.
-        if (next?.kind === SyntaxKind.OpenParenToken) continue
+        // A non-null assertion is punctuation on the NAME, not part of the access after it, so step
+        // over it before asking what that access is. Reading `tokens[i + 1]` alone, `source!()` and
+        // `source!.set(v)` both fell through to the read branch and emitted `source()!()` and
+        // `source()!.set(v)` — the CELL called, and then its VALUE called or written to.
+        let accessAt = i + 1
+        if (tokens[accessAt]?.kind === SyntaxKind.ExclamationToken) accessAt++
+        const access = tokens[accessAt]
+
+        // `source(…)` and `source?.(…)` — the author wrote the read.
+        if (access?.kind === SyntaxKind.OpenParenToken) continue
+        if (
+            access?.kind === SyntaxKind.QuestionDotToken &&
+            tokens[accessAt + 1]?.kind === SyntaxKind.OpenParenToken
+        ) {
+            continue
+        }
         // `source.set(…)` and the rest of the reserved surface. Matched on TEXT, not kind: `set` and
         // `get` scan as contextual keywords rather than identifiers.
-        const member = tokens[i + 2]
+        const member = tokens[accessAt + 1]
         if (
-            (next?.kind === SyntaxKind.DotToken || next?.kind === SyntaxKind.QuestionDotToken) &&
+            (access?.kind === SyntaxKind.DotToken || access?.kind === SyntaxKind.QuestionDotToken) &&
             member !== undefined &&
             SOURCE_SURFACE.has(member.text)
         ) {

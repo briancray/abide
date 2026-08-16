@@ -447,6 +447,49 @@ export default suite({
                 // …and the fixture proves it renders, loaded through the real plugin.
                 const markup = await renderToString(Widget({}) as never)
                 is('and it renders', /<a href="\/x\/two\/y">go<\/a>/.test(markup), true)
+
+                // A hole that is ONE string folds back into the literal, which is how SPEC says a
+                // brace is written. The test is on the TOKENS: anchoring a regex to the first and
+                // last character folded anything that merely began and ended with a quote, so an
+                // expression BETWEEN two literals was swallowed as text and its reads went with it.
+                is(
+                    'a lone string folds into the literal',
+                    template('<button title="{\'hi\'}">x</button>'),
+                    '<button title="hi">x</button>',
+                )
+                is(
+                    'a literal brace, which is what the fold is for',
+                    template('<button title="{\'{\'}">x</button>'),
+                    '<button title="{">x</button>',
+                )
+                is(
+                    '…but a concatenation between two literals is an expression, and still reads',
+                    template(
+                        "<script>const name = state('x')</script><button title=\"{'Delete ' + name + '?'}\">x</button>",
+                    ),
+                    "<button title=${() => `${'Delete ' + name() + '?'}`}>x</button>",
+                )
+            },
+        },
+
+        {
+            title: '`x?.()` and `x!()` are the author’s own call, punctuation and all',
+            note: 'The explicit `x()` / `x.set(v)` spelling has to keep compiling — the sugar is over it, never instead of it. The guard for that read the token IMMEDIATELY after the name, so anything between the name and its call defeated it: an optional call `?.` or a non-null assertion `!`. Both then took the read branch and emitted `x()?.()` / `x()!()`, which call the CELL and then call whatever it handed back.',
+            run({ is }) {
+                const source = "<script>import { state } from 'abide'\nconst f = state(() => 1)\nconst name = state('x')</script>"
+                is('an optional call', template(`${source}<p>{f?.()}</p>`), '<p>${() => f?.()}</p>')
+                is('a non-null call', template(`${source}<p>{f!()}</p>`), '<p>${() => f!()}</p>')
+                // The reserved surface is reached through the same punctuation, so it moves with it.
+                is(
+                    'and the write surface behind either one',
+                    template(`${source}<button onclick={() => name!.set('y')}>x</button>`),
+                    "<button @click=${() => name!.set('y')}>x</button>",
+                )
+                is(
+                    'a bare name is still read',
+                    template(`${source}<p>{name + 1}</p>`),
+                    '<p>${() => name() + 1}</p>',
+                )
             },
         },
 

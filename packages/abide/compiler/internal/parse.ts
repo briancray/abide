@@ -460,6 +460,26 @@ function awaits(source: string): boolean {
 }
 
 /**
+ * The hole's text when it is ONE string literal and nothing else, or null.
+ *
+ * The question a regex over the first and last character could not ask: `'a' + b + 'c'` opens and
+ * closes with a quote without being a literal, and folding it into the markup dropped every read
+ * between them. `NoSubstitutionTemplateLiteral` counts — it is a literal with no holes by
+ * definition — while a template WITH holes scans as `TemplateHead` and does not.
+ */
+function onlyStringLiteral(source: string): string | null {
+    let found: string | null = null
+    for (const token of tokensOf(source)) {
+        if (found !== null) return null
+        if (token.kind !== SyntaxKind.StringLiteral && token.kind !== SyntaxKind.NoSubstitutionTemplateLiteral) {
+            return null
+        }
+        found = token.text.slice(1, -1)
+    }
+    return found
+}
+
+/**
  * How far into `text` the real expression starts.
  *
  * `code()` slices the ORIGINAL file from an `Expr.start` for `source.length` characters, so a source
@@ -613,11 +633,14 @@ function parseQuoted(reader: Reader, name: string, quote: string): Attribute {
             const start = reader.at
             const { text, end } = readExpression(reader.source, start)
             // `{'{'}` is how a literal brace is written (SPEC), so a lone-string hole folds back
-            // into the literal rather than becoming a slot.
+            // into the literal rather than becoming a slot. Decided by TOKEN: anchoring a regex on
+            // the first and last character folded any expression that merely began and ended with a
+            // quote, so `{'Delete ' + name + '?'}` became the text `Delete ' + name + '?` — the
+            // reads inside it gone, with no error and nothing rendered wrong enough to notice.
             const trimmed = text.trim()
-            const literalBrace = /^(['"])(.*)\1$/s.exec(trimmed)
-            if (literalBrace !== null) {
-                literal += literalBrace[2] as string
+            const only = onlyStringLiteral(trimmed)
+            if (only !== null) {
+                literal += only
             } else {
                 if (literal !== '') parts.push(literal)
                 literal = ''
