@@ -30,29 +30,30 @@ this table is stale and so is whatever else it says.
 
 | unit | files | lines |
 |---|---|---|
-| `packages/abide/compiler` | 19 | 7.5k |
+| `packages/abide/compiler` | 19 | 8.2k |
 | `packages/abide/cli` | 22 | 4.2k |
-| `packages/abide/src/shared` | 32 | 8.3k |
-| `packages/abide/src/server` | 21 | 6.6k |
+| `packages/abide/src/shared` | 34 | 8.8k |
+| `packages/abide/src/server` | 21 | 6.7k |
 | `packages/abide/src/ui` | 5 | 2.7k |
-| `packages/harness` | 18 | 3.9k |
-| `packages/dogfood/demos` | 134 | 21.6k |
-| `packages/dogfood/test` | 28 | 6.9k |
-| `packages/dogfood/pages` | 16 | 0.7k |
+| `packages/harness` | 18 | 4.0k |
+| `packages/dogfood/demos` | 206 | 24.7k |
+| `packages/dogfood/test` | 28 | 7.2k |
+| `packages/dogfood/pages` | 18 | 0.9k |
 | `packages/dogfood/site` | 16 | 1.9k |
 | `packages/perf` | 38 | 2.0k |
 
 `demos/fixtures` is no longer its own row — `checks.sh --units` counts it inside
-`packages/dogfood/demos`, which is why that number jumped. The 103 fixture files are ~1.7k of
-the 21.6k; the 31 suite files at the top level are the other 19.9k.
+`packages/dogfood/demos`, which is why that number jumped. The 173 fixture files are ~2.5k of
+the 24.7k; the 33 suite files at the top level are the other 22.2k.
 
 Every unit here fits in one agent's context whole, with one exception. Read it entirely; do not
 sample.
 
-**`dogfood/demos` is the one exception and it must be stated, not fudged.** 19.9k lines over 31
+**`dogfood/demos` is the one exception and it must be stated, not fudged.** 22.2k lines over 33
 suite files does not fit the way the others do, so it is read BY FACE: round F reads the `bench`
 faces and `vanilla.ts`, round G reads `run` / `interact` / `examples`. An agent told to read it
-"whole" will sample and not say so.
+"whole" will sample and not say so. Round D reads the `bench` faces too — 18 of the 33 suites
+have one.
 
 `packages/abide/cli` is a unit `abide/cli` is a public specifier for, and CLAUDE.md's directory
 structure does not list it. That is a CLAUDE.md gap to report, not to paper over.
