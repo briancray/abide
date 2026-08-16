@@ -266,17 +266,18 @@ export function component<P extends Record<string, unknown>>(
  * string. One rule is cheaper than that exception.
  *
  * What does NOT get a cell is `passedThrough`'s question.
+ *
+ * Grown key-by-key on purpose, and `{ ...props }` first was tried and reverted: seeding the record
+ * with a spread costs one map transition instead of one per prop, but it READS every prop twice —
+ * once for the spread and once for `props[name]` — and a prop is not always a plain field. It turned
+ * `/docs/syntax/for` rung 7 into a substrate disagreement. Anything faster here has to keep the read
+ * count at one per prop.
  */
 export function cellProps(props: Record<string, unknown>): Record<string, unknown> {
-    // COPIED first, then overwritten in place: the compiler emits the call site's props as one
-    // literal, so the spread inherits that map in a step and each `state()` lands on a key that
-    // already exists. Grown key-by-key it was one map transition per prop per row, and the record
-    // `writeProps` reads on every later pass had a map built by the prop COUNT rather than by a
-    // construction site. A pass-through prop is already in place and is not stored again.
-    const made: Record<string, unknown> = { ...props }
+    const made: Record<string, unknown> = {}
     for (const name in props) {
         const value = props[name]
-        if (!passedThrough(value)) made[name] = state(value)
+        made[name] = passedThrough(value) ? value : state(value)
     }
     return made
 }
