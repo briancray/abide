@@ -27,6 +27,7 @@ import vm from 'node:vm'
 // reached lazily through its row in `COMMANDS`, so the side effect costs `abide --help` nothing.
 import '$compiler/preload.ts'
 import * as SURFACE from '$abide'
+import { internals } from '$shared/internal/graph.ts'
 import { isThenable, messageOf } from '$shared/internal/probes.ts'
 import { isSource } from '$shared/internal/BRANDS.ts'
 import { STREAMING } from '$shared/internal/wire.ts'
@@ -406,16 +407,18 @@ function show(value: unknown, colors: boolean): string {
             : typeof source.refresh === 'function'
               ? 'memo'
               : 'state'
-    const failed = source.error()
+    // QUIETLY, all three: a probe kicks the load, and PRINTING a source must not run its body —
+    // inspecting a cold memo at the prompt would warm it, and the next line would print a different
+    // thing for having looked.
+    const failed = internals.quietly(() => source.error())
     if (failed !== undefined) {
         const said = failed instanceof Error ? `${failed.name}: ${failed.message}` : Bun.inspect(failed)
         return paint(`${kind} ✗ ${said}`, RED, colors)
     }
-    if (source.pending()) return paint(`${kind} (pending)`, DIM, colors)
+    if (internals.quietly(() => source.pending())) return paint(`${kind} (pending)`, DIM, colors)
     // A source that has not settled holds NOTHING, and `undefined` is a value it could legitimately be
-    // holding — so the two are said differently. Selecting a slot starts no work, which is exactly why
-    // a memo can be printed while still cold.
-    if (!source.settled()) {
+    // holding — so the two are said differently.
+    if (!internals.quietly(() => source.settled())) {
         return paint(`${kind} ${kind === 'channel' ? '(nothing yet)' : '(cold)'}`, DIM, colors)
     }
     return `${paint(kind, DIM, colors)} ${Bun.inspect(source.peek(), { colors })}`

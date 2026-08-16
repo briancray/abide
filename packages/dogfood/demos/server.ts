@@ -16,6 +16,7 @@ import { floorTicks, keep, microtasks, settled, tick } from 'harness/measure'
 import { hydrate, mount } from 'abide/ui'
 import { button, el, output, row } from './dom.ts'
 import Concurrent, { peakInFlight, reset as resetConcurrent } from './fixtures/concurrent.abide'
+import Deferring, { peakInFlight as peakDeferring, reset as resetDeferring } from './fixtures/deferring.abide'
 import Derived, { peakInFlight as peakDerived, reset as resetDerived } from './fixtures/derived.abide'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
@@ -1301,6 +1302,19 @@ export default suite({
                 const markup = await renderToString(Derived({}) as never)
                 is('both sides rendered', /LEFT\+LEFT[\s\S]*RIGHT\+RIGHT/.test(markup), true)
                 is('both loads were in flight together', peakDerived(), 2)
+            },
+        },
+        {
+            title: 'deferring blocks start their loads together too',
+            note: 'The same claim as the two above, on the path `start([…])` deliberately skips: a deferring block needs nothing from the compiler’s eager start, because the block asks its own operand for a settle as the walk passes and the arm’s `pending()` probe starts the load it reports. Either one alone is enough, which is why this is the gate rather than the reason — three 60ms panels measured 63ms with both, 63ms with only the probe, and 186ms with neither. Only the peak in flight can tell them apart: every arrangement produces the same document, three deferrals and all, so a markup test passes on the sum.',
+            async run({ is }) {
+                resetDeferring()
+                let markup = ''
+                for await (const chunk of renderDocument('<title>deferring</title>', () => Deferring({}) as never)) {
+                    markup += chunk
+                }
+                is('all three landed', /LEFT[\s\S]*MIDDLE[\s\S]*RIGHT/.test(markup), true)
+                is('all three were in flight together', peakDeferring(), 3)
             },
         },
     ],

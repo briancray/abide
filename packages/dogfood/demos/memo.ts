@@ -516,8 +516,8 @@ export default suite({
         },
 
         {
-            title: 'a probe observes; it never CAUSES',
-            note: 'Asking `pending()` on a cell whose load has not been kicked reports `false` and starts nothing. The two members that ask for the value — `()` and `await` — are the two that start one.',
+            title: 'a probe ASKS, and asking KICKS',
+            note: 'Every member that asks ABOUT the value starts the load: `()`, `await`, and the probes. `pending()` on a cell nobody had kicked used to report `false` — which reads as "no load is running" and meant "none has begun", a different fact wearing the same answer. Kicking makes it true, and makes a probe-first template work on its own: `{#if a.pending() || b.pending()}` starts both, with no compiler recognising the spelling. `peek` is the one member left that only observes, and SELECTING a keyed slot still starts nothing — the two places a caller can ask about a key without paying for it.',
             async run({ is }) {
                 let bodyRuns = 0
                 const report = memo(async () => {
@@ -526,21 +526,82 @@ export default suite({
                     return 'the report'
                 })
 
-                is('pending()', report.pending(), false)
+                is('peek() is what observes', report.peek(), undefined)
+                is('…and it started nothing', bodyRuns, 0)
+
+                is('pending() reports the load it just started', report.pending(), true)
+                is('body runs after the probe', bodyRuns, 1)
                 is('settled()', report.settled(), false)
                 is('error()', report.error(), undefined)
-                is('body runs after three probes', bodyRuns, 0)
+                is('…and neither of those started a second', bodyRuns, 1)
 
-                is('the READ starts it', report(), undefined)
-                is('body runs after the read', bodyRuns, 1)
+                is('the read has nothing yet — it is in flight', report(), undefined)
                 await sleep(30)
                 is('report() once it lands', report(), 'the report')
 
-                // …and so does an await, on a memo that has never been read.
+                // …and so does an await, on a memo nothing has asked about.
                 let awaited = 0
                 const other = memo(async () => `${++awaited}`)
-                is('probes leave it cold', other.settled(), false)
                 is('await DOES cause', await other, '1')
+                is('one body run for it', awaited, 1)
+            },
+        },
+
+        {
+            title: 'a probe starts what it ASKS — and `||` asks about one cell',
+            note: 'The reason the kick moved onto the probe, and the limit of what moving it buys. Deferring used to be decided by the COMPILER matching `{#if <cell>.pending()}` as the whole of a chain’s first test, so a gate spelled any other way started nothing and reported `false` forever; the runtime is the recogniser now, and whatever asks, starts — including a `memo` over a probe, which no regex could have seen. But it can only start what is EVALUATED, and `||` short-circuits: `{#if a.pending() || b.pending()}` starts `a` and leaves `b` cold until something reads it, which is the two-load waterfall in a new place rather than a fixed one. A gate over several loads has to ask about all of them — `[a.pending(), b.pending()].includes(true)`, which reads worse and is the honest spelling. Asserted in BODY RUNS: every one of these renders correctly either way, just a round trip apart.',
+            async run({ is }) {
+                let leftRuns = 0
+                let rightRuns = 0
+                const left = memo(async () => {
+                    leftRuns++
+                    await sleep(10)
+                    return 'L'
+                })
+                const right = memo(async () => {
+                    rightRuns++
+                    await sleep(10)
+                    return 'R'
+                })
+
+                // The spelling `deferrable` could never see: two cells, one placeholder. It answers
+                // correctly and starts ONE load, because `||` never evaluated the second probe.
+                is('the OR gate answers', left.pending() || right.pending(), true)
+                is('…but short-circuit left the second cold', [leftRuns, rightRuns], [1, 0])
+
+                // Asking about both is what starts both, and it has to be spelled that way.
+                is('asking about both', [left.pending(), right.pending()].includes(true), true)
+                is('…and now both are in flight', [leftRuns, rightRuns], [1, 1])
+
+                // And a gate lifted into a derivation, which is the same fact one level up.
+                let gateRuns = 0
+                const slow = memo(async ({ id }: { id: number }) => {
+                    gateRuns++
+                    await sleep(10)
+                    return `row ${id}`
+                })
+                const loading = memo(() => slow({ id: 1 }).pending())
+                is('a memo OVER a probe reports the load', loading(), true)
+                is('…which its own read started', gateRuns, 1)
+
+                // A NEGATED probe in a ternary — no `{#if}`, so nothing ever recognised it. It read
+                // `done()` false on a cold cell, rendered the placeholder and started nothing, on
+                // both substrates: a page stuck on 'Not done' for good, with the right markup.
+                let stuckRuns = 0
+                const report = memo(async () => {
+                    stuckRuns++
+                    await sleep(10)
+                    return 'ready'
+                })
+                is('the arm a cold cell takes', !report.done() ? 'Not done' : report(), 'Not done')
+                is('…and taking it started the load', stuckRuns, 1)
+
+                await sleep(40)
+                is('left', left(), 'L')
+                is('right', right(), 'R')
+                is('the row', slow({ id: 1 })(), 'row 1')
+                is('the ternary is no longer stuck', !report.done() ? 'Not done' : report(), 'ready')
+                is('and none of them loaded twice', [leftRuns, rightRuns, gateRuns, stuckRuns], [1, 1, 1, 1])
             },
         },
 
@@ -892,17 +953,19 @@ export default suite({
 
                 const handle = get({ id: 1 }) // selection alone
                 is('selecting starts nothing', bodyRuns, 0)
-                // Everything that only OBSERVES leaves it cold — the property that dies if the call
-                // kicks, because then there is no way to ask about a key without starting work on it.
+                // SELECTING and PEEKING are what leave it cold — the property that dies if the call
+                // kicks, because then there is no way to name a key without starting work on it.
+                // Asking is a different act, and it pays: see "a probe ASKS, and asking KICKS".
                 is('peek()', handle.peek(), undefined)
-                is('pending()', handle.pending(), false)
+                is('after a select and a peek, still cold', bodyRuns, 0)
+
+                is('pending() kicks it', handle.pending(), true)
+                is('body runs', bodyRuns, 1)
                 is('settled()', handle.settled(), false)
                 is('error()', handle.error(), undefined)
-                is('after four probes, still cold', bodyRuns, 0)
+                is('…and those two joined the load rather than starting one', bodyRuns, 1)
 
-                is('the READ kicks', handle(), undefined)
-                is('body runs', bodyRuns, 1)
-                is('pending()', handle.pending(), true)
+                is('the read has nothing yet', handle(), undefined)
                 is('await handle', await handle, 'v1')
 
                 // …and so does an await on a cold slot, or it would resolve `undefined` forever.
@@ -1232,11 +1295,12 @@ export default suite({
                 is('…and it settled, so the kick worked', loaded.peek(), [1, 2, 3])
                 view.dispose()
 
-                // The kick is still a kick: a load nobody started reports nothing pending.
+                // The kick is still a kick — but `pending()` cannot be what shows it any more, since
+                // ASKING starts the load too. `peek` is the only question left that does not.
                 const cold = memo(async () => 'x')
-                is('a load nobody started is not pending', cold.pending(), false)
+                is('nothing has landed, and looking did not start one', cold.peek(), undefined)
                 start([cold])
-                is('…and starting it makes it so', cold.pending(), true)
+                is('…and starting it makes it pending', cold.pending(), true)
                 await sleep(20)
                 is('…then it settles', cold.peek(), 'x')
             },

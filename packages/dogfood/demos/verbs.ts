@@ -104,13 +104,14 @@ export default suite({
 
                 page({ n: 1 }).invalidate()
                 is('invalidate — "is WRONG", so drop it', page({ n: 1 }).peek(), undefined)
-                is('settled()', page({ n: 1 }).settled(), false)
-                is('and it starts nothing on its own', page({ n: 1 }).pending(), false)
-                is('body runs', bodyRuns, 2)
+                is('peek looked without paying', bodyRuns, 2)
 
-                is('the next READ is what pays', page({ n: 1 })(), undefined)
+                // ASKING is what pays now, and `settled()` is an ask like any other.
+                is('settled()', page({ n: 1 }).settled(), false)
+                is('the ask kicked the reload', bodyRuns, 3)
+                is('…and pending() reports it', page({ n: 1 }).pending(), true)
                 await tick()
-                is('after that read', page({ n: 1 }).peek(), 'page 1, load #3')
+                is('after it lands', page({ n: 1 }).peek(), 'page 1, load #3')
             },
             interact({ host, log }) {
                 let bodyRuns = 0
@@ -669,9 +670,9 @@ export default suite({
 
                 session.invalidate()
                 is('invalidate drops it', session.peek(), undefined)
+                is('peek started nothing', runs, 2)
                 is('settled()', session.settled(), false)
-                is('and starts nothing', runs, 2)
-                is('the read is what starts it', session(), undefined)
+                is('…and asking kicked the reload', runs, 3)
                 await tick()
                 is('session()', session(), 'session#3')
 

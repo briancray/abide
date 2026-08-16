@@ -178,7 +178,12 @@ export class Node {
         // INSIDE the run writes its observers' status directly, and THAT one is consumed in place,
         // by the very read that pulled it. Effects have no observers, so nothing travels past here.
         if (this.runState !== NOT_RUNNING) {
-            this.runState = REMARKED
+            // …unless this run is the one that CAUSED the move, through a probe that kicks: the
+            // flip is written inside `pending()` and reported by the same call, so the run is
+            // answering from AFTER it, not before. That is the "consumed in place" exemption the
+            // paragraph above draws for a derivation pulled by a read, and it is the same shape —
+            // absorbing here is only wrong when the run answered first and the move came second.
+            if (this !== kickedBy) this.runState = REMARKED
             return
         }
         if (this.status >= next) {
@@ -892,14 +897,76 @@ function settledPromise(node: Node): Promise<unknown> {
     return Promise.resolve(node.value)
 }
 
-function attachAsync(read: Cell<unknown>, node: Node): void {
+// A cell with no load to kick — a plain `state(5)`, or a `state(promise)` whose promise the argument
+// already constructed — still calls through, so the probe closures have one shape rather than two.
+const NO_KICK = (): void => {}
+
+// Cleared only by `internals.quietly` — see there for why abide's own callers need it.
+let kicking = true
+
+// The node whose own probe is kicking a load right now, so `mark` can tell the flip this run caused
+// from one that landed under it. Null outside a kick, which is every path but the one below.
+let kickedBy: Node | null = null
+
+/**
+ * What a probe does before it answers: START the work, without taking the value.
+ *
+ * The two kinds of not-yet-started are different nodes, which is why this is not just `beforeRead`.
+ * A KEYED slot kicks through `beforeRead`. A DERIVATION holds its load in a body that has not run,
+ * and the tracker a probe reads is only written once it does — so a probe that skipped the pull
+ * reported `false` on an argless `memo` forever, which is the same lie this change is removing.
+ *
+ * UNTRACKED, because the probes carry their own signals: subscribing the asker to the VALUE here
+ * would wake a region that only asked `pending()` on every value that lands after.
+ */
+function kicker(node: Node, beforeRead: (() => void) | null): () => void {
+    if (beforeRead === null && node.fn === null) return NO_KICK
+    return () => {
+        if (!kicking) return
+        const previous = kickedBy
+        kickedBy = current
+        try {
+            if (beforeRead !== null) beforeRead()
+            if (node.fn !== null) untrack(() => node.pull())
+        } catch {
+            // Starting is never where a failure surfaces — a signal or a throw out of the body is
+            // reported by the read that renders, exactly as `start` in `html.ts` leaves it.
+        } finally {
+            kickedBy = previous
+        }
+    }
+}
+
+function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) | null): void {
+    // A PROBE KICKS THE LOAD, exactly as `()` and `await` do. Asking a cold slot `pending()` used to
+    // report `false` — not "no load is running" but "none has begun", which is a different fact
+    // wearing the same answer. Kicking makes the answer true and makes every probe-first spelling
+    // work on its own: `{#if a.pending() || b.pending()}` and a `memo` over probes start their loads
+    // for the same reason the recognised `{#if x.pending()}` did, without a compiler recognising it.
+    //
+    // Resolved once per cell rather than branched per call: a probe is read per region, and in a list
+    // per row.
+    const kick = kicker(node, beforeRead)
     // Written on every cell, so the shape stays monomorphic and `nodeOf` never misses.
     ;(read as unknown as Record<symbol, Node>)[CELL] = node
-    read.pending = () => trackerFor(node).pending.read() as boolean
-    read.refreshing = () => trackerFor(node).refreshing.read() as boolean
-    read.settled = () => trackerFor(node).settled.read() as boolean
-    read.error = () => trackerFor(node).error.read()
+    read.pending = () => {
+        kick()
+        return trackerFor(node).pending.read() as boolean
+    }
+    read.refreshing = () => {
+        kick()
+        return trackerFor(node).refreshing.read() as boolean
+    }
+    read.settled = () => {
+        kick()
+        return trackerFor(node).settled.read() as boolean
+    }
+    read.error = () => {
+        kick()
+        return trackerFor(node).error.read()
+    }
     read.chunks = () => {
+        kick()
         const track = trackerFor(node)
         track.chunks.read() // the VERSION is what a reader subscribes to; the buffer is pushed into
         // The BUFFER, not a copy of it. A copy per version reads well — a reader is handed something
@@ -915,7 +982,10 @@ function attachAsync(read: Cell<unknown>, node: Node): void {
         // the version is what tells it there is more.
         return track.buffer
     }
-    read.streaming = () => trackerFor(node).streaming.read() as boolean
+    read.streaming = () => {
+        kick()
+        return trackerFor(node).streaming.read() as boolean
+    }
     // Written here with the rest of the async surface, so every cell has the same shape whether or
     // not it ever meets a stream — the generator is built per loop, not per cell.
     read[Symbol.asyncIterator] = () => iterate(read)
@@ -927,6 +997,7 @@ function attachAsync(read: Cell<unknown>, node: Node): void {
     // a warm reload has an OUTCOME already — the last load finished, and `done` reports that — while
     // a stream mid-flight has not produced one yet, however many chunks it has handed over.
     read.done = () => {
+        kick()
         const track = trackerFor(node)
         return (
             track.settled.read() === true &&
@@ -990,8 +1061,8 @@ function nodeOf(cell: Cell<unknown>): Node {
 export const internals = {
     /**
      * A cell that has NOT settled: `undefined` is what it holds, not what it loaded. `beforeRead`
-     * fires on `()` and on `await`, and on no other member — so a slot kicks its own load from the
-     * read while `peek` and the probes still start nothing.
+     * fires on `()`, on `await` and on every probe — so a slot kicks its own load from any question
+     * asked of it, while `peek` alone still starts nothing.
      */
     cold<T>(beforeRead: () => void, transform?: (value: unknown) => unknown): State<T | undefined> {
         const node = new Node(undefined, null)
@@ -1005,6 +1076,28 @@ export const internals = {
     loading<T>(cell: Cell<T>): boolean {
         const track = nodeOf(cell as Cell<unknown>).asyncTrack
         return track !== null && (track.pending.value === true || track.refreshing.value === true)
+    },
+    /**
+     * Ask probes WITHOUT starting anything — for machinery routing or inspecting rather than
+     * displaying.
+     *
+     * A probe kicks the load now, which is right for an author asking in order to show something and
+     * wrong for every internal caller asking in order to decide what to do. Both of abide's own were
+     * bugs the moment probes started causing: the rpc responder asks `streaming()` one line after
+     * `handle()` already started the work, and on a MUTATION slot — stale by design, so that every
+     * ask runs it — the second kick ran the handler a SECOND time; and `repl` asks three of them to
+     * choose how to PRINT a source, which warmed every cold memo it displayed.
+     *
+     * A flag rather than a non-kicking twin per question, so a probe added later needs nothing here.
+     */
+    quietly<T>(fn: () => T): T {
+        const previous = kicking
+        kicking = false
+        try {
+            return fn()
+        } finally {
+            kicking = previous
+        }
     },
     /** Settle a failure IN THE CALL, for a body that threw synchronously. */
     fail<T>(cell: Cell<T>, error: unknown): void {
@@ -1256,9 +1349,9 @@ export interface Memo<T> extends Cell<T> {
     dispose(): void
 }
 
-// `beforeRead` runs on the two operations that ASK FOR THE VALUE — `x()` and `await x` — and on
-// nothing else. That is the seam a keyed slot kicks its load through: selecting a slot starts
-// nothing, reading it does, and a probe on the same handle still causes nothing at all.
+// `beforeRead` runs on every operation that ASKS ABOUT THE VALUE — `x()`, `await x`, and the probes.
+// That is the seam a keyed slot kicks its load through: SELECTING a slot starts nothing, and asking
+// it anything does. `peek` is the one member left that does not, which is what keeps it a question.
 function makeCell(node: Node, beforeRead: (() => void) | null): State<unknown> {
     // Every cell is a source, which is what a slot recognises. Branded before anything else is
     // assigned so the shape stays monomorphic.
@@ -1299,7 +1392,7 @@ function makeCell(node: Node, beforeRead: (() => void) | null): State<unknown> {
     // is the same answer a never-read slot gives.
     read.peek = () => node.value
     read.invalidate = () => resetNode(node)
-    attachAsync(read, node)
+    attachAsync(read, node, beforeRead)
     if (beforeRead !== null) {
         const settled = read.then.bind(read) as (a?: unknown, b?: unknown) => Promise<unknown>
         const target = read as unknown as {

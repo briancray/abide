@@ -9,6 +9,7 @@
 // the browser lane, so nothing about this file — or anything it imports — reaches a browser.
 
 import { type Channel, type ChannelOptions, channel, type KeyedChannel } from '$shared/channel.ts'
+import { internals } from '$shared/internal/graph.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { seedKey } from '$shared/internal/seed.ts'
 import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
@@ -432,7 +433,9 @@ export function respond<Args, T>(
     } catch {
         // A retained failure. Asked about below, where it becomes a status rather than a throw.
     }
-    if (handle.streaming() || handle.chunks().length > 0) {
+    // QUIETLY: a probe kicks the load, and `handle()` above already started it — on a mutation slot,
+    // stale by design, the second kick ran the handler again. This asks in order to ROUTE.
+    if (internals.quietly(() => handle.streaming() || handle.chunks().length > 0)) {
         // Time to the FIRST response rather than to the last chunk: the body is still being produced
         // when this returns, and a duration covering work that has not happened is a number that
         // means nothing. What the line reports is that the call became a stream and how fast.

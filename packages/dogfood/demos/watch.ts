@@ -553,7 +553,7 @@ export default suite({
 
         {
             title: 'a source this run MOVED wakes it again',
-            note: 'A body that reads an invalidated slot KICKS its load, and the load flips `pending` on the way — a source this same body read a line earlier, in this same run. The run is answering the value from BEFORE the flip, but the node is DIRTY for the whole of it, so absorbing that mark as "the one this run is already answering" left the effect sitting on the stale answer with no second flip coming. Only the run counts can see it: the gate reports `pending` false, produces nothing at all, and the next thing to wake it is the settle 20ms later — the right value, from a reader that never once showed the load. A derivation recomputed by a read INSIDE the run is the case this must NOT catch, and it is the ordinary one: that value is consumed in place, by the read that pulled it.',
+            note: 'A body that asks an invalidated slot anything KICKS its load, and the load flips `pending` on the way — a source this same body asked a line earlier, in this same run. The run is answering from BEFORE the flip, but the node is DIRTY for the whole of it, so absorbing that mark as "the one this run is already answering" left the effect sitting on the stale answer with no second flip coming. Only the run counts can see it: the gate produces nothing at all, and the next thing to wake it is the settle 20ms later — the right value, from a reader that never once showed the load. A derivation recomputed by a read INSIDE the run is the case this must NOT catch, and it is the ordinary one: that value is consumed in place, by the read that pulled it. The FIRST pass is the other half, and it is what changed when probes began kicking: `pending()` starts the load it is asked about, so the gate is true and the placeholder is shown — where before the probe reported `false` on a load nobody had begun, the body fell through to the read, and the reader never once showed what it was written to show.',
             async run({ is }) {
                 let loads = 0
                 const quote = memo(async ({ symbol }: { symbol: string }) => {
@@ -562,8 +562,8 @@ export default suite({
                     return `${symbol} @ ${++loads}`
                 })
                 const shown: string[] = []
-                // The `{#if x.pending()}` shape, in one effect: the gate is read BEFORE the read
-                // below is what starts the load that moves it.
+                // The `{#if x.pending()}` shape, in one effect: the gate is what STARTS the load it
+                // then reports, so the placeholder shows on the first pass rather than never.
                 const stop = watch(() => {
                     const slot = quote({ symbol: 'ABC' })
                     if (slot.pending()) {
@@ -573,14 +573,17 @@ export default suite({
                     shown.push(String(slot()))
                 })
                 await sleep(40)
-                is('the first pass signalled; the settle is what it showed', shown, ['ABC @ 1'])
+                is('the gate started the load and showed it', shown, ['loading…', 'ABC @ 1'])
 
                 quote({ symbol: 'ABC' }).invalidate()
                 await tick()
-                is('the flip its own read caused wakes it', shown, ['ABC @ 1', 'loading…'])
+                // ONCE, not twice: the gate kicked the load and reported it in the same call, so the
+                // flip is already in this run's answer and re-marking it would repaint the identical
+                // arm. Only the count says so — both runs push the same string.
+                is('the flip its own ask caused wakes it', shown, ['loading…', 'ABC @ 1', 'loading…'])
 
                 await sleep(40)
-                is('…and then the settle does', shown, ['ABC @ 1', 'loading…', 'ABC @ 2'])
+                is('…and then the settle does', shown, ['loading…', 'ABC @ 1', 'loading…', 'ABC @ 2'])
                 stop()
             },
         },

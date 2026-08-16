@@ -124,9 +124,10 @@ test('both laws meet over a real wire', async () => {
     )
     expect(result.registeredSockets.slice().sort()).toEqual(['feed/ticks', 'feed/rooms'].sort())
 
-    // A probe observes and never causes: selecting the slot started nothing.
+    // `peek` observes; a PROBE asks, and asking reaches the wire — over a real socket, not just in
+    // the emulator, which is the half a demo case cannot claim.
     expect(result.coldPeek).toBeNull()
-    expect(result.coldPending).toBe(false)
+    expect(result.coldPending).toBe(true)
 
     // The value came over the wire and is retained after it.
     expect(result.value).toEqual({ id: 7, name: 'user 7', connections: 1 })

@@ -197,8 +197,9 @@ function keyedMemo<Args, T>(
             return entry.slot
         }
 
-        // COLD, not `state(undefined)`: the slot holds nothing, it has not loaded nothing. The read
-        // is what kicks it — selecting the slot, peeking at it or probing it starts nothing.
+        // COLD, not `state(undefined)`: the slot holds nothing, it has not loaded nothing. ASKING is
+        // what kicks it — a read, an await or a probe — while selecting the slot and peeking at it
+        // start nothing.
         const slot: Slot<T> = {
             handle: undefined as unknown as MemoHandle<T>,
             loadedAt: 0,

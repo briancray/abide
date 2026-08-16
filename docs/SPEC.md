@@ -56,7 +56,7 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 | `memo` | `<T>(body: () => T, options?: MemoOptions) => Memo<T>` | A derived value that recomputes whenever anything it read changes. A promise or async iterable body is the same `Memo<T>`: a load that has not landed is not part of the read's type, because the read signals instead. |
 | `memo` | `<Args, T>(body: (args: Args) => T, options?: MemoOptions<Args>) => KeyedMemo<Args, T>` | A value computed per argument key, one independently cached slot per distinct args. Only the key is tracked; the body is untracked. |
 | `memo` | `(body, transform: (v: T) => Out, options?) => Memo<Out>` | The derived value passes through `transform`, untracked, and the memo becomes its return. Options still follow third. |
-| `m` | `(args: Args) => MemoHandle<T>` | SELECTS the slot and hands back its cell. Selecting starts nothing; the read kicks the load. |
+| `m` | `(args: Args) => MemoHandle<T>` | SELECTS the slot and hands back its cell. Selecting starts nothing; ASKING it anything — a read, an `await`, a probe — kicks the load. |
 | `m.invalidate` | `(pattern?: Partial<Args>) => void` | Every slot matching a subset of the args, compared the way slots are keyed. No pattern means every slot. |
 | `m.refresh` | `(pattern?: Partial<Args>) => void` | The same match, re-running each slot's body while it keeps serving what it holds. |
 | `invalidate` / `refresh` | `(selector: { tags: string[] }, scope?) => void` | Everything carrying any of the tags, without the caller knowing which memo that is. `scope` narrows to one memo's slots. |
@@ -201,6 +201,18 @@ Probes never throw and never start work.
 | `x.streaming` | `() => boolean` | It is currently producing chunks. |
 | `x.error` | `() => unknown` | The failure it ended with, if it failed. |
 | `x.isError` | `(error: unknown, name: string) => boolean` | Whether a caught failure is the one named — directly, or wrapped as another's `cause`. The NAME, so it answers over a wire. |
+
+**A probe KICKS the load it reports.** Asking about a value is a way of asking for it: a page writes
+`{#if x.pending()}` because it is about to show `x`. On a cold slot a probe used to answer `false`,
+which reads as "no load is running" and meant "none has begun" — a different fact wearing the same
+answer — so the arm shown was a placeholder for work nobody had started. Every probe now starts it,
+which is what lets ANY probe-first spelling defer without a compiler recognising the shape of it: a
+`memo` over a probe, an inverted test, a chain a regex could not match.
+
+It can only start what is EVALUATED. `||` short-circuits, so `{#if a.pending() || b.pending()}` starts
+`a` and leaves `b` cold until something reads it; a gate over several loads has to ask about all of
+them. `peek` is the one member left that observes without causing, and SELECTING a keyed slot still
+starts nothing — those two are how a caller asks about a key it does not intend to show.
 
 ## `rpc` — `memo` + transport
 
@@ -809,9 +821,9 @@ same walk and byte-identical markup.
 | the ROOTS under it | a slot naming a DERIVATION resolves to the loads beneath it, however many derivations deep, deduped and cycle-guarded. Starting the derivation would be the wrong half — its body runs only as far as the read it derives from, which signals, and the rest is discarded. A page reads `{total}` and never `{rows}`, so without this the loads are invisible until the walk reaches the first slot that derives from one: two independent roots behind two derivations each rendered in 124ms, three in 185ms, and both in 62ms once resolved |
 | a KEYED source is a root | `memo(() => catalogue({ … }))` names an rpc rather than another memo, so it is a load and exactly what this starts |
 | UNCONDITIONAL | the descent stops at every block and every component: a load inside a branch nobody takes is work the page never asked for, and a `{#for}` row's reads belong to the row |
-| a PLAIN read | a name or a member path off one, with no call in it. That excludes every probe in one condition — `{x.pending() ? … : x}` decides what to show from whether the load has BEGUN, so starting it early would turn a page that blocks into a placeholder that never leaves |
+| a PLAIN read | a name or a member path off one, with no call in it. That excludes every probe in one condition. The exclusion no longer decides what `{x.pending() ? … : x}` renders, though: a probe starts the load it reports, so that ternary shows its placeholder whether or not this call named the cell — and on a render with nowhere to patch, the placeholder is what ships. Asking about a load is saying you have something to show while it runs; a page that means to BLOCK reads the cell instead |
 | not a prop | a prop is a cell too, but it holds what the parent already resolved |
-| a deferring block needs nothing | `awaited` already asks its operand for the settle before the arm runs |
+| a deferring block needs nothing | TWO things start it and either alone is enough: `awaited` asks its operand for the settle as the walk passes, and the arm's own `pending()` probe starts the load it reports. The block sends its arm and the walk moves on, so three deferred panels are in flight together — three 60ms panels measure 63ms with either, and 186ms with neither. Gated on the PEAK IN FLIGHT rather than the clock, because every arrangement produces the same document |
 
 A failure is swallowed at the start and reported by the read that renders, which is where it was
 always reported. Nothing about what a page renders changes — only when its loads begin — which is why

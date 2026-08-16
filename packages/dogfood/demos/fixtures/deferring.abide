@@ -1,0 +1,48 @@
+<!-- Three independent loads, each behind its own DEFERRING block — `concurrent.abide`'s question asked
+     of the other path.
+
+     There the slots are unconditional plain reads, so the compiler's `start([…])` is what puts the
+     three loads in flight together. Nothing starts these: a deferring block sends its pending arm and
+     the walk moves on, so the load has to be kicked by the block itself or it does not begin until
+     something awaits it — and three that begin one after another cost their SUM while producing the
+     same document.
+
+     Two things kick them, and either alone is enough: `started()` asks the operand for its settle as
+     the walk passes, and the arm's own `pending()` probe now starts the load it reports. The counter
+     is the whole assertion — the markup is identical however many were ever in flight at once. -->
+<script module>
+import { memo } from 'abide'
+
+let inFlight = 0
+let peak = 0
+
+/** The most loads in flight at any one moment — a count, because the output cannot show this. */
+export const peakInFlight = (): number => peak
+
+/** Cold again, and counting from zero: these cells are module scope, so they outlive one render. */
+export const reset = (): void => {
+    left.invalidate()
+    middle.invalidate()
+    right.invalidate()
+    inFlight = 0
+    peak = 0
+}
+
+async function load(label: string): Promise<string> {
+    inFlight++
+    if (inFlight > peak) peak = inFlight
+    await new Promise((settle) => setTimeout(settle, 10))
+    inFlight--
+    return label
+}
+
+export const left = memo(() => load('LEFT'))
+export const middle = memo(() => load('MIDDLE'))
+export const right = memo(() => load('RIGHT'))
+</script>
+
+<div>
+    <section>{#if left.pending()}…{:else if left.error()}✗{:else}{left}{/if}</section>
+    <section>{#if middle.pending()}…{:else if middle.error()}✗{:else}{middle}{/if}</section>
+    <section>{#if right.pending()}…{:else if right.error()}✗{:else}{right}{/if}</section>
+</div>

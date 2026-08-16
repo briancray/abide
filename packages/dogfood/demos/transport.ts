@@ -81,14 +81,14 @@ export default suite({
     cases: [
         {
             title: 'a read is a keyed memo whose body is a fetch',
-            note: "Both halves of the law return the SAME THING — a keyed memo — so the caller's whole vocabulary is already written and identical on both sides. The CALL selects a slot and starts nothing; the READ is what reaches the server, which is why `peek` and the probes still answer on a cold key.",
+            note: "Both halves of the law return the SAME THING — a keyed memo — so the caller's whole vocabulary is already written and identical on both sides. The CALL selects a slot and starts nothing; ASKING is what reaches the server, and a probe is an ask — `{#if remoteUser({ id }).pending()}` is a page saying it will show this, so the fetch is in flight by the time the arm is chosen. `peek` is what still answers on a cold key without causing a request.",
             async run({ is }) {
                 const getUser = GET(({ id }: { id: number }) => find(id))
                 register('rpc', [['demo/read/getUser', 'getUser']], { getUser })
                 const remoteUser = client<{ id: number }, { id: number; name: string }>('demo/read/getUser')
 
                 is('selecting a slot starts nothing — peek()', remoteUser({ id: 7 }).peek(), undefined)
-                is('…and pending()', remoteUser({ id: 7 }).pending(), false)
+                is('…and pending() KICKS the fetch it reports', remoteUser({ id: 7 }).pending(), true)
 
                 is('the value came over the wire', await remoteUser({ id: 7 }), { id: 7, name: 'user 7' })
                 is('…and is retained after it', remoteUser({ id: 7 }).peek(), { id: 7, name: 'user 7' })
