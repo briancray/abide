@@ -2,7 +2,7 @@
 
 import { channel, html, memo, state, type TemplateResult, watch } from 'abide'
 import { renderToString } from 'abide/server/internal'
-import { container, sleep, suite } from 'harness'
+import { scratch, sleep, suite } from 'harness'
 import { tick } from 'harness/measure'
 import { mount } from 'abide/ui'
 import { button, field, output, row, stage } from './dom.ts'
@@ -38,8 +38,7 @@ export default suite({
                     </div>
                 `
 
-                const host = container()
-                mount(host, view)
+                const host = scratch(view)
                 is(
                     'the client painted the shell',
                     host.querySelector('p')?.textContent?.includes('count 0'),

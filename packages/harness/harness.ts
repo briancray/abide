@@ -27,13 +27,17 @@
 // test runner. `ctx.is(...)` records a line and throws an `AssertionError` on mismatch: the runner
 // turns that into a failed test, the page paints it red.
 //
-// This entry point imports `abide`; `harness/measure` deliberately does not, and the numbers live
-// there for that reason. `harness/spawn` is the third, and is bun-only.
+// This entry point imports `abide` and — for `scratch` — `abide/ui`; `harness/measure` deliberately
+// imports neither, and the numbers live there for that reason. `harness/spawn` is the third, and is
+// bun-only.
 
 // `isPending` is public surface for exactly this: any code that catches around a reactive read has to
 // be able to tell a not-ready-yet SIGNAL from a failure and pass it on, and a JavaScript catch is
 // total. `watch` because a recording reader IS an effect.
 import { isPending, type TemplateResult, watch } from 'abide'
+// `abide/ui` for `scratch` below, and it costs this entry point nothing on a server: the entry's two
+// installs are guarded, so importing it where there is no document is a no-op rather than a throw.
+import { mount, type Mounted } from 'abide/ui'
 import { AssertionError, equals, fail, messageMatches, show } from './internal/assert.ts'
 import type { Arm } from './internal/bench.ts'
 import type { Framed } from './internal/frame.ts'
@@ -462,10 +466,41 @@ export function container(): HTMLElement {
 }
 
 /**
- * Drop whatever the last case left behind. Idempotent, and free for a case that cleaned up after
- * itself — which is still the ordinary thing for a case to do, because removing its own container is
- * sometimes part of what it is measuring.
+ * Scratch space with a VIEW already in it — `container()` and the `mount` over it, as one call.
+ *
+ * A host and the root that writes into it are two things with ONE lifetime, and only the host was
+ * ever cleaned up. Sweeping drops the nodes, which is what a page looks like; the root goes on
+ * subscribing to every cell the view read, so the next write to one of those still reaches a
+ * component nobody can see — and a bench counting that write counts it once per copy left behind.
+ * The parity arms on `/bench/compiler` read 2 DOM calls on their first run and 4 on their second for
+ * exactly that reason, with the markup correct throughout and no test able to see it.
+ *
+ * So the disposal is the mechanism's rather than the author's: every runner sweeps in a `finally`, so
+ * a view rendered through here cannot outlive the case or the bench row that rendered it. `mount` and
+ * `container()` by hand still compile and are still right where a case DISPOSES on purpose — timing
+ * what a teardown costs, or asserting that one happened.
+ *
+ * The `Mounted` list is per MOUNT, not per iteration, which is what makes it affordable where the
+ * holder alone could not be: an arm mounts in `prepare` and writes cells in `run`.
+ */
+export function scratch(view: () => TemplateResult): HTMLElement {
+    const host = container()
+    MOUNTED.push(mount(host, view))
+    return host
+}
+
+const MOUNTED: Mounted[] = []
+
+/**
+ * Drop whatever the last case left behind — the roots `scratch` made, and then the nodes. Idempotent,
+ * and free for a case that cleaned up after itself, which is still the ordinary thing for a case to
+ * do because removing its own container is sometimes part of what it is measuring.
+ *
+ * Roots first: a disposal writes to the nodes it is taking down, and doing it after the holder is
+ * emptied would be a teardown against detached DOM — right, but not the thing that was measured.
  */
 export function sweepContainers(): void {
+    for (const held of MOUNTED) held.dispose()
+    MOUNTED.length = 0
     HOLDER?.replaceChildren()
 }

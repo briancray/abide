@@ -3,8 +3,7 @@
 // while waking readers nothing moved for is the wrong implementation.
 
 import { state, watch } from 'abide'
-import { mount } from 'abide/ui'
-import { container, reader, sleep, suite, until } from 'harness'
+import { reader, scratch, sleep, suite, until } from 'harness'
 import { keep, settled, tick } from 'harness/measure'
 import { isolate } from '$shared/internal/scopes.ts'
 import { button, el, field, row, stage } from './dom.ts'
@@ -871,8 +870,7 @@ export default suite({
                 // that nothing had touched the page yet, which is true under `bun test` and not true in
                 // a browser where somebody has already clicked the button.
                 exampleCount.set(0)
-                const host = container()
-                mount(host, () => Example({}))
+                const host = scratch(() => Example({}))
                 const line = (): string | undefined => host.querySelector('p')?.textContent ?? undefined
 
                 is('the cell is on the page', line(), 'count 0 · doubled 0')

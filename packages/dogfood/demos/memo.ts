@@ -5,8 +5,7 @@
 
 import { memo, state, watch } from 'abide'
 import { start } from 'abide/runtime'
-import { mount } from 'abide/ui'
-import { container, reader, show, sleep, suite, until } from 'harness'
+import { reader, scratch, show, sleep, suite, until } from 'harness'
 import { countCalls, keep, tick } from 'harness/measure'
 import { button, field, row, stage } from './dom.ts'
 // The rungs the case at the bottom asserts. Two of them, because the two FORMS are two rungs: a
@@ -1245,8 +1244,7 @@ export default suite({
 
                 // Rung 1 — the derive form. Synchronous, so it is painted by the time `mount` returns.
                 deriveQuery.set('cd')
-                const derive = container()
-                mount(derive, () => Derive({}))
+                const derive = scratch(() => Derive({}))
                 is('a derivation paints at once', derive.querySelector('p')?.textContent, 'CD')
                 deriveQuery.set('ab')
                 derive.remove()
@@ -1254,8 +1252,7 @@ export default suite({
                 // Rung 3 — the load form, whose whole claim is the region: a placeholder now, the list
                 // when it lands, and nothing in the markup awaiting anything.
                 loadQuery.set('cd')
-                const load = container()
-                mount(load, () => Load({}))
+                const load = scratch(() => Load({}))
                 is('a load shows its placeholder', load.querySelector('p')?.textContent, 'searching…')
 
                 await until(() => load.querySelector('li') !== null, 'the load to land')

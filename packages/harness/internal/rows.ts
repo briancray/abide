@@ -24,8 +24,7 @@
 //     minimal keyed reconcile from a rebuild; a two-row swap can
 
 import { type State, state } from 'abide'
-import type { Bench, Case, Suite } from '../harness.ts'
-import { isThenable } from './probes.ts'
+import { type Bench, type Case, type Suite, sweepContainers } from '../harness.ts'
 import {
     type Arm,
     duration,
@@ -40,6 +39,7 @@ import {
     total,
     verdict,
 } from '../measure.ts'
+import { isThenable } from './probes.ts'
 
 /** One arm's row. One shape for all four kinds, so a row is never two different objects. */
 export interface ArmRow {
@@ -158,14 +158,18 @@ async function profileArm(arms: Runnable[], label: string, ops: number): Promise
     const arm = arms.find((candidate) => candidate.label === label)
     if (arm === undefined) throw new Error(`bench: no arm named ${JSON.stringify(label)}`)
     await arm.prepare?.()
-    // Warmed before the caller's first read, for the reason every other measurement here warms: a
-    // parse, a first-call cache and a cold call site are one-time costs, and a profiler bracketing
-    // twenty ops would otherwise attribute all three to the twenty.
-    const produced = arm.run(0)
-    if (isThenable(produced)) await produced
-    for (let i = 0; i < ops; i++) {
-        const each = arm.run(i + 1)
-        if (isThenable(each)) await each
+    try {
+        // Warmed before the caller's first read, for the reason every other measurement here warms: a
+        // parse, a first-call cache and a cold call site are one-time costs, and a profiler bracketing
+        // twenty ops would otherwise attribute all three to the twenty.
+        const produced = arm.run(0)
+        if (isThenable(produced)) await produced
+        for (let i = 0; i < ops; i++) {
+            const each = arm.run(i + 1)
+            if (isThenable(each)) await each
+        }
+    } finally {
+        sweepContainers()
     }
 }
 
@@ -302,7 +306,15 @@ export function benchRow(suite: string, spec: Case, bench: Bench): BenchRow {
             status.set('running…')
             noisy.set(false)
             await frame()
-            await paint()
+            try {
+                await paint()
+            } finally {
+                // Whatever the arms rendered into `container()` and did not take down. The other two
+                // runners sweep in their own `finally` and this one did not, so on `/bench` — where
+                // `document.body` is the page somebody is reading — every run left another copy of
+                // the arm's markup stacked up unstyled under the table.
+                sweepContainers()
+            }
             status.set(done)
         },
     }

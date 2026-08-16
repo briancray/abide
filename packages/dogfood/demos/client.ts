@@ -7,7 +7,7 @@
 
 import { html, memo, state, type State, type TemplateResult } from 'abide'
 import { awaited, component, keyed, streamed } from 'abide/runtime'
-import { container, sleep, suite, until } from 'harness'
+import { container, scratch, sleep, suite, until } from 'harness'
 import {
     countCalls,
     install,
@@ -355,9 +355,7 @@ export default suite({
             async run({ is, log }) {
                 const count = state(0)
                 const name = state('ada')
-                const host = container()
-                mount(
-                    host,
+                const host = scratch(
                     () =>
                         html`<p><span>name</span> ${() => name()} · <span>count</span> ${() => count()}</p>`,
                 )
@@ -404,8 +402,7 @@ export default suite({
             async run({ is }) {
                 const level = state('high')
                 const label = state('steady')
-                const host = container()
-                mount(host, () => html`<p class=${() => level()}>${() => label()}</p>`)
+                const host = scratch(() => html`<p class=${() => level()}>${() => label()}</p>`)
 
                 const same = await measureFlush(() => {
                     level.set('high')
@@ -458,8 +455,7 @@ export default suite({
             async run({ is }) {
                 const cls = state('a')
                 const other = state(0)
-                const host = container()
-                mount(host, () => html`<i class=${() => cls()} data-n=${() => String(other())}>x</i>`)
+                const host = scratch(() => html`<i class=${() => cls()} data-n=${() => String(other())}>x</i>`)
 
                 // Spied on the ELEMENT, not `Element.prototype`. The prototype is shared with the page
                 // this case is running inside: on `/tests` the row's own status badge writes its class
@@ -483,8 +479,7 @@ export default suite({
             note: '1000 rows, one of them edited. A whole-list rebuild produces the same screen and a thousand times the work. The hand-written arm wins on TIME and always will — it walks nothing, because the author already knew which row it was — so the arm to read the abide one against is the third: setting an array asks for the whole list to be described again, and describing it is most of what the op costs before any reconciling starts.',
             async run({ is, log }) {
                 const rows = state(build(1000))
-                const host = container()
-                mount(host, () => list(rows))
+                const host = scratch(() => list(rows))
                 is('1000 rows', host.querySelectorAll('li').length, 1000)
                 const nodes = Array.from(host.querySelectorAll('li'))
 
@@ -710,8 +705,7 @@ export default suite({
                 ] as const) {
                     const source = build(100)
                     const rows = state(source)
-                    const host = container()
-                    mount(host, () => keyedList(rows))
+                    const host = scratch(() => keyedList(rows))
                     await tick()
                     const before = new Map(
                         Array.from(host.querySelectorAll('li')).map((li) => [li.textContent, li]),
@@ -823,8 +817,7 @@ export default suite({
                     perRow: number,
                 ): Promise<{ moved: number; labels: (string | null)[] }> => {
                     const rows = state(build(200))
-                    const host = container()
-                    mount(host, () => html`<ul>${() => rows().map((item) => keyed(item.id, view(item)))}</ul>`)
+                    const host = scratch(() => html`<ul>${() => rows().map((item) => keyed(item.id, view(item)))}</ul>`)
                     await tick()
                     // Every row below the drop shifts INDEX, so nothing here is outside the walk's
                     // changed range: the rows are reconsidered and then left where they are.
@@ -901,8 +894,7 @@ export default suite({
             note: 'What a feed does on every poll, and the mutation the whole-array cases cannot show: a reconcile that is right for an EDIT can still rebuild the tail. The thousand rows already there must be left alone — same elements, no text writes — and only the ten new ones created.',
             async run({ is, log }) {
                 const rows = state(build(1000))
-                const host = container()
-                mount(host, () => list(rows))
+                const host = scratch(() => list(rows))
                 const nodes = Array.from(host.querySelectorAll('li'))
 
                 const work = await measureFlush(() => {
@@ -1026,9 +1018,7 @@ export default suite({
                         return labels
                     }
                     const rows = state(build(30))
-                    const host = container()
-                    mount(
-                        host,
+                    const host = scratch(
                         () => html`<ul>${() => rows().map((item) => keyed(item.id, view(item)))}</ul>`,
                     )
                     await tick()
@@ -1253,8 +1243,7 @@ export default suite({
             note: 'Without a key a row is identified by its index, so a swap rewrites both rows’ text rather than moving two nodes. That is cheaper for an edit and wrong for a reorder — which is the whole reason `keyed` exists.',
             async run({ is }) {
                 const rows = state(build(5))
-                const host = container()
-                mount(host, () => list(rows))
+                const host = scratch(() => list(rows))
                 const nodes = Array.from(host.querySelectorAll('li'))
 
                 const work = await measureFlush(() => rows.set(swapped(rows.peek(), 1, 3)))
@@ -1335,8 +1324,7 @@ export default suite({
                         return `${n}:${value()}`
                     }}</p>`
 
-                const host = container()
-                mount(host, () => html`<div>${() => pane(patch())}</div>`)
+                const host = scratch(() => html`<div>${() => pane(patch())}</div>`)
                 is('one run on mount', runs, 1)
 
                 for (let i = 1; i <= 3; i++) {
@@ -1370,8 +1358,7 @@ export default suite({
                                     runs++
                                     return `${n}:${value()}`
                                 }}</p>`
-                            const host = container()
-                            mount(host, () => html`<div>${() => pane(patch())}</div>`)
+                            const host = scratch(() => html`<div>${() => pane(patch())}</div>`)
                             for (let i = 1; i <= 50; i++) {
                                 patch.set(i)
                                 await tick()
@@ -1411,9 +1398,7 @@ export default suite({
                 }
 
                 const items = state(build(50))
-                const host = container()
-                mount(
-                    host,
+                const host = scratch(
                     () => html`<ul>${() => items().map((i) => keyed(i.id, html`<li>${i.label}</li>`))}</ul>`,
                 )
                 await tick()
@@ -1435,9 +1420,7 @@ export default suite({
                 // A thunk is a fresh closure on every reconcile, so no row can ever be skipped.
                 painted = 0
                 const thunked = state(build(50))
-                const other = container()
-                mount(
-                    other,
+                const other = scratch(
                     () =>
                         html`<ul>${() => thunked().map((i) => keyed(i.id, html`<li>${() => i.label}</li>`))}</ul>`,
                 )
@@ -1460,9 +1443,7 @@ export default suite({
                 // reactive but the list itself, so a repaint of row 3 is work nobody asked for.
                 painted = 0
                 const handled = state(build(50))
-                const third = container()
-                mount(
-                    third,
+                const third = scratch(
                     () =>
                         html`<ul>${() =>
                             handled().map((i) =>
@@ -1510,8 +1491,7 @@ export default suite({
                             return out
                         }
                         const items = state(build())
-                        const host = container()
-                        mount(host, () =>
+                        const host = scratch(() =>
                             thunk
                                 ? html`<ul>${() => items().map((i) => keyed(i.id, html`<li>${() => i.label}</li>`))}</ul>`
                                 : html`<ul>${() => items().map((i) => keyed(i.id, html`<li>${i.label}</li>`))}</ul>`,
@@ -1736,8 +1716,7 @@ export default suite({
                         return `v${k}`
                     },
                 })
-                const host = container()
-                mount(host, () => {
+                const host = scratch(() => {
                     const k = n()
                     return html`<b>${bomb(k)}</b><i>${k === 1 ? 'one' : 'two'}</i><u>${k}</u>`
                 })
@@ -1768,8 +1747,7 @@ export default suite({
             note: 'A top-level child slot inserts what it renders before its anchor comment, which is still inside the fragment while the instance is being built. Recording the instance’s nodes before that first update captured only the anchor — so the content was left orphaned in the fragment and the template painted BLANK until some later update happened to re-place it.',
             async run({ is }) {
                 const items = state(['a', 'b'])
-                const host = container()
-                mount(host, () => html`${() => items().map((x) => html`<li>${x}</li>`)}`)
+                const host = scratch(() => html`${() => items().map((x) => html`<li>${x}</li>`)}`)
                 is(
                     'a list at the root',
                     Array.from(host.querySelectorAll('li')).map((li) => li.textContent),
@@ -1777,8 +1755,7 @@ export default suite({
                 )
 
                 const label = state('hello')
-                const text = container()
-                mount(text, () => html`${() => label()}`)
+                const text = scratch(() => html`${() => label()}`)
                 is('a bare text slot at the root', text.textContent, 'hello')
                 host.remove()
                 text.remove()
@@ -1790,8 +1767,7 @@ export default suite({
             note: 'No `<Suspense>` and no second spelling: the slot reads the cell, and the cell wakes it once the load settles.',
             async run({ is }) {
                 const session = state(Promise.resolve('ada'))
-                const host = container()
-                mount(host, () => html`<p>${() => (session.pending() ? '…' : session())}</p>`)
+                const host = scratch(() => html`<p>${() => (session.pending() ? '…' : session())}</p>`)
                 is('while it is cold', host.querySelector('p')?.textContent, '…')
                 await tick()
                 is('once it lands', host.querySelector('p')?.textContent, 'ada')
@@ -1827,9 +1803,7 @@ export default suite({
             note: 'The probe above is optional, not the price of admission. A cold read SIGNALS rather than handing back `undefined`, and the slot effect is what stands under it: no output for that region, no throw out of the mount, and one repaint on the wake the graph was going to send anyway. The signal fires on the READ, so an expression built out of one never gets as far as producing garbage — no `undefined.name`, no `NaN`.',
             async run({ is }) {
                 const session = state(Promise.resolve({ name: 'ada', visits: 2 }))
-                const host = container()
-                mount(
-                    host,
+                const host = scratch(
                     () => html`<p>${() => session()?.name}</p>
                         <b>${() => (session()?.visits ?? 0) + 1}</b>`,
                 )
@@ -1848,9 +1822,7 @@ export default suite({
             async run({ is }) {
                 const query = state('a')
                 const gate: ((value: string) => void)[] = []
-                const host = container()
-                mount(
-                    host,
+                const host = scratch(
                     () =>
                         html`<p>${() => {
                             query()
@@ -1914,8 +1886,7 @@ export default suite({
             async run({ is }) {
                 const search = memo(async ({ q }: { q: string }) => `results for ${q}`)
                 const query = state('a')
-                const host = container()
-                mount(host, () => html`<p>${() => search({ q: query() })}</p>`)
+                const host = scratch(() => html`<p>${() => search({ q: query() })}</p>`)
                 is('cold', host.querySelector('p')?.textContent, '')
                 await tick()
                 is('once it lands', host.querySelector('p')?.textContent, 'results for a')
@@ -1938,9 +1909,7 @@ export default suite({
                 const teardown = async (n: number): Promise<number> => {
                     const items = build(n)
                     const shown = state(true)
-                    const host = container()
-                    mount(
-                        host,
+                    const host = scratch(
                         () =>
                             html`<div>${() =>
                                 shown()
@@ -1967,8 +1936,7 @@ export default suite({
             async run({ is, log }) {
                 const drop = async (row: (item: Item) => TemplateResult): Promise<number> => {
                     const rows = state(build(20))
-                    const host = container()
-                    mount(host, () => html`<ul>${() => rows().map((item) => keyed(item.id, row(item)))}</ul>`)
+                    const host = scratch(() => html`<ul>${() => rows().map((item) => keyed(item.id, row(item)))}</ul>`)
                     await tick()
                     // Ten of twenty, from the middle, so the drop is not also a truncation.
                     const work = await measureFlush(() => rows.set(rows.peek().slice(0, 10)))
@@ -2300,9 +2268,7 @@ export default suite({
                     return Promise.resolve(`load ${loads}`)
                 }
                 const beside = state(0)
-                const host = container()
-                mount(
-                    host,
+                const host = scratch(
                     () =>
                         html`<p>${() => beside()}</p><b>${() => awaited(load(), { pending: () => html`pending`, then: (value) => html`${value}`, catch: undefined, finally: undefined })}</b>`,
                 )
@@ -2335,9 +2301,7 @@ export default suite({
                 const chain = (): unknown =>
                     html`<section><h2>panel</h2><p>rows ${() => rows()}</p></section>`
                 const arm = (): unknown => html`${chain}`
-                const host = container()
-                mount(
-                    host,
+                const host = scratch(
                     () =>
                         html`<div>${() => awaited(loading, { pending: arm, then: arm, catch: arm, finally: undefined })}</div>`,
                 )
@@ -2365,9 +2329,7 @@ export default suite({
                     await sleep(20)
                     return `${symbol} @ ${++loads}`
                 })
-                const host = container()
-                mount(
-                    host,
+                const host = scratch(
                     () =>
                         html`${() =>
                             quote({ symbol: 'ABC' }).pending()
@@ -2461,9 +2423,7 @@ export default suite({
             note: 'A block whose operand is not thenable has nothing to wait for, so the settled arm is what it shows — and it used to show `pending` first anyway, built and inserted and then removed inside one synchronous call, for a state no frame could ever contain. The adopt path already declined to do this and says why: showing `pending` over correct markup is a flash back to a state nobody saw. This is the same claim on the BUILD path, and it is a call count rather than a rendering because the rendering was always right — the arm ran, painted and was painted over.',
             async run({ is }) {
                 let pendingRuns = 0
-                const host = container()
-                mount(
-                    host,
+                const host = scratch(
                     () =>
                         html`<div>${() =>
                             awaited('already here', {
@@ -2492,8 +2452,7 @@ export default suite({
                     { id: 2, label: 'beta' },
                     { id: 3, label: 'gamma' },
                 ])
-                const host = container()
-                mount(host, () => Example({}))
+                const host = scratch(() => Example({}))
                 const shown = (): string[] => {
                     const out: string[] = []
                     for (const item of host.querySelectorAll('li')) out.push(item.textContent ?? '')

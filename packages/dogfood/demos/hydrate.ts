@@ -13,7 +13,7 @@ import { html, memo, state, type State, type TemplateResult } from 'abide'
 import { awaited, component, keyed } from 'abide/runtime'
 import { renderDocument, renderToString } from 'abide/server/internal'
 import { shell } from 'abide/server/internal'
-import { type Case, container, sleep, suite } from 'harness'
+import { type Case, container, scratch, sleep, suite } from 'harness'
 import { install, keep, measure, measureFlush, nodesMade, nonZero, tick, total } from 'harness/measure'
 import { hydrate, mount, type Mounted } from 'abide/ui'
 import { button, lazy, output, row, stage } from './dom.ts'
@@ -446,8 +446,7 @@ export default suite({
                 const strip = (markup: string): string => markup.replace(/<!--[^>]*-->/g, '')
 
                 for (const [name, view, expected] of shapes) {
-                    const built = container()
-                    mount(built, view)
+                    const built = scratch(view)
                     await tick()
                     is(`${name} — built`, strip(built.innerHTML), expected)
                     built.remove()
@@ -492,8 +491,7 @@ export default suite({
                 for (const [name, view] of kinds) {
                     const expected = strip(await renderToString(view()))
 
-                    const built = container()
-                    mount(built, view)
+                    const built = scratch(view)
                     await tick()
                     is(`${name} — built matches the server`, strip(built.innerHTML), expected)
                     built.remove()

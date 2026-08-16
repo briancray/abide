@@ -12,7 +12,7 @@ import { GET, type Renderable, render, server } from 'abide/server'
 import { register, renderDocument, renderDocumentToString, renderToString, serve, toStream } from 'abide/server/internal'
 import { remote } from 'abide/runtime/transport'
 import { heldStream, isServing, shell } from 'abide/server/internal'
-import { container, loopback, sleep, suite } from 'harness'
+import { container, loopback, scratch, sleep, suite } from 'harness'
 import { floorTicks, keep, microtasks, settled, tick } from 'harness/measure'
 import { hydrate, mount } from 'abide/ui'
 import { button, el, output, row } from './dom.ts'
@@ -879,8 +879,7 @@ export default suite({
 
                 // The client half: the fallback is on screen first, which is the whole reason an
                 // author wrote one. A server render never shows it — there is nothing to wake later.
-                const mounted = container()
-                mount(mounted, view)
+                const mounted = scratch(view)
                 is('the fallback, while it waits', mounted.textContent, 'loading…')
                 // The load is a real timer, so the graph flush alone would race it — `settled` drains
                 // the effects, not the clock.
@@ -1191,8 +1190,7 @@ export default suite({
                 }
 
                 const user = state(Promise.resolve('ada'))
-                const host = container()
-                mount(host, () => html`<p>${swallowing(user)}</p>`)
+                const host = scratch(() => html`<p>${swallowing(user)}</p>`)
                 is('the fallback is never painted', host.querySelector('p')?.textContent, '')
                 await tick()
                 is('and the value arrives on the wake', host.querySelector('p')?.textContent, 'ada')

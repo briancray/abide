@@ -11,7 +11,7 @@ import { styleTags } from 'abide/server/internal'
 import { adopt, keyed, streamed } from 'abide/runtime'
 import { compile, describe, locate, originalPosition, ParseError } from 'abide/compiler'
 import { renderToString } from 'abide/server/internal'
-import { container, sleep, suite, until } from 'harness'
+import { container, scratch, sleep, suite, until } from 'harness'
 import { duration, install, keep, measureFlush, nonZero, nsPerOp, tick } from 'harness/measure'
 import { mount } from 'abide/ui'
 import Compiled, {
@@ -512,8 +512,7 @@ export default suite({
                 )
 
                 // The round trip, live: the cell writes the property, and typing writes the cell.
-                const host = container()
-                mount(host, () => Widget({}) as never)
+                const host = scratch(() => Widget({}) as never)
                 const input = host.querySelector('input') as HTMLInputElement
                 is('the property was written', input.value, 'a')
                 input.value = 'ab'
@@ -627,8 +626,7 @@ export default suite({
                 const view = () => html`<ul>${() => rows.map((w) => keyed(w.id, html``))}</ul>`
                 const served = await renderToString(view)
                 is('the server renders the empty list', served.includes('<ul>'), true)
-                const host = container()
-                mount(host, view)
+                const host = scratch(view)
                 is('and the client builds it rather than throwing', host.querySelectorAll('ul').length, 1)
                 host.remove()
             },
@@ -864,18 +862,14 @@ export default suite({
                 const fromAbide = normalize(await renderToString(Compiled({})))
                 is('the server markup is the same', fromAbide, fromSource)
 
-                const a = container()
-                const b = container()
-                mount(a, () => handWritten())
-                mount(b, () => Compiled({}) as never)
+                const a = scratch(() => handWritten())
+                const b = scratch(() => Compiled({}) as never)
                 await tick()
                 is(
                     'and so is the DOM',
                     normalize((b.querySelector('main') as HTMLElement).innerHTML),
                     normalize((a.querySelector('main') as HTMLElement).innerHTML),
                 )
-                a.remove()
-                b.remove()
             },
             bench: {
                 kind: 'work',
@@ -883,16 +877,14 @@ export default suite({
                     {
                         label: 'abide — compiled from .abide, one count write',
                         prepare: () => {
-                            const host = container()
-                            mount(host, () => Compiled({}) as never)
+                            scratch(() => Compiled({}) as never)
                         },
                         run: () => compiledCount.set(compiledCount.peek() + 1),
                     },
                     {
                         label: 'vanilla — the hand-written counter.ts, one count write',
                         prepare: () => {
-                            const host = container()
-                            mount(host, () => handWritten())
+                            scratch(() => handWritten())
                         },
                         run: () => count.set(count.peek() + 1),
                     },
@@ -956,8 +948,7 @@ export default suite({
                 is('…and verbs', code.includes('summary.refresh()'), true)
                 is('and so do verbs', code.includes('details.invalidate()'), true)
 
-                const host = container()
-                mount(host, () => Library({}) as never)
+                const host = scratch(() => Library({}) as never)
                 await tick()
                 is(
                     'the derive counted the matches',
@@ -1354,8 +1345,7 @@ export default suite({
                 )
 
                 await narrowSession
-                const host = container()
-                mount(host, () => Narrow({}) as never)
+                const host = scratch(() => Narrow({}) as never)
                 await tick()
                 is('and the narrowed branch renders', host.querySelector('p')?.textContent, 'ada')
                 host.remove()
@@ -1402,9 +1392,8 @@ export default suite({
 
                 // Registered at module scope, so it lands once however many times it is mounted.
                 const before = document.querySelectorAll('style[data-abide]').length
-                const host = container()
-                mount(host, () => Card({}) as never)
-                mount(container(), () => Card({}) as never)
+                const host = scratch(() => Card({}) as never)
+                scratch(() => Card({}) as never)
                 await tick()
                 is('the sheet is adopted once', document.querySelectorAll('style[data-abide]').length, before)
                 const article = host.querySelector('article') as HTMLElement
@@ -1511,8 +1500,7 @@ export default suite({
                 is('the probe is in the head, untouched', emitted.includes('p.pending() ? html`a` : html`b`'), true)
 
                 const before = calls()
-                const host = container()
-                mount(host, () => Loader({}) as never)
+                const host = scratch(() => Loader({}) as never)
                 is('the pending arm first', host.textContent?.includes('loading…'), true)
                 is('…and the lazy handle was STARTED by the block', calls() - before, 1)
 
@@ -1542,8 +1530,7 @@ export default suite({
             note: 'Reactive, not one-shot: the enclosing effect re-runs when the source’s dependencies move, and the generation stamp tears the old stream down. Rows are handed to the same `ListPart` a `{#for}` uses, so a keyed row still moves rather than being rewritten.',
             async run({ is }) {
                 room.set('lobby')
-                const host = container()
-                mount(host, () => Stream({}) as never)
+                const host = scratch(() => Stream({}) as never)
                 const rows = (): (string | null)[] =>
                     Array.from(host.querySelectorAll('li')).map((li) => li.textContent)
 
@@ -1701,8 +1688,7 @@ export default suite({
                 )
 
                 failing.set(true)
-                const host = container()
-                mount(host, () => Stream({}) as never)
+                const host = scratch(() => Stream({}) as never)
                 await tick()
                 is('the throw is caught', host.querySelector('i')?.textContent, 'caught: Error: boom')
                 is('and {:finally} rendered anyway', host.querySelector('small')?.textContent, 'done')
@@ -1750,8 +1736,7 @@ export default suite({
                 // outer source. Asking whether the INHERITED set holds it answers the wrong question.
                 rate.set(2)
                 items.set([{ id: 'a', width: 3, height: 4 }])
-                const host = container()
-                mount(host, () => Rows({}) as never)
+                const host = scratch(() => Rows({}) as never)
                 await tick()
                 is(
                     'inside, the shadowing binding wins',

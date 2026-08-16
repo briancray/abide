@@ -11,12 +11,24 @@
 // runner is not one of the app's capabilities, and a page titled "the harness works" would be
 // furniture rather than a claim about abide.
 //
-// The two import lines below are the layering, asserted by being written: `smokeBench` knows what a
-// `Case` is and `timeArms` does not know what abide is.
+// The `harness` and `harness/measure` import lines below are the layering, asserted by being written:
+// `smokeBench` knows what a `Case` is and `timeArms` does not know what abide is. The abide line is a
+// case's own vocabulary rather than the harness's — a view to render, and a cell to write to it.
 
 import { describe, expect, test } from 'bun:test'
-import { AssertionError, type Case, enqueue, equals, running, smokeBench } from 'harness'
-import { install, measure, NOISE, quiesce, timeArms, verdict } from 'harness/measure'
+import { html, state } from 'abide'
+import {
+    AssertionError,
+    type Bench,
+    benchRow,
+    type Case,
+    enqueue,
+    equals,
+    running,
+    scratch,
+    smokeBench,
+} from 'harness'
+import { install, measure, measureFlush, NOISE, quiesce, timeArms, total, verdict } from 'harness/measure'
 
 // Run from the REPO ROOT. `bunfig.toml`'s preload is what puts a document here, and bun reads a bunfig
 // from the current directory only — so `cd packages/harness && bun test` runs this file against no
@@ -200,6 +212,51 @@ describe('AssertionError — what the card and the runner both catch', () => {
             kind: 'wake',
             arms: [{ label: 'counts one', run: async () => ({ count: 1, of: 'wake-ups' }) }],
         })
+    })
+})
+
+/**
+ * What a bench row leaves behind, which is TWO things with one lifetime and used to be one.
+ *
+ * The nodes are the visible half: `runHeadless` and the queue sweep in a `finally` and the bench row
+ * did not, so `/bench` grew another copy of whatever every arm rendered on every run — under the
+ * table, unstyled, which is how this was noticed at all.
+ *
+ * The root is the half nothing could see. A swept host is detached and a mount nobody disposed goes
+ * on writing into it, so the next write to a cell the view read still costs DOM work and a bench
+ * counting that write counts it once per copy. Which is why the second expectation is not about the
+ * document at all: it is what the cell COSTS afterwards.
+ *
+ * Verified by reverting each half on its own — the `finally` out reads 4 leftover nodes instead of 0,
+ * and the dispose loop out of `sweepContainers` reads 2 DOM calls for a write nobody is watching.
+ */
+describe('a bench row sweeps what its arms rendered', () => {
+    test('running one twice leaves no nodes, and nothing still listening', async () => {
+        const word = state('a')
+        const spec: Case = {
+            title: 'an arm that renders and walks away',
+            bench: {
+                kind: 'work',
+                arms: [
+                    {
+                        label: 'abide — renders into the scratch holder',
+                        prepare: () => {
+                            scratch(() => html`<p>${() => word()}</p>`)
+                        },
+                        run: () => word.set(`${word.peek()}!`),
+                    },
+                ],
+            },
+        }
+
+        const row = benchRow('harness', spec, spec.bench as Bench)
+        await row.run()
+        await row.run()
+
+        // The holder itself stays — it is reused — so what is asserted is that it is EMPTY.
+        expect(document.querySelectorAll('[data-abide-scratch] *').length).toBe(0)
+        // …and that the two views it held are not still on the other end of the cell.
+        expect(total(await measureFlush(() => word.set('z')))).toBe(0)
     })
 })
 

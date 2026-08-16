@@ -4,8 +4,7 @@
 
 import { channel, html, memo } from 'abide'
 import { renderToString } from 'abide/server/internal'
-import { mount } from 'abide/ui'
-import { container, reader, sleep, suite, until } from 'harness'
+import { reader, scratch, sleep, suite, until } from 'harness'
 import { duration, nsPerOp, quiesce, tick } from 'harness/measure'
 import { button, el, field, row, stage } from './dom.ts'
 // The rung the case at the bottom asserts — the one whose `adds` it is about.
@@ -25,8 +24,7 @@ export default suite({
 
                 is('server', await renderToString(html`<p>${() => room}</p>`), '<p>hello</p>')
 
-                const host = container()
-                mount(host, () => html`<p>${() => room}</p>`)
+                const host = scratch(() => html`<p>${() => room}</p>`)
                 is('client', host.querySelector('p')?.textContent, 'hello')
 
                 room.publish('second')
@@ -574,8 +572,7 @@ export default suite({
                 // a cell this example cannot be put back to a known value. Asserting `message 1` would
                 // be asserting that this case is the first thing that ever ran against the channel.
                 const before = exampleFeed.chunks().length
-                const host = container()
-                mount(host, () => Example({}))
+                const host = scratch(() => Example({}))
 
                 exampleSend()
                 await tick()

@@ -8,8 +8,8 @@ import { html, raw, state, type TemplateResult, watch } from 'abide'
 // author types, so it comes off the front door above with `html`.
 import { classifySlots, escape, isKeyed, isTemplate, keyed } from 'abide/runtime'
 import { renderToString } from 'abide/server/internal'
-import { mount } from 'abide/ui'
-import { container, show, sleep, suite } from 'harness'
+import { mount, type Mounted } from 'abide/ui'
+import { container, scratch, show, sleep, suite } from 'harness'
 import { install, keep, measureFlush, tick } from 'harness/measure'
 import { button, el, lazy, output, row, stage } from './dom.ts'
 // The rungs the case at the bottom asserts, one mount each: what a slot MEANS is decided by where it
@@ -81,8 +81,7 @@ export default suite({
                     await renderToString(view()),
                     '<p>hello &lt;script&gt;alert(1)&lt;/script&gt;</p>',
                 )
-                const host = container()
-                mount(host, view)
+                const host = scratch(view)
                 // The client never produced markup at all, so the text arrives as text.
                 is('client', host.querySelector('p')?.textContent, 'hello <script>alert(1)</script>')
                 is('and no script element was created', host.querySelector('script'), null)
@@ -149,9 +148,7 @@ export default suite({
 
                 const level = state<'high' | null>('high')
                 const disabled = state(true)
-                const host = container()
-                mount(
-                    host,
+                const host = scratch(
                     () => html`<button class=${() => level()} disabled=${() => disabled()}>go</button>`,
                 )
                 const node = host.querySelector('button') as HTMLButtonElement
@@ -206,8 +203,7 @@ export default suite({
 
                 is('server', await renderToString(view()), '<button>go</button>')
 
-                const host = container()
-                mount(host, view)
+                const host = scratch(view)
                 const node = host.querySelector('button') as HTMLButtonElement
                 node.click()
                 label.set('stop') // an unrelated slot moving must not re-attach the listener
@@ -221,9 +217,7 @@ export default suite({
                 // Counted rather than clicked: re-attaching produces identical behaviour, so a click
                 // test passes either way.
                 const patch = state(0)
-                const rows = container()
-                mount(
-                    rows,
+                const rows = scratch(
                     () =>
                         html`<ul>
                             ${() =>
@@ -265,8 +259,7 @@ export default suite({
                     '<p>x</p>',
                 )
 
-                const host = container()
-                mount(host, () => html`<p &ref=${node}>x</p>`)
+                const host = scratch(() => html`<p &ref=${node}>x</p>`)
                 is('a cell is handed the element', node()?.tagName, 'P')
                 host.remove()
 
@@ -322,8 +315,7 @@ export default suite({
                     '<input />',
                 )
 
-                const host = container()
-                mount(host, () => html`<input .value=${() => text()} />`)
+                const host = scratch(() => html`<input .value=${() => text()} />`)
                 const node = host.querySelector('input') as HTMLInputElement
                 is('client sets the PROPERTY', node.value, 'typed by the cell')
                 is('…and not the attribute', node.hasAttribute('value'), false)
@@ -457,8 +449,7 @@ export default suite({
                 )
 
                 const items = state(['alpha', 'beta'])
-                const host = container()
-                mount(host, () => html`<ul>${() => items().map((item) => html`<li>${item}</li>`)}</ul>`)
+                const host = scratch(() => html`<ul>${() => items().map((item) => html`<li>${item}</li>`)}</ul>`)
                 is(
                     'client',
                     Array.from(host.querySelectorAll('li')).map((li) => li.textContent),
@@ -497,8 +488,7 @@ export default suite({
                     '<div><em class="on-purpose">emphasis</em></div>',
                 )
 
-                const host = container()
-                mount(host, () => html`<div>${markup}</div>`)
+                const host = scratch(() => html`<div>${markup}</div>`)
                 is('client parsed it as markup', host.querySelector('em')?.className, 'on-purpose')
                 host.remove()
             },
@@ -520,8 +510,7 @@ export default suite({
                     '<p>later</p>',
                 )
 
-                const host = container()
-                mount(host, () => html`<p>${Promise.resolve('later')}</p>`)
+                const host = scratch(() => html`<p>${Promise.resolve('later')}</p>`)
                 is('client — blank until it lands', host.querySelector('p')?.textContent, '')
                 await tick()
                 is('…and then the value, not [object Promise]', host.querySelector('p')?.textContent, 'later')
@@ -581,8 +570,7 @@ export default suite({
             note: "`${() => search({ q: filter() })}` needs no trailing `()`. Cells are recognised by a registry-symbol brand, not by being callable — so neither substrate imports the reactive graph to spot one, and a plain function passed to a `.prop` slot is still a plain function. EVERY slot kind reads that step, not just child slots: an attribute that read one step short rendered the cell's own source text where the client rendered its value.",
             async run({ is }) {
                 const cell = state('a cell, not a function')
-                const host = container()
-                mount(host, () => html`<p>${() => cell}</p>`)
+                const host = scratch(() => html`<p>${() => cell}</p>`)
                 is(
                     'the handle in the slot means its VALUE',
                     host.querySelector('p')?.textContent,
@@ -597,8 +585,7 @@ export default suite({
                 // the server, because a lane that reads one step short is a hydration mismatch.
                 const cls = state('big')
                 const attrs = state<Record<string, unknown>>({ id: 'x', hidden: true })
-                const attrHost = container()
-                mount(attrHost, () => html`<div class=${() => cls}>a</div>`)
+                const attrHost = scratch(() => html`<div class=${() => cls}>a</div>`)
                 is('attribute slot, client', attrHost.querySelector('div')?.getAttribute('class'), 'big')
                 is(
                     'attribute slot, server',
@@ -607,8 +594,7 @@ export default suite({
                 )
                 attrHost.remove()
 
-                const spreadHost = container()
-                mount(spreadHost, () => html`<div ...=${() => attrs}>a</div>`)
+                const spreadHost = scratch(() => html`<div ...=${() => attrs}>a</div>`)
                 is(
                     'spread slot, client',
                     spreadHost.querySelector('div')?.outerHTML,
@@ -638,8 +624,7 @@ export default suite({
                     await renderToString(html`<div ...=${() => hostile}>a</div>`),
                     '<div id="kept">a</div>',
                 )
-                const hostileHost = container()
-                mount(hostileHost, () => html`<div ...=${() => hostile}>a</div>`)
+                const hostileHost = scratch(() => html`<div ...=${() => hostile}>a</div>`)
                 is('and the client wrote the same thing', hostileHost.querySelector('div')?.outerHTML, '<div id="kept">a</div>')
                 hostileHost.remove()
 
@@ -687,8 +672,7 @@ export default suite({
                 )
 
                 const props = state<Record<string, unknown>>({ href: '/a', title: 'first', 'data-n': 1 })
-                const host = container()
-                mount(host, () => html`<a ...=${() => props()}>go</a>`)
+                const host = scratch(() => html`<a ...=${() => props()}>go</a>`)
                 const node = host.querySelector('a') as HTMLAnchorElement
                 is('client — every name landed', node.getAttribute('title'), 'first')
 
@@ -820,8 +804,7 @@ export default suite({
                 // and the measured mount below starts from where the second row of any real list
                 // starts. Without this the case would price the first instantiation, which is the
                 // one instantiation that legitimately parses.
-                const warm = container()
-                mount(warm, () => listOf([rowOf(0)]))
+                const warm = scratch(() => listOf([rowOf(0)]))
                 warm.remove()
 
                 const built: TemplateResult[] = []
@@ -834,13 +817,19 @@ export default suite({
                 // counter below can say it did.
                 is('distinct `strings` identities', identities.size, 1)
 
+                // `mount` inside the measured window and `container()` outside it: the host's own
+                // `createElement` would otherwise land in the count this case is about, which is why
+                // this one place cannot be `scratch`. Held so the root still goes with the case.
                 const host = container()
-                const work = await measureFlush(() => void mount(host, () => listOf(built)))
+                let live: Mounted | undefined
+                const work = await measureFlush(() => {
+                    live = mount(host, () => listOf(built))
+                })
                 is('and they all rendered', host.querySelectorAll('li').length, 500)
                 // The claim. An implementation that re-scanned and re-parsed per instantiation
                 // renders the same 500 rows and scores 500 here.
                 is('500 more instantiations parsed nothing', work.createElement, 0)
-                host.remove()
+                live?.dispose()
             },
             bench: {
                 kind: 'time',
@@ -882,8 +871,7 @@ export default suite({
             async run({ is }) {
                 // Rung 2 — content, and a whole attribute value.
                 attributeName.set('ada')
-                const attribute = container()
-                mount(attribute, () => Attribute({}))
+                const attribute = scratch(() => Attribute({}))
                 is('child position is content', attribute.querySelector('p')?.textContent, 'hello ada')
                 const link = attribute.querySelector('a') as HTMLAnchorElement
                 is('an attribute slot is the WHOLE value', link.getAttribute('href'), '/who/ada')
@@ -893,8 +881,7 @@ export default suite({
                 // Rung 3 — a toggle, which is the claim a rendering cannot make on its own: what matters
                 // is that the REST of the attribute is untouched.
                 toggleWarn.set(false)
-                const toggled = container()
-                mount(toggled, () => Toggle({}))
+                const toggled = scratch(() => Toggle({}))
                 const styled = toggled.querySelector('p.line') as HTMLElement
                 is('a toggle leaves the rest of the attribute alone', styled.className, 'line')
                 toggleWarn.set(true)
@@ -905,8 +892,7 @@ export default suite({
 
                 // Rung 5 — a keyed list.
                 listRows.set(['alpha', 'beta'])
-                const list = container()
-                mount(list, () => List({}))
+                const list = scratch(() => List({}))
                 const rows: string[] = []
                 for (const item of list.querySelectorAll('li')) rows.push(item.textContent ?? '')
                 is('a keyed {#for}', rows, ['alpha', 'beta'])
@@ -920,10 +906,8 @@ export default suite({
                 // The prop arrives as a CELL — `Props<T>` maps each field to one — which is what lets a
                 // parent re-point a child without re-running its setup.
                 const which = state('gamma')
-                const compiled = container()
-                mount(compiled, () => RowComponent({ row: which }))
-                const written = container()
-                mount(written, () => HandWrittenRow({ row: which() }))
+                const compiled = scratch(() => RowComponent({ row: which }))
+                const written = scratch(() => HandWrittenRow({ row: which() }))
                 is('a component takes a prop', compiled.querySelector('li')?.textContent, 'gamma')
                 is(
                     '…and the hand-written tag renders the same node',
@@ -939,8 +923,7 @@ export default suite({
                 // trusted line renders SOMETHING either way. What distinguishes them is whether a `<b>`
                 // is an element or four characters, so the claim is about the node.
                 trustedRow.set('<b>ada</b> lovelace')
-                const trusted = container()
-                mount(trusted, () => Trusted({}))
+                const trusted = scratch(() => Trusted({}))
                 const [escapedLine, trustedLine] = trusted.querySelectorAll('li')
                 is('a slot ESCAPES — the markup arrived as text', escapedLine?.querySelector('b'), null)
                 is('…so the tags are visible', escapedLine?.textContent, 'escaped: <b>ada</b> lovelace')

@@ -6,8 +6,7 @@
 // split has to read identically on a state, a derivation, a keyed slot and a channel.
 
 import { channel, invalidate, memo, refresh, state } from 'abide'
-import { mount } from 'abide/ui'
-import { container, reader, sleep, suite, until } from 'harness'
+import { reader, scratch, sleep, suite, until } from 'harness'
 import { tick } from 'harness/measure'
 import { button, el, row } from './dom.ts'
 // The rung the case at the bottom asserts — the one whose `adds` it is about.
@@ -730,8 +729,7 @@ export default suite({
             title: 'the documented example runs',
             note: 'What `/docs/verbs` shows and mounts, mounted here and asserted — including the one claim the two verbs exist to make: after `refresh` the OLD value is still on screen while the new one loads, and after `invalidate` there is nothing to show at all.',
             async run({ is }) {
-                const host = container()
-                mount(host, () => Example({}))
+                const host = scratch(() => Example({}))
                 const line = (): string => host.querySelector('p')?.textContent ?? ''
                 is('the placeholder arm is what a cold load shows', line(), 'loading…')
 
