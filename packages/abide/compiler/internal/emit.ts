@@ -33,12 +33,24 @@ import { type Token, tokensOf } from './lex.ts'
 import { extract, mark, type Segment } from './map.ts'
 import type { Attribute, Blocks, Branch, Expr, Node } from './parse.ts'
 import { HTML_COMMENT, IDENTIFIER, ParseError } from './parse.ts'
-import { TypeReader } from './shape.ts'
+import { type TypeSource, TypeReader } from './shape.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 export interface EmitOptions {
     /** Used for the default export's name and for error messages. */
     filename: string
+    /**
+     * The text of a module this one imports its PROPS TYPE from, so the members can be classified.
+     *
+     * Injected rather than reached for, exactly as `ElideOptions.resolve` is and for the same two
+     * reasons: this pass does no I/O, and a demo hands over a map in memory so a case still runs in
+     * a browser. It reads TEXT and runs the same member regex over it — no checker enters the emit
+     * path, and what a cell is stays a syntactic question.
+     *
+     * `| undefined` explicitly, because `exactOptionalPropertyTypes` otherwise refuses `compile`'s
+     * own optional straight through.
+     */
+    resolve?: TypeSource | undefined
 }
 
 interface Context {
@@ -472,6 +484,87 @@ function membersOf(type: string, rest: string, tokens: Token[], types: TypeReade
     if (!IDENTIFIER.test(type)) return ''
     for (const found of declaredTypes(tokens, types)) {
         if (found.name === type) return rest.slice(found.start, found.end)
+    }
+    return ''
+}
+
+/**
+ * Which module a `<script>` imported a name from, and what it is called there.
+ *
+ * Read off the LIFTED import statements, since `splitImports` has already taken them out of the body
+ * the props call is read from. Only a braced binding counts: a default import binds a value, and a
+ * namespace reaches a type only through a qualified name that nothing here resolves.
+ */
+function importBinding(imports: readonly string[], local: string): { specifier: string; exported: string } | null {
+    for (const statement of imports) {
+        let tokens: Token[]
+        try {
+            tokens = tokensOf(statement)
+        } catch {
+            continue
+        }
+        let specifier = ''
+        for (let i = tokens.length - 1; i >= 0; i--) {
+            const token = tokens[i] as Token
+            if (token.kind === SyntaxKind.StringLiteral) {
+                specifier = token.text.slice(1, -1)
+                break
+            }
+        }
+        if (specifier === '') continue
+        let braced = false
+        for (let i = 0; i < tokens.length; i++) {
+            const token = tokens[i] as Token
+            if (token.kind === SyntaxKind.OpenBraceToken) braced = true
+            else if (token.kind === SyntaxKind.CloseBraceToken) braced = false
+            if (!braced || token.kind !== SyntaxKind.Identifier || token.text !== local) continue
+            // `Exported as local` — the name over there is two tokens back. The LEFT side of a rename
+            // is the exported name and not this local, so a match there is not this binding.
+            if (tokens[i - 1]?.text === 'as' && tokens[i - 2]?.kind === SyntaxKind.Identifier) {
+                return { specifier, exported: (tokens[i - 2] as Token).text }
+            }
+            if (tokens[i + 1]?.text === 'as') continue
+            return { specifier, exported: local }
+        }
+    }
+    return null
+}
+
+/**
+ * The members of a props type declared in ANOTHER module, as text.
+ *
+ * The gap this closes was not a missing type-checker — `classifyMember` is a regex over the member's
+ * declaration text — it was the other file's bytes. So the same `declaredTypes` walk runs over the
+ * resolved module and the same slice comes back, and an imported `RowProps` classifies exactly as
+ * the inline spelling does. Without it the two disagreed: a FUNCTION member fell to the `cell`
+ * fallback, `propCell` wrapped the handler, and `onpick(row.id)` called the CELL and threw the
+ * handler away — a dead click in a file where nothing near the call mentions a cell.
+ *
+ * Answers `''` for anything it cannot follow — no resolver, an unreadable module, a name declared
+ * somewhere the walk does not reach — which is the fallback the caller already had.
+ */
+function importedMembers(
+    type: string,
+    imports: readonly string[],
+    importer: string,
+    resolve: TypeSource | undefined,
+): string {
+    if (resolve === undefined || !IDENTIFIER.test(type)) return ''
+    const binding = importBinding(imports, type)
+    if (binding === null) return ''
+    const found = resolve(binding.specifier, importer)
+    if (found === null) return ''
+    let tokens: Token[]
+    try {
+        tokens = tokensOf(found.text)
+    } catch {
+        // An unparseable module is one no type can be read out of, which is the same answer as one
+        // that could not be found. A build must not fail over a classification it was only offering.
+        return ''
+    }
+    const types = new TypeReader(tokens, found.path)
+    for (const declared of declaredTypes(tokens, types)) {
+        if (declared.name === binding.exported) return found.text.slice(declared.start, declared.end)
     }
     return ''
 }
@@ -2168,7 +2261,10 @@ export function emit(
             ? NO_KINDS
             : propKinds(
                   declared.bound,
-                  declared.type === null ? '' : membersOf(declared.type, setup.rest, setupTokens, setupTypes),
+                  declared.type === null
+                      ? ''
+                      : membersOf(declared.type, setup.rest, setupTokens, setupTypes) ||
+                        importedMembers(declared.type, setup.imports, options.filename, options.resolve),
               )
     const replaced = declared === null ? setup.rest : bindProps(setup.rest, declared, kinds)
     // No `props()` is the common shape — most `.abide` files are a page, and a page takes none. The

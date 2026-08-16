@@ -41,6 +41,16 @@ export type { ImportedModule, TypeSource } from './internal/shape.ts'
 export interface CompileOptions {
     /** Names the default export and every diagnostic. */
     filename?: string
+    /**
+     * The text of a module this one imports its PROPS TYPE from — the same option `elide` takes, for
+     * the same reason and with the same guarantee: injected rather than reached for, so this stays
+     * text in, text out.
+     *
+     * A prop's kind is read off the member's declaration TEXT, so an imported type needed the other
+     * file's bytes and nothing more. Absent, an imported type classifies as it always has — every
+     * member a cell — which is the degradation, not an error.
+     */
+    resolve?: TypeSource
 }
 
 export interface Compiled {
@@ -54,7 +64,7 @@ export interface Compiled {
 export function compile(source: string, options: CompileOptions = {}): Compiled {
     const filename = options.filename ?? 'Component.abide'
     const blocks = parse(source)
-    const { code, segments } = emit(source, blocks, { filename })
+    const { code, segments } = emit(source, blocks, { filename, resolve: options.resolve })
     const base = filename.split('/').pop() ?? filename
     // Encoded ON DEMAND. `plugin.ts` reads only `code`, and it is the caller that runs per `.abide`
     // file per bundle — the dev server re-bundles a route on every document request — while VLQ

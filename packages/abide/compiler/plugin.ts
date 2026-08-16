@@ -160,7 +160,13 @@ export const abidePlugin: BunPlugin = {
         build.onLoad({ filter: /\.abide$/ }, async (args) => {
             const source = await Bun.file(args.path).text()
             try {
-                return { loader: 'ts', contents: compile(source, { filename: args.path }).code }
+                // The same resolver `elide` is handed, and its two caches with it: a props type
+                // imported from another module is classified off that module's TEXT, so an imported
+                // `RowProps` and the inline spelling of it emit the same component.
+                return {
+                    loader: 'ts',
+                    contents: compile(source, { filename: args.path, resolve: moduleFor }).code,
+                }
             } catch (error) {
                 // The compiler reports a position in the `.abide` file; a raw throw here would name
                 // the plugin instead, which is the one place the author cannot look.

@@ -967,6 +967,60 @@ export default suite({
         },
 
         {
+            title: 'an IMPORTED props type classifies the same as the inline spelling',
+            note: 'A prop’s kind is read off its member declaration as TEXT — a member whose type starts with `(` is a callback, a `KeyedMemo` is a handle, everything else is a cell. So an imported type never needed a checker, it needed the other file’s bytes. The resolver is INJECTED, the same one `elide` takes: the plugin hands over one that reads from disk, a case hands over a map in memory, and `compile` stays text in, text out. Absent, an imported type degrades to what it always did — every member a cell — which is the fallback, not an error.',
+            run({ is }) {
+                const models = 'export type RowProps = { row: { id: number }; onpick: (id: number) => void }'
+                const source = `<script>\nimport { props } from 'abide'\nimport type { RowProps } from './models.ts'\nconst { row, onpick } = props<RowProps>()\n</script>\n<button onclick={() => onpick(row.id)}>{row.id}</button>`
+                const resolved = compile(source, {
+                    filename: 'C.abide',
+                    resolve: () => ({ path: '/models.ts', text: models }),
+                })
+                // The callback is NOT wrapped, so `onpick(row.id)` calls the handler. Wrapped, the
+                // same line calls the CELL and discards what it hands back — a click that does
+                // nothing, with the markup and the types both still right.
+                is('a function member stays plain', resolved.code.includes('const onpick = propCell('), false)
+                is('…and a value member is still a cell', resolved.code.includes('const row = propCell($row)'), true)
+                // The inline spelling of the same type is the control: the two must agree, because
+                // the whole defect was that they did not.
+                const inline = compile(
+                    `<script>\nimport { props } from 'abide'\nconst { row, onpick } = props<{ row: { id: number }; onpick: (id: number) => void }>()\n</script>\n<button onclick={() => onpick(row.id)}>{row.id}</button>`,
+                    { filename: 'C.abide' },
+                ).code
+                const bodyOf = (code: string): string =>
+                    code.slice(code.indexOf('): TemplateResult {')).replace(/\s+/g, ' ')
+                is('the inline spelling emits the same component', bodyOf(resolved.code), bodyOf(inline))
+                // Two spellings the resolver has to follow, and the answer when it cannot.
+                is(
+                    'a renamed import',
+                    compile(source.replace('RowProps }', 'RowProps as P }').replace('props<RowProps>', 'props<P>'), {
+                        filename: 'C.abide',
+                        resolve: () => ({ path: '/models.ts', text: models }),
+                    }).code.includes('const onpick = propCell('),
+                    false,
+                )
+                is(
+                    'an interface rather than an alias',
+                    compile(source, {
+                        filename: 'C.abide',
+                        resolve: () => ({
+                            path: '/models.ts',
+                            text: 'export interface RowProps { row: { id: number }; onpick(id: number): void }',
+                        }),
+                    }).code.includes('const onpick = propCell('),
+                    false,
+                )
+                is(
+                    'a resolver that answers nothing degrades to the old classification',
+                    compile(source, { filename: 'C.abide', resolve: () => null }).code.includes(
+                        'const onpick = propCell(',
+                    ),
+                    true,
+                )
+            },
+        },
+
+        {
             title: '`export` in a <script> is a compile error, and says where to put it',
             note: 'A `<script>` body is inlined into the component setup, so an export there has nowhere to go. `<script module>` IS module scope, so the same statement is fine one block over — the error names that.',
             run({ is, throws }) {
