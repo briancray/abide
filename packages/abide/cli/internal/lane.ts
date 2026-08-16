@@ -32,7 +32,7 @@ export interface Lane {
  * `[serve.static] plugins` is what `bun ./index.html` already reads to bundle a page's module graph,
  * and this is the same question asked by a different server: a Tailwind stylesheet an app imports has
  * to be compiled by something, and the framework must not be the thing that knows which something. So
- * there is no fifth convention beside `app.ts` / `app.html` / `pages/` / `client.ts` — the app writes
+ * there is no fifth convention beside `app.ts` / `app.html` / `pages/` / `server/rpc/**` — the app writes
  * the list once, where a Bun user would already write it.
  */
 const BUNFIG = 'bunfig.toml'

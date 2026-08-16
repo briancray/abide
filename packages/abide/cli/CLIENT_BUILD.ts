@@ -1,6 +1,6 @@
 // What `abide build` writes, as a shape rather than as a convention.
 //
-// Its own file, with one import, for the same reason `CLI_EXIT_CODES` is its own file: `abide --help`
+// Its own file, for the same reason `CLI_EXIT_CODES` is its own file: `abide --help`
 // is the most common thing this binary is asked for, and `cli/index.ts` re-exports these so an app
 // can read a manifest without the command that wrote one dragging the compiler in behind it. The
 // paths are here rather than in `internal/build.ts` for the same reason — a server that serves the

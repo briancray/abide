@@ -92,13 +92,13 @@ import { APP_HTML, type AppShell, appShell } from './shell.ts'
 
 /**
  * What an app SAYS about itself, in the order it is looked for — `app.ts` beside the `app.html` it is
- * served in and the `client.ts` the browser gets. One name for the app, spelled once per lane.
+ * served in. One name for the app, and the browser's lane is generated rather than named here.
  *
  * ABSENT is an ordinary app. Every export this file reads is optional, so the file is too: an app of
  * pages and endpoints that wants no hook and no route of its own has nothing to put in it, and a
  * module written to hold nothing is a convention that exists to be satisfied.
  *
- * No `.abide` here, where the client list has one: a `.abide` file compiles to a COMPONENT, and this
+ * No `.abide` here, where the REFUSED client names have one: a `.abide` file compiles to a COMPONENT, and this
  * module is asked for hooks. A `.abide` app entry would be a page with nowhere to be served from.
  */
 const CONVENTIONAL = ['app.ts', 'app.tsx', 'app.js']
