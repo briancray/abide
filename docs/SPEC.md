@@ -642,12 +642,12 @@ is sugar over it, not a replacement.
 
 | Form | Meaning |
 | --- | --- |
-| `{source}` | The identifier IS the whole expression → the **cell** is handed over. A slot renders its value; a prop or a `bind:` receives the cell |
+| `{source}` | The identifier IS the whole expression → the **cell** is handed over. A slot renders its value; a prop or a `bind:` receives the cell. "Whole" is a question about TOKENS, so a comment or whitespace around the name does not make it a read — `{count /* note */}` still hands over the cell. A parenthesised `{(count)}` does not yet, and reads |
 | `{m(args)}`, `{m(args).pages}` | A **keyed** memo is read by its CALL the way a cell is read by its name — the handle IS the cell, so no trailing `()` |
 | `{source + 1}`, `{source.length}` | Used as part of an expression → a **read**. In a `<script>`'s own statements it is `peek()` instead — see below |
 | `source = v` | A write |
 | `source += v`, `source++`, `source = source + v` | Read through `peek` then write — a write must not subscribe, so an effect is never woken by its own write. All three spellings agree, and only the TARGET peeks: `a = a + b` still subscribes to `b`. `++`/`--` are statement position only |
-| `source()`, `source.set(v)`, `.peek`, `.pending`, … | Untouched. The shared surface is **reserved**; every other property belongs to the value. This is also how a write that DOES mean to subscribe is written — `x = x() + 1` — so there is no `untrack` to reach for |
+| `source()`, `source.set(v)`, `.peek`, `.pending`, … | Untouched. The shared surface is **reserved**; every other property belongs to the value. This is also how a write that DOES mean to subscribe is written — `x = x() + 1` — so there is no `untrack` to reach for. Punctuation between the name and the access comes with it: `source?.()`, `source!()` and `source!.set(v)` are the author's own spelling too |
 | `{await p}` | **Refused.** A slot is a thunk and a thunk is not async. A promise in a slot renders what it resolves to; a load to say something ABOUT goes in a cell |
 | shadowing | A `const`/`let`/parameter/`{#for}` binding of the same name shadows, so a loop variable is never read as a cell |
 | narrowing | A `{#if}`/`{:else if}`/`{#switch}` condition reads ONCE into a local and its branch narrows off that. The body's other reads keep their own thunks |
@@ -676,7 +676,7 @@ the room form, and an import cannot say which one it is.
 | `{raw(...)}` | Raw HTML |
 | `name={expr}` | Reactive attribute or property (whole-value expression) |
 | `on<event>={fn}` | Native listener on an ELEMENT. On a **component** the same syntax is an ordinary prop named `onclick` |
-| `name="…{expr}…"` | Quoted values interpolate too, also on component props; a literal brace is `{'{'}` |
+| `name="…{expr}…"` | Quoted values interpolate too, also on component props; a literal brace is `{'{'}`. A hole folds back into the literal only when it is ONE string and nothing else — `{'a' + b + 'c'}` opens and closes with a quote without being one, and is an expression |
 | `bind:value` | Two-way bind — read the property, write back on input/change. On a **component** it hands over the cell ITSELF rather than a copy, which is what lets the child write back; declaring the prop as a `State<…>` is what says it may |
 | `bind:checked` | Boolean bind on an `<input>` — a boolean DOM property mirrored as a boolean attribute, never stringified. Writes back on `change` |
 | `bind:open` | The same, on a `<details>`, written back from `toggle`. The attribute half is what makes a row that is open on the server open in the markup it sends |
@@ -967,6 +967,12 @@ Relative specifiers resolve beside the importer and anything else goes through B
 The desugar rewrites EXPRESSIONS only: a cell named inside a type is left exactly as written — a
 `type` alias, an `interface` body, an annotation, `as`/`satisfies`, a type-parameter or type-argument
 list alike. The `<` ambiguity is resolved by speculative parse.
+
+`as`, `satisfies` and `implements` are CONTEXTUAL keywords, so which of them opens a type is decided
+by the token in front: something an operand can end with, or `>` for `class C<T> implements I`.
+`{ as: 1 }`, `row.as` and `const as = 1` are ordinary JavaScript and stay expressions — matched on
+the word alone, each of them made the rest of the expression a type region, and a cell read inside
+one is then left as the CELL with nothing reporting it.
 
 | Form | Checked as |
 | --- | --- |
