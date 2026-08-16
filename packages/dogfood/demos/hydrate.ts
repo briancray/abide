@@ -10,7 +10,7 @@
 // declared once (`$shared/internal/MARKERS.ts`) rather than kept true by hand in two files.
 
 import { html, memo, state, type State, type TemplateResult } from 'abide'
-import { awaited, component, keyed } from 'abide/runtime'
+import { awaited, boundary, component, keyed } from 'abide/runtime'
 import { renderDocument, renderToString } from 'abide/server/internal'
 import { shell } from 'abide/server/internal'
 import { type Case, container, scratch, sleep, suite } from 'harness'
@@ -251,6 +251,44 @@ const LARGE_NOTE =
 export default suite({
     ...META.hydrate,
     cases: [
+        {
+            title: 'a `{#try}` whose body AWAITS still adopts — only the awaiting hole is replaced',
+            note: 'The adoption win survives the block that can defer. A boundary body runs SYNCHRONOUSLY even when a hole in it awaits, so the structure is knowable the moment the body returns and only the hole is not — but `settledBoundary` folds the two into one promise, and a part handed an opaque promise claims the range and replaces every node in it on settle. That threw away the whole subtree the server sent for the sake of one text node. `producedBoundary` is the same body run without the fold: the structure adopts, and each awaiting hole claims its own nodes one level down. The element identity below is the assertion — same node before and after, which no output comparison can make, since a rebuild renders the identical screen.',
+            async run({ is }) {
+                const arms = {
+                    pending: undefined,
+                    then: undefined,
+                    catch: (() => html`<b>caught</b>`) as (error: unknown) => unknown,
+                    finally: undefined,
+                }
+                // What `{#try}<p id="keep">{await p}</p>{/try}` compiles to: eager body, IIFE hole.
+                const view = (): TemplateResult =>
+                    html`${boundary(
+                        () =>
+                            html`<p id="keep">
+                                ${(async () => {
+                                    await sleep(1)
+                                    return 'V'
+                                })()}
+                            </p>`,
+                        arms,
+                        true,
+                    )}`
+
+                const host = container()
+                host.innerHTML = await renderToString(view(), { hydratable: true })
+                const before = host.querySelector('#keep')
+                is('the server sent the element', before !== null, true)
+
+                hydrate(host, view)
+                await sleep(20)
+
+                is('the SAME element is still there', host.querySelector('#keep') === before, true)
+                is('…and the awaiting hole landed', host.querySelector('#keep')?.textContent?.trim(), 'V')
+                host.remove()
+            },
+        },
+
         {
             title: 'a frame is its own realm — counting inside one needs its own install',
             note: 'A document of its own is what an isolated demo needs: its own shell, its own stylesheet, its own hydration, none of it entangled with the page around it. What it costs is this — the counters patch PROTOTYPES, and chromium gives a frame a fresh set, so a frame’s work is invisible to a page’s install and every claim about it reads zero while passing. Under happy-dom the frame is handed the SAME prototypes, so this case passes here whether or not the install below happened — which is exactly why the number that matters is the browser’s, on `/tests/hydrate`. Keyed by prototype rather than by document so the emulator does not patch its one set twice and bill everything twice.',

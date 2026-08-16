@@ -812,6 +812,9 @@ export function settledOf(pending: Pending): Promise<unknown> {
     return settledPromise(pending.node)
 }
 
+/** Shared, so claiming a discarded promise allocates no closure per call. */
+function ignore(): void {}
+
 /** `retryableCall` for a caller that already holds a thunk. */
 export function retryable<T>(fn: () => T): T {
     return retryableCall(callThunk, fn)
@@ -840,7 +843,16 @@ export function retryableCall<A, T>(fn: (arg: A) => T, arg: A): T {
     outstanding = null
     try {
         const produced = fn(arg)
-        if (outstanding !== null) throw outstanding // something caught the signal — see `outstanding`
+        if (outstanding !== null) {
+            // An ASYNC body hands back a promise even when a read inside it signalled: the throw
+            // becomes a rejection, so nothing arrives here to catch and `outstanding` is the only
+            // record of it. The caller acts on the signal and calls `fn` AGAIN, which discards this
+            // value — and a discarded promise rejecting with the same signal is an unhandled
+            // rejection nobody wrote. Claimed here rather than at the call sites, because this is the
+            // line that drops it. The retry is what produces the answer; this only stops the litter.
+            if (isThenable(produced)) produced.then(ignore, ignore)
+            throw outstanding // something caught the signal — see `outstanding`
+        }
         return produced
     } finally {
         willRetry = previous

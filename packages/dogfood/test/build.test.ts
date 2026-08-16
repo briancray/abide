@@ -172,6 +172,60 @@ test('a page is its own chunk, absent from the entry until somebody navigates', 
     expect(holding('<h1>user ')).not.toEqual(holding('<h1>files '))
 })
 
+test('the first load carries the renderer and the router, and nothing a page has not asked for', () => {
+    // The FIRST LOAD is the entry plus its static import closure — what a browser must have before
+    // anything paints. Route chunks are lazy and are not it, which is what the case above asserts.
+    //
+    // What this one asserts is the other half, and it is a claim no size number can make on its own:
+    // three modules that a first load has no use for got into it anyway, each through a single import
+    // that reads as free. A module reached from this closure keeps every export ANYTHING in the build
+    // uses, so one edge into one is the whole of it — and all three cost their bytes on every page.
+    //
+    // The three markers are runtime strings rather than module names, because the closure is minified
+    // and a name is exactly what minification takes away. Each fails on its own revert, and the number
+    // beside it is what that revert costs, measured against `packages/perf` — the app with no demos in
+    // it, and so the honest floor.
+    const closure = new Set<string>()
+    const walk = (name: string): void => {
+        if (closure.has(name)) return
+        closure.add(name)
+        for (const held of manifest.graph?.imports?.[name] ?? []) walk(held)
+    }
+    walk(manifest.entries['client.ts'] as string)
+    const loaded = [...closure].map((name) => [name, texts.get(name) ?? ''] as const)
+
+    // All three at once rather than an assertion each, because the three are COUPLED and asserting
+    // them in sequence hides that: putting the `abide` barrel back brings `identity.ts` AND the
+    // `wire.ts` behind its `askWire`, and a short-circuiting first expect reports one revert as the
+    // other. What a failure has to say is which modules came back, not which check ran first.
+    const RESIDENT = [
+        // `wire.ts`, 3,002 bytes: `$ui`'s navigation reader named `STREAMING` — a two-word decode
+        // option — and got the rpc argument encoder behind it. The constant is its own leaf now, and
+        // this is the marker for the module it used to sit in.
+        ['the rpc call-and-decode path (wire.ts)', 'AbideTransportError'],
+        // `identity.ts` and `memo.ts`, 4,338 bytes together: the GENERATED client entry imported
+        // `navigate` from the `abide` barrel for one link handler. It reads `abide/runtime` now,
+        // which is where the name it wanted already lived.
+        ['the `abide` barrel (identity.ts)', 'a caller that could write its own principal'],
+        // `lines.ts`, 993 bytes: `emit` called `formatLogLine` unconditionally, so the ANSI tables,
+        // the tab escaping and the ISO stamping shipped to a console that can only ever be in
+        // `plain`. The three terminal shapes are installed by `abide/server` now.
+        ['the terminal log shapes (lines.ts)', 'ABIDE_LOG_FORMAT'],
+    ] as const
+
+    const resident: string[] = []
+    for (const [what, needle] of RESIDENT) {
+        for (const [name, text] of loaded) {
+            if (text.includes(needle)) resident.push(`${what} — in ${name}`)
+        }
+    }
+    expect(resident, 'modules a first load has no use for are in it').toEqual([])
+
+    // And the closure is a closure rather than the whole build — a walk that reached everything would
+    // pass all three above by never having narrowed anything.
+    expect(closure.size).toBeLessThan(Object.keys(manifest.assets).length)
+})
+
 test('a sidecar is written only when it is smaller, and holds the same bytes', async () => {
     for (const [name, asset] of Object.entries(manifest.assets)) {
         const identity = new Uint8Array(await Bun.file(`${OUT}/${name}`).arrayBuffer())

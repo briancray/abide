@@ -10,6 +10,7 @@ import { mounted } from './mount.ts'
 import { ARGS_PARAM } from './PATHS.ts'
 import { isFile, isThenable } from './probes.ts'
 import type { JsonSchema } from './shapes.ts'
+import { STREAMING } from './STREAMING.ts'
 import { traceHeaders } from './trace.ts'
 
 /** A stream of chunks, one JSON value per line — what a handler that YIELDS is served as. */
@@ -639,15 +640,6 @@ export async function askWire<T>(
 export function isChunked(response: Response): boolean {
     return (response.headers.get('content-type') ?? '').includes(NDJSON_TYPE)
 }
-
-/**
- * The decode options a streaming read passes on every chunk.
- *
- * Exported, and the reason is the seam: `$ui`'s navigation reader decodes a stream the same way, and
- * the same constant declared on both sides of `$shared` is the duplication this layout invites. One
- * object rather than one per chunk, in one place rather than two.
- */
-export const STREAMING: TextDecodeOptions = { stream: true }
 
 /**
  * A response body as the chunks it carries.

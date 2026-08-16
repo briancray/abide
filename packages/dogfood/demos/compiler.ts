@@ -747,17 +747,130 @@ export default suite({
         },
 
         {
-            title: 'a slot cannot `await`, and the refusal names the two spellings that can',
-            note: 'A slot is a THUNK, and a thunk is not async — so there is no code to emit for an `await` inside one. It used to compile to `() => await value`, which is JavaScript no engine parses, produced silently, with the error arriving from the runtime and nothing pointing back at the line. What replaces it is the thing the sugar was standing in for: a promise in a slot renders what it resolves to, and a load an author wants to say something ABOUT — a placeholder, a failure — goes in a cell, where the probes can be asked and the chain over them is what defers the region.',
-            run({ is, throws }) {
-                throws('a whole-expression await', () => template('<p>{await p}</p>'), 'cannot `await`')
-                throws(
+            title: 'a hole that `await`s gets an ASYNC thunk, and the question is whose await it is',
+            note: 'It used to be refused, on the reasoning that a slot is a thunk and a thunk is not async. The thunk is the answer rather than the obstacle: made `async` it hands back a promise, and a promise in a hole already renders what it resolves to. The refusal was a flat token scan that never asked WHOSE function body the `await` sat in, so it also rejected a nested `async` arrow and a property named `await` — valid TypeScript, and the attribute path compiled all three, which is what showed the emit was never the problem. Kept as a scan, it now picks a thunk instead of rejecting, and over-approximating costs one promise rather than a compile error.',
+            run({ is }) {
+                is('a whole-expression await', template('<p>{await p}</p>'), '<p>${async () => await p}</p>')
+                is(
                     'one buried in an expression',
-                    () => template('<p>{x ? await a : b}</p>'),
-                    'cannot `await`',
+                    template('<p>{x ? await a : b}</p>'),
+                    '<p>${async () => x ? await a : b}</p>',
+                )
+                // NOT in tail position, which is why the thunk is made async rather than the `await`
+                // being dropped: `{user.name}` over a promise is `undefined`, silently.
+                is(
+                    'one that has to be reached THROUGH',
+                    template('<p>{(await user).name}</p>'),
+                    '<p>${async () => (await user).name}</p>',
+                )
+                // Whose await it is. Both of these are ordinary TypeScript the flat scan refused.
+                is(
+                    'an await belonging to a nested arrow still compiles',
+                    template('<p>{ids.map(async (id) => await load(id))}</p>'),
+                    '<p>${async () => ids.map(async (id) => await load(id))}</p>',
+                )
+                is(
+                    '…and a property NAMED await is not one at all',
+                    template('<p>{obj.await}</p>'),
+                    '<p>${obj.await}</p>',
+                )
+                is('the same through an optional chain', template('<p>{obj?.await}</p>'), '<p>${obj?.await}</p>')
+                // An ATTRIBUTE says the same thing, and used to say something else: it emitted a bare
+                // `await` into a template function that is never async, so the emitted FILE did not
+                // compile — TS1308, pointing at generated code rather than at the hole.
+                is(
+                    'an attribute gets the same async thunk',
+                    template('<p title={await p}>x</p>'),
+                    '<p title=${async () => await p}>x</p>',
+                )
+                is(
+                    '…and refuses nothing a slot accepts',
+                    template('<p title={obj.await}>x</p>'),
+                    '<p title=${obj.await}>x</p>',
+                )
+                // Every OTHER position a thunk covers, which the first pass left emitting a bare
+                // `await` into a non-async arrow: a quoted attribute's interpolation, a spread, and
+                // the three block HEADS.
+                is(
+                    'a quoted attribute’s interpolation',
+                    template('<p title="a {await p} b">x</p>'),
+                    '<p title=${async () => `a ${await p} b`}>x</p>',
+                )
+                is(
+                    'a spread',
+                    template('<p {...await props}>x</p>'),
+                    '<p ...=${async () => await props}>x</p>',
+                )
+                is(
+                    'an `{#if}` head',
+                    template('{#if await p}<b>y</b>{/if}'),
+                    '${async () => await p ? html`<b>y</b>` : null}',
+                )
+                is(
+                    'a `{#for}` head',
+                    template('{#for x of await rows}<b>{x}</b>{/for}'),
+                    '${async () => (await rows ?? []).map((x) => html`<b>${x}</b>`)}',
+                )
+                is(
+                    'a `{#switch}` subject',
+                    template('{#switch await mode}{:case 1}<b>a</b>{/switch}'),
+                    '${async () => { const $0 = await mode; return $0 === 1 ? html`<b>a</b>` : null }}',
+                )
+                // The HEAD is what decides, never the body: a hole inside the block carries its own
+                // async thunk, and making the whole region async for it would defer what one arm
+                // renders. Both of these keep a plain outer thunk.
+                is(
+                    'a body’s own await leaves the block synchronous',
+                    template('{#if ready}<b>{await p}</b>{/if}'),
+                    '${() => ready ? html`<b>${async () => await p}</b>` : null}',
+                )
+                is(
+                    '…and the same inside a row',
+                    template('{#for x of rows}<b>{await load(x)}</b>{/for}'),
+                    '${() => (rows ?? []).map((x) => html`<b>${async () => await load(x)}</b>`)}',
                 )
                 // A name that merely starts with the letters is not an await.
                 is('`awaitable` is an identifier', template('<p>{awaitable}</p>'), '<p>${awaitable}</p>')
+                is('and `"await"` is a string', template('<p>{"await"}</p>'), '<p>${"await"}</p>')
+
+                // The two remaining thunk positions, both of which land in a consumer that already
+                // resolves a promise — a toggle in the class ATTRIBUTE, a component in a CHILD slot.
+                is(
+                    'a `class:` toggle',
+                    template('<p class:on={await p}>x</p>'),
+                    '<p class=${async () => classes("", $lifted0, await p)}>x</p>',
+                )
+                is(
+                    'a component prop, which is one thunk over the whole invocation',
+                    template('<Card x={await p}/>'),
+                    '${async () => component(Card, { x: await p, children: undefined })}',
+                )
+            },
+            // The claim the shapes above only IMPLY, made directly: the emitted file PARSES. An
+            // assertion on emitted text cannot make it — every wrong shape here is a string that
+            // compares fine and a file no engine accepts, which is exactly how the attribute path
+            // shipped `title=${await p}` into a function that is never async. `Bun.Transpiler` is the
+            // discriminator, and it is also why this is a `server` face rather than more of `run`: a
+            // browser has no `Bun`, so asking there is a red row meaning "cannot ask" rather than
+            // "broken". It throws on `${await p}` and on `${() => await p}`, and parses `async () =>`.
+            server({ is }) {
+                // The WHOLE emitted file, imports included — the bytes the build hands the engine.
+                // Stripping anything first would be asserting about a file nothing writes.
+                const transpiler = new Bun.Transpiler({ loader: 'ts' })
+                const parses = (source: string): boolean => {
+                    const emitted = compile(`<template>${source}</template>`, { filename: 'P.abide' }).code
+                    try {
+                        transpiler.transformSync(emitted)
+                        return true
+                    } catch {
+                        return false
+                    }
+                }
+                is('a slot’s emitted file parses', parses('<p>{await p}</p>'), true)
+                is('one reached THROUGH parses', parses('<p>{(await user).name}</p>'), true)
+                is('an attribute’s does too', parses('<p title={await p}>x</p>'), true)
+                is('a class: toggle’s does', parses('<p class:on={await p}>x</p>'), true)
+                is('and a component prop’s', parses('<Card x={await p}/>'), true)
                 // A promise in a slot needs no spelling at all: both substrates render what it
                 // resolves to, which is what the short form was sugar over.
                 is(
@@ -786,6 +899,33 @@ export default suite({
                     'the two are the SAME shape, which is the whole change',
                     template('<script>const p = state(0)</script><p>{#if p.pending()}x{:else}y{/if}</p>'),
                     '<p>${() => p.pending() ? html`x` : html`y`}</p>',
+                )
+            },
+        },
+
+        {
+            title: 'the two positions an `await` is REFUSED in, and why each has nowhere to put one',
+            note: 'Making a thunk `async` only works where the value it hands back lands in something that resolves a promise — a child slot, an attribute, a spread, a toggle, a component prop. Two positions have no such consumer, and for them an async thunk would trade a compile error for a silently wrong value, which is the worse of the two. `bind:` hands over the CELL and emits no thunk at all, so a promise would be written onto a DOM property as itself. A `by` key is emitted INSIDE the row callback and is an IDENTITY compared per row — a fresh promise every pass matches nothing, so every row would move on every update. A `{#try}` was briefly a third and is NOT one: see the case below, which is the boundary catching what its body awaited.',
+            run({ is, throws }) {
+                throws(
+                    'a `bind:` hands over the cell, not a value',
+                    () => template('<input bind:value={await v}/>'),
+                    'cannot `await`',
+                )
+                throws(
+                    'a `by` key is an identity, compared per row',
+                    () => template('{#for x of rows by await k(x)}<b>{x}</b>{/for}'),
+                    'cannot `await`',
+                )
+                // The FLAG a `{#try}` gets instead, which is the whole of what it costs: present only
+                // when the body awaits, so no `{#try}` ever written changes shape.
+                const flagged = (source: string): boolean => template(source).includes('}, true)')
+                is('an awaiting `{#try}` is flagged', flagged('{#try}<p>{await p}</p>{:catch e}<b>c</b>{/try}'), true)
+                is('…and a plain one is not', flagged('{#try}<p>{v}</p>{:catch e}<b>c</b>{/try}'), false)
+                is(
+                    '…and `obj.await` is a property here too, so the bind still emits its cell',
+                    template('<input bind:value={obj.await}/>').includes('.value=${obj.await}'),
+                    true,
                 )
             },
         },

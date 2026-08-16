@@ -1202,6 +1202,10 @@ const EVALUATES = /[(`]|=>|\bfunction\b/
  */
 function unthunked(emitted: string, context: Context): boolean {
     if (EVALUATES.test(emitted)) return false
+    // An awaiting expression keeps its thunk whatever else is true of it: the thunk is what `slot`
+    // makes ASYNC, and an unthunked expression goes in bare — into a template function that is never
+    // async, so the emitted FILE stopped compiling.
+    if (awaits(emitted)) return false
     // A keyed memo named alone is its HANDLE — `m` is not `m(args)` — so it is not a value to render.
     // Only a bare path can be that: anything else has composed the name into something else.
     if (!PLAIN_PATH.test(emitted)) return true
@@ -1298,9 +1302,73 @@ function registerSheet(css: string, context: Context): string {
  * the tagged template sees nothing and the throw surfaces later inside the slot's own effect. Inside
  * a boundary everything is evaluated while the body runs, which is the only way the boundary's
  * `catch` is reachable at all.
+ *
+ * `awaiting` makes that thunk ASYNC, which is the whole of what an `await` in a hole needs: the thunk
+ * hands back a promise, and a promise in a slot already renders what it resolves to. The eager form
+ * has no thunk to make async, so it invokes one — consistent with a boundary's existing treatment of
+ * a promise, which `settledBoundary` resolves synchronously and does not route through `{:catch}`.
  */
-function slot(value: string, context: Context): string {
-    return context.eager ? `\${${value}}` : `\${() => ${value}}`
+function slot(value: string, context: Context, awaiting = false): string {
+    if (context.eager) return awaiting ? `\${(async () => ${value})()}` : `\${${value}}`
+    return `\${${thunkArrow(awaiting)} ${value}}`
+}
+
+/**
+ * The arrow every thunk opens with, so which spelling an awaiting one gets is decided in one place.
+ *
+ * The block heads write their own rather than going through `slot`, because an else-if chain needs a
+ * body rather than an expression — but the choice is the same choice, and it was five copies of one
+ * ternary before this.
+ */
+function thunkArrow(awaiting: boolean): string {
+    return awaiting ? 'async () =>' : '() =>'
+}
+
+/**
+ * Does any test in an `{#if}` chain await? The chain is ONE thunk, so one arm decides for all of them.
+ *
+ * Asked of the author's TESTS rather than of the emitted chain, which holds the bodies too: a body's
+ * own `await` is inside a hole that already carries its own async thunk, and making the chain async
+ * for it would defer the whole region on something one arm renders.
+ */
+function headAwaits(branches: Branch[]): boolean {
+    for (const branch of branches) {
+        if (branch.test !== null && awaits(branch.test.source)) return true
+    }
+    return false
+}
+
+/**
+ * Does this expression `await`, and therefore need an ASYNC thunk?
+ *
+ * Over-approximates on purpose, in the one direction that is free: an `await` belonging to a NESTED
+ * arrow — `{ids.map(async (id) => await load(id))}` — answers true and buys an `async` the expression
+ * did not need. That is one promise and one microtask tick per evaluation, so in a `{#for}` body it
+ * is per row per pass rather than once. This same scan used to REFUSE the hole, where those false
+ * positives were compile errors on valid TypeScript — asking it to pick a thunk rather than to reject
+ * is what makes being conservative cost a tick instead of a build.
+ *
+ * Two things it must NOT over-approximate, because both are ordinary JavaScript that would otherwise
+ * pay for a thunk: `"await"` is a string, which the scanner already tells apart from the keyword, and
+ * `obj.await` is a property, which it does not — a property name scans as the KEYWORD, so the token
+ * in front is what says which one this is. Same rule, same spelling, as `desugar`'s.
+ */
+function awaits(source: string): boolean {
+    // The scanner is the answer; this is only whether to ask it. A hole with no `await` in its bytes
+    // is every hole but a handful, and `unthunked` asks per expression per node.
+    if (!source.includes('await')) return false
+    let previous: SyntaxKind | undefined
+    for (const token of tokensOf(source)) {
+        if (
+            token.kind === SyntaxKind.AwaitKeyword &&
+            previous !== SyntaxKind.DotToken &&
+            previous !== SyntaxKind.QuestionDotToken
+        ) {
+            return true
+        }
+        previous = token.kind
+    }
+    return false
 }
 
 /**
@@ -1347,12 +1415,18 @@ function child(node: Node, context: Context): string {
             // Nothing here can read a source, or it IS one — either way the thunk would only cost.
             if (unthunked(value, context)) return `\${${marked}}`
             // Inside a `{#try}` the boundary is one unit, so nothing gets its own thunk.
-            return slot(marked, context)
+            return slot(marked, context, awaits(value))
         }
         case 'element':
             return element(node, context)
-        case 'component':
-            return slot(invoke(node, context), context)
+        case 'component': {
+            // Asked of the whole INVOCATION rather than of one prop: every prop is built inside the
+            // one `component(…)` call, so any `await` among them is in this thunk. What it hands back
+            // is then a promise where a component was, which is a child slot — the one position that
+            // has always rendered what a promise resolves to.
+            const invoked = invoke(node, context)
+            return slot(invoked, context, awaits(invoked))
+        }
         case 'slot': {
             const held = context.children
             if (held === null) {
@@ -1387,14 +1461,15 @@ function child(node: Node, context: Context): string {
         case 'style':
             // Lifted into the module-scope registry `subtreeScoped` already wrote it to.
             return ''
-        // `conditional` and `switched` hand back a whole thunk, since an else-if chain needs a body
-        // rather than an expression.
+        // `chained` and `switched` hand back a whole thunk, since an else-if chain needs a body
+        // rather than an expression — including the arrow it opens with, which is why neither takes
+        // the awaiting flag the sibling cases pass to `slot`.
         case 'if':
-            return called(conditional(node.branches, context), context)
+            return called(chained(node.branches, context), context)
         case 'switch':
             return called(switched(node, context), context)
         case 'for':
-            return slot(loop(node, context), context)
+            return slot(loop(node, context), context, awaits(node.list.source))
         case 'try':
             return slot(guarded(node, context), context)
         case 'define':
@@ -1566,16 +1641,25 @@ function element(
             case 'expression': {
                 const emitted = code(attribute.value, context)
                 const marked = mark(attribute.value.start, body(emitted))
+                // The same async thunk a child slot gets, for the same reason: the binder awaits what
+                // a thunk hands back. Without it the attribute path emitted a bare `await` into a
+                // function that is never async, and the FILE failed to compile.
                 open += unthunked(emitted, context)
                     ? ` ${attribute.name}=\${${marked}}`
-                    : ` ${attribute.name}=\${() => ${marked}}`
+                    : ` ${attribute.name}=\${${thunkArrow(awaits(emitted))} ${marked}}`
                 break
             }
             case 'interpolated': {
                 const joined = interpolate(attribute.parts, context)
-                open += joined.reads
-                    ? ` ${attribute.name}=\${() => \`${joined.text}\`}`
-                    : ` ${attribute.name}=\${\`${joined.text}\`}`
+                // `joined.text` is the whole quoted value with its holes already emitted, so one scan
+                // answers for all of them — there is one thunk over the lot either way. Asked only on
+                // the arm that writes a thunk: the other has no arrow, and the text it would scan is
+                // the attribute's static prose.
+                if (joined.reads) {
+                    open += ` ${attribute.name}=\${${thunkArrow(awaits(joined.text))} \`${joined.text}\`}`
+                } else {
+                    open += ` ${attribute.name}=\${\`${joined.text}\`}`
+                }
                 break
             }
             case 'event':
@@ -1588,7 +1672,7 @@ function element(
                 const emitted = code(attribute.value, context)
                 open += unthunked(emitted, context)
                     ? ` ...=\${${body(emitted)}}`
-                    : ` ...=\${() => ${body(emitted)}}`
+                    : ` ...=\${${thunkArrow(awaits(emitted))} ${body(emitted)}}`
                 break
             }
             case 'bind':
@@ -1635,7 +1719,11 @@ function toggled(
         conditions += `, ${emitted}`
     }
     const call = `${need(context, helper)}(${JSON.stringify(base)}, ${liftArray(names, context)}${conditions})`
-    return ` ${attribute}=\${${reads ? `() => ${call}` : call}}`
+    // One scan for every toggle, since they share the one thunk. An awaiting toggle always HAS that
+    // thunk to make async: `unthunked` answers false for an awaiting expression, so the loop above has
+    // already set `reads` — without which the `await` would go in bare, beside the `classes(…)` call,
+    // in a template function that is never async.
+    return ` ${attribute}=\${${reads ? `${thunkArrow(awaits(conditions))} ${call}` : call}}`
 }
 
 /**
@@ -1708,6 +1796,19 @@ function bind(
     context: Context,
 ): string {
     const key_ = attribute.target
+    // REFUSED rather than made async, which is the whole of what separates this from an attribute. A
+    // bind hands over the CELL — the emit is `.prop=${source}` and `&ref=${source}`, with no thunk in
+    // either — so there is nothing here to make async, and a promise arriving would be written onto a
+    // DOM property or handed over as a node ref as the promise it is. Every other position that awaits
+    // resolves it somewhere; these two have nowhere to resolve it to.
+    if (attribute.value !== null && awaits(attribute.value.source)) {
+        throw new ParseError(
+            `abide: \`bind:${key_}\` cannot \`await\` — a bind hands over the CELL it reads and ` +
+                `writes back to, and a promise is neither. Await into a cell and bind that`,
+            attribute.value.start,
+        )
+    }
+
     // `bind:value` with no value binds the cell of the same name — `bind:value={value}` written once.
     const source =
         attribute.value === null
@@ -1950,25 +2051,6 @@ function childrenOf(parameters: string): string | null {
 // --- control flow ----------------------------------------------------------
 
 /**
- * The thunk a `{#if}` becomes. An else-if chain is a sequence of early returns rather than nested
- * ternaries, so each condition's hoisted reads sit in scope for its own branch only — and a later
- * condition still does not run when an earlier one matched.
- */
-function conditional(branches: Branch[], context: Context): string {
-    // The chain, and nothing around it. A `{#if x.pending()}` head used to be matched here and
-    // wrapped in `awaited(cell, { pending, then, catch })` — one arm handed over three times — so
-    // that the SERVER knew to defer this region and the client's settle landed on the same template.
-    //
-    // The walk decides deferral now, off the probe rather than off the spelling, so the wrapper was
-    // carrying only the second half. It was not carrying it: the no-op held only while both arms
-    // reached a slot in the SAME shape, and a compiled chain's arms are different templates, so the
-    // settle rebuilt the region either way. Measured on a gated load — inserted 2, removed 1,
-    // created 1 element · 1 text · 1 comment, cloned 2, IDENTICAL with the wrapper and without it.
-    return chained(branches, context)
-}
-
-
-/**
  * The cells an UNCONDITIONAL child slot reads, so setup can start their loads before the walk reaches
  * the first of them.
  *
@@ -2077,7 +2159,26 @@ function rootsOf(
     for (const source of from) rootsOf(source, memos, seen, into)
 }
 
+/**
+ * The thunk a `{#if}` becomes. An else-if chain is a sequence of early returns rather than nested
+ * ternaries, so each condition's hoisted reads sit in scope for its own branch only — and a later
+ * condition still does not run when an earlier one matched.
+ *
+ * The chain, and nothing around it. A `{#if x.pending()}` head used to be matched here and wrapped in
+ * `awaited(cell, { pending, then, catch })` — one arm handed over three times — so that the SERVER
+ * knew to defer this region and the client's settle landed on the same template.
+ *
+ * The walk decides deferral now, off the probe rather than off the spelling, so the wrapper was
+ * carrying only the second half. It was not carrying it: the no-op held only while both arms reached
+ * a slot in the SAME shape, and a compiled chain's arms are different templates, so the settle
+ * rebuilt the region either way. Measured on a gated load — inserted 2, removed 1, created 1 element
+ * · 1 text · 1 comment, cloned 2, IDENTICAL with the wrapper and without it.
+ */
 function chained(branches: Branch[], context: Context): string {
+    // Every shape below opens the same way, and an awaiting HEAD is what decides it — a body's own
+    // `await` is inside a hole that already carries its own async thunk. Asked here rather than
+    // handed in: the branches are what the answer is read off, and they are already the argument.
+    const arrow = thunkArrow(headAwaits(branches))
     // The CONDITIONS alone decide the shape, so hoist them all before emitting a single body:
     // `fragment` recurses, so a body emitted for the losing shape would be compiled twice — and
     // exponentially with nesting.
@@ -2105,7 +2206,7 @@ function chained(branches: Branch[], context: Context): string {
         // Nothing to narrow, so keep the ternary — it is the shape a person would have written.
         let out = ''
         for (const arm of arms) {
-            if (arm.branch.test === null) return `() => ${out}${fragment(arm.branch.body, context)}`
+            if (arm.branch.test === null) return `${arrow} ${out}${fragment(arm.branch.body, context)}`
             // The text `hoistReads` already produced: nothing hoisted on this path, so the scope it
             // was emitted against is the one `code` would use.
             // Same operand rule as `switched`'s case values: `{#if a ?? b}` inlined bare emits
@@ -2113,7 +2214,7 @@ function chained(branches: Branch[], context: Context): string {
             // below is safe on its own, so only the ternary needs this.
             out += `${operand(arm.text)} ? ${fragment(arm.branch.body, context)} : `
         }
-        return `() => ${out}null`
+        return `${arrow} ${out}null`
     }
 
     const parts: string[] = []
@@ -2127,10 +2228,12 @@ function chained(branches: Branch[], context: Context): string {
     }
     const last = parts[parts.length - 1] as string
     if (!last.startsWith('return ')) parts.push('return null')
-    return `() => { ${parts.join('; ')} }`
+    return `${arrow} { ${parts.join('; ')} }`
 }
 
 function switched(node: { value: Expr; branches: Branch[] }, context: Context): string {
+    // The SUBJECT is what decides it — a case body's own `await` sits in a hole with its own thunk.
+    const arrow = thunkArrow(awaits(node.value.source))
     const { declarations, scope, text } = hoistReads(node.value, context)
     const inner = withHoists(context, scope)
     // Re-emitted only when the hoist CHANGED the scope; otherwise `hoistReads`'s own pass is it.
@@ -2152,16 +2255,16 @@ function switched(node: { value: Expr; branches: Branch[] }, context: Context): 
         if (branch.test === null) {
             out += fragment(branch.body, inner)
             return declarations.length === 0
-                ? `() => ${out}`
-                : `() => { ${declarations.join('; ')}; return ${out} }`
+                ? `${arrow} ${out}`
+                : `${arrow} { ${declarations.join('; ')}; return ${out} }`
         }
         // The case value goes in as an OPERAND: `{:case alt ? 'a' : 'b'}` pasted bare emits
         // `$0 === alt ? 'a' : 'b' ? … : …`, which is a different expression entirely.
         out += `${subject} === ${operand(code(branch.test, inner))} ? ${fragment(branch.body, inner)} : `
     }
     return declarations.length === 0
-        ? `() => ${out}null`
-        : `() => { ${declarations.join('; ')}; return ${out}null }`
+        ? `${arrow} ${out}null`
+        : `${arrow} { ${declarations.join('; ')}; return ${out}null }`
 }
 
 function loop(
@@ -2176,6 +2279,18 @@ function loop(
     },
     context: Context,
 ): string {
+    // REFUSED for the same reason a `bind:` is: the key is emitted INSIDE the row callback, so making
+    // it async would make that callback async and `.map` would hand back an array of promises where
+    // the reconcile expects rows. And a key is an IDENTITY compared per row — a fresh promise every
+    // pass is the one value that can never match itself, so every row would move on every update.
+    if (node.key !== null && awaits(node.key.source)) {
+        throw new ParseError(
+            'abide: a `by` key cannot `await` — the key is what a reorder MOVES a row by, compared ' +
+                'per row, and a promise is a new identity every pass. Key by something already in hand',
+            node.key.start,
+        )
+    }
+
     const inner: Context = { ...context, shadow: new Set(context.shadow) }
     for (const name of parameterNames(node.item)) inner.shadow.add(name)
     if (node.index !== null) inner.shadow.add(node.index)
@@ -2235,7 +2350,13 @@ function guarded(node: { body: Node[]; branches: Branch[] }, context: Context): 
     // The body is emitted EAGERLY — see `Context.eager`. One unit, so a throw anywhere in it reaches
     // the boundary rather than the nested effect that would otherwise have owned the expression.
     const body = fragment(node.body, { ...context, eager: true })
-    return `${need(context, 'boundary')}(() => ${body}, { ${arms.join(', ')} })`
+    // An `{await …}` in the body is an invoked async IIFE, so what it leaves in the slot is a PROMISE
+    // and its rejection arrives after the body returned. The third argument is what tells
+    // `settledBoundary` to collect those before deciding — asked of the emitted body, which is where
+    // the IIFEs are. Omitted entirely when there is none, so no existing `{#try}` changes shape.
+    const awaiting = awaits(body)
+    const flag = awaiting ? ', true' : ''
+    return `${need(context, 'boundary')}(() => ${body}, { ${arms.join(', ')} }${flag})`
 }
 
 // --- the file --------------------------------------------------------------

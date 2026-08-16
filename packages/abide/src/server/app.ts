@@ -14,7 +14,8 @@ import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { env } from '$shared/internal/env.ts'
-import { appName, useAppNameSource } from '$shared/log.ts'
+import { terminalLine } from '$shared/internal/lines.ts'
+import { appName, useAppNameSource, useLineWriter } from '$shared/log.ts'
 import { knobOf, useAppFactsSource } from './config.ts'
 
 /** What the climb below is looking for: the two facts an app is identified by. */
@@ -73,6 +74,11 @@ function nearestManifest(): Manifest {
 }
 
 useAppNameSource(() => nearestManifest().name)
+// The three TERMINAL line shapes, which a browser can never be in and so does not carry — eagerly,
+// for the reason the app name is: a line can be written long before anything calls `serve()`, and a
+// framework warning that came out plain because nothing had imported the writer yet would be a
+// difference nobody could account for. See `$shared/internal/lines.ts`.
+useLineWriter(terminalLine)
 // The two facts `config()` publishes as `APP_VERSION` and `APP_DATA_DIR`. Installed rather than
 // imported, so this file keeps its `node:` imports out of `config.ts` — see `useAppFactsSource`.
 useAppFactsSource(() => ({ version: appVersion(), dataDir: appDataDir() }))

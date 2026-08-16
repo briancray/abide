@@ -1,9 +1,10 @@
 // The template runtime: what the COMPILER writes, and what reads what it wrote.
 //
-// Nothing here is a name an author types. Fourteen of them are emitted — eleven by the template
-// header in `$compiler/internal/emit.ts`, three by `abide build` into the generated client entry —
-// and the five predicates below are how the two renderers and the harness read the shapes those
-// calls produce.
+// Nothing here is a name an author types WHERE IT IS WRITTEN. Fifteen of them are emitted — eleven by
+// the template header in `$compiler/internal/emit.ts`, four by `abide build` into the generated client
+// entry — and the five predicates below are how the two renderers and the harness read the shapes
+// those calls produce. `navigate` is the one that is also authored, and it is re-exported here rather
+// than reached for on `abide` for a bundling reason the export itself states.
 //
 // Each of the eleven is what the compiler writes for a SPELLING, except `start`, which is written for
 // a POSITION: the memos an unconditional plain slot reads, so their loads are in flight before the
@@ -31,11 +32,11 @@ export {
     type Awaited,
     awaited,
     type Boundary,
-    boundary,
     type Branches,
+    boundary,
+    type Component,
     cellProps,
     classifySlots,
-    type Component,
     component,
     escape,
     type Given,
@@ -46,18 +47,27 @@ export {
     propCell,
     type Raw,
     type SlotKind,
-    start,
     type Streamed,
+    start,
     streamed,
 } from './html.ts'
-// What `abide build` writes into `.abide/client.entry.ts`: the route table, and the two calls that
-// put it on screen. An app names none of these — the build wrote the file that does — so the table's
-// own types are here too rather than on `abide`, which keeps `route()` and the thing it reads apart.
+// What `abide build` writes into `.abide/client.entry.ts`: the route table, the two calls that put it
+// on screen, and the `navigate` its link handler makes. An app names none of these AS WRITTEN THERE —
+// the build wrote the file that does — so the table's own types are here too rather than on `abide`,
+// which keeps `route()` and the thing it reads apart.
+//
+// `navigate` is the one name on both this specifier and `abide`, and the duplication is what keeps
+// the generated entry off the barrel: importing it from `abide` for that one link handler pulled
+// `identity`, `online`, `memo` and `tags` into the chunk EVERY page loads — 4,338 minified bytes on
+// the perf app, which is 7.3% of its first load, for a name already sitting in `router.ts` one import
+// down. An author still types `navigate` and still reaches for it on `abide`; nothing about the two
+// re-exports differs but which chunk the importer lands in.
 export {
     type Loader,
+    navigate,
     outlet,
-    ready,
     type RouteEntry,
+    ready,
     routes,
     type View,
     type ViewModule,

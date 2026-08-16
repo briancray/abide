@@ -21,8 +21,9 @@
 // So the server frames the response into pieces that are each complete on their own, and this reads
 // to the sentinel between them and parses exactly once per piece.
 //
-// NOT `$shared`'s `chunksOf` (`internal/wire.ts`), which frames a stream the same way and already
-// shares the `STREAMING` constant with this file. The invariant differs at the BOUND: a line there is
+// NOT `$shared`'s `chunksOf` (`internal/wire.ts`), which frames a stream the same way and shares the
+// `STREAMING` constant with this file — from a LEAF, not from `wire.ts`, because naming it there put
+// the whole rpc encoder in the chunk every page loads. The invariant differs at the BOUND: a line there is
 // one NDJSON value, small enough that it can hold a flat buffer and re-slice it, while a piece here is
 // a whole page — which is exactly what makes `held += chunk` quadratic at this size, and what the
 // unjoined rope and the straddle window below exist to avoid. Merging them would put this file's
@@ -31,7 +32,7 @@
 import { PATCH_FORM, PIECE_END, placeholderId } from '$shared/internal/MARKERS.ts'
 import { NAVIGATION_DEPTH_HEADER, NAVIGATION_FROM_HEADER, NAVIGATION_HEADER } from '$shared/internal/PATHS.ts'
 import { addSeeds, SEED_ELEMENT_ID } from '$shared/internal/seed.ts'
-import { STREAMING } from '$shared/internal/wire.ts'
+import { STREAMING } from '$shared/internal/STREAMING.ts'
 import { abideLog } from '$shared/log.ts'
 import {
     currentRouteName,

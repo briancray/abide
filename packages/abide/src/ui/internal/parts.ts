@@ -26,6 +26,7 @@ import {
     type SlotKind,
     Streamed,
     settledArms,
+    producedBoundary,
     settledBoundary,
     type TemplateResult,
 } from '$shared/html.ts'
@@ -33,6 +34,7 @@ import {
     forgetProbedLoad,
     hasProbedLoad,
     hasProbedStream,
+    isPending,
     type Node,
     rerun,
     type State,
@@ -109,6 +111,19 @@ function isOpen(node: ChildNode | null): boolean {
  */
 function textOf(value: unknown): string {
     return value === null || value === undefined || value === false || value === true ? '' : String(value)
+}
+
+/**
+ * A failure the author never claimed, sent where an unhandled rejection goes.
+ *
+ * Three positions produce one: a bare promise in a slot, a `{#for await}` with no `{:catch}`, and a
+ * promise in an attribute. None of the three lets an author name a handler, so none of them may
+ * swallow it either — the microtask queue is the only place left that still reports it.
+ */
+function unclaimed(error: unknown): void {
+    queueMicrotask(() => {
+        throw error
+    })
 }
 
 /**
@@ -407,7 +422,27 @@ export class ChildPart {
     private take(claimed: ChildNode[], value: unknown): void {
         if (value instanceof Boundary) {
             // Synchronous, so the client reaches the same arm the server did by running the same body.
-            this.take(claimed, settledBoundary(value))
+            //
+            // `producedBoundary` rather than `settledBoundary`, and the difference is the whole
+            // adoption win: an awaiting body still returns its STRUCTURE synchronously — only the
+            // holes defer — so folding the two into one promise would hand this an opaque range and
+            // every node the server sent would be replaced on settle. Adopted here instead, and each
+            // awaiting hole claims its own nodes one level down.
+            const { produced, waiting } = producedBoundary(value)
+            this.take(claimed, produced)
+            if (waiting.length === 0) return
+            // The body was adopted on the bet that it settles — which is the same bet the server
+            // already made and wrote into the markup. If it does not, the catch arm replaces it, and
+            // that is a rebuild of a region the server got wrong too.
+            const mine = ++this.generation
+            void Promise.all(waiting).catch((error: unknown) => {
+                if (mine !== this.generation) return
+                if (isPending(error) || value.branches.catch === undefined) {
+                    unclaimed(error)
+                    return
+                }
+                this.show(settledArms(value.branches, true, error), error)
+            })
             return
         }
 
@@ -540,9 +575,7 @@ export class ChildPart {
                 if (generation !== this.generation) return
                 // No `{:catch}` means the author did not claim to handle it, so it stays a failure.
                 if (branches === null || branches.catch === undefined) {
-                    queueMicrotask(() => {
-                        throw error
-                    })
+                    unclaimed(error)
                     return
                 }
                 this.show(settledArms(branches, true, error), operand)
@@ -658,9 +691,7 @@ export class ChildPart {
             } catch (error) {
                 if (generation !== this.generation) return
                 if (block.failure === undefined) {
-                    queueMicrotask(() => {
-                        throw error
-                    })
+                    unclaimed(error)
                     return
                 }
                 this.show(block.failure(error), source)
@@ -1648,7 +1679,7 @@ class Instance {
             // WRITTEN rather than what was handed over, so a name the guard rejected is never handed to
             // `removeAttribute` either.
             let previous: string[] = []
-            return (value) => {
+            const apply = (value: unknown): void => {
                 const next = (value ?? {}) as Record<string, unknown>
                 const names = Object.keys(next)
                 const written: string[] = []
@@ -1664,8 +1695,53 @@ class Instance {
                 }
                 previous = written
             }
+            // The attribute binder's discipline below, and for the same reason: `{...await props}`
+            // compiles to an async thunk, so the value handed here IS a promise — and `Object.keys`
+            // of one is empty, which wrote no attributes and took back every name the last pass had.
+            // The stamp is what a superseded spread loses: it must not take back names the newer one
+            // has already written.
+            let generation = 0
+            return (value) => {
+                generation++
+                if (!isThenable(value)) {
+                    apply(value)
+                    return
+                }
+                const mine = generation
+                value.then(
+                    (settled) => {
+                        if (mine === generation) apply(settled)
+                    },
+                    (error: unknown) => {
+                        if (mine === generation) unclaimed(error)
+                    },
+                )
+            }
         }
-        return (value) => writeAttribute(element, kind.name, value)
+        // A promise settles in place, the way one in a child slot does. Without it `attributeText` —
+        // which is `String(value)` — wrote `[object Promise]` where the same value one position over
+        // rendered what it resolved to, and the two hole kinds meant different things for no reason
+        // either could state. `generation` is what a superseded load loses: two in flight, and the
+        // older one must not paint over the newer. It is bumped on EVERY write, because a synchronous
+        // value arriving is exactly what has to invalidate a load still running.
+        let generation = 0
+        return (value) => {
+            generation++
+            if (!isThenable(value)) {
+                writeAttribute(element, kind.name, value)
+                return
+            }
+            const mine = generation
+            value.then(
+                (settled) => {
+                    if (mine === generation) writeAttribute(element, kind.name, settled)
+                },
+                (error: unknown) => {
+                    if (mine !== generation) return
+                    unclaimed(error)
+                },
+            )
+        }
     }
 
     update(values: readonly unknown[]): void {

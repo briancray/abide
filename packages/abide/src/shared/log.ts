@@ -6,7 +6,6 @@
 // way it is. The one rule worth restating at the code: `warning` and `error` are never gated, on any
 // channel, because the gate exists to control volume rather than to hide breakage.
 
-import { colorAllowed, stdoutIsTTY } from './internal/env.ts'
 import { textKnob } from './internal/knobs.ts'
 import { traceId } from './internal/trace.ts'
 
@@ -136,66 +135,51 @@ function enabledIn(spec: string, channel: string): boolean {
 // --- what a line looks like --------------------------------------------------
 
 /**
- * The four forms one line takes. `abide logs` renders a record the feed handed it, and it renders it
- * by the rules the console was already following — so the decision is `logShape()`'s, not a caller's,
- * and nothing outside this file names the type.
+ * One written line, as text. The `now` is a millisecond stamp rather than a formatted one: only the
+ * machine forms carry a timestamp at all, and building the ISO string is the most expensive thing on
+ * this path — so whoever writes the line decides whether to pay for it.
  */
-type LogShape = 'color' | 'plain' | 'tsv' | 'json'
-
-// A browser is decided by having a document and no terminal behind it: ANSI would arrive as literal
-// junk in the console, and a tab is not a field separator anybody there can use.
-//
-// Latched on the first line written rather than at import, for the reason `stdoutIsTTY` states: bun
-// BUILDS `process.stdout` on the first touch and it costs ~6ms, so a module-level const charges it
-// to every importer. A document short-circuits it away on the server and in the CLI, but not in the
-// lane where a document AND a process both exist — the DOM emulator every `bun test` run preloads,
-// which reaches this file transitively through `ceilings.ts` and `memo.ts`.
-let inBrowser: boolean | null = null
+export type LineWriter = (
+    level: Level,
+    channel: string,
+    message: string,
+    now: number,
+    traced: string | null,
+    since: number,
+) => string
 
 /**
- * One decision, not two. Whether a line is machine-readable and whether it carries color are the
- * same question asked of the same variables, and answering them separately meant keeping the
- * `NO_COLOR` / `FORCE_COLOR` / `isTTY` ordering consistent in two places by hand — so that ordering
- * is `colorAllowed`'s, which the CLI's usage screen asks too.
+ * How much of a trace id a human sees on a terminal.
  *
- * Exported for the tail: a CLI printing somebody else's records answers the same question about its
- * OWN stdout.
+ * Eight hex is enough to pick one operation out of a session's worth of lines by eye, and 32 on
+ * every line is a wall. The MACHINE formats carry the whole id, so the thing you paste into an APM
+ * is never the truncated one — the short form is for finding the line, not for leaving with it.
  */
-export function logShape(): LogShape {
-    // Declared beats inferred everywhere, which is also what makes the machine formats testable from a
-    // demo that runs in both lanes.
-    const declared = textKnob('ABIDE_LOG_FORMAT')
-    if (declared === 'json') return 'json'
-    if (declared === 'tsv') return 'tsv'
-    if (inBrowser === null) inBrowser = typeof document !== 'undefined' && !stdoutIsTTY()
-    if (inBrowser) return 'plain'
-    return colorAllowed() ? 'color' : 'tsv'
+export const READABLE_TRACE = 8
+
+/**
+ * The readable form, and the only one a browser can be in — so it is the one that lives here.
+ *
+ * `logShape()` answers `plain` for a document with no terminal behind it and nothing can move that:
+ * the other three are declared through `ABIDE_LOG_FORMAT` or inferred from a TTY, and a client has
+ * neither. They are in `internal/lines.ts` and reach a line only through `useLineWriter` below.
+ */
+export const plainLine: LineWriter = (level, channel, message, _now, traced, since) => {
+    const suffix = level === 'log' ? '' : ` ${level}`
+    // Short, and trailing with the delta rather than leading: both are metadata about the line, and
+    // the message is what someone reading a terminal is scanning for.
+    const short = traced === null ? '' : ` ${traced.slice(0, READABLE_TRACE)}`
+    return `${channel}${suffix} ${message}${short} +${since}ms`
 }
 
-// Six that stay legible on both a light and a dark terminal, picked by hashing the channel so one
-// channel keeps its color for the life of the process without anything remembering the assignment.
-const CHANNEL_COLORS = [36, 35, 34, 33, 32, 31]
+// What the three TERMINAL forms are installed over. A browser never replaces it, which is the whole
+// point: `internal/lines.ts` carries the ANSI tables, the tab escaping and the ISO stamping, and
+// nothing a client bundle imports reaches that file.
+let lineWriter: LineWriter = plainLine
 
-function channelColor(channel: string): number {
-    let hash = 0
-    for (let i = 0; i < channel.length; i++) hash = (hash * 31 + channel.charCodeAt(i)) | 0
-    return CHANNEL_COLORS[Math.abs(hash) % CHANNEL_COLORS.length] as number
-}
-
-const LEVEL_COLORS: Record<Level, number> = {
-    log: 90,
-    info: 90,
-    warning: 33,
-    error: 31,
-    debug: 90,
-}
-
-/** Probes before it replaces: a message with nothing to escape costs one test. */
-function oneLine(message: string): string {
-    if (!/[\t\n\r\\]/.test(message)) return message
-    return message.replace(/[\t\n\r\\]/g, (ch) =>
-        ch === '\t' ? '\\t' : ch === '\n' ? '\\n' : ch === '\r' ? '\\r' : '\\\\',
-    )
+/** Installed by `abide/server` at import, beside `useAppNameSource`. See `internal/lines.ts`. */
+export function useLineWriter(writer: LineWriter): void {
+    lineWriter = writer
 }
 
 // --- the logger --------------------------------------------------------------
@@ -242,15 +226,6 @@ export function useLogSink(fn: (record: LogRecord) => void, wants: () => boolean
     sink = fn
     sinkWants = wants
 }
-
-/**
- * How much of a trace id a human sees on a terminal.
- *
- * Eight hex is enough to pick one operation out of a session's worth of lines by eye, and 32 on
- * every line is a wall. The MACHINE formats carry the whole id, so the thing you paste into an APM
- * is never the truncated one — the short form is for finding the line, not for leaving with it.
- */
-const READABLE_TRACE = 8
 
 export interface Logger {
     /** One line on this logger's channel. */
@@ -357,17 +332,13 @@ function emit(level: Level, channel: string, message: string, now: number, since
     // request. Asked only for a line being WRITTEN: the gate has already run by here.
     const traced = traceId()
 
-    const form = logShape()
-    // ISO-8601 is what the feed and both machine formats carry, and formatting one costs more than
-    // everything else on this path put together — so it is built once, for the readers that exist.
-    const feeding = sink !== null && sinkWants()
-    const stamped = feeding || form === 'json' || form === 'tsv' ? new Date(now).toISOString() : ''
-
-    // Before the console, and OUTSIDE whichever shape is in force: a feed carries records rather than
+    // Before the console, and OUTSIDE whatever shape is in force: a feed carries records rather than
     // rendered lines, so a reader of it is not decoding whatever `ABIDE_LOG_FORMAT` happened to be.
-    if (feeding) {
-        ;(sink as (record: LogRecord) => void)({
-            time: stamped,
+    // It builds its own ISO stamp — which is the most expensive thing on this path — because `emit`
+    // no longer knows whether the writer wants one. See `internal/lines.ts` for what that costs.
+    if (sink !== null && sinkWants()) {
+        sink({
+            time: new Date(now).toISOString(),
             level,
             channel,
             message,
@@ -375,42 +346,7 @@ function emit(level: Level, channel: string, message: string, now: number, since
         })
     }
 
-    writeLogLine(level, formatLogLine(level, channel, message, stamped, traced, since, form))
-}
-
-/**
- * The five fields as the line one shape writes.
- *
- * POSITIONAL rather than taking a `LogRecord`, because the writer above does not have one and must
- * not have to build one: a record costs an object and — worse — the ISO string, which is the most
- * expensive thing on this path and is skipped outright for a terminal. A reader that HAS a record
- * spreads its fields in, which is the cheap direction.
- */
-export function formatLogLine(
-    level: Level,
-    channel: string,
-    message: string,
-    stamped: string,
-    traced: string | null,
-    since: number,
-    form: LogShape,
-): string {
-    if (form === 'json') return JSON.stringify({ time: stamped, level, channel, message, trace: traced })
-    // Five columns always, empty where there is no id: a row whose column count depends on whether a
-    // request was in flight is one no `cut -f` can read.
-    if (form === 'tsv') return `${stamped}\t${level}\t${channel}\t${oneLine(message)}\t${traced ?? ''}`
-
-    const delta = `+${since}ms`
-    const suffix = level === 'log' ? '' : ` ${level}`
-    // Short, and trailing with the delta rather than leading: both are metadata about the line, and
-    // the message is what someone reading a terminal is scanning for.
-    const short = traced === null ? '' : ` ${traced.slice(0, READABLE_TRACE)}`
-    if (form !== 'color') return `${channel}${suffix} ${message}${short} ${delta}`
-    return (
-        `\x1b[${channelColor(channel)}m${channel}\x1b[0m` +
-        (suffix === '' ? '' : `\x1b[${LEVEL_COLORS[level]}m${suffix}\x1b[0m`) +
-        ` ${message}\x1b[90m${short} ${delta}\x1b[0m`
-    )
+    writeLogLine(level, lineWriter(level, channel, message, now, traced, since))
 }
 
 /**

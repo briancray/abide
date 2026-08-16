@@ -427,36 +427,10 @@ function parseHole(reader: Reader): Node {
     const trimmed = text.trim()
     const at = start + 1 + leading(text)
 
-    // A slot is a THUNK, and a thunk is not async — so there is no code to emit for an `await` in
-    // one, and the refusal names the two spellings that do work. A promise in a slot renders what it
-    // resolves to; a load an author wants to say something ABOUT — a placeholder, a failure — goes in
-    // a cell, where the probes can be asked and the answer is what defers the region.
-    if (awaits(trimmed)) {
-        fail(
-            reader,
-            'a slot cannot `await` — put the promise in a `state()` and read the cell, or ask ' +
-                '`{#if x.pending()}` about it',
-            start,
-        )
-    }
-
     // `{raw(...)}` is the escape hatch (SPEC). Syntactic, like every other decision on this path: the
     // name is what marks the slot, so nothing here needs to know what the expression evaluates to.
     const raw = /^raw\s*\(/.test(trimmed)
     return { kind: 'expression', raw, value: { source: trimmed, start: at } }
-}
-
-/**
- * Does an `await` KEYWORD appear anywhere in this expression?
- *
- * Asked of tokens rather than of the text: `awaitable` and `"await"` are not awaits, and the scanner
- * has already told the two apart.
- */
-function awaits(source: string): boolean {
-    for (const token of tokensOf(source)) {
-        if (token.kind === SyntaxKind.AwaitKeyword) return true
-    }
-    return false
 }
 
 /**

@@ -2,11 +2,11 @@
 // template both ways — to a string with `renderToString`, and to live DOM with `mount` — so the
 // difference between the lanes is visible where there is one, and asserted where there is not.
 
-import { html, raw, state, type TemplateResult, watch } from 'abide'
+import { html, memo, raw, state, type TemplateResult, watch } from 'abide'
 // This suite is what tests the template runtime, so it calls what the emitter writes — and the
 // predicates that read what it wrote — by hand. `raw` is not among them: it is the escape hatch an
 // author types, so it comes off the front door above with `html`.
-import { classifySlots, escape, isKeyed, isTemplate, keyed } from 'abide/runtime'
+import { boundary, classifySlots, escape, isKeyed, isTemplate, keyed } from 'abide/runtime'
 import { renderToString } from 'abide/server/internal'
 import { mount, type Mounted } from 'abide/ui'
 import { container, scratch, show, sleep, suite } from 'harness'
@@ -497,6 +497,232 @@ export default suite({
                     host,
                     () => html`<div>${raw('<em class="text-brass">emphasis, on purpose</em>')}</div>`,
                 )
+            },
+        },
+
+        {
+            title: 'an async thunk defers a source read, and drops the promise it produced doing it',
+            note: 'What `{await …}` costs the signal protocol, and the one line that pays it. A read SIGNALS by throwing, and the walk catches that synchronously and calls the thunk AGAIN once the load lands — but an `async` body converts the throw into a rejection, so nothing arrives to catch and `outstanding` is the only record left. The retry still produces correct markup, which is why this was invisible: what leaked was the DISCARDED promise, rejecting with the same signal and owned by nobody, as an unhandled rejection no author wrote. `retryableCall` claims it at the line that drops it. What no fix reaches is a read placed AFTER an await — nothing is tracked through one, which `settledPromise` already says of every async body in the framework, memos included.',
+            async run({ is }) {
+                const awaited = memo(async () => {
+                    await sleep(5)
+                    return 'A'
+                })
+                is(
+                    'awaiting a source hands back a promise, and the slot renders it',
+                    await renderToString(html`<p>${async () => await awaited}</p>`),
+                    '<p>A</p>',
+                )
+
+                // The gate is that this case RUNS at all. Without the claim in `retryableCall` the
+                // discarded promise rejects unowned, and `bun test` fails the whole file on the
+                // unhandled rejection before any assertion here is reached — which is exactly how it
+                // failed, and why the markup being right the whole time hid it.
+                const read = memo(async () => {
+                    await sleep(5)
+                    return 'B'
+                })
+                is(
+                    'a read inside one still defers, and leaves no rejection behind',
+                    await renderToString(html`<p>${async () => read()}</p>`),
+                    '<p>B</p>',
+                )
+
+                const plain = memo(async () => {
+                    await sleep(5)
+                    return 'C'
+                })
+                is(
+                    'the plain thunk it has to agree with',
+                    await renderToString(html`<p>${() => plain()}</p>`),
+                    '<p>C</p>',
+                )
+            },
+        },
+
+        {
+            title: 'a promise in an ATTRIBUTE, which is the same rule one position over',
+            note: 'It used to stringify: `attributeText` is `String(value)`, so an attribute wrote the text `[object Promise]` where the same value in a child slot rendered what it resolved to. Two hole kinds meant different things for no reason either could state, and it is what made `{await …}` unemittable in an attribute — there was nothing for an async thunk to hand its promise to. The generation counter is the child slot’s: a load superseded before it settles is discarded, not painted over the newer value.',
+            async run({ is }) {
+                is(
+                    'server awaits it in place',
+                    await renderToString(html`<p title=${() => Promise.resolve('later')}>x</p>`),
+                    '<p title="later">x</p>',
+                )
+                is(
+                    'an async thunk is the same thing — what the compiler emits for `{await p}`',
+                    await renderToString(html`<p title=${async () => await Promise.resolve('later')}>x</p>`),
+                    '<p title="later">x</p>',
+                )
+
+                const host = scratch(() => html`<p title=${() => Promise.resolve('later')}>x</p>`)
+                is('client — absent until it lands', host.querySelector('p')?.getAttribute('title'), null)
+                await tick()
+                is(
+                    '…and then the value, not [object Promise]',
+                    host.querySelector('p')?.getAttribute('title'),
+                    'later',
+                )
+                host.remove()
+
+                // The discard, which no assertion above can reach: without the counter the slow load
+                // lands last and wins, and the attribute ends on a value already superseded.
+                //
+                // The promise is held OUTSIDE the cell on purpose. `state(promise)` is a load — the
+                // cell absorbs it and the binder is handed the settled value, never the promise — so
+                // a first attempt at this raced the mount instead of the write and passed with the
+                // counter taken out. What the binder has to see is a promise, then a newer value.
+                const slow = sleep(40).then(() => 'STALE')
+                const which = state(0)
+                const racing = scratch(
+                    () => html`<p title=${() => (which() === 0 ? slow : 'fresh')}>x</p>`,
+                )
+                await sleep(5)
+                which.set(1)
+                await sleep(80)
+                is(
+                    'a superseded load does not paint over the newer value',
+                    racing.querySelector('p')?.getAttribute('title'),
+                    'fresh',
+                )
+                racing.remove()
+            },
+        },
+
+        {
+            title: 'a `{#try}` catches what its body AWAITED, and still defers what its body READ',
+            note: 'A `{#try}` catches what happens in it — an `await` is the operand most likely to fail, so it has to be among them. It did not: the body is emitted EAGERLY, one unit, so that a throw anywhere in it happens while the body runs and `{:catch}` is reachable at all, and an `await` there compiled to an invoked async IIFE whose REJECTION arrived long after the body returned. So the boundary caught nothing for the operand it most needed to. The fix keeps the body synchronous and has `settledBoundary` collect the promises the body left in its slots, deciding between the body and the catch arm once they settle; the walk is behind a compiler flag, so a `{#try}` with no await pays nothing and does not change shape. The third assertion is the one that says the catch was not bought with the DEFERRAL — a read signals by throwing, and the boundary must still let that signal through.',
+            async run({ is }) {
+                const arms = (catcher: (error: Error) => TemplateResult) => ({
+                    pending: undefined,
+                    then: undefined,
+                    catch: catcher as (error: unknown) => unknown,
+                    finally: undefined,
+                })
+                const caught = (error: Error): TemplateResult => html`<b>caught: ${error.message}</b>`
+
+                // What `{#try}<p>{await p}</p>{:catch e}…{/try}` compiles to, flag included.
+                is(
+                    'a rejecting await reaches `{:catch}`',
+                    await renderToString(
+                        html`${boundary(
+                            () => html`<p>${(async () => await Promise.reject(new Error('nope')))()}</p>`,
+                            arms(caught),
+                            true,
+                        )}`,
+                    ),
+                    '<b>caught: nope</b>',
+                )
+                is(
+                    '…and a resolving one renders the body',
+                    await renderToString(
+                        html`${boundary(
+                            () => html`<p>${(async () => await Promise.resolve('V'))()}</p>`,
+                            arms(caught),
+                            true,
+                        )}`,
+                    ),
+                    '<p>V</p>',
+                )
+
+                // The half the async-body route destroyed. A read SIGNALS by throwing, and the throw
+                // is only a throw while the body is synchronous — this is the assertion that says the
+                // boundary did not buy its catch with the deferral.
+                const loaded = memo(async () => {
+                    await sleep(5)
+                    return 'LOADED'
+                })
+                is(
+                    'a cell read inside the block still defers',
+                    await renderToString(
+                        html`${boundary(() => html`<p>${loaded()}</p>`, arms(caught), false)}`,
+                    ),
+                    '<p>LOADED</p>',
+                )
+
+                // NESTED one block deep, which is the case that decides the whole design. The other
+                // route — emitting the BODY `async` and the hole bare — is less machinery and passes
+                // every assertion above, then emits `(() => c ? html`<p>${await p}</p>` : null)()`
+                // for this one: a bare `await` inside the `{#if}`'s own non-async arrow, which is a
+                // file no engine parses. Wrapping each awaiting hole is what keeps the `await` from
+                // escaping into an enclosing thunk, and the walk below is what then finds it.
+                // The emitted shape of `{#try}<div>{#if c}<p>{await p}</p>{/if}</div>{/try}`, with the
+                // `{#if}`'s invoked thunk in the middle — so the promise is two templates down.
+                const deep = (): TemplateResult =>
+                    html`<div>${(() => html`<p>${(async () => await Promise.reject(new Error('deep')))()}</p>`)()}</div>`
+                is(
+                    'a rejection nested inside an `{#if}` still reaches `{:catch}`',
+                    await renderToString(html`${boundary(deep, arms(caught), true)}`),
+                    '<b>caught: deep</b>',
+                )
+
+                // Both at once, which is the case neither mechanism handles by accident.
+                const also = memo(async () => {
+                    await sleep(5)
+                    return 'L'
+                })
+                is(
+                    'a read and an await in the same block',
+                    await renderToString(
+                        html`${boundary(
+                            () => html`<p>${also()}${(async () => await Promise.resolve('|A'))()}</p>`,
+                            arms(caught),
+                            true,
+                        )}`,
+                    ),
+                    '<p>L|A</p>',
+                )
+            },
+        },
+
+        {
+            title: 'a promise in a SPREAD, which is the same rule one hole kind further over',
+            note: 'The failure mode an attribute’s fix left one position away, and a worse one than the `[object Promise]` it replaced: a spread reads `Object.keys` off what it is handed, and a promise has none — so `{...await props}` compiled clean, wrote NO attributes, and took back every name the previous pass had set. Nothing threw and nothing was logged. Making the emit async across positions is what reached this: until a spread’s thunk could be `async` the case was a build error, which is the loud failure this silence replaced. The generation stamp is the attribute binder’s, and it guards the same thing one step wider — a superseded spread must not take back names the newer one has already written.',
+            async run({ is }) {
+                is(
+                    'server awaits it in place',
+                    await renderToString(
+                        html`<p ...=${() => Promise.resolve({ title: 'later', id: 'n' })}>y</p>`,
+                    ),
+                    '<p title="later" id="n">y</p>',
+                )
+                is(
+                    'an async thunk is the same thing — what the compiler emits for `{...await p}`',
+                    await renderToString(
+                        html`<p ...=${async () => await Promise.resolve({ title: 'later' })}>y</p>`,
+                    ),
+                    '<p title="later">y</p>',
+                )
+
+                const host = scratch(
+                    () => html`<p ...=${() => Promise.resolve({ title: 'later' })}>y</p>`,
+                )
+                is('client — absent until it lands', host.querySelector('p')?.getAttribute('title'), null)
+                await tick()
+                is(
+                    '…and then every name it carries',
+                    host.querySelector('p')?.getAttribute('title'),
+                    'later',
+                )
+                host.remove()
+
+                // The discard, and it is the half a spread owns that an attribute does not: the
+                // binder TAKES BACK names the last pass wrote. Landing a superseded spread does not
+                // merely paint a stale value, it removes what the newer one just set.
+                const slow = sleep(40).then(() => ({ title: 'STALE' }))
+                const which = state(0)
+                const racing = scratch(
+                    () => html`<p ...=${() => (which() === 0 ? slow : { title: 'fresh' })}>y</p>`,
+                )
+                await sleep(5)
+                which.set(1)
+                await sleep(80)
+                is(
+                    'a superseded spread neither paints nor takes back',
+                    racing.querySelector('p')?.getAttribute('title'),
+                    'fresh',
+                )
+                racing.remove()
             },
         },
 

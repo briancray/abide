@@ -13,10 +13,12 @@
 // rendered line.
 
 import { config } from '$server/config.ts'
+import { formatLogLine, logShape } from '$shared/internal/lines.ts'
 import { LOGS_PATH } from '$shared/internal/PATHS.ts'
 import { messageOf } from '$shared/internal/probes.ts'
-import { JSONL_TYPE, payloadOf, STREAMING } from '$shared/internal/wire.ts'
-import { formatLogLine, type LogRecord, logShape, writeLogLine } from '$shared/log.ts'
+import { STREAMING } from '$shared/internal/STREAMING.ts'
+import { JSONL_TYPE, payloadOf } from '$shared/internal/wire.ts'
+import { type LogRecord, writeLogLine } from '$shared/log.ts'
 import { CLI_EXIT_CODES, exitForStatus } from '../CLI_EXIT_CODES.ts'
 import { takesNothing } from '../COMMANDS.ts'
 

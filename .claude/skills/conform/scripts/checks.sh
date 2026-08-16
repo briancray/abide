@@ -152,7 +152,24 @@ if [ -n "$missing" ]; then
   echo
 fi
 
+# Not a grep: a docblock STRANDED by a function inserted between it and the one it documented, which
+# reads as the new function's summary and is wrong about it. Found three times in one round, from
+# three different commits and three different authors, so it is mechanical rather than a judgment.
+# The tell is two `/**` blocks with nothing between them. `c > 0` because a file whose first line
+# opens a block has no preceding one to be stranded by.
+stranded() {
+  for file in $(find packages -name '*.ts' -not -path '*/node_modules/*' -not -path '*/.abide/*'); do
+    awk -v F="$file" '/\*\/[ \t]*$/{c=NR} /^[ \t]*\/\*\*/{ if (c > 0 && NR == c + 1) print F":"NR }' "$file"
+  done
+}
+
 printf "  %-20s %-24s %s\n" "CHECK" "JUDGED AGAINST" "HITS"
+stranded_hits=$(stranded | wc -l | tr -d ' ')
+printf "  %-20s %-24s %s\n" "stranded docblock" "simplification" "$stranded_hits"
+if [ "$DETAILS" = 1 ] && [ "$stranded_hits" != "0" ]; then
+  stranded | sed 's/^/      /'
+  echo
+fi
 for row in "${CHECKS[@]}"; do
   IFS='|' read -r name section cmd <<<"$row"
   hits=$(eval "$cmd" 2>/dev/null | wc -l | tr -d ' ')

@@ -246,6 +246,44 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
 }
 
 /**
+ * An attribute that arrived late: write it, then resume the walk after it.
+ *
+ * The two ways one can arrive late — a read that signalled, and a thunk that handed back a promise —
+ * end identically, so the continuation is here rather than spelled twice inside the `attr` case.
+ * Resumed at the NEXT slot: the static text in front of this one is already in the buffer, so the
+ * walk cannot re-enter at it.
+ *
+ * A free function rather than a closure built in the case body, so the common branch — an attribute
+ * whose value is already in hand — allocates nothing. Only the two branches that waited build the
+ * arrow that calls this.
+ */
+function resumeAttribute(
+    result: TemplateResult,
+    context: RenderContext,
+    out: Out,
+    slot: number,
+    name: string,
+    settled: unknown,
+): Promise<void> | undefined {
+    out.text += attribute(name, settled)
+    const rest = emitTemplate(result, context, out, slot + 1)
+    return rest === null ? undefined : rest
+}
+
+/** A spread that arrived late. `resumeAttribute`'s rule one hole kind over — see its note. */
+function resumeSpread(
+    result: TemplateResult,
+    context: RenderContext,
+    out: Out,
+    slot: number,
+    settled: unknown,
+): Promise<void> | undefined {
+    writeSpread(settled, out)
+    const rest = emitTemplate(result, context, out, slot + 1)
+    return rest === null ? undefined : rest
+}
+
+/**
  * One template, resumable at slot `from`.
  *
  * Resumption is what replaces the generator: a slot that suspends returns the promise for
@@ -302,14 +340,24 @@ function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, 
                     produced = retryableCall(unwrap, value)
                 } catch (error) {
                     if (!isPending(error)) throw error
-                    // Resumed at the NEXT slot, and the attribute written here: the static text in
-                    // front of this one is already in the buffer, so the walk cannot re-enter at it.
                     const slot = i
-                    return awaitedProduce(error, () => unwrap(value), out).then((settled) => {
-                        out.text += attribute(name, settled)
-                        const rest = emitTemplate(result, context, out, slot + 1)
-                        return rest === null ? undefined : rest
-                    })
+                    return awaitedProduce(error, () => unwrap(value), out).then((settled) =>
+                        resumeAttribute(result, context, out, slot, name, settled),
+                    )
+                }
+                if (isThenable(produced)) {
+                    // Awaited in place, the way a child slot's promise is. `attributeText` is
+                    // `String(value)`, so this is the difference between the value and the text
+                    // `[object Promise]` — and the client binds the settled value either way, so
+                    // without it the two lanes disagreed about the same attribute.
+                    //
+                    // `Promise.resolve` for the TYPE, not for a wrap: a native promise comes straight
+                    // back out of it, and only a foreign thenable — which `isThenable` also admits —
+                    // costs the adapter.
+                    const slot = i
+                    return Promise.resolve(produced).then((settled) =>
+                        resumeAttribute(result, context, out, slot, name, settled),
+                    )
                 }
                 out.text += attribute(name, produced)
                 break
@@ -331,11 +379,19 @@ function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, 
                 } catch (error) {
                     if (!isPending(error)) throw error
                     const slot = i
-                    return awaitedProduce(error, () => unwrap(value), out).then((settled) => {
-                        writeSpread(settled, out)
-                        const rest = emitTemplate(result, context, out, slot + 1)
-                        return rest === null ? undefined : rest
-                    })
+                    return awaitedProduce(error, () => unwrap(value), out).then((settled) =>
+                        resumeSpread(result, context, out, slot, settled),
+                    )
+                }
+                if (isThenable(spread)) {
+                    // The same rule as an attribute's, and it has to be: `{...await props}` compiles
+                    // to an async thunk, so what arrives here IS a promise. `writeSpread` reads
+                    // `Object.keys` off it, and a promise has none — so the whole spread rendered as
+                    // nothing at all, silently, on a template that compiled clean.
+                    const slot = i
+                    return Promise.resolve(spread).then((settled) =>
+                        resumeSpread(result, context, out, slot, settled),
+                    )
                 }
                 writeSpread(spread, out)
                 break

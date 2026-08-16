@@ -9,6 +9,7 @@
 //
 import { isSource } from './internal/BRANDS.ts'
 import { type Cell, derive, isPending, state, untrack } from './internal/graph.ts'
+import { isThenable } from './internal/probes.ts'
 
 const TEMPLATE_BRAND = Symbol.for('abide.template')
 
@@ -326,6 +327,14 @@ export class Boundary {
     constructor(
         readonly body: () => unknown,
         readonly branches: Branches,
+        /**
+         * Does the body hold an `{await …}`? Written by the compiler, which knows syntactically.
+         *
+         * A flag rather than a probe because it decides whether `settledBoundary` WALKS at all: every
+         * `{#try}` ever written is `false` here and pays exactly nothing, and the walk is the cost of
+         * having asked for an await.
+         */
+        readonly awaiting: boolean = false,
     ) {}
 }
 
@@ -334,10 +343,16 @@ export class Boundary {
  * expression its own thunk: an expression that produced its value in a nested effect would throw
  * there, past this try/catch, and the boundary would catch nothing. So a boundary is one unit — it
  * renders or it catches — and the cost is that any dependency inside it re-runs the whole body.
- * Asynchronous failures are not caught, for the same reason a JavaScript `try` does not catch them.
+ *
+ * An `{await …}` inside the body IS caught, and `awaiting` is what says to look: the hole compiles to
+ * an invoked async IIFE, so the body still runs SYNCHRONOUSLY and a source read inside it still
+ * signals — see `settledBoundary`, which is where the promises it left behind are collected. Making
+ * the body itself `async` would have been the shorter route and it is the wrong one: an async function
+ * converts every throw into a rejection, pending SIGNALS included, so a cell read inside a `{#try}`
+ * would stop deferring and serve nothing at all, silently.
  */
-export function boundary(body: () => unknown, branches: Branches): Boundary {
-    return new Boundary(body, branches)
+export function boundary(body: () => unknown, branches: Branches, awaiting = false): Boundary {
+    return new Boundary(body, branches, awaiting)
 }
 
 export class Streamed {
@@ -408,7 +423,17 @@ export function pendingArm(branches: Branches): unknown {
  * lives here and each substrate keeps only its continuation. Without a `{:catch}` the author did not
  * claim to handle it, so the throw passes through and this boundary catches nothing.
  */
-export function settledBoundary(block: Boundary): unknown {
+/**
+ * The body's result and the promises it left behind, WITHOUT collapsing the two together.
+ *
+ * The split exists for hydration. A boundary body runs synchronously even when it awaits — the holes
+ * are what defer, not the body — so the STRUCTURE is knowable the moment the body returns, and only
+ * the awaiting holes are not. `settledBoundary` folds both into one promise, which is right for a
+ * renderer that just wants the answer and wrong for `take`, which would then see an opaque promise
+ * and replace server nodes it could have adopted. `waiting` is empty for every `{#try}` with no
+ * await in it.
+ */
+export function producedBoundary(block: Boundary): { produced: unknown; waiting: PromiseLike<unknown>[] } {
     let produced: unknown
     try {
         produced = block.body()
@@ -416,10 +441,56 @@ export function settledBoundary(block: Boundary): unknown {
         // A read with nothing to serve YET is not a failure, and this is not the boundary that
         // recovers from it: the signal passes through to whoever will run the body again.
         if (isPending(error) || block.branches.catch === undefined) throw error
-        return settledArms(block.branches, true, error)
+        return { produced: settledArms(block.branches, true, error), waiting: [] }
     }
+    const waiting: PromiseLike<unknown>[] = []
+    if (block.awaiting) collectThenables(produced, waiting, 0)
+    return { produced, waiting }
+}
+
+export function settledBoundary(block: Boundary): unknown {
+    const { produced, waiting } = producedBoundary(block)
+    // An `{await …}` in the body left a promise in a slot, and a promise rejecting later is the
+    // failure this boundary exists to claim. The promises are NOT replaced: the renderer resolves
+    // them itself, and awaiting one twice costs nothing — all this decides is whether the body's
+    // result or the catch arm is what gets rendered.
+    if (waiting.length > 0) {
+        return Promise.all(waiting).then(
+            () => withFinally(block, produced),
+            (error: unknown) => {
+                if (isPending(error) || block.branches.catch === undefined) throw error
+                return settledArms(block.branches, true, error)
+            },
+        )
+    }
+    return withFinally(block, produced)
+}
+
+function withFinally(block: Boundary, produced: unknown): unknown {
     const settled = block.branches.finally
     return settled === undefined ? produced : [produced, settled()]
+}
+
+/**
+ * Every promise a boundary body left in its slots, including in the templates nested inside it.
+ *
+ * `depth` is a guard rather than a budget: a body is a tree the compiler emitted, so it is bounded by
+ * the source, but a value handed IN can be a cycle and this walk is not the place to discover that.
+ */
+function collectThenables(value: unknown, into: PromiseLike<unknown>[], depth: number): void {
+    if (depth > 16 || value === null || typeof value !== 'object') return
+    if (isThenable(value)) {
+        into.push(value)
+        return
+    }
+    if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) collectThenables(value[i], into, depth + 1)
+        return
+    }
+    if (isTemplate(value)) {
+        const values = value.values
+        for (let i = 0; i < values.length; i++) collectThenables(values[i], into, depth + 1)
+    }
 }
 
 // --- the one classifier ---------------------------------------------------
