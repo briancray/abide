@@ -8,7 +8,7 @@
 // `$shared/internal/slots.ts`.
 //
 import { isSource } from './internal/BRANDS.ts'
-import { type Cell, derive, isPending, state, untrack } from './internal/graph.ts'
+import { type Cell, derive, isPending, state } from './internal/graph.ts'
 import { isThenable } from './internal/probes.ts'
 
 const TEMPLATE_BRAND = Symbol.for('abide.template')
@@ -155,41 +155,6 @@ export class Awaited {
  */
 export function awaited<T>(value: PromiseLike<T> | T, branches: Branches<T>): Awaited {
     return new Awaited(value, branches as Branches)
-}
-
-/**
- * Start every load this template is going to read, before the walk reaches the first of them.
- *
- * A cell begins its load on the first READ, and in a server render that read is the WALK ARRIVING at
- * the slot — so a page holding three independent loads in three sections costs their SUM rather than
- * their longest. Three 60ms loads rendered in 185ms; started together they render in 63ms, with the
- * same blocking, the same walk and the same complete markup. The only thing that moves is when they
- * begin.
- *
- * The compiler names the cells whose slots are UNCONDITIONAL, so this is the set of loads the walk was
- * going to demand anyway — never a load a branch might not have taken.
- *
- * A throw is swallowed. A body that fails synchronously fails again at the slot that reads it, which
- * is where it was always reported, and one failing load must not keep the others from starting.
- *
- * UNTRACKED, and that is the whole of the difference between kicking a load and subscribing to it.
- * This is called from a component's SETUP, which is itself a tracked run — so a plain read here made
- * the COMPONENT a reader of every load it starts. The component then re-ran when the load settled,
- * and re-running setup built fresh cells and started the load again: `/bench` spun setup → load →
- * setup → load without pause, so the load was never once observed settled, every slot stayed
- * deferred, and the page a reader saw was the server's markup with nothing live in it. The chips did
- * not filter, the filter field would not hold a character, and a handler reading the derived cell got
- * `undefined`. Starting a load is not reading it, and only `untrack` says so.
- */
-export function start(sources: readonly (() => unknown)[]): void {
-    for (let i = 0; i < sources.length; i++) {
-        try {
-            untrack(sources[i] as () => unknown)
-        } catch {
-            // Reported by the read that renders, exactly as before. Starting is never where a
-            // failure surfaces.
-        }
-    }
 }
 
 // --- components -----------------------------------------------------------

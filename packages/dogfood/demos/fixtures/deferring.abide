@@ -7,9 +7,9 @@
      something awaits it — and three that begin one after another cost their SUM while producing the
      same document.
 
-     Two things kick them, and either alone is enough: `started()` asks the operand for its settle as
-     the walk passes, and the arm's own `pending()` probe now starts the load it reports. The counter
-     is the whole assertion — the markup is identical however many were ever in flight at once. -->
+     What kicks them is the arm's own `pending()` probe: a probe starts the load it reports, so asking
+     the question is what puts it in flight. The counter is the whole assertion — the markup is
+     identical however many were ever in flight at once. -->
 <script module>
 import { memo } from 'abide'
 

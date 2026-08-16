@@ -4,7 +4,6 @@
 //   memo(({ id }) => fetch(id))  args    -> the args ARE the cache key
 
 import { memo, state, watch } from 'abide'
-import { start } from 'abide/runtime'
 import { reader, scratch, show, sleep, suite, until } from 'harness'
 import { countCalls, keep, tick } from 'harness/measure'
 import { button, field, row, stage } from './dom.ts'
@@ -1263,44 +1262,6 @@ export default suite({
                 is('…and then the list, with no await in the markup', shown, ['ab-one', 'ab-two'])
 
                 load.remove()
-            },
-        },
-        {
-            title: 'start() KICKS a load without becoming a reader of it',
-            note: 'What the compiler emits above a template holding an unconditional load, so three independent loads cost their longest rather than their sum. The whole of the claim is that starting is not reading: `start` is called from a component’s SETUP, which is itself a tracked run, so a plain read there subscribed the COMPONENT to every load it started. The component then re-ran when the load settled, and re-running setup built fresh cells and started the load again — `/bench` spun setup → load → setup → load with no pause, so the load was never once observed settled. Every slot stayed deferred and the page a reader saw was the server’s markup with nothing live in it: the filter would not hold a character, the kind chips did not filter, and a handler reading a derived cell got `undefined`. Nothing about that is visible in the output, which is why the assertion is the RE-RUN COUNT of the scope that called `start` — a value test passes with the loop still running.',
-            async run({ is }) {
-                let bodies = 0
-                const loaded = memo(async () => {
-                    bodies++
-                    await sleep(20)
-                    return [1, 2, 3]
-                })
-
-                // A tracked scope that STARTS the load and never reads it — which is exactly the
-                // shape of a setup region carrying the compiler's `start([...])`.
-                let setups = 0
-                const view = reader(() => {
-                    setups++
-                    start([loaded])
-                    return 'rendered'
-                })
-
-                await sleep(80)
-                is('the load ran once', bodies, 1)
-                // ONE. Subscribed, this was the scope re-running on the settle — and in a component
-                // that would build a second load and go round again.
-                is('and the scope that started it did not wake', setups, 1)
-                is('…and it settled, so the kick worked', loaded.peek(), [1, 2, 3])
-                view.dispose()
-
-                // The kick is still a kick — but `pending()` cannot be what shows it any more, since
-                // ASKING starts the load too. `peek` is the only question left that does not.
-                const cold = memo(async () => 'x')
-                is('nothing has landed, and looking did not start one', cold.peek(), undefined)
-                start([cold])
-                is('…and starting it makes it pending', cold.pending(), true)
-                await sleep(20)
-                is('…then it settles', cold.peek(), 'x')
             },
         },
     ],

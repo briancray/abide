@@ -119,10 +119,45 @@ interface Out {
      * back-pressure — and `null` means it is already ready, so there was never anything to wait for.
      */
     flush: (() => Promise<void> | null) | null
+    /**
+     * The markup written before each HOLE, and the holes themselves — `null` in a slot is a hole that
+     * has not filled. Null itself until a region takes one, which is every render with no wait in it.
+     *
+     * A hole is how a render stops costing the SUM of its waits. A region that has to wait used to
+     * hold the walk, so the loads in every slot after it did not begin until it settled — three
+     * independent 60ms loads cost 183ms. Written into a buffer of its own and spliced back at the
+     * position it left, the walk carries straight on and starts them, and the same three cost 62ms.
+     */
+    segments: (string | null)[] | null
+    /** One per hole, settled when that hole's markup is in `segments`. */
+    fills: Promise<void>[] | null
+    /**
+     * How many segments have gone to the consumer. A STREAM may only be given the run of segments up
+     * to the first unfilled hole — bytes leave in document order however the holes settle, which is
+     * what lets this lane take one at all.
+     */
+    sent: number
+    /**
+     * Bytes written but not yet sendable, because a hole in front of them is still open. Kept as a
+     * running count rather than summed on demand: it is read once per WAIT to decide whether taking
+     * another hole is affordable, and walking the segment list for that would be per-wait work.
+     */
+    held: number
+    /**
+     * The holes not yet filled, so the cap can SPILL them — see `spill`. Null until one is taken.
+     *
+     * Patching the region the cap was reached AT would not bound anything: the bytes are held behind
+     * the EARLIEST open hole, and that one is still open. What has to be given up is every hole at
+     * once, which is why this list exists rather than a count.
+     */
+    open: { at: number; markup: Promise<string>; patched: boolean }[] | null
 }
 
 /** `null` means the node is fully written; a promise means the rest of it will be. */
 type Rest = Promise<void> | null
+
+/** `Promise.all` hands back an array, and every caller here wants the settle rather than the values. */
+function nothing(): void {}
 
 /** How much a streaming render buffers before handing a chunk over. */
 const HIGH_WATER = 8192
@@ -158,6 +193,222 @@ function paused(out: Out): Promise<void> | null {
  */
 function handOver(out: Out): Promise<void> | null {
     return out.flush === null ? null : out.flush()
+}
+
+/**
+ * How many bytes a STREAMING walk may hold behind an open hole before it SPILLS them — see `spill`.
+ *
+ * Everything written past an unfilled hole is markup a consumer cannot be given yet, and the walk
+ * fills that at CPU speed rather than at the load's: measured behind a 300ms load, a megabyte of
+ * document was held 1.6ms after the first hole was taken. That is also why the cap is bytes and not
+ * a duration — the two quantities are decoupled, and a timer long enough to be worth having would
+ * let the whole document through every time.
+ *
+ * Eight chunks: enough that a page's panels overlap, small enough that the ceiling is a chunk count.
+ */
+const HOLD_LIMIT = HIGH_WATER * 8
+
+/**
+ * May this position be left open? A string render always can — its buffer IS its output, so a hole
+ * costs it nothing it was not going to hold anyway — and a stream can until the held bytes reach the
+ * cap.
+ */
+function holds(out: Out): boolean {
+    return out.flush === null || out.held + out.text.length < HOLD_LIMIT
+}
+
+/**
+ * A branch that is about to wait: into a hole where the walk can carry on past it, in place where it
+ * cannot.
+ *
+ * The six waiting branches are all one shape — an async function writing into an `Out` — so the fork
+ * is here rather than six times over. One closure per WAIT, which is the branch that was about to
+ * cost a load anyway.
+ *
+ * Over the cap, the holes are SPILLED rather than the walk stopped, which is what keeps a big page's
+ * loads in flight together. With nowhere to patch — `render()`, `toStream()` — there is nothing to
+ * spill INTO, so that lane blocks exactly as it did before any of this.
+ */
+function waits(out: Out, run: (into: Out) => Promise<void>, context: RenderContext): Rest {
+    if (!holds(out) && context.document !== null) spill(out, context.document)
+    return holds(out) ? hole(out, run) : run(out)
+}
+
+/**
+ * Give up every open hole: each becomes a PLACEHOLDER now and a patch when it lands.
+ *
+ * This is what the cap does instead of stopping the walk. Blocking bounded the buffer by refusing to
+ * write more, at the price of the loads after it starting one at a time again — 224ms against 161ms
+ * on a megabyte page behind four loads. Spilling bounds it by making the held bytes SENDABLE: the
+ * hole's markup no longer has to arrive in document order, because it arrives as a `<template>` and
+ * a `$p` call instead, exactly as a `{#if x.pending()}` region does.
+ *
+ * The trade is real and belongs to the reader rather than to the server: a patched region needs
+ * JAVASCRIPT to appear, so a crawler sees the placeholder. It is announced for that reason — a page
+ * that crossed the cap is a page whose fidelity changed, and the size it happens at is not something
+ * an author can see in their own source.
+ */
+function spill(out: Out, document: DocumentContext): void {
+    const open = out.open
+    if (open === null || open.length === 0) return
+    const segments = out.segments as (string | null)[]
+    const given = open.length
+    for (let i = 0; i < open.length; i++) {
+        const entry = open[i] as { at: number; markup: Promise<string>; patched: boolean }
+        if (entry.patched) continue
+        entry.patched = true
+        const id = document.nextId++
+        document.deferred.push({
+            id,
+            html: entry.markup.then(
+                (text) => text,
+                (error: unknown) => deferralFailed(id, error, 'threw after the walk gave up its hole'),
+            ),
+        })
+        const placeholder = `<${PLACEHOLDER_TAG} id="${placeholderId(id)}"></${PLACEHOLDER_TAG}>`
+        segments[entry.at] = placeholder
+        out.held += placeholder.length
+    }
+    open.length = 0
+    renderLog.warning(
+        `a render passed ${HOLD_LIMIT} held bytes and patched ${given} region(s) instead of ` +
+            'blocking — that markup now needs javascript to appear',
+    )
+    // Everything is sendable now, so hand it over: the point of spilling is the bytes LEAVING, and
+    // the walk's own next `paused` is where back-pressure is applied.
+    flushFilled(out)
+}
+
+/** Hand over what a fill or a spill just made sendable, without parking on the consumer. */
+function flushFilled(out: Out): void {
+    if (out.flush === null) return
+    const waiting = out.flush()
+    // The WALK applies back-pressure; this is a fill landing beside it, so it neither parks nor
+    // carries the abandonment its own flush may answer with.
+    if (waiting !== null) void waiting.catch(() => {})
+}
+
+/**
+ * A branch that STREAMS rather than one that waits once — `{#for await}` and a bare async iterable.
+ *
+ * These may take a hole only where nothing is consuming incrementally, and the distinction is not a
+ * refinement: a hole hands over the region's markup when it is COMPLETE, so a source arriving a row
+ * at a time collapses into one chunk at the end — eight rows, eight chunks, became three — and an
+ * INFINITE source never completes at all, so a channel in a slot hung the render outright. A source's
+ * bytes ARE the stream, which is why they stay in the walk's own buffer wherever there is a consumer.
+ */
+function streams(out: Out, run: (into: Out) => Promise<void>): Rest {
+    return out.flush === null ? hole(out, run) : run(out)
+}
+
+/**
+ * Reserve this position, hand `run` a buffer of its own, and return as though the node were written.
+ *
+ * The walk goes on to the next sibling — which is the whole point, since that is where the loads
+ * that would otherwise have started one at a time live. `assembled` joins a string render back up;
+ * `sendable` is what lets a stream give away the part in front of a hole while it is still open.
+ */
+function hole(out: Out, run: (into: Out) => Promise<void>): Rest {
+    let segments = out.segments
+    if (segments === null) {
+        segments = []
+        out.segments = segments
+    }
+    let fills = out.fills
+    if (fills === null) {
+        fills = []
+        out.fills = fills
+    }
+    let open = out.open
+    if (open === null) {
+        open = []
+        out.open = open
+    }
+    out.held += out.text.length
+    segments.push(out.text)
+    out.text = ''
+    const at = segments.length
+    segments.push(null)
+    // Field order matches every other `Out` in the file — see `stream`'s note.
+    const into: Out = { text: '', flush: null, segments: null, fills: null, sent: 0, held: 0, open: null }
+    // The region's MARKUP, which is what a spill hands to the drain — so the two endings share one
+    // run of the body rather than the walk having to choose between them up front.
+    const markup = run(into).then(() => assembled(into))
+    const entry = { at, markup, patched: false }
+    open.push(entry)
+    fills.push(
+        markup.then(
+            (text) => {
+                // Spilled while it was in flight: the placeholder is already on the wire and this
+                // markup belongs to the patch, not to the segment it used to own.
+                if (entry.patched) return
+                take(open as typeof open & object, entry)
+                ;(segments as (string | null)[])[at] = text
+                out.held += text.length
+                // A stream may now be able to give away everything up to the NEXT hole, and nothing
+                // else will ask: the walk is past this position and may already have finished.
+                flushFilled(out)
+            },
+            (error: unknown) => {
+                // A patched region reports its own failure through `deferralFailed`. An open one is
+                // still part of this walk, and fails it exactly as blocking there did.
+                if (entry.patched) return
+                take(open as typeof open & object, entry)
+                throw error
+            },
+        ),
+    )
+    return null
+}
+
+/** Drop a hole that filled on its own, so a later spill has only the ones still open to give up. */
+function take(open: { at: number; markup: Promise<string>; patched: boolean }[], entry: unknown): void {
+    const at = open.indexOf(entry as never)
+    if (at !== -1) open.splice(at, 1)
+}
+
+/** The buffer as one string, once every hole in it is filled. */
+async function assembled(out: Out): Promise<string> {
+    const fills = out.fills
+    if (fills === null) return out.text
+    // THE COLLAPSE: every hole was opened before the walk carried on past it, so the loads under all
+    // of them are in flight together and this waits out the longest rather than their sum.
+    await Promise.all(fills)
+    return `${(out.segments as string[]).join('')}${out.text}`
+}
+
+/**
+ * Everything the consumer may have, into `queue`: the run of filled segments from where the last one
+ * stopped, and the tail only once no hole is left open in front of it.
+ *
+ * The segment list is emptied the moment it is fully sent, so a page whose holes fill as it goes
+ * keeps no list at all — and the common streaming walk, which takes none, never allocates one.
+ */
+function sendable(out: Out, queue: string[]): void {
+    const segments = out.segments
+    if (segments !== null) {
+        let at = out.sent
+        while (at < segments.length) {
+            // Cast for the INDEX, not for the value: `at < segments.length` is the bound, and the
+            // checker's `| undefined` for a read inside it is what the loop condition already ruled out.
+            const piece = segments[at] as string | null
+            if (piece === null) break
+            if (piece !== '') {
+                queue.push(piece)
+                out.held -= piece.length
+            }
+            at++
+        }
+        out.sent = at
+        // A hole is still open, so the tail behind it is not the consumer's yet.
+        if (at < segments.length) return
+        segments.length = 0
+        out.sent = 0
+    }
+    if (out.text !== '') {
+        queue.push(out.text)
+        out.text = ''
+    }
 }
 
 // --- the walk ----------------------------------------------------------------
@@ -219,7 +470,7 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
         if (context.document !== null && node.branches.pending !== undefined) {
             return emitDeferred(node, context, out)
         }
-        return emitAwaited(node, context, out)
+        return waits(out, (into) => emitAwaited(node, context, into), context)
     }
     if (node instanceof Component) {
         // A snapshot has no instance to KEEP, so the call is the whole of the render — and it is a
@@ -238,9 +489,9 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
         // boundary, which is per REGION rather than per row.
         return emitProduced(() => settledBoundary(node) as Renderable, context, out)
     }
-    if (node instanceof Streamed) return emitStreamed(node, context, out)
-    if (isThenable(node)) return emitPromise(node, context, out)
-    if (isAsyncIterable(node)) return emitAsyncIterable(node, context, out)
+    if (node instanceof Streamed) return streams(out, (into) => emitStreamed(node, context, into))
+    if (isThenable(node)) return waits(out, (into) => emitPromise(node, context, into), context)
+    if (isAsyncIterable(node)) return streams(out, (into) => emitAsyncIterable(node, context, into))
 
     out.text += escape(String(node))
     return null
@@ -341,6 +592,16 @@ function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, 
                     produced = retryableCall(unwrap, value)
                 } catch (error) {
                     if (!isPending(error)) throw error
+                    // A hole holds the ATTRIBUTE TEXT, which is the whole of what this slot writes —
+                    // so the element it belongs to, and every load in the slots after it, carry on
+                    // rather than waiting behind one `class=${() => tone()}`.
+                    if (holds(out)) {
+                        const signal = error
+                        hole(out, async (into) => {
+                            into.text += attribute(name, await awaitedProduce(signal, () => unwrap(value), into))
+                        })
+                        continue
+                    }
                     const slot = i
                     return awaitedProduce(error, () => unwrap(value), out).then((settled) =>
                         resumeAttribute(result, context, out, slot, name, settled),
@@ -355,6 +616,13 @@ function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, 
                     // `Promise.resolve` for the TYPE, not for a wrap: a native promise comes straight
                     // back out of it, and only a foreign thenable — which `isThenable` also admits —
                     // costs the adapter.
+                    if (holds(out)) {
+                        const settling = produced
+                        hole(out, async (into) => {
+                            into.text += attribute(name, await settling)
+                        })
+                        continue
+                    }
                     const slot = i
                     return Promise.resolve(produced).then((settled) =>
                         resumeAttribute(result, context, out, slot, name, settled),
@@ -379,6 +647,15 @@ function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, 
                     spread = retryableCall(unwrap, value)
                 } catch (error) {
                     if (!isPending(error)) throw error
+                    // The attribute rule one hole kind over: what this slot writes is a run of
+                    // attributes, and a run of attributes is a string like any other.
+                    if (holds(out)) {
+                        const signal = error
+                        hole(out, async (into) => {
+                            writeSpread(await awaitedProduce(signal, () => unwrap(value), into), into)
+                        })
+                        continue
+                    }
                     const slot = i
                     return awaitedProduce(error, () => unwrap(value), out).then((settled) =>
                         resumeSpread(result, context, out, slot, settled),
@@ -389,6 +666,13 @@ function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, 
                     // to an async thunk, so what arrives here IS a promise. `writeSpread` reads
                     // `Object.keys` off it, and a promise has none — so the whole spread rendered as
                     // nothing at all, silently, on a template that compiled clean.
+                    if (holds(out)) {
+                        const settling = spread
+                        hole(out, async (into) => {
+                            writeSpread(await settling, into)
+                        })
+                        continue
+                    }
                     const slot = i
                     return Promise.resolve(spread).then((settled) =>
                         resumeSpread(result, context, out, slot, settled),
@@ -494,7 +778,8 @@ function emitProduced(produce: () => Renderable, context: RenderContext, out: Ou
         produced = retryable(produce)
     } catch (error) {
         if (!isPending(error)) throw error
-        return awaitPending(error, produce, context, out)
+        const signal = error
+        return waits(out, (into) => awaitPending(signal, produce, context, into), context)
     }
     // It PROBED a load that has not landed, so it had something to show and showed it: `produced` is
     // the placeholder, by the same rule an `{#if x.pending()}` arm is one — asking about a load is
@@ -509,9 +794,11 @@ function emitProduced(produce: () => Renderable, context: RenderContext, out: Ou
         // SETTLE, so the markup is complete when it arrives. The placeholder is half an answer and it
         // is the half a reader running no scripts would keep forever. A walk that can patch asks for
         // the first chunk instead, which is a different moment only for a stream — see `probedLoad`.
-        return context.document === null
-            ? awaitProbed(produce, probedLoad(false) as Promise<unknown>, context, out)
-            : emitProbed(produce, produced, probedLoad(true) as Promise<unknown>, context, out)
+        if (context.document !== null) {
+            return emitProbed(produce, produced, probedLoad(true) as Promise<unknown>, context, out)
+        }
+        const settling = probedLoad(false) as Promise<unknown>
+        return waits(out, (into) => awaitProbed(produce, settling, context, into), context)
     }
     return emit(produced, context, out)
 }
@@ -592,7 +879,7 @@ function emitProbed(
                     if (!isPending(error)) throw error
                     again = (await awaitedProduce(error, produce, out)) as Renderable
                 }
-                return await renderToString(again, { hydratable: context.hydratable })
+                return await intoString(again, deferredContext(context))
             } catch (error) {
                 return deferralFailed(id, error, 'threw while re-running its region')
             }
@@ -720,6 +1007,43 @@ async function emitAsyncIterable(
 
 const PLACEHOLDER_CLOSE = `</${PLACEHOLDER_TAG}>`
 
+/**
+ * What a deferred subtree renders in: the same DOCUMENT, so deferral COMPOSES.
+ *
+ * It used to be `renderToString`'s context, which carries no document — so a deferring block inside a
+ * deferred subtree awaited inline and delayed its parent's patch, and a page two regions deep held the
+ * outer one until the inner load landed as well. With the document carried through, the inner block
+ * registers a patch of its own: the outer region reaches the reader as soon as ITS load settles, and
+ * the inner one follows. `drain` is what had to learn that its list can grow while it is being read.
+ *
+ * `placeholder` is false rather than carried: a placeholder renders through `IN_PLACEHOLDER` and never
+ * reaches here, and a subtree that HAS patched is an ordinary region again.
+ */
+function deferredContext(context: RenderContext): RenderContext {
+    return { hydratable: context.hydratable, document: context.document, placeholder: false }
+}
+
+/**
+ * A subtree as a string, in a context of its own.
+ *
+ * The same six lines as `renderToString` and deliberately not a call to it: that would be one more
+ * async frame, which is 160 ns on a JSC promise and 35% of what a small render costs — and this is
+ * `renderToString`'s own inner loop, reached once per deferred subtree.
+ */
+async function intoString(node: Renderable, context: RenderContext): Promise<string> {
+    const out: Out = { text: '', flush: null, segments: null, fills: null, sent: 0, held: 0, open: null }
+    try {
+        const waiting = emit(node, context, out)
+        if (waiting !== null) await waiting
+    } catch (error) {
+        const fills = out.fills
+        if (fills !== null) await Promise.allSettled(fills)
+        throw error
+    }
+    if (out.fills === null) return out.text
+    return assembled(out)
+}
+
 /** Abide's own channel for what a render could not say in the markup. Off unless `DEBUG` names it —
  *  except `error`, which the gate never swallows, and a subtree that failed with nowhere to report it
  *  is exactly what that exception is for. */
@@ -782,7 +1106,7 @@ function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
                     if (!isPending(error)) throw error
                     arms = (await awaitedProduce(error, () => armsOf(node, settled, failed), out)) as Renderable
                 }
-                return await renderToString(arms, { hydratable: context.hydratable })
+                return await intoString(arms, deferredContext(context))
             } catch (error) {
                 // The failure arm THREW, and for the compiled shape that is the ordinary outcome
                 // rather than an exotic one: the compiler hands the same `{#if}` chain to all three
@@ -898,10 +1222,9 @@ function stream(node: Renderable, context: RenderContext, budget: Budget | null)
     const out: Out = {
         text: '',
         flush(): Promise<void> | null {
-            if (out.text !== '') {
-                queue.push(out.text)
-                out.text = ''
-            }
+            // Not `out.text` directly: a hole in front of the tail means the tail is not sendable
+            // yet, and document order is the one thing a stream cannot trade for latency.
+            sendable(out, queue)
             const wake = wakeConsumer
             wakeConsumer = null
             if (wake !== null) wake()
@@ -912,11 +1235,22 @@ function stream(node: Renderable, context: RenderContext, budget: Budget | null)
             // is actually needed: one unread chunk is slack, two is a consumer falling behind, and
             // the walk parks then — so the queue is bounded at two either way.
             if (queue.length <= 1) return null
+            // Already parked, so the WALK holds the resume handle and this caller is a fill or a
+            // spill flushing beside it. Building a second promise here REPLACED the resolver the
+            // consumer was about to call, and the walk then waited on one nobody held — a hang that
+            // needs back-pressure and a late fill at the same time, so every render into a string
+            // and every fast consumer missed it.
+            if (resumeWalk !== null) return null
             return new Promise<void>((resolve, reject) => {
                 resumeWalk = () => resolve()
                 rejectWalk = reject
             })
         },
+        segments: null,
+        fills: null,
+        sent: 0,
+        held: 0,
+        open: null,
     }
 
     // Taken through a function with a DECLARED return type: `flush` is the only writer and it is a
@@ -948,24 +1282,32 @@ function stream(node: Renderable, context: RenderContext, budget: Budget | null)
         if (reject !== null) reject(ABANDONED)
     }
 
+    /**
+     * `waiting`, under the wall clock — armed here, on the first phase that actually waits.
+     *
+     * A page with no promise in it cannot run out of wall clock, so a render that never suspends
+     * never even asks. Named rather than written inline because a walk that took HOLES finishes with
+     * work still outstanding, and the fills are a phase of the same render on the same clock.
+     */
+    function racing(waiting: Promise<void>): Promise<void> {
+        if (clock === null) {
+            const limit = renderBudget()
+            if (limit !== NO_LIMIT) {
+                ownClock = new Budget(limit)
+                clock = ownClock
+            }
+        }
+        return clock === null ? waiting : clock.race(waiting)
+    }
+
     async function walk(): Promise<void> {
         try {
             const waiting = emit(node, context, out)
-            if (waiting !== null) {
-                // Read on the branch that actually waited: a page with no promise in it cannot run
-                // out of wall clock, so a render that never suspends never even asks. Undeclared,
-                // the walk is awaited exactly as it was before there was a budget at all — no timer,
-                // no race, and no second promise per render to learn that nobody set one.
-                if (clock === null) {
-                    const limit = renderBudget()
-                    if (limit !== NO_LIMIT) {
-                        ownClock = new Budget(limit)
-                        clock = ownClock
-                    }
-                }
-                if (clock === null) await waiting
-                else await clock.race(waiting)
-            }
+            if (waiting !== null) await racing(waiting)
+            // Every hole this walk left open. `emit` returns null once a region takes one, so on this
+            // path the walk is DONE writing and what is left is the loads it did not stop for.
+            const fills = out.fills
+            if (fills !== null) await racing(Promise.all(fills).then(nothing))
         } catch (error) {
             if (error !== ABANDONED) {
                 failed = true
@@ -978,10 +1320,9 @@ function stream(node: Renderable, context: RenderContext, budget: Budget | null)
                 abandon()
             }
         }
-        if (out.text !== '') {
-            queue.push(out.text)
-            out.text = ''
-        }
+        // A hole still open here is one the failure above unwound, and `sendable` stops in front of
+        // it: a truncated body, in document order, which is what a torn-off response has always been.
+        sendable(out, queue)
         finished = true
         const wake = wakeConsumer
         wakeConsumer = null
@@ -1026,11 +1367,24 @@ function contextFor(options: RenderOptions | undefined): RenderContext {
 // scan and the promise the caller awaits, not the shape of this function.
 export async function renderToString(node: Renderable, options?: RenderOptions): Promise<string> {
     // No `flush`, so nothing in the walk can pause: a tree with no promises in it produces the whole
-    // document without a single microtask, which is the entire reason `emit` is shaped this way.
-    const out: Out = { text: '', flush: null }
-    const waiting = emit(node, contextFor(options), out)
-    if (waiting !== null) await waiting
-    return out.text
+    // document without a single microtask, which is the entire reason `emit` is shaped this way. It
+    // is also what lets a region that waits take a hole rather than hold the walk — see `Out`.
+    const out: Out = { text: '', flush: null, segments: null, fills: null, sent: 0, held: 0, open: null }
+    try {
+        const waiting = emit(node, contextFor(options), out)
+        if (waiting !== null) await waiting
+    } catch (error) {
+        // The walk failed with holes still open, and nothing is left to await them — an unawaited
+        // rejection is an unhandled one. Settled here, and the walk's own failure is what is thrown.
+        const fills = out.fills
+        if (fills !== null) await Promise.allSettled(fills)
+        throw error
+    }
+    // Asked here rather than inside `assembled`: a render with no hole in it is every render that
+    // never waited, and calling one more async function to be told so costs it a promise and a tick —
+    // 153 ns to 206 ns on a small template, which is 35% of what the whole render costs.
+    if (out.fills === null) return out.text
+    return assembled(out)
 }
 
 export function toStream(node: Renderable, options?: RenderOptions): ReadableStream<Uint8Array> {
@@ -1256,21 +1610,26 @@ async function* drain(
     // is a subtree this waits on forever, so `pending` never reaches zero and the response never ends.
     const landed: { id: number; text: string }[] = []
     let wake: (() => void) | null = null
-    // The list is CLOSED before this is entered, so it is walked once and there is no cursor to
-    // keep: the only `deferred.push` is `emitDeferred`'s, it happens only when `context.document` is
-    // set, and a deferred subtree is rendered by `renderToString`, whose context always carries
-    // `document: null`. A `suspend` nested inside a suspended subtree therefore awaits INLINE — it
-    // delays its parent's patch rather than registering a patch of its own — and the walk this
-    // drains has finished before the first yield here.
-    let pending = deferrals.deferred.length
-    for (const d of deferrals.deferred) {
-        void d.html.then((text) => {
-            landed.push({ id: d.id, text })
-            const resume = wake
-            wake = null
-            resume?.()
-        })
+    // The list GROWS while this reads it, which is what makes deferral compose: a deferred subtree
+    // renders with the document carried through, so a block nested inside one registers a patch of
+    // its own instead of holding its parent's until both loads have landed. A cursor rather than a
+    // re-scan, and `take` is called after each patch is written — the nested block is pushed while
+    // its parent's markup is being rendered, so it is always in the list by the time the parent lands.
+    let taken = 0
+    let pending = 0
+    const take = (): void => {
+        while (taken < deferrals.deferred.length) {
+            const d = deferrals.deferred[taken++] as Deferred
+            pending++
+            void d.html.then((text) => {
+                landed.push({ id: d.id, text })
+                const resume = wake
+                wake = null
+                resume?.()
+            })
+        }
     }
+    take()
     // The two-line patch script goes out ahead of the FIRST patch rather than in the shell, so a
     // page that suspends nothing ships no script at all. Nothing calls `$p` before a patch exists,
     // so a yield here is early enough, and the loop below then has no state to carry between turns.
@@ -1291,6 +1650,12 @@ async function* drain(
         }
         const ready = landed.shift() as { id: number; text: string }
         pending--
+        // A block nested inside the subtree that just landed registered itself while that markup was
+        // being rendered, so this is where it joins the loop. Its patch necessarily follows its
+        // parent's — its load could not start until the parent's settled — which is the order the
+        // client needs, since `$p` can only find a placeholder its parent's patch already put in the
+        // document.
+        take()
         const patch = `<template id="${patchId(ready.id)}">${ready.text}</template>`
         // A framed patch carries no script: the client is parsing this itself and would not run one.
         yield framed

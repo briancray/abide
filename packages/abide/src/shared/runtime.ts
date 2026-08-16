@@ -6,9 +6,7 @@
 // those calls produce. `navigate` is the one that is also authored, and it is re-exported here rather
 // than reached for on `abide` for a bundling reason the export itself states.
 //
-// Each of the eleven is what the compiler writes for a SPELLING, except `start`, which is written for
-// a POSITION: the memos an unconditional plain slot reads, so their loads are in flight before the
-// walk arrives at the slot that renders them.
+// Each of these is what the compiler writes for a SPELLING — never a name an author types.
 //
 // It is on its own specifier so that `abide` holds only what somebody TYPES: a name that appears in
 // generated output and never in a source file is surface an app has to read past.
@@ -48,7 +46,6 @@ export {
     type Raw,
     type SlotKind,
     type Streamed,
-    start,
     streamed,
 } from './html.ts'
 // What `abide build` writes into `.abide/client.entry.ts`: the route table, the two calls that put it

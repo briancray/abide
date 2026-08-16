@@ -1,6 +1,6 @@
 // The node tree becomes the file a careful author would have written by hand.
 //
-// Not a pre-scanned `TemplateResult`: an `html` tagged template, the shape `packages/dogfood/counter.ts`
+// Not a pre-scanned `TemplateResult`: an `html` tagged template, the shape `demos/fixtures/counter.ts`
 // already is. `planOf` and `prepare` are keyed on the `strings` identity a tagged template gives
 // for free, so the scan and the parse happen once per call site whatever the compiler does — and
 // what pre-scanning would buy is one scan per call site per process, against a stack trace that no
@@ -131,13 +131,11 @@ type Runtime =
     | 'keyed'
     | 'classes'
     | 'styles'
-    | 'awaited'
     | 'boundary'
     | 'component'
     | 'propCell'
     | 'streamed'
     | 'adopt'
-    | 'start'
     | 'scopedEffect'
 
 /**
@@ -238,7 +236,7 @@ function declaredNameBefore(tokens: Token[], equalsAt: number): Token | undefine
  * already has a binding in hand and is only asking whether it declares rather than shadows. Merging
  * them would mean one walk that does both, which is more machinery than the predicate they share.
  */
-function reactiveBindings(tokens: Token[], into: Reactive, memos?: Map<string, readonly string[]>): void {
+function reactiveBindings(tokens: Token[], into: Reactive): void {
     for (let i = 1; i < tokens.length; i++) {
         // `NAME = state(` — or `NAME = state<T>(`, whose type argument list sits between the two.
         if ((tokens[i] as Token).kind !== SyntaxKind.OpenParenToken) continue
@@ -281,14 +279,10 @@ function reactiveBindings(tokens: Token[], into: Reactive, memos?: Map<string, r
         if (tokens[body]?.kind !== SyntaxKind.OpenParenToken) {
             // `memo(fn)` — a reference, whose shape is not visible here. Read by name, as before.
             into.cells.add(name.text)
-            // Which memos this one reads, so a template naming only a DERIVATION can still be
-            // resolved back to the loads under it — see `rootsOf`.
-            memos?.set(name.text, memosReferenced(tokens, i, memos))
             continue
         }
         if (tokens[body + 1]?.kind === SyntaxKind.CloseParenToken) {
             into.cells.add(name.text)
-            memos?.set(name.text, memosReferenced(tokens, i, memos))
         }
         else into.keyed.add(name.text)
     }
@@ -2283,115 +2277,6 @@ function childrenOf(parameters: string): string | null {
 // --- control flow ----------------------------------------------------------
 
 /**
- * The cells an UNCONDITIONAL child slot reads, so setup can start their loads before the walk reaches
- * the first of them.
- *
- * A load begins on its first read, and in a server render that read is the walk ARRIVING at the slot.
- * So three sections holding three independent loads cost their SUM rather than their longest — three
- * 60ms loads rendered in 185ms, and in 63ms once they start together, with the same blocking and the
- * same complete markup. This collects the set the walk was going to read anyway; only the timing moves.
- *
- * UNCONDITIONAL is the whole of the rule, and it is why the descent stops at every block and every
- * component: a load inside a branch nobody takes is work the page never asked for, and a `{#for}`
- * row's reads belong to the row. A deferring block needs nothing from here — `awaited` already asks
- * its operand for the settle before the arm runs.
- *
- * A PLAIN READ only: a name, or a member path off one, with no call anywhere in it. That excludes
- * every probe under one condition rather than a list of them, and the exclusion is load-bearing —
- * `{x.pending() ? … : x}` decides what to show from whether the load has BEGUN, so starting it early
- * would turn a page that blocks into one showing a placeholder that never leaves. That spelling has
- * its own problems; they are not this change's to introduce.
- *
- * What lands in `into` is the memo the SLOT names; `rootsOf` turns each into the loads under it, so a
- * page of plain `state` emits nothing at all here and a page of aggregates emits its rpcs.
- */
-function eagerCells(
-    nodes: readonly Node[],
-    memos: ReadonlyMap<string, readonly string[]>,
-    into: Set<string>,
-): void {
-    for (const node of nodes) {
-        if (node.kind === 'element') eagerCells(node.children, memos, into)
-        else if (node.kind === 'expression' && !node.raw) {
-            const source = node.value.source
-            if (source.includes('(')) continue
-            const name = LEADING_IDENTIFIER.exec(source)?.[0]
-            if (name === undefined) continue
-            // What follows the name must be a member PATH and nothing else, so `{a.b}` is in and
-            // `{a + b}` is out — with no expression parser to run for the answer.
-            if (!MEMBER_PATH.test(source.slice(name.length))) continue
-            if (memos.has(name)) into.add(name)
-        }
-    }
-}
-
-const LEADING_IDENTIFIER = /^[A-Za-z_$][\w$]*/
-const MEMBER_PATH = /^(\??\.[A-Za-z_$][\w$]*)*$/
-
-/**
- * The memos named inside a `memo(…)`'s own argument list — what this one DERIVES from.
- *
- * Empty means a ROOT: a body that loads rather than one that reads another cell and reshapes it. Only
- * a root is worth starting, because starting a derivation runs its body as far as the read it derives
- * from, which signals, and the half-run body is discarded — a page fanning five aggregates out of one
- * rpc paid five aborted body entries and started nothing the first slot's read would not have.
- *
- * A KEYED source deliberately does not count. `memo(() => catalogue({ … }))` names an rpc and is the
- * very root this exists to start, so only a zero-arity memo already declared can appear here — which
- * is also why one pass in declaration order is enough to build the whole map.
- */
-function memosReferenced(
-    tokens: Token[],
-    open: number,
-    declared: ReadonlyMap<string, readonly string[]>,
-): readonly string[] {
-    let found: string[] | null = null
-    let depth = 0
-    for (let i = open; i < tokens.length; i++) {
-        const token = tokens[i] as Token
-        if (token.kind === SyntaxKind.OpenParenToken) depth++
-        else if (token.kind === SyntaxKind.CloseParenToken) {
-            depth--
-            if (depth === 0) break
-        } else if (token.kind === SyntaxKind.Identifier && declared.has(token.text)) {
-            if (found === null) found = [token.text]
-            else if (!found.includes(token.text)) found.push(token.text)
-        }
-    }
-    // One shared empty array for every root, which is most of them.
-    return found ?? NO_REFERENCES
-}
-
-const NO_REFERENCES: readonly string[] = []
-
-/**
- * The loads under a memo the template names, however many derivations sit between.
- *
- * A page reading only its aggregates never names the rpc they came from, so without this the roots
- * start when the walk arrives and cost their SUM: three independent roots behind two derivations each
- * rendered in 185ms, and in 62ms once resolved — the same 3x the flat case has, and with the same
- * derived body counts, because what gets started is the load rather than the derivation.
- *
- * `seen` is the cycle guard. A cycle cannot typecheck, but this walk runs before anything checks that.
- */
-function rootsOf(
-    name: string,
-    memos: ReadonlyMap<string, readonly string[]>,
-    seen: Set<string>,
-    into: Set<string>,
-): void {
-    if (seen.has(name)) return
-    seen.add(name)
-    const from = memos.get(name)
-    if (from === undefined) return
-    if (from.length === 0) {
-        into.add(name)
-        return
-    }
-    for (const source of from) rootsOf(source, memos, seen, into)
-}
-
-/**
  * The thunk a `{#if}` becomes. An else-if chain is a sequence of early returns rather than nested
  * ternaries, so each condition's hoisted reads sit in scope for its own branch only — and a later
  * condition still does not run when an earlier one matched.
@@ -2571,7 +2456,8 @@ function guarded(node: { body: Node[]; branches: Branch[] }, context: Context): 
     // All four keys, `undefined` included: `Branches` declares four, and an arm omitted here is a
     // different hidden class reaching the same reads in `settledArms` and `ChildPart`. Sixteen arm
     // combinations across a page is what turns those shared reads megamorphic, and a block inside a
-    // `{#for}` pays it per row. The same four a deferring `{#if}` writes, for the same reason.
+    // `{#for}` pays it per row. This is the only `Branches` literal the compiler writes; the shape it
+    // has to match is the hand-written `awaited()` call in the runtime.
     const arms = [
         `pending: undefined`,
         `then: undefined`,
@@ -2655,13 +2541,8 @@ export function emit(
     const replacedTypes = declared === null ? setupTypes : new TypeReader(replacedTokens)
 
     const reactive: Reactive = { cells: new Set(), keyed: new Set() }
-    // Every zero-arity memo, mapped to the memos it derives FROM. `memo` alone, and the other two
-    // constructors are not an omission: a `state(promise)` is already running before the cell exists —
-    // the promise was constructed by the argument expression — and a `channel` never loads at all. A
-    // memo is the one source holding a body that has not run.
-    const memos = new Map<string, readonly string[]>()
-    reactiveBindings(moduleTokens, reactive, memos)
-    reactiveBindings(setupRegion, reactive, memos)
+    reactiveBindings(moduleTokens, reactive)
+    reactiveBindings(setupRegion, reactive)
     // The imports were lifted out of both regions above, so the bindings walk never sees them.
     rpcImports(moduleImports.imports, reactive)
     rpcImports(setup.imports, reactive)
@@ -2723,15 +2604,6 @@ export function emit(
     const lifted = liftTypes(replaced, declaredTypes(replacedTokens, replacedTypes))
     const args = `args: ${signature(declared)}`
 
-    // Read off the template rather than the walk's leavings, and BEFORE the header below, which is
-    // built from what the file turned out to need.
-    const named = new Set<string>()
-    eagerCells(blocks.template, memos, named)
-    const eager = new Set<string>()
-    const seen = new Set<string>()
-    for (const name of named) rootsOf(name, memos, seen, eager)
-    const started = eager.size === 0 ? '' : `    ${need(context, 'start')}([${[...eager].join(', ')}])\n`
-
     // `html` and the return type are always needed; everything else is imported only if the file
     // turned out to use it, so a component that never toggles a class does not import `classes`.
     // The module block, per caller: cell bindings wrapped where they stand, and an effect wrapped
@@ -2774,7 +2646,7 @@ export function emit(
         `${moduleBlock.text}\n${adopted}` +
         (lifted.declarations === '' ? '' : `${lifted.declarations}\n`) +
         `export default function ${name}(${args}): TemplateResult {\n` +
-        `${setupBody}${kicked}${started}${defines}` +
+        `${setupBody}${kicked}${defines}` +
         `    return html\`${markup}\`\n` +
         `}\n`
 

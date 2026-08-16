@@ -16,9 +16,7 @@ import { container, loopback, scratch, sleep, suite } from 'harness'
 import { floorTicks, keep, microtasks, settled, tick } from 'harness/measure'
 import { hydrate, mount } from 'abide/ui'
 import { button, el, output, row } from './dom.ts'
-import Concurrent, { peakInFlight, reset as resetConcurrent } from './fixtures/concurrent.abide'
 import Deferring, { peakInFlight as peakDeferring, reset as resetDeferring } from './fixtures/deferring.abide'
-import Derived, { peakInFlight as peakDerived, reset as resetDerived } from './fixtures/derived.abide'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -1323,28 +1321,8 @@ export default suite({
             },
         },
         {
-            title: 'a page starts its loads at setup, not when the walk arrives',
-            note: 'A cell begins its load on the first READ, and in a render that read is the walk reaching the slot — so three independent loads in three sections cost their SUM. The compiler starts every cell an unconditional plain slot reads before the walk begins: the same set of loads, a third of the wait. Asserted as the peak in flight AT ONCE, because the markup is identical either way.',
-            async run({ is }) {
-                resetConcurrent()
-                const markup = await renderToString(Concurrent({}) as never)
-                is('every section rendered', /ONE[\s\S]*TWO[\s\S]*THREE/.test(markup), true)
-                is('all three were in flight together', peakInFlight(), 3)
-            },
-        },
-        {
-            title: 'the load under a derivation starts too, however deep',
-            note: 'A page reads its aggregates, never the rpc beneath them — so the loads are invisible to the walk until it reaches a slot that derives from one, and two independent roots cost their sum. Each slot resolves back to the loads under it instead. Starting the DERIVATION would be the wrong half: its body runs only as far as the read it derives from, which signals, and the rest is discarded.',
-            async run({ is }) {
-                resetDerived()
-                const markup = await renderToString(Derived({}) as never)
-                is('both sides rendered', /LEFT\+LEFT[\s\S]*RIGHT\+RIGHT/.test(markup), true)
-                is('both loads were in flight together', peakDerived(), 2)
-            },
-        },
-        {
             title: 'deferring blocks start their loads together too',
-            note: 'The same claim as the two above, on the path `start([…])` deliberately skips: a deferring block needs nothing from the compiler’s eager start, because the block asks its own operand for a settle as the walk passes and the arm’s `pending()` probe starts the load it reports. Either one alone is enough, which is why this is the gate rather than the reason — three 60ms panels measured 63ms with both, 63ms with only the probe, and 186ms with neither. Only the peak in flight can tell them apart: every arrangement produces the same document, three deferrals and all, so a markup test passes on the sum.',
+            note: 'A deferring block sends its pending arm and the walk moves on, so nothing about the block itself puts its load in flight — the ARM’s own `pending()` probe does, because asking about a load starts it. Three 60ms panels measured 63ms with the probe kicking and 186ms without. Only the peak in flight can tell them apart: every arrangement produces the same document, three deferrals and all, so a markup test passes on the sum.',
             async run({ is }) {
                 resetDeferring()
                 let markup = ''
@@ -1353,6 +1331,166 @@ export default suite({
                 }
                 is('all three landed', /LEFT[\s\S]*MIDDLE[\s\S]*RIGHT/.test(markup), true)
                 is('all three were in flight together', peakDeferring(), 3)
+            },
+        },
+        {
+            title: 'a region that WAITS does not hold the walk',
+            note: 'A load begins on its first READ, and in a render that read is the walk ARRIVING at the slot — so read in document order, independent loads cost their SUM. The walk does not arrive and wait: a region that has to wait is written into a buffer of its own and spliced back at the position it left, so the walk carries straight on to the next row and starts what THAT reads. It covers a component subtree, a guarded slot, an attribute and a row’s own load the same way, with nothing analysed and nothing for an author to spell — which is what replaced the compiler pass that used to name a page’s unconditional loads and start them at setup. Three 60ms rows measured 183ms holding the walk and 62ms taking a hole, for identical markup, which is why the peak is the assertion and the markup is only the guard on it.',
+            async run({ is }) {
+                let inFlight = 0
+                let peak = 0
+                const row = memo(async (label: string) => {
+                    inFlight++
+                    if (inFlight > peak) peak = inFlight
+                    await sleep(20)
+                    inFlight--
+                    return label
+                })
+                const markup = await renderToString(
+                    html`<ul>${['ONE', 'TWO', 'THREE'].map((label) => html`<li>${() => row(label)}</li>`)}</ul>`,
+                )
+                is(
+                    'every row rendered, in document order',
+                    markup,
+                    '<ul><li>ONE</li><li>TWO</li><li>THREE</li></ul>',
+                )
+                is('all three were in flight together', peak, 3)
+            },
+        },
+        {
+            title: 'a STREAMED render takes the same hole, up to a cap',
+            note: 'Bytes already handed to a consumer cannot be reordered, so this lane looked like the one that had to block — and it does not: what a hole holds back is the markup AFTER it, which has not been sent either. The consumer is given everything up to the first open hole and the walk carries on past it, so three rows cost 63ms rather than 185ms and arrive in document order regardless. The cap is what keeps that honest — past eight chunks’ worth of bytes held behind a hole the walk waits in place, so the buffer is bounded by a chunk count rather than by hope. What may NOT take a hole is a SOURCE: `{#for await}` and a bare async iterable hand over a row at a time, and a hole hands over a region when it is COMPLETE — eight rows collapsed into three chunks, and a channel, which never completes, hung the render outright.',
+            async run({ is }) {
+                let inFlight = 0
+                let peak = 0
+                const row = memo(async (label: string) => {
+                    inFlight++
+                    if (inFlight > peak) peak = inFlight
+                    await sleep(20)
+                    inFlight--
+                    return label
+                })
+                let markup = ''
+                for await (const chunk of renderDocument(
+                    '<title>held</title>',
+                    () => html`<ul>${['ONE', 'TWO', 'THREE'].map((l) => html`<li>${() => row(l)}</li>`)}</ul>`,
+                )) {
+                    markup += chunk
+                }
+                is('the rows are in document order', /ONE[\s\S]*TWO[\s\S]*THREE/.test(markup), true)
+                is('all three were in flight together', peak, 3)
+            },
+        },
+        {
+            title: 'an ATTRIBUTE that waits holds only itself',
+            note: 'A hole is a splice, and an attribute value is a string like any other — so the element it belongs to, and every slot after it, no longer wait behind one `class=${() => tone()}`. What it cannot do is resume the template at its OWN slot: the static text in front of an attribute is already in the buffer, which is why the hole holds the attribute text rather than the rest of the template. Three attribute loads on one element, which is the arrangement that used to cost their sum.',
+            async run({ is }) {
+                let inFlight = 0
+                let peak = 0
+                const attribute = memo(async (label: string) => {
+                    inFlight++
+                    if (inFlight > peak) peak = inFlight
+                    await sleep(20)
+                    inFlight--
+                    return label
+                })
+                const markup = await renderToString(
+                    html`<p class=${() => attribute('a')} id=${() => attribute('b')} title=${() => attribute('c')}>x</p>`,
+                )
+                is('every attribute landed, in order', markup, '<p class="a" id="b" title="c">x</p>')
+                is('all three were in flight together', peak, 3)
+            },
+        },
+        {
+            title: 'a deferred subtree may defer AGAIN',
+            note: 'A deferred subtree used to render through `renderToString`, which carries no document — so a deferring block inside one had nowhere to patch and awaited inline, holding its parent’s patch until the inner load landed as well. Two 60ms regions one inside the other reached the reader as one patch at 123ms. With the document carried through, the outer patch goes out at 64ms carrying the inner PLACEHOLDER and the inner follows at 125ms. The total is unchanged and cannot change — the inner load does not exist until the outer producer has been re-run — so what moves is when the outer region is on screen, which is the half a reader is looking at. `drain` reads a list that now GROWS under it, and the order falls out rather than being arranged: a nested patch cannot land before its parent’s, because its load could not start until the parent’s settled.',
+            async run({ is }) {
+                const outer = memo(async () => {
+                    await sleep(20)
+                    return 'OUTER'
+                })
+                const inner = memo(async () => {
+                    await sleep(20)
+                    return 'INNER'
+                })
+                const chunks: string[] = []
+                for await (const chunk of renderDocument('<title>nested</title>', () =>
+                    html`<div>${() =>
+                        outer.pending()
+                            ? 'waiting'
+                            : html`<p>${outer()}${() => (inner.pending() ? 'waiting' : inner())}</p>`}</div>`,
+                )) {
+                    chunks.push(chunk)
+                }
+                const patched = chunks.filter((chunk) => chunk.includes('<template id='))
+                is('two patches, not one', patched.length, 2)
+                // `<slot-s` written down rather than imported, for the reason the probing case gives.
+                is('the first carries OUTER and a placeholder for the inner', patched[0]?.includes('OUTER') === true && patched[0]?.includes('<slot-s') === true, true)
+                is('the second is the inner region', patched[1]?.includes('INNER'), true)
+            },
+        },
+        {
+            title: 'past the hold cap the walk PATCHES rather than blocks',
+            note: 'A hole holds every byte written after it until it fills, and the walk writes those at CPU speed rather than at the load’s — behind a 300ms load, a megabyte of document was held 1.6ms after the first hole. So a streaming render caps what it will hold, and what it does at the cap is the whole of this: it SPILLS. Every open hole becomes an empty placeholder now and a `<template>` plus a `$p` call when it lands, exactly as a `{#if x.pending()}` region does — so the held bytes become sendable, the buffer is bounded, and the loads still run together. Blocking instead bounded the buffer by refusing to write more, at the price of the loads after it starting one at a time: 224ms against 108ms on this page. The trade is the reader’s rather than the server’s, and it is why the spill is announced on abide’s own channel: a patched region needs JAVASCRIPT to appear, so a crawler sees the placeholder. It cannot reach a STRING render, whose buffer is its output and which therefore holds everything by construction — `renderToString` and `renderDocumentToString` always produce complete markup.',
+            async run({ is }) {
+                let inFlight = 0
+                let peak = 0
+                const panel = memo(async (label: string) => {
+                    inFlight++
+                    if (inFlight > peak) peak = inFlight
+                    await sleep(20)
+                    inFlight--
+                    return label
+                })
+                // Two of these between the loads is more than a walk may hold.
+                const filler = html`<p>${'x'.repeat(60000)}</p>`
+                let markup = ''
+                let patches = 0
+                const drained = (async () => {
+                for await (const chunk of renderDocument(
+                    '<title>spill</title>',
+                    () =>
+                        html`<div>${() => panel('ONE')}${filler}${() => panel('TWO')}${filler}${() => panel('THREE')}${filler}</div>`,
+                )) {
+                    markup += chunk
+                    if (chunk.includes('<template id=')) patches++
+                    // A consumer paying for BYTES rather than a toll per chunk — a socket — which is
+                    // what puts the walk under back-pressure and keeps it there while the spill lands
+                    // beside it. That pairing is what stranded the walk: `flush` built a second park
+                    // promise and replaced the resolver the consumer was about to call, so the walk
+                    // waited on one nobody held. It hangs rather than fails, which is the worst shape
+                    // a regression can take, so the drain below is raced against a deadline.
+                    await sleep(Math.max(1, Math.round(chunk.length / 4000)))
+                }
+                })()
+                // A stranded walk never ends, and a suite that HANGS reports nothing at all — so the
+                // deadline is what turns that regression into a red line instead of a stuck run.
+                let deadline: ReturnType<typeof setTimeout> | undefined
+                try {
+                    await Promise.race([
+                        drained,
+                        new Promise<never>((_, fail) => {
+                            deadline = setTimeout(
+                                () => fail(new Error('the render never finished — the walk was stranded on a park nobody held')),
+                                4000,
+                            )
+                        }),
+                    ])
+                } finally {
+                    clearTimeout(deadline)
+                }
+                is('all three were in flight together', peak, 3)
+                is('the spilled regions arrived as patches', patches > 0, true)
+                // `<slot-s` written down rather than imported, for the reason the probing case gives.
+                is('and their placeholders went out empty', markup.includes('<slot-s id="s0"></slot-s>'), true)
+                // NOT in document order, and that is the trade rather than a defect: a spilled
+                // region's markup arrives after everything the walk wrote past it, and `$p` is what
+                // puts it back where it belongs.
+                is(
+                    'every panel is in the document',
+                    ['ONE', 'TWO', 'THREE'].every((label) => markup.includes(label)),
+                    true,
+                )
             },
         },
         {

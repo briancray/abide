@@ -9,7 +9,7 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 | Specifier | Holds |
 | --- | --- |
 | `abide` | What an author TYPES — **17 values and 22 types**, and the file behind it is CURATED rather than collected: `./abide.ts`, one line per decision, not a barrel over a directory. `state` / `memo` / `channel`, `watch`, `html` / `raw` / `props` (with `Props`, the type a compiled component's parameter is written in), `log`, `online()` / `health()` / `identity()`, `route()` / `navigate()` / `url()`, `invalidate` / `refresh`, `isPending` (the one predicate about the signal, for an author's own `catch` — see "a read that signals"). A VALUE is here because a user-facing app types it — the standard is the dogfood app's own pages and server, never its demos, which test the framework rather than use it. A TYPE is here because it is the input or output of one of those values, which is why `Route` is here and `RouteEntry` is not. `scope`, `untrack` and `isolate` are on no entry point at all: nothing an app writes calls one, so the suites that test the graph reach `$shared/*` directly |
-| `abide/runtime` | What only the COMPILER writes, plus the predicates that read what it wrote. Emitted: `classes` / `styles` (a `class:` / `style:` toggle), `adopt` (a `<style>` block), `boundary` / `streamed` (the blocks), `awaited` (no longer emitted for any spelling — a hand-written `.ts` component still builds one, and both renderers read it back), `component` / `propCell` (a `<Name/>` tag and the props it binds), `keyed` (`by` on a `{#for}`), and `routes` / `outlet` / `ready` / `navigate` (what `abide build` writes into the client entry). Read-back: `isTemplate`, `isKeyed`, `classifySlots`, `escape`, `cellProps`. `navigate` is the one name on both this specifier and `abide`, and the duplication is a BUNDLING one, the same kind the row below states: the generated entry's link handler reached for it on the barrel, and that pulled `identity`, `online`, `memo` and `tags` into the chunk every page loads — 4,338 minified bytes of the perf app's first load, 7.3% of it, for a name already one import down in `router.ts`. An author still types `navigate` and still finds it on `abide`. Each emitted name is what the compiler writes for a SPELLING, never a name a source file says — with one exception, `start`, which is written for a POSITION rather than a spelling: the memos an unconditional plain slot reads, started before the walk reaches any of them. `html` and `raw` are the two that stay on `abide`: the template tag and the escape hatch, both of which a hand-written `.ts` component writes too. Nothing here may import a renderer, which is why `hydrate` is on `abide/ui` |
+| `abide/runtime` | What only the COMPILER writes, plus the predicates that read what it wrote. Emitted: `classes` / `styles` (a `class:` / `style:` toggle), `adopt` (a `<style>` block), `boundary` / `streamed` (the blocks), `awaited` (no longer emitted for any spelling — a hand-written `.ts` component still builds one, and both renderers read it back), `component` / `propCell` (a `<Name/>` tag and the props it binds), `keyed` (`by` on a `{#for}`), and `routes` / `outlet` / `ready` / `navigate` (what `abide build` writes into the client entry). Read-back: `isTemplate`, `isKeyed`, `classifySlots`, `escape`, `cellProps`. `navigate` is the one name on both this specifier and `abide`, and the duplication is a BUNDLING one, the same kind the row below states: the generated entry's link handler reached for it on the barrel, and that pulled `identity`, `online`, `memo` and `tags` into the chunk every page loads — 4,338 minified bytes of the perf app's first load, 7.3% of it, for a name already one import down in `router.ts`. An author still types `navigate` and still finds it on `abide`. Each emitted name is what the compiler writes for a SPELLING, never a name a source file says. `html` and `raw` are the two that stay on `abide`: the template tag and the escape hatch, both of which a hand-written `.ts` component writes too. Nothing here may import a renderer, which is why `hydrate` is on `abide/ui` |
 | `abide/runtime/transport` | What a server module ELIDES TO in the client lane — `remote` / `remoteSocket` / `asRpc` and the shapes describing one (`Rpc`, `RpcHandle`, `RemoteOptions`, `RemoteSocket`, `RemoteSocketOptions`, `CallOptions`, `Kind`, `Method`, `Wire`). Split off `abide/runtime` for a BUNDLING reason and no other: that module is what the generated client entry imports for `routes` / `outlet` / `ready`, so anything re-exported from it sits in the chunk every page loads, and one lazy route with one rpc put the whole call-and-decode path in front of every page — 4,066 bytes of the perf app's shared entry, on a page that calls nothing. Reached by its own specifier it lands in the chunk of whatever page imports it |
 | `abide/ui` | The DOM substrate: `mount`, `hydrate`. Reached by `abide build`'s GENERATED client entry and by benches, never by an app's own pages — so it is a real entry point that is NOT on `/docs`, which lists what an author types. The `client` and `hydrate` ladders document these two and claim no name; `dogfood/test/docs.test.ts` holds that exclusion in both directions |
 | `abide/server` | What a SERVER-SIDE author types — the declaring half of both transports (`GET` / `POST` / `PUT` / `PATCH` / `DELETE` / `socket`), what a route answers with (`error` / `json` / `jsonl` / `page` / `redirect` / `sse` / `HttpError`), `render`, the process lifecycle as an app DECLARES it (`server()` / `middleware` / `onError` / `onStart` / `onStop`), the request scope as an app READS it (`request()` / `bag()` / `cookies()` / `nonce()` / `trace()`), `config()` / `onConfig`, the server half of the two ambients (`onHealth` / `onIdentity` / `identity`), and `csp()`. Curated by the same rule as `abide` and one more: **what the docs app covers is what is public** — every name here has its own page at `/docs/<name>` with at least one rung on it, and a name with no page belongs on the entry point below. Asserted in both directions in `dogfood/test/docs.test.ts`, against `Object.keys` of the module rather than against prose |
@@ -840,61 +840,43 @@ needs them inside, because `$p` finds its placeholder by id from anywhere in the
 ### When a load starts
 
 A cell begins its load on the first READ, and in a server render that read is the WALK ARRIVING at the
-slot. Left alone, that makes document order the start order: three sections holding three independent
-loads cost their SUM rather than their longest, and a page pays 185ms for three 60ms loads with
-nothing in the source saying so.
+slot. Left alone that makes document order the start order: three sections holding three independent
+loads would cost their SUM rather than their longest, and a page would pay 185ms for three 60ms loads
+with nothing in the source saying so.
 
-So the compiler starts them itself. Every **memo** an **unconditional plain slot** reads is named in
-one `start([…])` call emitted after setup, before the first byte — the same set of loads the walk was
-going to demand, in flight together. The example above renders in 63ms, with the same blocking, the
-same walk and byte-identical markup.
+**The walk does not arrive and wait.** A region that has to wait takes a HOLE — it is written into a
+buffer of its own and spliced back at the position it left — so the walk carries straight on to the
+next slot and starts what THAT reads. Nothing is analysed and nothing is spelled: a component subtree,
+a guarded slot, a `{#for}` row's own load and an attribute value are all covered by the same fork,
+and each of those is a shape a compile-time pass could not enter. The three sections render in 62ms.
 
-| the rule | why |
-| --- | --- |
-| `memo` only | a `state(promise)` is already running before the cell exists — the promise was constructed by the argument — and a `channel` never loads. A memo is the one source holding a body that has not run |
-| the ROOTS under it | a slot naming a DERIVATION resolves to the loads beneath it, however many derivations deep, deduped and cycle-guarded. Starting the derivation would be the wrong half — its body runs only as far as the read it derives from, which signals, and the rest is discarded. A page reads `{total}` and never `{rows}`, so without this the loads are invisible until the walk reaches the first slot that derives from one: two independent roots behind two derivations each rendered in 124ms, three in 185ms, and both in 62ms once resolved |
-| a KEYED source is a root | `memo(() => catalogue({ … }))` names an rpc rather than another memo, so it is a load and exactly what this starts |
-| UNCONDITIONAL | the descent stops at every block and every component: a load inside a branch nobody takes is work the page never asked for, and a `{#for}` row's reads belong to the row |
-| a PLAIN read | a name or a member path off one, with no call in it. That excludes every probe in one condition, and the exclusion no longer decides anything: a probe starts the load it reports, so `{x.pending() ? … : x}` is in flight either way — and it now DEFERS on that fact, sending the placeholder and patching the settled region in. Asking about a load is saying you have something to show while it runs; a page that means to BLOCK reads the cell instead |
-| not a prop | a prop is a cell too, but it holds what the parent already resolved |
-| a deferring region needs nothing | Its own probe starts it. The region sends what it made and the walk moves on, so three deferred panels are in flight together — three 60ms panels measure 63ms, and 186ms with nothing kicking them. Gated on the PEAK IN FLIGHT rather than the clock, because every arrangement produces the same document |
+This replaced a compiler pass — `start([…])`, emitted above a template naming its unconditional plain
+slots — which reached only the flattest of those shapes and, on both apps, resolved to sync
+derivations with no load in them at all.
 
-A failure is swallowed at the start and reported by the read that renders, which is where it was
-always reported. Nothing about what a page renders changes — only when its loads begin — which is why
-the demo asserts the peak number in flight AT ONCE rather than a clock.
+A probe starts what it asks about, so a deferring region needs nothing either: `{#if x.pending()}`
+sends its arm and the walk moves on, with the load already in flight. Three deferred panels measure
+63ms, and 186ms with nothing kicking them.
 
-What it does NOT reach: a load reached only from inside a block, a component, or an expression with a
-call in it. Those start when the walk arrives, as they always did.
+Nothing about what a page renders changes — only when its loads begin — which is why every demo here
+asserts the PEAK NUMBER IN FLIGHT rather than a clock.
 
-### Known limits
+**A streamed render holds bytes, up to a cap, and then SPILLS.** The consumer is given everything up
+to the first open hole, so document order survives however the holes settle. Past eight chunks' worth
+of held bytes, every open hole becomes an empty placeholder and a patch — see below — which bounds the
+buffer without putting the loads back in series. It is announced on abide's own `render` channel,
+because a patched region needs JAVASCRIPT to appear and the size it happens at is not visible in an
+author's source. A STRING render never reaches it: its buffer is its output, so `renderToString` and
+`renderDocumentToString` always produce complete markup.
 
-Two things a server render cannot hand across, both because the markup is the only channel:
+**A SOURCE may not take a hole.** `{#for await}` and a bare async iterable hand over a row at a time,
+while a hole hands over a region when it is COMPLETE — eight rows became three chunks, and a channel,
+which never completes, hung the render outright. They stay in the walk wherever there is a consumer.
 
-- **A `.prop` slot emits nothing.** A DOM property has no serialisation, so an SSR walk skips it and
-  the client sets it on mount. Use an attribute slot when the value must survive the render.
-- **A hydrated `{#for await}` re-streams from the top.** The markup does not say how far the server
-  got, so the rows are rebuilt rather than adopted. Every other part adopts its range.
-- **Nothing is tracked through an `await`.** A source read placed after one does not subscribe and
-  does not defer — it serves what is there. True of every async body, a `memo(async …)` as much as
-  the async thunk `{await …}` compiles to, and stated on `settledPromise`: awaiting a source
-  deliberately reads untracked, because there is nothing to track through. Read the sources you need
-  FIRST, then await. A read BEFORE the await is fully tracked and deferred, including inside an async
-  thunk.
-
-A SETTLED operand is not deferred at all. `awaited` takes a plain value as well as a promise, and
-there is nothing to defer about one already in hand: both substrates render the settled arm in place,
-so there is no placeholder, no pending arm and no patch. The two have to agree here — a placeholder
-the client never expects to adopt is a hydration mismatch.
-
-An operand that has not MOVED does not restart. The client keeps the operand a block is showing and
-compares it, so a re-run of the enclosing effect for some other reason leaves a settled panel alone
-rather than throwing it back to its fallback and rebuilding it — the same cutoff a deferring block
-and `{#for await}` have. A body closure that captured newer state is not re-rendered until the operand
-itself changes.
-
-A block NESTED inside a deferred subtree awaits inline rather than deferring again: the subtree
-is rendered with nowhere to patch, so the inner one delays its parent's patch instead of registering
-a patch of its own. Deferral is one level deep by construction.
+**A deferred subtree may defer again.** It renders with the document carried through, so a deferring
+block inside one registers a patch of its own rather than holding its parent's until the inner load
+lands too. The order needs no arranging: a nested load cannot start until its parent's has settled, so
+its patch cannot precede the one that puts its placeholder in the document.
 
 **A probed STREAM patches its FIRST CHUNK.** It is the one source where "there is something to show"
 and "the load is over" are different moments — `pending` stands down at the first chunk while the
