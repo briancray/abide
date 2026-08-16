@@ -1193,7 +1193,12 @@ export default suite({
             bench: {
                 kind: 'work',
                 arms: (() => {
-                    const level = state('high')
+                    // A RECORD, not the string: `set` dedupes on identity, so `level.set('high')`
+                    // over `state('high')` never notified and the five slots were never re-evaluated
+                    // — the arm priced a cell's `===` and the 0 it reported was the effect not
+                    // running, which no counter can tell from five compares that all skipped. A
+                    // fresh record per op is `template.ts`'s shape, for the same reason.
+                    const level = state({ level: 'high' })
                     // By `prepare`, not here: here is module scope — the suite object is built at
                     // import, and this module is imported on the server too, where there is no
                     // document. Every other fixture in this file went lazy for the same reason.
@@ -1207,11 +1212,11 @@ export default suite({
                             host,
                             () =>
                                 html`<p
-                                    class=${() => level()}
-                                    data-a=${() => level()}
-                                    data-b=${() => level()}
-                                    data-c=${() => level()}
-                                    data-d=${() => level()}
+                                    class=${() => level().level}
+                                    data-a=${() => level().level}
+                                    data-b=${() => level().level}
+                                    data-c=${() => level().level}
+                                    data-d=${() => level().level}
                                 ></p>`,
                         )
                         plain = document.createElement('p')
@@ -1221,7 +1226,7 @@ export default suite({
                         {
                             label: 'abide — five slots, same value',
                             prepare: ready,
-                            run: () => level.set('high'),
+                            run: () => level.set({ level: 'high' }),
                         },
                         {
                             label: 'vanilla — setAttribute, unguarded',

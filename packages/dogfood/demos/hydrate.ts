@@ -739,10 +739,16 @@ export default suite({
                     },
                     {
                         label: 'abide — mount, throwing the server’s rows away',
+                        // The same `prepare` the arm above carries, and for the counter rather than
+                        // for the fixture: `benchHost` opens by disposing the PREVIOUS arm's tree,
+                        // and a work bench runs each arm once in order — so without this, arm 2
+                        // counts arm 1's teardown and the vanilla arm counts arm 2's.
+                        prepare: () => void benchHost(SMALL.served),
                         run: () => hold(mount(benchHost(SMALL.served), SMALL.view)),
                     },
                     {
                         label: 'vanilla — walk the rows and keep their text nodes',
+                        prepare: () => void benchHost(SMALL.byHand),
                         run: () =>
                             void vanilla.adoptRows(benchHost(SMALL.byHand).firstElementChild as Element),
                     },
