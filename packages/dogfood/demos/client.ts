@@ -214,6 +214,10 @@ const ROWS_1010 = build(1010)
 // swapped the same pair every iteration would time the first op and then time nothing.
 const SWAP_ADJACENT = swapped(ROWS_200, 1, 2)
 const SWAP_DISTANT = swapped(ROWS_200, 1, 198)
+// The RELOCATION, which is not a swap in either direction: one row out and back in 197 places up,
+// trading neither end. `lifted(…, 1, 198)` is its exact inverse, so `ROWS_200` is what it alternates
+// with and the DOM returns to the order it started in on every second iteration.
+const LIFT_UP = lifted(ROWS_200, 198, 1)
 
 // The cells the persistent lists track. Reactive state, not DOM — they belong out here with the rows.
 const liveRows = state(ROWS_1000)
@@ -228,6 +232,7 @@ const keyedRows = state(ROWS_200)
 const unkeyedRows = state(ROWS_200)
 const adjacentRows = state(ROWS_200)
 const distantRows = state(ROWS_200)
+const liftedRows = state(ROWS_200)
 const growRows = state(ROWS_1000)
 
 /** One record, so the whole set is one shape the JIT sees the same way at every arm's call site. */
@@ -245,6 +250,8 @@ interface Fixtures {
     innerHost: HTMLElement
     adjacentHost: HTMLElement
     distantHost: HTMLElement
+    liftedHost: HTMLElement
+    vanillaLiftHost: HTMLElement
     growHost: HTMLElement
     growVanillaHost: HTMLElement
 }
@@ -292,6 +299,15 @@ const fixtures = lazy((): Fixtures => {
     const distantHost = ul()
     mount(distantHost, () => keyedList(distantRows))
 
+    // The relocation, and a vanilla host of its OWN rather than sharing `vanillaHost` with the swap
+    // arms: two arms alternating the same nodes leave each other's list in the order the other one
+    // just undid, which times a reorder that is sometimes a no-op.
+    const liftedHost = ul()
+    mount(liftedHost, () => keyedList(liftedRows))
+
+    const vanillaLiftHost = ul()
+    vanilla.buildRows(vanillaLiftHost, ROWS_200)
+
     // Growth: a thousand rows with ten more on the end, alternating. This is what a feed does on
     // every poll, and it is the mutation the whole-array benches above cannot show — a reconcile that
     // is right for an edit can still rebuild the tail.
@@ -318,6 +334,8 @@ const fixtures = lazy((): Fixtures => {
         innerHost,
         adjacentHost,
         distantHost,
+        liftedHost,
+        vanillaLiftHost,
         growHost,
         growVanillaHost,
     }
@@ -686,22 +704,24 @@ export default suite({
         },
 
         {
-            title: 'keyed — a reorder MOVES DOM, and a SWAP moves two rows rather than the distance',
-            note: 'No element is re-created: every row survives as the same object. Placement is an in-order walk rather than a minimal-move (LIS) reconcile, so in general a move costs the DISTANCE it covers — once the walk moves a row, every row between it and where it came from has the wrong next sibling and is moved in turn. A two-row swap is the shape that walk is worst at and the one the DOM is asked for most, so it is detected instead: the first and last rows of the changed range have traded places, which is three identity checks and no scan, and two ranges move. The last two pairs are what is NOT taken, and they are the same reorder in the two directions — the walk runs backwards from the last change, so sending a row DOWN the list costs one move and pulling the same row back UP costs the distance. That asymmetry is the trade LIS would buy out; on a real re-sort it is worth about 5%, because an uncorrelated permutation needs ~n−2√n moves against the ~n this makes.',
+            title: 'keyed — a reorder MOVES DOM, and a SWAP or a RELOCATION moves rows rather than the distance',
+            note: 'No element is re-created: every row survives as the same object. Placement is an in-order walk rather than a minimal-move (LIS) reconcile, so in general a move costs the DISTANCE it covers — once the walk moves a row, every row between it and where it came from has the wrong next sibling and is moved in turn. Two shapes are detected ahead of it because they are what the DOM is actually asked for. A SWAP: the first and last rows of the changed range have traded places, which is three identity checks and no scan, and two ranges move. A RELOCATION: one row taken out and put back somewhere else, which trades neither end and changes every index between — a drag handle, a "move to top", one item jumping in a re-sort. The walk runs backwards, so sending a row DOWN the list already cost one move; it is pulling the same row back UP that cost the distance, and that is the asymmetry this removes. A relocation is verified over the WHOLE changed range rather than at its ends, one index at a time, so a reverse or a scatter fails on the first read and pays nothing for the attempt. Both land on the hand-written floor for their shape, which is the comparison that settles it rather than the improvement: the swap moves 2 where two insertBefore calls move 2, and the relocation moves 1 where one insertBefore moves 1. What is still NOT taken is the general permutation: a reverse moves n−1, which is what it needs, and an uncorrelated re-sort moves ~n against the ~n−2√n LIS would — worth about 5%, for a second pass and an array per update.',
             async run({ is }) {
                 for (const [label, reorder, expected] of [
                     ['swap 1↔2 (adjacent)', swapped(build(100), 1, 2), 1],
                     ['swap 1↔20', swapped(build(100), 1, 20), 2],
                     ['swap 1↔98', swapped(build(100), 1, 98), 2],
                     ['send row 1 down to 98', lifted(build(100), 1, 98), 1],
-                    ['pull row 98 up to 1', lifted(build(100), 98, 1), 97],
+                    ['pull row 98 up to 1', lifted(build(100), 98, 1), 1],
                     // The two that LOOK like a swap at the ends and are not. A reverse trades row 0
                     // with row 99 and moves everything between as well; a rotation trades nothing at
-                    // all. Both reach the fast path's identity checks, and both come out with the
+                    // all. Both reach the fast paths' identity checks, and both come out with the
                     // right first and last row — which is the whole of what a spot check reads, and
-                    // is why these are here as counts rather than as a glance at the page.
+                    // is why these are here as counts rather than as a glance at the page. The
+                    // reverse is what separates them: a relocation shifts its whole range by one, and
+                    // a reverse does not, so it fails on the first index inside the bracket.
                     ['reverse all 100', build(100).slice().reverse(), 99],
-                    ['rotate the last row to the front', lifted(build(100), 99, 0), 99],
+                    ['rotate the last row to the front', lifted(build(100), 99, 0), 1],
                 ] as const) {
                     const source = build(100)
                     const rows = state(source)
@@ -773,7 +793,14 @@ export default suite({
                 arms: [
                     {
                         label: 'abide — keyed, ADJACENT rows (optimal)',
+                        // `fixtures()` FIRST, and every abide arm below does the same. The hosts are
+                        // built lazily and only the vanilla arms used to name them, so the abide arms
+                        // ran against a list that had never been mounted and every one of them read
+                        // `no DOM work at all` — while the first vanilla arm, which is where the lazy
+                        // build actually landed, reported 14,836 inserts for a two-insert reorder.
+                        // Both numbers looked like findings and neither was about the reconcile.
                         prepare: async () => {
+                            fixtures()
                             keyedRows.set(ROWS_200)
                             await tick()
                         },
@@ -782,14 +809,25 @@ export default suite({
                     {
                         label: 'abide — keyed, DISTANT rows (a swap, so two ranges)',
                         prepare: async () => {
+                            fixtures()
                             keyedRows.set(ROWS_200)
                             await tick()
                         },
                         run: () => keyedRows.set(swapped(ROWS_200, 1, 198)),
                     },
                     {
+                        label: 'abide — keyed, RELOCATION (row 198 up to 1)',
+                        prepare: async () => {
+                            fixtures()
+                            keyedRows.set(ROWS_200)
+                            await tick()
+                        },
+                        run: () => keyedRows.set(LIFT_UP),
+                    },
+                    {
                         label: 'abide — unkeyed, same data (rewrites two rows’ text)',
                         prepare: async () => {
+                            fixtures()
                             unkeyedRows.set(ROWS_200)
                             await tick()
                         },
@@ -800,11 +838,47 @@ export default suite({
                         run: () => vanilla.swapRows(fixtures().vanillaHost, 1, 198),
                     },
                     {
+                        label: 'vanilla — ONE insertBefore (the relocation floor)',
+                        run: () => vanilla.liftRow(fixtures().vanillaLiftHost, 198, 1),
+                    },
+                    {
                         label: 'vanilla — innerHTML rebuild',
                         run: () =>
                             vanilla.buildRowsInnerHTML(fixtures().innerHost, swapped(ROWS_200, 1, 198)),
                     },
                 ],
+            },
+        },
+
+        {
+            title: 'the key index is not built for a shift, and one row does not decide it for the rest',
+            note: 'A keyed row that is not at its own index is looked for at its NEIGHBOURS before a `Map` of every previous row is built, because a row that moved usually moved one place. What that probe was missing is that it used to stop once the index existed: the FIRST row to miss all three tests built the map, and every row after it went through a hash lookup even when the answer was sitting at `previous[i - 1]`. A relocation is exactly that shape — its first row is the one that came from far away, and the 197 behind it have each shifted by one — so it paid 204 lookups where 7 will do. So did an insert at the FRONT, which is what a feed does on every poll. Counted rather than timed on purpose: this is a "does less work" contract, the output is identical either way, and the count is the same number on any machine while the wall clock here moved 4x between two runs of the same build. `Map.prototype` is patched rather than one instance, which is the hazard the reorder case warns about for `Node.prototype` — it is sound only because the identical-order row reads 0, which is what says nothing else on this path touches a Map.',
+            async run({ is, log }) {
+                const base = build(200)
+                const shapes: [string, Item[], number][] = [
+                    ['identical order', base.slice(), 0],
+                    ['drop the first row', base.slice(1), 3],
+                    ['adjacent swap', swapped(base, 1, 2), 6],
+                    ['distant swap', swapped(base, 1, 198), 14],
+                    ['relocation 198 → 1', lifted(base, 198, 1), 7],
+                    ['insert at the front', [{ id: 9999, label: 'row 9999' }, ...base], 4],
+                ]
+                for (const [label, target, expected] of shapes) {
+                    const rows = state(base)
+                    const host = scratch(() => keyedList(rows))
+                    await tick()
+                    const gets = countCalls(Map.prototype, 'get')
+                    rows.set(target)
+                    await tick()
+                    gets.restore()
+                    const shown = Array.from(host.querySelectorAll('li')).map((li) => li.textContent)
+                    host.remove()
+                    // The order as well as the count: a lookup skipped by taking the WRONG row is
+                    // cheaper still, and nothing about the count would say so.
+                    is(`${label} — the order`, shown, target.map((item) => item.label))
+                    is(`${label} — key-index lookups`, gets.calls, expected)
+                }
+                log('', 'with the neighbour probe behind the index instead of in front of it, the last two read 204')
             },
         },
 
@@ -853,8 +927,8 @@ export default suite({
         },
 
         {
-            title: 'the same two reorders, TIMED',
-            note: 'The counters above say both swaps now move two ranges, the same as a hand-written one. This is the number they cannot give: the DESCRIBING is what a whole-array update costs before any reconciling starts, and it is O(n) whatever the reorder turns out to be — two hundred rows are re-evaluated to swap two of them, and that is the floor the two arms below share. A reconcile that is cheap in moves and linear in describing is priced honestly by having both cards.',
+            title: 'the same three reorders, TIMED',
+            note: 'The counters above say both swaps move two ranges and the relocation moves one, the same as a hand-written arm. This card is what those counts cost. Two different things are in it and the card exists to keep them apart. The PLACEMENT is real money: with the relocation path taken out, that arm moves 197 rows instead of 1 and measures 43.8 µs against 15.7 — 2.8x, in chromium, at only two hundred rows — while the two swap arms either side of it do not move at all (7.8/7.7 and 14.0/14.0), which is what says the 2.8x is the moves and not the weather. The DESCRIBING is the rest and it is nobody’s fault: a whole-array update re-evaluates all two hundred rows before any reconciling starts, O(n) whatever the reorder turns out to be, and that is the floor every abide arm here shares and no vanilla arm pays. How much of the op it is was ASSERTED here twice and wrong both times, which is why the last two arms measure it instead: describing is about a fifth, the reconcile walk about a quarter, and the remaining half is the change-handling and the mutation itself. So the gap to vanilla’s ~1.3 µs is not any one of those — a whole-list update simply does three things a hand-written insertBefore does none of. Both cards are needed: the counts above cannot see the 2.8x, and this one cannot see that an arm is at its hand-written floor for moves. Absolute figures here are the machine’s and move by 4x under load; the SHARES between the arms are what to read, and they hold. One share this card cannot show at all, because no case body can reach Blink: of the ENGINE work a reorder causes, the script above is about a third and style plus layout are the other two thirds — 35% script swapping two rows of a thousand, 31% re-sorting five hundred, measured over CDP in `packages/perf/e2e/reorder-layers.e2e.ts`. A hand-written `insertBefore` invalidates the same layout, so that third is the whole ceiling on making any of this faster, and it is why the reconcile is not where the next win is.',
             bench: {
                 kind: 'time',
                 floor: 'flush',
@@ -874,8 +948,25 @@ export default suite({
                         },
                     },
                     {
+                        label: 'abide — keyed, relocation up 197 places',
+                        run: async (i: number) => {
+                            liftedRows.set(i % 2 === 0 ? LIFT_UP : ROWS_200)
+                            await settled()
+                        },
+                    },
+                    {
                         label: 'vanilla — two insertBefore calls',
                         run: () => vanilla.swapRows(fixtures().vanillaHost, 1, 198),
+                    },
+                    {
+                        // The inverse is `1 -> 199` and not `1 -> 198`: taking the row out shifts every
+                        // index after it down one, so the node that has to end up following it is read
+                        // at the index it holds BEFORE the move.
+                        label: 'vanilla — one insertBefore',
+                        run: (i: number) =>
+                            i % 2 === 0
+                                ? vanilla.liftRow(fixtures().vanillaLiftHost, 198, 1)
+                                : vanilla.liftRow(fixtures().vanillaLiftHost, 1, 199),
                     },
                     {
                         label: 'vanilla — innerHTML rebuild',
@@ -884,6 +975,29 @@ export default suite({
                                 fixtures().innerHost,
                                 i % 2 === 0 ? SWAP_DISTANT : ROWS_200,
                             ),
+                    },
+                    {
+                        // Describe + the whole reconcile walk and NO placement: every row carries by
+                        // key at its own index, so `set` returns before the placement loop. Subtract
+                        // the arm below it for the walk alone.
+                        label: '…of which the walk: fresh array, identical order',
+                        run: async () => {
+                            liftedRows.set(ROWS_200.slice())
+                            await settled()
+                        },
+                    },
+                    {
+                        // The array a whole-list update BUILDS, with nothing done to it. This is the
+                        // floor no abide arm can go below and no vanilla arm pays at all, and it is
+                        // here so the note's split is a number on the page rather than a claim.
+                        label: '…of which the describing: 200 rows to keyed templates, discarded',
+                        run: (i: number) => {
+                            const items = i % 2 === 0 ? LIFT_UP : ROWS_200
+                            const described = items.map((item) =>
+                                keyed(item.id, html`<li>${item.label}</li>`),
+                            )
+                            if (described.length === 0) throw new Error('unreachable')
+                        },
                     },
                 ],
             },
@@ -1006,7 +1120,7 @@ export default suite({
 
         {
             title: 'the reconcile is right under ARBITRARY mutation, not just the ones with cases',
-            note: 'The placement walk starts at the last row that changed and stops once it is below the first, and a two-row swap skips the walk entirely — which is exactly the kind of reasoning that is right for every mutation somebody thought of. So the mutations are generated: insert, remove, swap, reverse a run, rotate one row, and edit, at random positions, two hundred times, with the whole list checked after every one. Several PER STEP, which is the half that matters: with one mutation per step the first and last changed index are always the two changed rows, so a fast path that confuses "the brackets around the changes" with "the only changes" agrees with the truth by construction and the fuzz can never disagree with it. That confusion shipped once. Run over TWO row shapes as well, because a row that is one element and a row that is a fragment are two different pieces of code — one moves a node and the other moves a range it has to walk out first. The seed is fixed, so a failure is a failure anybody can reproduce.',
+            note: 'The placement walk starts at the last row that changed and stops once it is below the first, and a two-row swap or a one-row relocation skips the walk entirely — which is exactly the kind of reasoning that is right for every mutation somebody thought of. So the mutations are generated: insert, remove, swap, reverse a run, rotate one row, and edit, at random positions, four hundred times, with the whole list checked after every one. FOUR hundred and not two, and that number is load-bearing rather than round: the relocation path was landed against this fuzz at 200 steps and it stayed GREEN with the path deliberately broken to read only the ends of its range — the fixed seed over thirty rows never happened to produce the shape. It goes red at 250. A step count is part of what a fuzz gates, and the only way to know it is enough is to break the thing and watch. Several PER STEP, which is the half that matters: with one mutation per step the first and last changed index are always the two changed rows, so a fast path that confuses "the brackets around the changes" with "the only changes" agrees with the truth by construction and the fuzz can never disagree with it. That confusion shipped once. Run over TWO row shapes as well, because a row that is one element and a row that is a fragment are two different pieces of code — one moves a node and the other moves a range it has to walk out first. The seed is fixed, so a failure is a failure anybody can reproduce.',
             async run({ is }) {
                 const fuzz = async (view: (item: Item) => TemplateResult, perRow: number): Promise<number> => {
                     // Every shape carries the label in its FIRST node, so one stride reads the order
@@ -1070,7 +1184,7 @@ export default suite({
                     }
 
                     let mismatches = 0
-                    for (let step = 0; step < 200; step++) {
+                    for (let step = 0; step < 400; step++) {
                         const next = rows.peek().slice()
                         // One to four, so a step is sometimes the single mutation the brackets
                         // describe exactly and sometimes several they only bound.
@@ -1140,6 +1254,7 @@ export default suite({
                     {
                         label: 'abide — keyed, in-order placement',
                         prepare: async () => {
+                            fixtures()
                             keyedRows.set(ROWS_200)
                             await tick()
                         },

@@ -396,6 +396,25 @@ export function swapRows(host: Element, a: number, b: number): void {
 }
 
 /**
+ * One row taken out and put back somewhere else — ONE insertBefore, whatever the distance.
+ *
+ * The floor for a relocation, and it is a different shape from `swapRows` rather than a special case
+ * of it: a swap trades two positions and leaves everything between alone, while this shifts every
+ * index between the two and trades neither end. An author writing it by hand does not care which
+ * direction it went, and that is the whole point of having it here — the reconcile's backwards walk
+ * did, and the arm it is measured against is what says whether that mattered.
+ */
+export function liftRow(host: Element, from: number, to: number): void {
+    const moving = host.children[from] as ChildNode | undefined
+    if (moving === undefined) return
+    // Read BEFORE the move: taking the row out shifts every index after it, so a destination read
+    // afterwards is off by one in exactly the direction that makes the arm look slower than it is.
+    const before = host.children[to] as ChildNode | undefined
+    if (before === undefined || before === moving) return
+    host.insertBefore(moving, before)
+}
+
+/**
  * Adopt server markup the way a hand-written app does: find the nodes you will need to touch later
  * and keep references to them. No markers, because the author already knows the shape — which is
  * exactly the knowledge a framework has to recover from the markup, and the reason this arm is the

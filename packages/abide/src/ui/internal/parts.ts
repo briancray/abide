@@ -1048,18 +1048,26 @@ class ListPart {
                     // The NEIGHBOURS before the index. A row that moved usually moved one place —
                     // a swap, an insert, a delete — and the index is a walk of every previous row
                     // built from inside the per-row walk, so a two-row swap of two hundred indexed
-                    // all two hundred to answer two lookups. Probed only while `byKey` is still
-                    // null, so the general path costs two array reads per `set` rather than per row
-                    // once a pass has genuinely scattered.
-                    if (byKey !== null) row = byKey.get(key)
+                    // all two hundred to answer two lookups.
+                    //
+                    // Probed BEFORE the index and on every row, not only while the index is still
+                    // null. Skipping it once `byKey` exists reads as saving two array reads on a
+                    // pass that has genuinely scattered, and for a scatter it does — but ONE row
+                    // decides it for all the others, and the shape that gets caught by that is the
+                    // commonest reorder there is. A relocation shifts every row after it by one, so
+                    // row i wants `previous[i - 1]`, which is exactly this probe; its FIRST row is
+                    // the one that came from far away, misses all three tests and builds the index —
+                    // and the 197 rows behind it, each sitting at its own `before`, then paid a
+                    // `Map.get` and a `Map.delete` apiece to be told what an array read already knew.
+                    // Two reads per row against a hash lookup per row is the cheaper side even when
+                    // the probe misses, which is the only case this order is worse in.
+                    const before = previous[i - 1]
+                    if (before !== undefined && before.key === key && before.usedAt !== pass) row = before
                     else {
-                        const before = previous[i - 1]
                         const after = previous[i + 1]
-                        if (before !== undefined && before.key === key && before.usedAt !== pass) row = before
-                        else if (after !== undefined && after.key === key && after.usedAt !== pass)
-                            row = after
+                        if (after !== undefined && after.key === key && after.usedAt !== pass) row = after
                         else {
-                            byKey = indexByKey(previous)
+                            if (byKey === null) byKey = indexByKey(previous)
                             row = byKey.get(key)
                         }
                     }
@@ -1104,6 +1112,7 @@ class ListPart {
 
         const parent = this.anchor.parentNode as ParentNode
         if (changed === 2 && this.transposed(next, previous, firstChanged, lastChanged, parent)) return
+        if (changed > 2 && this.relocated(next, previous, firstChanged, lastChanged, parent)) return
 
         // Place in order, walking backwards. A row already sitting where it belongs is not touched,
         // so a change at one end of the list does not disturb the other.
@@ -1221,6 +1230,41 @@ class ListPart {
                 parent.insertBefore(earlierNodes[i] as ChildNode, after)
             }
         }
+        return true
+    }
+
+    /**
+     * One row taken out and put back higher up — move that row, not the run it passed.
+     *
+     * The general walk runs backwards, so a row sent DOWN the list already costs one insert; pulling
+     * the same row back UP costs the distance, because every row it passes then wants the one below
+     * it. That asymmetry is the whole of this: the shape is a drag handle, a "move to top", one item
+     * jumping in a re-sort.
+     *
+     * The check is the WHOLE range and not its edges — `firstChanged`/`lastChanged` only bracket the
+     * changes, and reading them as "the only changes" is what corrupted the reconcile before. Outside
+     * the bracket every index holds the same row object by construction; inside, the shift is verified
+     * one index at a time, so a reverse or a scatter fails on the first read and pays nothing.
+     */
+    private relocated(
+        next: Row[],
+        previous: Row[],
+        firstChanged: number,
+        lastChanged: number,
+        parent: ParentNode,
+    ): boolean {
+        const moved = previous[lastChanged]
+        if (moved === undefined || next[firstChanged] !== moved) return false
+        for (let i = firstChanged + 1; i <= lastChanged; i++) {
+            if (next[i] !== previous[i - 1]) return false
+        }
+        // Where the row is going: in front of the run it displaced, which has not moved.
+        const before = (previous[firstChanged] as Row).instance.firstNode()
+        if (before === null || before.parentNode === null) return false
+        const nodes = moved.instance.live()
+        const first = nodes[0]
+        if (first === undefined || first.parentNode === null) return false
+        for (let i = 0; i < nodes.length; i++) parent.insertBefore(nodes[i] as ChildNode, before)
         return true
     }
 
