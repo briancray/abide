@@ -134,10 +134,19 @@ export default suite({
                     const small = channel<number>({ tail: 8 })
                     const large = channel<number>({ tail: 500 })
                     const plain = vanilla.feed<number>(8)
+                    // BOTH caps by hand as well, because that is the whole claim: `feed`'s `shift`
+                    // is O(tail) per publish once the cap is reached, so a single hand-written arm
+                    // at 8 leaves "neither abide arm moves when the cap grows" asserted against a
+                    // denominator that never grew. This is the 2x2 the `run` face already carries.
+                    const plainLarge = vanilla.feed<number>(500)
                     return [
                         { label: 'abide — channel({ tail: 8 })', run: (i: number) => small.publish(i) },
                         { label: 'abide — channel({ tail: 500 })', run: (i: number) => large.publish(i) },
-                        { label: 'vanilla — push + shift', run: (i: number) => plain.publish(i) },
+                        { label: 'vanilla — push + shift, tail 8', run: (i: number) => plain.publish(i) },
+                        {
+                            label: 'vanilla — push + shift, tail 500',
+                            run: (i: number) => plainLarge.publish(i),
+                        },
                     ]
                 })(),
             },

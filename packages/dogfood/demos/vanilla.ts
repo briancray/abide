@@ -163,7 +163,7 @@ export interface VanillaStream<T> {
  */
 export function stream<T>(source: AsyncIterable<T>): VanillaStream<T> {
     let latest: T | undefined
-    let transcript: T[] = []
+    const transcript: T[] = []
     let running = true
     let finished = false
     const listeners = new Set<() => void>()
@@ -174,7 +174,10 @@ export function stream<T>(source: AsyncIterable<T>): VanillaStream<T> {
         try {
             for await (const chunk of source) {
                 latest = chunk
-                transcript = transcript.concat(chunk)
+                // PUSHED, for the reason `feed` states: nobody rebuilds the whole retention per
+                // message by hand, so a `concat` here would measure abide against its own mistake —
+                // and O(n²) over a stream is the one this file exists not to make.
+                transcript.push(chunk)
                 notify()
             }
             finished = true

@@ -131,9 +131,15 @@ export default suite({
                             },
                         },
                         {
-                            label: 'vanilla — subscribe() then off()',
+                            label: 'vanilla — subscribe(), run once, then off()',
                             run: () => {
-                                const off = plain.subscribe(() => void plain.get())
+                                // RUN ONCE, because `watch` runs its body on creation and this
+                                // suite's own `run` face asserts it. `subscribe` is a `Set.add`, so
+                                // without the call the denominator never mounts anything and the
+                                // per-binding number above is priced against a `Set.add`.
+                                const listener = (): void => void plain.get()
+                                const off = plain.subscribe(listener)
+                                listener()
                                 off()
                             },
                         },
@@ -301,8 +307,13 @@ export default suite({
                                 runs++
                             })
                             await tick()
-                            for (let i = 0; i < 100; i++) noise.set(i)
-                            await tick()
+                            // A TURN PER WRITE, the shape `memo.ts` uses for the same question:
+                            // 100 writes in one turn are batched into one flush, so the arm below
+                            // reported 1 and the card read 0-vs-1 for a gap that is 0-vs-100.
+                            for (let i = 0; i < 100; i++) {
+                                noise.set(i)
+                                await tick()
+                            }
                             return {
                                 count: runs - 1,
                                 of: 're-runs from 100 writes to what the HANDLER reads',
@@ -321,8 +332,12 @@ export default suite({
                                 runs++
                             })
                             await tick()
-                            for (let i = 0; i < 100; i++) noise.set(i)
-                            await tick()
+                            // A turn per write, as the arm above — this is the one the batching was
+                            // hiding, and 100 is what the discovered form actually costs.
+                            for (let i = 0; i < 100; i++) {
+                                noise.set(i)
+                                await tick()
+                            }
                             return { count: runs - 1, of: 're-runs from 100 writes to what the BODY reads' }
                         },
                     },
@@ -480,8 +495,14 @@ export default suite({
                             label: 'vanilla — an array of unsubscribes',
                             run: () => {
                                 const offs: (() => void)[] = []
-                                for (let i = 0; i < 50; i++)
-                                    offs.push(plain.subscribe(() => void plain.get()))
+                                for (let i = 0; i < 50; i++) {
+                                    // Run once each, for the reason the single-binding arm above
+                                    // carries: 50 `watch` bodies run, so 50 subscribes that never
+                                    // fire is not the same fifty.
+                                    const listener = (): void => void plain.get()
+                                    offs.push(plain.subscribe(listener))
+                                    listener()
+                                }
                                 for (const off of offs) off()
                             },
                         },

@@ -1065,8 +1065,13 @@ export default suite({
                     // per-row allocation budget: one object, no scan — the scan is cached on the
                     // `strings` identity a tagged template gives for free.
                     const build = (n: number): unknown => html`<li class="row">${n}</li>`
+                    // HOISTED, because the arm above gets it hoisted for free: a tagged template's
+                    // strings are cached on the call site, so rebuilding the array per op put one
+                    // allocation on the denominator that the numerator never pays — on the one card
+                    // whose whole subject is the per-row allocation count.
+                    const PLAIN_STRINGS = ['<li class="row">', '</li>']
                     const plain = (n: number): unknown => ({
-                        strings: ['<li class="row">', '</li>'],
+                        strings: PLAIN_STRINGS,
                         values: [n],
                     })
                     return [
