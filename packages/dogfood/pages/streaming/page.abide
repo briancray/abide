@@ -24,6 +24,10 @@
      this a page about 300ms. The fast one is fixed: it is a control, not a subject. -->
 <script module>
 import { route, state } from 'abide'
+import { ticks } from '../../server/rpc/ticks.ts'
+
+/** Small, because the claim is the HANDOVER and a longer transcript says nothing more about it. */
+const COUNT_FROM = 5
 
 const DEFAULT_MS = 300
 
@@ -100,6 +104,20 @@ const fast = state(slowly(FAST_MS, 'the fast load settled'))
         <p class="is-ahead">{fast}</p>
         <p class={NOTE}>Rendered after the wait. On a document render this arrived as a patch, after the shell was already on screen.</p>
     {/if}
+</div>
+
+<!-- The third lane, and the one nothing served until now: a handler that YIELDS, rendered into the
+     page. The walk drains it and writes a row per chunk, so the whole transcript is in the markup —
+     and the browser used to re-stream it from the top, because a slot is per-caller and this one is
+     cold. For a list of five that is duplicated rows; for a generated answer it is the whole
+     generation, paid twice and watched restarting.
+
+     The render seeds the TRANSCRIPT now, so the client's first read finds it and reaches nothing.
+     `e2e/streaming.e2e.ts` is what says so, by counting requests rather than by reading the rows —
+     they are identical either way, which is why this went unnoticed while the page existed. -->
+<div class={CARD} id="streamed">
+    <ol class="rows">{#for await n of ticks({ from: COUNT_FROM })}<li>{n}</li>{/for}</ol>
+    <p class={NOTE}>Every chunk the handler yielded, drained by the render and adopted by the browser — no second request.</p>
 </div>
 
 <p class="note">Static markup below both panels. A document render sends this with the shell; a navigation sends it after the slowest block above it has settled.</p>

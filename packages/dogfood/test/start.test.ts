@@ -220,7 +220,13 @@ test('a navigation carries no patch SCRIPT — the client swaps the placeholders
     // The one thing a fragment cannot reuse from the document protocol. A `<script>` the client
     // injects while parsing this itself would never run — the HTML spec makes script elements
     // inserted that way non-executable — so a fragment that shipped one would silently never patch.
-    expect(whole).not.toContain('<script')
+    //
+    // EXECUTABLE ones. This read `not.toContain('<script')` and passed only because nothing on this
+    // page was seedable: a navigation carries its seeds as its last piece, in a data block that is
+    // never executed and is not what the claim is about. The page gained a streamed rpc, the block
+    // appeared, and the assertion failed on a fact it was not making. `$p(` below is the real one —
+    // it is the call a patch script would have to make.
+    expect(whole.replace(/<script type="application\/json"[\s\S]*?<\/script>/g, '')).not.toContain('<script')
     expect(whole).not.toContain('$p(')
 
     // What it carries instead: a placeholder per deferred subtree, a bare `<template>` per patch, and
@@ -230,8 +236,19 @@ test('a navigation carries no patch SCRIPT — the client swaps the placeholders
     expect(whole).toContain('<template id="t0">')
     expect(whole).toContain('<!--abide:piece-->')
 
-    // One sentinel per piece: the in-order pass, then one per suspended panel.
-    expect(whole.split('<!--abide:piece-->').length - 1).toBe(3)
+    // One sentinel per piece: the in-order pass, then one per suspended panel, then the SEEDS. The
+    // seed piece is last and is the one this page did not used to have — nothing on it was seedable
+    // until the streamed panel arrived, so the count read as "the walk plus the panels" and happened
+    // to be right. Spelled as the sum rather than as a number, because a page gaining a fourth panel
+    // and a page gaining a second seed block are not the same change and should not fail the same way.
+    const panels = 2
+    const seedPieces = 1
+    expect(whole.split('<!--abide:piece-->').length - 1).toBe(1 + panels + seedPieces)
+    // …and the seeds are the LAST of them, which is what lets a navigation's client consume them
+    // before it commits: it holds the stream and commits when it ends, so a block written after the
+    // drain still lands first.
+    expect(whole.trimEnd().endsWith('<!--abide:piece-->')).toBe(true)
+    expect(whole.lastIndexOf('id="abide-seed"')).toBeGreaterThan(whole.lastIndexOf('<template id='))
 })
 
 test('a path that is no route is a 404, and a method that is no page falls through to one', async () => {
@@ -643,6 +660,26 @@ test('a document hands the client what the render already resolved', async () =>
     // than what a reload gives it, and every test about the markup still passes.
     const overTheWire = await (await fetch(`${app.base}__abide/rpc/users/getUser?id=42`)).json()
     expect(seeded[key]).toEqual(overTheWire)
+})
+
+test('a handler that YIELDS is handed over by its transcript', async () => {
+    // The other shape of the same recall, and the one it costs most: the walk drains the stream to
+    // build the markup, and a client whose slot is cold re-streamed it FROM THE TOP. For a list of
+    // five that is duplicated rows; for anything generated it is the whole generation, paid twice.
+    //
+    // Its VALUE is the latest chunk, so there is no one answer to seed while it runs — by the time
+    // this block is written there is, because it goes out after every deferred region settles.
+    const markup = await (await fetch(`${app.base}streaming?ms=50`)).text()
+    const seeded = seedsIn(markup)
+    const key = seedKeyIn(seeded, 'ticks/ticks?')
+
+    expect(seeded[key]).toEqual([5, 4, 3, 2, 1])
+
+    // Every chunk is in the MARKUP too, which is what makes the seed a duplication rather than the
+    // only copy — and the trade `RpcOptions.seed` exists to decline when a transcript is too big to
+    // say twice. Markers stripped for the reason the case below gives.
+    const rendered = markup.replace(/<!--[\s\S]*?-->/g, '')
+    for (const n of [5, 4, 3, 2, 1]) expect(rendered).toContain(`<li>${n}</li>`)
 })
 
 test('a declaration can decline to be handed over, and the page still renders it', async () => {
