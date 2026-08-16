@@ -191,18 +191,31 @@ test('the outcome chips read a status, and drop no case before it has one', asyn
     for (const status of green) expect(status).toBe('passing')
 
     // The DISTINGUISHING suite, and it has to be a second page: every case in `state` carries a `run`,
-    // so all 21 settle green and a chip that showed everything would pass every assertion above. The
-    // `request` cases are `server` faces — settled, and neither passing nor failed — so the two chips
-    // are the only thing that can empty this page, and "not failed" is not what `passing` means.
+    // so all 21 settle green and a chip that showed everything would pass every assertion above. Most
+    // `request` cases are `server` faces — settled, and neither passing nor failed — so "not failed"
+    // is not what `passing` means here and the chip has to prove it.
+    //
+    // The claim is that `passing` FILTERS, not that it empties. It emptied when this was written,
+    // because every case was a `server` face; the suite has since gained a `run` one and the test
+    // failed on a premise rather than on the behaviour it is named for. A count that must be both
+    // non-zero and short of the total says the same thing and survives the next case either way.
     await page.goto('/tests/request')
     await interactive(page)
     await expect(statuses.first()).toHaveText(/^server$/i, { timeout: 120_000 })
     const answered = (await statuses.allInnerTexts()).map((text) => text.trim().toLowerCase())
     expect(answered.length).toBeGreaterThan(0)
-    for (const status of answered) expect(status).toBe('server')
+    expect(answered, 'the suite that distinguishes has to hold a server face').toContain('server')
 
     await page.getByRole('button', { name: 'passing', exact: true }).click()
-    await expect(page.getByText('No case here is passing.')).toBeVisible()
+    const shown = (await statuses.allInnerTexts()).map((text) => text.trim().toLowerCase())
+    // BOTH bounds, and the lower one is not a courtesy: with none shown the loop below passes
+    // vacuously and `0 < answered.length` passes too, so a chip that dropped every row would be
+    // green on all three lines.
+    expect(shown.length, 'the passing chip dropped every row').toBeGreaterThan(0)
+    expect(shown.length, 'a chip that showed everything would pass every line above').toBeLessThan(
+        answered.length,
+    )
+    for (const status of shown) expect(status).toBe('passing')
     await page.getByRole('button', { name: 'failing', exact: true }).click()
     await expect(page.getByText('Nothing failed.')).toBeVisible()
 })
