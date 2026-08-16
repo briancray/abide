@@ -23,7 +23,16 @@
 
 import { markSource } from './internal/BRANDS.ts'
 import { admit, Bounded, release, touch } from './internal/ceilings.ts'
-import { caught, type Cell, derive, internals, isPending, lastly, type Memo, untrack } from './internal/graph.ts'
+import {
+    caught,
+    type Cell,
+    derive,
+    internals,
+    isPending,
+    lastly,
+    type Memo,
+    untrackCall,
+} from './internal/graph.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { isAsyncIterable, isThenable } from './internal/probes.ts'
 import { disposeWith, storeFor } from './internal/scopes.ts'
@@ -276,7 +285,7 @@ function keyedMemo<Args, T>(
     function start(args: Args, slot: Slot<T>): void {
         let produced: T | Promise<T>
         try {
-            produced = untrack(() => body(args))
+            produced = untrackCall(body, args)
         } catch (error) {
             // …but a read with nothing to serve YET is not a throw the slot settles: the body has not
             // run, so it is not loaded and it has not failed. Recorded as a failure the slot never

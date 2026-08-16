@@ -1074,7 +1074,10 @@ function kicker(node: Node, beforeRead: (() => void) | null): () => void {
             kickedBy = current
             try {
                 if (beforeRead !== null) beforeRead()
-                if (node.fn !== null) untrack(() => node.pull())
+                // Threaded, not captured: a kick runs on EVERY probe, and `iterate` reads eight of
+                // them per chunk — the captured form allocated one closure per probe per chunk to
+                // make a call the engine can make directly. The same reason that loop hoists its own.
+                if (node.fn !== null) untrackCall(pullNode, node)
             } catch {
                 // Starting is never where a failure surfaces — a signal or a throw out of the body is
                 // reported by the read that renders, exactly as `start` in `html.ts` leaves it.
@@ -1180,8 +1183,17 @@ function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) |
     const target = read as unknown as {
         then: (onFulfilled?: unknown, onRejected?: unknown) => Promise<unknown>
     }
-    target.then = (onFulfilled, onRejected) =>
-        settledPromise(node).then(onFulfilled as never, onRejected as never)
+    // Branched ONCE per cell, where `beforeRead` is already in hand: awaiting a cold slot must start
+    // it, or it resolves `undefined` forever. `makeCell` used to re-wrap this write with a `bind` and
+    // a second closure, so a keyed slot paid three function objects per row for the one call.
+    target.then =
+        beforeRead === null
+            ? (onFulfilled, onRejected) =>
+                  settledPromise(node).then(onFulfilled as never, onRejected as never)
+            : (onFulfilled, onRejected) => {
+                  beforeRead()
+                  return settledPromise(node).then(onFulfilled as never, onRejected as never)
+              }
     // The SAME two function objects on every cell — see `Cell.catch`. Assigned here rather than left
     // to a prototype because a cell is a function and mutating a function's prototype deoptimises it.
     const verbs = read as unknown as { catch: unknown; finally: unknown }
@@ -1568,16 +1580,6 @@ function makeCell(node: Node, beforeRead: (() => void) | null): State<unknown> {
     read.peek = () => node.value
     read.invalidate = () => resetNode(node)
     attachAsync(read, node, beforeRead)
-    if (beforeRead !== null) {
-        const settled = read.then.bind(read) as (a?: unknown, b?: unknown) => Promise<unknown>
-        const target = read as unknown as {
-            then: (a?: unknown, b?: unknown) => Promise<unknown>
-        }
-        target.then = (onFulfilled, onRejected) => {
-            beforeRead() // awaiting a cold slot must start it, or it resolves `undefined` forever
-            return settled(onFulfilled, onRejected)
-        }
-    }
     return read
 }
 
@@ -1847,11 +1849,11 @@ export function untrack<T>(fn: () => T): T {
 // captured form allocates one closure per slot per row per update — on a thousand-row list that is a
 // thousand allocations to make a call the engine could have made directly. Internal, because the
 // argless `untrack` is the spelling authors want and this one only pays off in a loop.
-export function untrackCall<A>(fn: (arg: A) => void, arg: A): void {
+export function untrackCall<A, T>(fn: (arg: A) => T, arg: A): T {
     const previous = current
     current = null
     try {
-        fn(arg)
+        return fn(arg)
     } finally {
         current = previous
     }
