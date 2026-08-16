@@ -94,6 +94,26 @@ export default suite({
                     template('<script>const n = state(0)</script><p>{n}</p>'),
                     '<p>${n}</p>',
                 )
+                // "Alone" is a question about TOKENS, not about the source text. `code`'s fast path
+                // in `emit.ts` tests `IDENTIFIER` against the raw string, so one identifier plus
+                // anything at all — a comment is enough — used to miss it and fall through to a
+                // read. In a component prop that is silent and permanent: the child is handed a
+                // NUMBER, `cellProps` wraps it in a fresh `state()`, and neither side's writes ever
+                // reach the other again. Correct on the first paint, dead after it.
+                is(
+                    'a trailing comment does not make it a read',
+                    template(
+                        "<script>import Child from './child.abide'\nconst n = state(0)</script><Child value={n /* the running total */}/>",
+                    ),
+                    '${() => component(Child, { value: n /* the running total */, children: undefined })}',
+                )
+                is(
+                    '…and composing it still reads, comment or not',
+                    template(
+                        "<script>import Child from './child.abide'\nconst n = state(0)</script><Child value={n + 1}/>",
+                    ),
+                    '${() => component(Child, { value: n() + 1, children: undefined })}',
+                )
                 is(
                     'a member read',
                     template('<script>const s = state("ab")</script><p>{s.length}</p>'),

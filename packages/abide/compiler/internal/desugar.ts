@@ -716,6 +716,24 @@ export function desugar(
             inObjectLiteral(cursor.tokens, cursor.nesting, i, expression)
         reads.push({ key: name, start: token.start, end: token.end, keyed: false })
         const local = hoisted.get(name)
+        // Held alone as the whole region, the cell itself is what the caller wants — `bind:`, `&ref`
+        // and a component prop need the cell and not its value. A hoisted read still wins, for the
+        // reason the keyed branch gives: the enclosing condition already subscribed to it.
+        //
+        // This is what `hold` says it does, and the keyed branch has asked it since it was written.
+        // The plain branch never did: `code`'s `IDENTIFIER.test` fast path in `emit.ts` was standing
+        // in, and that tests the raw SOURCE, so a region that is one identifier plus ANYTHING —
+        // a comment, a paren, a `!` — fell through to a read. `<Child value={count /* note */}/>`
+        // handed the child a number, `cellProps` made a fresh `state()` out of it, and no write on
+        // either side ever reached the other. Correct on the first paint, dead after it.
+        if (
+            local === undefined &&
+            options.hold === true &&
+            token.start === (tokens[0] as Token).start &&
+            next === undefined
+        ) {
+            continue
+        }
         const peeking = selfReads.has(i) || (insideFunction !== null && insideFunction[i] === 0)
         const read = local ?? (peeking ? `${name}.peek()` : `${name}()`)
         edits.push({
