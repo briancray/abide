@@ -202,6 +202,14 @@ Probes never throw and never start work.
 | `x.error` | `() => unknown` | The failure it ended with, if it failed. |
 | `x.isError` | `(error: unknown, name: string) => boolean` | Whether a caught failure is the one named — directly, or wrapped as another's `cause`. The NAME, so it answers over a wire. |
 
+**A probe does not repaint markup it is ADOPTING.** During hydration a producer that probed an
+unlanded load keeps what the server sent rather than painting its placeholder over it — the markup
+under the claim was built from the settled value, either awaited inline or patched in before this
+side ran, so painting would be a flash back to a state nobody saw. The claim is kept rather than
+dropped: the probe subscribed that region to the load, so the settle re-runs it and ADOPTS the same
+markup, at no write. Only while adopting — a `mount` has no markup to keep, so the same region paints
+its placeholder and then the answer.
+
 **A probe KICKS the load it reports.** Asking about a value is a way of asking for it: a page writes
 `{#if x.pending()}` because it is about to show `x`. On a cold slot a probe used to answer `false`,
 which reads as "no load is running" and meant "none has begun" — a different fact wearing the same

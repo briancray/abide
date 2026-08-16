@@ -30,7 +30,17 @@ import {
     started,
     type TemplateResult,
 } from '$shared/html.ts'
-import { type Node, rerun, type State, swallowed, untrack, untrackCall, watchNode } from '$shared/internal/graph.ts'
+import {
+    forgetProbedLoad,
+    hasProbedLoad,
+    type Node,
+    rerun,
+    type State,
+    swallowed,
+    untrack,
+    untrackCall,
+    watchNode,
+} from '$shared/internal/graph.ts'
 import { CLOSE_FORM, closeData, PLACEHOLDER_TAG, SLOT_CLOSE, SLOT_OPEN } from '$shared/internal/MARKERS.ts'
 import { isAsyncIterable, isThenable } from '$shared/internal/probes.ts'
 import { unwrap } from '$shared/internal/slots.ts'
@@ -241,6 +251,16 @@ export class ChildPart {
 
         const claimed = this.claimed
         if (claimed !== null) {
+            // The PROBE twin of `swallowed()` in the slot effect, and the same hazard: a producer
+            // that asked about an unlanded load built a placeholder, and the markup under this claim
+            // was built from the settled value — the server awaited it, or patched it in before this
+            // side ever ran. Painting now is a flash back to a state nobody saw.
+            //
+            // The claim is KEPT rather than cleared: the probe subscribed this effect to the load,
+            // so the settle re-runs the producer and `take` adopts against the very markup already
+            // here. That is also why nothing is registered for the settle — the subscription the
+            // probe made IS the registration.
+            if (hasProbedLoad()) return
             this.claimed = null
             try {
                 this.take(claimed, value)
@@ -1707,6 +1727,7 @@ class Instance {
                 }
                 const slot = i
                 effects[i] = watchNode(() => {
+                    forgetProbedLoad()
                     const produced = unwrap((this.lastValues as readonly unknown[])[slot])
                     // A thunk that CAUGHT a pending read hands back output built from a read that
                     // never happened. Not painted: `run` throws the signal on its behalf once this

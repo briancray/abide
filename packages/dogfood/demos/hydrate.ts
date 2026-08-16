@@ -9,7 +9,7 @@
 // `classifySlots` is already the one classifier both substrates read, so the marker contract is
 // declared once (`$shared/internal/MARKERS.ts`) rather than kept true by hand in two files.
 
-import { html, state, type State, type TemplateResult } from 'abide'
+import { html, memo, state, type State, type TemplateResult } from 'abide'
 import { awaited, component, keyed } from 'abide/runtime'
 import { renderDocument, renderToString } from 'abide/server/internal'
 import { shell } from 'abide/server/internal'
@@ -986,6 +986,49 @@ export default suite({
                 is('and so is what the patch brought', root.querySelector('b'), bold)
                 log('work to adopt a patched document', nonZero(work))
                 body.remove()
+            },
+        },
+
+        {
+            title: 'a PROBED region hydrates onto the answer, not back to its placeholder',
+            note: 'The case above is the `awaited` shape, and `ChildPart` has a branch for it: whatever the server sent for that subtree is already the settled arm, so hydration takes it rather than asking the probe again. A region that defers because it PROBED has no such marker — it is an ordinary thunk that happened to ask — and the client that runs it has a COLD cell, because cells do not cross the wire. So the probe kicks, reports `pending`, and the first pass paints the placeholder over the answer the patch already installed: value, then `waiting`, then value. Correct output the whole way, which is why the assertion is the WRITE COUNT. The cell is invalidated before hydrating because one process holds both halves here; a browser gets the cold cell for free.',
+            async run({ is, log }) {
+                const answer = memo(async () => {
+                    await sleep(5)
+                    return 'landed'
+                })
+                // No `awaited`, no `{#if}` — the thunk a ternary compiles to.
+                const view = (): TemplateResult =>
+                    html`<main>${() => (answer.pending() ? 'waiting' : answer())}</main>`
+
+                const body = await servedDocument(view)
+                const root = body.querySelector('slot') as HTMLElement
+                is('the patch landed', root.querySelector('main')?.textContent, 'landed')
+
+                // What a browser has: markup carrying the answer, and a cell that has never loaded.
+                answer.invalidate()
+
+                const work = measure(() => void hydrate(root, view))
+                is('no text rewritten', work.textWrite, 0)
+                is('nothing removed', work.remove, 0)
+                is('the answer is still on screen', root.querySelector('main')?.textContent, 'landed')
+                log('work to adopt a probed region', nonZero(work))
+                await sleep(20)
+                is('and the settle adopted rather than repainted', work.textWrite, 0)
+                body.remove()
+
+                // The guard is CONDITIONAL on adopting, and this is the half that says so: with no
+                // markup to keep, the same view must paint its placeholder and then the answer.
+                // Made unconditional — the obvious simplification — a mounted page shows nothing
+                // while it loads and every test above still passes.
+                answer.invalidate()
+                const fresh = container()
+                const live = mount(fresh, view)
+                is('a mounted region shows the placeholder', fresh.textContent, 'waiting')
+                await sleep(20)
+                is('…and then the answer', fresh.textContent, 'landed')
+                live.dispose()
+                fresh.remove()
             },
         },
     ],

@@ -918,11 +918,18 @@ export function forgetProbedLoad(): void {
     probedPending = null
 }
 
+/** Did the producer just probe a load that has not landed? */
+export function hasProbedLoad(): boolean {
+    return probedPending !== null
+}
+
 /**
  * The settle of a load the producer just PROBED and found unlanded, or null if it probed none.
  *
  * A promise rather than the cell, because that is all a caller does with it, and it keeps `Node` off
- * an exported signature.
+ * an exported signature. Separate from `hasProbedLoad` because asking BUILDS that promise, and on a
+ * rejecting load a promise nobody awaits is an unhandled rejection — so a caller that only wants the
+ * FACT must have a way to ask that costs nothing. Both callers want one or the other, never both.
  */
 export function probedLoad(): Promise<unknown> | null {
     return probedPending === null ? null : settledPromise(probedPending)
