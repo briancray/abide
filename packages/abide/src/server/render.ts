@@ -42,7 +42,15 @@ import {
 } from '$shared/html.ts'
 import { abideLog } from '$shared/log.ts'
 import { numberKnob } from '$shared/internal/knobs.ts'
-import { isPending, type Pending, retryable, retryableCall, settledOf } from '$shared/internal/graph.ts'
+import {
+    forgetProbedLoad,
+    isPending,
+    type Pending,
+    probedLoad,
+    retryable,
+    retryableCall,
+    settledOf,
+} from '$shared/internal/graph.ts'
 import {
     closeMarker,
     OPEN_MARKER,
@@ -424,13 +432,84 @@ function armsOf(node: Awaited, settled: unknown, failed: boolean): Renderable {
  */
 function emitProduced(produce: () => Renderable, context: RenderContext, out: Out): Rest {
     let produced: Renderable
+    forgetProbedLoad()
     try {
         produced = retryable(produce)
     } catch (error) {
         if (!isPending(error)) throw error
         return awaitPending(error, produce, context, out)
     }
+    // It PROBED a load that has not landed, so it had something to show and showed it: `produced` is
+    // the placeholder, by the same rule an `{#if x.pending()}` arm is one — asking about a load is
+    // having something to show while it runs. The difference is that nothing had to RECOGNISE the
+    // spelling; a ternary, a negated probe and a `memo` over one all arrive here identically.
+    //
+    // A plain read does not reach this: it signals, and `awaitPending` above blocks as it always did.
+    // The document check comes FIRST, and not for speed: `probedLoad` builds the settle promise, and
+    // on a rejecting load that promise rejects. Asked for where there is nowhere to patch — a PLAIN
+    // walk, which is what a placeholder and every `renderToString` are — nothing would await it, and
+    // a load that fails takes the process down with an unhandled rejection instead of rendering the
+    // failure arm it was built to render.
+    if (context.document !== null) {
+        const settling = probedLoad()
+        if (settling !== null) return emitProbed(produce, produced, settling, context, out)
+    }
     return emit(produced, context, out)
+}
+
+/**
+ * A region that probed an unlanded load: send what it made, and patch in what it makes once the load
+ * settles.
+ *
+ * The `{#if}` twin of this is `emitDeferred`, and the shape is simpler here because there are no
+ * ARMS — one producer, called again. What it produces the second time is whatever its own probes
+ * decide, so a region asking about two loads defers again on the second and patches twice.
+ */
+function emitProbed(
+    produce: () => Renderable,
+    placeholder: Renderable,
+    settling: Promise<unknown>,
+    context: RenderContext,
+    out: Out,
+): Rest {
+    const document = context.document as DocumentContext
+    const id = document.nextId++
+    document.deferred.push({
+        id,
+        html: (async () => {
+            try {
+                await settling
+            } catch {
+                // Waited out, not handled — the re-run below reports it from the author's own
+                // expression, exactly as `awaitedProduce` leaves a failed load.
+            }
+            try {
+                let again: Renderable
+                try {
+                    again = retryable(produce)
+                } catch (error) {
+                    if (!isPending(error)) throw error
+                    again = (await awaitedProduce(error, produce, out)) as Renderable
+                }
+                return await renderToString(again, { hydratable: context.hydratable })
+            } catch (error) {
+                return deferralFailed(id, error, 'threw while re-running its region')
+            }
+        })(),
+    })
+    out.text += `<${PLACEHOLDER_TAG} id="${placeholderId(id)}">`
+    // PLAIN: the placeholder is markup the client adopts as one piece and replaces whole, so it must
+    // not defer again from inside itself. Already produced, so this emits the VALUE rather than
+    // calling the thunk a second time.
+    const waiting = emit(placeholder, PLAIN, out)
+    if (waiting !== null) {
+        return then_(waiting, () => {
+            out.text += PLACEHOLDER_CLOSE
+            return null
+        })
+    }
+    out.text += PLACEHOLDER_CLOSE
+    return null
 }
 
 /**

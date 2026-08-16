@@ -1317,5 +1317,40 @@ export default suite({
                 is('all three were in flight together', peakDeferring(), 3)
             },
         },
+        {
+            title: 'a region that PROBED defers, whatever the spelling',
+            note: 'Deferring used to be decided by the compiler matching `{#if <cell>.pending()}` as the whole of a chain’s first test, so every other spelling fell through to a read and BLOCKED — right markup, one round trip later, and no way to say which you wanted. The walk decides now: a producer that asked about a load and did not get one has, by that fact, something to show while it runs, so what it made is the placeholder and it is called again on the settle. A ternary is the case no regex reached. A plain read is the case this must NOT catch — it signals rather than probing, so it still blocks and its markup is complete, which is what a reader running no scripts needs.',
+            async run({ is }) {
+                const probed = memo(async () => {
+                    await sleep(20)
+                    return 'PROBED'
+                })
+                const read = memo(async () => {
+                    await sleep(20)
+                    return 'READ'
+                })
+
+                let deferring = ''
+                for await (const chunk of renderDocument('<title>t</title>', () =>
+                    // No `{#if}`, no `awaited` — the thunk the compiler emits for a ternary.
+                    html`<p>${() => (probed.pending() ? 'waiting' : probed())}</p>`,
+                )) {
+                    deferring += chunk
+                }
+                is('the placeholder went out', deferring.includes('waiting'), true)
+                // `<slot-s` written down rather than imported, for the reason the case above gives:
+                // a renamed tag makes this vacuous rather than wrong, and the two assertions
+                // bracketing it are what would fail then.
+                is('…in a patchable slot', deferring.includes('<slot-s'), true)
+                is('…and the settled value followed it', deferring.includes('PROBED'), true)
+
+                let blocking = ''
+                for await (const chunk of renderDocument('<title>t</title>', () => html`<p>${() => read()}</p>`)) {
+                    blocking += chunk
+                }
+                is('a plain read blocks instead', blocking.includes('READ'), true)
+                is('…with no placeholder to patch', blocking.includes('<slot-s'), false)
+            },
+        },
     ],
 })

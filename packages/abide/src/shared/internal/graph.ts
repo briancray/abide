@@ -897,10 +897,6 @@ function settledPromise(node: Node): Promise<unknown> {
     return Promise.resolve(node.value)
 }
 
-// A cell with no load to kick — a plain `state(5)`, or a `state(promise)` whose promise the argument
-// already constructed — still calls through, so the probe closures have one shape rather than two.
-const NO_KICK = (): void => {}
-
 // Cleared only by `internals.quietly` — see there for why abide's own callers need it.
 let kicking = true
 
@@ -908,32 +904,67 @@ let kicking = true
 // from one that landed under it. Null outside a kick, which is every path but the one below.
 let kickedBy: Node | null = null
 
+// The last load a PROBE reported as not-yet-landed. What a server walk reads to learn that a region
+// asked about a load and therefore has something to show while it runs — the fact `deferrable` reads
+// off the SPELLING of an `{#if}` head, available here for any spelling at all.
+//
+// A single slot rather than a set: the walk asks one question, "is this region deferrable", and one
+// unsettled load is enough to answer it. Whichever is recorded last is the one awaited, and the arm
+// re-runs after it, so a region probing two loads defers again on the second.
+let probedPending: Node | null = null
+
+/** Forget what the last producer probed — the walk brackets each region with this. */
+export function forgetProbedLoad(): void {
+    probedPending = null
+}
+
 /**
- * What a probe does before it answers: START the work, without taking the value.
+ * The settle of a load the producer just PROBED and found unlanded, or null if it probed none.
  *
- * The two kinds of not-yet-started are different nodes, which is why this is not just `beforeRead`.
- * A KEYED slot kicks through `beforeRead`. A DERIVATION holds its load in a body that has not run,
- * and the tracker a probe reads is only written once it does — so a probe that skipped the pull
- * reported `false` on an argless `memo` forever, which is the same lie this change is removing.
+ * A promise rather than the cell, because that is all a caller does with it, and it keeps `Node` off
+ * an exported signature.
+ */
+export function probedLoad(): Promise<unknown> | null {
+    return probedPending === null ? null : settledPromise(probedPending)
+}
+
+/**
+ * What a probe does before it answers: START the work without taking the value, and NOTE the load if
+ * it has not landed.
+ *
+ * The two kinds of not-yet-started are different nodes, which is why the start is not just
+ * `beforeRead`. A KEYED slot kicks through `beforeRead`. A DERIVATION holds its load in a body that
+ * has not run, and the tracker a probe reads is only written once it does — so a probe that skipped
+ * the pull reported `false` on an argless `memo` forever, which is the same lie this change removed.
  *
  * UNTRACKED, because the probes carry their own signals: subscribing the asker to the VALUE here
  * would wake a region that only asked `pending()` on every value that lands after.
+ *
+ * The note is what a server walk reads back, and it is taken AFTER the start, so a slot that was
+ * cold a line ago is reported as the in-flight load it now is. There is no `NO_KICK` arm any more: a
+ * `state(promise)` has nothing to start and is pending the whole time, so an early return for
+ * "nothing to kick" would hide exactly the load a deferring region is built around. A cell that
+ * never met a promise has no tracker and pays one null check for all of it.
  */
 function kicker(node: Node, beforeRead: (() => void) | null): () => void {
-    if (beforeRead === null && node.fn === null) return NO_KICK
+    const startable = beforeRead !== null || node.fn !== null
     return () => {
         if (!kicking) return
-        const previous = kickedBy
-        kickedBy = current
-        try {
-            if (beforeRead !== null) beforeRead()
-            if (node.fn !== null) untrack(() => node.pull())
-        } catch {
-            // Starting is never where a failure surfaces — a signal or a throw out of the body is
-            // reported by the read that renders, exactly as `start` in `html.ts` leaves it.
-        } finally {
-            kickedBy = previous
+        if (startable) {
+            const previous = kickedBy
+            kickedBy = current
+            try {
+                if (beforeRead !== null) beforeRead()
+                if (node.fn !== null) untrack(() => node.pull())
+            } catch {
+                // Starting is never where a failure surfaces — a signal or a throw out of the body is
+                // reported by the read that renders, exactly as `start` in `html.ts` leaves it.
+            } finally {
+                kickedBy = previous
+            }
         }
+        const track = node.asyncTrack
+        if (track !== null && track.pending.value === true) probedPending = node
     }
 }
 
