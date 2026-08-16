@@ -642,7 +642,7 @@ is sugar over it, not a replacement.
 
 | Form | Meaning |
 | --- | --- |
-| `{source}` | The identifier IS the whole expression → the **cell** is handed over. A slot renders its value; a prop or a `bind:` receives the cell. "Whole" is a question about TOKENS, so a comment or whitespace around the name does not make it a read — `{count /* note */}` still hands over the cell. A parenthesised `{(count)}` does not yet, and reads |
+| `{source}` | The identifier IS the whole VALUE → the **cell** is handed over. A slot renders its value; a prop or a `bind:` receives the cell. A wrapper that cannot change WHICH cell it is comes off first — balanced parens, a trailing `!`, an `as T` / `satisfies T` tail — so `{count}`, `{count /* note */}`, `{(count)}`, `{count!}` and `{count as T}` all hand over the same cell. Composing it is still a read, wrapper or not: `{(count) + 1}` and `{f(count)}` read |
 | `{m(args)}`, `{m(args).pages}` | A **keyed** memo is read by its CALL the way a cell is read by its name — the handle IS the cell, so no trailing `()` |
 | `{source + 1}`, `{source.length}` | Used as part of an expression → a **read**. In a `<script>`'s own statements it is `peek()` instead — see below |
 | `source = v` | A write |

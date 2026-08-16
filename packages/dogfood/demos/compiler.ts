@@ -114,6 +114,28 @@ export default suite({
                     ),
                     '${() => component(Child, { value: n() + 1, children: undefined })}',
                 )
+                // "Whole" means the whole VALUE, so a wrapper that cannot change WHICH cell this is
+                // comes off first. Each of these failed for a different reason — a token in front, a
+                // token behind, a type tail — and `n!` is the one that bites: silencing a strict-null
+                // complaint on a prop killed the binding, because `n()!` type-checks and paints
+                // correctly exactly once.
+                const held = (hole: string): string =>
+                    template(`<script>import Child from './child.abide'\nconst n = state(0)</script><Child value={${hole}}/>`)
+                for (const hole of ['(n)', 'n!', '((n))', 'n as never', '(n)!']) {
+                    is(
+                        `held through a wrapper: ${hole}`,
+                        held(hole),
+                        `\${() => component(Child, { value: ${hole}, children: undefined })}`,
+                    )
+                }
+                // The other side: an unbalanced paren is somebody else's, and a wrapper around a
+                // COMPOSED expression does not make it a hand-over.
+                is('a call around it still reads', held('f(n)'), '${() => component(Child, { value: f(n()), children: undefined })}')
+                is(
+                    'and parens around an expression still read',
+                    held('(n) + 1'),
+                    '${() => component(Child, { value: (n()) + 1, children: undefined })}',
+                )
                 is(
                     'a member read',
                     template('<script>const s = state("ab")</script><p>{s.length}</p>'),

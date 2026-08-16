@@ -726,14 +726,7 @@ export function desugar(
         // a comment, a paren, a `!` — fell through to a read. `<Child value={count /* note */}/>`
         // handed the child a number, `cellProps` made a fresh `state()` out of it, and no write on
         // either side ever reached the other. Correct on the first paint, dead after it.
-        if (
-            local === undefined &&
-            options.hold === true &&
-            token.start === (tokens[0] as Token).start &&
-            next === undefined
-        ) {
-            continue
-        }
+        if (local === undefined && options.hold === true && namesWholeRegion(tokens, i, inType)) continue
         const peeking = selfReads.has(i) || (insideFunction !== null && insideFunction[i] === 0)
         const read = local ?? (peeking ? `${name}.peek()` : `${name}()`)
         edits.push({
@@ -766,6 +759,42 @@ function opensCall(cursor: Cursor, at: number): boolean {
     const past = closeAngle(tokens, at)
     if (past <= at + 1) return false
     return tokens[past]?.kind === SyntaxKind.OpenParenToken
+}
+
+/** `as` and `satisfies` themselves: `types.ts` marks what FOLLOWS one, never the keyword. */
+const TYPE_TAIL = new Set(['as', 'satisfies'])
+
+/**
+ * Is the name at `at` the whole VALUE of this region — the question `hold` actually asks?
+ *
+ * Not "the only token": a wrapper that cannot change WHICH cell this is has to come off first.
+ * Balanced parens around it, a trailing `!`, and an `as T` / `satisfies T` tail are all punctuation
+ * on the name, and each of them used to turn a hand-over into a read. `{count!}` is the one that
+ * bites — someone silences a strict-null complaint on a prop and the binding dies, because
+ * `count()!` type-checks, paints correctly once, and never updates again.
+ *
+ * Comments and whitespace need no arm here: the scanner emits no token for either, which is why
+ * `{count /* n *\/}` already held.
+ */
+function namesWholeRegion(tokens: Token[], at: number, inType: Uint8Array): boolean {
+    let opens = 0
+    for (let i = 0; i < at; i++) {
+        if ((tokens[i] as Token).kind !== SyntaxKind.OpenParenToken) return false
+        opens++
+    }
+    let closes = 0
+    for (let i = at + 1; i < tokens.length; i++) {
+        const token = tokens[i] as Token
+        if (inType[i] === 1 || TYPE_TAIL.has(token.text)) continue
+        if (token.kind === SyntaxKind.ExclamationToken) continue
+        if (token.kind === SyntaxKind.CloseParenToken) {
+            closes++
+            continue
+        }
+        return false
+    }
+    // Unbalanced means the parens are somebody else's — `f(count)` opens one this name does not own.
+    return opens === closes
 }
 
 /**
