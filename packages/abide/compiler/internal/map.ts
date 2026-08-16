@@ -71,9 +71,12 @@ export function extract(code: string, source: string): { code: string; segments:
     return { code: out, segments }
 }
 
+// The same forward `indexOf` walk `extract` above takes, and for the same reason: `source[i]`
+// materialises a one-character string per byte of the whole `.abide` file to answer a question
+// `indexOf` answers per LINE.
 export function startsOf(source: string): number[] {
     const starts = [0]
-    for (let i = 0; i < source.length; i++) if (source[i] === '\n') starts.push(i + 1)
+    for (let at = source.indexOf('\n'); at !== -1; at = source.indexOf('\n', at + 1)) starts.push(at + 1)
     return starts
 }
 

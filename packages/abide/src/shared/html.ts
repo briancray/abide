@@ -268,10 +268,15 @@ export function component<P extends Record<string, unknown>>(
  * What does NOT get a cell is `passedThrough`'s question.
  */
 export function cellProps(props: Record<string, unknown>): Record<string, unknown> {
-    const made: Record<string, unknown> = {}
+    // COPIED first, then overwritten in place: the compiler emits the call site's props as one
+    // literal, so the spread inherits that map in a step and each `state()` lands on a key that
+    // already exists. Grown key-by-key it was one map transition per prop per row, and the record
+    // `writeProps` reads on every later pass had a map built by the prop COUNT rather than by a
+    // construction site. A pass-through prop is already in place and is not stored again.
+    const made: Record<string, unknown> = { ...props }
     for (const name in props) {
         const value = props[name]
-        made[name] = passedThrough(value) ? value : state(value)
+        if (!passedThrough(value)) made[name] = state(value)
     }
     return made
 }

@@ -474,7 +474,7 @@ function leading(text: string): number {
 function parseTag(reader: Reader): Node {
     const start = reader.at
     reader.at++ // '<'
-    const nameEnd = scanWhile(reader, /[\w:.-]/)
+    const nameEnd = scanWhile(reader, TAG_NAME_CHAR)
     const name = reader.source.slice(start + 1, nameEnd)
     reader.at = nameEnd
 
@@ -552,7 +552,7 @@ function parseAttributes(reader: Reader): Attribute[] {
         }
 
         const nameStart = reader.at
-        const nameEnd = scanWhile(reader, /[\w:@.$-]/)
+        const nameEnd = scanWhile(reader, ATTRIBUTE_NAME_CHAR)
         if (nameEnd === nameStart) fail(reader, `unexpected \`${char}\` in a tag`)
         const name = reader.source.slice(nameStart, nameEnd)
         reader.at = nameEnd
@@ -581,7 +581,7 @@ function parseAttributes(reader: Reader): Attribute[] {
         }
         // Unquoted literal: `type=text`.
         const literalStart = reader.at
-        const literalEnd = scanWhile(reader, /[^\s>]/)
+        const literalEnd = scanWhile(reader, UNQUOTED_VALUE_CHAR)
         reader.at = literalEnd
         attributes.push({
             kind: 'static',
@@ -595,6 +595,7 @@ function parseAttributes(reader: Reader): Attribute[] {
 function parseQuoted(reader: Reader, name: string, quote: string): Attribute {
     reader.at++ // the opening quote
     const parts: (string | Expr)[] = []
+    const quoteCode = quote.charCodeAt(0)
     let literal = ''
     while (reader.at < reader.source.length) {
         const char = reader.source[reader.at] as string
@@ -628,8 +629,18 @@ function parseQuoted(reader: Reader, name: string, quote: string): Attribute {
             reader.at = end + 1
             continue
         }
-        literal += char
-        reader.at++
+        // The common shape of an attribute value is a run holding neither the quote nor `{` — taken
+        // in one slice rather than a string index and a rope append per character, which is the scan
+        // `parseNodes` already takes over markup. From `at + 1`: this character is neither, or one of
+        // the two arms above would have consumed it.
+        let run = reader.at + 1
+        while (run < reader.source.length) {
+            const code = reader.source.charCodeAt(run)
+            if (code === 123 /* { */ || code === quoteCode) break
+            run++
+        }
+        literal += reader.source.slice(reader.at, run)
+        reader.at = run
     }
     fail(reader, `unterminated ${quote} in an attribute value`)
 }
@@ -885,8 +896,18 @@ function parseDefine(reader: Reader, rest: string, open: number): Node {
 
 // --- small readers ---------------------------------------------------------
 
+// HOISTED, because a regex literal is a fresh object every time it is EVALUATED: inside
+// `skipSpace`'s loop condition that was one allocation per whitespace character, and at
+// `scanWhile`'s three call sites one per tag and per attribute. Kept as regexes rather than
+// charCode compares so the classes still mean exactly what they meant — `\s` includes the
+// non-ASCII spaces, and a parser is the wrong place for a sweep to narrow a character class.
+const WHITESPACE = /\s/
+const TAG_NAME_CHAR = /[\w:.-]/
+const ATTRIBUTE_NAME_CHAR = /[\w:@.$-]/
+const UNQUOTED_VALUE_CHAR = /[^\s>]/
+
 function skipSpace(reader: Reader): void {
-    while (reader.at < reader.source.length && /\s/.test(reader.source[reader.at] as string)) reader.at++
+    while (reader.at < reader.source.length && WHITESPACE.test(reader.source[reader.at] as string)) reader.at++
 }
 
 function scanWhile(reader: Reader, pattern: RegExp): number {
