@@ -16,7 +16,7 @@
 // definition of exact, because the language does not have another one.
 
 import { SyntaxKind } from 'typescript/unstable/ast'
-import type { Token } from './lex.ts'
+import { ENDS_EXPRESSION, type Token } from './lex.ts'
 import { closes, TypeReader } from './shape.ts'
 
 /** Words that begin a declaration whose whole tail is types. */
@@ -24,6 +24,17 @@ const TYPE_STATEMENTS = new Set(['interface', 'declare'])
 
 /** After one of these, what follows is a type — a cast, or a class heritage clause. */
 const TYPE_OPERATORS = new Set(['as', 'satisfies', 'implements'])
+
+/**
+ * What may sit BEFORE one of those and still leave it a type operator. All three are contextual
+ * keywords, so the text alone says nothing: `{ as: 1 }`, `row.as` and `const as = 1` are ordinary
+ * JavaScript, and reading them as casts made the whole rest of the expression a type region —
+ * which both desugar passes skip, so a cell inside it was never read and nothing reported it.
+ *
+ * `ENDS_EXPRESSION` is the operand test the lexer already uses to tell division from a regex.
+ * `>` is not in it and is added here for the one shape that needs it, `class C<T> implements I`.
+ */
+const OPERAND_BEFORE = new Set<SyntaxKind>([...ENDS_EXPRESSION, SyntaxKind.GreaterThanToken])
 
 /**
  * One byte per token: 1 where the token is part of a type.
@@ -76,8 +87,9 @@ export function typeRegions(
             continue
         }
 
-        // `x as T`, `x satisfies T`, `class C implements I`.
-        if (TYPE_OPERATORS.has(text) && tokens[i - 1] !== undefined) {
+        // `x as T`, `x satisfies T`, `class C implements I` — and only where something an operand
+        // could end sits in front, or the word is a property, a key or a name of the same spelling.
+        if (TYPE_OPERATORS.has(text) && OPERAND_BEFORE.has((tokens[i - 1] as Token | undefined)?.kind as SyntaxKind)) {
             mark(i + 1, types.extent(i + 1))
             continue
         }

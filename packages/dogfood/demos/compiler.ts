@@ -391,6 +391,51 @@ export default suite({
         },
 
         {
+            title: '`as` is a contextual keyword, so a property of that name is not a cast',
+            note: 'A type region is skipped by both desugar passes, which is right for a real cast and silent when it is not one. `as`, `satisfies` and `implements` are all contextual — `{ as: 1 }`, `row.as` and `const as = 1` are ordinary JavaScript — so matching the TEXT alone turned everything to the end of the expression into a type, and any cell read inside it was never desugared. The operand before it decides now: the same `ENDS_EXPRESSION` test the lexer uses to tell division from a regex, plus `>` for the one shape that needs it.',
+            run({ is }) {
+                const source = "<script>import { state } from 'abide'\nconst count = state(1)\nconst row = { as: 'b' }</script>"
+                // The cell is on the FAR side of the `as`, which is the half that went missing: the
+                // mark ran from the keyword to the end of the expression.
+                is(
+                    'a key spelled `as` leaves the read after it alone',
+                    template(`${source}<p>{row.as + count}</p>`),
+                    '<p>${() => row.as + count()}</p>',
+                )
+                is(
+                    '…and so does a member access spelled `.as`',
+                    template(`${source}<p>{row.as}{count + 1}</p>`),
+                    '<p>${row.as}${() => count() + 1}</p>',
+                )
+                // The other side of the rule: a real cast is still a type, so the read it wraps is
+                // still erased from the setup body rather than desugared into it.
+                is(
+                    'a real cast is still a cast',
+                    template("<script>import { state } from 'abide'\nconst count = state(1)\nconst n = count as unknown as number</script><p>{count + 1}</p>"),
+                    '<p>${() => count() + 1}</p>',
+                )
+                is(
+                    '`satisfies` still reads as one',
+                    template(
+                        "<script>import { state } from 'abide'\nconst count = state(1)\nconst o = { a: 1 } satisfies Record<string, number></script><p>{count + 1}</p>",
+                    ),
+                    '<p>${() => count() + 1}</p>',
+                )
+                // `implements` follows a NAME or the close of a type parameter list, and `>` is not
+                // something an expression can end with — which is why the operand set is not just
+                // `ENDS_EXPRESSION`.
+                is(
+                    'a class heritage clause, plain and generic',
+                    compile(
+                        '<script module>interface I<T> { x: T }\nexport class C<T> implements I<T> { x!: T }</script><p>ok</p>',
+                        { filename: 'C.abide' },
+                    ).code.includes('class C<T> implements I<T>'),
+                    true,
+                )
+            },
+        },
+
+        {
             title: 'a quoted attribute interpolates — the limit the runtime has, the compiler lifts',
             note: 'The runtime requires an attribute slot to be a WHOLE value written unquoted, because a slot cannot be part of one. The compiler owns the whole attribute, so it folds the literal and the holes into one expression and the restriction disappears.',
             async run({ is }) {
