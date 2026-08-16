@@ -913,14 +913,23 @@ let kickedBy: Node | null = null
 // re-runs after it, so a region probing two loads defers again on the second.
 let probedPending: Node | null = null
 
+/** The same for a LIVE STREAM, which is a different answer at hydration — see `kicker`. */
+let probedStream = false
+
 /** Forget what the last producer probed — the walk brackets each region with this. */
 export function forgetProbedLoad(): void {
     probedPending = null
+    probedStream = false
 }
 
 /** Did the producer just probe a load that has not landed? */
 export function hasProbedLoad(): boolean {
     return probedPending !== null
+}
+
+/** Did it probe a stream still arriving? Markup written from another point in it cannot be adopted. */
+export function hasProbedStream(): boolean {
+    return probedStream
 }
 
 /**
@@ -970,13 +979,24 @@ function kicker(node: Node, beforeRead: (() => void) | null): () => void {
                 kickedBy = previous
             }
         }
-        // PENDING or STREAMING: the fact a caller wants is "asked about something that has not
-        // finished arriving", and a stream mid-flight is that as much as a cold load is. It matters
-        // at hydration — the server DRAINED the stream and this side restarts it, so a region holding
-        // one has fewer rows than the markup under it and must keep that markup rather than adopt it.
+        // Two facts, and they are NOT the same answer at hydration.
+        //
+        // PENDING is "the server's markup is right and this side does not have it yet", so a region
+        // that probed one keeps what is under it and adopts on the settle.
+        //
+        // STREAMING is "the server DRAINED this and we restart from the top", so the markup is a
+        // different point in the same stream and no later chunk makes it match — the rows are
+        // rebuilt, which is what the `Streamed` branch in `$ui` has always done. Keeping them instead
+        // freezes the list on the server's last chunk while a plain READ of the same cell beside it
+        // counts up from one: `latest 1` over a list showing 1..5, reconciling only when the stream
+        // ends. Correct output at both ends, incoherent for the whole middle.
+        //
+        // Separate from the node record, so `probedLoad` — what the SERVER walk defers on — still
+        // answers about cold loads alone and a streaming region is walked exactly as it was.
         const track = node.asyncTrack
-        if (track !== null && (track.pending.value === true || track.streaming.value === true)) {
-            probedPending = node
+        if (track !== null) {
+            if (track.pending.value === true) probedPending = node
+            else if (track.streaming.value === true) probedStream = true
         }
     }
 }

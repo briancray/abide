@@ -210,6 +210,13 @@ dropped: the probe subscribed that region to the load, so the settle re-runs it 
 markup, at no write. Only while adopting — a `mount` has no markup to keep, so the same region paints
 its placeholder and then the answer.
 
+**A live STREAM is the other answer.** The server DRAINED it before writing, so those rows are a
+different point in the same stream and no chunk to come makes them match; a region that probed one
+drops them and rebuilds, exactly as a `{#for await}` block does. Keeping them instead freezes the
+list at the server's last chunk while a plain read of the same cell beside it counts up from one —
+`latest 1` over a list showing `1..5` — which agrees at both ends and is nonsense for the whole
+middle, with no mismatch and no warning to say so.
+
 **A probe KICKS the load it reports.** Asking about a value is a way of asking for it: a page writes
 `{#if x.pending()}` because it is about to show `x`. On a cold slot a probe used to answer `false`,
 which reads as "no load is running" and meant "none has begun" — a different fact wearing the same

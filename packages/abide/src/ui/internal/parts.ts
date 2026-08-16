@@ -32,6 +32,7 @@ import {
 import {
     forgetProbedLoad,
     hasProbedLoad,
+    hasProbedStream,
     type Node,
     rerun,
     type State,
@@ -260,6 +261,18 @@ export class ChildPart {
             // here. That is also why nothing is registered for the settle — the subscription the
             // probe made IS the registration.
             if (hasProbedLoad()) return
+            // A live STREAM is the other answer: the server drained it and this side restarts from
+            // the top, so what is under this claim is a different point in the same stream and no
+            // chunk to come makes it match. Dropped and rebuilt — the `Streamed` arm below does the
+            // same, for the same reason — rather than kept, which would freeze these rows at the
+            // server's last chunk while a plain read of the same cell beside them counts up.
+            if (hasProbedStream()) {
+                this.claimed = null
+                this.clearExcept(null)
+                for (const node of claimed) node.remove()
+                this.set(value)
+                return
+            }
             this.claimed = null
             try {
                 this.take(claimed, value)

@@ -123,3 +123,34 @@ for (const sweep of SWEEPS) {
         expect(seen, 'a page that rebuilt the markup it was handed').toEqual([])
     })
 }
+
+/**
+ * A rung holding a live STREAM, sampled while it is still arriving.
+ *
+ * The two slots read the same cell and take different paths: `{ticks ?? 0}` is a plain read and
+ * paints, `{#for tick of ticks.chunks()}` is a probe and does not. The server DRAINED this stream
+ * before it wrote the markup, so what is on screen at hydration is its last chunk — five rows beside
+ * a `latest 5` — while this side restarts from one.
+ *
+ * Whatever the two do, they have to do TOGETHER. Keeping the rows froze the list at the server's five
+ * while the count beside it climbed from one, which is correct at both ends and wrong for the whole
+ * middle — no console warning, no mismatch, and the final state agrees, so every other gate in this
+ * file is green while the page reads as nonsense.
+ */
+test('a streamed rung and the count beside it never disagree', async ({ page }) => {
+    await page.goto('/docs/state')
+    await interactive(page)
+
+    const rung = page.locator('.rung-preview').filter({ hasText: 'latest' }).first()
+    const latest = rung.locator('p')
+    const rows = rung.locator('li')
+
+    // SAMPLED, not read once: the disagreement is a window, and its two ends agree. The stream is
+    // five chunks 300ms apart, so this walks the middle of it.
+    for (let i = 0; i < 8; i++) {
+        const [text, count] = await Promise.all([latest.innerText(), rows.count()])
+        const shown = Number(/(\d+)/.exec(text)?.[1] ?? '-1')
+        expect(count, `latest ${shown} beside ${count} rows`).toBe(shown)
+        await page.waitForTimeout(150)
+    }
+})
