@@ -22,8 +22,17 @@ import { closes, TypeReader } from './shape.ts'
 /** Words that begin a declaration whose whole tail is types. */
 const TYPE_STATEMENTS = new Set(['interface', 'declare'])
 
-/** After one of these, what follows is a type — a cast, or a class heritage clause. */
-const TYPE_OPERATORS = new Set(['as', 'satisfies', 'implements'])
+/**
+ * After one of these, what follows is a type — a cast, or a class heritage clause.
+ *
+ * Exported because `desugar.ts` asks the mirror question about the same words — what FOLLOWS one is
+ * marked here, and the keyword ITSELF is punctuation on a name there. `implements` is inert in that
+ * second reading: a module is strict, so it is never an identifier a template could hold.
+ *
+ * Not to be confused with `shape.ts`'s `TYPE_PREFIX_OPERATORS`, which is the other closed set —
+ * those take an operand, these take a whole type.
+ */
+export const TYPE_CAST_KEYWORDS = new Set(['as', 'satisfies', 'implements'])
 
 /**
  * What may sit BEFORE one of those and still leave it a type operator. All three are contextual
@@ -89,7 +98,7 @@ export function typeRegions(
 
         // `x as T`, `x satisfies T`, `class C implements I` — and only where something an operand
         // could end sits in front, or the word is a property, a key or a name of the same spelling.
-        if (TYPE_OPERATORS.has(text) && OPERAND_BEFORE.has((tokens[i - 1] as Token | undefined)?.kind as SyntaxKind)) {
+        if (TYPE_CAST_KEYWORDS.has(text) && OPERAND_BEFORE.has((tokens[i - 1] as Token | undefined)?.kind as SyntaxKind)) {
             mark(i + 1, types.extent(i + 1))
             continue
         }

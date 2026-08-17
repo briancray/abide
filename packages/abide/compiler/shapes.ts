@@ -19,8 +19,11 @@
 
 import type { Shapes } from '$shared/internal/shapes.ts'
 import type { Kind } from '$shared/transport.ts'
-import { endpointId, SHAPES_FILE } from './index.ts'
-import { endpointsOf, TRANSPORT_GLOBS } from './internal/elide.ts'
+// From the leaves rather than `./index.ts`: this is a CLI entry, and the barrel's edge onto
+// `emit.ts` would hand it the whole emitter for one string and one join.
+import { endpointId, endpointsOf } from './internal/elide.ts'
+import { SHAPES_FILE } from './SHAPES_FILE.ts'
+import { TRANSPORT_GLOBS } from './TRANSPORT.ts'
 
 export interface DeriveOptions {
     /** Directories to scan for transport modules. */

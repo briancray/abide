@@ -13,7 +13,7 @@
 // here is a client's, which on a client is what it always was.
 
 import { HEALTH_PATH } from './internal/PATHS.ts'
-import { isThenable } from './internal/probes.ts'
+import { settled } from './internal/probes.ts'
 import { askWire, namesWire, type WireError } from './internal/wire.ts'
 import type { WireOptions } from './transport.ts'
 
@@ -67,8 +67,7 @@ export function useHealthSource(compose: HealthSource): void {
  */
 export function health(options?: WireOptions): Promise<Health> {
     if (!namesWire(options) && source !== null) {
-        const composed = source()
-        return isThenable(composed) ? composed : Promise.resolve(composed)
+        return settled(source())
     }
     // A refusal still carries the account — an app reporting that it is broken answers 503 with the
     // document saying so — so the body is what is read, not the status, which is `askWire`'s rule

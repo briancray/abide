@@ -75,7 +75,7 @@ interface Crossing {
 const MAX_DEPTH = 8
 
 /** Prefix operators over a type. Each takes an operand, which is what has to be consumed with it. */
-const TYPE_OPERATORS = new Set(['typeof', 'keyof', 'infer', 'unique'])
+const TYPE_PREFIX_OPERATORS = new Set(['typeof', 'keyof', 'infer', 'unique'])
 
 /**
  * The reader. One per module, because resolving a local `type`/`interface` is a jump to another part
@@ -305,7 +305,7 @@ export class TypeReader {
         // consuming it is the whole point: an extent that stopped at `typeof` left the name after it
         // looking like an expression to every pass downstream.
         if (token.text === 'readonly') return this.postfix(at + 1)
-        if (TYPE_OPERATORS.has(token.text)) {
+        if (TYPE_PREFIX_OPERATORS.has(token.text)) {
             return { schema: ANYTHING, optional: false, at: this.postfix(at + 1).at }
         }
 
@@ -318,7 +318,7 @@ export class TypeReader {
         if (token.kind === SyntaxKind.Identifier || isTypeWord(token)) return this.reference(at)
 
         // A template literal type, a mapped type, a conditional — readable by a checker and not by
-        // this. NOT `keyof`/`typeof`: those are `TYPE_OPERATORS` and were consumed above, which is
+        // this. NOT `keyof`/`typeof`: those are `TYPE_PREFIX_OPERATORS` and were consumed above, which is
         // what the comment there is about. Skipping to the end of the type is what keeps the members
         // AFTER it derivable.
         return { schema: ANYTHING, optional: false, at: this.skip(at) }

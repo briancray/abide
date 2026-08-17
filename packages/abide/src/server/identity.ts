@@ -29,6 +29,7 @@ import { isProduction } from '$shared/internal/env.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { abideLog } from '$shared/log.ts'
 import { knobOf } from './config.ts'
+import { NO_STORE } from './internal/CACHE.ts'
 import { HookSlot } from './internal/hooks.ts'
 import { failedInto, merged } from './internal/merge.ts'
 import { json, refuse } from './responses.ts'
@@ -55,7 +56,7 @@ const SEAL_ENCODING = { alphabet: 'base64url', omitPadding: true } as const
 const SEAL_DECODING = { alphabet: 'base64url' } as const
 
 /** The endpoint's one header, built once — this answer is per-caller, so nothing may cache it. */
-const NO_STORE = { 'cache-control': 'no-store' }
+const NO_STORE_HEADER = { 'cache-control': NO_STORE }
 
 /** What `set` hands back. One promise for the process: the work it reports is already done. */
 const SETTLED = Promise.resolve()
@@ -223,6 +224,10 @@ function resolve(): Identity | Promise<Identity> {
  * promise left in the whole path.
  */
 function principal(opened: Sealed | null): Identity | Promise<Identity> {
+    // Two shapes, deliberately: initializing `expiresAt` to `undefined` is what the hot-path rule
+    // asks for, and `Identity.expiresAt` is PUBLIC and declared `?: string` under
+    // `exactOptionalPropertyTypes` — so the fixed shape costs the published type a `| undefined`.
+    // Once per request, against a widened public surface; the type change is the discussion.
     const document: Identity = { authenticated: opened !== null }
     if (opened !== null) document.expiresAt = new Date(opened.expiry).toISOString()
     const claims = opened === null ? null : opened.claims
@@ -370,8 +375,8 @@ export function serveIdentity(request: Request): Response | Promise<Response> {
     // one place that happens. There is no caller to read a cookie off and nothing an app's policy
     // could be asked about, so the floor is the honest answer — and it is this endpoint's fact to
     // know, since every other way into `resolved()` is already inside a request.
-    if (!isServing()) return json(anonymous(), { headers: NO_STORE })
+    if (!isServing()) return json(anonymous(), { headers: NO_STORE_HEADER })
     const document = resolved()
-    if (!isThenable(document)) return json(document, { headers: NO_STORE })
-    return document.then((resolved) => json(resolved, { headers: NO_STORE }))
+    if (!isThenable(document)) return json(document, { headers: NO_STORE_HEADER })
+    return document.then((resolved) => json(resolved, { headers: NO_STORE_HEADER }))
 }

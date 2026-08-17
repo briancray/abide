@@ -18,7 +18,7 @@
 // `abide logs`, which renders records somebody ELSE's process wrote and renders them by these rules.
 // Nothing in a client graph imports this file, which is the whole of what keeps it off a page.
 
-import { type Level, type LineWriter, plainLine, READABLE_TRACE } from '../log.ts'
+import { type Level, levelSuffix, type LineWriter, plainLine, shortTrace } from '../log.ts'
 import { colorAllowed, stdoutIsTTY } from './env.ts'
 import { textKnob } from './knobs.ts'
 
@@ -111,10 +111,8 @@ export function formatLogLine(
     if (form !== 'color') return plainLine(level, channel, message, 0, traced, since)
 
     const delta = `+${since}ms`
-    const suffix = level === 'log' ? '' : ` ${level}`
-    // Short, and trailing with the delta rather than leading: both are metadata about the line, and
-    // the message is what someone reading a terminal is scanning for.
-    const short = traced === null ? '' : ` ${traced.slice(0, READABLE_TRACE)}`
+    const suffix = levelSuffix(level)
+    const short = shortTrace(traced)
     return (
         `\x1b[${channelColor(channel)}m${channel}\x1b[0m` +
         (suffix === '' ? '' : `\x1b[${LEVEL_COLORS[level]}m${suffix}\x1b[0m`) +

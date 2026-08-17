@@ -15,6 +15,7 @@ import { type Health, useHealthSource } from '$shared/health.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { abideLog } from '$shared/log.ts'
 import { appVersion } from './app.ts'
+import { NO_STORE } from './internal/CACHE.ts'
 import { HookSlot } from './internal/hooks.ts'
 import { failedInto, merged } from './internal/merge.ts'
 import { json, refuse } from './responses.ts'
@@ -118,7 +119,7 @@ function answer(document: Health): Response {
     // `no-store` is the whole point of this answer: it describes this process at this moment, and a
     // cached one is a load balancer being told a drained instance is healthy — the one failure a
     // health check exists to prevent.
-    const init: ResponseInit = { headers: { 'cache-control': 'no-store' } }
+    const init: ResponseInit = { headers: { 'cache-control': NO_STORE } }
     if (document.error !== undefined) init.status = 503
     return json(document, init)
 }

@@ -27,9 +27,10 @@ import {
     jsonLine,
     TRANSPORT_ERROR,
 } from '$shared/internal/wire.ts'
-import { ALWAYS_POLICY } from './csp.ts'
+import { PRIVATE_NO_STORE } from './internal/CACHE.ts'
+import { ALWAYS_POLICY } from './internal/POLICY.ts'
 import { gate, type Schema } from './schema.ts'
-import { heldFrames, heldStream, pendingCookies, traceResponse } from './scopes.ts'
+import { ambientHeaders, heldFrames, heldStream } from './scopes.ts'
 
 export type { Failed, FailureOptions } from '$shared/internal/wire.ts'
 // The class itself lives on the wire seam, because the browser lane builds one too: `wireError`
@@ -62,20 +63,10 @@ export function headersFor(carried: HeadersInit | undefined, defaults: Record<st
     headers.set('x-content-type-options', 'nosniff')
     // Every response abide builds says which operation answered it — this helper is the one funnel
     // all of them go through, including the rpc wire and every refusal `dispatch` writes. A failure
-    // is the response you most want to correlate, so the 404 carries it too.
-    //
-    // `has` first, like the defaults above: a caller that set its own means it.
-    if (!headers.has('traceresponse')) {
-        const parent = traceResponse()
-        if (parent !== null) headers.set('traceresponse', parent)
-    }
-    // A login is a call deep inside a handler and the response is built somewhere else entirely, so
-    // the cookie rides the same funnel. `append`, not `set`: `Set-Cookie` is the one header that may
-    // legitimately appear more than once, and a caller that wrote its own keeps it.
-    const cookies = pendingCookies()
-    if (cookies !== null) {
-        for (let i = 0; i < cookies.length; i++) headers.append('set-cookie', cookies[i] as string)
-    }
+    // is the response you most want to correlate, so the 404 carries it too. A login is a call deep
+    // inside a handler and the response is built somewhere else entirely, so the cookie it wrote
+    // rides the same funnel.
+    ambientHeaders(headers)
     return headers
 }
 
@@ -190,7 +181,7 @@ export function page(
  */
 const PAGE_HEADERS: Record<string, string> = {
     'content-type': HTML_TYPE,
-    'cache-control': 'private, no-store',
+    'cache-control': PRIVATE_NO_STORE,
     'referrer-policy': 'strict-origin-when-cross-origin',
     'content-security-policy': ALWAYS_POLICY,
 }
@@ -415,7 +406,7 @@ export function failed(
         status,
         // A refusal is about THIS call — a 403 is about who asked, a 404 about what they asked for
         // — and a cached one is answered to the next caller, who may be someone else entirely.
-        headers: headersFor(extra, { 'content-type': JSON_TYPE, 'cache-control': 'private, no-store' }),
+        headers: headersFor(extra, { 'content-type': JSON_TYPE, 'cache-control': PRIVATE_NO_STORE }),
     })
 }
 

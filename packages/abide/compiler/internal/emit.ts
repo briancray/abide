@@ -87,8 +87,6 @@ interface Context {
      * a pair is not read by name anywhere — only `bind` asks. See `accessorBindings`.
      */
     accessors: Set<string>
-    /** Names bound by a `{#for}` or a branch, which shadow a reactive name of the same spelling. */
-    shadow: Set<string>
     /** Reads a `{#if}` or `{#switch}` already took into a local, so the body narrows off it. */
     hoisted: Map<string, string>
     /**
@@ -578,12 +576,7 @@ function membersOf(type: string, rest: string, tokens: Token[], types: TypeReade
  */
 function importBinding(imports: readonly string[], local: string): { specifier: string; exported: string } | null {
     for (const statement of imports) {
-        let tokens: Token[]
-        try {
-            tokens = tokensOf(statement)
-        } catch {
-            continue
-        }
+        const tokens = tokensOfBody(statement)
         let specifier = ''
         for (let i = tokens.length - 1; i >= 0; i--) {
             const token = tokens[i] as Token
@@ -635,14 +628,10 @@ function importedMembers(
     if (binding === null) return ''
     const found = resolve(binding.specifier, importer)
     if (found === null) return ''
-    let tokens: Token[]
-    try {
-        tokens = tokensOf(found.text)
-    } catch {
-        // An unparseable module is one no type can be read out of, which is the same answer as one
-        // that could not be found. A build must not fail over a classification it was only offering.
-        return ''
-    }
+    // An unparseable module is one no type can be read out of, which is the same answer as one that
+    // could not be found — `tokensOfBody` returns no tokens and the walk below declares nothing. A
+    // build must not fail over a classification it was only offering.
+    const tokens = tokensOfBody(found.text)
     const types = new TypeReader(tokens, found.path)
     for (const declared of declaredTypes(tokens, types)) {
         if (declared.name === binding.exported) return found.text.slice(declared.start, declared.end)
@@ -819,6 +808,22 @@ function checkNoProps(source: string, tokens: Token[], filename: string): void {
 }
 
 /**
+ * The index of the `)` closing the `(` at `open`, or -1 when the body ends first.
+ *
+ * Counted rather than read off `depth` — a token's `depth` is BRACE depth (see `lex.ts`), which says
+ * nothing about the parens an argument list nests.
+ */
+function closingParen(tokens: readonly Token[], open: number): number {
+    let level = 0
+    for (let j = open; j < tokens.length; j++) {
+        const kind = (tokens[j] as Token).kind
+        if (kind === SyntaxKind.OpenParenToken) level++
+        else if (kind === SyntaxKind.CloseParenToken && --level === 0) return j
+    }
+    return -1
+}
+
+/**
  * A `watch` written as a STATEMENT in a `<script module>`, made per caller.
  *
  * The last of the three module-scope spellings that meant "once for the server process", and the one
@@ -851,16 +856,7 @@ function scopeEffects(rest: string): { text: string; kicks: string[] } {
             }
         }
         if (open < 0) continue
-        let close = -1
-        let level = 0
-        for (let j = open; j < tokens.length; j++) {
-            const kind = (tokens[j] as Token).kind
-            if (kind === SyntaxKind.OpenParenToken) level++
-            else if (kind === SyntaxKind.CloseParenToken && --level === 0) {
-                close = j
-                break
-            }
-        }
+        const close = closingParen(tokens, open)
         if (close < 0) continue
         const to = (tokens[close] as Token).end
         const name = `$effect${i}`
@@ -913,18 +909,7 @@ function scopeCells(rest: string): string {
         if (tokens[at - 1]?.kind === SyntaxKind.DotToken) continue
         if (tokens[at - 1]?.kind !== SyntaxKind.EqualsToken) continue
         if (declaredNameBefore(tokens, at - 1) === undefined) continue
-        // The call's own close, counted rather than read off `depth` — a token's `depth` is BRACE
-        // depth (see `lex.ts`), which says nothing about the parens an argument list nests.
-        let close = -1
-        let level = 0
-        for (let j = i; j < tokens.length; j++) {
-            const kind = (tokens[j] as Token).kind
-            if (kind === SyntaxKind.OpenParenToken) level++
-            else if (kind === SyntaxKind.CloseParenToken && --level === 0) {
-                close = j
-                break
-            }
-        }
+        const close = closingParen(tokens, i)
         if (close < 0) continue
         spans.push({
             from: (tokens[at] as Token).start,
@@ -1139,20 +1124,6 @@ function splitImports(
 
 // --- expressions -----------------------------------------------------------
 
-// Materialising the shadow-filtered environment is for `desugar`, which needs the two sets as
-// arguments. A caller asking whether ONE name is live asks `liveCell`/`liveKeyed` instead: under a
-// `{#for}`, a `{#component}` or a branch script the shadow is non-empty, so `live` allocates two
-// sets and walks the whole environment — once per expression node and once per expression attribute
-// in the emitter's per-node walk, half of it thrown away unread.
-function live(context: Context): Reactive {
-    if (context.shadow.size === 0) return context.reactive
-    const cells = new Set<string>()
-    for (const name of context.reactive.cells) if (!context.shadow.has(name)) cells.add(name)
-    const keyed = new Set<string>()
-    for (const name of context.reactive.keyed) if (!context.shadow.has(name)) keyed.add(name)
-    return { cells, keyed }
-}
-
 /**
  * A named import from `server/rpc/**` is a KEYED MEMO, and an import statement is the only place that
  * fact can come from.
@@ -1195,16 +1166,28 @@ function rpcImports(statements: string[], into: Reactive): void {
 
 const IMPORT_CLAUSE = /^\s*import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]\s*$/
 
-function liveCell(context: Context, name: string): boolean {
-    return context.reactive.cells.has(name) && !context.shadow.has(name)
-}
-
-function liveKeyed(context: Context, name: string): boolean {
-    return context.reactive.keyed.has(name) && !context.shadow.has(name)
-}
-
-function liveAccessor(context: Context, name: string): boolean {
-    return context.accessors.has(name) && !context.shadow.has(name)
+/**
+ * A nested level's vocabulary: the enclosing one with `bound` taken OUT of it.
+ *
+ * A `{#for}` row, a component parameter and a `{:catch}` binding all hide whatever the name meant
+ * outside — source, keyed memo or accessor pair alike. Subtracted HERE, at the four places a binding
+ * is introduced, rather than tested at every read: a block is one place and an expression node is
+ * thousands, and the environment used to be rebuilt — two Sets and a walk of the whole vocabulary —
+ * once per node and once per expression attribute, with half of it thrown away unread.
+ *
+ * The accumulators (`used`, `sheets`, `lifted`, `counter`) stay SHARED through the spread, which is
+ * what they are for.
+ */
+function shadowing(context: Context, bound: Iterable<string>): Context {
+    const cells = new Set(context.reactive.cells)
+    const keyed = new Set(context.reactive.keyed)
+    const accessors = new Set(context.accessors)
+    for (const name of bound) {
+        cells.delete(name)
+        keyed.delete(name)
+        accessors.delete(name)
+    }
+    return { ...context, reactive: { cells, keyed }, accessors }
 }
 
 /**
@@ -1241,14 +1224,14 @@ function code(expr: Expr, context: Context, position: Position = 'read'): string
     // reaches `desugar`, so the sets it would have taken are not built for it. Its source IS the
     // name, so it is the whole region by construction and a held position hands the cell over —
     // the same answer `desugar` reaches for every spelling this does not catch.
-    if (IDENTIFIER.test(expr.source) && liveCell(context, expr.source)) {
+    if (IDENTIFIER.test(expr.source) && context.reactive.cells.has(expr.source)) {
         if (position === 'read' || position === 'slot') {
             const local = hoisted.get(expr.source)
             if (local !== undefined) return local
         }
         return position === 'read' ? `${expr.source}()` : expr.source
     }
-    const names = live(context)
+    const names = context.reactive
     return desugar(context.source, expr.start, expr.start + expr.source.length, names.cells, {
         keyed: names.keyed,
         hold: HELD[position],
@@ -1272,7 +1255,7 @@ function hoistReads(
     expr: Expr,
     context: Context,
 ): { declarations: string[]; scope: Map<string, string>; text: string } {
-    const names = live(context)
+    const names = context.reactive
     // The TEXT comes back with the reads, and both are the same pass. Keeping only `.reads` meant
     // every `{#if}`, `{:else if}` and `{#switch}` head was desugared twice — a second tokenize, a
     // second `typeRegions` with its own `TypeReader`, and both walks — to recover text this pass had
@@ -1414,7 +1397,7 @@ function unthunked(emitted: string, context: Context): boolean {
     // Only a bare path can be that: anything else has composed the name into something else.
     if (!PLAIN_PATH.test(emitted)) return true
     const dot = emitted.indexOf('.')
-    return !liveKeyed(context, dot < 0 ? emitted : emitted.slice(0, dot))
+    return !context.reactive.keyed.has(dot < 0 ? emitted : emitted.slice(0, dot))
 }
 
 /** Record a runtime helper the emitted file turned out to need, so the header imports it. */
@@ -1692,12 +1675,6 @@ function fragment(nodes: Node[], context: Context): string {
     return `(() => {${branch.statements}return ${markup} })()`
 }
 
-interface Scoped {
-    statements: string
-    context: Context
-    rest: Node[]
-}
-
 /**
  * A branch-local `<script>`: statements for the level's own closure, and a scope its body resolves
  * against.
@@ -1706,7 +1683,7 @@ interface Scoped {
  * their declaration. It carries no `import`, because it reuses the component's, and because an import
  * inside a branch has nowhere to be hoisted TO.
  */
-function scoped(nodes: Node[], context: Context): Scoped {
+function scoped(nodes: Node[], context: Context): { statements: string; context: Context; rest: Node[] } {
     let first = -1
     for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i] as Node
@@ -1758,25 +1735,25 @@ function scoped(nodes: Node[], context: Context): Scoped {
         keyed: new Set(context.reactive.keyed),
     }
     const accessors = new Set(context.accessors)
-    const shadow = new Set(context.shadow)
     for (const name of declaredNames(tokens)) {
         if (own.cells.has(name)) {
             reactive.cells.add(name)
-            shadow.delete(name)
         } else if (own.keyed.has(name)) {
             reactive.keyed.add(name)
-            shadow.delete(name)
         } else if (ownAccessors.has(name)) {
             accessors.add(name)
-            shadow.delete(name)
         } else {
             // A plain binding. It hides whatever the name meant outside, source or not — an accessor
-            // pair included, which is why this arm does not delete from `accessors`.
-            shadow.add(name)
+            // pair included, which is why all three are subtracted and not just the two `Reactive`
+            // carries. The three arms above are the same rule the other way: a name declared here as
+            // a cell, a keyed memo or a pair IS that thing inside the branch, whatever it was outside.
+            reactive.cells.delete(name)
+            reactive.keyed.delete(name)
+            accessors.delete(name)
         }
     }
 
-    const inner: Context = { ...context, reactive, accessors, shadow }
+    const inner: Context = { ...context, reactive, accessors }
     const statements = desugar(context.source, from, to, reactive.cells, {
         expression: false,
         keyed: reactive.keyed,
@@ -1948,13 +1925,22 @@ function toggled(
  * of them reported here. The `selected` refusal was the shape of the answer; it was one row of it.
  *
  * `element` is deliberately absent: it is a node ref rather than a value, so it has no event and is
- * legal anywhere.
+ * legal anywhere. It is the one target with no row, which is why `bind` answers it before the lookup
+ * and why `docs.test.ts` adds it back by hand.
+ *
+ * `mirror` is HOW the pair is written, on the row rather than in a second table keyed by the same
+ * key. That second table is the shape this docblock already describes failing once: a refusal beside
+ * the map instead of a column in it. Absent is the ordinary pair — a `.prop` handed the cell and a
+ * listener writing it back — which is where `value` on all three of its tags lands.
  *
  * Exported for the reason `BRANCHES` is: it is the closed set of bind TARGETS, and `/docs/syntax/bind`
  * claims to show every one of them. `dogfood/test/docs.test.ts` asks that each key here appears in a
  * rung on that page, so a sixth target lands red rather than undocumented.
  */
-export const BINDABLE: Record<string, Record<string, { dom: string; event: string }>> = {
+export const BINDABLE: Record<
+    string,
+    Record<string, { dom: string; event: string; mirror?: 'boolean' | 'membership' }>
+> = {
     value: {
         input: { dom: 'HTMLInputElement', event: 'input' },
         textarea: { dom: 'HTMLTextAreaElement', event: 'input' },
@@ -1962,13 +1948,10 @@ export const BINDABLE: Record<string, Record<string, { dom: string; event: strin
         // the selection settled, and it is what every arm of this ever emitted.
         select: { dom: 'HTMLSelectElement', event: 'change' },
     },
-    checked: { input: { dom: 'HTMLInputElement', event: 'change' } },
-    group: { input: { dom: 'HTMLInputElement', event: 'change' } },
-    open: { details: { dom: 'HTMLDetailsElement', event: 'toggle' } },
+    checked: { input: { dom: 'HTMLInputElement', event: 'change', mirror: 'boolean' } },
+    group: { input: { dom: 'HTMLInputElement', event: 'change', mirror: 'membership' } },
+    open: { details: { dom: 'HTMLDetailsElement', event: 'toggle', mirror: 'boolean' } },
 }
-
-/** A boolean PROPERTY mirrored as a boolean attribute: present iff truthy, never stringified. */
-const BOOLEAN_BINDS = new Set(['checked', 'open'])
 
 /**
  * What to write INSTEAD, for the spellings somebody reaches for before the one that works.
@@ -2066,16 +2049,16 @@ function bind(
     // `{get, set}` — an explicit accessor pair rather than a cell, written inline in the tag or
     // hoisted out of it into a name. See `accessorBindings` for why the second spelling is asked
     // about rather than inferred from the text.
-    const accessor = source.startsWith('{') || liveAccessor(context, source)
+    const accessor = source.startsWith('{') || context.accessors.has(source)
     const read = accessor ? `(${source}).get()` : `${source}()`
     const write = (value: string): string =>
         accessor ? `(${source}).set(${value})` : `${source}.set(${value})`
 
-    if (BOOLEAN_BINDS.has(key_)) {
+    if (legal.mirror === 'boolean') {
         // A boolean DOM property mirrored as a boolean ATTRIBUTE: present iff truthy, never
         // stringified — which is why the attribute slot is handed the raw boolean, and what makes
-        // the state survive SSR. `checked` and `open` differ only in the event, which the table
-        // above already carries, so this is one arm rather than the second copy of one.
+        // the state survive SSR. `checked` and `open` differ only in the event, which the row
+        // already carries, so this is one arm rather than the second copy of one.
         return (
             ` .${key_}=\${() => !!${read}}` +
             ` ${key_}=\${() => !!${read}}` +
@@ -2083,7 +2066,7 @@ function bind(
         )
     }
 
-    if (key_ === 'group') {
+    if (legal.mirror === 'membership') {
         // Membership, compared against the input's OWN value — and never emitted as a `group`
         // attribute, because there is no such attribute.
         if (own === null) {
@@ -2117,9 +2100,9 @@ function bind(
     // The CELL itself where the source is one, not a thunk that reads it: a property slot's function
     // value goes through `unwrap`, which reads a source one step further, so the two are the same
     // write on both substrates — and the thunk was a fresh closure per bound input per row. The
-    // exceptions are the arms above and are exactly why they are arms: an accessor pair is not a
-    // cell, and a boolean needs the `!!` coercion for the attribute half. A `<select>` lands HERE —
-    // `.value` plus the `change` the table names for it — which is why it has no arm of its own.
+    // exceptions are the two `mirror` arms above and are exactly why they are arms: an accessor pair
+    // is not a cell, and a boolean needs the `!!` coercion for the attribute half. A `<select>` lands
+    // HERE — `.value` plus the `change` its row names — which is why it has no arm of its own.
     const value = accessor ? `() => ${read}` : source
     return ` .${key_}=\${${value}}` + ` @${legal.event}=\${(event: Event) => ${write(target(key_))}}`
 }
@@ -2187,7 +2170,7 @@ function invoke(node: { name: string; attributes: Attribute[]; children: Node[] 
     else if (!spread) props.push('children: undefined')
 
     // A state- or memo-named tag is a REACTIVE component: the cell is read, so a change re-mounts it.
-    const callee = liveCell(context, node.name) ? `${node.name}()` : node.name
+    const callee = context.reactive.cells.has(node.name) ? `${node.name}()` : node.name
     // CARRIED, not called — except for an inline component, which has no setup to protect. The call
     // used to happen wherever the enclosing thunk ran, and that thunk re-runs for anything the parent
     // reads: a keyed list gaining one row rebuilt every instance in it and discarded whatever the
@@ -2212,11 +2195,9 @@ function inlineComponents(template: Node[]): Set<string> {
 
 function define(node: { name: string; parameters: string; body: Node[] }, context: Context): string {
     const inner: Context = {
-        ...context,
-        shadow: new Set(context.shadow),
+        ...shadowing(context, parameterNames(node.parameters)),
         children: childrenOf(node.parameters),
     }
-    for (const name of parameterNames(node.parameters)) inner.shadow.add(name)
     // A parameter written by hand types itself. One written as `()` still BINDS `args` — that is what
     // `childrenOf` answers with — and an untyped binding is an implicit `any`, which the app's own
     // typecheck refuses: `{#component Loud()}` was a documented spelling that could not compile.
@@ -2281,15 +2262,8 @@ function childrenOf(parameters: string): string | null {
  * ternaries, so each condition's hoisted reads sit in scope for its own branch only — and a later
  * condition still does not run when an earlier one matched.
  *
- * The chain, and nothing around it. A `{#if x.pending()}` head used to be matched here and wrapped in
- * `awaited(cell, { pending, then, catch })` — one arm handed over three times — so that the SERVER
- * knew to defer this region and the client's settle landed on the same template.
- *
- * The walk decides deferral now, off the probe rather than off the spelling, so the wrapper was
- * carrying only the second half. It was not carrying it: the no-op held only while both arms reached
- * a slot in the SAME shape, and a compiled chain's arms are different templates, so the settle
- * rebuilt the region either way. Measured on a gated load — inserted 2, removed 1, created 1 element
- * · 1 text · 1 comment, cloned 2, IDENTICAL with the wrapper and without it.
+ * The chain, and nothing around it: the WALK decides deferral, off the probe rather than off the
+ * spelling of the head.
  */
 function chained(branches: Branch[], context: Context): string {
     // Every shape below opens the same way, and an awaiting HEAD is what decides it — a body's own
@@ -2408,9 +2382,9 @@ function loop(
         )
     }
 
-    const inner: Context = { ...context, shadow: new Set(context.shadow) }
-    for (const name of parameterNames(node.item)) inner.shadow.add(name)
-    if (node.index !== null) inner.shadow.add(node.index)
+    const bound = parameterNames(node.item)
+    if (node.index !== null) bound.push(node.index)
+    const inner = shadowing(context, bound)
 
     const parameters = node.index === null ? node.item : `${node.item}, ${node.index}`
 
@@ -2451,7 +2425,7 @@ function guarded(node: { body: Node[]; branches: Branch[] }, context: Context): 
     const inner: Context =
         failure?.binding == null
             ? context
-            : { ...context, shadow: new Set([...context.shadow, failure.binding]) }
+            : shadowing(context, [failure.binding])
 
     // All four keys, `undefined` included: `Branches` declares four, and an arm omitted here is a
     // different hidden class reaching the same reads in `settledArms` and `ChildPart`. Sixteen arm
@@ -2563,7 +2537,6 @@ export function emit(
         sheets: new Map(),
         lifted: new Map(),
         eager: false,
-        shadow: new Set(),
         hoisted: new Map(),
         children: 'args.children',
         inline: inlineComponents(blocks.template),

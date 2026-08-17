@@ -42,6 +42,14 @@ const DRAIN_SLACK = 64
  */
 const FORGET_ROOM = new WeakMap<object, () => void>()
 
+// The constant probes, one per process rather than one per channel. A channel is built per ROOM —
+// `remoteSocket`'s `connect` builds one per address — and these five answers are fixed at
+// construction, so a closure apiece is five allocations buying nothing. See the note at their
+// assignment for WHY they are constants rather than cells.
+const NEVER_TRUE = (): boolean => false
+const ALWAYS_TRUE = (): boolean => true
+const NO_ERROR = (): undefined => undefined
+
 export interface Channel<T> {
     /** Latest message, reactive. Subscribes the caller. */
     (): T | undefined
@@ -354,12 +362,12 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
     // construction. A stream with no end is likewise never `done` and always producing, in the only
     // sense a channel has. Constants, and honest ones — the alternative is a reader having to know
     // which primitive it was handed before it can ask.
-    self.pending = () => false
-    self.refreshing = () => false
-    self.error = () => undefined
-    self.streaming = () => true
-    self.done = () => false
-    self.isError = (error: unknown, name: string) => isNamedError(error, name)
+    self.pending = NEVER_TRUE
+    self.refreshing = NEVER_TRUE
+    self.error = NO_ERROR
+    self.streaming = ALWAYS_TRUE
+    self.done = NEVER_TRUE
+    self.isError = isNamedError
     self.watch = (handler) => watch(self as () => T | undefined, handler)
     self.subscribe = (listener: (message: T) => void): (() => void) => {
         listeners.add(listener)

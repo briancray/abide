@@ -360,7 +360,7 @@ function parseNodes(reader: Reader, closing: string | null): Node[] {
     let text = ''
 
     const flush = (): void => {
-        if (text.trim() !== '' || /[ \t]/.test(text)) nodes.push({ kind: 'text', value: text })
+        if (meaningful(text)) nodes.push({ kind: 'text', value: text })
         text = ''
     }
 
@@ -398,7 +398,7 @@ function parseNodes(reader: Reader, closing: string | null): Node[] {
                 reader.at = stop
                 continue
             }
-            if (next !== undefined && /[A-Za-z]/.test(next)) {
+            if (next !== undefined && TAG_START.test(next)) {
                 flush()
                 nodes.push(parseTag(reader))
                 continue
@@ -903,8 +903,24 @@ function parseDefine(reader: Reader, rest: string, open: number): Node {
 // non-ASCII spaces, and a parser is the wrong place for a sweep to narrow a character class.
 const WHITESPACE = /\s/
 const TAG_NAME_CHAR = /[\w:.-]/
+const TAG_START = /[A-Za-z]/
 const ATTRIBUTE_NAME_CHAR = /[\w:@.$-]/
 const UNQUOTED_VALUE_CHAR = /[^\s>]/
+
+/**
+ * Whether a run of text between nodes is worth a node of its own.
+ *
+ * A space or a tab is TEXT — it separates two words the author wrote. A run of only newlines is
+ * layout in the source and nothing in the output. One walk that stops on the first answer, rather
+ * than a `trim()` that copies the whole run to ask whether it was blank and a second scan after it.
+ */
+function meaningful(text: string): boolean {
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i] as string
+        if (char === ' ' || char === '\t' || !WHITESPACE.test(char)) return true
+    }
+    return false
+}
 
 function skipSpace(reader: Reader): void {
     while (reader.at < reader.source.length && WHITESPACE.test(reader.source[reader.at] as string)) reader.at++

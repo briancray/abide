@@ -29,6 +29,7 @@ import { abideLog } from '$shared/log.ts'
 import { type KeyedMemo, type MemoOptions, memo } from '$shared/memo.ts'
 import { asRpc, type Method, type Rpc } from '$shared/transport.ts'
 import { knobOf } from './config.ts'
+import { PRIVATE_NO_STORE } from './internal/CACHE.ts'
 import { failed, headersFor } from './responses.ts'
 import { type Gate, gate, publishable, type Schema, type SchemaRefusal } from './schema.ts'
 import { heldFrames, recordSeed, seedsTable } from './scopes.ts'
@@ -437,11 +438,13 @@ function statusOf(error: unknown): number {
  * says nobody in between may keep a copy.
  */
 function wireHeaders(ttl: number, type: string, extra: Record<string, string> | undefined): Headers {
-    if (ttl === Infinity) return headersFor(extra, { 'content-type': type, 'cache-control': NO_STORE })
-    return headersFor(extra, { 'content-type': type, 'cache-control': NO_STORE, [TTL_HEADER]: String(ttl) })
+    if (ttl === Infinity) return headersFor(extra, { 'content-type': type, 'cache-control': PRIVATE_NO_STORE })
+    return headersFor(extra, {
+        'content-type': type,
+        'cache-control': PRIVATE_NO_STORE,
+        [TTL_HEADER]: String(ttl),
+    })
 }
-
-const NO_STORE = 'private, no-store'
 
 /**
  * One call, as a response. What `dispatch` writes and what `fn.raw` hands back in-process, so the

@@ -24,56 +24,11 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 // sides and fails on the wire.
 import type { Shapes } from '$shared/internal/shapes.ts'
 import type { Kind } from '$shared/transport.ts'
+// The directory rule, from the leaf that owns it: the cli and the boot scan with these too, and an
+// edge onto THIS module would hand them TypeScript's scanner for two glob strings.
+import { TRANSPORT_DIRECTORIES } from '../TRANSPORT.ts'
 import { SyntaxError_, type Token, tokensOf } from './lex.ts'
 import { crossing, type Declared, shapesAt, TypeReader, type TypeSource } from './shape.ts'
-
-const RPC_DIRECTORY = '/server/rpc/'
-const SOCKET_DIRECTORY = '/server/sockets/'
-
-/**
- * Every `.ts` a transport directory holds. The plugin's filter, and nothing else matches it.
- *
- * Derived like the two globs below, and for a sharper version of the same reason: this one is the
- * `onLoad` filter, so a spelling that drifted from the directories above would silently stop
- * matching — no elision, and the server module goes into the browser bundle verbatim.
- */
-export const TRANSPORT_MODULE = new RegExp(`(${RPC_DIRECTORY}|${SOCKET_DIRECTORY})[^?]+\\.ts$`)
-
-/** The leading wildcard that makes a glob match at any depth — what an ANCHORED spelling drops. */
-const ANYWHERE = '**/'
-
-/**
- * The same rule as a glob, per kind — what a build SCANS with.
- *
- * Derived from the directories above rather than written out again, because a scanner that misses a
- * renamed directory finds nothing and reports nothing: the checker pass would simply publish no
- * upgrades, which is indistinguishable from having none to publish.
- *
- * Strings rather than `Bun.Glob`, because this module loads in the browser lane too.
- */
-export const TRANSPORT_GLOBS: Record<Kind, string> = {
-    // `RPC_DIRECTORY` opens with the same slash `ANYWHERE` closes on, so it is sliced off here.
-    rpc: `${ANYWHERE}${RPC_DIRECTORY.slice(1)}**/*.ts`,
-    socket: `${ANYWHERE}${SOCKET_DIRECTORY.slice(1)}**/*.ts`,
-}
-
-/**
- * The same rule ANCHORED at a project root — what a BOOT scans with.
- *
- * The difference is what the scan is FOR. A pass that only reads may match a transport directory
- * anywhere under the tree: a fixture under `types/checker/server/rpc/` is a module whose shapes are
- * worth deriving, and deriving one nobody serves costs nothing. A boot IMPORTS what it finds, and
- * that fixture is not an endpoint of the app — its module body would run, its declarations would
- * register, and its address would collide with the real `server/rpc/` file of the same name, because
- * an id is cut at the LAST transport directory in a path.
- */
-export const TRANSPORT_ROOTS: Record<Kind, string> = {
-    // The same string with its `**/` prefix cut, rather than the tail written a second time: a
-    // scanner whose suffix drifts from the one above finds nothing, and "no endpoints" is what an
-    // app made only of pages looks like too.
-    rpc: TRANSPORT_GLOBS.rpc.slice(ANYWHERE.length),
-    socket: TRANSPORT_GLOBS.socket.slice(ANYWHERE.length),
-}
 
 const RPC_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
 const SOCKET_METHODS = ['socket'] as const
@@ -81,7 +36,6 @@ const SOCKET_METHODS = ['socket'] as const
 type Method = (typeof RPC_METHODS)[number] | (typeof SOCKET_METHODS)[number]
 
 const LEGAL: Record<Kind, readonly string[]> = { rpc: RPC_METHODS, socket: SOCKET_METHODS }
-const DIRECTORIES: Record<Kind, string> = { rpc: RPC_DIRECTORY, socket: SOCKET_DIRECTORY }
 
 /**
  * One endpoint, as its own declaration describes it.
@@ -108,14 +62,14 @@ export class ElisionError extends SyntaxError_ {
 
 /** Which transport a module declares, or `null` if it declares none. */
 export function kindOf(modulePath: string): Kind | null {
-    if (modulePath.includes(RPC_DIRECTORY)) return 'rpc'
-    if (modulePath.includes(SOCKET_DIRECTORY)) return 'socket'
+    if (modulePath.includes(TRANSPORT_DIRECTORIES.rpc)) return 'rpc'
+    if (modulePath.includes(TRANSPORT_DIRECTORIES.socket)) return 'socket'
     return null
 }
 
 /** The module's own path under its transport directory — every id in the file shares it. */
 function moduleAddress(modulePath: string, kind: Kind): string {
-    const directory = DIRECTORIES[kind]
+    const directory = TRANSPORT_DIRECTORIES[kind]
     const rest = modulePath.slice(modulePath.lastIndexOf(directory) + directory.length)
     return rest.endsWith('.ts') ? rest.slice(0, -3) : rest
 }
@@ -144,7 +98,10 @@ function addressOf(address: string, endpoint: Endpoint): string {
 export function endpointId(modulePath: string, exportName: string): string {
     const kind = kindOf(modulePath)
     if (kind === null) {
-        throw new ElisionError(`abide: ${modulePath} is not under ${RPC_DIRECTORY} or ${SOCKET_DIRECTORY}`, 0)
+        throw new ElisionError(
+            `abide: ${modulePath} is not under ${TRANSPORT_DIRECTORIES.rpc} or ${TRANSPORT_DIRECTORIES.socket}`,
+            0,
+        )
     }
     return joinId(moduleAddress(modulePath, kind), exportName)
 }

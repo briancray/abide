@@ -69,10 +69,10 @@ export {
     type View,
     type ViewModule,
 } from './router.ts'
-// A compiled `<style>` block registers itself through this.
 // What the compiler writes for a `watch` in a `<script module>` — one effect per caller, kicked by
 // the setup of the component that declared it. Emitter-only, which is why it is here and not on `abide`.
 export { scopedEffect } from './reactive.ts'
+// A compiled `<style>` block registers itself through this.
 export { adopt } from './styles.ts'
 
 // What a server module elides to — `remote` / `remoteSocket` and the shapes describing one — is on

@@ -155,7 +155,7 @@ export type LineWriter = (
  * every line is a wall. The MACHINE formats carry the whole id, so the thing you paste into an APM
  * is never the truncated one — the short form is for finding the line, not for leaving with it.
  */
-export const READABLE_TRACE = 8
+const READABLE_TRACE = 8
 
 /**
  * The readable form, and the only one a browser can be in — so it is the one that lives here.
@@ -165,11 +165,20 @@ export const READABLE_TRACE = 8
  * neither. They are in `internal/lines.ts` and reach a line only through `useLineWriter` below.
  */
 export const plainLine: LineWriter = (level, channel, message, _now, traced, since) => {
-    const suffix = level === 'log' ? '' : ` ${level}`
-    // Short, and trailing with the delta rather than leading: both are metadata about the line, and
-    // the message is what someone reading a terminal is scanning for.
-    const short = traced === null ? '' : ` ${traced.slice(0, READABLE_TRACE)}`
-    return `${channel}${suffix} ${message}${short} +${since}ms`
+    return `${channel}${levelSuffix(level)} ${message}${shortTrace(traced)} +${since}ms`
+}
+
+/** The level, or nothing at all for a plain `log` — the common line names no level. */
+export function levelSuffix(level: Level): string {
+    return level === 'log' ? '' : ` ${level}`
+}
+
+/**
+ * The trace id, short and TRAILING rather than leading: both it and the delta are metadata about the
+ * line, and the message is what someone reading a terminal is scanning for.
+ */
+export function shortTrace(traced: string | null): string {
+    return traced === null ? '' : ` ${traced.slice(0, READABLE_TRACE)}`
 }
 
 // What the three TERMINAL forms are installed over. A browser never replaces it, which is the whole

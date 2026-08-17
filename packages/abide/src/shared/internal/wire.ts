@@ -6,6 +6,7 @@
 // is false however faithfully it was serialised.
 
 import type { WireOptions } from '../transport.ts'
+import { ENCODER } from './ENCODER.ts'
 import { mounted } from './mount.ts'
 import { ARGS_PARAM } from './PATHS.ts'
 import { isFile, isThenable } from './probes.ts'
@@ -778,7 +779,6 @@ export function framedBody<T>(
     frame: (value: T) => string,
     failed?: (error: unknown) => string,
 ): ReadableStream<Uint8Array> {
-    const encoder = new TextEncoder()
     const framed = framedSteps(source, frame, failed)
     return new ReadableStream<Uint8Array>({
         async pull(controller) {
@@ -788,7 +788,7 @@ export function framedBody<T>(
                 controller.close()
                 return
             }
-            controller.enqueue(encoder.encode(step.value))
+            controller.enqueue(ENCODER.encode(step.value))
         },
         cancel: (reason) => framed.cancel(reason),
     })

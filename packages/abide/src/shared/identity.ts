@@ -15,7 +15,7 @@
 // could forge with, which is the point: this half knows an address and how to read a reply.
 
 import { IDENTITY_PATH } from './internal/PATHS.ts'
-import { isThenable } from './internal/probes.ts'
+import { settled } from './internal/probes.ts'
 import { askWire, namesWire, type WireError } from './internal/wire.ts'
 import type { WireOptions } from './transport.ts'
 
@@ -83,8 +83,7 @@ function ask(options?: WireOptions): Promise<Identity> {
     const named = namesWire(options)
     const held = source
     if (!named && held !== null && held.serving()) {
-        const resolved = held.resolve()
-        return isThenable(resolved) ? resolved : Promise.resolve(resolved)
+        return settled(held.resolve())
     }
     // A named wire is not THIS page's session, so it is asked every time rather than answering out
     // of the cache the page holds for its own.

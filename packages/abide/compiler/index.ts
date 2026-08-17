@@ -31,13 +31,9 @@ import type { TypeSource } from './internal/shape.ts'
 // own name for what an endpoint is, and a hop through `elide.ts` would put a file that does not
 // declare it between the two.
 export type { Kind } from '$shared/transport.ts'
-export { ElisionError, type Endpoint, endpointId, kindOf, TRANSPORT_MODULE } from './internal/elide.ts'
-/**
- * Where a build leaves what the checker derived, and where the plugin looks for it.
- *
- * Relative to the working directory, so it is one path to ignore and one to point a build at.
- */
-export const SHAPES_FILE = '.abide/shapes.json'
+export { ElisionError, type Endpoint, endpointId, kindOf } from './internal/elide.ts'
+export { SHAPES_FILE } from './SHAPES_FILE.ts'
+export { TRANSPORT_MODULE } from './TRANSPORT.ts'
 
 export { BINDABLE } from './internal/emit.ts'
 export { original as originalPosition, type Segment } from './internal/map.ts'

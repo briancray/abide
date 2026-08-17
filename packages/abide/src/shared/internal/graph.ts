@@ -493,6 +493,18 @@ function resetChunks(track: Async): void {
 }
 
 /**
+ * The same forget, for a run that is about to PUSH: it ends owning a writable buffer of its own.
+ *
+ * `NO_CHUNKS` is SHARED, so the empty case still has to swap. Readers ARE handed the new array, but
+ * both are empty and the version does not move, so a cursor finds the same nothing it found before.
+ * `resetNode` keeps calling `resetChunks` instead — un-settling deliberately allocates nothing.
+ */
+function freshBuffer(track: Async): void {
+    resetChunks(track)
+    if (track.buffer === NO_CHUNKS) track.buffer = []
+}
+
+/**
  * Put a value through the node's `transform` before it is stored, reading nothing under tracking —
  * a transform is UNTRACKED by definition, and `set` is routinely called from inside an effect.
  *
@@ -509,14 +521,7 @@ function transformed(node: Node, value: unknown): unknown {
     // A non-null `transform` is the caller's precondition. Each of the six tests it before calling,
     // which is what keeps a cell WITHOUT one from paying a call at all — so re-testing here would be
     // a second guard on every settle, every chunk and every sync write of the cells that do have one.
-    const fn = node.transform as (value: unknown) => unknown
-    const previous = current
-    current = null
-    try {
-        return fn(value)
-    } finally {
-        current = previous
-    }
+    return untrackCall(node.transform as (value: unknown) => unknown, value)
 }
 
 // --- async cells ----------------------------------------------------------
@@ -663,8 +668,7 @@ function hold(node: Node, track: Async, value: unknown): void {
 function adoptTranscript(node: Node, chunks: readonly unknown[]): void {
     const track = trackerFor(node)
     track.generation++ // whatever was in flight is no longer wanted
-    resetChunks(track)
-    if (track.buffer === NO_CHUNKS) track.buffer = []
+    freshBuffer(track)
     for (let i = 0; i < chunks.length; i++) {
         track.buffer.push(node.transform === null ? chunks[i] : transformed(node, chunks[i]))
     }
@@ -701,11 +705,7 @@ function consume(node: Node, source: AsyncIterable<unknown>): void {
     if (node.hasValue && node.value !== undefined) track.refreshing.write(true)
     else track.pending.write(true)
     track.streaming.write(true)
-    resetChunks(track)
-    // NO_CHUNKS is SHARED. A run that is about to push needs one of its own. Readers ARE handed this
-    // array now, so the swap is visible to them — but both are empty and the version does not move,
-    // so a cursor reading it finds the same nothing it found before.
-    if (track.buffer === NO_CHUNKS) track.buffer = []
+    freshBuffer(track)
 
     // The transcript's ceiling, declared ONCE per stream — the cap is per-stream, so no chunk reads
     // an environment and a stream nobody capped charges nothing at all.
@@ -1175,7 +1175,8 @@ function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) |
             track.streaming.read() !== true
         )
     }
-    read.isError = (error: unknown, name: string) => isNamedError(error, name)
+    // The shared function, not a closure forwarding to it: this runs per cell, therefore per keyed row.
+    read.isError = isNamedError
     read.watch = (handler: (value: unknown) => unknown) =>
         watch(read as () => unknown, handler as (value: unknown) => void)
     // Cast because `then` is generic in its two result types and this one implementation serves
@@ -1755,16 +1756,7 @@ export function watch(first: () => unknown, handler?: (value: unknown) => unknow
     if (handler !== undefined) {
         // Hoisted rather than `untrack(() => handler(value))`: an effect re-runs, and the closure
         // form allocates one per run for a call the engine can make directly.
-        body = () => {
-            const value = first()
-            const previous = current
-            current = null
-            try {
-                return handler(value)
-            } finally {
-                current = previous
-            }
-        }
+        body = () => untrackCall(handler, first())
     }
     const node = new Node(undefined, body, true)
     node.pull()

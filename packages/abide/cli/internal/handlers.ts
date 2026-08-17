@@ -18,7 +18,7 @@
 // one imports what it finds: a fixture in some other `server/rpc/` under the tree is not an endpoint
 // of this app, and its address would be cut from the same directory name as the real one.
 
-import { TRANSPORT_ROOTS } from '$compiler/internal/elide.ts'
+import { TRANSPORT_ROOTS } from '$compiler/TRANSPORT.ts'
 
 /**
  * Import every handler under `root`. The registry is the answer — that is what an import is FOR here.

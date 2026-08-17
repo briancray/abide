@@ -65,31 +65,44 @@ export interface Prepared {
 
 const prepared = new WeakMap<readonly string[], Prepared>()
 
+/**
+ * Markup parsed to nodes, in the one place the parse convention lives.
+ *
+ * `<template>` rather than a `<div>` or a range parse, because it is the only container that holds a
+ * `<tr>` or an `<option>` without the parser hoisting it out. A caller that wants the ELEMENT builds
+ * its own — `prepare` does, since every instance clones from it.
+ */
+export function fragmentOf(markup: string): DocumentFragment {
+    const parsed = document.createElement('template')
+    parsed.innerHTML = markup
+    return parsed.content
+}
+
 export function prepare(result: TemplateResult): Prepared {
     const cached = prepared.get(result.strings)
     if (cached !== undefined) return cached
 
-    const kinds = planOf(result).kinds
-    const { strings } = result
+    // `texts` is the SAME cut the server's `emitTemplate` writes from, already made and cached by the
+    // scan — and reading it costs one packed array load where `result.strings` is a frozen
+    // `TemplateStringsArray` in JSC's slow index mode.
+    const { kinds, texts } = planOf(result)
     let markup = ''
 
-    for (let i = 0; i < strings.length; i++) {
-        const text = strings[i] as string
+    for (let i = 0; i < texts.length; i++) {
+        markup += texts[i]
         const kind = kinds[i]
-        if (kind !== undefined && kind.kind !== 'child') {
-            // The slot owns the `name=` before it; replace that markup with a locator attribute.
-            markup += `${text.slice(0, text.length - kind.staticTail)} data-$${i}=""`
-        } else {
-            markup += text
-            if (kind !== undefined) markup += closeMarker(i)
-        }
+        if (kind === undefined) continue
+        // A non-child slot owns the `name=` the cut took off; it becomes a locator attribute.
+        markup += kind.kind === 'child' ? closeMarker(i) : ` data-$${i}=""`
     }
 
+    // The ELEMENT, not just its fragment: `Prepared` holds it, and every instance clones from it.
     const element = document.createElement('template')
     element.innerHTML = markup
+    const content = element.content
 
     const parts: PreparedPart[] = []
-    record(element.content, parts, kinds, [], { index: -1 })
+    record(content, parts, kinds, [], { index: -1 })
 
     const takesRawFunction: boolean[] = []
     for (let i = 0; i < kinds.length; i++) {
@@ -97,7 +110,6 @@ export function prepare(result: TemplateResult): Prepared {
         takesRawFunction.push(kind === 'event' || kind === 'ref')
     }
 
-    const content = element.content
     const only = content.firstChild
     const root = only !== null && only.nextSibling === null && only.nodeType === 1 ? (only as Element) : null
     // Recorded against the fragment above, so the first step is the one that reaches the root — and

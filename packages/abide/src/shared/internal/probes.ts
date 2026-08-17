@@ -35,6 +35,16 @@ export function isThenable(value: unknown): value is PromiseLike<unknown> {
     return typeof (value as { then?: unknown }).then === 'function'
 }
 
+/**
+ * A promise for a value that is USUALLY already settled, without the unconditional wrap.
+ *
+ * `Promise.resolve` on a thenable is another promise and another microtask tick, and the callers are
+ * the two `$shared` documents whose local source answers synchronously in almost every process.
+ */
+export function settled<T>(value: T | PromiseLike<T>): Promise<T> {
+    return (isThenable(value) ? value : Promise.resolve(value)) as Promise<T>
+}
+
 export function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
     if (value === null) return false
     const type = typeof value

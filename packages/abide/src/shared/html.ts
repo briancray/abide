@@ -568,14 +568,6 @@ export function classifySlots(strings: readonly string[]): SlotKind[] {
     return kinds
 }
 
-const ESCAPES: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-}
-
 // Hoisted, for `wire.ts`'s reason: a regex LITERAL builds a fresh `RegExp` every time it is
 // evaluated, and this pair is evaluated per interpolated text node and per attribute value on the
 // server walk. The two spellings are one probe and one replace, so the `g` one's `lastIndex` is
@@ -587,7 +579,23 @@ export function escape(value: string): string {
     // Probe before replacing — most interpolated text has nothing to escape, and `replace` with a
     // callback allocates per hit.
     if (!ESCAPABLE.test(value)) return value
-    return value.replace(ESCAPABLE_ALL, (c) => ESCAPES[c] as string)
+    // A compare chain rather than a keyed load off a record: this callback runs once per escapable
+    // character, on the server's per-row path, and a string-keyed lookup there is the dynamic
+    // property access the hot-path rule names.
+    return value.replace(ESCAPABLE_ALL, (character) => {
+        switch (character) {
+            case '&':
+                return '&amp;'
+            case '<':
+                return '&lt;'
+            case '>':
+                return '&gt;'
+            case '"':
+                return '&quot;'
+            default:
+                return '&#39;'
+        }
+    })
 }
 
 /**

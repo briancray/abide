@@ -421,7 +421,7 @@ export function remoteSocket<T, Args = void>(
         // is what a channel's own `isError` does too. Through `held()` it was the only probe in this
         // table that opened a connection, and on a socket whose address is not resolvable yet it did
         // not merely start work, it THREW, out of a member the spec says never does either.
-        isError: (error, name) => isNamedError(error, name),
+        isError: isNamedError,
         watch: (handler) => held().watch(handler),
         subscribe: (listener) => held().subscribe(listener),
         tail: () => held().tail(),

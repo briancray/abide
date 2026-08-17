@@ -46,7 +46,7 @@ import { constants, createGzip } from 'node:zlib'
 import '$compiler/preload.ts'
 // The transport directories by their one definition, for the refusal that names them. The globs come
 // from the compiler rather than being written again here, exactly as the boot's own scan takes them.
-import { TRANSPORT_ROOTS } from '$compiler/internal/elide.ts'
+import { TRANSPORT_ROOTS } from '$compiler/TRANSPORT.ts'
 import { type Config, type ConfigDefaults, isPort, onConfig } from '$server/config.ts'
 import { type HealthReporter, onHealth } from '$server/health.ts'
 import { type IdentityResolver, onIdentity } from '$server/identity.ts'

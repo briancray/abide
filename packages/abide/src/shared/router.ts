@@ -342,7 +342,9 @@ export function outletFrom(from: number): TemplateResult {
     //
     // On the cells rather than at module scope, because a server renders two callers at once and this
     // is a fact about ONE of them. Rebuilt per run, never appended to.
-    const chain: TemplateResult[] = []
+    // Its full length up front: the descending fill would otherwise write past the end of an empty
+    // array on its first step, which is a holey allocation every `chain[i]` read downstream pays for.
+    const chain: TemplateResult[] = new Array(held.wraps.length)
     for (let i = held.wraps.length - 1; i >= from; i--) {
         chain[i] = node
         node = (held.wraps[i] as View)({ children: node })

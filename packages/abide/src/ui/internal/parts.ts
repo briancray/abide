@@ -47,7 +47,7 @@ import { CLOSE_FORM, closeData, PLACEHOLDER_TAG, SLOT_CLOSE, SLOT_OPEN } from '$
 import { isAsyncIterable, isThenable } from '$shared/internal/probes.ts'
 import { unwrap } from '$shared/internal/slots.ts'
 import { abideLog } from '$shared/log.ts'
-import { type Prepared, type PreparedPart, prepare } from './prepare.ts'
+import { fragmentOf, type Prepared, type PreparedPart, prepare } from './prepare.ts'
 
 // A `warning`, so the DEBUG gate never swallows it: a page that silently rebuilt half of what the
 // server sent looks exactly like a page that adopted it.
@@ -357,9 +357,7 @@ export class ChildPart {
             // screen is the most expensive way there is to produce the same nodes.
             if (this.rawHtml === value.html) return
             this.clearExcept(null)
-            const fragment = document.createElement('template')
-            fragment.innerHTML = value.html
-            this.owned = Array.from(fragment.content.childNodes) as ChildNode[]
+            this.owned = Array.from(fragmentOf(value.html).childNodes) as ChildNode[]
             this.anchor.before(...this.owned)
             this.rawHtml = value.html
             return
@@ -979,7 +977,8 @@ class ListPart {
         // The anchor is what every row sits BEFORE, so appending there is the end of the list. No
         // placement walk: nothing below this row moved, because there is nothing below it.
         const parent = this.anchor.parentNode as ParentNode
-        for (const node of instance.live()) parent.insertBefore(node, this.anchor)
+        const nodes = instance.live()
+        for (let i = 0; i < nodes.length; i++) parent.insertBefore(nodes[i] as ChildNode, this.anchor)
     }
 
     set(items: unknown[]): void {
@@ -1103,7 +1102,8 @@ class ListPart {
                 // DESCENDANT of what this loop just detached, so letting each child slot run its own
                 // removal walked an already-detached subtree — 4x the removes of the hand-written arm
                 // on a 500-of-1000 drop, none of them on a connected node.
-                for (const node of row.instance.live()) node.remove()
+                const nodes = row.instance.live()
+                for (let j = 0; j < nodes.length; j++) (nodes[j] as ChildNode).remove()
                 row.instance.dispose()
             }
         }
@@ -1155,7 +1155,8 @@ class ListPart {
             if (first.parentNode === null || instance.lastNode()?.nextSibling !== reference) {
                 // Materialised BEFORE the moves: the walk is over siblings, and inserting the first
                 // node rewrites the `nextSibling` chain the rest of it would have been read from.
-                for (const node of instance.live()) parent.insertBefore(node, reference)
+                const nodes = instance.live()
+                for (let j = 0; j < nodes.length; j++) parent.insertBefore(nodes[j] as ChildNode, reference)
             } else if (i < firstChanged) {
                 break
             }
@@ -1279,8 +1280,13 @@ class ListPart {
     }
 
     dispose(detach = true): void {
-        for (const row of this.rows) {
-            if (detach) for (const node of row.instance.live()) node.remove()
+        const rows = this.rows
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i] as Row
+            if (detach) {
+                const nodes = row.instance.live()
+                for (let j = 0; j < nodes.length; j++) (nodes[j] as ChildNode).remove()
+            }
             row.instance.dispose()
         }
         this.rows = []
@@ -1733,9 +1739,12 @@ class Instance {
                     writeAttribute(element, name, next[name])
                     written.push(name)
                 }
+                // Asked of `next` rather than scanned out of `written`: every name in `previous`
+                // passed the guard when it was written, so "still named" is the whole question, and
+                // `includes` made a 20-attribute spread 400 compares to decide the usual zero.
                 for (let i = 0; i < previous.length; i++) {
                     const name = previous[i] as string
-                    if (!written.includes(name)) element.removeAttribute(name)
+                    if (!Object.hasOwn(next, name)) element.removeAttribute(name)
                 }
                 previous = written
             }
@@ -1807,16 +1816,7 @@ class Instance {
         // stays because it is what makes the indexed read below safe without that argument, which is
         // two call sites away rather than here.
         const previous = last !== null && last.length === values.length ? last : null
-        if (previous !== null) {
-            let moved = false
-            for (let i = 0; i < values.length; i++) {
-                if (values[i] !== previous[i]) {
-                    moved = true
-                    break
-                }
-            }
-            if (!moved) return
-        }
+        if (previous !== null && sameValues(previous, values)) return
         this.lastValues = values
         this.applied = null
 
@@ -1933,8 +1933,11 @@ function writeAttribute(element: Element, name: string, value: unknown): void {
  */
 function sameTemplate(previous: unknown, next: TemplateResult): boolean {
     if (!isTemplate(previous) || previous.strings !== next.strings) return false
-    const before = previous.values
-    const after = next.values
+    return sameValues(previous.values, next.values)
+}
+
+/** A fresh envelope over the values already on screen — the one invariant both callers test for. */
+function sameValues(before: readonly unknown[], after: readonly unknown[]): boolean {
     if (before.length !== after.length) return false
     for (let i = 0; i < before.length; i++) {
         if (before[i] !== after[i]) return false
@@ -1956,7 +1959,9 @@ function sameTemplate(previous: unknown, next: TemplateResult): boolean {
  * rather than skipped, because the output is simply one prop behind and nothing else says so.
  */
 function writeProps(held: Record<string, unknown>, next: Record<string, unknown>): void {
-    for (const name in next) {
+    const names = Object.keys(next)
+    for (let i = 0; i < names.length; i++) {
+        const name = names[i] as string
         const value = next[name]
         if (passedThrough(value)) continue
         const cell = held[name] as State<unknown> | undefined

@@ -30,7 +30,9 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { ENDS_EXPRESSION, Lexer, SyntaxError_, type Token } from './lex.ts'
-import { closeAngle, inObjectLiteral, typeRegions } from './types.ts'
+// The cast keywords THEMSELVES: `types.ts` marks what FOLLOWS one, and here the keyword is
+// punctuation on a name to step over.
+import { closeAngle, inObjectLiteral, TYPE_CAST_KEYWORDS, typeRegions } from './types.ts'
 
 /**
  * The verbs every source carries (SPEC, "The shared surface"). Reserved: `x.set` is the verb, and
@@ -819,9 +821,6 @@ function opensCall(cursor: Cursor, at: number): boolean {
     return tokens[past]?.kind === SyntaxKind.OpenParenToken
 }
 
-/** `as` and `satisfies` themselves: `types.ts` marks what FOLLOWS one, never the keyword. */
-const TYPE_TAIL = new Set(['as', 'satisfies'])
-
 /**
  * Is the name at `at` the whole VALUE of this region — the question `hold` actually asks?
  *
@@ -843,7 +842,7 @@ function namesWholeRegion(tokens: Token[], at: number, inType: Uint8Array): bool
     let closes = 0
     for (let i = at + 1; i < tokens.length; i++) {
         const token = tokens[i] as Token
-        if (inType[i] === 1 || TYPE_TAIL.has(token.text)) continue
+        if (inType[i] === 1 || TYPE_CAST_KEYWORDS.has(token.text)) continue
         if (token.kind === SyntaxKind.ExclamationToken) continue
         if (token.kind === SyntaxKind.CloseParenToken) {
             closes++

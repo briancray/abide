@@ -11,6 +11,7 @@
 
 // `AsyncLocalStorage` has no `Bun.*` spelling — Bun implements the node module and nothing else.
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { ENCODER } from '$shared/internal/ENCODER.ts'
 import type { Identity } from '$shared/identity.ts'
 import {
     dropScope,
@@ -170,8 +171,8 @@ function markHeld<T>(body: ReadableStream<T>): ReadableStream<T> {
     return body
 }
 
-/** Stateless, so one for the process rather than one per response — `identity.ts` seals with it too. */
-export const ENCODER = new TextEncoder()
+/** Re-exported so `identity.ts` keeps one spelling of it; the instance is `$shared`'s leaf. */
+export { ENCODER } from '$shared/internal/ENCODER.ts'
 
 /** One chunk, however its producer spells one — a generator's step and a reader's agree here. */
 interface Step {
@@ -209,7 +210,7 @@ function settleChunk(
  * The hold, the bind, and the three ways a body ends — once, over whatever produces the next chunk.
  *
  * A held body comes in three shapes: `heldStream` pumps a stream somebody else built, `heldFrames`
- * pumps an iterable it frames as it goes, and `bytes` in `index.ts` pumps a render walk. `heldFrames`
+ * pumps an iterable it frames as it goes, and `bytes` in `render.ts` pumps a render walk. `heldFrames`
  * is the one the guard below is for, since a sync iterable settles in the call. What differs is where
  * a chunk comes from; what must not differ is the RELEASE, which has three exits — the close, the
  * throw and the cancel — and a scope leaks silently when any one of them is missed. So the source is the argument and the protocol is here,
@@ -293,7 +294,7 @@ export function heldStream(body: ReadableStream<Uint8Array>): ReadableStream<Uin
  * A FRAMED sequence as a held body — one stream, not a framed one wrapped in a held one.
  *
  * This is `heldStream(framedBody(…))` with the second `ReadableStream` taken out, and it is the same
- * choice `bytes` in `index.ts` already made for the render walk: the framing is a source of chunks,
+ * choice `bytes` in `render.ts` already made for the render walk: the framing is a source of chunks,
  * so it belongs on the inside of the pump rather than behind a reader feeding it. Wrapping cost a
  * second stream and its queue per response, a second `TextEncoder`, and a `getReader()` — and every
  * chunk crossed both queues.
@@ -486,7 +487,11 @@ interface Tracing {
 }
 
 function tracing(): Tracing {
-    const held = serving('trace')
+    return tracingOf(serving('trace'))
+}
+
+/** The same, off a scope already in hand — what keeps `ambientHeaders` to one store read. */
+function tracingOf(held: Serving): Tracing {
     if (held.trace !== null) return held.trace
     const carried = held.request.headers.get('traceparent')
     const matched = carried === null ? null : TRACEPARENT.exec(carried.trim().toLowerCase())
@@ -494,11 +499,15 @@ function tracing(): Tracing {
     // own rule, so it is followed by nothing — the operation starts here instead. Groups 1-3 are all
     // mandatory in the pattern, so a match narrows all three at once.
     const following = matched !== null && matched[1] !== NO_TRACE && matched[2] !== NO_SPAN ? matched : null
+    // ONE draw for both ids. Minting happens on every request that answers, and two calls were two
+    // `getRandomValues` entries and two arrays for the 24 bytes `randomHex`'s own measurement is
+    // quoted in. Sliced rather than drawn twice; the inbound id wins where there was one.
+    const minted = crypto.getRandomValues(new Uint8Array(24)).toHex()
     held.trace = {
-        id: following?.[1] ?? randomHex(16),
+        id: following?.[1] ?? minted.slice(0, 32),
         // A span of our OWN either way. This is what was missing: without one, nothing we send can
         // name a parent, so neither an outbound `traceparent` nor a `traceresponse` was answerable.
-        span: randomHex(8),
+        span: minted.slice(32),
         flags: following?.[3] ?? MINTED_FLAGS,
         stateText: held.request.headers.get('tracestate'),
         state: null,
@@ -595,14 +604,24 @@ trace.responseHeaders = () => ({
 })
 
 /**
- * The `traceresponse` text, or `null` outside a request — the form `headersFor` wants.
+ * What the ambient request adds to a response's headers: the operation that answered it, and any
+ * cookie a handler wrote deep inside it.
  *
- * Every response abide builds asks this, so it is the one place on that path worth spelling without
- * an intermediate object: a string rather than a one-key record allocated to read a single field
- * back off it.
+ * ONE scope read. `headersFor` is the funnel every response abide builds goes through, and asking
+ * separately for the trace and the cookies walked the async context three times per response — once
+ * to test, once inside `tracing()`, once for the cookies. Written here rather than exposing the
+ * fields, so the `Serving` record stays this file's.
  */
-export function traceResponse(): string | null {
-    return STORAGE?.getStore() === undefined ? null : parentText(tracing())
+export function ambientHeaders(headers: Headers): void {
+    const held = STORAGE?.getStore()
+    if (held === undefined) return
+    // `has` first, like the defaults `headersFor` writes: a caller that set its own means it.
+    if (!headers.has('traceresponse')) headers.set('traceresponse', parentText(tracingOf(held)))
+    // `append`, not `set`: `Set-Cookie` is the one header that may legitimately appear more than
+    // once, and a caller that wrote its own keeps it.
+    const cookies = held.cookiesOut
+    if (cookies === null) return
+    for (let i = 0; i < cookies.length; i++) headers.append('set-cookie', cookies[i] as string)
 }
 
 /**
@@ -650,14 +669,6 @@ export function writeCookie(line: string): void {
     const held = serving('writeCookie')
     if (held.cookiesOut === null) held.cookiesOut = [line]
     else held.cookiesOut.push(line)
-}
-
-/**
- * The lines to write, or `null` when there are none — which is every request that did not log
- * anybody in, so the common response allocates nothing to find that out.
- */
-export function pendingCookies(): string[] | null {
-    return STORAGE?.getStore()?.cookiesOut ?? null
 }
 
 // --- the principal -----------------------------------------------------------
