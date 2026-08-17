@@ -419,9 +419,7 @@ export class Node {
         const track = this.asyncTrack
         if (track !== null) {
             track.generation++
-            track.pending.write(false)
-            track.refreshing.write(false)
-            track.streaming.write(false)
+            standDown(track)
             if (track.waiters !== null) {
                 finish(track, new Error('abide: disposed before the load settled'), true)
             }
@@ -444,8 +442,7 @@ export class Node {
         // Marked BEFORE the list is dropped, and free for the node nobody read — the common case is
         // an empty `observers`. A reader being torn down in the same teardown absorbs this in `mark`,
         // which returns early on a status already at DEAD.
-        const observers = this.observers
-        for (let i = 0; i < observers.length; i++) (observers[i] as Node).mark(DIRTY)
+        wakeReaders(this)
         // A fresh empty rather than `length = 0`: this may be the SHARED one, which a node that
         // nothing ever read still holds.
         this.observers = NO_OBSERVERS
@@ -615,10 +612,12 @@ function adopt(node: Node, promise: PromiseLike<unknown>): void {
     )
 }
 
-// A failure changes the OUTCOME of a plain read without moving the value, so the value's own
-// readers have to be woken for it. Subscribing them to the error node instead does not work: a
-// reader that ran before the cell ever met a promise subscribed when there was no error node to
-// subscribe TO, and would then sit on the last good value as though the load had succeeded.
+// Everyone reading this node has to ASK AGAIN, without the node's own value having moved. A FAILURE
+// is the case that needs it most: it changes the OUTCOME of a plain read while the value stays put,
+// and subscribing those readers to the error node instead does not work — a reader that ran before
+// the cell ever met a promise subscribed when there was no error node to subscribe TO, and would
+// then sit on the last good value as though the load had succeeded. Disposal wants the same wake for
+// a different reason; `Node.write` keeps its own copy, being the per-write path.
 function wakeReaders(node: Node): void {
     const observers = node.observers
     for (let i = 0; i < observers.length; i++) (observers[i] as Node).mark(DIRTY)
@@ -673,17 +672,29 @@ function adoptTranscript(node: Node, chunks: readonly unknown[]): void {
         track.buffer.push(node.transform === null ? chunks[i] : transformed(node, chunks[i]))
     }
     track.chunks.write((track.chunks.value as number) + 1)
-    track.streaming.write(false)
     if (chunks.length > 0) hold(node, track, track.buffer[track.buffer.length - 1])
     markSettled(track)
     finish(track, node.value, false)
 }
 
+/**
+ * Nothing is in flight any more, whatever ended it.
+ *
+ * One writer for the three probes, because they stand down TOGETHER: `markSettled` used to leave
+ * `streaming` alone, so each of its stream callers wrote that line itself and a settle reached any
+ * other way left a cell claiming to stream. Every write here is identity-deduped, so a probe already
+ * false costs one compare.
+ */
+function standDown(track: Async): void {
+    track.pending.write(false)
+    track.refreshing.write(false)
+    track.streaming.write(false)
+}
+
 /** Nothing is in flight any more, and it ended without a failure. */
 function markSettled(track: Async): void {
     track.error.write(undefined)
-    track.pending.write(false)
-    track.refreshing.write(false)
+    standDown(track)
     track.settled.write(true)
 }
 
@@ -753,12 +764,10 @@ function consume(node: Node, source: AsyncIterable<unknown>): void {
             }
         } catch (error) {
             if (generation !== track.generation) return
-            track.streaming.write(false)
             settleError(node, error)
             return
         }
         if (generation !== track.generation) return
-        track.streaming.write(false)
         // The last chunk is already held and already transformed, so ending is bookkeeping alone —
         // routing it back through `settleValue` would put the value through the transform twice.
         markSettled(track)
@@ -787,9 +796,7 @@ function settleError(node: Node, error: unknown): void {
     const changed = track.error.value !== reason
     track.error.write(reason)
     if (changed) wakeReaders(node)
-    track.pending.write(false)
-    track.refreshing.write(false)
-    track.streaming.write(false)
+    standDown(track)
     track.settled.write(true)
     finish(track, error, true)
 }
@@ -1209,14 +1216,14 @@ function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) |
  * arguments already hands back a real promise, which is what makes `finally` one line and what makes
  * both agree with the native semantics they are named after.
  */
-export function caught(
+function caught(
     this: PromiseLike<unknown>,
     onRejected?: ((reason: unknown) => unknown) | null,
 ): Promise<unknown> {
     return this.then(undefined, onRejected) as Promise<unknown>
 }
 
-export function lastly(this: PromiseLike<unknown>, onFinally?: (() => void) | null): Promise<unknown> {
+function lastly(this: PromiseLike<unknown>, onFinally?: (() => void) | null): Promise<unknown> {
     return (this.then() as Promise<unknown>).finally(onFinally)
 }
 
@@ -1296,9 +1303,7 @@ function resetNode(node: Node): void {
         track.generation++ // whatever is in flight is no longer wanted
         const wasFailed = track.error.value !== undefined
         track.error.write(undefined)
-        track.pending.write(false)
-        track.refreshing.write(false)
-        track.streaming.write(false)
+        standDown(track)
         track.settled.write(false)
         resetChunks(track)
         if (wasFailed) wakeReaders(node)
@@ -1663,9 +1668,22 @@ state.scoped = <C extends Cell<unknown>>(make: () => C): C => {
     // function. Deliberately no `abide.cell`: that symbol names one node and the node varies here,
     // which is the same reason `scopedArgless` withholds it.
     const facade = markSource((() => pick()()) as unknown as C)
-    // A TABLE typed by `keyof Cell`, so a member added to the cell surface is a type error HERE
-    // rather than an `undefined` that only shows up on a server.
-    const forward: { [K in keyof Cell<unknown>]: Cell<unknown>[K] } = {
+    Object.assign(facade, cellForward(pick as () => Cell<unknown>))
+    return facade
+}
+
+/**
+ * The whole cell surface, forwarded to whatever `pick` resolves to at the moment of the call.
+ *
+ * A TABLE typed by `keyof Cell`, so a member added to the cell surface is a type error HERE rather
+ * than an `undefined` that only shows up on a server — and ONE table, because that check is the only
+ * reason it is written this way. `state.scoped` above and `memo`'s `scopedArgless` had a copy each,
+ * sixteen members apart from the memo's own two verbs, so the guarantee each of them claimed singly
+ * had to be repaired in two files. A scoped memo `Omit`s its extra verbs on at its own call site,
+ * which keeps that surface exhaustively checked too.
+ */
+export function cellForward(pick: () => Cell<unknown>): { [K in keyof Cell<unknown>]: Cell<unknown>[K] } {
+    return {
         peek: () => pick().peek(),
         set: (value) => pick().set(value),
         invalidate: () => pick().invalidate(),
@@ -1679,18 +1697,20 @@ state.scoped = <C extends Cell<unknown>>(make: () => C): C => {
         isError: (error, name) => pick().isError(error, name),
         watch: (handler) => pick().watch(handler),
         [Symbol.asyncIterator]: () => pick()[Symbol.asyncIterator](),
+        // Cast for the same reason `attachAsync` casts: one implementation serves every instantiation
+        // of `then`'s two type parameters, and the erased signature is the honest description of it.
         then: ((onFulfilled: unknown, onRejected: unknown) =>
             (pick() as unknown as { then: (a?: unknown, b?: unknown) => Promise<unknown> }).then(
                 onFulfilled,
                 onRejected,
             )) as Cell<unknown>['then'],
-        // The SAME shared pair every cell carries rather than forwarders of their own: both reach
-        // this facade through `this`, and its `then` above is what puts the caller's cell behind them.
+        // The SAME shared pair every cell carries rather than forwarders of their own: both reach the
+        // facade through `this`, and its `then` above is what puts the caller's cell behind them. A
+        // closure here would be two more allocations per caller AND a different function object,
+        // which is the thing the identity assertion in `demos/memo.ts` is watching for.
         catch: caught as Cell<unknown>['catch'],
         finally: lastly as Cell<unknown>['finally'],
     }
-    Object.assign(facade, forward)
-    return facade
 }
 
 // The ARGLESS form of abide's `memo`: auto-tracked derivation, lazy, memoised on identity. A body

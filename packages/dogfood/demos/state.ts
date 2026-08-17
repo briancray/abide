@@ -348,6 +348,34 @@ export default suite({
         },
 
         {
+            title: 'a stream SUPERSEDED mid-flight stands the probes down, like one that ended',
+            note: 'Setting a plain value over a live stream bumps the generation, and the consume loop drops out at its next guard rather than running to either of its own two ends. Those ends used to be the only places `streaming` was cleared, so the cell settled holding the new value while still reporting that it was streaming — for good, because nothing else was ever going to ask. Nothing about the VALUE is wrong on that path, which is why only a probe can catch it.',
+            async run({ is }) {
+                async function* words(): AsyncGenerator<string> {
+                    for (const word of ['the', 'quick', 'brown']) {
+                        await sleep(5)
+                        yield word
+                    }
+                }
+                const line = state<string | undefined>(undefined)
+                line.set(words())
+                await until(() => line.chunks().length === 1)
+                is('streaming() mid-flight', line.streaming(), true)
+
+                // The supersede: a sync value, which is the arm `Node.write` says "clears whatever
+                // the async side was reporting".
+                line.set('done')
+                await sleep(20)
+
+                is('the value is the one that superseded it', line(), 'done')
+                is('settled()', line.settled(), true)
+                is('streaming() — stood down with the rest', line.streaming(), false)
+                is('pending()', line.pending(), false)
+                is('refreshing()', line.refreshing(), false)
+            },
+        },
+
+        {
             title: 'for await — the cursor face of the same transcript',
             note: '`chunks()` is for a reader that re-reads the whole list; this is for one that reads each chunk once and never looks back. Same cell, same transcript, no second vocabulary — and the two are why `chunks()` can hand back the live buffer: the reader that must not see it move is the one that re-reads it, and this one re-reads nothing. The replay is what makes it a CELL rather than a subscription: a consumer that arrives after the stream ended still gets the whole of it.',
             async run({ is }) {

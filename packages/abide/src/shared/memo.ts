@@ -23,16 +23,7 @@
 
 import { markSource } from './internal/BRANDS.ts'
 import { admit, Bounded, release, touch } from './internal/ceilings.ts'
-import {
-    caught,
-    type Cell,
-    derive,
-    internals,
-    isPending,
-    lastly,
-    type Memo,
-    untrackCall,
-} from './internal/graph.ts'
+import { type Cell, cellForward, derive, internals, isPending, type Memo, untrackCall } from './internal/graph.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { isAsyncIterable, isThenable } from './internal/probes.ts'
 import { disposeWith, storeFor } from './internal/scopes.ts'
@@ -46,14 +37,6 @@ import { arm } from './internal/timers.ts'
 export interface MemoHandle<T> extends Cell<T> {
     /** This data may be STALE: re-run the body now, keeping the old value on screen meanwhile. */
     refresh(): void
-    /**
-     * Awaiting waits for a settle, exactly as reading it does — the two differ in HOW they wait, not
-     * in what they can hand back.
-     */
-    then<Fulfilled = T, Rejected = never>(
-        onFulfilled?: ((value: T) => Fulfilled | PromiseLike<Fulfilled>) | null,
-        onRejected?: ((reason: unknown) => Rejected | PromiseLike<Rejected>) | null,
-    ): Promise<Fulfilled | Rejected>
 }
 
 interface Slot<T> {
@@ -449,43 +432,17 @@ function scopedArgless<T>(fallback: Memo<T>, build: () => Memo<T>): Memo<T> {
     // CLOSURE CALL, not the depth. There is nothing to buy back short of not having a facade.
     const facade = markSource((() => pick()()) as Memo<T>)
 
-    // A TABLE typed by `keyof Memo`, not one assignment per member: a member added to the cell surface is
-    // then a type error HERE, rather than a member that is silently `undefined` on every scoped memo
-    // — and only where a caller scope exists, so never in a client test.
+    // The cell surface comes from `cellForward`, which is where the `keyof Cell` check lives; what a
+    // MEMO adds on top of it is these two, typed by `Omit` so that surface stays exhaustively checked
+    // as well. A member added to either interface is a type error in exactly one place.
     //
     // Deliberately no `abide.cell`: that symbol names ONE node, and the whole point of the facade is
     // that the node varies by caller. `internals` is handed the inner cell, never this.
-    const forward: { [K in keyof Memo<T>]: Memo<T>[K] } = {
-        peek: () => pick().peek(),
-        set: (value) => pick().set(value),
-        invalidate: () => pick().invalidate(),
+    const verbs: Omit<Memo<T>, keyof Cell<T>> = {
         refresh: () => pick().refresh(),
         dispose: () => pick().dispose(),
-        chunks: () => pick().chunks(),
-        [Symbol.asyncIterator]: () => pick()[Symbol.asyncIterator](),
-        pending: () => pick().pending(),
-        refreshing: () => pick().refreshing(),
-        streaming: () => pick().streaming(),
-        error: () => pick().error(),
-        settled: () => pick().settled(),
-        done: () => pick().done(),
-        isError: (error, name) => pick().isError(error, name),
-        watch: (handler) => pick().watch(handler),
-        // Cast for the same reason `attachAsync` casts: one implementation serves every instantiation
-        // of `then`'s two type parameters, and the erased signature is the honest description of it.
-        then: ((onFulfilled: unknown, onRejected: unknown) =>
-            (pick() as unknown as { then: (a?: unknown, b?: unknown) => Promise<unknown> }).then(
-                onFulfilled,
-                onRejected,
-            )) as Memo<T>['then'],
-        // The SAME pair every other cell carries, not a forwarder of their own: both reach this
-        // facade through `this`, and its `then` above is what puts the scoped instance behind them.
-        // A closure here would be two more allocations per caller AND a different function object,
-        // which is the thing the identity assertion in `demos/memo.ts` is watching for.
-        catch: caught as Memo<T>['catch'],
-        finally: lastly as Memo<T>['finally'],
     }
-    Object.assign(facade, forward)
+    Object.assign(facade, cellForward(pick as unknown as () => Cell<unknown>), verbs)
     return facade
 }
 
