@@ -411,6 +411,43 @@ export default suite({
         },
 
         {
+            title: 'the LAST navigation is the one that lands, however slowly the others resolve',
+            note: 'A reader who clicks again is waiting on the second answer, so a navigation that has been overtaken commits nothing when its own module finally arrives. Without that the slower move wins by finishing last — it moves the address bar back to a page the reader has already left, seconds after they left it.',
+            async run({ is }) {
+                let release = (): void => {}
+                const gate = new Promise<void>((resolve) => {
+                    release = resolve
+                })
+                const SLOW: RouteEntry[] = [
+                    { path: '/', page: load(Home) },
+                    { path: '/users/[id]', page: load(User) },
+                    {
+                        path: '/slow',
+                        page: async () => {
+                            await gate
+                            return { default: Fresh }
+                        },
+                    },
+                ]
+                await withTable(SLOW, async () => {
+                    await navigate('/')
+
+                    // Started first and answered last, which is the whole of the arrangement: the
+                    // second move has nothing to wait for and lands in the same tick.
+                    const overtaken = navigate('/slow')
+                    await navigate('/users/1')
+                    is('the second move landed', route().name, '/users/[id]')
+
+                    release()
+                    await overtaken
+                    await settled()
+                    is('and the first one stayed off the route', route().name, '/users/[id]')
+                    is('and off the address it was for', route().url.pathname, '/users/1')
+                })
+            },
+        },
+
+        {
             title: '`url` builds an in-app href, or refuses to build a wrong one',
             note: 'A missing segment and a param the pattern has no segment for are both typos every time, and both otherwise produce an href pointing at the wrong page — a bug nothing catches until somebody clicks it.',
             run({ is, throws }) {

@@ -358,9 +358,19 @@ export function outletChain(): TemplateResult[] {
     return cellsFor().chain
 }
 
-/** The pattern the caller is standing on, without subscribing to it. */
-export function currentRouteName(): string {
-    return cellsFor().name.peek()
+/**
+ * The route whose layouts this caller can put a fragment INSIDE, without subscribing to it.
+ *
+ * The pattern it is standing on, and `''` — claim nothing — while a served range is standing that no
+ * commit has claimed. That range replaced the layouts the committed name describes, so naming it
+ * would have the server leave off chrome the reader is no longer looking at, and the descent through
+ * `outletChain` would then be looking for parts that were disposed when the range was reclaimed. The
+ * server reads `''` as a caller that cannot place a fragment and answers with the whole outlet, which
+ * is the one arrangement that is right however deep the two routes happen to agree.
+ */
+export function placeableRouteName(): string {
+    const cells = cellsFor()
+    return cells.stood ? '' : cells.name.peek()
 }
 
 /**
@@ -416,8 +426,29 @@ interface Cells {
      * A navigation resolves when its whole range has landed, and a reader can start another one
      * before that — so without this the overtaken call still ran `commit` when its stream finally
      * ended, leaving the reader on the new page showing the old page's params.
+     *
+     * Claimed by EVERY navigation and not only by the served ones. A local move is instant, which is
+     * exactly why it has to take one: it lands while a served answer is still on the wire, and the
+     * served call then committed over the top of it — the reader clicked a link, saw that page, and
+     * was moved back off it a second later by the navigation they had already left.
      */
     entering: number
+    /**
+     * A served range is standing in the outlet that no commit has claimed yet.
+     *
+     * TRUE from the first piece landing until the route it belongs to is committed, and it is the one
+     * thing that makes the committed route a LIE about the screen: `name` still says where the reader
+     * was, while the range that page rendered into has already been torn down and refilled from the
+     * wire. Both of the questions a navigation asks about the screen — may I patch in place, and
+     * which layouts am I already showing — are answered off `name`, so both are wrong exactly here.
+     *
+     * Owned by the LIVE navigation, which is what decides where it is cleared: beside the commit on
+     * the way through, and again in `enter`'s `finally` so no other exit can leave it set. An
+     * overtaken navigation leaves it alone — the one that overtook it owns the range by then.
+     *
+     * Not a cell: nothing renders from it, and the two readers are decisions taken inside `navigate`.
+     */
+    stood: boolean
 }
 
 interface Here {
@@ -495,8 +526,16 @@ export interface Entered {
  * route — is routing's, and it must not need a document to be decided.
  */
 export interface NavigationSink {
-    /** Resolves when the FIRST piece is on screen, not when the page is whole. */
-    enter(url: URL): Promise<Entered>
+    /**
+     * Resolves when the FIRST piece is on screen, not when the page is whole.
+     *
+     * `live` is what says this navigation is still the one the reader is waiting on, and it is asked
+     * at the MUTATION rather than around the call: `enter` below re-checks after this resolves, but
+     * the range has already been replaced by then, so a click landing while the answer was in flight
+     * had its page painted over by the one it overtook. A sink that stands a fragment without asking
+     * is that bug, and it is silent — the markup it paints is correct markup for the wrong page.
+     */
+    enter(url: URL, live: () => boolean): Promise<Entered>
 }
 
 let NAVIGATION_SINK: NavigationSink | null = null
@@ -540,6 +579,7 @@ function cellsFor(fallback?: string): Cells {
         adopted: state(0),
         chain: NO_CHAIN,
         entering: 0,
+        stood: false,
     }
     here.cells = made
     return made
@@ -876,6 +916,11 @@ function land(cells: Cells, url: URL, options: NavigateOptions | undefined, foun
  */
 function paintsLocally(cells: Cells, found: Match | null): boolean {
     if (found === null) return false
+    // A served range is standing that nothing has committed, so the route below names a page whose
+    // nodes are gone — reclaimed when that range was filled. "The page is on screen and the render
+    // that follows therefore patches" is the whole premise of this path, and it is false here: the
+    // params would move, the page's own reads would wake, and they would patch nothing at all.
+    if (cells.stood) return false
     if (found.held.pattern.path !== cells.name.peek()) return false
     // A route can be the one showing and still have nothing to render with — an async loader whose
     // first module has not landed. Then the server is the faster answer as well as the only one.
@@ -908,17 +953,22 @@ async function enter(
     options: NavigateOptions | undefined,
     found: Match | null,
     sink: NavigationSink,
+    mine: number,
 ): Promise<void> {
     const loading = found === null ? null : loadFor(found.held)
-    // Claimed before the first await. Every step below that could have been overtaken asks whether
-    // this is still the newest navigation, because a reader who clicked twice is waiting on the
-    // second answer and this one has nothing left to say. The abandoned response is still read to
-    // its end — the part's reclaim handle is superseded, so what it reads paints nothing — rather
+    // Claimed by `navigate` before this was called. Every step below that could have been overtaken
+    // asks whether this is still the newest navigation, because a reader who clicked twice is waiting
+    // on the second answer and this one has nothing left to say. The abandoned response is still read
+    // to its end — the part's reclaim handle is superseded, so what it reads paints nothing — rather
     // than cancelled, which would need a way to say so through the sink.
-    const mine = ++cells.entering
+    //
+    // Handed to the sink as well, because the checks here are all AFTER an await and the sink writes
+    // to the document inside one: by the time the check below runs, an overtaken answer has already
+    // stood its page over the one the reader chose.
+    const live = (): boolean => cells.entering === mine
     cells.navigating.set(true)
     try {
-        const entered = await sink.enter(url)
+        const entered = await sink.enter(url, live)
         // The browser is taking this URL and its own load answers everything below, so this side
         // commits NOTHING — not the address it answers about, not the route, not the range. Resolving
         // rather than waiting on `complete`, which is a promise nothing settles: the caller asked to
@@ -926,7 +976,9 @@ async function enter(
         if (entered.left) return
         if (cells.entering !== mine) return
         // The first piece is on screen, so the address bar is now behind what the reader is looking
-        // at. This is the half that cannot wait for the range to be whole.
+        // at. This is the half that cannot wait for the range to be whole — and the range standing
+        // there is now what the screen IS, which is what the committed route has stopped describing.
+        cells.stood = true
         place(cells, url, options)
         await entered.complete
         if (loading !== null) await loading
@@ -936,9 +988,22 @@ async function enter(
         // the page's view runs once for the navigation however many cells moved.
         cells.adopted.set(cells.adopted.peek() + 1)
     } finally {
-        // Only the live navigation may say the navigating is over: an overtaken one finishing its
-        // stream would otherwise clear the flag while the newer one is still in flight.
-        if (cells.entering === mine) cells.navigating.set(false)
+        // Only the live navigation may say either of these is over: an overtaken one finishing its
+        // stream would otherwise clear them while the newer one is still in flight.
+        //
+        // `stood` is cleared HERE and nowhere else, which is what makes the commit and the clear one
+        // fact rather than two: nothing between the commit above and this reads it — the renderer
+        // batches onto a microtask and there is no await in that region — and a clear beside the
+        // commit would leave the flag set on a throw between standing the range and committing it,
+        // with `paintsLocally` then refusing the next same-route move its local patch. That heals
+        // itself, because the refusal forces the next move down this path and it clears the flag on
+        // its way through, so the cost is one round trip rather than a page stuck on the server. An
+        // OVERTAKEN navigation deliberately leaves it set: the one that overtook it owns the range
+        // now, and clears it on its own commit.
+        if (cells.entering === mine) {
+            cells.stood = false
+            cells.navigating.set(false)
+        }
     }
 }
 
@@ -987,15 +1052,22 @@ export function navigate(target: string, options?: NavigateOptions): Promise<voi
     const url = mountedTarget(new URL(target, cells.url.peek().href), cells.url.peek())
     const found = lookup(url.pathname)
 
+    // Claimed HERE rather than inside `enter`, so the local arm takes one too. A local move is the
+    // arm that most needs it: it lands in the same tick, so it is the one a reader reaches for while
+    // a served answer is still on the wire, and that answer then committed on top of it.
+    const mine = ++cells.entering
+
     // Where there is a document showing the outlet, a navigation the client cannot already paint is
     // the SERVER's to answer: the page is rendered by the app's own middleware onion once, at the URL
     // being asked for, and this side claims what comes back.
     //
     // A request being served and a test driving a route on the side each render locally.
     const sink = drivesDocument() && !paintsLocally(cells, found) ? NAVIGATION_SINK : null
-    if (sink !== null) return enter(cells, url, options, found, sink)
+    if (sink !== null) return enter(cells, url, options, found, sink, mine)
 
     const loading = found === null ? null : loadFor(found.held)
+    // Nothing to wait for, so nothing can overtake it between the claim above and the landing: the
+    // check the other arm makes would be reading a counter that has not been touched since.
     if (loading === null) {
         land(cells, url, options, found)
         return SETTLED
@@ -1003,11 +1075,14 @@ export function navigate(target: string, options?: NavigateOptions): Promise<voi
     cells.navigating.set(true)
     return loading.then(
         () => {
+            // Overtaken while its module was arriving. Landing anyway would move the address bar back
+            // to a page the reader has already left, which is the served arm's bug in the other lane.
+            if (cells.entering !== mine) return
             land(cells, url, options, found)
             cells.navigating.set(false)
         },
         (error: unknown) => {
-            cells.navigating.set(false)
+            if (cells.entering === mine) cells.navigating.set(false)
             throw error
         },
     )

@@ -35,10 +35,10 @@ import { addSeeds, SEED_ELEMENT_ID } from '#shared/internal/seed.ts'
 import { STREAMING } from '#shared/internal/STREAMING.ts'
 import { abideLog } from '#shared/log.ts'
 import {
-    currentRouteName,
     type Entered,
     type NavigationSink,
     outletChain,
+    placeableRouteName,
     useNavigationSink,
 } from '#shared/router.ts'
 import type { ChildPart, Reclaiming } from './parts.ts'
@@ -127,7 +127,10 @@ function startTransition(): ((update: () => void) => { updateCallbackDone: Promi
 class Filling {
     private held: Reclaiming | null = null
 
-    constructor(private readonly part: ChildPart) {}
+    constructor(
+        private readonly part: ChildPart,
+        private readonly live: () => boolean,
+    ) {}
 
     /** Stand the first piece in the range. Resolves once it is on screen, animation still running. */
     async stand(fragment: DocumentFragment): Promise<void> {
@@ -142,6 +145,13 @@ class Filling {
     }
 
     private open(fragment: DocumentFragment): void {
+        // The ONE mutation this file makes to a range it does not already own, so this is where the
+        // question belongs — asked here rather than in `stand`, because a transition callback runs on
+        // the browser's frame and a click can land between the two. `enter` re-checks after this
+        // resolves, which is too late by exactly one repaint: an overtaken answer would have stood
+        // its page over the one the reader chose, and the markup is correct markup for a page they
+        // already left, so nothing downstream can tell.
+        if (!this.live()) return
         const held = this.part.reclaiming()
         held.insert(fragment)
         this.held = held
@@ -156,13 +166,13 @@ class Filling {
 class DocumentNavigation implements NavigationSink {
     constructor(private readonly part: ChildPart) {}
 
-    async enter(url: URL): Promise<Entered> {
+    async enter(url: URL, live: () => boolean): Promise<Entered> {
         let answered: Response
         try {
             answered = await fetch(url, {
                 // Where the reader IS, so the answer can leave off the layouts they are already
                 // looking at. A hint, and read as one — see `NAVIGATION_FROM_HEADER`.
-                headers: { [NAVIGATION_HEADER]: '1', [NAVIGATION_FROM_HEADER]: currentRouteName() },
+                headers: { [NAVIGATION_HEADER]: '1', [NAVIGATION_FROM_HEADER]: placeableRouteName() },
                 // The cookies are the whole point — the app's auth rung reads the same seal it would
                 // read for a full page load. `same-origin` rather than `include`: a navigation is
                 // within this app, and an app's own route is not a cross-site call.
@@ -200,7 +210,7 @@ class DocumentNavigation implements NavigationSink {
         // has to happen inside the callback — the browser snapshots the OLD state when
         // `startViewTransition` is called, so a page already emptied snapshots as empty and the
         // animation crossfades from nothing. `Filling` opens on the first piece instead.
-        const filling = new Filling(into)
+        const filling = new Filling(into, live)
 
         // The FIRST piece is the whole page bar its suspended subtrees, and it is what this call
         // resolves on. Everything after it — the panels, as their own loads settle — lands while the
