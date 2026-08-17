@@ -34,8 +34,12 @@ export const GENERATED_ENTRY = '.abide/client.entry.ts'
  * `null` is an app with no pages: nothing for a browser to be handed, which is an app made of
  * endpoints. Both commands that bundle go through here, so `abide dev` and `abide build` cannot be
  * pointed at different modules.
+ *
+ * `scanned` is the walk a caller already did. `abide dev` has one, because the server's route table
+ * is built from the same list on the same save — and handing it over is what stops the directory
+ * being globbed twice per keystroke. Nobody else has one, so the walk stays here for them.
  */
-export async function clientLane(root: string): Promise<string | null> {
+export async function clientLane(root: string, scanned?: PageFiles[]): Promise<string | null> {
     // Said out loud, because it is otherwise the quietest kind of breakage: the app still builds and
     // still runs, and the only symptom is that whatever was in that file stopped happening. Here
     // rather than in either command, so `abide dev` and `abide build` cannot warn differently.
@@ -45,7 +49,7 @@ export async function clientLane(root: string): Promise<string | null> {
         console.error('       client-side code of your own goes in pages/layout.abide')
     }
 
-    const table = await pageFiles(`${root}/${PAGES}`).catch(() => [])
+    const table = scanned ?? (await pageFiles(`${root}/${PAGES}`).catch(() => []))
     if (table.length === 0) return null
 
     const path = `${root}/${GENERATED_ENTRY}`

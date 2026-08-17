@@ -38,7 +38,8 @@ import { socket } from '$server/rpc.ts'
 import { mountBase } from '$shared/internal/mount.ts'
 import { messageOf } from '$shared/internal/probes.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
-import { CLIENT_KEY, clientGraph, entryNames } from '../CLIENT_BUILD.ts'
+import { type PageFiles, pageFiles } from '$server/pages.ts'
+import { CLIENT_KEY, clientGraph, entryNames, PAGES } from '../CLIENT_BUILD.ts'
 import { heldClient, type LoadedClient } from './assets.ts'
 import { clientLane } from './entry.ts'
 import { clientBuild, type Lane } from './lane.ts'
@@ -108,17 +109,29 @@ async function run(argv: string[], pin: number | null): Promise<void> {
     if (pin !== null) process.env.PORT = String(pin)
 
     const root = process.cwd()
+    // ONE walk of `pages/` per save, handed to both readers of it. The client entry is generated from
+    // this list and the server's route table is built from it, and each used to scan the directory
+    // itself — the same recursive glob twice, a few milliseconds apart, on every keystroke. Awaited
+    // here rather than inside `bundle` because that is where it already was: the build's first act
+    // was this walk, so hoisting it delays nothing and removes the second one.
+    const scanned = await pageFiles(`${root}/${PAGES}`).catch((): PageFiles[] => [])
     // Unawaited. The bundle and the app's own module graph read nothing of each other, and `assemble`
     // does not look at the bundle until it cuts the shell — so on every save the build runs beside the
     // handler scan and the `app.ts` import rather than in front of them.
-    const building = bundle(root)
+    const building = bundle(root, scanned)
 
     // Read BEFORE the app is assembled, and not only for the port: resolving the document is what
     // installs the mount from `APP_URL`, and the shell `assemble` cuts carries that in every asset
     // href it writes. A shell cut against the root and served under a sub-path is a page of 404s.
     const first = config().PORT
 
-    const assembled = await assemble({ root, label: 'abide dev', client: building, head: reloadTag() })
+    const assembled = await assemble({
+        root,
+        label: 'abide dev',
+        client: building,
+        head: reloadTag(),
+        pages: scanned,
+    })
     if (typeof assembled === 'number') return scope.postMessage({ refused: assembled } satisfies Said)
 
     // The reload client in front of the app, the way the bundle is: it is this command's file rather
@@ -242,12 +255,12 @@ const HELD: Lane = {
  * returns without ever looking at it, and a promise nobody awaited is an unhandled rejection that
  * would take the worker down instead of the message that explains it.
  */
-async function bundle(root: string): Promise<LoadedClient | null> {
+async function bundle(root: string, scanned: PageFiles[]): Promise<LoadedClient | null> {
     try {
         // Regenerated per rebuild rather than once at startup, because a page ADDED is a row the
         // table has to grow — and `.abide/` is what the watcher already ignores, so writing here is
         // not a save that triggers the rebuild that writes it.
-        const lane = await clientLane(root)
+        const lane = await clientLane(root, scanned)
         if (lane === null) return null
 
         const built = await clientBuild([lane], HELD, root)

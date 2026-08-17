@@ -63,7 +63,7 @@ import {
     type StartHook,
     type StopHook,
 } from '$server/lifecycle.ts'
-import { pages } from '$server/pages.ts'
+import { type PageFiles, pages, pagesFrom } from '$server/pages.ts'
 import { registered } from '$server/registry.ts'
 import { page } from '$server/responses.ts'
 import type { Schema } from '$server/schema.ts'
@@ -131,6 +131,11 @@ export interface Assembling {
     client: LoadedClient | null | Promise<LoadedClient | null>
     /** Appended to the end of the shell's head. The tag naming `abide dev`'s reload client, and nothing more. */
     head?: string
+    /**
+     * The pages walk, when the caller already did one — `abide dev` does, to generate the client
+     * entry from the same list on the same save. Absent means "scan it here", which is `abide start`.
+     */
+    pages?: PageFiles[]
 }
 
 /** The assembled app: what serves it, and the three facts the report is built from. */
@@ -196,7 +201,7 @@ export async function assemble(asked: Assembling): Promise<Assembly | number> {
     let built: LoadedClient | null
     try {
         built = isThenable(asked.client) ? await asked.client : asked.client
-        paged = await pageLayer(root, built?.manifest ?? null, asked.head)
+        paged = await pageLayer(root, built?.manifest ?? null, asked.head, asked.pages)
         serving = composed(declared, paged, built?.manifest ?? null)
     } catch (failure) {
         // An `app.html` with nowhere to render is the loud one, and it is caught HERE rather than on
@@ -259,6 +264,7 @@ async function pageLayer(
     root: string,
     manifest: ClientManifest | null,
     head: string | undefined,
+    scanned: PageFiles[] | undefined,
 ): Promise<Paged | null> {
     const directory = `${root}/${PAGES}`
     try {
@@ -271,7 +277,7 @@ async function pageLayer(
     // scan for `</head>` would have. After the stylesheets `appShell` already appended, which is what
     // keeps a dev client from being the thing that decides where an app's own css goes.
     if (head !== undefined) shell.parts.head += head
-    return { table: await pages(directory), shell }
+    return { table: scanned === undefined ? await pages(directory) : pagesFrom(directory, scanned), shell }
 }
 
 /**

@@ -101,6 +101,18 @@ export async function pageFiles(dir: string | URL): Promise<PageFiles[]> {
  */
 export async function pages(dir: string | URL): Promise<RouteEntry[]> {
     const root = typeof dir === 'string' ? dir : Bun.fileURLToPath(dir)
+    return pagesFrom(root, await pageFiles(root))
+}
+
+/**
+ * The same table, from a walk somebody already did.
+ *
+ * `abide dev` needs this list twice per save — once to generate the client entry, once to build the
+ * server's routes — and the two scans are the same recursive glob of the same directory a few
+ * milliseconds apart. Split rather than cached because a rebuild MUST re-scan: a page added is a row
+ * the table has to grow, which is the whole reason the entry is regenerated per save.
+ */
+export function pagesFrom(root: string, found: PageFiles[]): RouteEntry[] {
     const base = Bun.pathToFileURL(root.endsWith('/') ? root : `${root}/`)
 
     // One loader per FILE, not per file per page: a root layout is above every route in the table,
@@ -117,14 +129,14 @@ export async function pages(dir: string | URL): Promise<RouteEntry[]> {
     }
 
     const table: RouteEntry[] = []
-    for (const found of await pageFiles(root)) {
+    for (const entry of found) {
         const wraps: Loader[] = []
-        for (const wrapFile of found.layouts) wraps.push(loaderFor(wrapFile))
+        for (const wrapFile of entry.layouts) wraps.push(loaderFor(wrapFile))
         table.push({
-            path: found.path,
-            page: loaderFor(found.page),
+            path: entry.path,
+            page: loaderFor(entry.page),
             layouts: wraps,
-            source: { page: found.page, layouts: found.layouts },
+            source: { page: entry.page, layouts: entry.layouts },
         })
     }
     return table
