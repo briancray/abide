@@ -17,6 +17,8 @@ import { renderToString } from 'abide/server/internal'
 import { APPS } from '../demos/APPS.ts'
 import { allSuites } from '../demos/index.ts'
 import { NAV } from '../demos/SUITES.ts'
+import Arms from '../site/arms.abide'
+import { benchRows } from '../site/bench.ts'
 import Cases from '../site/cases.abide'
 import Demo from '../site/demo.abide'
 import { type Face, painted, scan, sliceOf } from '../site/code.ts'
@@ -233,4 +235,31 @@ test('/demos frames every app in the fleet, and says so when one is not there', 
     // would send both to whichever sorted first, and the second would never be reachable at all.
     const prefixes = new Set(APPS.map((app) => app.prefix))
     expect(prefixes.size, 'two demo apps claim the same prefix').toBe(APPS.length)
+})
+
+test('the bench table spends verdigris on the verdict and nothing else', async () => {
+    const rows = await benchRows()
+
+    // The `…of which` convention, against the labels the app actually writes. A slice is found by its
+    // label the way a hand-written arm is, and the character it starts with is U+2026 — one file
+    // spelling it as three periods marks nothing at all, silently, with every number still correct
+    // and the whole point of the column gone. So the two lists are compared rather than counted.
+    const byLabel: string[] = []
+    const bySlice: string[] = []
+    for (const row of rows) {
+        for (const arm of row.arms) {
+            if (arm.label.includes('of which')) byLabel.push(arm.label)
+            if (arm.slice) bySlice.push(arm.label)
+        }
+    }
+    expect(byLabel.length, 'no arm is a slice of its subject any more').toBeGreaterThan(0)
+    expect(bySlice).toEqual(byLabel)
+
+    // And the rendered row. Abide's number used to carry `is-good` unconditionally, which is the same
+    // green `.tail.is-good` uses for WON — so a row where abide lost said both at once. Identity is
+    // the column head's job and the verdict is the tail's; `is-good` on a `.number` is neither, and
+    // the rule behind it is gone from `app.css` as well.
+    const markup = await renderToString(component(Arms, { rows: rows.slice(0, 12) }))
+    expect(markup).toContain('class="number"')
+    expect(markup, 'a measurement is coloured as a verdict').not.toContain('number is-good')
 })

@@ -39,6 +39,7 @@ export {
     quiesce,
     ratioText,
     settled,
+    shareText,
     type Timing,
     timeArms,
     verdict,

@@ -312,6 +312,26 @@ export function ratioText(abide: number, arm: number): string {
     return `${(abide / arm).toFixed(2)}×`
 }
 
+/**
+ * The OTHER axis: what fraction of the whole op a SLICE of it took — `11.7% of the op`.
+ *
+ * A slice is not a rival, and `ratioText` cannot say so. `…of which the server` is a PART of the trip
+ * the subject measures, so dividing the two produced `8.53×` in the column a reader scans for who
+ * won — abide losing by 8.5× to a thing it contains. Same numbers, opposite reading.
+ *
+ * A share is also the number the project's own rule asks for before any of these layers is touched:
+ * an optimisation is capped by the fraction of the op it touches, and this is that fraction, printed
+ * on the row that motivates it. The suffix stays in the text because a bare `11.7%` under a head
+ * reading `abide ÷ arm` is one more thing to work out — and it is `of abide` rather than `of the op`
+ * because the column is 120px and a rounded `100.0% of the op` wants 122.
+ *
+ * One decimal, and a whole of zero has no share rather than a `NaN%` that reads as a failed run.
+ */
+export function shareText(part: number, whole: number): string {
+    if (whole === 0) return '—'
+    return `${((part / whole) * 100).toFixed(1)}% of abide`
+}
+
 // Yield long enough for the browser to paint what was just written.
 //
 // A hidden tab fires no `requestAnimationFrame` and clamps `setTimeout` to about a second, so a run

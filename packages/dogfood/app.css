@@ -992,11 +992,10 @@
     font-variant-numeric: tabular-nums;
     letter-spacing: -.04em;
   }
-  .number.is-good { color: var(--color-verdigris); }
   .number.is-sub  { font-weight: 300; font-size: var(--text-mini); color: var(--color-pencil); }
   /* The ratio is the conclusion the row exists to state, so it is set with the measurement rather
-     than under it. It fits: the longest string, `0.44× slower`, costs 76px against a 104px arm
-     column and a 128px summary column. */
+     than under it. It fits: the longest string is a slice's `100.0% of abide` at 114px against the
+     120px track, which is what sized the suffix — see `shareText`. */
   .tail { font-family: var(--font-display); font-size: var(--text-ui); font-weight: 700; letter-spacing: -.03em; color: var(--color-pencil); }
   .tail.is-good { color: var(--color-verdigris); }
   .tail.is-bad  { color: var(--color-oxide); }

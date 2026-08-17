@@ -35,6 +35,7 @@ import {
     nonZero,
     quiesce,
     ratioText,
+    shareText,
     timeArms,
     total,
     verdict,
@@ -48,6 +49,16 @@ export interface ArmRow {
     subject: boolean
     /** The harness floor: a measurement of measuring, to be subtracted rather than compared. */
     floor: boolean
+    /**
+     * A PART of the subject rather than a rival to it — `…of which the server`. Found by that label,
+     * on the same convention `handWritten` is found by, and for the same reason.
+     *
+     * The distinction is the whole of what the diff column can honestly say. A rival is divided
+     * against and gets a ratio and a verdict; a slice is a piece of the number above it, so it gets a
+     * SHARE and no verdict at all. Read as a rival, `…of which the server: 937 µs` against an 8 ms
+     * trip printed `8.53×` in red — abide beaten by eight and a half times by one of its own stages.
+     */
+    slice: boolean
     /**
      * The number, however it is counted — a duration, or a count. `—` until it has been run.
      *
@@ -83,7 +94,7 @@ export interface ArmRow {
     nodesEach: State<string>
     /** 0 to 1, against the slowest arm in the row. Whether that becomes a bar is the page's business. */
     fill: State<number>
-    /** `baseline`, `subtract me`, or the ratio against abide. */
+    /** `baseline`, `subtract me`, a slice's share of the op, or the ratio against abide. */
     tail: State<string>
     /** Which way that ratio went, for a page to colour. Empty for a row that is not a comparison. */
     tailVerdict: State<'faster' | 'same' | 'slower' | ''>
@@ -141,6 +152,9 @@ export interface BenchRow {
 /** The label every hand-written arm in this repo starts with. See `BenchRow.handWritten`. */
 const HAND_WRITTEN = 'vanilla'
 
+/** The label every arm that is a PIECE of the subject starts with. See `ArmRow.slice`. */
+const SLICE = '…of which'
+
 /**
  * What all four kinds of arm have in common, which is all `profile` needs of them.
  *
@@ -178,6 +192,7 @@ function armRow(label: string, subject: boolean, floor: boolean): ArmRow {
         label,
         subject,
         floor,
+        slice: !subject && !floor && label.startsWith(SLICE),
         value: state('—'),
         each: state(''),
         min: state(''),
@@ -350,8 +365,20 @@ async function runTime(
             bench.per === undefined ? '' : `${(timing.nodes / bench.per.n).toFixed(1)}/${bench.per.label}`,
         )
         row.fill.set(slowest === 0 ? 0 : timing.p50 / slowest)
-        row.tail.set(row.floor ? 'subtract me' : row.subject ? 'baseline' : ratioText(abide.p50, timing.p50))
-        row.tailVerdict.set(row.floor || row.subject ? '' : verdict(abide.p50, timing.p50))
+        row.tail.set(
+            row.floor
+                ? 'subtract me'
+                : row.subject
+                  ? 'baseline'
+                  : row.slice
+                    ? shareText(timing.p50, abide.p50)
+                    : ratioText(abide.p50, timing.p50),
+        )
+        // Only a RIVAL has a verdict. A slice is part of the subject, so there is no side for it to
+        // have landed on and a colour would be inventing one — see `ArmRow.slice`.
+        row.tailVerdict.set(
+            row.floor || row.subject || row.slice ? '' : verdict(abide.p50, timing.p50),
+        )
         // Median ÷ best: 1 is a perfectly quiet run, and above the band the passes disagreed. Taken
         // here rather than carried on `Timing`, where it was a third field to hold consistent with
         // the two it is made of.
@@ -370,12 +397,22 @@ async function runTime(
  * because a counter has no noise floor. Two timings 3% apart are the same measurement taken twice;
  * three wake-ups against four is one extra wake-up, every time, and a 5% band that called it `same`
  * would be hiding exactly the kind of regression a wake bench exists to catch.
+ *
+ * A slice is a share here for the same reason it is one in `runTime`, and the branch is written even
+ * though every `…of which` arm in the repo today is on a `time` bench: it is the SAME fact deciding
+ * the same column, and split across the two runners it would go red the first time a counted bench
+ * grew one, silently and in the one column a reader trusts.
  */
 function countTails(rows: ArmRow[], counts: number[]): void {
     const subject = counts[0] as number
     for (let i = 1; i < rows.length; i++) {
         const row = rows[i] as ArmRow
         const count = counts[i] as number
+        if (row.slice) {
+            row.tail.set(shareText(count, subject))
+            row.tailVerdict.set('')
+            continue
+        }
         row.tail.set(ratioText(subject, count))
         row.tailVerdict.set(subject === count ? 'same' : subject < count ? 'faster' : 'slower')
     }

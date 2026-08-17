@@ -1028,7 +1028,7 @@ A separate package, and split by DEPENDENCY rather than by topic:
 | Entry | Holds | Imports |
 | --- | --- | --- |
 | `harness` | The `Case` / `Suite` shape, `suite()`, the assertions, `runHeadless`, `collector`, `reader`, `container`, `until` / `sleep`, `loopback()` | `abide` |
-| `harness/measure` | Timing (`timeArms`, `nsPerOp`, `duration`, `ratioText`, `verdict`, `NOISE`), the waits (`quiesce` / `settled` / `frame` / `tick` / `microtasks`), the DOM work counters, and `keep` | **nothing** |
+| `harness/measure` | Timing (`timeArms`, `nsPerOp`, `duration`, `ratioText`, `shareText`, `verdict`, `NOISE`), the waits (`quiesce` / `settled` / `frame` / `tick` / `microtasks`), the DOM work counters, and `keep` | **nothing** |
 | `harness/spawn` | The binary as a child process: `abide()`, `spawn`, `started`, the line readers | bun |
 | `harness/engine` | What BLINK did: `engine(page)`, `EngineWork`, `shares()` | playwright |
 | `harness/server` | What a server render cost: `serverWork()`, `serverWorkOver()` | bun |
@@ -1041,6 +1041,15 @@ importable by a browser page and by the cross-repo comparison harness, both of w
 are not abide's. The two probes it needs (`isThenable`, `messageOf`) are its own six lines for the same
 reason. Assertions are on `harness` rather than in `measure`: an assertion is how a case states a
 claim, not how a number is taken.
+
+A bench row's diff column carries TWO axes, and which one an arm gets is decided by its label. A
+RIVAL is divided against the subject — `ratioText` gives `3.03×`, `verdict` says which side of `NOISE`
+it landed on, and the page colours it. A SLICE is a piece of the subject rather than a competitor to
+it, named `…of which …`, and it gets `shareText` — `11.7% of abide` — with no verdict and no colour,
+because there is no race for it to have lost. Divided as a rival it read `8.53×` in the red the page
+uses for a loss, which is abide beaten by one of its own stages. `handWritten` is found by the same
+kind of label convention (`vanilla — …`); both are asserted against the app's real labels in
+`dogfood/test/site.test.ts`, since a mis-typed `…` marks nothing while every number stays correct.
 
 ### Measuring work — three lanes, because three substrates answer different questions
 

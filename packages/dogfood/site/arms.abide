@@ -89,9 +89,16 @@ const { rows } = props<{ rows: BenchRow[] }>()
             <!-- The two numbers the page exists for, in the same two columns on every row of every
                  suite. The per-item number rides under each of them rather than in a column of its
                  own: it is only present on a bench that declared `per`, and an empty column on the
-                 other thirty rows is a column that reads as missing data. -->
+                 other thirty rows is a column that reads as missing data.
+
+                 NEITHER is coloured, and abide's used to be. Verdigris means two things on this page
+                 — `is-abide` marks whose arm it is, `is-good` marks who won — and on the one element
+                 that wore both they disagreed out loud: `8.00 ms` in green beside a hand-written
+                 `2.64 ms` and a red `3.03×`, one row saying abide won and lost. Identity is already
+                 carried by the column head and by `armTone` on the label below, so the number gives
+                 the colour up and the VERDICT is the only thing on a row still spending it. -->
             <div class="cell-right">
-                <div class="{NUMBER} is-good">{row.abide.value()}</div>
+                <div class={NUMBER}>{row.abide.value()}</div>
                 {#if row.abide.each()}<div class="{NUMBER} is-sub">{row.abide.each()}</div>{/if}
             </div>
             <div class="cell-right">
@@ -111,7 +118,7 @@ const { rows } = props<{ rows: BenchRow[] }>()
                  tenth part, so a reader took 10,001 for the per-row figure of the number above it.
                  The hand-written count is one click away, in the per-arm `nodes` column below. -->
             <div class="cell-right">
-                <div class="{NUMBER} is-good">{row.abide.nodes() || NONE}</div>
+                <div class={NUMBER}>{row.abide.nodes() || NONE}</div>
                 {#if row.abide.nodesEach()}<div class="{NUMBER} is-sub">{row.abide.nodesEach()}</div>{/if}
             </div>
 

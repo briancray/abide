@@ -18,6 +18,7 @@
 import { describe, expect, test } from 'bun:test'
 import { html, state } from 'abide'
 import {
+    type ArmRow,
     AssertionError,
     type Bench,
     benchRow,
@@ -299,6 +300,58 @@ describe('the noise band', () => {
         expect(verdict(1, 1 + NOISE / 2)).toBe('same')
         expect(verdict(1 + NOISE * 2, 1)).toBe('slower')
         expect(verdict(1, 1 + NOISE * 2)).toBe('faster')
+    })
+})
+
+/**
+ * A slice is a PIECE of the subject, and the diff column has to say so.
+ *
+ * This is a "reads wrong" contract rather than a "does less work" one, and it fails just as silently:
+ * every number the table printed was correct while `…of which the server: 937 µs` sat under an 8 ms
+ * trip carrying `8.53×` in the red the page uses for LOST — abide beaten by a stage of its own.
+ *
+ * Verified by reverting each half. With the `row.slice` branch out of `countTails` the share reads
+ * `3.00×` and the verdict `faster`; with the `slice` field itself out of `armRow` the same two land
+ * on the row again from the other direction. A `wake` bench because its counts are exact — a timing
+ * would assert the same two things through a ratio the machine gets a vote in.
+ */
+describe('a slice of the subject is a share, not a ratio', () => {
+    const counted = (label: string, count: number) => ({
+        label,
+        run: async () => ({ count, of: 'wake-ups' }),
+    })
+
+    test('a slice carries its share of abide and no verdict; a rival still carries both', async () => {
+        const spec: Case = {
+            title: 'three wake-ups, one of which is the inner reader',
+            bench: {
+                kind: 'wake',
+                arms: [
+                    counted('abide — the whole read', 3),
+                    counted('…of which the inner reader', 1),
+                    counted('vanilla — one subscribe', 6),
+                ],
+            },
+        }
+
+        const row = benchRow('harness', spec, spec.bench as Bench)
+        await row.run()
+
+        const [abide, slice, rival] = row.arms as [ArmRow, ArmRow, ArmRow]
+        expect(abide.tail()).toBe('baseline')
+
+        // A THIRD of the subject, phrased in the direction that reading gives — not `3.00×`, which is
+        // the same two numbers divided the way a rival is and is the whole of the misreading.
+        expect(slice.slice).toBe(true)
+        expect(slice.tail()).toBe('33.3% of abide')
+        // Nothing to colour: a part of the subject has no side of the noise band to have landed on,
+        // and `is-good` / `is-bad` are the only two things a page does with this.
+        expect(slice.tailVerdict()).toBe('')
+
+        // The path that must NOT have changed. A rival is still divided against and still judged.
+        expect(rival.slice).toBe(false)
+        expect(rival.tail()).toBe('0.50×')
+        expect(rival.tailVerdict()).toBe('faster')
     })
 })
 
