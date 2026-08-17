@@ -42,15 +42,10 @@ import {
     useNavigationSink,
 } from '$shared/router.ts'
 import type { ChildPart, Reclaiming } from './parts.ts'
+// One complete piece, parsed once — HTML cannot be parsed halfway, so the piece is the unit.
+import { fragmentOf } from './prepare.ts'
 
 const navigateLog = abideLog.channel('navigate')
-
-/** One complete piece, parsed once. HTML cannot be parsed halfway, so the piece is the unit. */
-function parse(markup: string): DocumentFragment {
-    const parsed = document.createElement('template')
-    parsed.innerHTML = markup
-    return parsed.content
-}
 
 /**
  * Whether this app wants its navigations to cross-fade — ASKED OF ITS CSS, not of a flag.
@@ -110,13 +105,11 @@ function wantsTransitions(): boolean {
     return false
 }
 
-interface Transition {
-    updateCallbackDone: Promise<void>
-}
-
 /** The browser's own call when this app's CSS asked for it and this browser has it, `null` otherwise. */
-function startTransition(): ((update: () => void) => Transition) | null {
-    const owner = document as Document & { startViewTransition?: (update: () => void) => Transition }
+function startTransition(): ((update: () => void) => { updateCallbackDone: Promise<void> }) | null {
+    const owner = document as Document & {
+        startViewTransition?: (update: () => void) => { updateCallbackDone: Promise<void> }
+    }
     if (typeof owner.startViewTransition !== 'function') return null
     return wantsTransitions() ? owner.startViewTransition.bind(owner) : null
 }
@@ -381,7 +374,7 @@ class DocumentNavigation implements NavigationSink {
             if (first) {
                 // The one piece that STANDS in the range, and the only one a transition wraps: it is
                 // the visible change. Everything after it replaces a placeholder already on screen.
-                await filling.stand(parse(text.slice(0, from)))
+                await filling.stand(fragmentOf(text.slice(0, from)))
                 return text.slice(from + PIECE_END.length)
             }
             this.patch(filling, text.slice(0, from))
@@ -418,7 +411,7 @@ class DocumentNavigation implements NavigationSink {
     private patch(filling: Filling, markup: string): void {
         const held = filling.opened()
         if (held === null) return
-        const parsed = parse(markup)
+        const parsed = fragmentOf(markup)
         const carried = parsed.firstElementChild
         // The seed piece, which the server writes LAST. It stays in this template and never enters
         // the document: what it carries is VALUES, and the slots that want them are on the render
