@@ -17,7 +17,7 @@ import { markSource } from './internal/BRANDS.ts'
 import { storeForLazy } from './internal/scopes.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { isNamedError } from './internal/probes.ts'
-import { arm } from './internal/timers.ts'
+import { arm, NO_LIMIT } from './internal/timers.ts'
 import { state, watch } from './reactive.ts'
 
 // One shared empty array, so a `chunks()` reader on a channel with no retention sees the same
@@ -110,11 +110,11 @@ export function channel<T>(options?: ChannelOptions): Channel<T>
 export function channel<T, Args>(options?: ChannelOptions): KeyedChannel<Args, T>
 export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & KeyedChannel<Args, T> {
     const tail = options.tail ?? 0
-    const maxAge = options.maxAge ?? Infinity
+    const maxAge = options.maxAge ?? NO_LIMIT
     // Only `schedule`/`expire` ask how old a message is, and nothing reaches them without this. So
     // the clock read and the parallel array are maintained only where they are read: a channel with
     // no `maxAge` — the default — pays neither per publish.
-    const ages = maxAge !== Infinity
+    const ages = maxAge !== NO_LIMIT
     const listeners = new Set<(message: T) => void>()
 
     // --- what is held, and what WAKES for it -------------------------------

@@ -1,6 +1,6 @@
 // Who the server decided this caller is.
 //
-// The same shape as `health()` above it, and for the same reason: one document, composed in the
+// The same shape as `health()` in `./health.ts`, and for the same reason: one document, composed in the
 // process that is SERVING the caller and fetched by anyone else. What differs is that a principal is
 // per-caller rather than per-process, so "serving" here means "there is a request scope to answer
 // about" rather than "this module was imported".

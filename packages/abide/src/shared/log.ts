@@ -250,7 +250,7 @@ export function useLogSink(fn: (record: LogRecord) => void, wants: () => boolean
  * than a contract: `%c` styles a line in a browser and means nothing on a terminal, and which of those
  * you get is a property of where you are reading, which the caller already knows and this file does not.
  */
-export type LogArgs = readonly unknown[]
+type LogArgs = readonly unknown[]
 
 export interface Logger {
     /** One line on this logger's channel. */

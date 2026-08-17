@@ -8,21 +8,16 @@
 // for the same reason; their documents are bigger and nothing follows them.
 //
 // The key is `keyOf` — what a keyed memo already addresses a slot by — so the two sides compute the
-// same string and there is no second convention to keep in step.
+// same string and there is no second convention to keep in step. `seedKey` itself lives in `keys.ts`
+// for the first-load reason stated there; this module must not import it back.
 //
 // Shared rather than per-lane because the KEY has to be, and the two halves either side of it are
 // small enough that splitting them would cost an import to save nothing.
 
 import { nonceAttribute } from '../html.ts'
-import { keyOf } from './keys.ts'
 
 /** Where the document carries it. A data block, never executed — the client parses it. */
 export const SEED_ELEMENT_ID = 'abide-seed'
-
-/** One slot, addressed the way the memo holding it is. */
-export function seedKey(address: string, args: unknown): string {
-    return `${address}?${keyOf(args)}`
-}
 
 /**
  * `</script` is the only sequence that can end the block early, and it is the only one escaped.

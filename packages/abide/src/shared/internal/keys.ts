@@ -132,3 +132,16 @@ export function matcher(pattern: unknown): (args: unknown) => boolean {
         return true
     }
 }
+
+/**
+ * One SEEDED slot, addressed the way the memo holding it is.
+ *
+ * Here rather than beside the seed table it keys, and that is a first-load decision: `$ui`'s
+ * navigation reader needs `addSeeds` and `SEED_ELEMENT_ID` from `seed.ts`, so a `keyOf` call in that
+ * module put this whole file — `matcher`, `sortedKey`, the file tagger and its WeakMap, 999 bytes —
+ * into every page's entry chunk, for callers (`transport.ts`, `$server/rpc.ts`) that are not in it.
+ * The key has to be `keyOf`'s so the two sides compute the same string; it does not have to be there.
+ */
+export function seedKey(address: string, args: unknown): string {
+    return `${address}?${keyOf(args)}`
+}

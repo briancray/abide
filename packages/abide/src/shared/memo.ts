@@ -22,13 +22,13 @@
 // ask for the value, `()` and `await`, are the two that start one.
 
 import { markSource } from './internal/BRANDS.ts'
-import { admit, Bounded, release, touch } from './internal/ceilings.ts'
+import { admit, Bounded, release, touch } from './internal/cache.ts'
 import { type Cell, cellForward, derive, internals, isPending, type Memo, untrackCall } from './internal/graph.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { isAsyncIterable, isThenable } from './internal/probes.ts'
 import { disposeWith, storeFor } from './internal/scopes.ts'
 import { joinTags, taggedTargets } from './internal/tags.ts'
-import { arm } from './internal/timers.ts'
+import { arm, NO_LIMIT } from './internal/timers.ts'
 
 // The handle a keyed call hands back: the slot's own cell, plus the two verbs that need a body to
 // re-run. Everything else — `()`, `peek`, `set`, the probes, `await` — is the ordinary cell surface,
@@ -123,9 +123,10 @@ function pacer(
                 }, debounceMs)
                 return
             }
-            const since = Date.now() - firedAt
+            const now = Date.now()
+            const since = now - firedAt
             if (since >= throttleMs) {
-                firedAt = Date.now()
+                firedAt = now
                 run()
                 return
             }
@@ -161,7 +162,7 @@ function keyedMemo<Args, T>(
     options: MemoOptions<Args>,
     transform?: (value: unknown) => unknown,
 ): KeyedMemo<Args, T> {
-    const ttl = options.ttl ?? Infinity
+    const ttl = options.ttl ?? NO_LIMIT
     const throttleMs = options.throttle ?? 0
     const debounceMs = options.debounce ?? 0
     const paced = throttleMs > 0 || debounceMs > 0
@@ -260,7 +261,7 @@ function keyedMemo<Args, T>(
     }
 
     const stale = (slot: Slot<T>): boolean =>
-        slot.loadedAt === 0 || (ttl !== Infinity && Date.now() - slot.loadedAt >= ttl)
+        slot.loadedAt === 0 || (ttl !== NO_LIMIT && Date.now() - slot.loadedAt >= ttl)
 
     // Run the body into the slot. Returns nothing: a caller that wants the outcome asks the handle,
     // never the body's own promise. That is what makes coalescing, newest-wins and "invalidate
@@ -344,7 +345,7 @@ function buildArgless<T>(
     options: MemoOptions,
     transform?: (value: unknown) => unknown,
 ): Memo<T> {
-    const ttl = options.ttl ?? Infinity
+    const ttl = options.ttl ?? NO_LIMIT
     let loadedAt = 0
 
     // Stamped when the body SETTLES, not when it starts, so a ttl counts from the answer.
@@ -367,7 +368,7 @@ function buildArgless<T>(
     }
 
     const cell: Memo<T> =
-        ttl === Infinity
+        ttl === NO_LIMIT
             ? derive(timed as () => T, transform)
             : internals.derived<T>(
                   timed,
@@ -388,8 +389,10 @@ function buildArgless<T>(
     // ttl expiring on a read still recomputes in the call and only `refresh` waits for a window.
     // The same predicate the keyed form spells as `paced`: a window of zero is not a window, so
     // `{ throttle: 0 }` builds no pacer here either.
-    if ((options.throttle ?? 0) > 0 || (options.debounce ?? 0) > 0) {
-        const window = pacer(options.throttle ?? 0, options.debounce ?? 0)
+    const throttleMs = options.throttle ?? 0
+    const debounceMs = options.debounce ?? 0
+    if (throttleMs > 0 || debounceMs > 0) {
+        const window = pacer(throttleMs, debounceMs)
         const run = cell.refresh
         cell.refresh = () => window.fire(loadedAt !== 0, run)
         const drop = cell.invalidate

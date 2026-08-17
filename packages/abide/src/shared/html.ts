@@ -294,6 +294,10 @@ export function propCell(given: unknown, fallback?: unknown): Cell<unknown> {
 // `{#try}` and `{#for await}`, the same way: a marker carrying unevaluated work, and one case per
 // substrate. Neither needs anything the `Awaited` case did not already need.
 
+// Nothing to await. Shared and empty, so the `{#try}` that holds no `{await}` — which is every one of
+// them until somebody writes one — allocates none. Read for its length by both callers, never pushed to.
+const NOT_WAITING: PromiseLike<unknown>[] = []
+
 export class Boundary {
     constructor(
         readonly body: () => unknown,
@@ -387,6 +391,19 @@ export function pendingArm(branches: Branches): unknown {
 }
 
 /**
+ * What a failed body renders to, or a rethrow. ONE rule with two arrival paths — the body throwing
+ * synchronously, and an awaited hole rejecting a tick later — so it is written once:
+ *
+ * a read with nothing to serve YET is not a failure, and this is not the boundary that recovers from
+ * it; the signal passes through to whoever will run the body again. Without a `{:catch}` the author
+ * did not claim to handle anything either, so that throw passes through too.
+ */
+function caughtArm(block: Boundary, error: unknown): unknown {
+    if (isPending(error) || block.branches.catch === undefined) throw error
+    return settledArms(block.branches, true, error)
+}
+
+/**
  * What the body PRODUCED — its `{:finally}` arm included — and the promises it left behind, without
  * collapsing the two together.
  *
@@ -408,15 +425,15 @@ export function producedBoundary(block: Boundary): { produced: unknown; waiting:
     try {
         produced = block.body()
     } catch (error) {
-        // A read with nothing to serve YET is not a failure, and this is not the boundary that
-        // recovers from it: the signal passes through to whoever will run the body again.
-        if (isPending(error) || block.branches.catch === undefined) throw error
-        return { produced: settledArms(block.branches, true, error), waiting: [] }
+        return { produced: caughtArm(block, error), waiting: NOT_WAITING }
     }
-    const waiting: PromiseLike<unknown>[] = []
     // Collected off the BODY rather than off what is returned: the `{:finally}` arm is not what the
     // boundary is waiting on, and walking it would put its holes into the same `Promise.all`.
-    if (block.awaiting) collectThenables(produced, waiting, 0)
+    let waiting = NOT_WAITING
+    if (block.awaiting) {
+        waiting = []
+        collectThenables(produced, waiting, 0)
+    }
     const settled = block.branches.finally
     return { produced: settled === undefined ? produced : [produced, settled()], waiting }
 }
@@ -438,10 +455,7 @@ export function settledBoundary(block: Boundary): unknown {
     if (waiting.length > 0) {
         return Promise.all(waiting).then(
             () => produced,
-            (error: unknown) => {
-                if (isPending(error) || block.branches.catch === undefined) throw error
-                return settledArms(block.branches, true, error)
-            },
+            (error: unknown) => caughtArm(block, error),
         )
     }
     return produced

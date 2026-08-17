@@ -26,7 +26,7 @@ import { textKnob } from './knobs.ts'
  * The four forms one line takes. `abide logs` renders a record the feed handed it, and it renders it
  * by the rules the console was already following — so the decision is `logShape()`'s, not a caller's.
  */
-export type LogShape = 'color' | 'plain' | 'tsv' | 'json'
+type LogShape = 'color' | 'plain' | 'tsv' | 'json'
 
 // A browser is decided by having a document and no terminal behind it: ANSI would arrive as literal
 // junk in the console, and a tab is not a field separator anybody there can use. Still asked, though
@@ -76,10 +76,14 @@ const LEVEL_COLORS: Record<Level, number> = {
     debug: 90,
 }
 
+// Hoisted: a regex literal builds a fresh RegExp every time it is evaluated, and this runs per line.
+const ESCAPABLE = /[\t\n\r\\]/
+const ESCAPABLE_ALL = /[\t\n\r\\]/g
+
 /** Probes before it replaces: a message with nothing to escape costs one test. */
 function oneLine(message: string): string {
-    if (!/[\t\n\r\\]/.test(message)) return message
-    return message.replace(/[\t\n\r\\]/g, (ch) =>
+    if (!ESCAPABLE.test(message)) return message
+    return message.replace(ESCAPABLE_ALL, (ch) =>
         ch === '\t' ? '\\t' : ch === '\n' ? '\\n' : ch === '\r' ? '\\r' : '\\\\',
     )
 }

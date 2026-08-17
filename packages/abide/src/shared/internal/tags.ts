@@ -5,7 +5,7 @@
 // module-level map rather than a field on each memo — and why the public verbs in `$shared/memo.ts`
 // are bare functions with no `fn.` in front of them.
 
-export interface Taggable {
+interface Taggable {
     invalidate(): void
     refresh(): void
 }

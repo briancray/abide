@@ -206,11 +206,25 @@ test('the first load carries the renderer and the router, and nothing a page has
         // `identity.ts` and `memo.ts`, 4,338 bytes together: the GENERATED client entry imported
         // `navigate` from the `abide` barrel for one link handler. It reads `abide/runtime` now,
         // which is where the name it wanted already lived.
+        //
+        // The needle is `identity.ts`'s alone, and it gates the EDGE rather than both modules:
+        // `memo.ts` has no runtime string literal to name it by, so it came out with the barrel and
+        // nothing here would say if it came back on its own.
         ['the `abide` barrel (identity.ts)', 'a caller that could write its own principal'],
         // `lines.ts`, 993 bytes: `emit` called `formatLogLine` unconditionally, so the ANSI tables,
         // the tab escaping and the ISO stamping shipped to a console that can only ever be in
         // `plain`. The three terminal shapes are installed by `abide/server` now.
         ['the terminal log shapes (lines.ts)', 'ABIDE_LOG_FORMAT'],
+        // The memo cache LRU, 909 bytes: it shared `ceilings.ts` with the STREAM ceiling, which
+        // `graph.ts` imports — so the class, the order, the three verbs and the stringifying charge
+        // rode the graph's edge into every page while `memo.ts`, their only consumer, stayed out.
+        // The cache half is `internal/cache.ts` now, and the edge runs one way into `ceilings.ts`.
+        ['the memo cache LRU (cache.ts)', 'ABIDE_MAX_GLOBAL_CACHE_SIZE'],
+        // `keys.ts`, 1,112 bytes: `$ui`'s navigation reader wanted `addSeeds` from `seed.ts`, and
+        // `seed.ts` spent one `keyOf` call on `seedKey` — so `matcher`, `sortedKey`, the file tagger
+        // and its WeakMap shipped to every page for two callers that are in neither. `seedKey` is in
+        // `keys.ts` itself now, which is the module it was already borrowing the format from.
+        ['the memo key builder (keys.ts)', 'file#'],
     ] as const
 
     const resident: string[] = []

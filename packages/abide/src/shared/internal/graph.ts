@@ -235,46 +235,31 @@ export class Node {
             // An EFFECT keeps throwing out of here: `flush` resets it to CLEAN and rethrows from a
             // fresh microtask, which is what keeps the throw observable.
             if (this.isEffect) {
-                this.runState = RUNNING
-                try {
-                    this.run()
-                } catch (error) {
-                    // A body that could not read yet has not RUN — there is nothing to report and
-                    // nothing to undo. The signalling read subscribed this node to the flip that ends
-                    // the load, so the body runs again the moment it can.
-                    if (!(error instanceof Pending)) throw error
-                } finally {
-                    // In a `finally`, because a body that THROWS has still left the run: left
-                    // `RUNNING`, every later mark would be recorded for a run that is over and the
-                    // effect would be dead for the life of the page — which is the thing `flush`'s
-                    // reset to CLEAN exists to prevent.
-                    this.finishRun()
-                }
+                rerun(this)
                 return
-            } else {
-                // Cleared BEFORE the run and set only by the signal below, so any run that reaches a
-                // value clears it — including the one this pull is about to make.
-                this.signalled = false
-                try {
-                    this.run()
-                } catch (error) {
-                    if (error instanceof Pending) {
-                        // The node is DIRTY with nothing behind it, and `mark` has to know: it would
-                        // otherwise absorb every later change to this body's own sources.
-                        this.signalled = true
-                        // Nobody to signal: whoever read this derivation is at a position that will
-                        // not run again, so it serves what it has — nothing yet — exactly as the cold
-                        // cell under it would have. Returning here leaves the node DIRTY, so the next
-                        // read runs the body rather than trusting a value it never produced.
-                        if (current === null && !willRetry) return
-                        // Re-armed for whoever is reading: the derivation's own run restored this on
-                        // its way out, so without it a body that CATCHES the relayed signal would
-                        // look like a body that never met one.
-                        outstanding = error
-                        throw relayed(error)
-                    }
-                    settleError(this, error)
+            }
+            // Cleared BEFORE the run and set only by the signal below, so any run that reaches a
+            // value clears it — including the one this pull is about to make.
+            this.signalled = false
+            try {
+                this.run()
+            } catch (error) {
+                if (error instanceof Pending) {
+                    // The node is DIRTY with nothing behind it, and `mark` has to know: it would
+                    // otherwise absorb every later change to this body's own sources.
+                    this.signalled = true
+                    // Nobody to signal: whoever read this derivation is at a position that will
+                    // not run again, so it serves what it has — nothing yet — exactly as the cold
+                    // cell under it would have. Returning here leaves the node DIRTY, so the next
+                    // read runs the body rather than trusting a value it never produced.
+                    if (current === null && !willRetry) return
+                    // Re-armed for whoever is reading: the derivation's own run restored this on
+                    // its way out, so without it a body that CATCHES the relayed signal would
+                    // look like a body that never met one.
+                    outstanding = error
+                    throw relayed(error)
                 }
+                settleError(this, error)
             }
         }
         this.status = CLEAN
@@ -597,17 +582,25 @@ function trackerFor(node: Node): Async {
     return track
 }
 
+/**
+ * Which probe a starting load moves. Both starters ask it, so the cold/warm rule has one writer.
+ *
+ * COLD (nothing retained) → `pending`, because there is genuinely nothing to show. WARM (a value is
+ * held) → only `refreshing` moves, so the retained value keeps being served and its readers stay
+ * asleep until the load actually changes it.
+ *
+ * A retained `undefined` counts as COLD: `state(undefined)` has settled, but it has nothing to keep
+ * showing, and a spinner that reads `refreshing` over a blank cell is the wrong spinner.
+ */
+function markStarted(node: Node, track: Async): void {
+    if (node.hasValue && node.value !== undefined) track.refreshing.write(true)
+    else track.pending.write(true)
+}
+
 function adopt(node: Node, promise: PromiseLike<unknown>): void {
     const track = trackerFor(node)
     const generation = ++track.generation
-    // COLD (nothing retained) → `pending`, because there is genuinely nothing to show. WARM (a value
-    // is held) → only `refreshing` moves, so the retained value keeps being served and its readers
-    // stay asleep until the load actually changes it.
-    //
-    // A retained `undefined` counts as COLD: `state(undefined)` has settled, but it has nothing to
-    // keep showing, and a spinner that reads `refreshing` over a blank cell is the wrong spinner.
-    if (node.hasValue && node.value !== undefined) track.refreshing.write(true)
-    else track.pending.write(true)
+    markStarted(node, track)
 
     // `Promise.resolve` of a native promise is that same promise, so the common case adds no tick;
     // it is here to make a foreign thenable safe to adopt.
@@ -734,8 +727,7 @@ function markSettled(track: Async): void {
 function consume(node: Node, source: AsyncIterable<unknown>): void {
     const track = trackerFor(node)
     const generation = ++track.generation
-    if (node.hasValue && node.value !== undefined) track.refreshing.write(true)
-    else track.pending.write(true)
+    markStarted(node, track)
     track.streaming.write(true)
     freshBuffer(track)
 
@@ -1102,10 +1094,10 @@ function withoutReporting<T>(fn: () => T): T {
 let kickedBy: Node | null = null
 
 // The last load a PROBE reported as not-yet-landed. What a server walk reads to learn that a region
-// asked about a load and therefore has something to show while it runs — the fact `deferrable` reads
-// off the SPELLING of an `{#if}` head, available here for any spelling at all.
+// asked about a load and therefore has something to show while it runs — the fact `$compiler`'s emit
+// reads off the SPELLING of an `{#if}` head, available here for any spelling at all.
 //
-// A single slot rather than a set: the walk asks one question, "is this region deferrable", and one
+// A single slot rather than a set: the walk asks one question, "is this region deferring", and one
 // unsettled load is enough to answer it. Whichever is recorded last is the one awaited, and the arm
 // re-runs after it, so a region probing two loads defers again on the second.
 let probedPending: Node | null = null
@@ -1171,10 +1163,10 @@ export function probedLoad(atFirstChunk: boolean): Promise<unknown> | null {
  * would wake a region that only asked `pending()` on every value that lands after.
  *
  * The note is what a server walk reads back, and it is taken AFTER the start, so a slot that was
- * cold a line ago is reported as the in-flight load it now is. There is no `NO_KICK` arm any more: a
- * `state(promise)` has nothing to start and is pending the whole time, so an early return for
- * "nothing to kick" would hide exactly the load a deferring region is built around. A cell that
- * never met a promise has no tracker and pays one null check for all of it.
+ * cold a line ago is reported as the in-flight load it now is. No early return for "nothing to
+ * kick", either: a `state(promise)` has nothing to start and is pending the whole time, so one would
+ * hide exactly the load a deferring region is built around. A cell that never met a promise has no
+ * tracker and pays one null check for all of it.
  */
 function kicker(node: Node, beforeRead: (() => void) | null): () => void {
     const startable = beforeRead !== null || node.fn !== null
@@ -1942,30 +1934,33 @@ export function scopedEffect(make: () => () => void): () => void {
     return () => void pick()
 }
 
-/** Run an effect node NOW, as `pull` would. Its sources are re-collected, so a new body is adopted. */
+/**
+ * Run an effect node NOW. Its sources are re-collected, so a new body is adopted.
+ *
+ * The ONE way an effect runs — `pull`'s DIRTY arm comes through here as well — so the two invariants
+ * below are stated once rather than in both.
+ */
 export function rerun(node: Node): void {
     if (node.status === DEAD) return
     node.runState = RUNNING
     try {
         node.run()
     } catch (error) {
-        // As in `pull`: a body that could not read yet has not run, and the read subscribed this node
-        // to what ends the load. `rerun` is the one path into an effect that does not go through
-        // `pull`, so the catch is owed here too.
+        // A body that could not read yet has not RUN — there is nothing to report and nothing to
+        // undo. The signalling read subscribed this node to the flip that ends the load, so the body
+        // runs again the moment it can.
         if (!(error instanceof Pending)) throw error
     } finally {
+        // In a `finally`, because a body that THROWS has still left the run: left `RUNNING`, every
+        // later mark would be recorded for a run that is over and the effect would be dead for the
+        // life of the page — which is the thing `flush`'s reset to CLEAN exists to prevent.
         node.finishRun()
     }
 }
 
+/** `untrackCall` for a caller that already holds a thunk. */
 export function untrack<T>(fn: () => T): T {
-    const previous = current
-    current = null
-    try {
-        return fn()
-    } finally {
-        current = previous
-    }
+    return untrackCall(callThunk, fn)
 }
 
 // `untrack(() => binder(value))` with the argument threaded through instead of captured.

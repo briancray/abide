@@ -63,7 +63,7 @@ const FORM_TYPE = 'application/x-www-form-urlencoded'
 const FILE_REF = '__abide_file'
 
 /** A call's args, encoded once: the JSON that carries them, and the files that JSON points at. */
-export interface Encoded {
+interface Encoded {
     text: string
     /** `null` when the args are plain JSON, which is the whole of the ordinary path. */
     files: [name: string, file: Blob][] | null
@@ -297,42 +297,6 @@ export function multipartBody(encoded: Encoded): FormData {
 export function isForm(request: Request): boolean {
     const type = request.headers.get('content-type') ?? ''
     return type.includes(MULTIPART_TYPE) || type.includes(FORM_TYPE)
-}
-
-/** `q=0` in an `Accept-Encoding` parameter list. Hoisted: this runs per request that can compress. */
-const REFUSED = /(^|;)\s*q\s*=\s*0(\.0*)?\s*(;|$)/i
-
-/**
- * Which of `candidates` this caller accepts, as an index — `-1` for none, so identity.
- *
- * `candidates` is in the answerer's preference order and the LOWEST accepted index wins. The two
- * answerers rank differently and both are right: the built assets are ordered smallest-first out of
- * the build, and a streamed response has one compressor. What they cannot differ on is the reading of
- * the header, which is why that is here and not twice — `br;q=0` is a caller REFUSING brotli, and a
- * scan that only searched for the token would hand it exactly what it refused.
- *
- * ONE pass over the header rather than one per candidate: each token is cut, trimmed and lowered once
- * and then asked of the candidates, of which there are at most two.
- *
- * `*` is deliberately NOT read as an invitation. It means "anything you have", and answering it with
- * a compressed form is correct for a browser and wrong for the long tail of things that send it while
- * decoding only what they listed. A caller that wants a compressed form says which one, and identity
- * is always right — the one place a conservative reading costs bytes rather than correctness.
- */
-export function acceptedEncoding(header: string | null, candidates: readonly string[]): number {
-    if (header === null || candidates.length === 0) return -1
-    let best = -1
-    for (const part of header.split(',')) {
-        const semi = part.indexOf(';')
-        // Encoding tokens are case-insensitive, and `Accept-Encoding: BR` is legal even if nothing
-        // sends it that way.
-        const name = (semi < 0 ? part : part.slice(0, semi)).trim().toLowerCase()
-        if (semi >= 0 && REFUSED.test(part.slice(semi))) continue
-        for (let at = 0; at < candidates.length; at++) {
-            if (candidates[at] === name && (best < 0 || at < best)) best = at
-        }
-    }
-    return best
 }
 
 /** The other half of `encodeArgs`. Absent and empty both mean an argless call. */
@@ -708,7 +672,7 @@ function stepsOf<T>(source: AsyncIterable<T> | Iterable<T>): AsyncIterator<T> | 
 }
 
 /** One framed chunk: the text to write, or the end of the sequence. Both fields always set. */
-export interface FramedStep {
+interface FramedStep {
     done: boolean
     value: string
 }

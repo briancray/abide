@@ -11,7 +11,7 @@
 import { type Channel, type ChannelOptions, channel, type KeyedChannel } from '$shared/channel.ts'
 import { internals } from '$shared/internal/graph.ts'
 import { isThenable } from '$shared/internal/probes.ts'
-import { seedKey } from '$shared/internal/seed.ts'
+import { seedKey } from '$shared/internal/keys.ts'
 import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
 import { NO_LIMIT, race, timeoutError } from '$shared/internal/timers.ts'
 import {

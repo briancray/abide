@@ -9,7 +9,7 @@ import { classifySlots, type SlotKind, type TemplateResult } from '../html.ts'
 import { isSource } from './BRANDS.ts'
 
 /** What a call site's `strings` mean, worked out once: the slot kinds, and the text as it is EMITTED. */
-export interface TemplatePlan {
+interface TemplatePlan {
     kinds: SlotKind[]
     /**
      * Each static string with the `name=` an attribute slot owns already cut off.
