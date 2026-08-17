@@ -1,9 +1,9 @@
 // `Accept-Encoding`, read once for both answerers.
 //
-// Here rather than in `$shared/internal/wire.ts`, where it started: `$shared` is what BOTH substrates
+// Here rather than in `#shared/internal/wire.ts`, where it started: `#shared` is what BOTH substrates
 // need, and this has no client half and cannot have one — it is a SERVER deciding which form of a
 // response to hand back. Both callers are in this directory (`assets.ts` for a built file,
-// `layers.ts` for a streamed page), and neither the framework's server package nor `$shared` asks.
+// `layers.ts` for a streamed page), and neither the framework's server package nor `#shared` asks.
 //
 // It leaving also takes the edge with it: `assets.ts` imported nothing else from `wire.ts`, so a
 // twenty-line header parser was putting the rpc argument encoder, the multipart body builder, the

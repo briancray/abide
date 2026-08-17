@@ -1,9 +1,9 @@
 // Where the app's name comes from when nobody declared one, and where its version comes from at all.
 //
-// `ABIDE_APP_NAME` is the answer everywhere it is set, and `$shared/log.ts` asks the document for it.
+// `ABIDE_APP_NAME` is the answer everywhere it is set, and `#shared/log.ts` asks the document for it.
 // This file is only the fallback under it — package.json's `name`, and the `version` beside it that the
 // health document publishes — and it lives here because finding one means walking a filesystem, which
-// is a server. Installed as a source rather than called, so `$shared` keeps its node-free import
+// is a server. Installed as a source rather than called, so `#shared` keeps its node-free import
 // graph and a browser bundle never carries a `fs` shim it would only ever find empty. Installed at
 // IMPORT rather than lazily inside `serve()` the way the scope and href sources are: a line can be
 // written long before anything serves a request.
@@ -13,9 +13,9 @@
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { env } from '$shared/internal/env.ts'
-import { terminalLine } from '$shared/internal/lines.ts'
-import { appName, useAppNameSource, useLineWriter } from '$shared/log.ts'
+import { env } from '#shared/internal/env.ts'
+import { terminalLine } from '#shared/internal/lines.ts'
+import { appName, useAppNameSource, useLineWriter } from '#shared/log.ts'
 import { knobOf, useAppFactsSource } from './config.ts'
 
 /** What the climb below is looking for: the two facts an app is identified by. */
@@ -38,7 +38,7 @@ let found: Manifest | null = null
  * the one that named the app would be a version of something else. `ABIDE_APP_NAME` can therefore
  * rename the app without the climb ever happening, and `appVersion()` is what starts it then.
  */
-// Climbs past a manifest with no `name`, which is what separates this from `$compiler/check.ts`'s
+// Climbs past a manifest with no `name`, which is what separates this from `#compiler/check.ts`'s
 // climb: an app under a nameless `{ "private": true }` leaf is named after its workspace root, while
 // the type mirror roots at the nearest package BOUNDARY whatever it says. Two rules, on purpose.
 function nearestManifest(): Manifest {
@@ -77,7 +77,7 @@ useAppNameSource(() => nearestManifest().name)
 // The three TERMINAL line shapes, which a browser can never be in and so does not carry — eagerly,
 // for the reason the app name is: a line can be written long before anything calls `serve()`, and a
 // framework warning that came out plain because nothing had imported the writer yet would be a
-// difference nobody could account for. See `$shared/internal/lines.ts`.
+// difference nobody could account for. See `#shared/internal/lines.ts`.
 useLineWriter(terminalLine)
 // The two facts `config()` publishes as `APP_VERSION` and `APP_DATA_DIR`. Installed rather than
 // imported, so this file keeps its `node:` imports out of `config.ts` — see `useAppFactsSource`.

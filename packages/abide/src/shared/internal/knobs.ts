@@ -2,7 +2,7 @@
 //
 // `config()` is the source of truth for every knob abide reads: the floor, then the app's `onConfig`
 // defaults, then what the operator declared, resolved once and read from there. The three ceilings
-// are read from `$shared`, which may not import `$server` — so the server REGISTERS itself here, the
+// are read from `#shared`, which may not import `#server` — so the server REGISTERS itself here, the
 // same inversion `useLogSink`, `useAppNameSource` and `useIdentitySource` already are.
 //
 // Nothing registered is the honest answer in a browser: there is no config there and `env()` reads an
@@ -17,7 +17,7 @@ type Resolver = (field: string) => unknown
 
 let resolver: Resolver | null = null
 
-/** Registered by `$server/config.ts` on import, so loading `abide/server` is what wires this up. */
+/** Registered by `#server/config.ts` on import, so loading `abide/server` is what wires this up. */
 export function useConfigSource(source: Resolver): void {
     resolver = source
 }

@@ -3,17 +3,17 @@
 // The point of the two laws is that these functions return the SAME THING the local primitives do —
 // a keyed memo, a channel — so a caller's whole vocabulary is already written and identical on both
 // sides. The transport is not in here at all: it is in `registry.ts`, which serves what these
-// declare, and in `$shared/transport.ts`, which is the same shape with a fetch for a body.
+// declare, and in `#shared/transport.ts`, which is the same shape with a fetch for a body.
 //
 // A handler lives under `server/rpc/**` or `server/sockets/**` and the compiler elides the module in
 // the browser lane, so nothing about this file — or anything it imports — reaches a browser.
 
-import { type Channel, type ChannelOptions, channel, type KeyedChannel } from '$shared/channel.ts'
-import { internals } from '$shared/internal/graph.ts'
-import { isThenable } from '$shared/internal/probes.ts'
-import { seedKey } from '$shared/internal/keys.ts'
-import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
-import { NO_LIMIT, race, timeoutError } from '$shared/internal/timers.ts'
+import { type Channel, type ChannelOptions, channel, type KeyedChannel } from '#shared/channel.ts'
+import { internals } from '#shared/internal/graph.ts'
+import { isThenable } from '#shared/internal/probes.ts'
+import { seedKey } from '#shared/internal/keys.ts'
+import type { JsonSchema, Shapes } from '#shared/internal/shapes.ts'
+import { NO_LIMIT, race, timeoutError } from '#shared/internal/timers.ts'
 import {
     type Answer,
     errorPayload,
@@ -24,10 +24,10 @@ import {
     NDJSON_TYPE,
     type Refusals,
     TTL_HEADER,
-} from '$shared/internal/wire.ts'
-import { abideLog } from '$shared/log.ts'
-import { type KeyedMemo, type MemoOptions, memo } from '$shared/memo.ts'
-import { asRpc, type Method, type Rpc } from '$shared/transport.ts'
+} from '#shared/internal/wire.ts'
+import { abideLog } from '#shared/log.ts'
+import { type KeyedMemo, type MemoOptions, memo } from '#shared/memo.ts'
+import { asRpc, type Method, type Rpc } from '#shared/transport.ts'
 import { knobOf } from './config.ts'
 import { PRIVATE_NO_STORE } from './internal/CACHE.ts'
 import { failed, headersFor } from './responses.ts'

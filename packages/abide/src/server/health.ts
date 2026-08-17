@@ -11,9 +11,9 @@
 // that one field. The failure is also written to `abide:health` as a warning, which the `DEBUG` gate
 // never swallows — the gate is there to control volume, not to hide breakage.
 
-import { type Health, useHealthSource } from '$shared/health.ts'
-import { isThenable } from '$shared/internal/probes.ts'
-import { abideLog } from '$shared/log.ts'
+import { type Health, useHealthSource } from '#shared/health.ts'
+import { isThenable } from '#shared/internal/probes.ts'
+import { abideLog } from '#shared/log.ts'
 import { appVersion } from './app.ts'
 import { NO_STORE_HEADER } from './internal/CACHE.ts'
 import { HookSlot } from './internal/hooks.ts'

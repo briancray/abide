@@ -13,7 +13,7 @@ import { traceId } from './internal/trace.ts'
 
 // `ABIDE_APP_NAME`, then package.json's `name`, then `abide`. The middle one needs a filesystem, so
 // it arrives through a source `abide/server` installs at import — eagerly, unlike the scope and href
-// sources, because a line can be written long before anything calls `serve()`. That keeps `$shared`
+// sources, because a line can be written long before anything calls `serve()`. That keeps `#shared`
 // free of a node import a browser would only ever bundle as an empty object.
 let appNameSource: (() => string | null) | null = null
 let resolvedAppName: string | null = null

@@ -1,0 +1,17 @@
+<!doctype html>
+<!--
+    The app's own document, and an ordinary html file: `<slot></slot>` is where a page renders — the
+    same word a `.abide` file uses for the same relationship. Nothing of abide's is named here: the
+    client script and the css `#ui/pages/layout.abide` imports are both appended from what the build
+    wrote, so this file is only what is the APP's.
+-->
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>abide dogfood</title>
+    </head>
+    <body>
+        <slot>loading…</slot>
+    </body>
+</html>

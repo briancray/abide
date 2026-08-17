@@ -1,0 +1,119 @@
+<!-- One case as a row: what it claims, whether it passed, and — on open — everything that says why.
+     Forty cases used to be forty cards, each showing its live area, its log and two source panes at
+     once, so reviewing a suite meant scrolling past everything that was working. A row per case is read
+     by SCANNING: the status is in a column, and the detail is one click away for the row that is red.
+
+     Collapsed is not "not run". The case runs when its live area lands, exactly as the card did — the
+     queue is the harness's and runs one case at a time, because the DOM counters are global and a case
+     started beside another has its work billed to whichever one is measuring. What `<details>` decides
+     is whether anybody is LOOKING, not whether it happened.
+
+     `bind:element` is client-only, which is also what decides WHEN a case runs: a server render writes
+     the row's shell and starts nothing, and the browser that adopts it is what puts the case in the
+     queue. So a page of rows server-renders in one pass with no case having run.
+
+     The state is HANDED OVER rather than made here, and `cases.abide` says why: a chip that filters on
+     an outcome has to read a status from outside the component that paints it. It outliving this row is
+     the other half of that — a row a chip drops and returns comes back with the result it already had. -->
+<script module>
+import { state, watch } from 'abide'
+import { type Case, enqueue, type Running } from 'harness'
+import { CASE_ROW, HIT, LINE, marked, TONE } from './table.ts'
+import Source from './Source.abide'
+</script>
+
+<script>
+import { props } from 'abide'
+
+const { spec, suite, held, wanted } = props<{
+    spec: Case
+    suite: string
+    held: Running
+    wanted: string[]
+}>()
+
+const stage = state<HTMLElement | null>(null)
+
+watch(() => {
+    const node = stage()
+    if (node !== null) enqueue(spec(), held(), node)
+})
+
+/**
+ * Whether anybody is looking, which is what the source panes are fetched on.
+ *
+ * NOT whether the case ran — that is `held`, and it happens either way. This is the one thing a shut
+ * row is allowed to skip: three hundred rows asking the slicing rpc for a body nobody opened is the
+ * reason the panes were behind a second disclosure, and reading the row's own state instead is what
+ * lets them be open by the time a reader gets there.
+ */
+const looking = state(false)
+
+/** The console follows its own tail — a case that logs forty lines should show the last one. */
+const console_ = state<HTMLElement | null>(null)
+watch(() => {
+    held.lines()
+    const node = console_()
+    if (node !== null) node.scrollTop = node.scrollHeight
+})
+</script>
+
+<!-- `data-case` names the row for whoever is counting or clicking it: a source pane inside is a
+     `<details>` too, so "how many rows" is a question the tag cannot answer. It is also the handle a
+     browser-driven test reaches a case by.
+
+     `bind:open` and not a `toggle` handler: this is what the bind IS, and the app is where it gets
+     used. `toggle` does not bubble, so a source pane shutting inside this row cannot be mistaken for
+     the row shutting. -->
+<details class="row" data-case={spec.title} bind:open={looking}>
+    <summary class={CASE_ROW}>
+        <svg viewBox="0 0 8 8" class="chevron" aria-hidden="true"><path d="M2 0 L7 4 L2 8 Z"/></svg>
+        <!-- The title, with what the filter matched painted inside it — and it is the ONLY thing painted
+             on this row, because it is the only thing the filter reads. Every row on a filtered page
+             carries a mark, which is what a browser test asserts.
+
+             The `title` attribute stays the WHOLE string: the column truncates, and a tooltip is what a
+             reader reaches for when the end of a claim is under the ellipsis.
+
+             An unmatched run is text and not a `<span class="">` — the same call `code.abide` makes for
+             the same reason, and here it is also the empty-query shape: no terms is one plain run, so a
+             page nobody has typed into paints three hundred titles and no elements. -->
+        <span class="case-title" title={spec.title}>{#for part of marked(spec.title, wanted)}{#if part.hit}<mark class={HIT}>{part.text}</mark>{:else}{part.text}{/if}{/for}</span>
+        <span class="badge {TONE[held.status()]}">{held.status()}</span>
+    </summary>
+
+    <div class="row-body">
+        {#if spec.note}<p class="row-note">{spec.note}</p>{/if}
+
+        <!-- The live area. In the document whether or not the row is open, so the case runs either way —
+             but a closed `<details>` hides its children, so while it is shut this host has no LAYOUT BOX
+             and a case reading `offsetWidth` off it would read zero. No case does; the measurements that
+             need a real box are bench arms, and those run on `/bench` against their own containers. A
+             case that starts needing one belongs there rather than here. -->
+        <div class="stage" bind:element={stage}></div>
+
+        <div class="console" bind:element={console_}>
+            {#for line of held.lines()}
+                <div class="console-line">
+                    <span class="console-label">{line.label === '' ? ' ' : line.label}</span>
+                    {#if line.value !== ''}
+                        <span class="console-value {LINE[line.kind]}">{line.value}</span>
+                    {/if}
+                </div>
+            {/for}
+        </div>
+
+        <!-- Open with the row, because the code IS what a reader opened the row to see — the status
+             column already said what happened. `shown` is what fetches them as well as what expands
+             them, so a shut row still costs the slicing rpc nothing. See `source.abide`. -->
+        {#if spec.run}
+            <Source suite={suite} title={spec.title} face="run" label="the assertions" shown={looking}/>
+        {/if}
+        {#if spec.server}
+            <Source suite={suite} title={spec.title} face="server" label="the assertions (server only)" shown={looking}/>
+        {/if}
+        {#if spec.interact}
+            <Source suite={suite} title={spec.title} face="interact" label="the interactive half" shown={looking}/>
+        {/if}
+    </div>
+</details>

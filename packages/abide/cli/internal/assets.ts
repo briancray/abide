@@ -21,7 +21,7 @@
 
 // `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
 import { basename } from 'node:path'
-import { reserved } from '$shared/internal/mount.ts'
+import { reserved } from '#shared/internal/mount.ts'
 import { acceptedEncoding } from './encodings.ts'
 import {
     assetOf,

@@ -10,7 +10,7 @@
 // without a browser, and without touching a global anything else in the suite can see.
 
 import { expect, test } from 'bun:test'
-import { useMountBase } from '$shared/internal/mount.ts'
+import { useMountBase } from '#shared/internal/mount.ts'
 import { BOOT_ID, reloadClient, reloadSource, reloadTag } from './reload.ts'
 
 /** What the client does to a socket, from the socket's side. */

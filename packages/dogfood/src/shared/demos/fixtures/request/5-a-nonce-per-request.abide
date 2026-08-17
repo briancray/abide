@@ -1,0 +1,23 @@
+<script>
+import { whatArrived } from '#server/rpc/docs/request/a-nonce-per-request.ts'
+import Answer from '#ui/lib/Answer.abide'
+import { state } from 'abide'
+
+const asked = state(false)
+const ask = (): void => {
+    asked = true
+    whatArrived({}).invalidate()
+}
+</script>
+
+<!-- Both halves of the claim in one answer: `nonce` and `again` are the SAME string, because two
+     askers inside one request get one value — and pressing again changes both, because the next
+     request mints its own. -->
+<button onclick={ask}>ask the server</button>
+{#if asked}
+    {#if whatArrived({}).pending()}
+        <p>asking…</p>
+    {:else}
+        <Answer source={JSON.stringify(whatArrived({})(), null, 2)}/>
+    {/if}
+{/if}

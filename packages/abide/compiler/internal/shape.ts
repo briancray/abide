@@ -20,7 +20,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 // Type-only, exactly like `Kind` in `elide.ts`: the emitted schema IS the contract between the two
 // halves, and a shape language declared twice is a keyword that means one thing here and another
 // there.
-import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
+import type { JsonSchema, Shapes } from '#shared/internal/shapes.ts'
 import { ANYTHING, arrayOf, formatOf, INTRINSICS, isAnything, NOTHING, objectOf, union, usable } from './assemble.ts'
 import { type Token, tokensOf } from './lex.ts'
 import { IDENTIFIER } from './parse.ts'

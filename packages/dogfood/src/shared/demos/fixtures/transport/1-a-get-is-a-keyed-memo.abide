@@ -1,0 +1,18 @@
+<script>
+import { user } from '#server/rpc/docs/transport/a-get-is-a-keyed-memo.ts'
+import { state } from 'abide'
+
+// Nothing is asked for until this is written, and that is about the PROOF rather than about the
+// lesson: `#shared/demos/proofs.ts` renders this on a server and mounts it on a client and compares the two,
+// so a read on sight would put a round trip inside the comparison. Idle, both arms write the button.
+const id = state(0)
+</script>
+
+<button onclick={() => id++}>ask for user {id + 1}</button>
+<button onclick={() => id--} disabled={id < 2}>back to user {id - 1}</button>
+
+<!-- `user({ id })` SELECTS the slot and reading it is the request — so going back to a key already
+     asked for paints from the slot and the network panel stays quiet. -->
+{#if id}
+    {#if user({ id: id }).pending()}<p>asking…</p>{:else}<p>{user({ id: id })().name}</p>{/if}
+{/if}

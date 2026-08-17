@@ -1,0 +1,37 @@
+<!-- What a RUNG printed, as opposed to what a rung is written in — see `code.abide` for the other one.
+
+     The difference is not the grammar, it is whether there is one. A source pane is always JavaScript;
+     a preview shows whatever the example had to say, which is a `JSON.stringify` on a good day and
+     `nothing asked yet` or the text of a refusal on the others. Handing that second kind to a
+     JavaScript lexer is what this component exists to stop: `nobody has signed in yet` paints `in` as a
+     keyword, and the apostrophe in `can't write an identity here` opens a string that swallows the rest
+     of the line. Both failures are the LEXER BEING ASKED THE WRONG QUESTION rather than being weak —
+     sugar-high, measured on the same two strings, gets them identically wrong, and every valid-JSON
+     payload thrown at `painted` round-trips through it correctly, escaped quotes and `/*` and backticks
+     inside string values included.
+
+     So the question asked here is whether the text is DATA, and `JSON.parse` is the only thing that can
+     answer it. Painted when it is, shown as it is when it is not — which is also the right answer for
+     the placeholder a preview holds before anybody presses anything. -->
+<script module>
+/** Whether `text` is data rather than a sentence. The parse is the whole test — the value is unused. */
+function isJson(text: string): boolean {
+    try {
+        JSON.parse(text)
+        return true
+    } catch {
+        return false
+    }
+}
+</script>
+
+<script>
+import { props } from 'abide'
+import Code from './Code.abide'
+
+const { source } = props<{ source: string }>()
+</script>
+
+<!-- `.code` on the plain arm too: a sentence in the answer's place is still the answer, so it keeps the
+     pane's face and size rather than dropping to the frame's body serif for the one case that failed. -->
+{#if isJson(source)}<Code source={source}/>{:else}<pre class="code">{source}</pre>{/if}

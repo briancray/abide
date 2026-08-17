@@ -317,22 +317,22 @@ ever consume them.
 
 | Rule | Detail |
 | --- | --- |
-| directory is the kind | `server/rpc/**` is rpc; `server/sockets/**` is a socket |
+| directory is the kind | `src/server/rpc/**` is rpc; `src/server/sockets/**` is a socket |
 | syntactic recognition | `export const NAME = GET(…)`, or `const NAME = GET(…)` with `export default NAME`. Any other export in those directories is a compile error naming the export |
-| the module as the endpoint | `export default NAME` addresses by the module PATH ALONE — `server/rpc/users.ts` answers at `users`, not `users/default` — so a route whose whole job is one endpoint does not repeat itself in its own address. The stub is a default too, so the import side is unchanged |
+| the module as the endpoint | `export default NAME` addresses by the module PATH ALONE — `src/server/rpc/users.ts` answers at `users`, not `users/default` — so a route whose whole job is one endpoint does not repeat itself in its own address. The stub is a default too, so the import side is unchanged |
 | a default needs a BINDING | `export default GET(…)` inline is refused, and the message says how to bind it. The server lane is the module UNCHANGED plus an appended registration, and that registration maps an address to a local name; a bare default declares no name, and a module cannot reach its own default export to supply one. The `const` may sit above or below the `export default` that names it |
 | addressed ONCE | `export const h = …` plus `export default h` is a compile error: it would answer at both `…/h` and the module |
 | reserved prefix | Everything abide serves is under `/__abide/`; `dispatch` returns `undefined` for anything outside it |
-| who imports it | The BOOT does. A handler is reachable once its module has been imported, and `abide start` / `abide dev` scan `server/rpc/**` and `server/sockets/**` from the project root and import each — anchored there, so a transport directory nested elsewhere in the tree is not this app's. An app importing one for its side effect is a list kept in step by hand |
+| who imports it | The BOOT does. A handler is reachable once its module has been imported, and `abide start` / `abide dev` scan `src/server/rpc/**` and `src/server/sockets/**` under the app's source directory and import each — anchored there, so a transport directory nested elsewhere in the tree is not this app's. An app importing one for its side effect is a list kept in step by hand |
 | no hash | The module's path IS the address, so it is legible in a stack trace and a network panel |
 
 | File | Export | Served at |
 | --- | --- | --- |
-| `server/rpc/users.ts` | `getUser` | `/__abide/rpc/users/getUser` |
-| `server/rpc/admin/audit.ts` | `recent` | `/__abide/rpc/admin/audit/recent` |
+| `src/server/rpc/users.ts` | `getUser` | `/__abide/rpc/users/getUser` |
+| `src/server/rpc/admin/audit.ts` | `recent` | `/__abide/rpc/admin/audit/recent` |
 | `server/sockets/feed.ts` | `ticks` | `/__abide/socket/feed/ticks` |
 
-| Lane | Gets, for `server/rpc/users.ts` |
+| Lane | Gets, for `src/server/rpc/users.ts` |
 | --- | --- |
 | browser | `export const getUser = remote("users/getUser", { method: "GET" })` — the address, and none of the module |
 | server | The module VERBATIM, plus an appended `register("rpc", [["users/getUser", "getUser"]], { getUser })` |
@@ -671,7 +671,7 @@ nobody.
 Whether the NAME or the CALL is the source comes from the declaration — `memo(() => …)` vs
 `memo(({ id }) => …)`, `channel<T>()` vs `channel<T, Args>()`. An **imported** source has no
 declaration to read, so it keeps the explicit spelling — with one exception, which is an import
-statement that says as much as a declaration would: a named import from **`server/rpc/**`** is a
+statement that says as much as a declaration would: a named import from **`src/server/rpc/**`** is a
 keyed memo, because that is what the directory means and `rpc` = `memo` + transport leaves nothing
 else it could be. So `{orders({ id }).total}` reads, and `{#if orders({ id }).pending()}` defers,
 exactly as a local keyed memo does. `server/sockets/**` is NOT included: a socket is keyed only in
@@ -1111,7 +1111,7 @@ body needs is declared by which face it is written as rather than by a flag on `
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `suite` | `(spec: { name, title, blurb, cases }) => Suite` | Identity, and the one place a suite naming nothing is caught. `name` is the route segment and test-file name. A suite does NOT carry its ladder: `/docs` is keyed by callable, so the rungs are read from `fixtures/<suite>/ladder.ts` by whatever needs them. |
-| `Example` | `{ adds: string; of: readonly string[]; source: string; client?: string; view?: (args) => TemplateResult }` | One RUNG: the one thing it introduces that the rung before it did not, the PUBLIC NAMES it introduces (which is what `/docs/<callable>` is keyed by — almost always one, more only when the names are one idea spelled several ways), the file's own text (through `?source`, so it is what an author wrote in every lane), and what to mount. A rung that CROSSES THE SEAM is two files: `source` is a real endpoint under `server/rpc/**` and `client` is the browser half that calls it, which is what `view` was compiled from and what the page shows in a second pane. Every rung on a page renders — `dogfood/test/docs.test.ts` holds the one exception in both directions — and a view whose result comes from the server is driven by a BUTTON, because `demos/proofs.ts` renders each one on both substrates and compares them. Order is the content: each rung is the one before it plus one new thing. |
+| `Example` | `{ adds: string; of: readonly string[]; source: string; client?: string; view?: (args) => TemplateResult }` | One RUNG: the one thing it introduces that the rung before it did not, the PUBLIC NAMES it introduces (which is what `/docs/<callable>` is keyed by — almost always one, more only when the names are one idea spelled several ways), the file's own text (through `?source`, so it is what an author wrote in every lane), and what to mount. A rung that CROSSES THE SEAM is two files: `source` is a real endpoint under `src/server/rpc/**` and `client` is the browser half that calls it, which is what `view` was compiled from and what the page shows in a second pane. Every rung on a page renders — `dogfood/test/docs.test.ts` holds the one exception in both directions — and a view whose result comes from the server is driven by a BUTTON, because `demos/proofs.ts` renders each one on both substrates and compares them. Order is the content: each rung is the one before it plus one new thing. |
 | `ctx.host` | `HTMLElement` | The live area — a detached element headless, the row's own in the browser. |
 | `ctx.is` | `<T>(label: string, actual: T, expected: T) => void` | Structural equality. Records the line either way; throws on a mismatch. |
 | `ctx.throws` | `(label: string, fn: () => unknown, match?: string \| RegExp) => void` | Asserts the call throws, matching the message by substring or pattern. |
@@ -1188,7 +1188,7 @@ none of them. The TYPES stay on `abide`, because `pages()` hands back a `RouteEn
 
 | Pattern | Meaning |
 | --- | --- |
-| `<dir>/**/page.abide` | A route, under the directory handed to `pages(dir)` — `abide start` hands it `pages/` itself |
+| `<dir>/**/page.abide` | A route, under the directory handed to `pages(dir)` — `abide start` hands it `src/ui/pages/` itself |
 | `<dir>/**/layout.abide` | A layout; renders its child page through `<slot/>` |
 | `[name]` | Required dynamic segment → `route().params.name` |
 | `[[name]]` | Optional segment (absent → param omitted) |
@@ -1236,7 +1236,7 @@ Two spaces, and which one a path is in is decided by which side of the wire it i
 
 | Space | What is written in it | Carries the base |
 | --- | --- | --- |
-| APP | the route table, a pattern, `route().name`, an rpc id, a `pages/` directory | no |
+| APP | the route table, a pattern, `route().name`, an rpc id, a pages directory | no |
 | BROWSER | an `href`, the address bar, a `fetch`, `route().url` | yes |
 
 A page under a mount is not a page that was renamed, so nothing an app calls things BY moves. `url()`
@@ -1330,7 +1330,7 @@ keep their identity.
 `renderFragment` is `renderDocument` without the shell, and a navigation is answered with it — so a
 A pending-armed block DEFERS on this path exactly as it does on a page load, rather than being awaited in
 document order. Without it, a fast panel below a slow one waits for the slow one, and so does every
-static byte beneath it; measured on `pages/streaming` at a 600ms/50ms split, that was 654ms for
+static byte beneath it; measured on `/streaming` at a 600ms/50ms split, that was 654ms for
 content ready at 50ms, and 654ms for a paragraph that was never waiting on anything.
 
 | Rule | Detail |
@@ -1423,18 +1423,51 @@ that runs on both sides of the thing it wraps.
 
 ### What an app IS
 
-Four conventions in the project root, and no wiring. Nothing in them imports a server, calls
-`Bun.serve`, mounts `dispatch`, opens a request scope, installs a signal handler, matches a route or
-builds a document — every one of those is the same code in every app, so the booting binary is where
-it lives, once, for both `abide start` and `abide dev`.
+`src/`, split three ways by SUBSTRATE, plus what neither side serves. Every directory below is a
+convention — abide reads it, nothing declares it — and there is no wiring. Nothing in them imports a
+server, calls `Bun.serve`, mounts `dispatch`, opens a request scope, installs a signal handler,
+matches a route or builds a document: every one of those is the same code in every app, so the
+booting binary is where it lives, once, for both `abide start` and `abide dev`.
+
+```
+src/server/   app.ts, rpc/**, sockets/**, and the app's own server code
+src/ui/       app.html, app.css, pages/**, public/**, and the app's own components
+src/shared/   what both sides run
+src/tests/    what neither serves
+```
+
+The same four are the app's SEAMS — `#server`, `#ui`, `#shared`, `#tests` — declared once in its own
+`package.json` and resolved by Bun, `tsc` and `Bun.build` alike:
+
+```json
+"imports": {
+    "#server/*": ["./src/server/*", "./.abide/types/src/server/*"],
+    "#ui/*":     ["./src/ui/*",     "./.abide/types/src/ui/*"],
+    "#shared/*": ["./src/shared/*", "./.abide/types/src/shared/*"],
+    "#tests/*":  ["./src/tests/*",  "./.abide/types/src/tests/*"]
+}
+```
+
+Subpath imports rather than tsconfig `paths`, and the difference is not cosmetic: `paths` is
+PROGRAM-global, so `#server` could only ever mean one package's server — and an app whose program
+compiles abide's own source (a workspace link resolves to `.ts`) would have to declare the
+framework's aliases to type-check its own pages. `imports` is scoped to the package the importing
+FILE is in, so the same four names mean the framework's seams inside the framework and this app's
+seams inside this app. The second entry in each pair is the `.abide` mirror: a declaration for
+`#ui/lib/Answer.abide` is generated under `.abide/types/`, and `rootDirs` only redirects RELATIVE
+resolution. It costs nothing at run time — the real file is found first.
+
+The rest of an app's config is one line, because everything a `.abide` program needs the checker to
+know is shipped: `{ "extends": "abide/tsconfig.json", "include": ["**/*.ts", ".abide/types/**/*.ts"] }`.
 
 | Convention | What it is |
 | --- | --- |
-| `app.ts` | What this app IS: the hooks below, and a route only if it wants one. `app.tsx` / `app.js` alike. Every export is optional, so the FILE is — an app of pages and endpoints needs none. What makes a directory an app is having something to serve: no `pages/`, no handlers and no module is the one shape refused |
-| `app.html` | The document its pages are served in. `<slot></slot>` is where the page renders; a `src`/`href` naming a build ENTRY is rewritten to what the build wrote, and the css the client graph imported is linked from the build. Absent → abide's own minimal shell |
-| `pages/` | What it serves. The directory IS the route table, installed for you — `pages(dir)` + `routes(...)`, and `route()` already answers off the request |
-| `server/rpc/**` · `server/sockets/**` | What it answers. Imported by the boot before a line of `app.ts` runs, so nothing imports a handler for its side effect |
-| `.abide/client.entry.ts` | The lane the browser gets, and what `abide build` is pointed at. **Generated from `pages/`, always** — the same route table, written as a static `import()` per row so every page is still its own chunk, plus `ready()`, `hydrate()` and link interception. There is no app-written client entry: client-side code of your own goes in `pages/layout.abide`, which is above every route and already isomorphic. An app that still has a `client.ts` is told it is built by nothing |
+| `src/server/app.ts` | What this app IS: the hooks below, and a route only if it wants one. `app.tsx` / `app.js` alike. Every export is optional, so the FILE is — an app of pages and endpoints needs none. What makes a directory an app is having something to serve: no pages, no handlers and no module is the one shape refused |
+| `src/ui/app.html` | The document its pages are served in. `<slot></slot>` is where the page renders, and the file names nothing of abide's: the client script and the css the client graph imported are both APPENDED to the head from the build, so a document carries no address a build decides. Absent → abide's own minimal shell |
+| `src/ui/pages/` | What it serves. The directory IS the route table, installed for you — `pages(dir)` + `routes(...)`, and `route()` already answers off the request |
+| `src/ui/public/` | What it hands over UNCHANGED. The tree is the address space: `public/favicon.ico` answers at `/favicon.ico`. Read once at boot into a map, so a request is a key lookup and no caller's string is ever joined onto a path. Served in front of the request pipeline, like the bundle and for the same reason — a favicon has no caller to be about — but SECOND, so it cannot shadow anything under the reserved prefix. Cached for an hour rather than forever: the name does not change when the bytes do |
+| `src/server/rpc/**` · `src/server/sockets/**` | What it answers. Imported by the boot before a line of `app.ts` runs, so nothing imports a handler for its side effect |
+| `.abide/client.entry.ts` | The lane the browser gets, and what `abide build` is pointed at. **Generated from `src/ui/pages/`, always** — the same route table, written as a static `import()` per row so every page is still its own chunk, plus `ready()`, `hydrate()` and link interception. There is no app-written client entry: client-side code of your own goes in `src/ui/pages/layout.abide`, which is above every route and already isomorphic. An app that still has a `client.ts` is told it is built by nothing |
 
 ### What a booting binary reads
 
@@ -1485,8 +1518,8 @@ failure in a line.
 | `abide run <file> [args…]` | Run a script under the abide runtime. Everything after `<file>` belongs to the SCRIPT, so it is SPAWNED: it reads its own `argv` and keeps its own exit code. |
 | `abide check [dir…]` | Type-check `.abide` script bodies, reporting every diagnostic on the `.abide` line. The list is stdout; the exit code says it failed. |
 | `abide dev [--port <n>]` | Watch the project and keep the app up: the client bundled into MEMORY, the server restarted on every change, and full live-reload over the socket mux. `--port` (default `3000`) HOPS to the next open port if taken, then PINS what it bound so no restart moves the app. `PORT` and `APP_URL` are written back from the socket and `config()` invalidated, so what the document reports is where it is actually listening and `abide logs` resolves an app a hop moved. |
-| `abide build [entry…]` | Code-split client → content-hashed chunks + `manifest.json` under `.abide/client/`, minified and precompressed. With no entry named it builds the lane generated from `pages/`. |
-| `abide start [--port <n>]` | Boot the app's `app.ts` if it wrote one, and serve its `pages/` in its `app.html`, with the bundle in front and `/__abide/**` behind that. `--port` binds DIRECTLY and fails hard on `EADDRINUSE`, so `APP_URL` cannot drift. |
+| `abide build [entry…]` | Code-split client → content-hashed chunks + `manifest.json` under `.abide/client/`, minified and precompressed. With no entry named it builds the lane generated from `src/ui/pages/`. |
+| `abide start [--port <n>]` | Boot the app's `src/server/app.ts` if it wrote one, and serve its `src/ui/pages/` in its `src/ui/app.html`, with the bundle in front and `/__abide/**` behind that. `--port` binds DIRECTLY and fails hard on `EADDRINUSE`, so `APP_URL` cannot drift. |
 | `abide logs` | Tail `GET /__abide/logs`: the ring replayed, then every line as written. Printed by the rules THIS process's stdout answers to, with `+Nms` rebuilt from the record times. |
 | `abide compile [--target] [--out] [--platforms]` | ONE standalone executable, via `bun build --compile`. `--platforms` cross-compiles a release set for the price of one client build, and makes `--out` name a DIRECTORY. |
 | `abide bundle` | A desktop launcher for the host platform: embedded assets and a first-run setup screen. Native windowing is best-effort — a system webview binary, or the default browser. |
@@ -1566,12 +1599,12 @@ line editor takes its terminal as HOOKS, so a test drives it with a string of ke
 | `ClientGraph` | `{ modules: Record<string, string>; imports: Record<string, string[]> }` | Source path → the output file holding it, and output name → the names it imports, so a preload reaches a whole subtree rather than a face of it. Neither half is derivable from the filenames. |
 | `ClientAsset` | `{ kind: 'entry' \| 'chunk' \| 'asset'; size: number; type: string; encodings: Sidecar[] }` | The identity form's size and content type, plus what was written beside it. |
 | `Sidecar` | `{ encoding: 'br' \| 'gzip'; file: string; size: number }` | A precompressed form written BESIDE the identity bytes, never instead. Listed SMALLEST first, so "best available" costs no comparison at request time. |
-| entry | — | The files named on the command line, or — with none named — the lane generated from `pages/` at `.abide/client.entry.ts`. The manifest keys the generated lane as `client.ts`, so an `app.html` naming that source resolves it without a document having to know where the file sits. |
+| entry | — | The files named on the command line, or — with none named — the lane generated from `src/ui/pages/` at `.abide/client.entry.ts`. Every entry is keyed in the manifest by where it sits, the generated lane included: `abide start` looks that key up to append the `<script>`, so no document names one. |
 | naming | `[name]-[hash].[ext]` | The hash is in the name rather than a query, so a chunk is immutable at its address and the directory is cacheable forever. |
 
 | Rule | Detail |
 | --- | --- |
-| the lane | `target: 'browser'`, which is what `abide/compiler/plugin` reads to elide a `server/rpc/**` module to its address. A page importing `getUser` gets `remote("users/getUser")` and none of the driver |
+| the lane | `target: 'browser'`, which is what `abide/compiler/plugin` reads to elide a `src/server/rpc/**` module to its address. A page importing `getUser` gets `remote("users/getUser")` and none of the driver |
 | plugins | The app's own, read from `[serve.static] plugins` in its `bunfig.toml` — Bun's existing spelling for "what bundles this app's client", so a Tailwind stylesheet is compiled by the app's dependency rather than by one abide would have to acquire. Resolved from the app root; a plugin that is named and cannot be loaded FAILS the build, because a stylesheet that quietly did not compile is a build that succeeds and ships an unstyled page |
 | splitting | Every `import()` the bundler can SEE is a chunk, which is what makes a route reached through a loader absent from the first load |
 | the graph | `manifest.graph` — which chunk holds a source module, and what each chunk statically imports. Read off Bun's `metafile`, where a code-split chunk's `entryPoint` names the file it was split out of, so nothing here reproduces `[name]-[hash]` |

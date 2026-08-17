@@ -9,7 +9,7 @@
 //
 // This is deliberately ONE file rather than graph / async / cell. `Node.run` decides between "this
 // is a value" and "this is a load" inline, and the load path writes back through `Node.write` — so
-// any split along those lines is an import cycle, not a seam. `$shared/reactive.ts` is the public
+// any split along those lines is an import cycle, not a seam. `#shared/reactive.ts` is the public
 // face of what is here; nothing outside abide imports this module.
 
 import { abideLog } from '../log.ts'
@@ -1094,7 +1094,7 @@ function withoutReporting<T>(fn: () => T): T {
 let kickedBy: Node | null = null
 
 // The last load a PROBE reported as not-yet-landed. What a server walk reads to learn that a region
-// asked about a load and therefore has something to show while it runs — the fact `$compiler`'s emit
+// asked about a load and therefore has something to show while it runs — the fact `#compiler`'s emit
 // reads off the SPELLING of an `{#if}` head, available here for any spelling at all.
 //
 // A single slot rather than a set: the walk asks one question, "is this region deferring", and one
@@ -1195,7 +1195,7 @@ function kicker(node: Node, beforeRead: (() => void) | null): () => void {
         //
         // STREAMING is "the server DRAINED this and we restart from the top", so the markup is a
         // different point in the same stream and no later chunk makes it match — the rows are
-        // rebuilt, which is what the `Streamed` branch in `$ui` has always done. Keeping them instead
+        // rebuilt, which is what the `Streamed` branch in `#ui` has always done. Keeping them instead
         // freezes the list on the server's last chunk while a plain READ of the same cell beside it
         // counts up from one: `latest 1` over a list showing 1..5, reconciling only when the stream
         // ends. Correct output at both ends, incoherent for the whole middle.
@@ -1340,7 +1340,7 @@ function lastly(this: PromiseLike<unknown>, onFinally?: (() => void) | null): Pr
 
 // Where a cell keeps its node. Graph-internal and deliberately NOT the brand a renderer checks: the
 // brand answers "should a slot read this?", which is a wider question than "does this have a node"
-// — a channel has no node and is still a source. `$shared/internal/BRANDS.ts` owns that one.
+// — a channel has no node and is still a source. `#shared/internal/BRANDS.ts` owns that one.
 const CELL = Symbol.for('abide.cell')
 
 function nodeOf(cell: Cell<unknown>): Node {

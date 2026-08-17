@@ -10,7 +10,7 @@
 // that matters — the script's own flags have to reach the script, including the ones this binary
 // also answers to.
 
-import { PRELOAD_FILE } from '$compiler/PRELOAD_FILE.ts'
+import { PRELOAD_FILE } from '#compiler/PRELOAD_FILE.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 
 export async function run(argv: string[]): Promise<number> {

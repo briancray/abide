@@ -1,7 +1,7 @@
 // `.abide` becomes an importable module.
 //
 // Registered three ways, all of them reaching this one module: the root `bunfig.toml`'s `[test]
-// preload` for `bun test`, an `import '$compiler/preload.ts'` in `cli/internal/layers.ts` and
+// preload` for `bun test`, an `import '#compiler/preload.ts'` in `cli/internal/layers.ts` and
 // `cli/internal/repl.ts` (and a `--preload` in `cli/internal/run.ts`) for the server lane, and
 // `cli/internal/lane.ts`'s plugin list for the browser bundle. So the SAME compiler output runs in
 // every lane — there is no build step whose result could differ from what the tests loaded. An APP never names it: see the dogfood app's
@@ -54,8 +54,9 @@ const SOURCE_NAMESPACE = 'abide-source'
  * a models module every handler's args come from one `readFileSync` PER TRANSPORT FILE.
  *
  * Relative specifiers resolve beside the importer; anything else goes through Bun's own resolver, so
- * a workspace package works and a tsconfig `paths` alias does not — which costs a shape rather than a
- * build, because a name that does not resolve is one the derivation already knows how to answer.
+ * a workspace package and an app's `#server` / `#ui` seam alias both work — they are `package.json`
+ * subpath imports, which is resolution rather than configuration. A name that still does not resolve
+ * costs a shape rather than a build, because the derivation already knows how to answer "unknown".
  */
 const RESOLVED = new Map<string, string | null>()
 const TEXTS = new Map<string, ImportedModule | null>()
@@ -144,10 +145,19 @@ export const abidePlugin: BunPlugin = {
         // declaration, an endpoint — has an example with nothing to render and text as its whole
         // content, and the reference page that shows it may not read a disk. Nothing below cares which
         // extension it was: the loader strips the query and reads the file.
-        build.onResolve({ filter: /\.(abide|ts)\?source$/ }, (args) => ({
-            path: resolve(dirname(args.importer), args.path),
-            namespace: SOURCE_NAMESPACE,
-        }))
+        // The same rule `moduleFor` resolves by, because it is the same question: a relative
+        // specifier is beside the importer and anything else — a workspace package, or a `#ui/lib/x`
+        // seam alias out of the app's own `imports` map — is Bun's to resolve. Joining a seam alias
+        // onto a directory produced a path with a literal `#server` segment in it, and the failure
+        // was an ENOENT from the LOADER rather than anything naming the import.
+        build.onResolve({ filter: /\.(abide|ts)\?source$/ }, (args) => {
+            const bare = args.path.slice(0, -SOURCE_QUERY.length)
+            const from = dirname(args.importer)
+            return {
+                path: `${bare.startsWith('.') ? resolve(from, bare) : Bun.resolveSync(bare, from)}${SOURCE_QUERY}`,
+                namespace: SOURCE_NAMESPACE,
+            }
+        })
         // A module that exports the string, rather than `loader: 'text'`: the bundler accepts the
         // text loader and the RUNTIME lane does not, and the two lanes have to load this the same way
         // or a demo means something different under `bun test` than it does on the page.

@@ -1,0 +1,21 @@
+<script>
+import { countdown } from '#server/rpc/docs/transport/a-handler-that-yields.ts'
+import { state } from 'abide'
+
+// Behind a press for rung 1's reason: `#shared/demos/proofs.ts` compares a server render against a client
+// mount, and a stream consumed on sight would put a round trip inside that comparison.
+const started = state(false)
+</script>
+
+<!-- `{#for await}` over the handle, which is what a `function*` handler compiles a caller into: the
+     replay comes first and then everything after it — the same cursor a `channel` hands out, because it
+     is the same transcript underneath. Rows land one at a time, 50 ms apart, and nothing here waited
+     for the last of them. -->
+<button onclick={() => started = true}>count down from 5</button>
+{#if started}
+    <ul>
+        {#for await n of countdown({ from: 5 })}
+            <li>{n}</li>
+        {/for}
+    </ul>
+{/if}

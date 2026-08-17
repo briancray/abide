@@ -14,7 +14,7 @@
 // `useHealthSource` and `useIdentitySource` already are — this one just happens to be paid for in
 // bytes rather than in a `node:` import.
 //
-// It stays in `$shared` because both readers are on this side of the line: the installer above, and
+// It stays in `#shared` because both readers are on this side of the line: the installer above, and
 // `abide logs`, which renders records somebody ELSE's process wrote and renders them by these rules.
 // Nothing in a client graph imports this file, which is the whole of what keeps it off a page.
 

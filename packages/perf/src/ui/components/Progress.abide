@@ -1,0 +1,18 @@
+<script>
+import { props } from 'abide'
+import type { Media } from '#shared/media.ts'
+
+const { media } = props<{ media: Media }>()
+</script>
+
+<!-- A component INSIDE a row's component, which is the shape ~/code/media's poster has: the row is
+     not one template but a small tree of them, and that is what a reconcile has to move. -->
+<div class="progress">
+    {#if media.progress >= 100}
+        <span class="done">watched</span>
+    {:else if media.progress > 0}
+        <span class="part">{media.progress}%</span>
+    {:else}
+        <span class="none">unwatched</span>
+    {/if}
+</div>

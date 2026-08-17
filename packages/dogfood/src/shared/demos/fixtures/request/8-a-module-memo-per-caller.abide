@@ -1,0 +1,23 @@
+<script>
+import { whatArrived } from '#server/rpc/docs/request/a-module-memo-per-caller.ts'
+import Answer from '#ui/lib/Answer.abide'
+import { state } from 'abide'
+
+const asked = state(false)
+const ask = (): void => {
+    asked = true
+    whatArrived({}).invalidate()
+}
+</script>
+
+<!-- `sameObject` is the claim: one module-level `memo`, read twice in one request, computed once. Press
+     it again and it is computed AGAIN — with the next caller's cookies rather than these — which is
+     the half a single answer cannot show and a module-level cache would get wrong. -->
+<button onclick={ask}>ask the server</button>
+{#if asked}
+    {#if whatArrived({}).pending()}
+        <p>asking…</p>
+    {:else}
+        <Answer source={JSON.stringify(whatArrived({})(), null, 2)}/>
+    {/if}
+{/if}

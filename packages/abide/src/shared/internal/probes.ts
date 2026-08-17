@@ -45,7 +45,7 @@ export function isThenable(value: unknown): value is PromiseLike<unknown> {
  * A promise for a value that is USUALLY already settled, without the unconditional wrap.
  *
  * `Promise.resolve` on a thenable is another promise and another microtask tick, and the callers are
- * the two `$shared` documents whose local source answers synchronously in almost every process.
+ * the two `#shared` documents whose local source answers synchronously in almost every process.
  */
 export function settled<T>(value: T | PromiseLike<T>): Promise<T> {
     return (isThenable(value) ? value : Promise.resolve(value)) as Promise<T>

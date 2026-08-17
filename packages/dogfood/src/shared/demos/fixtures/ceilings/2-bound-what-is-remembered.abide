@@ -1,0 +1,19 @@
+<script>
+import { asDeclared } from '#server/rpc/docs/ceilings/bound-what-is-remembered.ts'
+import Answer from '#ui/lib/Answer.abide'
+import { state } from 'abide'
+
+const asked = state(false)
+</script>
+
+<!-- The one demonstration an operator can run themselves: restart this app with
+     `ABIDE_MAX_STREAM_BUFFER_SIZE=4096` in its environment and press the button again. The number
+     moves, and nothing in the app was rebuilt to make it. -->
+<button onclick={() => asked = true}>ask for the three ceilings</button>
+{#if asked}
+    {#if asDeclared({}).pending()}
+        <p>asking…</p>
+    {:else}
+        <Answer source={JSON.stringify(asDeclared({})(), null, 2)}/>
+    {/if}
+{/if}

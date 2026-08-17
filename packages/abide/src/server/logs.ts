@@ -12,9 +12,9 @@
 // Closed unless `ABIDE_LOGS` says otherwise, because an open feed is an app's own log output readable
 // by whoever can reach the port.
 
-import type { Channel } from '$shared/channel.ts'
-import { channel } from '$shared/channel.ts'
-import { type LogRecord, useLogSink } from '$shared/log.ts'
+import type { Channel } from '#shared/channel.ts'
+import { channel } from '#shared/channel.ts'
+import { type LogRecord, useLogSink } from '#shared/log.ts'
 import { knobOf } from './config.ts'
 import { jsonl, refuse } from './responses.ts'
 

@@ -1,0 +1,24 @@
+<script>
+import { signIn, whoAmI } from '#server/rpc/docs/responses/where-a-logins-cookie-goes.ts'
+import { state } from 'abide'
+
+const shown = state('nothing asked yet')
+
+// The hop is all a browser is allowed to see of a redirect. The cookie that rode with it is `HttpOnly`,
+// so it is not in `document.cookie` and cannot be — which is why the second button exists.
+const enter = async (): Promise<void> => {
+    const answered = await signIn.raw({})
+    const readable = document.cookie.includes('session') ? 'yes' : 'no'
+    shown = `landed on: ${answered.url}\nwith: ${answered.status}\nin document.cookie: ${readable}`
+}
+
+// And the next request, where it shows up: the header went out on the SAME response as the location,
+// so one press of the button above is enough for this to answer with a session rather than nobody.
+const ask = async (): Promise<void> => {
+    shown = JSON.stringify(await whoAmI({}), null, 2)
+}
+</script>
+
+<button onclick={enter}>sign in</button>
+<button onclick={ask}>…and what the next request carries</button>
+<pre>{shown}</pre>

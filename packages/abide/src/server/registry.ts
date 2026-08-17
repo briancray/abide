@@ -8,8 +8,8 @@
 // mount it in front of its own routes and never think about it again.
 
 import type { Server, ServerWebSocket } from 'bun'
-import type { Channel, KeyedChannel } from '$shared/channel.ts'
-import { reserved } from '$shared/internal/mount.ts'
+import type { Channel, KeyedChannel } from '#shared/channel.ts'
+import { reserved } from '#shared/internal/mount.ts'
 import {
     ABIDE_PREFIX,
     HEALTH_PATH,
@@ -18,12 +18,12 @@ import {
     RPC_PREFIX,
     SCHEMA_PATH,
     SOCKET_PREFIX,
-} from '$shared/internal/PATHS.ts'
-import { isThenable } from '$shared/internal/probes.ts'
-import type { EndpointShape, Shapes } from '$shared/internal/shapes.ts'
-import { decodeArgs, decodeForm, decodeQuery, isForm } from '$shared/internal/wire.ts'
-import { abideLog } from '$shared/log.ts'
-import type { Kind, Rpc } from '$shared/transport.ts'
+} from '#shared/internal/PATHS.ts'
+import { isThenable } from '#shared/internal/probes.ts'
+import type { EndpointShape, Shapes } from '#shared/internal/shapes.ts'
+import { decodeArgs, decodeForm, decodeQuery, isForm } from '#shared/internal/wire.ts'
+import { abideLog } from '#shared/log.ts'
+import type { Kind, Rpc } from '#shared/transport.ts'
 import { config } from './config.ts'
 import { serveHealth } from './health.ts'
 import { serveIdentity } from './identity.ts'

@@ -5,9 +5,9 @@
 // what lets the server put the whole sheet in `<head>` without tracking which components a render
 // happened to reach, and it is why this is a plain registry rather than anything render-aware.
 //
-// The client half is here rather than in `$ui` for the same reason: `adopt` is called from module
+// The client half is here rather than in `#ui` for the same reason: `adopt` is called from module
 // scope of a compiled component, which is loaded long before — and sometimes without — a `mount`.
-// Asking `$ui` to sync a registry it does not own would be a second contract with nothing checking
+// Asking `#ui` to sync a registry it does not own would be a second contract with nothing checking
 // it, which is the shape of bug this codebase keeps finding.
 
 const sheets = new Map<string, string>()

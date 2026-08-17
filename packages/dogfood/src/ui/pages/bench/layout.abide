@@ -1,0 +1,26 @@
+<!-- The bench section's frame, and `/tests`'s opposite number: the same capabilities down the side,
+     pointing at what each one COSTS rather than at whether it works.
+
+     The two sections are deliberately the same nav in the same place. A reader comparing a suite's
+     measurements against its claims moves between the two by the `tests →` / `bench →` link in the
+     chrome, and the column they were reading down does not move under them when they do. -->
+<script module>
+import { CAPABILITIES } from '#shared/demos/SUITES.ts'
+import type { NavGroup } from '#ui/lib/sidebar.ts'
+import Sidebar from '#ui/lib/Sidebar.abide'
+
+/** Built once, at module scope: the list is the same on every page in this section. */
+const GROUPS: NavGroup[] = [
+    {
+        title: `capabilities · ${CAPABILITIES.length}`,
+        items: CAPABILITIES.map((entry) => ({ href: `/bench/${entry.name}`, label: entry.name })),
+    },
+]
+</script>
+
+<div class="with-sidebar">
+    <Sidebar groups={GROUPS}/>
+    <div class="with-sidebar-body">
+        <slot/>
+    </div>
+</div>

@@ -1,0 +1,22 @@
+<script>
+import { signIn } from '#server/rpc/docs/identity/the-writers-are-the-servers.ts'
+import Answer from '#ui/lib/Answer.abide'
+import { identity, state } from 'abide'
+
+// The rung above sealed `{ id: 'ada' }` and NOTHING ELSE. What comes back here carries a `name` and
+// `roles` as well, and neither was in the cookie: this app's `onIdentity` — the hook the server half
+// beside this shows, exported from `packages/dogfood/app.ts` — read the id and resolved the row.
+//
+// Which is the whole trade: the cookie stays small and the row stays current, because it is read per
+// request rather than sealed once.
+const said = state('nothing asked yet')
+
+const ask = async (): Promise<void> => {
+    await signIn({ id: 'ada' })
+    identity.invalidate()
+    said = JSON.stringify(await identity(), null, 2)
+}
+</script>
+
+<button onclick={ask}>seal an id, and see what it resolved to</button>
+<Answer source={said}/>

@@ -7,11 +7,11 @@
 // `abide dev` is the other half — the same assembly with a bundler and a watcher behind the first
 // layer, and a hop instead of a refusal.
 
-import { config } from '$server/config.ts'
-import { boot } from '$server/lifecycle.ts'
-import { pageFiles } from '$server/pages.ts'
-import { websocket } from '$server/registry.ts'
-import { messageOf } from '$shared/internal/probes.ts'
+import { config } from '#server/config.ts'
+import { boot } from '#server/lifecycle.ts'
+import { pageFiles } from '#server/pages.ts'
+import { websocket } from '#server/registry.ts'
+import { messageOf } from '#shared/internal/probes.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { CLIENT_DIR, PAGES } from '../CLIENT_BUILD.ts'
 import { clientAssets, type LoadedClient } from './assets.ts'

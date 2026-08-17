@@ -52,7 +52,7 @@ export default defineConfig({
     projects: [
         {
             name: 'dogfood',
-            testDir: './packages/dogfood/e2e',
+            testDir: './packages/dogfood/src/tests/e2e',
             // `mounted/` is the same app under a sub-path and has its own server below. Ignored here
             // rather than moved elsewhere: it is this app's spec, and a recursive `testDir` would
             // otherwise run it against the ROOT server, where every path in it is off by `/v2`.
@@ -61,7 +61,7 @@ export default defineConfig({
         },
         {
             name: 'perf',
-            testDir: './packages/perf/e2e',
+            testDir: './packages/perf/src/tests/e2e',
             use: { baseURL: `http://localhost:${PERF_PORT}/` },
         },
         // The SAME app, one environment variable different. A third project rather than a case inside
@@ -69,7 +69,7 @@ export default defineConfig({
         // route and every endpoint move together, and there is no way to ask one server for both.
         {
             name: 'mounted',
-            testDir: './packages/dogfood/e2e/mounted',
+            testDir: './packages/dogfood/src/tests/e2e/mounted',
             use: { baseURL: `http://localhost:${MOUNTED_PORT}${MOUNT_BASE}/` },
         },
     ],

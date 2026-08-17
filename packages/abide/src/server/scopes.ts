@@ -2,7 +2,7 @@
 //
 // `AsyncLocalStorage` is the one place a node API is unavoidable: two requests interleave across
 // every `await`, so the scope has to follow the continuation rather than a variable someone sets and
-// puts back. `$shared/internal/scopes.ts` keeps the plain-variable form for a client, a test or a
+// puts back. `#shared/internal/scopes.ts` keeps the plain-variable form for a client, a test or a
 // script and knows nothing about this file — installing the source from here is what keeps the
 // browser bundle free of a shim it would never use.
 //
@@ -11,8 +11,8 @@
 
 // `AsyncLocalStorage` has no `Bun.*` spelling — Bun implements the node module and nothing else.
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { ENCODER } from '$shared/internal/ENCODER.ts'
-import type { Identity } from '$shared/identity.ts'
+import { ENCODER } from '#shared/internal/ENCODER.ts'
+import type { Identity } from '#shared/identity.ts'
 import {
     dropScope,
     newScope,
@@ -20,11 +20,11 @@ import {
     type Scope,
     settling,
     useScopeSource,
-} from '$shared/internal/scopes.ts'
-import { isThenable } from '$shared/internal/probes.ts'
-import { useTraceSources } from '$shared/internal/trace.ts'
-import { framedBody, framedSteps } from '$shared/internal/wire.ts'
-import { useHrefSource } from '$shared/router.ts'
+} from '#shared/internal/scopes.ts'
+import { isThenable } from '#shared/internal/probes.ts'
+import { useTraceSources } from '#shared/internal/trace.ts'
+import { framedBody, framedSteps } from '#shared/internal/wire.ts'
+import { useHrefSource } from '#shared/router.ts'
 
 interface Serving {
     scope: Scope
@@ -171,8 +171,8 @@ function markHeld<T>(body: ReadableStream<T>): ReadableStream<T> {
     return body
 }
 
-/** Re-exported so `identity.ts` keeps one spelling of it; the instance is `$shared`'s leaf. */
-export { ENCODER } from '$shared/internal/ENCODER.ts'
+/** Re-exported so `identity.ts` keeps one spelling of it; the instance is `#shared`'s leaf. */
+export { ENCODER } from '#shared/internal/ENCODER.ts'
 
 /** One chunk, however its producer spells one — a generator's step and a reader's agree here. */
 interface Step {
@@ -639,8 +639,8 @@ function serialiseState(held: Tracing): string | null {
 }
 
 // What the isomorphic half is allowed to ask: the id for a log line, the headers for an outbound
-// call. Installed here because this is the file that owns the answer, and neither `$shared/log.ts`
-// nor `$shared/transport.ts` may import `node:async_hooks` to get it. Both answer `null` outside a
+// call. Installed here because this is the file that owns the answer, and neither `#shared/log.ts`
+// nor `#shared/transport.ts` may import `node:async_hooks` to get it. Both answer `null` outside a
 // request rather than throwing — a log line is not a place to discover there was no caller.
 useTraceSources(
     () => (isServing() ? trace() : null),

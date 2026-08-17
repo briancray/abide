@@ -1,11 +1,11 @@
 // The leaf decisions of a server render: what an attribute serialises to, what counts as a thing to
 // await, and the two-line script that swaps a suspended subtree into place.
 //
-// The WALK stays in `$server/render.ts` — `emit` and `emitTemplate` recurse into each other, and
+// The WALK stays in `#server/render.ts` — `emit` and `emitTemplate` recurse into each other, and
 // separating them would buy nothing but an import cycle.
 
-import { attributeText, escape, nonceAttribute } from '$shared/html.ts'
-import { PATCH_SWAP } from '$shared/internal/MARKERS.ts'
+import { attributeText, escape, nonceAttribute } from '#shared/html.ts'
+import { PATCH_SWAP } from '#shared/internal/MARKERS.ts'
 
 export interface Deferred {
     id: number

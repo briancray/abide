@@ -1,85 +1,18 @@
+// The base the packages IN THIS REPO extend — and it extends the one abide ships to apps, so there
+// is one statement of what a `.abide` program is and the two apps here read it through the same
+// public specifier an app outside this repo would.
+//
+// What used to be here and is gone is the PROGRAM: one `include` covering every package, and one
+// `paths` map answering for all of them. That map is why `$server` / `$ui` / `$shared` could only
+// ever mean `packages/abide`'s seams — `paths` is program-global, so a second package meaning its own
+// by those names was not a rule anybody was keeping, it was an impossibility. Each package now owns
+// its own config, `abide check` runs the checker per package, and the seams are `package.json`
+// subpath imports — `#shared`, `#ui`, `#server` — which are scoped to the package the importing FILE
+// is in, and which Bun, `tsc` and `Bun.build` all resolve without being told.
+//
+// `files: []` and no `include`, so this file is a base and never a program of its own — a bare `tsc`
+// here checks nothing rather than assembling every package into the one program that was the problem.
 {
-    "compilerOptions": {
-        "lib": ["ESNext", "DOM", "DOM.Iterable"],
-        "target": "ESNext",
-        "module": "Preserve",
-        "moduleResolution": "bundler",
-        "moduleDetection": "force",
-        "allowImportingTsExtensions": true,
-        // `.abide` files resolve to the `.d.abide.ts` the compiler generates, so a template
-        // expression is checked by the real checker rather than by a second one.
-        "allowArbitraryExtensions": true,
-        // Where that generated tree actually IS. `allowArbitraryExtensions` looks for the declaration
-        // in the SAME directory as the source and cannot be redirected — `rootDirs` answers it by
-        // making these two one virtual directory for relative resolution, which is what keeps three
-        // generated files per page out of the tree the author reads. It merges BOTH ways, so a
-        // compiled module's own `../models.ts` still resolves back out into the source.
-        //
-        // A pair per PACKAGE that holds `.abide` files, because the mirror hangs off the package root
-        // — a compiled `<script module>` imports `abide` by its public specifier, and a bare specifier
-        // resolves by walking up for a `node_modules` rather than through anything here. An app
-        // outside a workspace writes the one pair, `[".", "./.abide/types"]`.
-        "rootDirs": [
-            "packages/dogfood",
-            "packages/dogfood/.abide/types",
-            "packages/perf",
-            "packages/perf/.abide/types"
-        ],
-        "verbatimModuleSyntax": true,
-        "noEmit": true,
-        "strict": true,
-        "skipLibCheck": true,
-        "noUncheckedIndexedAccess": true,
-        "exactOptionalPropertyTypes": true,
-        "types": ["bun"],
-        // The directories the source is split into. Everything crosses these seams by alias, so a
-        // file's imports say which SUBSTRATE it depends on rather than how many `../` it sits from.
-        //
-        // `$shared` is the only one that carries real traffic, and that is the architecture showing
-        // through: `$ui` and `$server` may import shared, never each other, and nothing may import a
-        // renderer except through its public entry point. The harness has no alias because it is not in
-        // this package at all: it is `packages/harness`, and it reaches the framework by the same
-        // public specifiers an app does.
-        // `$abide` is the CURATED front door — the file `.` resolves to, and the one place the
-        // author-facing surface is enumerated. It has exactly one consumer, the REPL, which puts that
-        // namespace into scope: what `abide repl` hands you and what an app may import are the same
-        // list by construction. The bare `$shared` / `$ui` / `$server` / `$compiler` aliases went with
-        // it — each named a barrel, and after the curation there is no barrel left to name.
-        "paths": {
-            "$shared/*": ["./packages/abide/src/shared/*"],
-            "$ui/*": ["./packages/abide/src/ui/*"],
-            "$server/*": ["./packages/abide/src/server/*"],
-            "$compiler/*": ["./packages/abide/compiler/*"],
-            "$abide": ["./packages/abide/abide.ts"]
-        }
-        // The public specifiers — `abide`, `abide/ui`, `abide/server`, `abide/compiler`, and the
-        // harness's own `harness` / `harness/measure` — are deliberately NOT aliased here: every
-        // consumer resolves them through the workspace link and the exports map, so a broken public
-        // entry point fails in a typecheck rather than being papered over.
-    },
-    "include": [
-        "packages/abide/src/**/*.ts",
-        "packages/abide/compiler/**/*.ts",
-        "packages/abide/cli/**/*.ts",
-        "packages/harness/**/*.ts",
-        "packages/dogfood/**/*.ts",
-        // What every `.abide` compiled to. The MODULE is where a template's expressions actually are,
-        // so a config that only resolved the declarations would check the types a page exports and
-        // nothing inside it.
-        "packages/dogfood/.abide/types/**/*.ts",
-        // The perf app and its mirror. Absent until a `details?: boolean` prop that should have been
-        // `State<boolean>` shipped through `abide check packages/perf` reporting clean — the checker
-        // emits the named package's mirror and then runs `tsc` over whatever THIS file covers, so a
-        // package missing here is checked to zero files and passes.
-        "packages/perf/**/*.ts",
-        "packages/perf/.abide/types/**/*.ts"
-    ],
-    // The type fixtures under `types/invalid` are SUPPOSED to fail. They are checked deliberately by
-    // `packages/dogfood/test/types.test.ts`, through their own config, and a repo whose own typecheck
-    // is red says nothing at all — so they are not part of it.
-    //
-    // A pattern rather than the one path, because the fixtures are now in two trees: the `.abide`
-    // sources and what they compiled to under `.abide/types/`. Two spellings of one rule is the one
-    // that gets updated alone, and this failure mode is a repo whose typecheck is permanently red.
-    "exclude": ["**/types/invalid"]
+    "extends": "./packages/abide/app.tsconfig.json",
+    "files": []
 }

@@ -1,4 +1,15 @@
+// The framework's own program.
+//
+// No `paths` at all: the seams are declared in `package.json`'s `imports`, where `#shared` / `#ui` /
+// `#server` / `#compiler` mean THIS package's directories and the same four names mean an APP's
+// directories inside an app. That is the whole reason they are subpath imports rather than tsconfig
+// aliases — `paths` is PROGRAM-global, so an app whose program compiles this package's source (a
+// workspace link resolves to `.ts`) would have to declare the framework's aliases to type-check its
+// own pages. `imports` is package-scoped, and Bun, `tsc` and `Bun.build` all resolve it the same way.
+//
+// The public specifiers — `abide`, `abide/ui`, `abide/server`, `abide/compiler` — are what an APP
+// resolves through, and are deliberately not reachable from inside here by any shorter name.
 {
     "extends": "../../tsconfig.json",
-    "include": ["src/**/*.ts", "cli/**/*.ts"]
+    "include": ["abide.ts", "src/**/*.ts", "compiler/**/*.ts", "cli/**/*.ts"]
 }

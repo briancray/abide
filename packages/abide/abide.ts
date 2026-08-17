@@ -23,12 +23,21 @@
 //   abide/server            — the SSR substrate, the request scope, and the declaring half of both
 //                             transports
 //
-// What is on NONE of them is still reachable at `$shared/*` — `scope`, `untrack` and `isolate` came
+// What is on NONE of them is reachable at `abide/internal` — `scope`, `untrack` and `isolate` came
 // off this file because no page or handler in the dogfood app types one. A suite that tests the graph
-// imports them from the module directly, which is the seam it is actually testing.
+// imports them from there, which is the seam it is actually testing. A SPECIFIER rather than
+// `#shared/*`, because that alias is now an APP's own name for its own shared seam.
 //
 // The two RENDERERS are separate because only one of them ships to a browser. Nothing here imports
 // either, so a page pays for the renderer it uses.
+
+/// <reference path="./compiler/SOURCES.d.ts" />
+// The ambient declarations for the three imports that are not TypeScript modules — `./x.abide?source`,
+// `./x.ts?source` and `./app.css`. Carried by the FRONT DOOR rather than named in every app's
+// `include`, because every compiled `.abide` imports this file for `html`: an app that writes a page
+// has the declarations in its program by construction, and one outside this repo does not have to
+// name a path into `node_modules` to typecheck a stylesheet import. Erased at emit, so the browser
+// lane pays nothing.
 
 export { type Channel, type ChannelOptions, channel, type KeyedChannel } from './src/shared/channel.ts'
 // The app's own account of whether it is working, asked the same way on both sides. `useHealthSource`

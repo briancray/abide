@@ -1,0 +1,19 @@
+<script>
+import { whatArrived } from '#server/rpc/docs/request/a-nonce-per-request.ts'
+import { state } from 'abide'
+
+// The policy is a HEADER, so what shows it is the raw response rather than a decoded value —
+// `raw({ … })` reaches the same handler by the same address and hands the envelope back whole.
+//
+// What comes back is THIS app's policy, declared in `packages/dogfood/app.ts` exactly the way the
+// server half beside this declares one. The `nonce=` in `script-src` is the value rung 5 asked for.
+const policy = state('nothing asked yet')
+
+const ask = async (): Promise<void> => {
+    const answered = await whatArrived.raw({})
+    policy = answered.headers.get('content-security-policy') ?? 'this app sent no policy'
+}
+</script>
+
+<button onclick={ask}>read the policy this page was served under</button>
+<pre>{policy}</pre>

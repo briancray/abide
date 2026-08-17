@@ -1,0 +1,16 @@
+<script>
+import { replace } from '#server/rpc/docs/transport/a-full-replacement.ts'
+import { state } from 'abide'
+
+const answered = state('nothing sent yet')
+
+// Awaited rather than read, exactly as the `POST` above it: the method changed and nothing else did.
+const send = async (): Promise<void> => {
+    answered = JSON.stringify(await replace({ id: 1, name: 'ada', role: 'editor' }))
+}
+</script>
+
+<!-- Every field is sent, which is what makes it a replacement — a `role` left out here would come back
+     missing rather than unchanged. -->
+<button onclick={send}>replace</button>
+<p>{answered}</p>

@@ -25,6 +25,13 @@
     "json": {
         "formatter": {
             "trailingCommas": "none"
+        },
+        "parser": {
+            // Every config in this repo is commented, and `tsc` reads JSONC for all of them — but
+            // biome only assumes comments for files literally NAMED `tsconfig.json`. The base abide
+            // ships to apps is `app.tsconfig.json`, so without this its whole header parses as 41
+            // syntax errors and `bun run lint` is red on a file nothing is wrong with.
+            "allowComments": true
         }
     },
     "css": {

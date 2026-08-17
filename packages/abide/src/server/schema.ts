@@ -19,11 +19,11 @@
 // published with the shape the compiler derived from its type instead. That asymmetry is the whole
 // reason JSON Schema is the native form rather than a projection of something else.
 
-import { isFile, isThenable, messageOf } from '$shared/internal/probes.ts'
-import type { JsonSchema, JsonType } from '$shared/internal/shapes.ts'
-import { type Failed, HttpError } from '$shared/internal/wire.ts'
+import { isFile, isThenable, messageOf } from '#shared/internal/probes.ts'
+import type { JsonSchema, JsonType } from '#shared/internal/shapes.ts'
+import { type Failed, HttpError } from '#shared/internal/wire.ts'
 
-export type { EndpointShape, JsonSchema, JsonType, Shapes } from '$shared/internal/shapes.ts'
+export type { EndpointShape, JsonSchema, JsonType, Shapes } from '#shared/internal/shapes.ts'
 
 /**
  * The Standard Schema interface, version 1 — declared, not imported.

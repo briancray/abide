@@ -1,6 +1,6 @@
 // Where the isomorphic half asks about the current trace, without knowing what answers.
 //
-// Two readers want two different things and neither may import `$server`: `log` wants the ID for a
+// Two readers want two different things and neither may import `#server`: `log` wants the ID for a
 // line, and `transport` wants the HEADERS for an outbound call. So there are two pointers rather than
 // one source handing back a record — a log line that had to build a headers object to read one field
 // off it would allocate per line, and lines are the hot path here.

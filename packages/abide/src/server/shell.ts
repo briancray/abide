@@ -95,8 +95,8 @@ export function shell(html: string): Shell {
     }
 }
 
-/** Where the comments are. Not exported from `abide/server`: it is a fact about text, not a primitive. */
-export interface Range {
+/** Where the comments are. A fact about text rather than a primitive, so it stays in this file. */
+interface Range {
     from: number
     to: number
 }
@@ -104,11 +104,10 @@ export interface Range {
 /**
  * Every `<!-- … -->` in a document.
  *
- * Shared with whoever REWRITES a shell — `abide start` maps `src="./client.ts"` through the manifest
- * — because it is the same rule for the same reason: a document that explains itself in a comment
- * must not have the explanation acted on.
+ * Scanned once for both of the patterns below, because they follow the same rule for the same
+ * reason: a document that explains itself in a comment must not have the explanation acted on.
  */
-export function commented(html: string): Range[] {
+function commented(html: string): Range[] {
     const ranges: Range[] = []
     COMMENT.lastIndex = 0
     for (let found = COMMENT.exec(html); found !== null; found = COMMENT.exec(html)) {
@@ -118,7 +117,7 @@ export function commented(html: string): Range[] {
 }
 
 /** Whether a position falls inside one of them. */
-export function within(ranges: Range[], at: number): boolean {
+function within(ranges: Range[], at: number): boolean {
     for (const range of ranges) if (at >= range.from && at < range.to) return true
     return false
 }

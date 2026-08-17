@@ -1,0 +1,23 @@
+<script>
+import { whatArrived } from '#server/rpc/docs/request/the-whole-cookie-jar.ts'
+import Answer from '#ui/lib/Answer.abide'
+import { state } from 'abide'
+
+const asked = state(false)
+const ask = (): void => {
+    asked = true
+    whatArrived({}).invalidate()
+}
+</script>
+
+<!-- What this app's own pages have already set is what `sent` and `names` report, so the answer is
+     about the browser you are reading in rather than about a fixture. `chosen` is `has` and not
+     `get(…) !== undefined`, which is the row to watch if you set `theme` to the empty string. -->
+<button onclick={ask}>ask the server</button>
+{#if asked}
+    {#if whatArrived({}).pending()}
+        <p>asking…</p>
+    {:else}
+        <Answer source={JSON.stringify(whatArrived({})(), null, 2)}/>
+    {/if}
+{/if}

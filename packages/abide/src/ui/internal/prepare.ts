@@ -15,9 +15,9 @@
 // element and comment in the clone. That is 1825 ns per row against 660 ns for the path walk and
 // 500 ns for the clone alone — a TreeWalker costs more to construct than a row costs to build.
 
-import type { SlotKind, TemplateResult } from '$shared/html.ts'
-import { closeMarker, SLOT_CLOSE, SLOT_CLOSE_CODE } from '$shared/internal/MARKERS.ts'
-import { planOf } from '$shared/internal/slots.ts'
+import type { SlotKind, TemplateResult } from '#shared/html.ts'
+import { closeMarker, SLOT_CLOSE, SLOT_CLOSE_CODE } from '#shared/internal/MARKERS.ts'
+import { planOf } from '#shared/internal/slots.ts'
 
 /**
  * Where a non-child slot's position is written down, between the emit above and the walk below.

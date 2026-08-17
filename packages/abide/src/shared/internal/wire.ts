@@ -450,7 +450,7 @@ export function errorPayload(error: unknown): { error: WireError } {
 
 /**
  * The name a refusal carries when nothing more specific did, spelled ONCE the way `AbideTimeoutError`
- * is: `$server`'s `refuse` writes it and `wireError` below rebuilds it, and `fn.isError(e, …)` is the
+ * is: `#server`'s `refuse` writes it and `wireError` below rebuilds it, and `fn.isError(e, …)` is the
  * public question asked of the result — so a rename on one side alone makes that predicate answer
  * `false` for exactly the unparseable-refusal path.
  */

@@ -1,30 +1,33 @@
-// `app.html` — the app's own document, wired to the build that is actually on disk.
+// `app.html` — the app's own document, with what the build wrote appended to it.
 //
-// The file names SOURCES: `<script type="module" src="./client.ts">` and nothing about hashes,
-// because a hash is a fact about a build and an app should not have to know one to write its own
-// head. This maps each one through the manifest, which is the only thing that knows what a source
-// compiled to — the same job Bun's own HTML entry point does, done here because the document is
-// served rather than bundled.
+// The file names NOTHING of abide's, and that is the whole shape of it: a document carries what is
+// the APP's — its `lang`, its fonts, its analytics snippet, its own `<link>` — and nothing whose
+// address is a fact about a build. The script and the stylesheets are both appended here from the
+// manifest, which is the only thing that knows what a source compiled to.
 //
-// The stylesheets are the other half and they are NOT named at all. A `.abide` layout that writes
-// `import './app.css'` has said the whole of it: the bundler pulled the css into the graph, wrote it
-// beside the chunks, and the manifest records it — so the `<link>` is appended from what was BUILT
-// rather than from what the html remembered to mention. An app that renames its stylesheet does not
-// then have a document pointing at a file that no longer exists.
+// The stylesheets have worked this way all along. A `.abide` layout that writes `import './app.css'`
+// has said the whole of it: the bundler pulled the css into the graph, wrote it beside the chunks,
+// and the manifest records it — so an app that renames its stylesheet does not then have a document
+// pointing at a file that no longer exists. The script was the exception and is not one now: the
+// lane is generated from `pages/` for every app (`internal/entry.ts`), so a hand-written
+// `src="./client.ts"` named a file the author never wrote, and was resolved only by a conventional
+// manifest key that existed to keep the fiction working.
 
-import { commented, DOCUMENT_OPEN, type Shell, shell, within } from '$server/shell.ts'
-import { escape } from '$shared/html.ts'
-import { mountBase, mounted, MOUNT_META } from '$shared/internal/mount.ts'
-import { CLIENT_ROUTE, type ClientAsset, type ClientManifest } from '../CLIENT_BUILD.ts'
+import { APP_HTML } from '#compiler/LAYOUT.ts'
+import { DOCUMENT_OPEN, type Shell, shell } from '#server/shell.ts'
+import { escape } from '#shared/html.ts'
+import { mountBase, mounted, MOUNT_META } from '#shared/internal/mount.ts'
+import { CLIENT_ROUTE, type ClientAsset, type ClientManifest, GENERATED_ENTRY } from '../CLIENT_BUILD.ts'
 
 /**
- * The app's own document. `.html` because that is what it is.
+ * The app's own document, from the file that says where anything in an app is.
  *
- * Exported for the report: a process saying `app.html` when the author wrote `App.html` is the
- * shortest way to find out the file is not being read, and a second spelling in the line that PRINTS
- * it is how that message starts naming a file this never looked for.
+ * Re-exported rather than imported by the report directly: a process saying `src/ui/app.html` when
+ * the author wrote `App.html` is the shortest way to find out the file is not being read, and a
+ * second spelling in the line that PRINTS it is how that message starts naming a file this never
+ * looked for.
  */
-export const APP_HTML = 'app.html'
+export { APP_HTML }
 
 /** The document, and whether the app wrote it. `own` is only for what the command REPORTS. */
 export interface AppShell {
@@ -55,13 +58,13 @@ export async function appShell(
         // shell somebody meant to serve, so it throws rather than being quietly replaced by abide's.
         if ((failure as { code?: string }).code !== 'ENOENT') throw failure
         own = false
-        text = fallback(name, manifest)
+        text = fallback(name)
     }
-    const parts = shell(built(text, manifest))
-    // `head` is BY DEFINITION the text before `</head>`, so appending to it puts the links exactly
+    const parts = shell(text)
+    // `head` is BY DEFINITION the text before `</head>`, so appending to it puts all three exactly
     // where a second scan for `</head>` would have — found once, by the function that owns where a
     // head ends. An app's own `<link>` is already in there and still comes first.
-    parts.head += mountMeta() + stylesheets(manifest)
+    parts.head += mountMeta() + clientScript(manifest) + stylesheets(manifest)
     return { parts, own }
 }
 
@@ -84,27 +87,17 @@ function mountMeta(): string {
     return base === '' ? '' : `<meta name="${MOUNT_META}" content="${escape(base)}">`
 }
 
-// A source path in a `src` or an `href`. Quoted values only: an unquoted attribute cannot hold the
-// `./` an app writes anyway, and a parser for the rest of HTML is not what this is.
-const REFERENCE = /\b(src|href)="([^"]+)"/gi
-
 /**
- * Every reference to a source the build produced, rewritten to the file it produced.
+ * The lane the browser is handed, as the one tag that boots it.
  *
- * A value that is not an entry is left EXACTLY as written — `href="https://…"`, `src="/logo.svg"`, a
- * font, an analytics script. The manifest is the whole of what this knows, so nothing else in an
- * app's document can be broken by a rewrite it did not ask for.
+ * `type="module"` is deferred by definition, so the head is where it costs nothing to put and where
+ * the preload scanner finds it first. Absent when there is no bundle at all, which is an app made of
+ * endpoints — and an app whose build FAILED, where `abide dev` serves the document anyway so the
+ * error on the page is the app's rather than a 404 for a chunk.
  */
-function built(html: string, manifest: ClientManifest | null): string {
-    if (manifest === null) return html
-    const ranges = commented(html)
-    return html.replace(REFERENCE, (whole, attribute: string, value: string, at: number) => {
-        // A comment is not markup, and a shell that documents its own `src="./client.ts"` — the one
-        // this repo ships does — must not have the sentence rewritten out from under it.
-        if (within(ranges, at)) return whole
-        const entry = manifest.entries[value.startsWith('./') ? value.slice(2) : value]
-        return entry === undefined ? whole : `${attribute}="${mounted(CLIENT_ROUTE)}${entry}"`
-    })
+function clientScript(manifest: ClientManifest | null): string {
+    const lane = manifest === null ? undefined : manifest.entries[GENERATED_ENTRY]
+    return lane === undefined ? '' : `<script type="module" src="${mounted(CLIENT_ROUTE)}${lane}"></script>`
 }
 
 /**
@@ -128,11 +121,11 @@ function stylesheets(manifest: ClientManifest | null): string {
  * What an app with no `app.html` is served in.
  *
  * Deliberately the shortest document that works, and it is here rather than in the renderer so that
- * reading it tells an app exactly what to copy into an `app.html` of its own: a head, a script naming
- * the client lane by its SOURCE path, and the slot the page renders into.
+ * reading it tells an app exactly what to copy into an `app.html` of its own: a head, and the slot
+ * the page renders into. No script, because that is not an app's to write in either document — the
+ * caller appends it to this one by the same line that appends it to a hand-written shell.
  */
-function fallback(name: string, manifest: ClientManifest | null): string {
-    const entry = manifest === null ? undefined : Object.keys(manifest.entries)[0]
+function fallback(name: string): string {
     return (
         // The same opening `renderDocument` wraps a bare head in, rather than a second spelling of
         // it: there is one answer to what abide's own document is, and an app reading this one to
@@ -142,7 +135,6 @@ function fallback(name: string, manifest: ClientManifest | null): string {
         // Through the same escaper every text node the renderer writes goes through. An app name is
         // a package.json field or an `ABIDE_APP_NAME`, so it is text rather than markup.
         `<title>${escape(name)}</title>` +
-        (entry === undefined ? '' : `<script type="module" src="./${entry}"></script>`) +
         '</head><body><slot></slot></body></html>'
     )
 }

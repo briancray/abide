@@ -1,9 +1,9 @@
 // What the two substrates need from a template beyond its public surface: the cached slot scan, and
 // the two recognisers that let a renderer decide what a slot value IS.
 //
-// Both live here rather than in `$shared/html.ts` because neither is authoring vocabulary — nobody
-// writing a component calls them — and because keeping them together is what stops `$ui` and
-// `$server` growing their own idea of a slot.
+// Both live here rather than in `#shared/html.ts` because neither is authoring vocabulary — nobody
+// writing a component calls them — and because keeping them together is what stops `#ui` and
+// `#server` growing their own idea of a slot.
 
 import { classifySlots, type SlotKind, type TemplateResult } from '../html.ts'
 import { isSource } from './BRANDS.ts'

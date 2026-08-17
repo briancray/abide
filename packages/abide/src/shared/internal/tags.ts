@@ -2,7 +2,7 @@
 //
 // A tag names DATA, not the thing holding it: `invalidate({ tags: ['user:42'] })` reaches every slot
 // carrying it without the caller knowing which memo that is. That is why the registry is one
-// module-level map rather than a field on each memo — and why the public verbs in `$shared/memo.ts`
+// module-level map rather than a field on each memo — and why the public verbs in `#shared/memo.ts`
 // are bare functions with no `fn.` in front of them.
 
 interface Taggable {

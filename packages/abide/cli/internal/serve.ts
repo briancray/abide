@@ -31,15 +31,15 @@
 // of server state, so there is nothing on the client worth preserving against it — and "the browser
 // shows what the files say" is a claim a full load can actually make.
 
-import { config } from '$server/config.ts'
-import { boot, shutdown } from '$server/lifecycle.ts'
-import { register, websocket } from '$server/registry.ts'
-import { socket } from '$server/rpc.ts'
-import { mountBase } from '$shared/internal/mount.ts'
-import { messageOf } from '$shared/internal/probes.ts'
+import { config } from '#server/config.ts'
+import { boot, shutdown } from '#server/lifecycle.ts'
+import { register, websocket } from '#server/registry.ts'
+import { socket } from '#server/rpc.ts'
+import { mountBase } from '#shared/internal/mount.ts'
+import { messageOf } from '#shared/internal/probes.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
-import { type PageFiles, pageFiles } from '$server/pages.ts'
-import { CLIENT_KEY, clientGraph, entryNames, PAGES } from '../CLIENT_BUILD.ts'
+import { type PageFiles, pageFiles } from '#server/pages.ts'
+import { clientGraph, entryNames, PAGES } from '../CLIENT_BUILD.ts'
 import { heldClient, type LoadedClient } from './assets.ts'
 import { clientLane } from './entry.ts'
 import { clientBuild, type Lane } from './lane.ts'
@@ -267,7 +267,7 @@ async function bundle(root: string, scanned: PageFiles[]): Promise<LoadedClient 
         if (built.success) {
             return await heldClient(
                 built.outputs,
-                entryNames(root, [lane], built.outputs, [CLIENT_KEY]),
+                entryNames(root, [lane], built.outputs),
                 clientGraph(built.metafile, root),
             )
         }

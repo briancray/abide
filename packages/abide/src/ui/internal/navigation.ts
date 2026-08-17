@@ -1,6 +1,6 @@
-// A navigation, as a streamed request — the sink `$shared/router.ts` asks for.
+// A navigation, as a streamed request — the sink `#shared/router.ts` asks for.
 //
-// Here for the reason `history.ts` is here: this is the package that owns the DOM, and `$shared`
+// Here for the reason `history.ts` is here: this is the package that owns the DOM, and `#shared`
 // keeps the policy. What the policy amounts to is one sentence — a client-side navigation asks the
 // server for the page it is navigating to — and the value is in the address it asks at and in what it
 // does with the answer before the answer has finished arriving.
@@ -21,7 +21,7 @@
 // So the server frames the response into pieces that are each complete on their own, and this reads
 // to the sentinel between them and parses exactly once per piece.
 //
-// NOT `$shared`'s `chunksOf` (`internal/wire.ts`), which frames a stream the same way and shares the
+// NOT `#shared`'s `chunksOf` (`internal/wire.ts`), which frames a stream the same way and shares the
 // `STREAMING` constant with this file — from a LEAF, not from `wire.ts`, because naming it there put
 // the whole rpc encoder in the chunk every page loads. The invariant differs at the BOUND: a line there is
 // one NDJSON value, small enough that it can hold a flat buffer and re-slice it, while a piece here is
@@ -29,18 +29,18 @@
 // unjoined rope and the straddle window below exist to avoid. Merging them would put this file's
 // machinery on every rpc line to buy nothing.
 
-import { PATCH_FORM, PIECE_END, placeholderId } from '$shared/internal/MARKERS.ts'
-import { NAVIGATION_DEPTH_HEADER, NAVIGATION_FROM_HEADER, NAVIGATION_HEADER } from '$shared/internal/PATHS.ts'
-import { addSeeds, SEED_ELEMENT_ID } from '$shared/internal/seed.ts'
-import { STREAMING } from '$shared/internal/STREAMING.ts'
-import { abideLog } from '$shared/log.ts'
+import { PATCH_FORM, PIECE_END, placeholderId } from '#shared/internal/MARKERS.ts'
+import { NAVIGATION_DEPTH_HEADER, NAVIGATION_FROM_HEADER, NAVIGATION_HEADER } from '#shared/internal/PATHS.ts'
+import { addSeeds, SEED_ELEMENT_ID } from '#shared/internal/seed.ts'
+import { STREAMING } from '#shared/internal/STREAMING.ts'
+import { abideLog } from '#shared/log.ts'
 import {
     currentRouteName,
     type Entered,
     type NavigationSink,
     outletChain,
     useNavigationSink,
-} from '$shared/router.ts'
+} from '#shared/router.ts'
 import type { ChildPart, Reclaiming } from './parts.ts'
 // One complete piece, parsed once — HTML cannot be parsed halfway, so the piece is the unit.
 import { fragmentOf } from './prepare.ts'

@@ -9,8 +9,8 @@
 // The whole mechanism is three decisions, and each one of them was a bug that left a tab spinning:
 // which id is compared, when it is compared, and when this file is allowed to run.
 
-import { mounted, reserved } from '$shared/internal/mount.ts'
-import { RELOAD_PATH, SOCKET_PREFIX } from '$shared/internal/PATHS.ts'
+import { mounted, reserved } from '#shared/internal/mount.ts'
+import { RELOAD_PATH, SOCKET_PREFIX } from '#shared/internal/PATHS.ts'
 import { NEVER, NOSNIFF } from './assets.ts'
 
 /**

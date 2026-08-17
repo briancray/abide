@@ -1,0 +1,27 @@
+<!-- `[id]` in the DIRECTORY name is the parameter, and `route().params` is where it arrives.
+
+     This page is also where the ELISION claim is asserted from, and it is asserted from real app
+     code rather than a probe: it imports `getUser` by the same name the server declares it under, so
+     in this lane that module elides to `remote("users/getUser")` and `server/db.ts` — a driver with a
+     module-level side effect a bundler may not drop — never enters the client graph at all. The
+     build test looks for the ADDRESS in what shipped and for the driver's marker in every byte. -->
+<script>
+import { memo, route } from 'abide'
+import { getUser, userActivity } from '#server/rpc/users.ts'
+
+// The id is a SEGMENT, so it arrives as a string and the endpoint declares a number.
+const found = memo(() => getUser({ id: Number(route().params.id) }))
+// Declared `seed: false`, and read here so the difference is a fact about this page rather than
+// about an endpoint nothing calls: both run during the render, and only one is handed over.
+const activity = memo(() => userActivity({ id: Number(route().params.id) }))
+</script>
+
+<h1>user {route().params.id}</h1>
+
+<!-- The refusal is narrowed in the lane that has none of the declaration in it: the name and the
+     shape are in the handler's TYPE, and the schema that checks the data is server-side text this
+     bundle never sees. -->
+{#try}<p>{found?.name}</p>{:catch e}<p>no user {route().params.id}</p>{/try}
+
+<!-- One field of an answer that carries four. The rest is what `seed: false` keeps out of the page. -->
+<p>visits: {activity?.visits}</p>

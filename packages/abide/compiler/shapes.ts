@@ -17,18 +17,19 @@
 // this half owns the address scheme, the directory rule and the endpoint syntax, so there is one
 // place that decides what an endpoint is and it is the same one both lanes already use.
 
-import type { Shapes } from '$shared/internal/shapes.ts'
-import type { Kind } from '$shared/transport.ts'
+import type { Shapes } from '#shared/internal/shapes.ts'
+import type { Kind } from '#shared/transport.ts'
 // From the leaves rather than `./index.ts`: this is a CLI entry, and the barrel's edge onto
 // `emit.ts` would hand it the whole emitter for one string and one join.
 import { endpointId, endpointsOf } from './internal/elide.ts'
+import { configAbove } from './internal/project.ts'
 import { SHAPES_FILE } from './SHAPES_FILE.ts'
 import { TRANSPORT_GLOBS } from './TRANSPORT.ts'
 
 export interface DeriveOptions {
     /** Directories to scan for transport modules. */
     roots: string[]
-    /** The project the checker opens. Defaults to `tsconfig.json` beside the working directory. */
+    /** The project the checker opens. Defaults to the nearest `tsconfig.json` above the first root. */
     tsconfig?: string
     cwd?: string
 }
@@ -107,11 +108,12 @@ export async function deriveShapes(options: DeriveOptions): Promise<Record<strin
     const endpoints = await wanted(options.roots)
     if (endpoints.length === 0) return {}
     const cwd = options.cwd ?? process.cwd()
-    const job = {
-        cwd,
-        tsconfig: options.tsconfig ?? `${cwd}/tsconfig.json`,
-        endpoints,
-    }
+    // The config above the ENDPOINTS, not the one beside the working directory. A repo root holds a
+    // base with no files in it, and a checker opening that derives nothing while exiting `0` — which
+    // is indistinguishable from an app whose shapes are all already known.
+    const tsconfig = options.tsconfig ?? (await configAbove((endpoints[0] as Wanted).file))
+    if (tsconfig === null) return {}
+    const job = { cwd, tsconfig, endpoints }
     // Spawned rather than imported, and NODE rather than Bun: see the header. The child is handed the
     // job on stdin so a project with hundreds of endpoints does not have to fit in an argument list.
     const child = Bun.spawn(['node', new URL('internal/checked.ts', import.meta.url).pathname], {

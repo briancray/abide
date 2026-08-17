@@ -24,9 +24,9 @@
 // anonymous floor before it looks at a cookie. A browser that DID get here would throw, which is the
 // correct outcome for a lane that may not decide who a caller is.
 
-import { anonymous, type Identity, type IdentitySource, useIdentitySource } from '$shared/identity.ts'
-import { isThenable } from '$shared/internal/probes.ts'
-import { abideLog } from '$shared/log.ts'
+import { anonymous, type Identity, type IdentitySource, useIdentitySource } from '#shared/identity.ts'
+import { isThenable } from '#shared/internal/probes.ts'
+import { abideLog } from '#shared/log.ts'
 import { knobOf } from './config.ts'
 import { NO_STORE_HEADER } from './internal/CACHE.ts'
 import { HookSlot } from './internal/hooks.ts'

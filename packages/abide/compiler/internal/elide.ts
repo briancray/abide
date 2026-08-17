@@ -22,8 +22,8 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 // Type-only, so nothing about the runtime reaches the compiler: the emitted `__register("rpc", …)`
 // IS the contract between the two, and a `Kind` declared twice is a rename that compiles on both
 // sides and fails on the wire.
-import type { Shapes } from '$shared/internal/shapes.ts'
-import type { Kind } from '$shared/transport.ts'
+import type { Shapes } from '#shared/internal/shapes.ts'
+import type { Kind } from '#shared/transport.ts'
 // The directory rule, from the leaf that owns it: the cli and the boot scan with these too, and an
 // edge onto THIS module would hand them TypeScript's scanner for two glob strings.
 import { TRANSPORT_DIRECTORIES } from '../TRANSPORT.ts'
@@ -65,6 +65,23 @@ export function kindOf(modulePath: string): Kind | null {
     if (modulePath.includes(TRANSPORT_DIRECTORIES.rpc)) return 'rpc'
     if (modulePath.includes(TRANSPORT_DIRECTORIES.socket)) return 'socket'
     return null
+}
+
+/**
+ * The same question asked of an IMPORT SPECIFIER rather than of a path on a disk.
+ *
+ * Two spellings reach the same module and neither is a path: `../../server/rpc/x.ts` from inside the
+ * server seam, and `#server/rpc/x.ts` from anywhere else — which is what an app writes now that its
+ * seams are subpath imports. The leading `/` makes a bare `server/rpc/x.ts` match on the same test a
+ * relative one does, and the `#` comes off first because a seam alias is the DIRECTORY under a
+ * different name. Both land on `kindOf`, so there is still one answer to what a transport module is.
+ *
+ * Getting this wrong is silent and expensive: an rpc the emitter does not recognise is not registered
+ * as a keyed source, so the cell sugar stops inserting the read and `bodyOf(args).source` compiles to
+ * a property access on a handle.
+ */
+export function kindOfImport(specifier: string): Kind | null {
+    return kindOf(`/${specifier.startsWith('#') ? specifier.slice(1) : specifier}`)
 }
 
 /** The module's own path under its transport directory — every id in the file shares it. */

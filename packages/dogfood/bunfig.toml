@@ -1,6 +1,6 @@
 # The pages are Tailwind-styled, and this is where the app says so: `abide build` and `abide dev`
 # read `[serve.static] plugins` — Bun's own spelling — and bundle the client lane with them, so the
-# `@import "tailwindcss"` in `app.css` is compiled by the app's own dependency.
+# `@import "tailwindcss"` in `src/ui/app.css` is compiled by the app's own dependency.
 #
 # Declared HERE rather than in the root bunfig because the plugin is resolved relative to the app root
 # that names it, and `bun-plugin-tailwind` is an example dependency — abide itself has no styling and

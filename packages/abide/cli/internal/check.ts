@@ -6,7 +6,7 @@
 // is the point — a second checker that agreed with the first until it didn't is the failure this
 // whole lane is shaped to avoid.
 
-import { diagnose } from '$compiler/check.ts'
+import { diagnose } from '#compiler/check.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { pathsOnly } from '../COMMANDS.ts'
 

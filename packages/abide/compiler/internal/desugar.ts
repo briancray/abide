@@ -5,7 +5,7 @@
 // sources, because what it rewrites is READS, and every source has those.
 //
 //   {source}          the identifier IS the expression — left alone, because `unwrap` in
-//                     `$shared/internal/slots.ts` already reads a slot's source one step further,
+//                     `#shared/internal/slots.ts` already reads a slot's source one step further,
 //                     and because handing the SOURCE over is what `bind:value={x}` and a component
 //                     prop need. Naming one alone hands it over; using it in an expression reads it.
 //                     That rule is decided by the caller, which does not call in here for a lone

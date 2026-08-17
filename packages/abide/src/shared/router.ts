@@ -338,7 +338,7 @@ export function outletFrom(from: number): TemplateResult {
     // What each layout was handed as its children, kept so the client can find the PART showing it.
     // A `TemplateResult`'s `values` array is freshly allocated per evaluation, so one of these
     // identifies exactly one slot in exactly one instance — which is what makes the descent in
-    // `$ui/internal/navigation.ts` a lookup rather than a guess about which slot a `<slot/>` is.
+    // `#ui/internal/navigation.ts` a lookup rather than a guess about which slot a `<slot/>` is.
     //
     // On the cells rather than at module scope, because a server renders two callers at once and this
     // is a fact about ONE of them. Rebuilt per run, never appended to.
@@ -405,7 +405,7 @@ interface Cells {
     /**
      * What each layout of the last `outletFrom` run was handed as its children, indexed by depth.
      *
-     * Not a cell and never read to render — it is a lookup key, handed to `$ui` so a served fragment
+     * Not a cell and never read to render — it is a lookup key, handed to `#ui` so a served fragment
      * can be put inside the layout it belongs in rather than over the whole outlet.
      */
     chain: TemplateResult[]

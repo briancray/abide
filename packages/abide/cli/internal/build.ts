@@ -19,22 +19,22 @@ import { rm } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { promisify } from 'node:util'
 import { brotliCompress, gzip, constants as ZLIB } from 'node:zlib'
-import { messageOf } from '$shared/internal/probes.ts'
+import { messageOf } from '#shared/internal/probes.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { pathsOnly } from '../COMMANDS.ts'
 import {
     assetOf,
     CLIENT_DIR,
-    CLIENT_KEY,
     type ClientAsset,
     type ClientManifest,
     clientGraph,
     entryNames,
+    GENERATED_ENTRY,
     MANIFEST_FILE,
     PAGES,
     type Sidecar,
 } from '../CLIENT_BUILD.ts'
-import { clientLane, GENERATED_ENTRY } from './entry.ts'
+import { clientLane } from './entry.ts'
 import { clientBuild, type Lane } from './lane.ts'
 import { BOLD, colored, DIM, paint, plural } from './paint.ts'
 
@@ -60,20 +60,18 @@ export async function build(argv: string[]): Promise<number> {
 
     const root = process.cwd()
     let entries = named
-    // The manifest keys, when they are not the entry paths. Only the conventional lane sets them — an
-    // entry somebody NAMED is keyed by what they named, because that is what their document says. So
-    // this having a value is also what says the lane was GENERATED, which `report` says out loud: a
-    // lane nobody wrote is a file the next reader will not find in their own source tree, and the one
-    // line naming where it came from is the whole of the fix.
-    let keys: string[] | undefined
+    // Whether the lane was written by this command rather than named by a person, which `report` says
+    // out loud: a lane nobody wrote is a file the next reader will not find in their own source tree,
+    // and the one line naming where it came from is the whole of the fix.
+    let generated = false
     if (entries.length === 0) {
-        // The conventional lane when nothing was named, written from `pages/`: a route table is
-        // already on disk, and retyping it for the browser is the one piece of an app nobody should
-        // be writing by hand.
+        // The lane when nothing was named, written from `pages/`: a route table is already on disk,
+        // and retyping it for the browser is the one piece of an app nobody should be writing by
+        // hand.
         const lane = await clientLane(root)
         if (lane !== null) {
             entries = [lane]
-            keys = [CLIENT_KEY]
+            generated = true
         }
     }
     if (entries.length === 0) {
@@ -120,13 +118,13 @@ export async function build(argv: string[]): Promise<number> {
     for (let at = 0; at < names.length; at++) assets[names[at] as string] = settled[at] as ClientAsset
 
     const manifest: ClientManifest = {
-        entries: entryNames(root, entries, built.outputs, keys),
+        entries: entryNames(root, entries, built.outputs),
         assets,
         graph: clientGraph(built.metafile, root),
     }
     await Bun.write(`${root}/${MANIFEST_FILE}`, `${JSON.stringify(manifest, null, 4)}\n`)
 
-    report(manifest, keys !== undefined)
+    report(manifest, generated)
     return CLI_EXIT_CODES.ok
 }
 

@@ -25,6 +25,7 @@ export {
     type ClientAsset,
     type ClientManifest,
     type Encoding,
+    GENERATED_ENTRY,
     MANIFEST_FILE,
     type Sidecar,
 } from './CLIENT_BUILD.ts'

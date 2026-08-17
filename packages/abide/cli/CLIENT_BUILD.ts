@@ -11,7 +11,9 @@
 // `.dockerignore` and one thing to delete.
 //
 // `node:path` is the only weight here, and it is a builtin: the rule is that reading a manifest must
-// not load a BUNDLER, not that this file may not resolve a path.
+// not load a BUNDLER, not that this file may not resolve a path. The two re-exports below are leaves
+// of strings with no imports of their own, which is the shape that lets a name cross a seam without
+// the module it came from arriving with it.
 
 // `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
 import { basename, relative, resolve } from 'node:path'
@@ -23,7 +25,7 @@ import { basename, relative, resolve } from 'node:path'
  * under the reserved prefix: an operator proxies, caches or excludes `/__abide/**` with one pattern,
  * and a segment claimed away from that table is one nothing else can know is taken.
  */
-export { CLIENT_ROUTE } from '$shared/internal/PATHS.ts'
+export { CLIENT_ROUTE } from '#shared/internal/PATHS.ts'
 
 /** Where the client bundle is written, relative to the project root. */
 export const CLIENT_DIR = '.abide/client'
@@ -44,27 +46,26 @@ export const MANIFEST_FILE = `${CLIENT_DIR}/manifest.json`
 export const CLIENT_ENTRIES = ['client.ts', 'client.tsx', 'client.abide', 'client.js']
 
 /**
- * What the manifest keys the client lane by, whoever wrote it.
+ * The lane itself — generated from `pages/`, for every app. See `internal/entry.ts`.
  *
- * The generated entry is at `.abide/client.entry.ts` and an app's own is at `client.ts`, and a
- * document must not have to know which: `app.html` names `src="./client.ts"` and `shell.ts` maps that
- * through `manifest.entries`, so the CONVENTIONAL name is the address in both cases. An app that
- * writes no client entry still writes the same head as one that does.
+ * Here beside `CLIENT_DIR` because it is the same fact: where the build's own files are. And it is
+ * the manifest KEY, which is what lets `abide start` put the script in a document that never named
+ * one — a `<script src="./client.ts">` an app had to write by hand was a path to a file the app
+ * never wrote, and the stylesheets beside it have come off the build all along.
  *
- * Beside the list it is the first of, because the two facts are one: `CLIENT_ENTRIES` is what a lane
- * may be CALLED and this is what it is ADDRESSED by.
+ * Beside the list it is not on, because the two facts are one: `CLIENT_ENTRIES` is what a lane may
+ * have been called and this is what a lane IS.
  */
-export const CLIENT_KEY = 'client.ts'
+export const GENERATED_ENTRY = '.abide/client.entry.ts'
 
 /**
- * Where the pages are. A directory rather than a declaration — the tree IS the route table.
+ * Where the pages are, re-exported from the one file that says where anything in an app is.
  *
- * Here rather than in either reader because both of them write the name into something the other
- * has to match: `entry.ts` emits `import('../pages/…')` specifiers and `layers.ts` builds
- * `pages/<file>` graph keys off it. Two copies is a rename that reaches one and produces a lane
- * importing nothing, with a build that still succeeds.
+ * Named here rather than only there because this module is what a server reading a build imports,
+ * and the directory is half of what the manifest's graph keys mean — see `layers.ts`. The DECISION
+ * is `LAYOUT.ts`'s, beside the transport directories it belongs with.
  */
-export const PAGES = 'pages'
+export { PAGES_DIR as PAGES } from '#compiler/LAYOUT.ts'
 
 /**
  * The first of `names` that is actually under `root`, or `null` for none of them.
@@ -86,9 +87,8 @@ export async function firstPresent(root: string, names: string[]): Promise<strin
  * Which file each entry produced, keyed as the manifest keys it.
  *
  * Here rather than in either builder because BOTH lanes produce a manifest — `abide build` writes one
- * to disk and `abide dev` holds one in memory — and the entry keys are what an `app.html`'s
- * `src="./client.ts"` is looked up by. Two copies of this is one lane rewriting a document and the
- * other quietly not.
+ * to disk and `abide dev` holds one in memory — and the entry keys are what the document's `<script>`
+ * is looked up by. Two copies of this is one lane naming the lane in a head and the other quietly not.
  *
  * Bun hands entry points back in the order they were given, so the two lists zip. Matching on the
  * filename instead would need this to reproduce `[name]-[hash]`, which is the bundler's rule and not
@@ -96,28 +96,22 @@ export async function firstPresent(root: string, names: string[]): Promise<strin
  *
  * The key is what the file IS rather than how somebody typed it: `abide build ./client.ts` and
  * `abide build client.ts` name one entry, and a manifest recording them as two would hand a server a
- * name it cannot look up.
- *
- * `keys` overrides that, positionally, for the one case where where a module IS and what a document
- * NAMES it by are different files: a generated lane sits in `.abide/` and an `app.html` still writes
- * `src="./client.ts"`. See `internal/entry.ts` — the conventional name is the address whether or not
- * the app wrote the file.
+ * name it cannot look up. The generated lane is keyed the same way, by where it sits — nothing here
+ * aliases a module to a name a document happens to write, because no document names one.
  */
 export function entryNames(
     root: string,
     entries: string[],
     outputs: readonly { kind: string; path: string }[],
-    keys?: string[],
 ): Record<string, string> {
     const produced: Record<string, string> = {}
     let at = 0
     for (const artifact of outputs) {
         if (artifact.kind !== 'entry-point') continue
         const entry = entries[at]
-        const key = keys?.[at]
         at++
         if (entry === undefined) continue
-        produced[key ?? relative(root, resolve(root, entry))] = basename(artifact.path)
+        produced[relative(root, resolve(root, entry))] = basename(artifact.path)
     }
     return produced
 }

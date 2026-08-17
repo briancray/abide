@@ -19,7 +19,7 @@
 // enums, no namespaces — because `checked.ts` runs under Node, and the type import below is erased
 // rather than resolved, which is what lets an alias appear in a file Node loads.
 
-import type { JsonSchema, JsonType } from '$shared/internal/shapes.ts'
+import type { JsonSchema, JsonType } from '#shared/internal/shapes.ts'
 
 /** Anything matches this, and it is what both derivations answer for a type they cannot describe. */
 export const ANYTHING: JsonSchema = {}

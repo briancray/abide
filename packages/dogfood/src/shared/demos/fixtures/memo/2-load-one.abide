@@ -1,0 +1,18 @@
+<script module>
+import { memo, state } from 'abide'
+
+// MODULE scope, which is about this PAGE rather than about the lesson: nothing addresses this load, so
+// nothing seeds it, and per-instance setup hands the server arm and the client arm each its own cold
+// memo. Per caller they are one cache. See `#shared/demos/proofs.ts`.
+const query = state('ab')
+
+// Declaring an argument says the args ARE the dependency set — and the cache key, so this is one slot
+// per `text` and typing the same letters twice asks once.
+const hits = memo(async ({ text }: { text: string }) => {
+    await new Promise((settle) => setTimeout(settle, 200))
+    return text === '' ? [] : [`${text}-one`, `${text}-two`]
+})
+</script>
+
+<input bind:value={query} />
+<ul>{#for hit of hits({ text: query })}<li>{hit}</li>{/for}</ul>

@@ -1,0 +1,26 @@
+<script module>
+import { invalidate, memo } from 'abide'
+
+// Module scope for the reason rung 1's is — one cache per caller. See `#shared/demos/proofs.ts`.
+let served = 0
+
+// Tags name the DATA, not the memo holding it.
+const quote = memo(
+    async ({ symbol }: { symbol: string }) => {
+        await new Promise((settle) => setTimeout(settle, 400))
+        return `${symbol} @ ${++served}`
+    },
+    { tags: ['quotes'] },
+)
+
+// So this drops every slot carrying the tag, from anywhere, knowing no memo's name.
+const dropEverything = (): void => invalidate({ tags: ['quotes'] })
+</script>
+
+{#if quote({ symbol: 'ABC' }).pending()}
+    <p>loading…</p>
+{:else}
+    <p>{quote({ symbol: 'ABC' })()}</p>
+{/if}
+
+<button onclick={dropEverything}>invalidate by tag</button>

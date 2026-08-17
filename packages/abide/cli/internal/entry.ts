@@ -22,11 +22,8 @@
 
 // `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
 import { dirname, relative } from 'node:path'
-import { type PageFiles, pageFiles } from '$server/pages.ts'
-import { CLIENT_ENTRIES, firstPresent, PAGES } from '../CLIENT_BUILD.ts'
-
-/** The generated lane, relative to the project root. Under `.abide/`, beside the build it feeds. */
-export const GENERATED_ENTRY = '.abide/client.entry.ts'
+import { type PageFiles, pageFiles } from '#server/pages.ts'
+import { CLIENT_ENTRIES, firstPresent, GENERATED_ENTRY, PAGES } from '../CLIENT_BUILD.ts'
 
 /**
  * The client lane at `root`, written from `pages/`.
@@ -128,8 +125,8 @@ document.addEventListener('click', (event) => {
 `
 }
 
-const HEADER = `// GENERATED from pages/ by \`abide build\` / \`abide dev\`. Edits here are overwritten on the next
-// build — client-side code of your own goes in \`pages/layout.abide\`, which is above every route.
+const HEADER = `// GENERATED from ${PAGES}/ by \`abide build\` / \`abide dev\`. Edits here are overwritten on the
+// next build — client-side code of your own goes in \`${PAGES}/layout.abide\`, above every route.
 `
 
 /**

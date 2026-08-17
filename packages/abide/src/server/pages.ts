@@ -14,7 +14,7 @@
 // it. A `.abide` page needs the compiler plugin registered (`abide/compiler/preload`), exactly as
 // importing one by hand does.
 
-import type { Loader, RouteEntry, ViewModule } from '$shared/router.ts'
+import type { Loader, RouteEntry, ViewModule } from '#shared/router.ts'
 
 const PAGE = 'page.'
 const LAYOUT = 'layout.'

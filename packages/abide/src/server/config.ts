@@ -23,7 +23,7 @@
 // answer, and `config()` publishing a number nothing honoured is exactly the disagreement an operator
 // has no way to catch.
 //
-// Two seams carry that the whole way. `$shared` may not import `$server`, so the ceilings ask through
+// Two seams carry that the whole way. `#shared` may not import `#server`, so the ceilings ask through
 // `useConfigSource` — the inversion `useLogSink` and `useIdentitySource` already are, and what leaves
 // a browser build on its floor. And an rpc's `timeout` and `maxBodySize` resolve at the DOOR rather
 // than at the declaration, because a declaration runs at import and could never have seen a hook
@@ -40,12 +40,12 @@
 // half. An app that wants a public subset publishes one through an rpc, which is one line and is a
 // decision somebody made on purpose.
 
-import { env, envNumber } from '$shared/internal/env.ts'
-import { useConfigSource } from '$shared/internal/knobs.ts'
-import { useMountBase } from '$shared/internal/mount.ts'
-import { isThenable } from '$shared/internal/probes.ts'
-import { NO_LIMIT } from '$shared/internal/timers.ts'
-import { abideLog, appName } from '$shared/log.ts'
+import { env, envNumber } from '#shared/internal/env.ts'
+import { useConfigSource } from '#shared/internal/knobs.ts'
+import { useMountBase } from '#shared/internal/mount.ts'
+import { isThenable } from '#shared/internal/probes.ts'
+import { NO_LIMIT } from '#shared/internal/timers.ts'
+import { abideLog, appName } from '#shared/log.ts'
 import { type Gate, gate, type Schema } from './schema.ts'
 
 /**
@@ -285,7 +285,7 @@ config.invalidate = (): void => {
 }
 
 /**
- * One knob as the path that USES it reads it — the `$server` half of `$shared`'s `knobs.ts`, and what
+ * One knob as the path that USES it reads it — the `#server` half of `#shared`'s `knobs.ts`, and what
  * that seam is registered with below.
  *
  * NOT a shorthand for `config()[field]`, and the three differences are the reason it exists.
@@ -315,7 +315,7 @@ export function knobOf<K extends keyof Env>(field: K): Env[K] {
     }
 }
 
-// The `$shared` half of the same question, and the SAME function rather than a second copy of the
+// The `#shared` half of the same question, and the SAME function rather than a second copy of the
 // three rules above. Registered on import, so loading `abide/server` is what gives the three ceilings
 // a configured answer and a browser build keeps its floor.
 useConfigSource(knobOf as (field: string) => unknown)

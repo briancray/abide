@@ -1,13 +1,15 @@
-// The four layers an abide app is served in, assembled once — the half `abide start` and `abide dev`
+// The layers an abide app is served in, assembled once — the half `abide start` and `abide dev`
 // have in common.
 //
-// An app is four conventions and no wiring: `app.ts` says what this app IS, `app.html` is the
-// document it is served in, `pages/` is what it serves, and `server/rpc/**` and `server/sockets/**`
-// are what it answers. The browser's lane is not a fifth — it is GENERATED from `pages/`, because a
-// route table is already on disk and only the browser cannot read it. Nothing in any of them imports
-// a server, calls `Bun.serve`, mounts `dispatch`, installs a signal handler, matches a route, builds
-// a document or imports a handler for its side effect — every one of those is the same code in every
-// app, and the one an app forgets is the one that matters.
+// An app is a handful of conventions and no wiring, and `LAYOUT.ts` is where every one of them is
+// written down: `src/server/app.ts` says what this app IS, `src/ui/app.html` is the document it is
+// served in, `src/ui/pages/` is what it serves, `src/ui/public/` is what it hands over unchanged, and
+// `src/server/rpc/**` and `src/server/sockets/**` are what it answers. The browser's lane is not one
+// of them — it is GENERATED from the pages, because a route table is already on disk and only the
+// browser cannot read it. Nothing in any of them imports a server, calls `Bun.serve`, mounts
+// `dispatch`, installs a signal handler, matches a route, builds a document or imports a handler for
+// its side effect — every one of those is the same code in every app, and the one an app forgets is
+// the one that matters.
 //
 // So `app.ts` exports HOOKS, and a route only if it wants one — and an app with none of either writes
 // no `app.ts` at all. Every export it could hold is optional, so a file holding none of them says
@@ -18,11 +20,14 @@
 // directory is the endpoints, the request's own URL is what matched it, and the shell is the file the
 // app already wrote. What is left for an app to say is the part that is actually its own.
 //
-// Four layers, and the ORDER is the whole design:
+// The ORDER is the whole design:
 //
 //   the client bundle   files, in front of everything, because it is not an endpoint and a page
 //                       waiting on an auth rung for its own JavaScript is a page that cannot log in.
 //                       Outside the request scope too: a static file has no caller to be about
+//   the public files    the same rule for the files an author dropped in a directory — a favicon has
+//                       no caller either, and its addresses are the ones abide did not choose, so it
+//                       is asked SECOND and cannot shadow anything under the reserved prefix
 //   /__abide/**         `dispatch`, which `handle` already puts in front of the app's routes
 //   the app's route     the default export, if it has one, wrapped in its own middleware onion
 //   the pages           whatever the app did not answer, rendered into its shell. `undefined` here
@@ -43,14 +48,17 @@ import { Duplex } from 'node:stream'
 import { constants, createGzip } from 'node:zlib'
 // The `.abide` loader, registered by importing the module that owns the registration — the same one
 // `abide run` preloads and `abide repl` makes. An app importing a page compiles it on the way in.
-import '$compiler/preload.ts'
+import '#compiler/preload.ts'
+// Where an app puts things, by its one definition — the module names for the entry this looks for,
+// and the public directory for the layer below. A leaf of strings, so naming it costs nothing.
+import { APP_MODULES, PUBLIC_DIR } from '#compiler/LAYOUT.ts'
 // The transport directories by their one definition, for the refusal that names them. The globs come
 // from the compiler rather than being written again here, exactly as the boot's own scan takes them.
-import { TRANSPORT_ROOTS } from '$compiler/TRANSPORT.ts'
-import { type Config, type ConfigDefaults, isPort, onConfig } from '$server/config.ts'
-import { type HealthReporter, onHealth } from '$server/health.ts'
-import { type IdentityResolver, onIdentity } from '$server/identity.ts'
-import { documentToStream, fragmentToStream } from '$server/render.ts'
+import { TRANSPORT_ROOTS } from '#compiler/TRANSPORT.ts'
+import { type Config, type ConfigDefaults, isPort, onConfig } from '#server/config.ts'
+import { type HealthReporter, onHealth } from '#server/health.ts'
+import { type IdentityResolver, onIdentity } from '#server/identity.ts'
+import { documentToStream, fragmentToStream } from '#server/render.ts'
 import {
     type ErrorHook,
     handle,
@@ -62,17 +70,17 @@ import {
     type Route,
     type StartHook,
     type StopHook,
-} from '$server/lifecycle.ts'
-import { type PageFiles, pages, pagesFrom } from '$server/pages.ts'
-import { registered } from '$server/registry.ts'
-import { page } from '$server/responses.ts'
-import type { Schema } from '$server/schema.ts'
-import type { Shell } from '$server/shell.ts'
-import { mounted } from '$shared/internal/mount.ts'
-import { NAVIGATION_DEPTH_HEADER, NAVIGATION_FROM_HEADER, NAVIGATION_HEADER } from '$shared/internal/PATHS.ts'
-import { isThenable, messageOf } from '$shared/internal/probes.ts'
-import { JSON_TYPE } from '$shared/internal/wire.ts'
-import { appName } from '$shared/log.ts'
+} from '#server/lifecycle.ts'
+import { type PageFiles, pages, pagesFrom } from '#server/pages.ts'
+import { registered } from '#server/registry.ts'
+import { page } from '#server/responses.ts'
+import type { Schema } from '#server/schema.ts'
+import type { Shell } from '#server/shell.ts'
+import { mounted } from '#shared/internal/mount.ts'
+import { NAVIGATION_DEPTH_HEADER, NAVIGATION_FROM_HEADER, NAVIGATION_HEADER } from '#shared/internal/PATHS.ts'
+import { isThenable, messageOf } from '#shared/internal/probes.ts'
+import { JSON_TYPE } from '#shared/internal/wire.ts'
+import { appName } from '#shared/log.ts'
 import {
     outlet,
     outletFrom,
@@ -81,7 +89,7 @@ import {
     route as routeAsked,
     routes,
     sharedLayoutDepth,
-} from '$shared/router.ts'
+} from '#shared/router.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { CLIENT_ROUTE, type ClientGraph, type ClientManifest, firstPresent, PAGES } from '../CLIENT_BUILD.ts'
 import { refuse } from '../COMMANDS.ts'
@@ -89,20 +97,8 @@ import type { ClientAssets, LoadedClient } from './assets.ts'
 import { acceptedEncoding } from './encodings.ts'
 import { handlers } from './handlers.ts'
 import { BOLD, colored, DIM, paint, plural } from './paint.ts'
+import { type PublicFiles, publicFiles } from './publics.ts'
 import { APP_HTML, type AppShell, appShell } from './shell.ts'
-
-/**
- * What an app SAYS about itself, in the order it is looked for — `app.ts` beside the `app.html` it is
- * served in. One name for the app, and the browser's lane is generated rather than named here.
- *
- * ABSENT is an ordinary app. Every export this file reads is optional, so the file is too: an app of
- * pages and endpoints that wants no hook and no route of its own has nothing to put in it, and a
- * module written to hold nothing is a convention that exists to be satisfied.
- *
- * No `.abide` here, where the REFUSED client names have one: a `.abide` file compiles to a COMPONENT, and this
- * module is asked for hooks. A `.abide` app entry would be a page with nowhere to be served from.
- */
-const CONVENTIONAL = ['app.ts', 'app.tsx', 'app.js']
 
 /** Hoisted: the render reads it once and keeps nothing, so a literal here would be per request. */
 const HYDRATABLE = { hydratable: true }
@@ -146,6 +142,8 @@ export interface Assembly {
     paged: Paged | null
     /** The bundle this was assembled WITH, so a report cannot describe a different one. */
     assets: ClientAssets | null
+    /** The public directory, for the same reason — `null` for an app that has none. */
+    publics: PublicFiles | null
     answer: Answer
 }
 
@@ -160,7 +158,7 @@ export interface Assembly {
 export async function assemble(asked: Assembling): Promise<Assembly | number> {
     const { root, label } = asked
 
-    const entry = await firstPresent(root, CONVENTIONAL)
+    const entry = await firstPresent(root, APP_MODULES)
 
     // The endpoints FIRST, so everything under `/__abide/` is registered before a line of the app's
     // own module runs — an `onStart` that calls one of its own handlers is calling something that is
@@ -200,9 +198,14 @@ export async function assemble(asked: Assembling): Promise<Assembly | number> {
     let paged: Paged | null
     let serving: Route
     let built: LoadedClient | null
+    let publics: PublicFiles | null
     try {
+        // Started before the bundle is waited on: the public directory has no bearing on either, so
+        // its scan overlaps the build rather than following the pages walk.
+        const reading = publicFiles(root)
         built = isThenable(asked.client) ? await asked.client : asked.client
         paged = await pageLayer(root, built?.manifest ?? null, asked.head, asked.pages)
+        publics = await reading
         serving = composed(declared, paged, built?.manifest ?? null)
     } catch (failure) {
         // An `app.html` with nowhere to render is the loud one, and it is caught HERE rather than on
@@ -223,27 +226,37 @@ export async function assemble(asked: Assembling): Promise<Assembly | number> {
         console.error(`${label}: no app here — nothing to serve in ${root}`)
         const transports = Object.values(TRANSPORT_ROOTS).join(', ')
         console.error(`       an app is a ${PAGES}/ directory, handlers under ${transports}, or one of`)
-        console.error(`       ${CONVENTIONAL.join(', ')} exporting its hooks`)
+        console.error(`       ${APP_MODULES.join(', ')} exporting its hooks`)
         return CLI_EXIT_CODES.usage
     }
 
     const handled = handle(serving)
     const assets = built?.assets ?? null
-    // Two shapes rather than one that tests `assets` per request: a process either has a bundle for
-    // its whole life or it does not, and this is the outermost function on every request the app
-    // takes.
+    // The static layers this process actually HAS, in the order they are asked: the bundle first,
+    // because its addresses are all under one reserved prefix and cannot collide with anything an
+    // author put in a directory.
     //
-    // The asset route is IN FRONT of the compressor and deliberately: a bundle was compressed once at
-    // build time and its sidecar is already chosen by the same header — running it through a second
-    // compressor would spend cpu per request to make brotli bytes bigger.
+    // Three shapes rather than one that tests both per request: a process either has a bundle and a
+    // public directory for its whole life or it does not, and this is the outermost function on every
+    // request the app takes. Both are IN FRONT of the compressor and deliberately — a bundle was
+    // compressed once at build time and its sidecar is already chosen by the same header, so running
+    // it through a second compressor would spend cpu per request to make brotli bytes bigger.
+    const files: { serve(request: Request): Response | undefined }[] = []
+    if (assets !== null) files.push(assets)
+    if (publics !== null) files.push(publics)
+    const first = files[0]
+    const second = files[1]
     const answer: Answer =
-        assets === null
+        first === undefined
             ? (request: Request, server: Parameters<typeof handled>[1]): ReturnType<typeof handled> =>
                   compressing(request, handled(request, server))
-            : (request: Request, server: Parameters<typeof handled>[1]): ReturnType<typeof handled> =>
-                  assets.serve(request) ?? compressing(request, handled(request, server))
+            : second === undefined
+              ? (request: Request, server: Parameters<typeof handled>[1]): ReturnType<typeof handled> =>
+                    first.serve(request) ?? compressing(request, handled(request, server))
+              : (request: Request, server: Parameters<typeof handled>[1]): ReturnType<typeof handled> =>
+                    first.serve(request) ?? second.serve(request) ?? compressing(request, handled(request, server))
 
-    return { entry, paged, assets, answer }
+    return { entry, paged, assets, publics, answer }
 }
 
 // --- the pages, and the document they are served in --------------------------
@@ -468,7 +481,7 @@ const RESPONSE_ENCODINGS = ['gzip']
 /**
  * The answer, compressed when it is markup and the caller takes it.
  *
- * Here rather than in `page()` for two reasons that point the same way: `$server/responses.ts` is
+ * Here rather than in `page()` for two reasons that point the same way: `#server/responses.ts` is
  * bundled for the BROWSER — the dogfood app's server suite renders in a card — so it cannot reach a
  * compressor at all, and a rule that only covered the documents abide itself builds would leave an
  * app's own `text/html` route uncompressed for no reason a reader could name.
@@ -792,6 +805,10 @@ export function report(url: string, assembly: Assembly, note?: string): void {
     if (sockets > 0) parts.push(plural(sockets, 'socket'))
     const assets = assembly.assets
     parts.push(assets === null ? 'no client bundle' : `${plural(assets.count, 'file')} at ${CLIENT_ROUTE}`)
+    // Only when there ARE some. An app with no public directory is the common case, and a line saying
+    // so every boot is noise about a convention it has not opted into.
+    const publics = assembly.publics
+    if (publics !== null) parts.push(`${plural(publics.count, 'file')} from ${PUBLIC_DIR}`)
     if (note !== undefined) parts.push(note)
     console.log(paint(`  ${parts.join(' · ')}`, DIM, on))
 }

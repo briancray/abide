@@ -1,0 +1,22 @@
+<script>
+import { whatArrived } from '#server/rpc/docs/request/the-thread-through-the-logs.ts'
+import Answer from '#ui/lib/Answer.abide'
+import { state } from 'abide'
+
+const asked = state(false)
+const ask = (): void => {
+    asked = true
+    whatArrived({}).invalidate()
+}
+</script>
+
+<!-- Press it twice: `operation` is a different id each time, because it is minted per REQUEST and
+     nothing here sent a `traceparent` to be continued from. -->
+<button onclick={ask}>ask the server</button>
+{#if asked}
+    {#if whatArrived({}).pending()}
+        <p>asking…</p>
+    {:else}
+        <Answer source={JSON.stringify(whatArrived({})(), null, 2)}/>
+    {/if}
+{/if}

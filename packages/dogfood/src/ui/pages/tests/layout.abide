@@ -1,0 +1,26 @@
+<!-- The tests section's frame: every capability down the side, the table beside it.
+
+     Keyed by CAPABILITY where `/docs` is keyed by callable — two vocabularies, one shape, which is why
+     `sidebar.abide` is handed its list rather than deciding it. Until this existed the twenty-one
+     capabilities were reachable only from the hub or from a group heading inside a table already showing
+     them, so moving from one suite to the next meant going back to `/`. -->
+<script module>
+import { CAPABILITIES } from '#shared/demos/SUITES.ts'
+import type { NavGroup } from '#ui/lib/sidebar.ts'
+import Sidebar from '#ui/lib/Sidebar.abide'
+
+/** Built once, at module scope: the list is the same on every page in this section. */
+const GROUPS: NavGroup[] = [
+    {
+        title: `capabilities · ${CAPABILITIES.length}`,
+        items: CAPABILITIES.map((entry) => ({ href: `/tests/${entry.name}`, label: entry.name })),
+    },
+]
+</script>
+
+<div class="with-sidebar">
+    <Sidebar groups={GROUPS}/>
+    <div class="with-sidebar-body">
+        <slot/>
+    </div>
+</div>

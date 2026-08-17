@@ -29,7 +29,7 @@ import {
     REACTIVE_TYPES,
     statementCalls,
 } from './desugar.ts'
-import { kindOf } from './elide.ts'
+import { kindOfImport } from './elide.ts'
 import { type Token, tokensOf } from './lex.ts'
 import { extract, mark, type Segment } from './map.ts'
 import type { Attribute, Blocks, Branch, Expr, Node } from './parse.ts'
@@ -1145,12 +1145,11 @@ function rpcImports(statements: string[], into: Reactive): void {
         const clause = match[1] as string
         // `import type { … }` carries no value at all, so nothing it names is a source.
         if (clause.startsWith('type ')) continue
-        // `kindOf` is the one place that says which transport a module declares, so this cannot
-        // drift from what `elide` does with the same specifier. The leading slash makes a bare
-        // `server/rpc/x.ts` match on the same test a relative `../../server/rpc/x.ts` does. A
-        // socket answers `'socket'` here rather than falling through unnamed — see above for why
-        // that is not keyed.
-        if (kindOf(`/${match[2] as string}`) !== 'rpc') continue
+        // `kindOfImport` is the one place that reads a SPECIFIER, so this cannot drift from what
+        // `elide` does with the same module — it normalises a seam alias and a relative path onto the
+        // one test `kindOf` makes. A socket answers `'socket'` here rather than falling through
+        // unnamed — see above for why that is not keyed.
+        if (kindOfImport(match[2] as string) !== 'rpc') continue
         const open = clause.indexOf('{')
         if (open === -1) continue
         for (const entry of clause.slice(open + 1, clause.lastIndexOf('}')).split(',')) {

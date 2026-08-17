@@ -1,0 +1,57 @@
+<script>
+import { memo, state } from 'abide'
+import Poster from '#ui/components/Poster.abide'
+import { buildMedia, type Media } from '#shared/media.ts'
+
+const SIZE = 500
+
+const ALL = buildMedia(1, SIZE)
+
+let query = state('')
+let sort = state('title')
+let details = state(true)
+
+// The three orderings a user actually switches between in ~/code/media. Each is a full reorder of
+// the SAME keyed rows, which is the case a distance-based placement walk pays most for and a
+// minimal-move one pays least — the reason this page exists.
+const SORTS: Record<string, (a: Media, b: Media) => number> = {
+    title: (a, b) => (a.title < b.title ? -1 : a.title > b.title ? 1 : a.id - b.id),
+    added: (a, b) => b.addedAt - a.addedAt,
+    watched: (a, b) => b.watchedAt - a.watchedAt,
+}
+
+const visible = memo(() => {
+    const needle = query.toLowerCase()
+    const matched: Media[] = []
+    for (const item of ALL) {
+        if (needle === '' || item.title.includes(needle)) matched.push(item)
+    }
+    return matched.sort(SORTS[sort] ?? SORTS.title)
+})
+</script>
+
+<h1>media</h1>
+<p>{SIZE} keyed rows, a component per row with a nested component and a branch chain inside it — the
+shape ~/code/media's list page has. The query filters, the sort REORDERS the same rows.</p>
+
+<div class="controls">
+    <input id="query" placeholder="filter" bind:value={query}/>
+    <select id="sort" bind:value={sort}>
+        <option value="title">Title</option>
+        <option value="added">Recently Added</option>
+        <option value="watched">Last Watched</option>
+    </select>
+    <label><input id="details" type="checkbox" bind:checked={details}/> details</label>
+</div>
+
+{#if visible.length === 0}
+    <p id="empty">Nothing matches.</p>
+{/if}
+
+<div id="media" class="grid">
+    {#for item of visible by item.id}
+        <Poster media={item} details={details}>
+            <small class="badge">{item.status}</small>
+        </Poster>
+    {/for}
+</div>

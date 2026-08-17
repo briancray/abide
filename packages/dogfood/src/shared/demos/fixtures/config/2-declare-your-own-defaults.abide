@@ -1,0 +1,19 @@
+<script>
+// The rung above's module, read back through its second endpoint: this app registers the `onConfig`
+// beside it, so `DOCS_GREETING` is a value that exists because the APP declared it and nobody else.
+// Set `DOCS_GREETING` in the environment and it changes — which is the layer order being a layer order.
+import { ourOwnDefault } from '#server/rpc/docs/config/read-the-environment.ts'
+import Answer from '#ui/lib/Answer.abide'
+import { state } from 'abide'
+
+const asked = state(false)
+</script>
+
+<button onclick={() => asked = true}>ask for the app’s own default</button>
+{#if asked}
+    {#if ourOwnDefault({}).pending()}
+        <p>asking…</p>
+    {:else}
+        <Answer source={JSON.stringify(ourOwnDefault({})(), null, 2)}/>
+    {/if}
+{/if}

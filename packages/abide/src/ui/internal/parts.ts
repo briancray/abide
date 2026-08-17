@@ -29,7 +29,7 @@ import {
     producedBoundary,
     settledBoundary,
     type TemplateResult,
-} from '$shared/html.ts'
+} from '#shared/html.ts'
 import {
     forgetProbedLoad,
     hasProbedLoad,
@@ -42,11 +42,11 @@ import {
     untrack,
     untrackCall,
     watchNode,
-} from '$shared/internal/graph.ts'
-import { CLOSE_FORM, closeData, PLACEHOLDER_TAG, SLOT_CLOSE, SLOT_OPEN } from '$shared/internal/MARKERS.ts'
-import { isAsyncIterable, isThenable } from '$shared/internal/probes.ts'
-import { unwrap } from '$shared/internal/slots.ts'
-import { abideLog } from '$shared/log.ts'
+} from '#shared/internal/graph.ts'
+import { CLOSE_FORM, closeData, PLACEHOLDER_TAG, SLOT_CLOSE, SLOT_OPEN } from '#shared/internal/MARKERS.ts'
+import { isAsyncIterable, isThenable } from '#shared/internal/probes.ts'
+import { unwrap } from '#shared/internal/slots.ts'
+import { abideLog } from '#shared/log.ts'
 import { fragmentOf, type Prepared, type PreparedPart, prepare } from './prepare.ts'
 
 // A `warning`, so the DEBUG gate never swallows it: a page that silently rebuilt half of what the
@@ -102,10 +102,10 @@ function isOpen(node: ChildNode | null): boolean {
 /**
  * What a plain value renders as. Nullish and BOTH booleans are nothing, not their spelling.
  *
- * The CHILD-position twin of `$shared`'s `attributeText`, and the same hydration mismatch is what the
+ * The CHILD-position twin of `#shared`'s `attributeText`, and the same hydration mismatch is what the
  * two lanes must agree about — `take` compares this against the text the server wrote, so a
  * disagreement rewrites markup the server already got right and nothing else catches it. Spelled
- * twice rather than shared: the server's half is the `typeof` switch at the top of `$server`'s
+ * twice rather than shared: the server's half is the `typeof` switch at the top of `#server`'s
  * `emit`, which exists so a thousand-row table's strings and numbers never reach a prototype probe,
  * and a shared call would be the thing that walk is written to avoid. Change one, change the other.
  */

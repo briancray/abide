@@ -3,8 +3,16 @@
     "version": "0.0.0",
     "type": "module",
     "private": true,
+    "imports": {
+        "#shared/*": "./src/shared/*",
+        "#ui/*": "./src/ui/*",
+        "#server/*": "./src/server/*",
+        "#compiler/*": "./compiler/*",
+        "#abide": "./abide.ts"
+    },
     "exports": {
         ".": "./abide.ts",
+        "./internal": "./src/shared/internal.ts",
         "./runtime": "./src/shared/runtime.ts",
         "./runtime/transport": "./src/shared/transport.ts",
         "./ui": "./src/ui/index.ts",
@@ -15,7 +23,8 @@
         "./compiler/shapes": "./compiler/shapes.ts",
         "./compiler/assemble": "./compiler/internal/assemble.ts",
         "./compiler/plugin": "./compiler/plugin.ts",
-        "./cli": "./cli/index.ts"
+        "./cli": "./cli/index.ts",
+        "./tsconfig.json": "./app.tsconfig.json"
     },
     "bin": {
         "abide": "./cli/index.ts"

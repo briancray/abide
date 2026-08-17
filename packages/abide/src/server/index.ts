@@ -24,12 +24,12 @@ export { render, type Renderable } from './render.ts'
 // surface — asking is the same call anywhere — and it is re-exported here, straight from the module
 // that defines it, because the handler writing a login is already importing `request()` and
 // `cookies()` from this entry point.
-export { type Identity, identity } from '$shared/identity.ts'
+export { type Identity, identity } from '#shared/identity.ts'
 // The shape one line takes on the remote feed. The endpoint itself is `dispatch`'s — an app mounts
 // that and gets `/__abide/logs` with it — but a reader of the feed needs the record to decode into.
 // `Level` beside the record it is a field of. Not on `abide`, because no call there takes or returns
 // one — `log.warning(...)` is a method per level rather than a level-taking call.
-export type { Level, LogRecord } from '$shared/log.ts'
+export type { Level, LogRecord } from '#shared/log.ts'
 // What the process was TOLD: the typed environment, with the app's own defaults under it, and the
 // three facts it CONCLUDES — `APP_NAME`, `APP_VERSION`, `APP_DATA_DIR`. Those three used to be
 // accessors beside this (`appName()`, `appVersion()`, `appDataDir()`) and are fields now, because an

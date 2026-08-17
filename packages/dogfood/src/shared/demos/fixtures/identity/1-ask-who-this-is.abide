@@ -1,0 +1,18 @@
+<script>
+import { identity, state } from 'abide'
+
+// One file and not two: `identity()` is the same call on both sides — in the process serving the
+// caller it composes the principal, and on a client it asks. Always a promise, because on a client it
+// may have to.
+const who = state('nothing asked yet')
+
+const ask = async (): Promise<void> => {
+    const said = await identity()
+    // NEVER NULL: anonymous IS an answer, so this is a greeting rather than a null check somebody
+    // forgot. Asked on a press, not on sight — see `#shared/demos/proofs.ts`.
+    who = said.authenticated ? `hello, ${String(said.name)}` : 'hello, stranger'
+}
+</script>
+
+<button onclick={ask}>ask who this is</button>
+<p>{who}</p>

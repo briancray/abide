@@ -15,8 +15,8 @@
 // of before/after hooks cannot express any of that without a variable held between them.
 
 import type { Server } from 'bun'
-import { isThenable, messageOf } from '$shared/internal/probes.ts'
-import { abideLog } from '$shared/log.ts'
+import { isThenable, messageOf } from '#shared/internal/probes.ts'
+import { abideLog } from '#shared/log.ts'
 import { config } from './config.ts'
 import { HookSlot } from './internal/hooks.ts'
 import { dispatch } from './registry.ts'

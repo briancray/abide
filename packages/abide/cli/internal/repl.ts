@@ -25,12 +25,12 @@ import vm from 'node:vm'
 // `await import('./page.abide')` compiles on the way in, exactly as it does under `run`. Through the
 // module that OWNS the registration rather than by calling `plugin(abidePlugin)` again — this file is
 // reached lazily through its row in `COMMANDS`, so the side effect costs `abide --help` nothing.
-import '$compiler/preload.ts'
-import * as SURFACE from '$abide'
-import { isSource } from '$shared/internal/BRANDS.ts'
-import { internals } from '$shared/internal/graph.ts'
-import { isThenable, messageOf } from '$shared/internal/probes.ts'
-import { STREAMING } from '$shared/internal/STREAMING.ts'
+import '#compiler/preload.ts'
+import * as SURFACE from '#abide'
+import { isSource } from '#shared/internal/BRANDS.ts'
+import { internals } from '#shared/internal/graph.ts'
+import { isThenable, messageOf } from '#shared/internal/probes.ts'
+import { STREAMING } from '#shared/internal/STREAMING.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { takesNothing } from '../COMMANDS.ts'
 import { LineEditor, suggest } from './editor.ts'

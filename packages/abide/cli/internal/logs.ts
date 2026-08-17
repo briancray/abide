@@ -5,20 +5,20 @@
 // side with exactly two jobs — read a never-ending jsonl body, and print each record the way the
 // console that wrote it would have.
 //
-// The SECOND one is why this file imports `$shared/log.ts` rather than formatting anything: a tail
+// The SECOND one is why this file imports `#shared/log.ts` rather than formatting anything: a tail
 // that spelled a line differently from the app's own stdout would be a second answer to the same
 // question, and an operator comparing the two would be right to call one of them broken. The shape is
 // decided by THIS process's stdout — pretty at a terminal, tsv through a pipe — because that is what
 // the rules were always asking about, and it is the reason a record crosses the wire rather than a
 // rendered line.
 
-import { config } from '$server/config.ts'
-import { formatLogLine, logShape } from '$shared/internal/lines.ts'
-import { LOGS_PATH } from '$shared/internal/PATHS.ts'
-import { messageOf } from '$shared/internal/probes.ts'
-import { STREAMING } from '$shared/internal/STREAMING.ts'
-import { JSONL_TYPE, payloadOf } from '$shared/internal/wire.ts'
-import { type LogRecord, writeLogLine } from '$shared/log.ts'
+import { config } from '#server/config.ts'
+import { formatLogLine, logShape } from '#shared/internal/lines.ts'
+import { LOGS_PATH } from '#shared/internal/PATHS.ts'
+import { messageOf } from '#shared/internal/probes.ts'
+import { STREAMING } from '#shared/internal/STREAMING.ts'
+import { JSONL_TYPE, payloadOf } from '#shared/internal/wire.ts'
+import { type LogRecord, writeLogLine } from '#shared/log.ts'
 import { CLI_EXIT_CODES, exitForStatus } from '../CLI_EXIT_CODES.ts'
 import { takesNothing } from '../COMMANDS.ts'
 

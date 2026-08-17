@@ -11,7 +11,10 @@
 
 // Type-only, so this stays a leaf: `Kind` is the runtime's own name for what an endpoint is, and the
 // import is erased before anything imports the file.
-import type { Kind } from '$shared/transport.ts'
+import type { Kind } from '#shared/transport.ts'
+// The other half of the same rule, and the only value imported here — a leaf of strings, so this one
+// stays as cheap as it was. `SOURCE_DIR` is what the ANCHORED spelling below gains over the loose one.
+import { SOURCE_DIR } from './LAYOUT.ts'
 
 const RPC_DIRECTORY = '/server/rpc/'
 const SOCKET_DIRECTORY = '/server/sockets/'
@@ -44,21 +47,24 @@ export const TRANSPORT_GLOBS: Record<Kind, string> = {
 }
 
 /**
- * The same rule ANCHORED at a project root — what a BOOT scans with.
+ * The same rule ANCHORED under an app's source directory — what a BOOT scans with.
  *
  * The difference is what the scan is FOR. A pass that only reads may match a transport directory
- * anywhere under the tree: a fixture under `types/checker/server/rpc/` is a module whose shapes are
- * worth deriving, and deriving one nobody serves costs nothing. A boot IMPORTS what it finds, and
+ * anywhere under the tree: a fixture under `tests/types/checker/server/rpc/` is a module whose shapes
+ * are worth deriving, and deriving one nobody serves costs nothing. A boot IMPORTS what it finds, and
  * that fixture is not an endpoint of the app — its module body would run, its declarations would
- * register, and its address would collide with the real `server/rpc/` file of the same name, because
- * an id is cut at the LAST transport directory in a path.
+ * register, and its address would collide with the real `src/server/rpc/` file of the same name,
+ * because an id is cut at the LAST transport directory in a path.
+ *
+ * Anchoring it at `src/` is what keeps those two apart now that a fixture tree is inside the app:
+ * only the endpoints an app SERVES are under its server seam, and a fixture is an argument to a case.
  */
 export const TRANSPORT_ROOTS: Record<Kind, string> = {
-    // The same string with its `**/` prefix cut, rather than the tail written a second time: a
-    // scanner whose suffix drifts from the one above finds nothing, and "no endpoints" is what an
-    // app made only of pages looks like too.
-    rpc: TRANSPORT_GLOBS.rpc.slice(ANYWHERE.length),
-    socket: TRANSPORT_GLOBS.socket.slice(ANYWHERE.length),
+    // The same string with its `**/` prefix cut and the source directory in front, rather than the
+    // tail written a second time: a scanner whose suffix drifts from the one above finds nothing, and
+    // "no endpoints" is what an app made only of pages looks like too.
+    rpc: `${SOURCE_DIR}/${TRANSPORT_GLOBS.rpc.slice(ANYWHERE.length)}`,
+    socket: `${SOURCE_DIR}/${TRANSPORT_GLOBS.socket.slice(ANYWHERE.length)}`,
 }
 
 /** Which kind a transport directory in a path names — the DIRECTORY is the kind, read back off it. */

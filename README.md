@@ -26,6 +26,38 @@ Nothing there awaits. A read with nothing to serve yet SIGNALS, and the walk run
 the load lands — on the server that means the shell streams out with the placeholder in it, and on the
 client it means the region fills in. Same file, both lanes.
 
+## What an app looks like
+
+Four directories, and abide reads them — nothing declares a route, an endpoint or an entry point.
+
+```
+src/server/   app.ts, rpc/**, sockets/**, and your own server code
+src/ui/       app.html, app.css, pages/**, public/**, and your own components
+src/shared/   what both sides run
+src/tests/    what neither serves
+```
+
+The same four are the seams you import across, declared once in your `package.json` and resolved by
+Bun, `tsc` and the bundler alike — no tsconfig `paths`, and no `../../` anywhere:
+
+```json
+"imports": {
+    "#server/*": ["./src/server/*", "./.abide/types/src/server/*"],
+    "#ui/*":     ["./src/ui/*",     "./.abide/types/src/ui/*"],
+    "#shared/*": ["./src/shared/*", "./.abide/types/src/shared/*"],
+    "#tests/*":  ["./src/tests/*",  "./.abide/types/src/tests/*"]
+}
+```
+
+The second entry in each pair is where the `.abide` type mirror is generated; the real file is found
+first, so it costs nothing at run time. The rest of the config is one line:
+
+```json
+{ "extends": "abide/tsconfig.json", "include": ["**/*.ts", ".abide/types/**/*.ts"] }
+```
+
+`packages/dogfood` and `packages/perf` are both written this way, which is what keeps it honest.
+
 ## The packages
 
 | | |

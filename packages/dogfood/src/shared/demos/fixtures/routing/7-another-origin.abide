@@ -1,0 +1,25 @@
+<script>
+import { url } from 'abide'
+</script>
+
+<!-- Targets that are not this app's path space, and what `url` does NOT do to them. Params still
+     substitute in every one of these, so an external endpoint written as a pattern stays a pattern.
+
+     A protocol-relative `//host/x` is an ORIGIN and not a doubled slash, which is the one shape a
+     naive join gets wrong. An opaque scheme — `mailto:`, `tel:` — comes back untouched.
+
+     WHERE THE MOUNT SHOWS UP is here rather than in a knob of its own. `APP_URL`'s path is the app's
+     mount base, so under `APP_URL=https://abide.com/v2` every root-absolute and relative answer above
+     carries `/v2` and the two rows below do not: another origin is not this app. This app is served at
+     the root, so what renders here is the unmounted answer — the mounted one is a deploy-time value and
+     `#shared/demos/routing.ts` is where it is asserted against a real base. -->
+<ul>
+    <li>
+        <code>{url('https://example.com/u/[id]', { id: 7 })}</code> — another origin, params and all
+    </li>
+    <li>
+        <code>{url('//cdn.example.com/logo.svg')}</code> — protocol-relative: an origin, not a
+        doubled slash
+    </li>
+    <li><code>{url('mailto:ada@example.com')}</code> — opaque, and therefore unchanged</li>
+</ul>

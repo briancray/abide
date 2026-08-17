@@ -1,0 +1,45 @@
+// What an abide app extends: everything a `.abide` file needs the checker to know.
+//
+//   { "extends": "abide/tsconfig.json", "include": ["**/*.ts", ".abide/types/**/*.ts"] }
+//
+// That is the whole of an app's config, because the SEAMS are not here — `#server` / `#ui` /
+// `#shared` / `#tests` are subpath imports, declared in the app's own `package.json`, and resolved
+// by Bun and `tsc` alike without a config entry. `paths` would have had to be written literally in
+// every app (Bun does not expand `${configDir}`) and would still have collided, since `paths` is
+// program-global and an app's program compiles this package's source through the workspace link.
+//
+// Shipped rather than documented, because the half below is not a preference: an app that gets
+// `allowArbitraryExtensions` or `rootDirs` wrong does not get a worse type-check, it gets one that
+// cannot resolve `./page.abide` at all.
+{
+    "compilerOptions": {
+        "lib": ["ESNext", "DOM", "DOM.Iterable"],
+        "target": "ESNext",
+        "module": "Preserve",
+        "moduleResolution": "bundler",
+        "moduleDetection": "force",
+        "allowImportingTsExtensions": true,
+        // `.abide` files resolve to the `.d.abide.ts` the compiler generates, so a template
+        // expression is checked by the real checker rather than by a second one.
+        "allowArbitraryExtensions": true,
+        // Where that generated tree actually IS. `allowArbitraryExtensions` looks for the declaration
+        // in the SAME directory as the source and cannot be redirected — `rootDirs` answers it by
+        // making these two one virtual directory for relative resolution, which is what keeps three
+        // generated files per page out of the tree the author reads. It merges BOTH ways, so a
+        // compiled module's own `../models.ts` still resolves back out into the source.
+        //
+        // `${configDir}` is the directory of the config that EXTENDS this one, so one pair covers
+        // every app: the mirror hangs off the package root, because a compiled `<script module>`
+        // imports `abide` by its public specifier and a bare specifier resolves by walking up for a
+        // `node_modules` rather than through anything here. Read by `tsc` alone, which is why this
+        // one variable is safe where it would not have been for a seam Bun also has to resolve.
+        "rootDirs": ["${configDir}", "${configDir}/.abide/types"],
+        "verbatimModuleSyntax": true,
+        "noEmit": true,
+        "strict": true,
+        "skipLibCheck": true,
+        "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
+        "types": ["bun"]
+    }
+}

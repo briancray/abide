@@ -6,7 +6,7 @@
 // log records and has nothing to say about whether a help screen a person asked for is colored, so
 // `logShape` is deliberately not asked here.
 
-export { colorAllowed as colored } from '$shared/internal/env.ts'
+export { colorAllowed as colored } from '#shared/internal/env.ts'
 
 export const DIM = '\x1b[90m'
 export const BOLD = '\x1b[1m'

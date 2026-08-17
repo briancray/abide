@@ -10,7 +10,7 @@
 // The logger is an argument rather than an import, so this stays a leaf and each caller warns on its
 // own channel — which is what tells an operator which hook returned the thing with no fields.
 
-import { errorPayload, type WireError } from '$shared/internal/wire.ts'
+import { errorPayload, type WireError } from '#shared/internal/wire.ts'
 
 /**
  * A hook that THREW, as the document it means: the floor, with the failure under `error`.

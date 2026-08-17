@@ -6,14 +6,14 @@
 // `internal/` and is reached only through these. `keyed` used to be re-exported here as authoring
 // vocabulary; it is on `abide/runtime`, because `by` on a `{#for}` is what an author writes.
 
-import type { TemplateResult } from '$shared/html.ts'
-import { scope, watch } from '$shared/reactive.ts'
-import { outlet } from '$shared/router.ts'
+import type { TemplateResult } from '#shared/html.ts'
+import { scope, watch } from '#shared/reactive.ts'
+import { outlet } from '#shared/router.ts'
 import { installHistory, installMount } from './internal/history.ts'
 import { installNavigation } from './internal/navigation.ts'
 import { ChildPart } from './internal/parts.ts'
 
-// Routing's client edge, handed to `$shared` here rather than found there: importing this entry point
+// Routing's client edge, handed to `#shared` here rather than found there: importing this entry point
 // is what says there is a document, exactly as calling `serve` says there is a request. At import and
 // not on the first `mount`, because an app navigates to where it already is before it renders.
 //

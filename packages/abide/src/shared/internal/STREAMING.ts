@@ -1,7 +1,7 @@
 // The decode options every streaming read passes on every chunk.
 //
 // Its own file, and the reason is entirely about which CHUNK its importers land in. Four readers want
-// it — `wire.ts`'s NDJSON line reader, `$ui`'s navigation piece reader, and the CLI's `logs` and
+// it — `wire.ts`'s NDJSON line reader, `#ui`'s navigation piece reader, and the CLI's `logs` and
 // `repl` — so one declaration is right, and it used to live in `wire.ts` beside the first of them.
 //
 // That one import cost the browser 3,002 minified bytes. A module reached from the first-load closure

@@ -1,0 +1,25 @@
+<script module>
+import { memo, state } from 'abide'
+
+// Module scope for the reason rung 2's is: one cache per caller, so the two substrates agree about
+// `pending()` instead of each starting a cold load. See `#shared/demos/proofs.ts`.
+const query = state('ab')
+
+// `throttle` and `debounce` pace EXPLICIT revalidation — a `refresh()`, or a dep changing — and both
+// apply only to a WARM slot. A cold one is never paced, because the first read is somebody waiting with
+// nothing on screen and there is no reason to make them wait longer.
+//
+// `throttle` fires immediately and then at most once per window; `debounce` waits until the triggers
+// stop. Set together, `debounce` wins — so hitting the button below repeatedly settles once.
+const hits = memo(
+    async ({ text }: { text: string }) => {
+        await new Promise((settle) => setTimeout(settle, 200))
+        return text === '' ? [] : [`${text}-one`, `${text}-two`]
+    },
+    { debounce: 300 },
+)
+</script>
+
+<input bind:value={query} />
+<ul>{#for hit of hits({ text: query })}<li>{hit}</li>{/for}</ul>
+<button onclick={() => hits({ text: query }).refresh()}>refresh</button>

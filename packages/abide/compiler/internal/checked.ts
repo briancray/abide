@@ -23,7 +23,7 @@ import type { Node } from 'typescript/unstable/ast'
 // resolving it, so this file never loads the module it is typed against and the one place that
 // touches an `unstable` surface is still checked against it.
 import type { Checker, Type } from 'typescript/unstable/sync'
-import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
+import type { JsonSchema, Shapes } from '#shared/internal/shapes.ts'
 // The one place both derivations agree, reached RELATIVELY because Node resolves no alias — and it
 // holds no runtime import of its own for the same reason.
 import { ANYTHING, arrayOf, formatOf, INTRINSICS, NOTHING, objectOf, union, usable } from './assemble.ts'

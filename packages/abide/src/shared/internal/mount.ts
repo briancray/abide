@@ -14,7 +14,7 @@
 // `href`, a `fetch` and the address bar carry, and it always does. `mounted` and `unmounted` below
 // are the only two crossings, so there is one place to read to know which space a path is in.
 //
-// Installed rather than read: `$shared` cannot ask `config()` without pulling the server into every
+// Installed rather than read: `#shared` cannot ask `config()` without pulling the server into every
 // browser bundle, and the client is not the lane that knows — it is TOLD, by the document it was
 // served in. See `useMountBase`'s two callers.
 

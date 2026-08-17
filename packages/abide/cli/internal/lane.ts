@@ -16,8 +16,8 @@
 // the two commands must bundle one graph — and it is read here rather than passed in so neither
 // command can be the one that forgets to.
 
-import { abidePlugin } from '$compiler/plugin.ts'
-import { messageOf } from '$shared/internal/probes.ts'
+import { abidePlugin } from '#compiler/plugin.ts'
+import { messageOf } from '#shared/internal/probes.ts'
 
 /** What the two lanes differ about, and the whole of it. */
 export interface Lane {

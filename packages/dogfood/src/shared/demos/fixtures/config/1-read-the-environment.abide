@@ -1,0 +1,18 @@
+<script>
+import { environment } from '#server/rpc/docs/config/read-the-environment.ts'
+import Answer from '#ui/lib/Answer.abide'
+import { state } from 'abide'
+
+// `config()` is the serving process's own, so the only way a page reads one is to ask. Nothing is
+// asked until the button is pressed — see `#shared/demos/proofs.ts`.
+const asked = state(false)
+</script>
+
+<button onclick={() => asked = true}>ask what this process was told</button>
+{#if asked}
+    {#if environment({}).pending()}
+        <p>asking…</p>
+    {:else}
+        <Answer source={JSON.stringify(environment({})(), null, 2)}/>
+    {/if}
+{/if}

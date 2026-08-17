@@ -8,9 +8,9 @@
 // `scopedEffect` is here but NOT on `abide`: it is what the compiler writes for a `watch` in a
 // `<script module>`, so it reaches a built app through `abide/runtime` and an author never types it.
 //
-// `derive` (the argless memo) is not here: `memo` in `$shared/memo.ts` is its one public spelling,
+// `derive` (the argless memo) is not here: `memo` in `#shared/memo.ts` is its one public spelling,
 // and there is deliberately no second name for "async memo". Everything else the engine exposes —
-// `Node`, `internals` — is reachable only through `$shared/internal/graph.ts`, which is the seam
+// `Node`, `internals` — is reachable only through `#shared/internal/graph.ts`, which is the seam
 // `memo` sits on and nothing outside abide imports.
 
 export {

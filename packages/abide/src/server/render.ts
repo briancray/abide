@@ -38,8 +38,8 @@ import {
     settledArms,
     settledBoundary,
     type TemplateResult,
-} from '$shared/html.ts'
-import { abideLog } from '$shared/log.ts'
+} from '#shared/html.ts'
+import { abideLog } from '#shared/log.ts'
 import {
     forgetProbedLoad,
     hasProbedLoad,
@@ -49,7 +49,7 @@ import {
     retryable,
     retryableCall,
     settledOf,
-} from '$shared/internal/graph.ts'
+} from '#shared/internal/graph.ts'
 import {
     closeMarker,
     OPEN_MARKER,
@@ -57,14 +57,14 @@ import {
     PLACEHOLDER_TAG,
     patchId,
     placeholderId,
-} from '$shared/internal/MARKERS.ts'
-import { isAsyncIterable, isThenable, messageOf } from '$shared/internal/probes.ts'
-import { seedScript } from '$shared/internal/seed.ts'
-import { planOf, unwrap } from '$shared/internal/slots.ts'
-import { arm, NO_LIMIT, timeoutError } from '$shared/internal/timers.ts'
+} from '#shared/internal/MARKERS.ts'
+import { isAsyncIterable, isThenable, messageOf } from '#shared/internal/probes.ts'
+import { seedScript } from '#shared/internal/seed.ts'
+import { planOf, unwrap } from '#shared/internal/slots.ts'
+import { arm, NO_LIMIT, timeoutError } from '#shared/internal/timers.ts'
 // Re-exported below as well: `<head>` is the only place a sheet is written as markup, so this is a
-// SERVER name that happened to live in `$shared` because `adopt()` fills the registry it reads.
-import { styleTags } from '$shared/styles.ts'
+// SERVER name that happened to live in `#shared` because `adopt()` fills the registry it reads.
+import { styleTags } from '#shared/styles.ts'
 import {
     attribute,
     type Deferred,
@@ -463,7 +463,7 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
     // brand checks below are seven prototype probes each of them would otherwise pay to get here.
     //
     // Which is why what a plain value renders as is spelled here rather than called: this is the
-    // child-position half of the rule `$ui`'s `textOf` states, and the two lanes have to agree or a
+    // child-position half of the rule `#ui`'s `textOf` states, and the two lanes have to agree or a
     // hydration mismatch follows. Nullish and BOTH booleans are nothing; everything else is `String`.
     switch (typeof node) {
         case 'string':
@@ -505,7 +505,7 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
         // chain whose first test is a `pending()` probe emits one — asking about a load is having
         // something to show while it runs — so it goes out as a placeholder and is patched in when
         // the load settles. Every other chain emits none, so there is nothing to send and the walk
-        // blocks until the value lands; see `deferrable` in `$compiler`.
+        // blocks until the value lands; see `deferrable` in `#compiler`.
         //
         // That distinction is what an author is choosing between, and it is not a detail: a deferred
         // subtree arrives through a `<template>` and a two-line script, so it needs JAVASCRIPT. A
@@ -1165,7 +1165,7 @@ function placeholderAround(out: Out, id: number, produce: () => Rest): Rest {
  * run is the only number a proxy in front of it is measuring anyway. One clock spans every PHASE of
  * a render, which is what makes a document's deferred half answer to it too.
  *
- * Here rather than in `$shared`'s `ceilings.ts` beside the other two: those bound what a PROCESS
+ * Here rather than in `#shared`'s `ceilings.ts` beside the other two: those bound what a PROCESS
  * remembers and are read from paths both lanes walk, while a streaming render only ever happens on
  * this side — a browser has no walk to budget and could not set the knob if it did.
  */

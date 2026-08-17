@@ -1,0 +1,5 @@
+# Served AS IT IS from `src/ui/public/`, at `/robots.txt` — the address is the filename, and nothing
+# in the app names this file. It is here because the convention needs one real user: a directory the
+# framework serves and no page imports is one a build could quietly stop reading.
+User-agent: *
+Allow: /

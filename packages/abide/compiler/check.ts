@@ -33,6 +33,7 @@
 // `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
 import { dirname, relative, resolve } from 'node:path'
 import { compile, describe, originalPosition, type Segment } from './index.ts'
+import { configAbove } from './internal/project.ts'
 
 export interface EmitResult {
     source: string
@@ -61,7 +62,7 @@ const PROJECTS = new Map<string, Promise<string>>()
  * `abide check` in. A `package.json` is the same boundary the module resolver stops at, so this is
  * that rule read rather than a rule invented for the mirror.
  *
- * NOT the same climb as `$server/app.ts`'s, and the difference is deliberate: that one wants the
+ * NOT the same climb as `#server/app.ts`'s, and the difference is deliberate: that one wants the
  * nearest manifest that NAMES something, so a nameless `{ "private": true }` leaf keeps it climbing
  * to the workspace root. This wants the nearest package BOUNDARY, whatever it says, because that is
  * where `rootDirs` and bare-specifier resolution start. Aligning them would break whichever was
@@ -197,6 +198,18 @@ async function pruneOrphans(packages: Iterable<string>): Promise<void> {
     await Promise.all(removing)
 }
 
+/**
+ * One `tsc` project per root, deduped — and `null` for a root with no config above it at all.
+ *
+ * A set because `abide check packages/dogfood/pages packages/dogfood/site` names one project twice,
+ * and running the checker over it twice is the whole check paid for again.
+ */
+async function projectsOf(roots: string[]): Promise<(string | null)[]> {
+    const climbing: Promise<string | null>[] = []
+    for (const root of roots) climbing.push(configAbove(resolve(root)))
+    return [...new Set(await Promise.all(climbing))]
+}
+
 export async function emitAll(roots: string[]): Promise<EmitResult[]> {
     // Files are independent, so the scan only collects paths and the compiles run together — this is
     // on the `typecheck` path a developer waits on.
@@ -244,14 +257,23 @@ export function remap(line: string, byModule: Map<string, EmitResult>): string {
 }
 
 /**
- * Emit every `.abide` under `roots`, run the real checker over the project, and hand back what it
- * said — every diagnostic already moved back onto the `.abide` line it came from.
+ * Emit every `.abide` under `roots`, run the real checker over each PACKAGE they sit in, and hand
+ * back what it said — every diagnostic already moved back onto the `.abide` line it came from.
+ *
+ * One checker run per root, against the nearest `tsconfig.json` ABOVE it, rather than one run over
+ * whatever config the working directory happened to sit under. That is what makes naming a package
+ * check that package: the old shape ran a config found at the cwd, so `abide check <pkg>` from a
+ * repo root ran the ROOT config, and a package that config did not `include` was checked to zero
+ * files and reported clean.
+ *
+ * Concurrently, because the packages are independent and this is the gate a developer waits on.
  *
  * A LIST rather than a printed report and an exit code: what to print and what to exit with is the
  * caller's, and `abide check` is the caller. Empty means clean, which is the whole of the decision.
  */
 export async function diagnose(roots: string[]): Promise<string[]> {
-    const written = await emitAll(roots.length > 0 ? roots : ['.'])
+    const asked = roots.length > 0 ? roots : ['.']
+    const written = await emitAll(asked)
 
     const byModule = new Map<string, EmitResult>()
     for (const item of written) {
@@ -263,16 +285,32 @@ export async function diagnose(roots: string[]): Promise<string[]> {
         byModule.set(relative(process.cwd(), item.module), item)
     }
 
-    const tsc = Bun.spawnSync(['bunx', 'tsc', '--noEmit', '--pretty', 'false'], {
-        cwd: process.cwd(),
-        stdout: 'pipe',
-        stderr: 'pipe',
-    })
-    const output = `${tsc.stdout.toString()}${tsc.stderr.toString()}`
     const found: string[] = []
-    for (const line of output.split('\n')) {
-        if (line.trim() === '') continue
-        found.push(remap(line, byModule))
+    const running: Promise<string>[] = []
+    for (const project of await projectsOf(asked)) {
+        if (project === null) {
+            // Reported rather than silently skipped: a checker with no program to run is the failure
+            // this whole shape exists to make loud, and "clean" is what it used to look like.
+            found.push('abide check: no tsconfig.json at or above the directory named')
+            continue
+        }
+        const tsc = Bun.spawn(['bunx', 'tsc', '-p', project, '--noEmit', '--pretty', 'false'], {
+            // The working directory the CALLER is in, so every diagnostic is reported relative to the
+            // same place whichever package it came from — which is what `byModule` is keyed on above.
+            cwd: process.cwd(),
+            stdout: 'pipe',
+            stderr: 'pipe',
+        })
+        running.push(
+            (async () => `${await new Response(tsc.stdout).text()}${await new Response(tsc.stderr).text()}`)(),
+        )
+    }
+
+    for (const output of await Promise.all(running)) {
+        for (const line of output.split('\n')) {
+            if (line.trim() === '') continue
+            found.push(remap(line, byModule))
+        }
     }
     return found
 }

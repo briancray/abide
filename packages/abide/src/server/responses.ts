@@ -16,7 +16,7 @@
 // `error.typed` failure with a declared shape returns `Failed<Name, Data>` instead, so the name and
 // the payload land in the handler's own type and a caller narrows to them.
 
-import { isThenable } from '$shared/internal/probes.ts'
+import { isThenable } from '#shared/internal/probes.ts'
 import {
     errorFrame,
     type Failed,
@@ -26,16 +26,16 @@ import {
     JSONL_TYPE,
     jsonLine,
     TRANSPORT_ERROR,
-} from '$shared/internal/wire.ts'
+} from '#shared/internal/wire.ts'
 import { PRIVATE_NO_STORE } from './internal/CACHE.ts'
 import { ALWAYS_POLICY } from './internal/POLICY.ts'
 import { gate, type Schema } from './schema.ts'
 import { ambientHeaders, heldFrames, heldStream } from './scopes.ts'
 
-export type { Failed, FailureOptions } from '$shared/internal/wire.ts'
+export type { Failed, FailureOptions } from '#shared/internal/wire.ts'
 // The class itself lives on the wire seam, because the browser lane builds one too: `wireError`
 // rebuilds a refusal as exactly this, so a caught failure has the same four members on both sides.
-export { HttpError } from '$shared/internal/wire.ts'
+export { HttpError } from '#shared/internal/wire.ts'
 
 const SSE_TYPE = 'text/event-stream'
 const HTML_TYPE = 'text/html; charset=utf-8'

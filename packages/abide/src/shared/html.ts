@@ -5,7 +5,7 @@
 // <template> and binds effects to the slots. Neither substrate is allowed its own idea of WHAT a
 // slot is: `classifySlots` below is the single classifier, and the two lanes differ only in the
 // ACTION they take per kind. The cached form and the two recognisers the substrates share live in
-// `$shared/internal/slots.ts`.
+// `#shared/internal/slots.ts`.
 //
 import { isSource } from './internal/BRANDS.ts'
 import { type Cell, derive, isPending, state } from './internal/graph.ts'
@@ -93,7 +93,7 @@ export function isAttributeName(name: string): boolean {
 //
 // A key is a plain data marker, not a renderer concept: it says WHICH row this is, and only the
 // client has anything to do with that (moving DOM instead of rewriting it). It lives here rather
-// than in `$ui` because a template is authored once for both substrates — a keyed list handed to
+// than in `#ui` because a template is authored once for both substrates — a keyed list handed to
 // `renderToString` has to render its rows, not stringify the wrappers, and that stopped being
 // hypothetical the moment `{#for … by key}` started emitting `keyed(...)` into isomorphic code.
 //
@@ -255,7 +255,7 @@ export function cellProps(props: Record<string, unknown>): Record<string, unknow
  * called, not read. The two collapse to one test, because a source IS a function — see `isSource`,
  * whose brand check is what the second arm would otherwise have had to repeat.
  *
- * Named rather than spelled at each site: `cellProps` here, `writeProps` in `$ui/internal/parts.ts`
+ * Named rather than spelled at each site: `cellProps` here, `writeProps` in `#ui/internal/parts.ts`
  * and `Props<T>` above all make exactly these exceptions, and a third one added to one of them
  * would be silently absent from the others.
  */
@@ -491,7 +491,7 @@ function collectThenables(value: unknown, into: PromiseLike<unknown>[], depth: n
  *
  * The array `classifySlots` returns is cached per template and re-walked on every instantiation, so
  * a thousand-row list reads it a thousand times; two element shapes in it made `kind.kind` at
- * `$server`'s `emitTemplate` a polymorphic load for a discriminant every element carries anyway. The
+ * `#server`'s `emitTemplate` a polymorphic load for a discriminant every element carries anyway. The
  * client lane does not re-walk this array at all — `prepare` projects what it needs out of it once
  * per template — so the cost was the server's alone.
  */

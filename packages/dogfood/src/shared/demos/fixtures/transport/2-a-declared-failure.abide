@@ -1,0 +1,18 @@
+<script>
+import { user } from '#server/rpc/docs/transport/a-declared-failure.ts'
+import { state } from 'abide'
+
+// `0` asks for a user the server declared it has none of; `1` and up exist. Nothing is asked at all
+// until one of the buttons is pressed — see rung 1.
+const id = state<number | null>(null)
+</script>
+
+<button onclick={() => id = 1}>ask for user 1</button>
+<button onclick={() => id = 0}>ask for user 0</button>
+
+<!-- The refusal is narrowed in a lane with none of the declaration in it: the name and the shape are
+     in the handler's TYPE, and the schema that checks the data is server-side text this bundle never
+     receives. -->
+{#if id !== null}
+    {#try}<p>{user({ id: id ?? 0 })().name}</p>{:catch}<p>no user by that id</p>{/try}
+{/if}

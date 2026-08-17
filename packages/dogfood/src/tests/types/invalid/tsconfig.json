@@ -1,0 +1,22 @@
+{
+    // The fixtures here are SUPPOSED to fail, so they are checked by `test/types.test.ts` through
+    // this config and excluded from the root one — a repo whose own typecheck is red says nothing.
+    //
+    // `exclude` is reset because it is INHERITED and resolved against this directory, so the root's
+    // own "skip types/invalid" would otherwise skip everything this config exists to include.
+    //
+    // The include reaches into the generated tree rather than into this directory, because that is
+    // where a `.abide` compiles to now — nothing beside these fixtures is a module.
+    //
+    // `rootDirs` is RESTATED rather than inherited, and that is the one thing this config cannot take
+    // from the base: the shipped one is written with `${configDir}`, which is the directory of the
+    // config a checker was POINTED AT — this one — and the mirror hangs off the package. Inheriting it
+    // anchors the pair here, and `imported.abide`'s own `../models.ts` then resolves to nothing, which
+    // reports as TS2307 on every fixture and hides the diagnostic each one exists to produce.
+    "extends": "abide/tsconfig.json",
+    "compilerOptions": {
+        "rootDirs": ["../../../..", "../../../../.abide/types"]
+    },
+    "include": ["../../../../.abide/types/src/tests/types/invalid/**/*.ts"],
+    "exclude": []
+}

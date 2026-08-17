@@ -1,3 +1,5 @@
+// The harness's own program. No aliases at all, and that is the harness's whole shape: it reaches
+// the framework by the public specifiers an app uses, and `harness/measure` reaches it not at all.
 {
     "extends": "../../tsconfig.json",
     "include": ["**/*.ts"]

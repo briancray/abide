@@ -1,12 +1,12 @@
-// The document's address bar, as the sink `$shared/router.ts` asks for.
+// The document's address bar, as the sink `#shared/router.ts` asks for.
 //
 // This is the whole of the DOM half of routing, and it is here because this is the package that owns
-// the DOM. `$shared` keeps the policy — only the ambient caller drives the address bar — and reaching
+// the DOM. `#shared` keeps the policy — only the ambient caller drives the address bar — and reaching
 // a `history` from there would mean a browser's worth of `globalThis` guessing inside code the server
 // loads too, plus a `location` that answers for whichever caller happened to ask.
 
-import { MOUNT_META, useMountBase } from '$shared/internal/mount.ts'
-import { type HistorySink, useHistorySink } from '$shared/router.ts'
+import { MOUNT_META, useMountBase } from '#shared/internal/mount.ts'
+import { type HistorySink, useHistorySink } from '#shared/router.ts'
 
 class DocumentHistory implements HistorySink {
     href(): string | null {

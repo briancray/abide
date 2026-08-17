@@ -1,0 +1,89 @@
+<!-- The root layout, and the site's chrome. Every page under this directory renders through the
+     <slot/> below, so the nav is written once and a page never has to remember to include it. -->
+<script module>
+// The app's stylesheet, imported by the thing that needs it rather than named in the document. It is
+// in the CLIENT graph, so the bundler writes it beside the chunks and `abide start` links what was
+// BUILT — a `.css` import is an ordinary import in both lanes, and on the server it is a no-op. It is
+// also where `@import "tailwindcss"` lives, compiled by the plugin this app declares in its bunfig.
+import '../app.css'
+import { route } from 'abide'
+import { NAV } from '#shared/demos/SUITES.ts'
+
+/**
+ * The nav, as data, built once at module scope.
+ *
+ * `overview` is absent because it is the `abide` link at the left — the hub is not a peer of the
+ * pages it indexes. `bench` is appended rather than declared in `SUITES.ts` for the same reason from
+ * the other side: it is not a suite, it is every suite's measurements on one page.
+ */
+/**
+ * The four sections, and nothing per capability.
+ *
+ * Twenty capability links used to be the nav, which made the header the site's index and left no room
+ * for the question a reader actually arrives with. The capabilities are indexed on the hub and reached
+ * from inside a section, where the section is what says which VIEW of them you get.
+ */
+const LINKS: { href: string; label: string }[] = [
+    { href: '/docs', label: 'docs' },
+    { href: '/tests', label: 'tests' },
+    { href: '/bench', label: 'bench' },
+    // The fourth is not a view of THIS app: `/demos` frames separate applications served under a
+    // prefix by `bun run fleet`. In the nav because a reader looking for "what does one of these look
+    // like at scale" has nowhere else to be sent.
+    { href: '/demos', label: 'demos' },
+]
+
+/**
+ * The other view of the capability being shown, when one is.
+ *
+ * `/tests/state` and `/bench/state` are two views of one thing — running, and priced — and which one a
+ * reader wants is decided by why they came. `/docs` is NOT the third any more: it is keyed by callable,
+ * so a suite name is not an address there, and offering `/docs/template` when `html` is what that suite
+ * documents would be a link to a 404.
+ */
+function siblings(pathname: string): { href: string; label: string }[] {
+    const [, section, name] = pathname.split('/')
+    if (name === undefined || name === '' || !NAV.some((entry) => entry.name === name)) return []
+    const out: { href: string; label: string }[] = []
+    for (const other of ['tests', 'bench']) {
+        if (other !== section) out.push({ href: `/${other}/${name}`, label: `${other} →` })
+    }
+    return out
+}
+
+const HERE = 'nav-link is-here'
+const AWAY = 'nav-link'
+
+/**
+ * A section is current when the URL is INSIDE it, not only when it is the section's own path.
+ *
+ * `/routing/users/1` is the routing page — one route, `[suite]/[...rest]`, which is what lets the
+ * routing card drive the address bar without ever leaving the page it is on.
+ */
+function at(pathname: string, href: string): string {
+    return pathname === href || pathname.startsWith(`${href}/`) ? HERE : AWAY
+}
+</script>
+
+<header class="site-header">
+    <div class="site-header-inner">
+        <a href="/" class="wordmark">abide</a>
+        <nav class="nav">{#for link of LINKS}<a href={link.href} class={at(route().url.pathname, link.href)}>{link.label}</a>{/for}</nav>
+        <span class="nav-siblings">
+            {#for sibling of siblings(route().url.pathname)}<a href={sibling.href} class={AWAY}>{sibling.label}</a>{/for}
+        </span>
+    </div>
+</header>
+
+<!-- The page box, and every page renders INSIDE it rather than declaring one. It carries the gutter and
+     the space between a page's blocks, so a page writes what it is made of and none of where it sits —
+     which is also what stopped `.page-head` sitting flush against the window on four pages that put it
+     outside their own `<main>`. -->
+<main>
+    <slot/>
+</main>
+
+<footer class="site-footer">
+    <span>abide</span>
+    <span>this site is the app abide is dogfooded on</span>
+</footer>
