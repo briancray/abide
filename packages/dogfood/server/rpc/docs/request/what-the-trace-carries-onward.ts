@@ -13,10 +13,16 @@ import { GET, trace } from 'abide/server'
  * `trace.state()` is `tracestate` as a live, mutable `Map` — the same shape `cookies()` and `bag()` are,
  * for the same reason. Left alone, the inbound text propagates byte for byte, which is the contract:
  * vendor entries belong to the vendors that wrote them, and rewriting one is how a chain loses them.
+ *
+ * Nothing here actually fetches. What an outbound call would carry is the HEADERS, so the headers are
+ * the demonstration — a real hop to a third party would make this rung a network dependency and show
+ * one line less.
  */
-export const relayed = GET(async () => {
+export const whatArrived = GET(() => {
     trace.state().set('mine', 'ab')
-
-    const answered = await fetch('https://example.com/upstream', { headers: trace.headers() })
-    return { upstream: answered.status, carried: trace.responseHeaders() }
+    return {
+        outbound: Object.fromEntries(new Headers(trace.headers())),
+        onTheResponse: Object.fromEntries(new Headers(trace.responseHeaders())),
+        state: [...trace.state()],
+    }
 })

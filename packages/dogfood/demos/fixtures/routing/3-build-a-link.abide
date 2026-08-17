@@ -8,7 +8,7 @@ import { url } from 'abide'
 
      Not a template literal, and that is the whole of what this buys: the pattern is the thing the app
      already writes down, a root-absolute one is NORMALISED so a trailing slash goes, and the refusals
-     two rungs down happen here rather than as a 404 nobody traced.
+     five rungs down happen here rather than as a 404 nobody traced.
 
      This form reads NOTHING, which makes it the fast path — the one called per row. -->
 <ul>

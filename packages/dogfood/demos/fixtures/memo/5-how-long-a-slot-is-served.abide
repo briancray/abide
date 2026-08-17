@@ -1,6 +1,8 @@
-<script>
+<script module>
 import { memo, state } from 'abide'
 
+// Module scope for the reason rung 2's is: one cache per caller, so the two substrates agree about
+// `pending()` instead of each starting a cold load. See `demos/proofs.ts`.
 const query = state('ab')
 
 // `ttl` is how long a SETTLED slot is served before the next read recomputes it. The default is

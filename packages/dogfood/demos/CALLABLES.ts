@@ -185,19 +185,19 @@ export const CALLABLES = {
     PUT: {
         name: 'PUT',
         from: 'abide/server',
-        blurb: 'A mutation, with the method changed. Nothing else about the declaration differs.',
+        blurb: 'A mutation whose method says REPLACE: the declaration is a `POST`, and the argument carries every field.',
         ladders: ['transport'],
     },
     PATCH: {
         name: 'PATCH',
         from: 'abide/server',
-        blurb: 'A mutation, with the method changed. Nothing else about the declaration differs.',
+        blurb: 'A mutation whose method says AMEND: what the argument leaves out, it leaves alone.',
         ladders: ['transport'],
     },
     DELETE: {
         name: 'DELETE',
         from: 'abide/server',
-        blurb: 'A mutation, with the method changed. Nothing else about the declaration differs.',
+        blurb: 'A mutation whose method says REMOVE: the argument is the key, and no link can reach the method.',
         ladders: ['transport'],
     },
     socket: {
@@ -312,7 +312,7 @@ export const CALLABLES = {
         name: 'middleware',
         from: 'abide/server',
         blurb: 'Wrap every request, outermost first — an ARRAY, because the order is the app’s to declare.',
-        ladders: ['lifecycle'],
+        ladders: ['lifecycle', 'transport'],
     },
     onStart: {
         name: 'onStart',

@@ -12,7 +12,7 @@ import { cookies, GET } from 'abide/server'
  * Parsed on the FIRST ask rather than on every request, so a route that never reads one pays nothing
  * for the header being there.
  */
-export const preferences = GET(() => {
+export const whatArrived = GET(() => {
     const jar = cookies()
     return {
         theme: jar.get('theme') ?? 'light',

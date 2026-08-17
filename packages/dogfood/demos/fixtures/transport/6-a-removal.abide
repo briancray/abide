@@ -1,0 +1,15 @@
+<script>
+import { remove } from '../../../server/rpc/docs/transport/a-removal.ts'
+import { state } from 'abide'
+
+const answered = state('nothing sent yet')
+
+const send = async (): Promise<void> => {
+    answered = JSON.stringify(await remove({ id: 1 }))
+}
+</script>
+
+<!-- Press it twice: `gone` is true and then false, because a mutation retains nothing and runs both
+     times — the same law the `POST` rung's counter shows. -->
+<button onclick={send}>remove</button>
+<p>{answered}</p>

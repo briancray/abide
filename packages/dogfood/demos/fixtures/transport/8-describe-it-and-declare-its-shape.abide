@@ -1,0 +1,27 @@
+<script>
+import { user } from '../../../server/rpc/docs/transport/describe-it-and-declare-its-shape.ts'
+import { state } from 'abide'
+
+const shown = state('nothing asked yet')
+
+// An integer passes the declared shape, so the answer is the ordinary one.
+const accepted = async (): Promise<void> => {
+    shown = JSON.stringify(await user({ id: 3 }))
+}
+
+// And a fraction does not. The refusal is the SCHEMA's, at the door — the handler never ran, and the
+// check that stopped it is server-side text this bundle never received.
+const refused = async (): Promise<void> => {
+    try {
+        shown = JSON.stringify(await user({ id: 3.5 }))
+    } catch (thrown) {
+        shown = thrown instanceof Error ? thrown.message : String(thrown)
+    }
+}
+</script>
+
+<!-- `description` is on the handle here, without a manifest to keep in step — rung 15 reads it. -->
+<p>declared as: <code>{user.description ?? 'no description'}</code></p>
+<button onclick={accepted}>ask for user 3</button>
+<button onclick={refused}>ask for user 3.5</button>
+<pre>{shown}</pre>

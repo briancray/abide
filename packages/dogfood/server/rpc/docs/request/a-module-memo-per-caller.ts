@@ -16,7 +16,7 @@ import { bag, cookies, GET } from 'abide/server'
  */
 const session = memo(() => ({ theme: cookies().get('theme') ?? 'light', at: 'resolved once per caller' }))
 
-export const page = GET(() => {
+export const whatArrived = GET(() => {
     // Read twice in one request, computed once — and computed AGAIN for the next caller, with their
     // cookies rather than these.
     const first = session()

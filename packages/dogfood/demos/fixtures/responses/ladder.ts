@@ -17,12 +17,18 @@ import Five from './5-answer-with-many.abide'
 import FIVE_CLIENT from './5-answer-with-many.abide?source'
 import Six from './6-answer-with-events.abide'
 import SIX_CLIENT from './6-answer-with-events.abide?source'
+import Seven from './7-where-a-logins-cookie-goes.abide'
+import SEVEN_CLIENT from './7-where-a-logins-cookie-goes.abide?source'
+import Eight from './8-a-failure-with-a-shape-on-it.abide'
+import EIGHT_CLIENT from './8-a-failure-with-a-shape-on-it.abide?source'
 import ONE from '../../../server/rpc/docs/responses/answer-with-json.ts?source'
 import TWO from '../../../server/rpc/docs/responses/answer-with-a-page.ts?source'
 import THREE from '../../../server/rpc/docs/responses/answer-with-a-location.ts?source'
 import FOUR from '../../../server/rpc/docs/responses/refuse-with-a-status.ts?source'
 import FIVE from '../../../server/rpc/docs/responses/answer-with-many.ts?source'
 import SIX from '../../../server/rpc/docs/responses/answer-with-events.ts?source'
+import SEVEN from '../../../server/rpc/docs/responses/where-a-logins-cookie-goes.ts?source'
+import EIGHT from '../../../server/rpc/docs/responses/a-failure-with-a-shape-on-it.ts?source'
 
 export const LADDER: Example[] = [
     {
@@ -68,5 +74,26 @@ export const LADDER: Example[] = [
         source: SIX,
         client: SIX_CLIENT,
         view: Six,
+    },
+    // The last two are the same six helpers again, asked what happens at the edges: what else rides on
+    // the response, and what a refusal can CARRY.
+    //
+    // A THIRD is written and not here — `9-when-a-stream-fails-mid-body.ts`, on what is left to say once
+    // the status line is out. Wiring it means moving it under `server/rpc/**`, and a source that throws
+    // part way through a `jsonl` body reaches `process.on('unhandledRejection')` in `lifecycle.ts` and
+    // takes the server down with it, so an addressable one is a page whose button ends the process.
+    {
+        adds: 'the third argument, where the caller’s own headers ride',
+        of: ['redirect'],
+        source: SEVEN,
+        client: SEVEN_CLIENT,
+        view: Seven,
+    },
+    {
+        adds: 'a DECLARED refusal, returned rather than thrown, so it carries data a caller can read',
+        of: ['error'],
+        source: EIGHT,
+        client: EIGHT_CLIENT,
+        view: Eight,
     },
 ]

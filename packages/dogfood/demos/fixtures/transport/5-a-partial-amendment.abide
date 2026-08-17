@@ -1,0 +1,15 @@
+<script>
+import { amend } from '../../../server/rpc/docs/transport/a-partial-amendment.ts'
+import { state } from 'abide'
+
+const answered = state('nothing sent yet')
+
+const send = async (): Promise<void> => {
+    answered = JSON.stringify(await amend({ id: 1, role: 'editor' }))
+}
+</script>
+
+<!-- `name` is never sent and comes back as it was: that is the whole difference between this rung and
+     the one above it. -->
+<button onclick={send}>amend</button>
+<p>{answered}</p>

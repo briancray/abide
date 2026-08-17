@@ -1,0 +1,31 @@
+<script>
+import { item } from '../../../server/rpc/docs/responses/a-failure-with-a-shape-on-it.ts'
+import { state } from 'abide'
+
+const shown = state('nothing asked yet')
+
+// The ENVELOPE first, because a shape on a failure is a claim about the wire: a 404 whose body carries
+// the name and the data, rather than a status and a sentence.
+const envelope = async (): Promise<void> => {
+    const answered = await item.raw({ id: 0 })
+    shown = `${answered.status}\n\n${await answered.text()}`
+}
+
+// And the same failure narrowed BY NAME, in a lane with none of the declaration in it — the schema that
+// checked `{ id }` is server-side text this bundle never receives.
+// `item({ id: 0 })` twice is the same SLOT, not a second request — which is why the narrowing can be
+// asked of it in the `catch` without holding the handle in a local.
+const narrowed = async (): Promise<void> => {
+    try {
+        shown = (await item({ id: 0 })).name
+    } catch (thrown) {
+        shown = item({ id: 0 }).isError(thrown, 'NoSuchItem')
+            ? `NoSuchItem — and data.id is ${thrown.data.id}`
+            : `something else: ${String(thrown)}`
+    }
+}
+</script>
+
+<button onclick={envelope}>ask for item 0</button>
+<button onclick={narrowed}>…and what a caller narrows</button>
+<pre>{shown}</pre>

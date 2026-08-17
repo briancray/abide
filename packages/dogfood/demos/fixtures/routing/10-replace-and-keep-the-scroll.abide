@@ -1,0 +1,31 @@
+<script>
+import { navigate, state } from 'abide'
+
+// `history.length` is the only thing that tells the two moves apart from inside the page, and it is
+// read in the handler rather than in the template: idle before the press, so both substrates write
+// the same markup.
+const entries = state('press one')
+
+const push = async (): Promise<void> => {
+    await navigate('?moved=push')
+    entries = `pushed — ${history.length} entries`
+}
+
+// `replace` swaps the current entry instead of pushing one, so the count holds still. That is what a
+// redirect after a form, a filter that rewrites its own query, and a wizard step all want: the back
+// button should reach where the reader came FROM, not the state they just left.
+//
+// `keepScroll` leaves the offset alone. The default is to reset it, because a new page read from the
+// middle is the wrong thing far more often — so this is for the moves that are not really a new page,
+// which in practice is the same-route kind rung 9 is about. Set here, this preview stays put.
+const replace = async (): Promise<void> => {
+    await navigate('?moved=replace', { replace: true, keepScroll: true })
+    entries = `replaced — ${history.length} entries`
+}
+</script>
+
+<!-- Both options are about what the BROWSER does rather than about what renders. Press `push` a few
+     times and the count climbs; press `replace` as often as you like and it does not. -->
+<button onclick={push}>push</button>
+<button onclick={replace}>replace, and stay put</button>
+<p>{entries}</p>
