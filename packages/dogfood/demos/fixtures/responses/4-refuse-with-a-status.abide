@@ -1,5 +1,6 @@
 <script>
 import { catalogue, whatItWas } from '../../../server/rpc/docs/responses/refuse-with-a-status.ts'
+import Answer from '../../../site/answer.abide'
 import { state } from 'abide'
 
 const shown = state('nothing asked yet')
@@ -20,4 +21,4 @@ const caught = async (): Promise<void> => {
 
 <button onclick={refused}>ask for id 0</button>
 <button onclick={caught}>…and what a catch sees</button>
-<pre>{shown}</pre>
+<Answer source={shown}/>

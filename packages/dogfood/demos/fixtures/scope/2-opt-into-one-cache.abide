@@ -1,5 +1,6 @@
 <script>
 import { readTwice } from '../../../server/rpc/docs/scope/opt-into-one-cache.ts'
+import Answer from '../../../site/answer.abide'
 import { state } from 'abide'
 
 const asked = state(false)
@@ -17,6 +18,6 @@ const ask = (): void => {
     {#if readTwice({}).pending()}
         <p>asking…</p>
     {:else}
-        <pre>{JSON.stringify(readTwice({})(), null, 2)}</pre>
+        <Answer source={JSON.stringify(readTwice({})(), null, 2)}/>
     {/if}
 {/if}

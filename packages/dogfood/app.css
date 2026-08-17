@@ -278,6 +278,25 @@
   .console { overflow-y: auto; }
   .reference { width: 100%; border-collapse: collapse; }
 
+  /* The `<pre>` an EXAMPLE wrote — `.rung-preview` on a docs rung, `.stage` on a case row. Both frames
+     are `justify-items: start`, which is right for the buttons and labels that fill them and wrong for
+     this: a start-aligned item is FIT-CONTENT sized, and `white-space: pre` makes a pre's max-content
+     its longest line. A `JSON.stringify` of a user-agent measured 1453px inside a 490px box, painted
+     straight across the code column beside it and took the document to 1799 in a 1566 window.
+
+     TWO DECLARATIONS, AND EITHER ALONE MEASURES 1453 — the pre is held at its longest line by two
+     independent rules and each hides the other. `justify-items: start` sizes the item to FIT-CONTENT,
+     which `justify-self: stretch` is what opts out of; and a grid item's `min-width: auto` is its
+     MIN-CONTENT, which for `white-space: pre` is that same longest line, and only `overflow` other than
+     visible lowers it to zero. So stretch alone is clamped by the minimum and overflow alone is never
+     asked to scroll. Bounding the TRACK is the third thing this reached for and it does nothing at all,
+     because a start-aligned item is not sized by its track.
+
+     Reached from here rather than from the examples, for the reason `.rung-preview button` is: the
+     source of a rung is the artifact a reader copies, so it stays class-free and the frame styles it. */
+  .rung-preview pre,
+  .stage pre { justify-self: stretch; overflow-x: auto; }
+
   /* Named `.datatable`, not `.table`: `table` is one of Tailwind's DISPLAY utilities, and a utility
      beats a component whatever the specificity, because layer order decides first. The element
      silently became `display: table`, shrink-wrapped to its content and stopped filling its panel.
@@ -655,7 +674,7 @@
      prose next to the text it drives — the reader could not tell the thing they were meant to TYPE in.
      Reached by descendant selector for the reason the buttons above are: the rung's source is what
      gets copied, so it stays class-free. */
-  .rung-preview input,
+  .rung-preview input:not([type='checkbox'], [type='radio']),
   .rung-preview select,
   .rung-preview textarea {
     font-family: var(--font-body);
@@ -669,7 +688,7 @@
   }
   /* A control at rest sits at ground level and LIFTS on focus — the move `.field` makes, so a rung and
      the app's own forms read as the same control. */
-  .rung-preview input:focus,
+  .rung-preview input:not([type='checkbox'], [type='radio']):focus,
   .rung-preview select:focus,
   .rung-preview textarea:focus {
     outline: none;
@@ -677,9 +696,28 @@
     border-color: var(--color-verdigris);
     box-shadow: inset 0 -2px 0 var(--color-verdigris);
   }
+  /* A toggle is not a field to type in, and the field rules above pushed its label 12rem away from it:
+     `min-width` on a checkbox leaves the native box at its own size and pads the ELEMENT out to the
+     measure, so `bind:group`'s two rows read as a column of boxes and a column of unattached words.
+     So the toggle keeps its native chrome, and the `<label>` around it becomes the row that pairs the
+     two — reached with `:has()` because the rung's source is what gets copied and stays class-free. */
+  .rung-preview input[type='checkbox'],
+  .rung-preview input[type='radio'] { margin: 0; accent-color: var(--color-verdigris); }
+  .rung-preview label:has(input[type='checkbox'], input[type='radio']) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    font-size: var(--text-ui);
+  }
 
   /* ── code ───────────────────────────────────────────────────────────────────────────────────── */
-  .code {
+  /* The `<pre>` an EXAMPLE wrote is on this selector rather than on a set of its own: what a rung
+     prints into one is a JSON answer or a log line, which is the same thing the pane beside it is
+     showing and reads at browser-default 16px body serif as though it were prose. Widened here rather
+     than restated next to `.rung-preview p`, so the two cannot drift a size apart. */
+  .code,
+  .rung-preview pre,
+  .stage pre {
     font-family: var(--font-data);
     font-size: var(--text-small);
     line-height: 1.85;

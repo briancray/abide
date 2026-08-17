@@ -1,5 +1,6 @@
 <script>
 import { signIn } from '../../../server/rpc/docs/identity/the-writers-are-the-servers.ts'
+import Answer from '../../../site/answer.abide'
 import { identity, state } from 'abide'
 
 // The rung above sealed `{ id: 'ada' }` and NOTHING ELSE. What comes back here carries a `name` and
@@ -18,4 +19,4 @@ const ask = async (): Promise<void> => {
 </script>
 
 <button onclick={ask}>seal an id, and see what it resolved to</button>
-<pre>{said}</pre>
+<Answer source={said}/>

@@ -1,5 +1,6 @@
 <script>
 import { signIn, signOut } from '../../../server/rpc/docs/identity/the-writers-are-the-servers.ts'
+import Answer from '../../../site/answer.abide'
 import { identity, state } from 'abide'
 
 const said = state('nobody has signed in yet')
@@ -34,4 +35,4 @@ const fromHere = async (): Promise<void> => {
 <button onclick={inAsAda}>sign in as ada</button>
 <button onclick={out}>sign out</button>
 <button onclick={fromHere}>try writing one from this page</button>
-<pre>{said}</pre>
+<Answer source={said}/>

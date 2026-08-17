@@ -1,5 +1,6 @@
 <script>
 import { listening } from '../../../server/rpc/docs/lifecycle/ask-what-is-listening.ts'
+import Answer from '../../../site/answer.abide'
 import { state } from 'abide'
 
 const asked = state(false)
@@ -12,6 +13,6 @@ const asked = state(false)
     {#if listening({}).pending()}
         <p>asking…</p>
     {:else}
-        <pre>{JSON.stringify(listening({})(), null, 2)}</pre>
+        <Answer source={JSON.stringify(listening({})(), null, 2)}/>
     {/if}
 {/if}

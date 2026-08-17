@@ -1,5 +1,6 @@
 <script>
 import { whatArrived } from '../../../server/rpc/docs/request/the-request-being-answered.ts'
+import Answer from '../../../site/answer.abide'
 import { state } from 'abide'
 
 // Nothing is asked until this is written: `demos/proofs.ts` renders this on a server and mounts it on
@@ -19,6 +20,6 @@ const ask = (): void => {
     {#if whatArrived({}).pending()}
         <p>asking…</p>
     {:else}
-        <pre>{JSON.stringify(whatArrived({})(), null, 2)}</pre>
+        <Answer source={JSON.stringify(whatArrived({})(), null, 2)}/>
     {/if}
 {/if}

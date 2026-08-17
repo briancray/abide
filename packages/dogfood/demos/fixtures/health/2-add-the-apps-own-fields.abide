@@ -1,4 +1,5 @@
 <script>
+import Answer from '../../../site/answer.abide'
 import { health, state } from 'abide'
 
 // The same call as the rung above, and what is new in the answer is the `example` field — merged OVER
@@ -13,4 +14,4 @@ const ask = async (): Promise<void> => {
 </script>
 
 <button onclick={ask}>ask for the app’s own fields</button>
-<pre>{own}</pre>
+<Answer source={own}/>

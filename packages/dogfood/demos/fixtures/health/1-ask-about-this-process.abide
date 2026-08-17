@@ -1,4 +1,5 @@
 <script>
+import Answer from '../../../site/answer.abide'
 import { health, state } from 'abide'
 
 // One file and not two: `health()` is the same call on both sides. In the process that is SERVING it
@@ -17,4 +18,4 @@ const ask = async (): Promise<void> => {
 <!-- The four abide fills in — `reachable`, `version`, `startedAt`, `uptime` — so a monitor has
      something to read from an app that reported nothing of its own. -->
 <button onclick={ask}>ask</button>
-<pre>{said}</pre>
+<Answer source={said}/>

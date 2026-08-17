@@ -1,5 +1,6 @@
 <script>
 import { whatArrived } from '../../../server/rpc/docs/request/a-nonce-per-request.ts'
+import Answer from '../../../site/answer.abide'
 import { state } from 'abide'
 
 const asked = state(false)
@@ -17,6 +18,6 @@ const ask = (): void => {
     {#if whatArrived({}).pending()}
         <p>asking…</p>
     {:else}
-        <pre>{JSON.stringify(whatArrived({})(), null, 2)}</pre>
+        <Answer source={JSON.stringify(whatArrived({})(), null, 2)}/>
     {/if}
 {/if}

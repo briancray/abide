@@ -1,5 +1,6 @@
 <script>
 import { asShipped } from '../../../server/rpc/docs/ceilings/unset-costs-nothing.ts'
+import Answer from '../../../site/answer.abide'
 import { state } from 'abide'
 
 // Nothing is asked until the button is pressed — see `demos/proofs.ts`.
@@ -13,6 +14,6 @@ const asked = state(false)
     {#if asShipped({}).pending()}
         <p>asking…</p>
     {:else}
-        <pre>{JSON.stringify(asShipped({})(), null, 2)}</pre>
+        <Answer source={JSON.stringify(asShipped({})(), null, 2)}/>
     {/if}
 {/if}

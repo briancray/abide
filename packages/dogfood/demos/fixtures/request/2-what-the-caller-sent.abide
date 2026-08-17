@@ -1,5 +1,6 @@
 <script>
 import { whatArrived } from '../../../server/rpc/docs/request/what-the-caller-sent.ts'
+import Answer from '../../../site/answer.abide'
 import { state } from 'abide'
 
 const asked = state(false)
@@ -22,6 +23,6 @@ const setTheme = (theme: string) => (): void => {
     {#if whatArrived({}).pending()}
         <p>asking…</p>
     {:else}
-        <pre>{JSON.stringify(whatArrived({})(), null, 2)}</pre>
+        <Answer source={JSON.stringify(whatArrived({})(), null, 2)}/>
     {/if}
 {/if}

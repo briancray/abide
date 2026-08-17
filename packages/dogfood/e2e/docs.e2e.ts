@@ -207,6 +207,69 @@ test('a mounted rung is live, not a picture of itself', async ({ page }) => {
     await expect(line).toHaveText(/count 1/)
 })
 
+test('a preview scrolls a long line rather than painting across the page', async ({ page, complaints }) => {
+    // The per-page spill check in `sourcesAreOnThePage` is written as the net for exactly this, and it
+    // could not see it: a preview is DORMANT until somebody presses it, so the answer that overflows
+    // does not exist while the ladder is merely being loaded. Pressing every preview on every page is
+    // not the way to close that — `navigate`'s buttons leave the page and `error`'s log on purpose, so
+    // the sweep would arrive carrying five exceptions. One press on one page is the whole claim.
+    //
+    // `request` is the page it happened on and the one that cannot stop happening: the answer is a
+    // `JSON.stringify` of the browser's own user-agent, which is a single unbreakable line whatever the
+    // browser and however wide the window. Measured at 1453px inside a 490px box, painted across the
+    // source pane beside it and took the document to 1799 in a 1566 window.
+    await page.goto('/docs/request')
+    await interactive(page)
+    const rung = page.locator('[data-rung="1"]')
+    await rung.getByRole('button', { name: 'ask the server' }).click()
+    const answer = rung.locator('.rung-preview pre')
+    await expect(answer).toBeVisible()
+
+    // The containment first, because that is the assertion the revert moves: with either half of the
+    // fix out — or both — the pre measures the same 1453px in a 222px box, since fit-content sizing and
+    // the item's automatic minimum size hold it there independently. The spill below is the symptom a
+    // reader saw and is kept for that, not because it distinguishes anything the line above does not.
+    const contained = await rung.evaluate((el) => {
+        const box = el.querySelector('.rung-preview')
+        const pre = box?.querySelector('pre')
+        if (box === null || box === undefined || pre === null || pre === undefined) return false
+        return pre.getBoundingClientRect().right <= box.getBoundingClientRect().right + 1
+    })
+    expect(contained, 'the preview paints its answer past the box that holds it').toBe(true)
+
+    const spill = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+    expect(spill, `an answered preview scrolls the page sideways by ${spill}px`).toBeLessThan(2)
+
+    expect(complaints.unexpected(), 'request logged errors').toEqual([])
+})
+
+test('a preview that answers in prose is not painted as code', async ({ page, complaints }) => {
+    // `site/answer.abide` asks `JSON.parse` whether the text is DATA before handing it to a grammar,
+    // and this is the case that asked for it: `identity`'s second rung answers with a refusal, in
+    // English, into the same `<pre>` its other buttons put JSON in. Painted as JavaScript that sentence
+    // comes back speckled — `set` as a call, every `.` and `:` and the em-dash as punctuation, 12 runs
+    // in all — and a sentence with a straight apostrophe in it is worse, because the quote opens a
+    // string that greens the rest of the line.
+    //
+    // NOT a claim about the painter, which is why it is asserted here rather than in `site.test.ts`:
+    // sugar-high gets the same two strings identically wrong, and every valid-JSON payload round-trips
+    // through `painted` correctly. The question is whether the text is data, and only a parse answers it.
+    await page.goto('/docs/identity')
+    await interactive(page)
+    const rung = page.locator('[data-rung="2"]')
+    await rung.getByRole('button', { name: 'try writing one from this page' }).click()
+
+    const answer = rung.locator('.rung-preview pre')
+    await expect(answer).toContainText('refused here')
+
+    // Zero and not "fewer": an unpainted run is TEXT rather than a `<span>` carrying no class, so a
+    // sentence that reached the painter at all leaves elements behind. See `site/code.abide`.
+    const runs = await answer.locator('span').count()
+    expect(runs, `the refusal is painted as JavaScript in ${runs} places`).toBe(0)
+
+    expect(complaints.unexpected(), 'identity logged errors').toEqual([])
+})
+
 test('a name abide does not export is a 404, not an apology', async ({ page }) => {
     const answered = await page.goto('/docs/nowhere')
     expect(answered?.status()).toBe(404)

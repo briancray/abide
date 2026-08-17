@@ -1,5 +1,6 @@
 <script>
 import { asDeclared } from '../../../server/rpc/docs/ceilings/bound-what-is-remembered.ts'
+import Answer from '../../../site/answer.abide'
 import { state } from 'abide'
 
 const asked = state(false)
@@ -13,6 +14,6 @@ const asked = state(false)
     {#if asDeclared({}).pending()}
         <p>asking…</p>
     {:else}
-        <pre>{JSON.stringify(asDeclared({})(), null, 2)}</pre>
+        <Answer source={JSON.stringify(asDeclared({})(), null, 2)}/>
     {/if}
 {/if}
