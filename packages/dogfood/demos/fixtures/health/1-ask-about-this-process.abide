@@ -1,0 +1,20 @@
+<script>
+import { health, state } from 'abide'
+
+// One file and not two: `health()` is the same call on both sides. In the process that is SERVING it
+// composes the account locally; anywhere else it fetches one, and a fetch that never lands is itself
+// an answer — `{ reachable: false }` and nothing more, because a client that filled in a version for a
+// server it could not reach would be inventing the thing it was asked about.
+//
+// Asked on a press rather than on sight — see `demos/proofs.ts`.
+const said = state('nothing asked yet')
+
+const ask = async (): Promise<void> => {
+    said = JSON.stringify(await health(), null, 2)
+}
+</script>
+
+<!-- The four abide fills in — `reachable`, `version`, `startedAt`, `uptime` — so a monitor has
+     something to read from an app that reported nothing of its own. -->
+<button onclick={ask}>ask</button>
+<pre>{said}</pre>

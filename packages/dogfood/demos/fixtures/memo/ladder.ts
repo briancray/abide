@@ -6,11 +6,12 @@ import Two from './2-load-one.abide'
 import TWO from './2-load-one.abide?source'
 import Three from './3-say-what-to-show-meanwhile.abide'
 import THREE from './3-say-what-to-show-meanwhile.abide?source'
-import FOUR from './4-a-read-that-signals.ts?source'
+import Four from './4-a-read-that-signals.abide'
+import FOUR from './4-a-read-that-signals.abide?source'
 
 export const LADDER: Example[] = [
     { adds: 'derive one — no args, so the body is the dependency set', of: ['memo'], source: ONE, view: One },
     { adds: 'load one — declaring args makes them the cache key', of: ['memo'], source: TWO, view: Two },
     { adds: 'say what to show meanwhile, with nothing awaiting', of: ['memo'], source: THREE, view: Three },
-    { adds: 'hand the signal back when your own `catch` swallows it', of: ['isPending'], source: FOUR },
+    { adds: 'hand the signal back when your own `catch` swallows it', of: ['isPending'], source: FOUR, view: Four },
 ]

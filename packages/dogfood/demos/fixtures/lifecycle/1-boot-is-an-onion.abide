@@ -1,0 +1,18 @@
+<script>
+import { health, state } from 'abide'
+
+// The onion's own account of itself. `startedAt` is stamped by the boot and `uptime` counts from it,
+// so an answer arriving at all is this app having got PAST `await start()` — everything the hook did
+// above that line had finished before the socket existed to be asked.
+//
+// `health()` is the same call on both sides, so nothing here is a server module: on a client it asks.
+const said = state('nothing asked yet')
+
+const ask = async (): Promise<void> => {
+    const now = await health()
+    said = `reachable: ${now.reachable}\nstarted: ${now.startedAt}\nup: ${now.uptime} ms`
+}
+</script>
+
+<button onclick={ask}>ask the process how long it has been up</button>
+<pre>{said}</pre>

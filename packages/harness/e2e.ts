@@ -20,6 +20,9 @@
 import { test as base, expect, type Page } from '@playwright/test'
 
 export { expect }
+// Re-exported so a spec that factors a locator walk into a helper can name what it takes without
+// reaching past this entry point for playwright's own types.
+export type { Page }
 
 /**
  * Wait until the client has adopted the page — the barrier `goto` looks like and is not.

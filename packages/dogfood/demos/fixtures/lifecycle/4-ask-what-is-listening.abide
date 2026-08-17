@@ -1,0 +1,17 @@
+<script>
+import { listening } from '../../../server/rpc/docs/lifecycle/ask-what-is-listening.ts'
+import { state } from 'abide'
+
+const asked = state(false)
+</script>
+
+<!-- The origin and the port are the socket's, and a browser cannot invent either: they are what
+     `server()` handed the handler, which is what the hooks above bound. -->
+<button onclick={() => asked = true}>ask what is listening</button>
+{#if asked}
+    {#if listening({}).pending()}
+        <p>asking…</p>
+    {:else}
+        <pre>{JSON.stringify(listening({})(), null, 2)}</pre>
+    {/if}
+{/if}

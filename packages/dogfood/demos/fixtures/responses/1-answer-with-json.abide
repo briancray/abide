@@ -1,0 +1,17 @@
+<script>
+import { catalogue } from '../../../server/rpc/docs/responses/answer-with-json.ts'
+import { state } from 'abide'
+
+// A rung about a RESPONSE is read through `raw`, not through the decoded value: the envelope is the
+// thing being shown, and `raw({ … })` reaches the same handler by the same address and hands it back
+// whole. Nothing is asked until the button is pressed — see `demos/proofs.ts`.
+const shown = state('nothing asked yet')
+
+const ask = async (): Promise<void> => {
+    const answered = await catalogue.raw({})
+    shown = `${answered.status} · ${answered.headers.get('content-type')}\n\n${await answered.text()}`
+}
+</script>
+
+<button onclick={ask}>ask for it</button>
+<pre>{shown}</pre>

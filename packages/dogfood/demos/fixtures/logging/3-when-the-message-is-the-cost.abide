@@ -1,0 +1,24 @@
+<script>
+import { log, state } from 'abide'
+
+const cart = log.channel('cart')
+const built = state(0)
+
+/**
+ * An argument is evaluated before any gate is consulted, so a line interpolating three fields
+ * allocates that string per request even with `DEBUG` unset. Asking first is what lets a per-request
+ * line stay in the code at all.
+ */
+const timed = (path: string, started: number): void => {
+    if (cart.enabled()) {
+        built++
+        cart(`${path} took ${(performance.now() - started).toFixed(1)}ms`)
+    }
+}
+</script>
+
+<!-- Press it with the channel off and `built` never moves: the string was never made. That is the
+     whole of what the guard buys, and it is invisible in the output — which is why the counter is
+     here rather than a sentence saying so. -->
+<button onclick={() => timed('/cart', performance.now())}>time a request</button>
+<p>messages built: {built} — the channel is {cart.enabled() ? 'on' : 'off'}</p>

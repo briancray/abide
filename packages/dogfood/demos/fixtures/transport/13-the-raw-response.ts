@@ -1,4 +1,4 @@
-import { user } from './1-a-get-is-a-keyed-memo.ts'
+import { user } from '../../../server/rpc/docs/transport/a-get-is-a-keyed-memo.ts'
 
 /**
  * The same call handed back as the RESPONSE instead of a decoded value — for the cases where the

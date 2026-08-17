@@ -69,9 +69,15 @@ const BUILT = new WeakMap<Example, Case | null>()
 /**
  * The proofs for one rung, or `null` when there is nothing to prove.
  *
- * About half the ladder has no `view` — a lifecycle hook, a config declaration, a server module — and
- * `null` is the honest answer there rather than a case that passes by doing nothing. The page says
- * "the source is the example" for those, which is true and is not a claim.
+ * `null` is nearly unreachable now and is kept for the one rung it is still about: `Example.view` is
+ * optional, and `dogfood/test/docs.test.ts` requires one on every rung a reader can reach except
+ * `template`'s prop-written-back, whose cell belongs to a parent it has none of. A case that passed by
+ * doing nothing would be the wrong answer there.
+ *
+ * WHAT THE THREE CLAIMS MEAN FOR A RUNG THAT FETCHES. The seam-crossing rungs mount a browser half
+ * that calls a real endpoint, and both arms below render it — `renderToString` here has no request
+ * scope and `mount` has no server. Neither is a problem, and the reason is a rule those rungs keep
+ * rather than luck: the result is behind a BUTTON, so the markup this compares is the idle one.
  */
 export function proofsOf(rung: Example): Case | null {
     const held = BUILT.get(rung)

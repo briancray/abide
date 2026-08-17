@@ -1,0 +1,20 @@
+<script>
+import { log, state } from 'abide'
+
+// One file, because `log` is the same call on both sides: on a server the lines go to whoever started
+// the process, and here they go to the browser's console. OPEN IT — the console is the result, and the
+// list below is only this page saying what it sent.
+const sent = state<string[]>([])
+const say = (what: string, write: () => void) => (): void => {
+    write()
+    sent = [...sent, what]
+}
+</script>
+
+<!-- The app talking to whoever started it. Always written: an app whose own output needs an env var
+     set to appear is an app nobody reads. -->
+<button onclick={say('log', () => log('listening on 3000'))}>log</button>
+<!-- Never gated, on any channel. A warning an operator cannot turn off is the point of a warning. -->
+<button onclick={say('log.warning', () => log.warning('refused SKU-1: out of stock'))}>warning</button>
+<button onclick={say('log.error', () => log.error('the queue would not drain'))}>error</button>
+<p>sent to the console: {sent.length === 0 ? 'nothing yet' : sent.join(', ')}</p>

@@ -17,9 +17,15 @@
 
      Every rung is rendered rather than described. `rung.view` is a compiled `.abide` component, so
      interpolating what it returns is ordinary content in a slot — which means the preview
-     server-renders with the page instead of waiting for a client to mount it. About half the rungs have
-     no `view`: a lifecycle hook and a config declaration are examples with nothing to show, and there
-     the source IS the example.
+     server-renders with the page instead of waiting for a client to mount it.
+
+     EVERY rung, including the ones whose subject is a server module. Half of them had no preview at
+     all while a rung was one file: a lifecycle hook and an endpoint have nothing to render BY
+     THEMSELVES, and the answer read as "the source is the example" — which is a page telling a reader
+     to imagine the result. A rung that crosses the seam is two files instead, the second being the
+     browser half that calls the first, and the preview is that half mounted. It is driven by a button
+     rather than loaded on sight, because `demos/proofs.ts` renders every view on both substrates and
+     compares them: a preview that fetched while it mounted would be asserting a round trip.
 
      What the repo ASSERTS about the name is not listed here at all. The cases run on `/tests/<suite>`
      and are priced on `/bench/<suite>`, so a title-and-note copy of them on this page was a third view
@@ -29,6 +35,7 @@ import type { Example } from 'harness'
 import { proofsOf } from '../demos/proofs.ts'
 import { type SpellingName, SPELLINGS } from '../demos/SPELLINGS.ts'
 import Code from './code.abide'
+import Files from './files.abide'
 import Proofs from './proofs.abide'
 import type { NavItem } from './sidebar.ts'
 
@@ -112,20 +119,17 @@ const { head, crumb, rungs } = props<{ head: ReferenceHead; crumb: NavItem; rung
                     {#for slug of rung.spells}<a href="/docs/syntax/{slug}" class="link"><code>{spelt(slug)}</code></a> {/for}
                 </p>
             </div>
-            <!-- The RESULT first and the source beside it, which is the order the two columns are sized
-                 in: a rung with no `view` collapses to one column and the source takes the width. -->
-            {#if rung.view}
-                <!-- `?.` for the TYPE, not the runtime: the `{#if}` above has already proved it, but a
-                     slot is its own thunk and the narrowing does not cross into one. -->
-                <div class={PREVIEW}>{rung.view?.({})}</div>
-            {/if}
-            <div class="code-block">
-                <Code source={rung.source}/>
-            </div>
-            <!-- `null` for a rung with nothing to mount — a lifecycle hook, a config declaration —
-                 and the component draws nothing for one, because "the source is the example" is not a
-                 claim to paint a badge on. Branched INSIDE rather than here: `{#if}` does not narrow
-                 into a slot's thunk, so a test here would not give the prop a narrowed type. -->
+            <!-- The RESULT first and the source beside it, which is the order the two columns are
+                 sized in. Unconditional: every rung on either axis renders something now, and
+                 `test/docs.test.ts` is what says so — a rung reachable from a page and carrying no
+                 view fails there rather than drawing an empty box here. -->
+            <div class={PREVIEW}>{rung.view?.({})}</div>
+            <!-- ONE file for a rung that is one file, and TWO where the demonstration crosses the
+                 seam — an endpoint under `server/rpc/**` is the declaration a reader came for AND the
+                 half their browser never receives, so showing it alone documents a call whose spelling
+                 the reader is left to guess. The tabs are named for the LANES, because which lane a
+                 file is in is the whole of what `server/rpc/**` decides. -->
+            <Files server={rung.source} client={rung.client}/>
             <Proofs spec={proofsOf(rung)}/>
         </section>
     {/for}

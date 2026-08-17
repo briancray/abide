@@ -1,0 +1,20 @@
+<script>
+import { outOfRange } from '../../../server/rpc/docs/lifecycle/ask-what-is-listening.ts'
+import { state } from 'abide'
+
+// The endpoint is one rung down — it lives beside `listening`, because a hook needs something that
+// FAILS before it can be shown doing anything. `11` throws a `RangeError` there; `9` does not.
+//
+// What comes back for `11` is a 400 and a sentence, and abide's own answer for an unplanned throw is
+// a 500: the difference is this app's `onError`, which the server half beside this declares.
+const shown = state('nothing asked yet')
+
+const ask = (n: number) => async (): Promise<void> => {
+    const answered = await outOfRange.raw({ n })
+    shown = `${answered.status}\n\n${await answered.text()}`
+}
+</script>
+
+<button onclick={ask(9)}>ask for 9</button>
+<button onclick={ask(11)}>ask for 11</button>
+<pre>{shown}</pre>

@@ -1,0 +1,22 @@
+<script>
+import { readTwice } from '../../../server/rpc/docs/scope/opt-into-one-cache.ts'
+import { state } from 'abide'
+
+const asked = state(false)
+const ask = (): void => {
+    asked = true
+    readTwice({}).invalidate()
+}
+</script>
+
+<!-- The same two buttons and the same two reads as the rung above. What changed is one option, and
+     what it changed is the SECOND PRESS: the number stays where it was, because the request that
+     followed found the cache the last one filled. -->
+<button onclick={ask}>ask the server</button>
+{#if asked}
+    {#if readTwice({}).pending()}
+        <p>asking…</p>
+    {:else}
+        <pre>{JSON.stringify(readTwice({})(), null, 2)}</pre>
+    {/if}
+{/if}

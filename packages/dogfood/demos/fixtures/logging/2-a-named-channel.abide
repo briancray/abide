@@ -1,0 +1,19 @@
+<script>
+import { log, state } from 'abide'
+
+// Prefixed with the app's own name: on an app called `shop` this is `shop:cart`, which is what
+// `DEBUG=shop:cart` — or `DEBUG=shop:*` — turns on. Silent otherwise.
+const cart = log.channel('cart')
+const sent = state(0)
+
+const add = (): void => {
+    cart('added SKU-1 x2')
+    sent++
+}
+</script>
+
+<!-- `enabled()` is the framework's own answer, not this page's: it is false until `DEBUG` names this
+     channel, and the button below writes nothing at all while it is. -->
+<p>this channel is {cart.enabled() ? 'on' : 'off — set DEBUG to turn it on'}</p>
+<button onclick={add}>write a line</button>
+<p>{sent} written{cart.enabled() ? '' : ', and none of them appeared'}</p>

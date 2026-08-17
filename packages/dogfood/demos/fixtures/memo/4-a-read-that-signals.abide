@@ -1,0 +1,36 @@
+<script>
+import { isPending, memo, state } from 'abide'
+
+const user = memo(async ({ id }: { id: number }) => {
+    await new Promise((settle) => setTimeout(settle, 400))
+    if (id < 1) throw new Error('no user by that id')
+    return { id, name: `user ${id}` }
+})
+
+/**
+ * The one predicate an author needs about a read with nothing to serve YET.
+ *
+ * A read that has not landed signals by THROWING, and a JavaScript `catch` is total — so a try/catch
+ * written for the failures catches that signal too, and swallowing it turns "the graph will run this
+ * again" into an error that never clears. `isPending` is how a `catch` hands it back.
+ */
+const nameOrTrouble = (id: number): string => {
+    try {
+        return user({ id })().name
+    } catch (thrown) {
+        if (isPending(thrown)) throw thrown
+        return 'could not load'
+    }
+}
+
+const id = state(0)
+</script>
+
+<!-- Press either one: the first paint after a press is the PENDING arm, because the read signalled and
+     the walk was told to come back. Take the `isPending` line out of the catch above and this box shows
+     "could not load" forever — the signal was swallowed and nothing ever runs the body again. -->
+<button onclick={() => id = 1}>load user 1</button>
+<button onclick={() => id = -1}>load one that fails</button>
+{#if id}
+    {#try}<p>{nameOrTrouble(id)}</p>{:catch}<p>waiting…</p>{/try}
+{/if}

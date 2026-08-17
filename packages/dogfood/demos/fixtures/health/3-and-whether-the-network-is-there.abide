@@ -1,0 +1,10 @@
+<script>
+import { online } from 'abide'
+</script>
+
+<!-- No button, and that is the rung: `online()` is a REACTIVE ambient, so nothing has to ask it. Pull
+     the network out — turn wifi off, or tick "Offline" in the browser's network panel — and this line
+     changes with no caller arriving and no request made.
+
+     `health()` above is what the app says about ITSELF; this is whether anything can reach it to ask. -->
+<p>the network is {online() ? 'there' : 'gone'}</p>

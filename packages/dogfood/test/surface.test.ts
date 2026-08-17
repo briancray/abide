@@ -136,14 +136,17 @@ test('the names SPEC says are absent are absent', () => {
  * whole value of the entry: a bare name would let the list absorb a failure instead of recording one.
  */
 const UNUSED_BY_THE_APP: Record<string, string> = {
+    // The four below are typed by a `/docs` PREVIEW rather than by nothing at all, which is a weaker
+    // gap than it was and still a gap: the scan is `pages`, `server` and `site` because those are the
+    // app being an app, and a rung is the app being a manual. Closing one means a page of this site
+    // reaching for the call for its own sake.
     channel:
-        '`server/sockets/feed.ts` declares two sockets and nothing on the site subscribes to either, ' +
-        'so the receiving half of the second law is demonstrated only by its suite.',
-    health: 'no page shows the app’s own account of whether it is working.',
-    identity: 'the app has no signed-in view; `server/rpc/admin/audit.ts` is the only thing addressed to a principal.',
+        '`server/sockets/feed.ts` declares two sockets and nothing on the site subscribes to either — ' +
+        'only `/docs/socket`’s preview does, which is a demonstration rather than a use.',
+    health: 'no page of the app’s own shows its account of whether it is working; `/docs/health` asks for it.',
     invalidate: 'nothing the app serves is ever dropped as WRONG — no page mutates what another page read.',
     log: 'the app writes nothing to its own channel, so the default channel is exercised by the framework alone.',
-    navigate: 'every link in `pages/layout.abide` is an `<a href>`; nothing here moves from code.',
+    navigate: 'every link in `pages/layout.abide` is an `<a href>`; only `/docs/navigate`’s preview moves from code.',
     online: 'no page reacts to connectivity — there is no offline banner to put behind it.',
     raw:
         'nothing this app serves is markup it did not build — the painted `<pre>` and the source panes ' +

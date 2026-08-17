@@ -103,3 +103,33 @@ export async function onStop(stop: () => Promise<void>): Promise<void> {
 export function onHealth(): unknown {
     return { example: { serving: true } }
 }
+
+// The three hooks below exist so that the `/docs` rungs about them have a RUNNING one to point at.
+// Every rung's preview presses a button against this process, and a hook nothing registered is a rung
+// whose preview would have to describe what would have happened — which is the thing the previews
+// replaced. They are app EXPORTS rather than calls made from a demo module on purpose: one process has
+// one answer to each of these, so a second registration replaces the first, and the boot is the single
+// place that should make it.
+
+/** The middle layer — under the environment, which is what makes it a default rather than a knob. */
+export function onConfig(): Record<string, unknown> {
+    return { DOCS_GREETING: 'hello' }
+}
+
+/** What an unexpected failure means here. `undefined` falls through to abide's own answer. */
+export function onError(thrown: unknown): Response | undefined {
+    if (thrown instanceof RangeError) return new Response('that number is out of range', { status: 400 })
+    return undefined
+}
+
+/**
+ * What the sealed claims MEAN — the cookie carries an id and the principal carries a row.
+ *
+ * Anonymous is left exactly as it was: a caller with no seal reaches here with `null`, and merging
+ * nothing over the floor is how this app says it has nothing to add about somebody it does not know.
+ */
+export function onIdentity(claims: unknown): unknown {
+    const { id } = (claims ?? {}) as { id?: string }
+    if (id === undefined) return {}
+    return { name: `user ${id}`, roles: ['reader'] }
+}

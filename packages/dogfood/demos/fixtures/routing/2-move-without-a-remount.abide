@@ -1,0 +1,25 @@
+<script>
+import { navigate, route, state, url } from 'abide'
+
+// A navigation is a real request the app's own middleware sees — which is why auth on a page is
+// middleware rather than a check a client could skip.
+//
+// TYPE SOMETHING HERE FIRST. The two buttons move to the same route with a different query, and this
+// cell still holds what you typed afterwards: `route()` is four small cells rather than one record, so
+// a move that changes only the query wakes a reader of `params` and leaves this component standing. A
+// remount would have cleared it.
+const note = state('')
+const asked = state(false)
+
+const go = (tab: string) => async (): Promise<void> => {
+    asked = true
+    await navigate(url(`?tab=${tab}`))
+}
+</script>
+
+<input bind:value={note} placeholder="type something, then move"/>
+<button onclick={go('one')}>?tab=one</button>
+<button onclick={go('two')}>?tab=two</button>
+{#if asked}
+    <p>query: <code>{route().url.search}</code> · still typed: <code>{note}</code></p>
+{/if}

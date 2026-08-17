@@ -1,0 +1,23 @@
+<script>
+import { amend, remove, replace } from '../../../server/rpc/docs/transport/the-other-three-verbs.ts'
+import { state } from 'abide'
+
+const answered = state('nothing sent yet')
+
+// One caller for three verbs, which is the rung's whole claim: the argument is the only thing that
+// differs between them here, and the method is the only thing that differs on the wire.
+const put = async (): Promise<void> => {
+    answered = `PUT → ${JSON.stringify(await replace({ id: 1, name: 'ada' }))}`
+}
+const patch = async (): Promise<void> => {
+    answered = `PATCH → ${JSON.stringify(await amend({ id: 1 }))}`
+}
+const del = async (): Promise<void> => {
+    answered = `DELETE → ${JSON.stringify(await remove({ id: 1 }))}`
+}
+</script>
+
+<button onclick={put}>replace</button>
+<button onclick={patch}>amend</button>
+<button onclick={del}>remove</button>
+<p>{answered}</p>

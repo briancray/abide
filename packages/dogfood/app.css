@@ -550,24 +550,57 @@
      CODE MEASURE the way `--measure` is a prose one. `minmax(0, …)` so it still gives way when the
      window is too narrow to honour it, at which point the code scrolls rather than the result
      vanishing; the result never goes below 14rem.
-     `:has()` rather than a modifier class, because a rung with no preview — code with nothing to
-     render — is a real shape in the app, and it should go back to one column on its own. */
-  /* The one column is DECLARED rather than left implicit, and that is the whole of a horizontal
-     scrollbar this page used to grow. An implicit `auto` track takes its minimum from the content, and
-     the content is a `<pre>`: `white-space: pre` makes its min-content the longest LINE, `overflow-x`
-     on the pre does not lower that, and a rung with no preview — the half of the ladder that gets no
-     explicit template — pushed the whole body column to 862px inside a 688px track. Only rungs WITHOUT
-     a preview were affected, which is why it read as two of six rungs being wrong rather than as a
-     layout rule missing. */
-  .rung { display: grid; gap: var(--s-4); grid-template-columns: minmax(0, 1fr); }
-  .rung:has(.rung-preview) { grid-template-columns: minmax(14rem, 1fr) minmax(0, var(--code-measure)); }
-  /* The heading names both columns, so it spans them however many there are. */
+     TWO COLUMNS UNCONDITIONALLY, which it can be now that every rung has a preview. The `:has()` here
+     was the one-column fallback for a rung with nothing to render, and it went with the half of the
+     ladder that had no `view` — see `site/reference.abide`. Keeping it meant an implicit `auto` track
+     in that arm, which is worth recording because it grew a horizontal scrollbar on the whole page: an
+     `auto` track takes its minimum from the content, the content is a `<pre>`, and `white-space: pre`
+     makes a pre's min-content its longest LINE — `overflow-x` on the pre does not lower that. So a
+     viewless rung pushed the body column to 862px inside a 688px track, and only those rungs were
+     affected, which read as two of six rungs being wrong rather than as a track being unstated. */
+  .rung { display: grid; gap: var(--s-4); grid-template-columns: minmax(14rem, 1fr) minmax(0, var(--code-measure)); }
+  /* The heading names both columns, so it spans them. */
   .rung-title { grid-column: 1 / -1; }
   /* The box is stretched to its neighbour's height; its contents stay at the top of it. */
   .rung-preview { align-content: start; }
+  /* The code column is a tab strip and ONE pane — see `site/files.abide` — so it is a grid of its own
+     rather than the bare `.code-block` that used to be the grid item here.
+     `minmax(0, 1fr)` and not the implicit `auto` this reached for first, which is the same horizontal
+     scrollbar the track above was declared to stop and is worth writing down twice: an `auto` track
+     takes its minimum from the item's AUTOMATIC MINIMUM SIZE, and `.code-block`'s is its `<pre>`'s
+     longest line. `minmax(0, …)` states the minimum instead, which is what removes it. Measured at
+     812px of pane inside a 672px column, running off the card and taking the body to 1523 in a 1440
+     window — and only on the rungs with two files, because they are the ones that grew this level. */
+  .files { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; }
+
+  /* The tabs sit ON the pane's top edge: same background, same border, and the bottom border painted
+     out in the pane's own colour, which is what joins the selected one to the box below it. The strip
+     is pulled down a pixel so the two borders are one line rather than two. */
+  .tabs { display: flex; gap: var(--s-1); margin-bottom: -1px; }
+  .tab {
+    font-family: var(--font-display);
+    font-size: var(--text-micro);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    padding: var(--s-1) var(--s-3);
+    color: var(--color-pencil);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+  }
+  .tab:hover { color: var(--color-ink); }
+  .tab[aria-selected="true"] {
+    color: var(--color-ink);
+    background: var(--color-lifted);
+    border-color: var(--color-rule);
+    border-bottom-color: var(--color-lifted);
+  }
+  /* A tabbed pane is square where the strip meets it, for the same reason: two radii there would show
+     the seam the negative margin exists to close. */
+  .tabs + .code-block { border-top-left-radius: 0; border-top-right-radius: 0; }
 
   @media (max-width: 64rem) {
-    .rung:has(.rung-preview) { grid-template-columns: minmax(0, 1fr); }
+    .rung { grid-template-columns: minmax(0, 1fr); }
   }
   .rung-head { display: flex; align-items: baseline; gap: var(--s-3); margin: 0; }
   .rung-number {

@@ -303,6 +303,63 @@ test('every ladder is reachable, and every rung carries the text of a real file'
     }
 })
 
+/**
+ * The one rung on a page that renders NOTHING, and why it is the only one.
+ *
+ * `36-a-prop-the-child-writes-back.abide` declares its prop `State<string>` and REQUIRED: the cell is
+ * the parent's, so there is nothing to mount this component with on its own. Giving it a default would
+ * make the cell this component's own and quietly demonstrate the opposite of what it is about, which is
+ * a worse answer than a page saying the source is the example.
+ *
+ * Keyed by `adds` rather than by an index, so reordering the ladder does not silently move the excuse
+ * to another rung. Asserted in BOTH directions below, which is what makes this a record of a decision
+ * rather than a place to put failures.
+ */
+const UNRENDERABLE = new Set(['a prop declared `State<…>` is the parent’s own cell, so the child writes back'])
+
+test('every rung a reader can reach RENDERS — the source is not the example', () => {
+    // What `/docs` and `/docs/syntax` put on a page is every rung claiming a name or a spelling, and
+    // `site/reference.abide` mounts each one beside its source. Half the ladder used to have no view at
+    // all — an endpoint and a lifecycle hook have nothing to render BY THEMSELVES — and the answer was
+    // a page telling a reader to imagine the result. A rung that crosses the seam is two files now, so
+    // "nothing to render" is not one of the shapes a documented rung comes in.
+    const blank: string[] = []
+    const excused: string[] = []
+    for (const { ladder, at, rung } of RUNGS) {
+        const onAPage = rung.of.length > 0 || (rung.spells?.length ?? 0) > 0
+        if (!onAPage) continue
+        if (UNRENDERABLE.has(rung.adds)) {
+            excused.push(rung.adds)
+            // An excused rung that grew a view is an excuse to delete, not a test to leave green.
+            expect(rung.view, `${ladder} rung ${at + 1} renders now and is still excused`).toBeUndefined()
+            continue
+        }
+        if (rung.view === undefined) blank.push(`${ladder} rung ${at + 1}: ${rung.adds}`)
+    }
+    expect(blank.sort(), 'a rung is on a page with nothing to show').toEqual([])
+    expect(excused.sort(), 'a rung is excused from rendering and is no longer in the repo').toEqual(
+        [...UNRENDERABLE].sort(),
+    )
+})
+
+test('a rung that crosses the seam shows BOTH files', () => {
+    // `client` is the browser half of a rung whose `source` is a server module, and the page labels the
+    // two panes with the lanes. Two ways it can go wrong that nothing else here would catch: a half that
+    // resolved to nothing, and a half that is the same text as the other — which would be one file shown
+    // twice under two labels, saying the seam is crossed where it is not.
+    const wrong: string[] = []
+    for (const { ladder, at, rung } of RUNGS) {
+        if (rung.client === undefined) continue
+        const where = `${ladder} rung ${at + 1}`
+        if (rung.client.length < 40) wrong.push(`${where}: the browser half is empty`)
+        if (rung.client === rung.source) wrong.push(`${where}: both panes are the same file`)
+        // A second file is what the preview was compiled from, so a rung carrying one and rendering
+        // nothing is a pane with no reason to be there.
+        if (rung.view === undefined) wrong.push(`${where}: two files and nothing to show`)
+    }
+    expect(wrong.sort(), 'a two-pane rung that is not two files').toEqual([])
+})
+
 test('a rung introduces ONE thing — no two rungs are the same file, or the same claim', () => {
     // Two failures this rules out. A copy-paste, where one file is shown twice and a reader compares it
     // with itself; and a duplicated `adds`, which means the ladder claims to introduce something twice

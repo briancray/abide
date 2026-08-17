@@ -1,0 +1,22 @@
+<script>
+import { listening } from '../../../server/rpc/docs/lifecycle/ask-what-is-listening.ts'
+import { state } from 'abide'
+
+// A rung sees the response coming BACK, so what shows it is a header — and a header means the raw
+// response rather than a decoded value.
+//
+// `x-dogfood` is on this one because `packages/dogfood/app.ts` exports a `middleware` array declaring
+// exactly the rung beside this. Every response this app sends carries it, including the document this
+// page arrived in.
+const headers = state('nothing asked yet')
+
+const ask = async (): Promise<void> => {
+    const answered = await listening.raw({})
+    const seen: string[] = []
+    for (const [name, value] of answered.headers) seen.push(`${name}: ${value}`)
+    headers = seen.join('\n')
+}
+</script>
+
+<button onclick={ask}>read what came back</button>
+<pre>{headers}</pre>

@@ -1,0 +1,20 @@
+<script>
+import { rename } from '../../../server/rpc/docs/transport/a-mutation.ts'
+import { state } from 'abide'
+
+const who = state('ada')
+// A mutation is AWAITED rather than read: it retains nothing, so there is no slot to subscribe to and
+// what came back is kept here instead.
+const answered = state('nothing sent yet')
+
+const send = async (): Promise<void> => {
+    const done = await rename({ id: 1, name: who })
+    answered = `${done.name} — call ${done.ran}`
+}
+</script>
+
+<input bind:value={who}/>
+<!-- Press it twice: the number goes up both times, where a `GET` with the same arguments would have
+     answered the second from its slot without asking. -->
+<button onclick={send}>rename</button>
+<p>{answered}</p>

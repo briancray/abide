@@ -225,7 +225,27 @@ export interface Example {
      */
     spells?: readonly string[]
     source: string
-    /** A compiled `.abide` default export, which is exactly this signature. */
+    /**
+     * The BROWSER half, when `source` is a server module — the file `view` below was compiled from.
+     *
+     * A rung that spans the seam is TWO files and always was; what changed is that the page now shows
+     * both. An endpoint under `server/rpc/**` is the declaration a reader came for, and it is also the
+     * half a browser never receives, so a page showing it alone documents a call nobody can make: the
+     * reader is left to guess the spelling of the call site, which is the part they were about to write.
+     *
+     * ABSENT on the rungs whose demonstration IS `source` — a `.abide` file is one file in both lanes,
+     * and repeating its text under a second label would claim a seam it does not cross.
+     */
+    client?: string
+    /**
+     * A compiled `.abide` default export, which is exactly this signature.
+     *
+     * Present on every rung that has anything to SHOW, which since the seam-crossing ladders grew a
+     * browser half is every rung on `/docs`. A view whose result comes from the server is driven by a
+     * button rather than loaded on sight, and that is not decoration: `demos/proofs.ts` renders each
+     * view on both substrates and compares them, so a rung that fetched while it mounted would be
+     * asserting a round trip inside `bun test`. Idle before the click, both arms write the same markup.
+     */
     view?: (args: { children?: unknown }) => TemplateResult
 }
 

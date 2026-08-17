@@ -9,9 +9,72 @@
 // without anybody remembering to add it. That file is plain TypeScript whose ladders are `import()`
 // thunks, which is why a playwright process can read it without pulling one rung.
 
-import { expect, interactive, test } from 'harness/e2e'
+import { expect, interactive, type Page, test } from 'harness/e2e'
 import { CALLABLE_ORDER, CALLABLES, SPECIFIERS } from '../demos/CALLABLES.ts'
 import { SPELLING_ORDER, SPELLINGS } from '../demos/SPELLINGS.ts'
+
+/**
+ * Every rung's SOURCE is on the page, painted, not blank, and not running off the card.
+ *
+ * Blank is one failure worth catching: the text arrives through `?source`, so a loader change turns
+ * every example into an empty frame while every other assertion in the repo still passes.
+ *
+ * ONE PANE per rung, always — a rung that crosses the seam is two files behind a TAB STRIP, so the
+ * second is a click rather than a second `<pre>`. The tabs are pressed here rather than assumed: a
+ * strip that renders and does not switch is markup with nothing behind it, which is the whole reason
+ * this file drives a real browser. Both halves are asserted non-empty and DIFFERENT, because a strip
+ * showing one file under two labels would satisfy every other check in the repo.
+ *
+ * The selector is scoped to `.files`. It was `[data-rung] pre`, which also matched the `<pre>` a
+ * PREVIEW renders its answer into — so the loose selector and a one-per-rung count failed together,
+ * and fixing either alone would have left a check that reads as though it still guarded something.
+ */
+async function sourcesAreOnThePage(page: Page, name: string, rungs: number): Promise<void> {
+    // The SYMPTOM, once per page and above the per-rung checks: a reference page never scrolls
+    // sideways. Whatever grows past the window — a pane, a table, a preview somebody writes next year —
+    // is caught here whether or not the check below happens to be looking at it.
+    const spill = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+    expect(spill, `${name} scrolls sideways by ${spill}px`).toBeLessThan(2)
+
+    for (let at = 0; at < rungs; at++) {
+        const where = `${name} rung ${at + 1}`
+        const rung = page.locator(`[data-rung="${at + 1}"]`)
+        const pane = rung.locator('.files pre')
+        expect(await pane.count(), `${where} does not show exactly one source pane`).toBe(1)
+        const server = (await pane.innerText()).trim()
+        expect(server.length, `${where} shows an empty pane`).toBeGreaterThan(20)
+
+        // Contained rather than overflowing: the pane scrolls its own long lines instead of growing to
+        // them. Asserted between the PANE and the box that holds it, which is where the failure was —
+        // an 812px pane inside a 672px column, running off the card and taking the document to 1523 in
+        // a 1440 window. Checked against the rung instead, `.files` itself fitted and the check passed
+        // with the bug in: the first version of this assertion was green against a page it should have
+        // failed, which is the whole reason the fix is reverted and re-run rather than eyeballed.
+        const fits = await rung.evaluate((el) => {
+            const box = el.querySelector('.files')
+            const pane = box?.querySelector('.code-block')
+            if (box === null || box === undefined || pane === null || pane === undefined) return true
+            return pane.getBoundingClientRect().right <= box.getBoundingClientRect().right + 1
+        })
+        expect(fits, `${where}: the source pane runs past the column that holds it`).toBe(true)
+
+        // A tab strip is two tabs or no strip at all. One tab is chrome that says nothing, and three
+        // means a rung grew a file the page has no vocabulary for.
+        const tabs = rung.locator('.tab')
+        const count = await tabs.count()
+        expect([0, 2], `${where} has ${count} tabs`).toContain(count)
+        if (count === 0) continue
+
+        await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+        await tabs.nth(1).click()
+        await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true')
+        expect(await pane.count(), `${where} shows both files at once after a tab press`).toBe(1)
+        const client = (await pane.innerText()).trim()
+        expect(client.length, `${where} shows an empty client half`).toBeGreaterThan(20)
+        expect(client === server, `${where} shows one file under both tabs`).toBe(false)
+        await tabs.nth(0).click()
+    }
+}
 
 test('/docs indexes the whole surface', async ({ page, complaints }) => {
     await page.goto('/docs')
@@ -44,15 +107,7 @@ for (const name of CALLABLE_ORDER) {
         await expect(rungs.first()).toBeVisible()
         const count = await rungs.count()
 
-        // Each rung's SOURCE is on the page, painted. An empty `<pre>` is the failure this catches: the
-        // text arrives through `?source`, so a loader change turns every example into a blank frame while
-        // every other assertion in the repo still passes.
-        const panes = page.locator('[data-rung] pre')
-        expect(await panes.count(), `${name} shows no source`).toBe(count)
-        for (let at = 0; at < count; at++) {
-            const text = (await panes.nth(at).innerText()).trim()
-            expect(text.length, `${name} rung ${at + 1} shows an empty pane`).toBeGreaterThan(20)
-        }
+        await sourcesAreOnThePage(page, name, count)
 
         // What is KNOWN about each rung, which the page proves live — see `demos/proofs.ts`. This is
         // where the per-rung sweep lives rather than under `bun test`: a page loads only the ladders
@@ -108,12 +163,7 @@ for (const slug of SPELLING_ORDER) {
         await expect(rungs.first()).toBeVisible()
         const count = await rungs.count()
 
-        const panes = page.locator('[data-rung] pre')
-        expect(await panes.count(), `${slug} shows no source`).toBe(count)
-        for (let at = 0; at < count; at++) {
-            const text = (await panes.nth(at).innerText()).trim()
-            expect(text.length, `${slug} rung ${at + 1} shows an empty pane`).toBeGreaterThan(20)
-        }
+        await sourcesAreOnThePage(page, slug, count)
 
         // The same per-rung sweep the callable pages get — see `demos/proofs.ts`. It matters more here:
         // this axis is where the template rungs live, so every mountable example in the language is
