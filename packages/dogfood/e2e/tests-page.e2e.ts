@@ -10,6 +10,7 @@
 
 import { expect, interactive, test } from 'harness/e2e'
 import { ORDER } from '../demos/SUITES.ts'
+import { sweepStatuses } from './internal/drive.ts'
 
 // Every suite, not one of them. This ran against `/tests/state` alone for as long as it existed, and a
 // case can only be measuring the EMULATOR while `bun test` is the only thing that runs it: `splitText`
@@ -33,29 +34,18 @@ test('no case on any suite page is red in a browser', async ({ page }) => {
     for (const name of CAPABILITIES) {
         await page.goto(`/tests/${name}`)
 
-        const rows = page.locator('[data-case]')
-        const count = await rows.count()
-        expect(count, `${name} has no rows`).toBeGreaterThan(0)
-
-        // The queue runs them ONE AT A TIME, so the last row is the one that settles last — waiting
-        // for it is waiting for all of them.
-        //
-        // A REGEX, and case-insensitively, because the badge is uppercased in CSS: `toHaveText` with a
-        // string is exact and case-sensitive, so `not.toHaveText('waiting')` was already true of a row
-        // reading `WAITING` and this line waited for nothing at all. The columns below were read off a
-        // suite still running, which is a gate that cannot see a case that fails late.
-        const statuses = page.locator('[data-case] summary span:last-child')
-        await expect(statuses.nth(count - 1)).not.toHaveText(/^waiting$/i, { timeout: 120_000 })
+        // Both columns and the settle-wait in one helper — see `sweepStatuses`, which carries why the
+        // wait is a case-insensitive regex over `waiting|running` and why the status is read off the
+        // ROW. This sweep is twenty suite drains long, hence the budget above.
+        const swept = await sweepStatuses(page, '[data-case]', 'summary span:last-child', 120_000)
+        expect(swept.length, `${name} has no rows`).toBeGreaterThan(0)
 
         // `failed` is the status a thrown assertion writes, and it is the only one that means this
-        // repo is broken rather than merely interactive. Both columns in ONE round trip each rather
-        // than one per row: twenty suites of twenty cases is 800 crossings read the other way.
-        const [written, titles] = await Promise.all([
-            statuses.allInnerTexts(),
-            rows.evaluateAll((all) => all.map((one) => one.getAttribute('data-case'))),
-        ])
-        for (let at = 0; at < written.length; at++) {
-            if (written[at]?.trim().toLowerCase() === 'failed') red.push(`${name}: ${titles[at]}`)
+        // repo is broken rather than merely interactive. A row read as `null` is collected too: the
+        // selector missing is indistinguishable from a clean sweep otherwise, and a gate that cannot
+        // tell those apart is the fake one this file has already been twice.
+        for (const { label, status } of swept) {
+            if (status === 'failed' || status === null) red.push(`${name}: ${label} is ${status}`)
         }
     }
     expect(red, 'cases red in a browser and green under `bun test`').toEqual([])

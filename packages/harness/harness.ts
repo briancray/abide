@@ -31,10 +31,11 @@
 // imports neither, and the numbers live there for that reason. `harness/spawn` is the third, and is
 // bun-only.
 
-// `isPending` is public surface for exactly this: any code that catches around a reactive read has to
-// be able to tell a not-ready-yet SIGNAL from a failure and pass it on, and a JavaScript catch is
-// total. `watch` because a recording reader IS an effect.
-import { isPending, type TemplateResult, watch } from 'abide'
+// `watch` because a recording reader IS an effect.
+import { type TemplateResult, watch } from 'abide'
+// `swallowed` for that reader: it ACTS on each observation rather than returning one, so the run
+// boundary that discards a swallowed signal's value comes too late — the push already happened.
+import { swallowed } from 'abide/runtime'
 // `abide/ui` for `scratch` below, and it costs this entry point nothing on a server: the entry's two
 // installs are guarded, so importing it where there is no document is a no-op rather than a throw.
 import { mount, type Mounted } from 'abide/ui'
@@ -438,12 +439,19 @@ export function reader<T>(read: () => T): Reader {
     const seen: string[] = []
     const dispose = watch(() => {
         try {
-            seen.push(show(read()))
-        } catch (error) {
+            const value = read()
             // A read with nothing to serve YET is not an observation — the body did not finish and
-            // the graph will run it again. Passed through, so this recorder never counts a pass the
-            // reader never had. Any try/catch standing between a slot and a read owes the same.
-            if (isPending(error)) throw error
+            // the graph will run it again. Asked BEFORE the push rather than in the catch below,
+            // because `read` may swallow its own signal and hand back a value it never had: the
+            // boundary discards that value, but a recorder that pushed it has already counted a pass
+            // the reader never made.
+            if (swallowed()) return
+            seen.push(show(value))
+        } catch (error) {
+            // The same question on the arm where the signal reached this catch instead — it is the
+            // read's own throw, so `outstanding` is set here too, and one predicate covers both ways
+            // in. Handed back, because the graph runs this body again when the load lands.
+            if (swallowed()) throw error
             seen.push(`THROW ${(error as Error).message}`)
         }
     })

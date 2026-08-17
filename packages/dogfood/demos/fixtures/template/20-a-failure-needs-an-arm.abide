@@ -26,7 +26,12 @@ const record = state<string>(
      `{:else}` falls into the READ — and a read throws the failure it was called to report. The region
      is then empty and the reason is a console throw, never markup. `{:else if record.error()}` is what
      asks. `{#try}` cannot stand in: that boundary is synchronous, and this failure arrives from a
-     settle. -->
+     settle.
+
+     The arm is what puts the failure in MARKUP; the console gets it either way. Both arms are READS —
+     this one asks, and the `{:else}` above reads the value and has the failure thrown at it — and a
+     read of a failed load is written to `abide:load` once, with the error itself beside the line so
+     its stack is there to open. -->
 {#if record.pending()}
     <p>loading {name}…</p>
 {:else if record.error()}

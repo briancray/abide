@@ -105,12 +105,6 @@ export const CALLABLES = {
         blurb: 'It may be STALE: keep serving what is held and re-run the body now. Needs a body, so plain `state` has none.',
         ladders: ['verbs'],
     },
-    isPending: {
-        name: 'isPending',
-        from: 'abide',
-        blurb: 'The one predicate about the signal — for handing it back when your own `catch` swallowed it.',
-        ladders: ['memo'],
-    },
     raw: {
         name: 'raw',
         from: 'abide',
@@ -383,7 +377,6 @@ export const CALLABLE_ORDER: CallableName[] = [
     'watch',
     'invalidate',
     'refresh',
-    'isPending',
     'raw',
     'props',
     'route',

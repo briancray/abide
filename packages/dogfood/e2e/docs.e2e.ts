@@ -12,6 +12,7 @@
 import { expect, interactive, type Page, test } from 'harness/e2e'
 import { CALLABLE_ORDER, CALLABLES, SPECIFIERS } from '../demos/CALLABLES.ts'
 import { SPELLING_ORDER, SPELLINGS } from '../demos/SPELLINGS.ts'
+import { type Swept, sweepStatuses } from './internal/drive.ts'
 
 /**
  * Every rung's SOURCE is on the page, painted, not blank, and not running off the card.
@@ -76,6 +77,27 @@ async function sourcesAreOnThePage(page: Page, name: string, rungs: number): Pro
     }
 }
 
+/**
+ * Every rung's proofs, run in this browser and TERMINAL — see `demos/proofs.ts`.
+ *
+ * Here rather than under `bun test`: a page loads only the ladders its own name is in, so each rung is
+ * mounted once and nothing else in the process holds an opinion about the module-level cells inside it.
+ *
+ * `passing` and not merely "settled", which is what makes this the check on `sweepStatuses`' own
+ * assumption that the last badge settling is all of them settling — a rung left `running` is not
+ * `passing`, so a queue that stalled mid-ladder is red here rather than invisible.
+ */
+async function proofsHold(page: Page, name: string): Promise<void> {
+    const swept = await sweepStatuses(page, '[data-rung]', '.proofs summary .badge', 30_000)
+    const red: string[] = []
+    for (let at = 0; at < swept.length; at++) {
+        const { label, status } = swept[at] as Swept
+        // A rung with no `view` renders no proofs, which is a rung with nothing to disagree about.
+        if (status !== null && status !== 'passing') red.push(`${name} rung ${at + 1} (${label}) is ${status}`)
+    }
+    expect(red, 'a documented example the two substrates disagree about').toEqual([])
+}
+
 test('/docs indexes the whole surface', async ({ page, complaints }) => {
     await page.goto('/docs')
 
@@ -88,7 +110,7 @@ test('/docs indexes the whole surface', async ({ page, complaints }) => {
     const groups = page.locator('[data-specifier]')
     expect(await groups.count(), '/docs lost an entry point').toBe(SPECIFIERS.length)
 
-    expect(complaints.errors, '/docs logged errors').toEqual([])
+    expect(complaints.unexpected(), '/docs logged errors').toEqual([])
 })
 
 for (const name of CALLABLE_ORDER) {
@@ -109,32 +131,13 @@ for (const name of CALLABLE_ORDER) {
 
         await sourcesAreOnThePage(page, name, count)
 
-        // What is KNOWN about each rung, which the page proves live — see `demos/proofs.ts`. This is
-        // where the per-rung sweep lives rather than under `bun test`: a page loads only the ladders
-        // its own callable is in, so each rung is mounted once and nothing else in the process holds
-        // an opinion about the module-level cells inside it.
-        //
-        // Waited for rather than read: the proofs are queued when their pane lands and run one at a
-        // time, so the last badge settling is all of them settling.
-        const badges = page.locator('[data-rung] .proofs .badge')
-        const proven = await badges.count()
-        if (proven > 0) {
-            await expect(badges.nth(proven - 1)).not.toHaveText('waiting', { timeout: 30_000 })
-            // `allInnerTexts` in one crossing rather than one per rung, and every red collected so
-            // that one broken rung cannot hide the next on the same page.
-            const written = await badges.allInnerTexts()
-            const red: string[] = []
-            for (let at = 0; at < written.length; at++) {
-                if (written[at]?.trim().toLowerCase() === 'failed') red.push(`${name} rung ${at + 1}`)
-            }
-            expect(red, 'a documented example the two substrates disagree about').toEqual([])
-        }
+        await proofsHold(page, name)
 
         // Stated here as well as in the fixture's teardown, and not only to satisfy a linter: a fixture
         // has to be REQUESTED to be active, so a page whose console nobody destructured is a page nobody
         // is listening to. Written at the call site, the claim is visible in the test rather than in the
         // harness. Hydration warnings are deliberately somebody else's file — see `hydration.e2e.ts`.
-        expect(complaints.errors, `${name} logged errors`).toEqual([])
+        expect(complaints.unexpected(), `${name} logged errors`).toEqual([])
     })
 }
 
@@ -143,11 +146,19 @@ test('/docs/syntax indexes the whole language', async ({ page, complaints }) => 
 
     const cards = page.locator('[data-spelling]')
     expect(await cards.count(), '/docs/syntax does not list every spelling').toBe(SPELLING_ORDER.length)
-    expect(complaints.errors, '/docs/syntax logged errors').toEqual([])
+    expect(complaints.unexpected(), '/docs/syntax logged errors').toEqual([])
 })
 
 for (const slug of SPELLING_ORDER) {
     test(`/docs/syntax/${slug} renders its ladder`, async ({ page, complaints }) => {
+        // The one failure this axis DEMONSTRATES, and on the ONE page that demonstrates it: `{#if}`'s
+        // ladder carries the rung whose load refuses on purpose, so its failure arm has something real
+        // to report — and a read of a failed load is written to `abide:load`, which is the behaviour
+        // that rung is teaching. Declared by the rung's own reason rather than by muting the channel,
+        // so any OTHER load failing here is still a failure; and named for `if` alone rather than for
+        // all fifteen, because `expected` REQUIRES the line, so the fourteen that never log it would be
+        // red — which is the property that makes this a claim about the page and not a hole in the gate.
+        if (slug === 'if') complaints.expected('a load failed: no such row')
         await page.goto(`/docs/syntax/${slug}`)
 
         // The heading is the SPELLING as it is typed — `{#for}`, not `for` — because that is what a
@@ -165,22 +176,13 @@ for (const slug of SPELLING_ORDER) {
 
         await sourcesAreOnThePage(page, slug, count)
 
-        // The same per-rung sweep the callable pages get — see `demos/proofs.ts`. It matters more here:
-        // this axis is where the template rungs live, so every mountable example in the language is
-        // built, server-rendered and hydrated over on one of these fifteen pages.
-        const badges = page.locator('[data-rung] .proofs .badge')
-        const proven = await badges.count()
-        if (proven > 0) {
-            await expect(badges.nth(proven - 1)).not.toHaveText('waiting', { timeout: 30_000 })
-            const written = await badges.allInnerTexts()
-            const red: string[] = []
-            for (let at = 0; at < written.length; at++) {
-                if (written[at]?.trim().toLowerCase() === 'failed') red.push(`${slug} rung ${at + 1}`)
-            }
-            expect(red, 'a documented example the two substrates disagree about').toEqual([])
-        }
+        // The same per-rung sweep the callable pages get. It matters more here: this axis is where the
+        // template rungs live, so every mountable example in the language is built, server-rendered
+        // and hydrated over on one of these fifteen pages — including the one that streams, which is
+        // the rung the sweep was silently sampling mid-run.
+        await proofsHold(page, slug)
 
-        expect(complaints.errors, `${slug} logged errors`).toEqual([])
+        expect(complaints.unexpected(), `${slug} logged errors`).toEqual([])
     })
 }
 

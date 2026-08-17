@@ -1234,6 +1234,58 @@ export default suite({
         },
 
         {
+            title: 'a total `catch` around a pending read cannot commit what it built',
+            note:
+                'The reason nothing about the signal is on `abide`. A read with nothing to serve throws, a ' +
+                'JavaScript catch is TOTAL, so an author’s try/catch swallows it — and the value that catch ' +
+                'returns is still discarded, because the read RECORDS the signal and the run boundary ' +
+                're-throws from the record rather than from what reached it. Reverting `Node.run`’s ' +
+                '`if (outstanding !== null) throw outstanding` puts the fallback in front of a reader on ' +
+                'every arm below.',
+            async run({ is }) {
+                const id = state(1)
+                const user = memo(async ({ n }: { n: number }) => {
+                    await sleep(20)
+                    if (n < 0) throw new Error('no user by that id')
+                    return `user ${n}`
+                })
+                // Written the way an author would who never heard of the signal: catch everything,
+                // return something to show. The fallback is what this case is watching for.
+                const nameOrTrouble = (n: number): string => {
+                    try {
+                        return user({ n })()
+                    } catch {
+                        return 'could not load'
+                    }
+                }
+
+                // A DERIVATION over it — the boundary is `Node.run`'s.
+                const label = memo(() => nameOrTrouble(id()))
+                const derived = reader(() => label())
+                await until(() => derived.seen.length > 0, 'the load to land')
+                is('a derivation never serves the fallback', derived.seen, ['user 1'])
+                derived.dispose()
+
+                // The same helper read STRAIGHT from an effect, so the swallow happens in the effect's
+                // own body rather than one derivation down.
+                id.set(2)
+                const direct = reader(() => nameOrTrouble(id()))
+                await until(() => direct.seen.length > 0, 'the second load to land')
+                is('…and neither does a watch body', direct.seen, ['user 2'])
+                direct.dispose()
+
+                // The arm that keeps the catch honest: a REJECTED load is not a signal, so the same
+                // catch does the job it was written for. Without this the case would pass against an
+                // implementation that simply never ran the catch.
+                id.set(-1)
+                const failing = reader(() => nameOrTrouble(id()))
+                await until(() => failing.seen.length > 0, 'the failing load to settle')
+                is('a real failure still reaches the catch', failing.seen, ['could not load'])
+                failing.dispose()
+            },
+        },
+
+        {
             title: 'the documented example runs',
             note: 'What `/docs/memo` shows and mounts, mounted here and asserted — including the half a reader would not think to check: the load form’s `pending()` region resolves to the list, on its own, with nothing in the markup awaiting anything.',
             async run({ is }) {

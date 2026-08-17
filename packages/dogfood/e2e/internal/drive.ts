@@ -75,3 +75,54 @@ export async function clickControl(page: Page, id: string, lands: string): Promi
     await settle(page)
     expect(new URL(page.url()).pathname).toBe(lands)
 }
+
+/**
+ * A status this sweep has NO ANSWER about, which is the trap all three callers had separately.
+ *
+ * `toHaveText` with a plain string is exact and case-SENSITIVE, and the badge is uppercased by a CSS
+ * rule — so `not.toHaveText('waiting')` was already true of a row reading `WAITING` and waited for
+ * nothing at all. `running` belongs here for the same reason `waiting` does, which the first repair
+ * missed twice: a case that outlives the page leaves the last row mid-run, and the columns were then
+ * read off a suite still going. Every other status is terminal.
+ */
+const UNDECIDED = /^(waiting|running)$/i
+
+/** One row of a suite page or a ladder: what it is called, and what its badge settled on. */
+export interface Swept {
+    /** `data-case` or `data-rung`, in document order. */
+    label: string | null
+    /** The badge, lowercased and trimmed — `null` for a row that renders none. */
+    status: string | null
+}
+
+/**
+ * Every row's status on the page in front of you, once the last of them has settled.
+ *
+ * ONE copy of a sweep three specs were each carrying, because each copy also carried the two traps in
+ * `UNDECIDED` and this diff is the second time they were fixed one file at a time.
+ *
+ * The queue runs one case at a time in mount order, so the LAST badge settling is all of them settling.
+ * That is an assumption rather than a guarantee, and returning every row is what lets the caller CHECK
+ * it — a row still `running` is not `passing`, so requiring the status is what holds the queue honest.
+ *
+ * Read off the ROW rather than off a flat badge list, which is the other bug this closes: a row with no
+ * badge and a row carrying a second one inside a source pane both make a badge's INDEX stop being its
+ * row's number, and the message that reported `/docs` red named "rung 7" of a four-rung ladder. Two
+ * crossings total — a count, then one `evaluateAll` for both columns.
+ */
+export async function sweepStatuses(page: Page, row: string, badge: string, timeout: number): Promise<Swept[]> {
+    const rows = page.locator(row)
+    const count = await rows.count()
+    if (count === 0) return []
+
+    await expect(page.locator(`${row} ${badge}`).last()).not.toHaveText(UNDECIDED, { timeout })
+
+    return rows.evaluateAll(
+        (nodes, inner) =>
+            nodes.map((node) => ({
+                label: node.getAttribute('data-case') ?? node.getAttribute('data-rung'),
+                status: node.querySelector(inner)?.textContent?.trim().toLowerCase() ?? null,
+            })),
+        badge,
+    )
+}

@@ -21,18 +21,24 @@ yet", so every caller has to handle a state the framework could have handled.
 the graph wakes it.
 
 An author's own `try`/`catch` between a slot and a read catches that sentinel too — a JavaScript
-`catch` is total — and swallowing it turns "the graph will run this again" into an error message that
-never clears. `isPending(error)` on `abide` is the one thing to ask, and re-throwing is the only
-correct answer:
+`catch` is total — and **nothing is owed for it**. The read RECORDS the signal as it raises it, and the
+run boundary re-throws from that record rather than from whatever reached it, so a total `catch` cannot
+commit the value it built:
 
 ```ts
 try {
     return render(source())
-} catch (error) {
-    if (isPending(error)) throw error
-    return `could not load — ${String(error)}`
+} catch {
+    // Built and then discarded while the load is still in flight: the region waits and repaints on
+    // the wake. Reached for real only once the load has FAILED.
+    return `could not load`
 }
 ```
+
+Nothing about the signal is on `abide`. The one shape that has to ask is a body that ACTS mid-run
+instead of returning one — a slot binder, a recording reader — because it has already acted by the time
+the boundary discards anything; that asks `swallowed()` on `abide/runtime`, which is a question about
+the run rather than a classification of a caught value.
 
 That is one rule with two mechanisms, which is what the substrate split is for:
 

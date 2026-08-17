@@ -69,6 +69,15 @@ export {
     type View,
     type ViewModule,
 } from './router.ts'
+// Did a read in the body running right now signal, and get caught on the way out?
+//
+// The one thing about the signal that is surface, and it is a question about the RUN rather than a
+// predicate over a caught value. A body that RETURNS needs neither: the boundary re-throws from the
+// slot this reads, so whatever a total `catch` built is discarded. A body that ACTS — the slot binder
+// in `$ui/internal/parts.ts`, the harness's recording reader — has already done the acting by then,
+// and this is what it asks before it does. `isPending` and `Pending` are on no entry point: reading
+// the run is strictly wider, since an async body's signal becomes a rejection and reaches no `catch`.
+export { swallowed } from './internal/graph.ts'
 // What the compiler writes for a `watch` in a `<script module>` — one effect per caller, kicked by
 // the setup of the component that declared it. Emitter-only, which is why it is here and not on `abide`.
 export { scopedEffect } from './reactive.ts'

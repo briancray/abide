@@ -463,16 +463,16 @@ export function respond<Args, T>(
     const watching = rpcLog.enabled()
     const started = watching ? performance.now() : 0
     const handle = rpc(args)
-    try {
-        // The read is what starts the work. A handler that yields hands the cell an async iterable
-        // in this call, so `streaming` is already true by the time the next line asks.
-        handle()
-    } catch {
-        // A retained failure. Asked about below, where it becomes a status rather than a throw.
-    }
-    // QUIETLY: a probe kicks the load, and `handle()` above already started it — on a mutation slot,
-    // stale by design, the second kick ran the handler again. This asks in order to ROUTE.
-    if (internals.quietly(() => handle.streaming() || handle.chunks().length > 0)) {
+    // The PROBE is what starts the work — a probe kicks, and a handler that yields hands the cell its
+    // async iterable in that same call, so `streaming` is true by the time this read returns. Reading
+    // the VALUE first was the older shape and it cost two things: the read throws a retained failure,
+    // so it needed a `try`/`catch` that discarded it; and it is a read of a cell on abide's behalf, so
+    // it needed `abide:load` suppressed around it or a declared `error.typed` answered here wrote a
+    // stack for an outcome already reported below with its name and status.
+    //
+    // `chunks()` stays QUIET beside it: one kick is what starts the handler, and a second on a mutation
+    // slot — stale by design, so every ask runs it — ran the handler again.
+    if (handle.streaming() || internals.quietly(() => handle.chunks().length > 0)) {
         // Time to the FIRST response rather than to the last chunk: the body is still being produced
         // when this returns, and a duration covering work that has not happened is a number that
         // means nothing. What the line reports is that the call became a stream and how fast.

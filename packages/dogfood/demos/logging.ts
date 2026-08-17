@@ -17,7 +17,7 @@
 // on every line is out of reach for the same reason — a card's lines carry none — so the
 // `abide:request` case below claims the fields that are the same in both lanes and nothing else.
 
-import { log } from 'abide'
+import { log, state } from 'abide'
 import { error, GET, json, type LogRecord, socket } from 'abide/server'
 import { handle, register } from 'abide/server/internal'
 import { loopback, sleep, suite, until } from 'harness'
@@ -407,6 +407,12 @@ export default suite({
                     await getUser.raw({ id: 7 })
                 })
 
+                // FOUR, counting every line the console got rather than this channel's. `missing`
+                // answers a declared `error.typed`, which settles a cell as a refused load does — and
+                // the silence here is the claim: nothing abide runs for an rpc READS that cell, so
+                // `abide:load` has nothing to say and the outcome is reported once, below, with its
+                // name and status. Reporting a failed load from the SETTLE instead put a second
+                // ungated stack against this line, which is how that placement was caught.
                 is('four calls, four lines', written.length, 4)
                 is('on abide’s own channel', channelOf(written[0]), 'abide:rpc')
                 is('the address and the outcome', textOf(written[0]).includes('demo/log/getUser ok'), true)
@@ -427,6 +433,70 @@ export default suite({
                 )
 
                 await setDebug(undefined)
+            },
+        },
+
+        {
+            title: 'abide:load — a failure the template touched, however it touched it',
+            note:
+                'THE READ IS WHAT REPORTS, not the settle. Both arms of a failed load are a read: the one that ASKS, ' +
+                '`{:else if x.error()}`, and the one that does not and reads the value instead, which gets the failure ' +
+                'thrown at it. Reporting from the settle cannot tell either of them from an rpc handler answering a ' +
+                'declared `error.typed` — the same event down there — so it wrote a stack for every modelled failure a ' +
+                'server answered, already on `abide:rpc` with its outcome. Nothing an app renders reads that cell, and ' +
+                'that is the whole line: an `await` is not a read either, so a caller that catches its own rejection is ' +
+                'not told about it twice. Nor is a `for await`, which reads the same cell through the same two probes ' +
+                'as MACHINERY — it subscribes in order to wake and asks in order to throw at its own consumer, and it ' +
+                'was reporting a stack alongside that throw until the reads were scoped. Said ONCE per reason however ' +
+                'many times the arm re-runs, and the reason goes to the console as the object — `String(err)` is ' +
+                '`name: message`, and a stack survives only as itself.',
+            async run({ is, throws, rejects }) {
+                // A TIMER, not `Promise.reject`. An already-rejected promise settles on the microtask
+                // `adopt` queues, which is ahead of the one an `await` needs to register as a waiter —
+                // so the awaited arm below would land un-awaited and this case would pass while
+                // claiming the opposite of what it tests.
+                const refusing = (reason: Error): Promise<string> =>
+                    new Promise((_, refuse) => setTimeout(() => refuse(reason), 5))
+
+                const askedFor = new Error('the arm asked')
+                const readInstead = new Error('the arm read')
+                const captured = await capture(async () => {
+                    const answered = state<string>(refusing(askedFor))
+                    await until(() => answered.settled())
+                    // Twice, which is what a re-render is.
+                    is('the ask hands the reason back', answered.error(), askedFor)
+                    answered.error()
+
+                    const bare = state<string>(refusing(readInstead))
+                    await until(() => bare.settled())
+                    throws('the read throws it instead', () => bare(), 'the arm read')
+
+                    const caught = state<string>(refusing(new Error('only awaited')))
+                    await rejects('an await is not a read', caught, 'only awaited')
+
+                    // A `for await` goes through BOTH app-facing probes — `error()` to wake on and
+                    // `error()` again to throw with — so it is the one internal reader that looks
+                    // exactly like a template arm from inside `readCell`. Its silence is counted by
+                    // the line total below rather than asserted on its own: unscope either read in
+                    // `iterate` and this case goes to three lines.
+                    const streamed = state<string>(refusing(new Error('only iterated')))
+                    let rows = 0
+                    let reached = 'none'
+                    try {
+                        for await (const row of streamed) if (row !== undefined) rows++
+                    } catch (failure) {
+                        reached = (failure as Error).message
+                    }
+                    is('a for await throws at its consumer', reached, 'only iterated')
+                    is('and hands over nothing first', rows, 0)
+                })
+                const written = captured.filter((line) => channelOf(line) === 'abide:load')
+
+                is('one line each for the two the template touched', written.length, 2)
+                is('a failure is never gated, so no DEBUG was set', textOf(written[0]).includes('the arm asked'), true)
+                is('and it is an error', written[0]?.level, 'error')
+                is('the reason itself rides beside the line', written[0]?.args[1], askedFor)
+                is('the arm that read instead is reported too', written[1]?.args[1], readInstead)
             },
         },
 

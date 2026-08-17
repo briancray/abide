@@ -47,8 +47,26 @@ export function interactive(page: Page): Promise<unknown> {
 
 /** What the page said for itself, so a test can assert about a specific complaint. */
 export interface Complaints {
-    errors: string[]
     warnings: string[]
+    /**
+     * An error this page is SUPPOSED to log, by any substring of it.
+     *
+     * For a page whose content is a failure — a reference example demonstrating a refused load is the
+     * one that needed this. Declared rather than muted, and REQUIRED rather than permitted: the
+     * teardown fails if a declared line never arrived, so this is a claim about the page and not a
+     * hole in the gate. Permitting was the first shape and it was worth nothing — the page it was
+     * written for stayed green with the behaviour it demonstrates reverted, which is the check
+     * "A GATE IS VERIFIED BY REVERTING THE FIX" is there to force.
+     */
+    expected(match: string): void
+    /**
+     * The errors no `expected` claimed — the ONE thing to assert on.
+     *
+     * The raw list is deliberately not on this interface. It was, and it is a trap next to this method:
+     * a test that declares an expectation and then reads the raw array is red for the very line it
+     * just declared, with nothing to say why.
+     */
+    unexpected(): string[]
 }
 
 /**
@@ -59,17 +77,34 @@ export interface Complaints {
  */
 export const test = base.extend<{ complaints: Complaints }>({
     complaints: async ({ page }, use) => {
-        const collected: Complaints = { errors: [], warnings: [] }
+        const allowed: string[] = []
+        const errors: string[] = []
+        const collected: Complaints = {
+            warnings: [],
+            expected(match) {
+                allowed.push(match)
+            },
+            // Always a snapshot, never the live array — an early return for the empty `allowed` would
+            // hand back `errors` itself in that case and a copy in the other, so a caller holding the
+            // result would see it grow on some pages and not others.
+            unexpected() {
+                return errors.filter((line) => !allowed.some((match) => line.includes(match)))
+            },
+        }
         page.on('console', (message) => {
-            if (message.type() === 'error') collected.errors.push(message.text())
+            if (message.type() === 'error') errors.push(message.text())
             if (message.type() === 'warning') collected.warnings.push(message.text())
         })
-        page.on('pageerror', (error) => collected.errors.push(String(error)))
+        page.on('pageerror', (error) => errors.push(String(error)))
 
         await use(collected)
 
         // Asserted on the way OUT, so a test does not have to remember to ask. A page that rendered
         // exactly the right markup and threw on the way is a page every server-side assertion passes on.
-        expect(collected.errors, 'the page logged errors').toEqual([])
+        expect(collected.unexpected(), 'the page logged errors').toEqual([])
+
+        // And the other direction: a demonstrated failure that stopped being demonstrated.
+        const missing = allowed.filter((match) => !errors.some((line) => line.includes(match)))
+        expect(missing, 'an error this page declared it would log never arrived').toEqual([])
     },
 })

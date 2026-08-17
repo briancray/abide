@@ -12,9 +12,10 @@
 // any split along those lines is an import cycle, not a seam. `$shared/reactive.ts` is the public
 // face of what is here; nothing outside abide imports this module.
 
+import { abideLog } from '../log.ts'
 import { markSource } from './BRANDS.ts'
 import { chunkCharge, reportOverflow, streamCeiling } from './ceilings.ts'
-import { isAsyncIterable, isNamedError, isThenable } from './probes.ts'
+import { isAsyncIterable, isNamedError, isThenable, messageOf } from './probes.ts'
 import { disposeWith, storeFor, storeForLazy } from './scopes.ts'
 import { NO_LIMIT } from './timers.ts'
 
@@ -573,6 +574,14 @@ class Async {
     waiters:
         | { resolve(value: unknown): void; reject(reason: unknown): void; atFirstChunk: boolean }[]
         | null = null
+    /**
+     * The failure already written to `abide:load`, so a re-render does not say it again.
+     *
+     * The REASON rather than a flag: a retry against a source that is still down throws a new `Error`
+     * per attempt, and each of those is a new failure worth a line. The same object arriving twice is
+     * one event, which is the rule `settleError` already applies to the wake.
+     */
+    reported: unknown = undefined
 
     constructor(settled: boolean) {
         this.settled = new Node(settled, null)
@@ -641,13 +650,25 @@ function settleValue(node: Node, value: unknown): void {
     finish(track, value, false)
 }
 
+/**
+ * Drop a held failure, and the note saying it was already reported.
+ *
+ * One function because the two have to move together: `reported` is the identity `reportFailure`
+ * dedupes against, so a clear that forgets it both retains a discarded `Error` for the cell's lifetime
+ * and goes silent if the same object is thrown again after a recovery.
+ */
+function clearError(track: Async): void {
+    track.error.write(undefined)
+    track.reported = undefined
+}
+
 /** Store a value the load produced, and stop the read throwing if the last one failed. */
 function hold(node: Node, track: Async, value: unknown): void {
     const recovered = track.error.value !== undefined
     node.hasValue = true
     node.write(value) // identity-deduped: a re-fill of unchanged data wakes nobody
     if (recovered) {
-        track.error.write(undefined)
+        clearError(track)
         wakeReaders(node) // …the value did not move, but the OUTCOME of reading it did
     }
 }
@@ -693,7 +714,7 @@ function standDown(track: Async): void {
 
 /** Nothing is in flight any more, and it ended without a failure. */
 function markSettled(track: Async): void {
-    track.error.write(undefined)
+    clearError(track)
     standDown(track)
     track.settled.write(true)
 }
@@ -782,6 +803,61 @@ function consume(node: Node, source: AsyncIterable<unknown>): void {
 // A rejection reason of `undefined` is indistinguishable from "no error" in the error node's
 // identity check, so it would settle without waking anyone. A marker keeps the wake honest.
 const REJECTED_WITH_UNDEFINED = new Error('abide: the load rejected with undefined')
+
+/** Where a read that touched a failed load says so. Why, and why from a read, is on `reportFailure`. */
+const loadLog = abideLog.channel('load')
+
+/**
+ * Say it once per distinct reason, however many times the read is made.
+ *
+ * A template arm is re-evaluated on every wake, and a failed cell goes on being failed — so the read
+ * is the right place to NOTICE and the wrong place to be unconditional. The reason itself is passed to
+ * the console beside the line: `String(err)` is `name: message`, and a stack survives only as the object.
+ *
+ * Reporting is not redundant with the read throwing. The throw is what a reader sees; it fires only
+ * where somebody reads the VALUE, and the arm that reports a failure in markup — `{:else if x.error()}`
+ * — is precisely the one that stops reading it. So a page that handles its failures correctly used to
+ * be the page with no stack anywhere, and a chain whose arms read neither the value nor `error()` was
+ * silent while rendering as though the load had succeeded.
+ *
+ * The reason goes to the console as an OBJECT, so what DevTools expands is the stack the error was
+ * constructed with rather than this line's own call site.
+ *
+ * An AWAIT is not a read, so nothing here has to check for one. A waiter is rejected through
+ * `settledPromise`, which never calls `readCell` — so the guard falls out of where the report is made
+ * rather than being a condition on it. That is what keeps a modelled failure quiet: an
+ * `error.typed('NoUser', 404)` answered over rpc is an ANSWER, reported on `abide:rpc` with its
+ * outcome, and whoever awaited it either catches it or raises an unhandled rejection already carrying
+ * the stack. A second ungated stack for it is the loudest possible way to say nothing.
+ *
+ * Reported from the READ, not from the settle, and that is the load-bearing part. Two earlier
+ * placements were built and reverted by the gate. Reporting at the SETTLE cannot tell a broken load
+ * from an answer an app DECLARED — an rpc handler returning `error.typed('NoUser', 404)` settles a
+ * cell exactly as a dead socket does, so it dumped a stack for every modelled failure a server
+ * answered, already reported with its outcome on `abide:rpc`. Moving it behind an `abide/ui` install
+ * fixed that and broke the case it was for: a rung whose `<script module>` runs on the SERVER renders
+ * its failure arm there and never ships to the browser at all, so the browser lane had nothing to see.
+ *
+ * A READ is what both of those get right, because reading is what a template does. So
+ * `{:else if x.error()}` reports, an arm that reads the value and throws reports, and a handler's
+ * declared answer stays the rpc channel's business. It lands in BOTH lanes, which is what the
+ * server-rendered rung needs.
+ *
+ * The two entries are `readCell` and `read.error` — the value and the probe — and abide's own machinery
+ * uses BOTH of them, which is why suppression is a scope (`withoutReporting`, `quietly`) rather than a
+ * property of the entry. The exceptions are listed on `reporting`; keep them enumerated from the call
+ * sites, because a missed one is a stack nobody asked for and nothing goes red.
+ */
+function reportFailure(track: Async, reason: unknown): void {
+    // `!kicking` is `internals.quietly`, and it counts as abide reading on its own behalf for the reason
+    // that function's own doc gives: a non-kicking probe is machinery "routing or inspecting rather than
+    // displaying". `repl`'s `show()` is the one that proves it — it asks three probes quietly to choose
+    // how to PRINT a cell, and a stack dumped into the prompt it is drawing is not a report anybody asked
+    // for. Covering it here rather than at that call site is what keeps the next such caller right too.
+    if (!reporting || !kicking || track.reported === reason) return
+    track.reported = reason
+    loadLog.error(`a load failed: ${messageOf(reason)}`, reason)
+}
 
 function settleError(node: Node, error: unknown): void {
     if (node.status === DEAD) return
@@ -941,7 +1017,13 @@ function readCell(node: Node): unknown {
     const value = node.read()
     const track = node.asyncTrack
     if (track === null) return value
-    if (track.error.value !== undefined) throw track.error.value
+    // The arm that did NOT ask. It reads the value, so it gets the failure thrown at it — and the
+    // throw alone is not the report: a slot's effect rethrows from a fresh microtask, which is loud in
+    // a browser and is nothing at all on a server, where the walk catches it to render a failure arm.
+    if (track.error.value !== undefined) {
+        reportFailure(track, track.error.value)
+        throw track.error.value
+    }
     if (track.pending.value === true && (current !== null || willRetry)) {
         // Subscribed to the FLIP, not to the value: a load that settles to `undefined` moves no
         // value at all, so a reader holding only the value subscription would never be woken for it
@@ -992,6 +1074,28 @@ function settledPromise(node: Node, atFirstChunk = false): Promise<unknown> {
 
 // Cleared only by `internals.quietly` — see there for why abide's own callers need it.
 let kicking = true
+
+// Cleared by `withoutReporting`, and for the same reason `kicking` exists: abide reads cells on its own
+// behalf, and those reads are not somebody looking at a failure.
+//
+// ONE reader needs it and it is in this file — `iterate`, which reads a cell to subscribe to it and
+// again to throw at its own consumer. Everything else that used to is covered without asking: `!kicking`
+// below is `quietly`, which is how `repl` prints a cell, and `respond` no longer reads a value at all.
+// OPT-OUT is the shape to be careful with, because a caller that forgets writes a stack nobody asked for
+// and nothing goes red — so keep the exceptions enumerated from the call sites, which is the thing this
+// flag got wrong twice before the set was closed.
+let reporting = true
+
+/** Read on ABIDE's behalf: a failure found here is not written to `abide:load`. */
+function withoutReporting<T>(fn: () => T): T {
+    const previous = reporting
+    reporting = false
+    try {
+        return fn()
+    } finally {
+        reporting = previous
+    }
+}
 
 // The node whose own probe is kicking a load right now, so `mark` can tell the flip this run caused
 // from one that landed under it. Null outside a kick, which is every path but the one below.
@@ -1138,9 +1242,15 @@ function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) |
         kick()
         return trackerFor(node).settled.read() as boolean
     }
+    // The arm that DID ask — `{:else if x.error()}`, and an app asking the same question by hand.
+    // Asking is not handling it quietly: the reason is what an author puts in markup, and the stack is
+    // what they need to find out why, so the ask is exactly the moment to write it down.
     read.error = () => {
         kick()
-        return trackerFor(node).error.read()
+        const track = trackerFor(node)
+        const reason = track.error.read()
+        if (reason !== undefined) reportFailure(track, reason)
+        return reason
     }
     read.chunks = () => {
         kick()
@@ -1302,7 +1412,7 @@ function resetNode(node: Node): void {
     if (track !== null) {
         track.generation++ // whatever is in flight is no longer wanted
         const wasFailed = track.error.value !== undefined
-        track.error.write(undefined)
+        clearError(track)
         standDown(track)
         track.settled.write(false)
         resetChunks(track)
@@ -1346,7 +1456,10 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
         cell.chunks()
         cell.streaming()
         cell.settled()
-        cell.error()
+        // UNREPORTED, and so are the two below: waking on a failure is not looking at one. The loop
+        // throws it at its own consumer, which either catches it or raises an unhandled rejection
+        // already carrying the stack — the same reason an `await` is not a read.
+        withoutReporting(cell.error)
         moved = true
         const resume = wake
         wake = null
@@ -1357,7 +1470,7 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
         // it may well be running inside someone else's effect.
         untrack(() => {
             try {
-                cell()
+                withoutReporting(cell)
             } catch {
                 // Asked about below, where the loop can throw it at its own consumer.
             }
@@ -1384,7 +1497,7 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
         }
         // Asked AFTER the transcript is handed over, so a failure that arrived while this was
         // suspended at a `yield` is thrown by the loop that was waiting on it.
-        const asked = (): unknown => cell.error()
+        const asked = (): unknown => withoutReporting(cell.error)
         // Hoisted for the same reason as the two above, which this used to sit seventeen lines under
         // while allocating a fresh executor per turn.
         const park = (resolve: () => void): void => {

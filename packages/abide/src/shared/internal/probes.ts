@@ -17,6 +17,10 @@
  * the wrapper's own message is a generic sentence about a module having failed. The first inner
  * message is the diagnostic — the line and the reason — so reading the wrapper is the difference
  * between "app.ts did not load" and being told which token was unexpected.
+ *
+ * `instanceof` is not the last word either: a value that crossed a wire can arrive as a plain record
+ * carrying a `message`, and `String` on one of those is `[object Object]` — the same reason `isError`
+ * matches on the NAME rather than the class.
  */
 export function messageOf(failure: unknown): string {
     // Guarded, because `throw null` is legal and a property read off it is a second failure thrown
@@ -25,7 +29,9 @@ export function messageOf(failure: unknown): string {
         const first = (failure as { errors?: { message?: unknown }[] }).errors?.[0]?.message
         if (typeof first === 'string') return first
     }
-    return failure instanceof Error ? failure.message : String(failure)
+    if (failure instanceof Error) return failure.message
+    const carried = (failure as { message?: unknown } | null | undefined)?.message
+    return typeof carried === 'string' ? carried : String(failure)
 }
 
 export function isThenable(value: unknown): value is PromiseLike<unknown> {

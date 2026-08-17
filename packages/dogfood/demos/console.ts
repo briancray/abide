@@ -12,7 +12,24 @@
 export interface Written {
     /** The console method the level asked for. */
     level: string
+    /**
+     * The composed LINE — the first argument, and nothing after it.
+     *
+     * Not every argument joined: a line carrying extras is `<the line>` plus live objects, and every
+     * reader here wants the line. `channelOf` parses this under `ABIDE_LOG_FORMAT=json`, so folding a
+     * stringified `Error` onto the end of the record makes `JSON.parse` throw on text that is no longer
+     * JSON. What the extras were is `args`, below, which is the honest place to ask.
+     */
     text: string
+    /**
+     * What the call was actually handed, untouched.
+     *
+     * `text` is the readable form and it cannot answer the one question a line carrying an `Error`
+     * raises: `String(err)` is `name: message` with no stack in it, so a line built by interpolating
+     * the error and a line passing the OBJECT beside it stringify to nearly the same thing while only
+     * the second gives a console a stack to expand. Identity is the only honest check for that.
+     */
+    args: readonly unknown[]
 }
 
 const METHODS = ['log', 'info', 'warn', 'error', 'debug'] as const
@@ -29,7 +46,7 @@ export function capture(fn: () => unknown): Written[] | Promise<Written[]> {
     }
     for (const name of METHODS) {
         console[name] = (...args: unknown[]): void => {
-            written.push({ level: name, text: args.map(String).join(' ') })
+            written.push({ level: name, text: args.length === 0 ? '' : String(args[0]), args })
         }
     }
     // A request is answered over at least one await, so the swap has to outlive the call rather than

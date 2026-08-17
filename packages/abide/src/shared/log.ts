@@ -236,13 +236,29 @@ export function useLogSink(fn: (record: LogRecord) => void, wants: () => boolean
     sinkWants = wants
 }
 
+/**
+ * What a call was handed, console's shape: any number of arguments, of any type.
+ *
+ * The FIRST composes the line, because a line is what a channel prefix, a level, a trace id and a
+ * `+Nms` delta attach to — a string is used as it stands, anything else through `String`, so
+ * `log.error(err)` reads as `Error: no such row` and the error itself still travels. Every argument
+ * the line did not consume goes to the console untouched, which is the whole point: a stack survives
+ * as an object and does not survive interpolation.
+ *
+ * Nothing here SUBSTITUTES — no `%s` handling of its own — but nothing is stripped either, so a
+ * specifier reaches the console and behaves however that console behaves. That is passthrough rather
+ * than a contract: `%c` styles a line in a browser and means nothing on a terminal, and which of those
+ * you get is a property of where you are reading, which the caller already knows and this file does not.
+ */
+export type LogArgs = readonly unknown[]
+
 export interface Logger {
     /** One line on this logger's channel. */
-    (message: string): void
-    info(message: string): void
-    warning(message: string): void
-    error(message: string): void
-    debug(message: string): void
+    (...args: LogArgs): void
+    info(...args: LogArgs): void
+    warning(...args: LogArgs): void
+    error(...args: LogArgs): void
+    debug(...args: LogArgs): void
     /**
      * A named sub-channel, prefixed with this one: `log.channel('cards')` on an app called `docs`
      * writes under `docs:cards`, which is what `DEBUG=docs:cards` names. Off unless `DEBUG` says
@@ -260,6 +276,9 @@ export interface Logger {
      */
     enabled(): boolean
 }
+
+/** Shared, so a caller that passes no extras allocates no array to say so. Above its first reader. */
+const NO_EXTRAS: LogArgs = []
 
 /**
  * `null` root means "whatever the app is called", resolved per line so `ABIDE_APP_NAME` is live.
@@ -297,29 +316,38 @@ function make(root: string | null, path: string): Logger {
         return spec !== undefined && enabledIn(spec, channelOf())
     }
 
-    const write = (level: Level, message: string): void => {
+    const write = (level: Level, args: LogArgs): void => {
         if (gated && level !== 'warning' && level !== 'error' && !open()) return
         const now = Date.now()
         const since = lastAt === 0 ? 0 : now - lastAt
         lastAt = now
-        emit(level, channelOf(), message, now, since)
+        // A STRING first argument is consumed by the line; anything else is rendered into the line
+        // AND passed along, because `String(err)` is `name: message` and the stack is only in the
+        // object. Consuming it both ways is what makes `log.error(err)` read the way it does on a
+        // console: a titled line, with the error under it to open.
+        //
+        // `String` is identity on a string, so one `emit` covers both — only the EXTRAS differ, and the
+        // ordinary `log('…')` takes `NO_EXTRAS` rather than allocating the empty array `slice` would.
+        const head = args[0]
+        const rest = typeof head !== 'string' ? args : args.length === 1 ? NO_EXTRAS : args.slice(1)
+        emit(level, channelOf(), args.length === 0 ? '' : String(head), now, since, rest)
     }
 
-    const logger = ((message: string): void => {
-        write('log', message)
+    const logger = ((...args: LogArgs): void => {
+        write('log', args)
     }) as Logger
 
-    logger.info = (message) => {
-        write('info', message)
+    logger.info = (...args) => {
+        write('info', args)
     }
-    logger.warning = (message) => {
-        write('warning', message)
+    logger.warning = (...args) => {
+        write('warning', args)
     }
-    logger.error = (message) => {
-        write('error', message)
+    logger.error = (...args) => {
+        write('error', args)
     }
-    logger.debug = (message) => {
-        write('debug', message)
+    logger.debug = (...args) => {
+        write('debug', args)
     }
     logger.enabled = () => !gated || open()
     logger.channel = (name) => {
@@ -335,7 +363,32 @@ function make(root: string | null, path: string): Logger {
     return logger
 }
 
-function emit(level: Level, channel: string, message: string, now: number, since: number): void {
+/**
+ * What the FEED carries for a line that had extras, which the console gets as live objects.
+ *
+ * Folded into `message` rather than added as a sixth field — see `LogRecord`. A collector is where a
+ * stack is worth the most and is also the one reader that cannot expand an object, so an `Error`
+ * contributes its `stack` (already `name: message` on its first line in both substrates) and anything
+ * else its `String`. Built only when the feed is open, and only for the lines that carried something.
+ */
+function recordMessage(message: string, rest: LogArgs): string {
+    if (rest.length === 0) return message
+    let built = message
+    for (const extra of rest) {
+        const stack = extra instanceof Error ? extra.stack : undefined
+        built += `\n${stack ?? String(extra)}`
+    }
+    return built
+}
+
+function emit(
+    level: Level,
+    channel: string,
+    message: string,
+    now: number,
+    since: number,
+    rest: LogArgs,
+): void {
     // Which operation this line belongs to. Asked once and used by all three shapes and the feed, so
     // a line is never two different answers — and `null` on a client, or on a server outside a
     // request. Asked only for a line being WRITTEN: the gate has already run by here.
@@ -350,12 +403,12 @@ function emit(level: Level, channel: string, message: string, now: number, since
             time: new Date(now).toISOString(),
             level,
             channel,
-            message,
+            message: recordMessage(message, rest),
             trace: traced,
         })
     }
 
-    writeLogLine(level, lineWriter(level, channel, message, now, traced, since))
+    writeLogLine(level, lineWriter(level, channel, message, now, traced, since), rest)
 }
 
 /**
@@ -365,12 +418,15 @@ function emit(level: Level, channel: string, message: string, now: number, since
  * itself, and it holds whether the other end is a terminal or a collector. The other three are named
  * rather than folded into `console.log` because a browser console filters by them.
  */
-export function writeLogLine(level: Level, line: string): void {
-    if (level === 'error') console.error(line)
-    else if (level === 'warning') console.warn(line)
-    else if (level === 'info') console.info(line)
-    else if (level === 'debug') console.debug(line)
-    else console.log(line)
+export function writeLogLine(level: Level, line: string, rest: LogArgs = NO_EXTRAS): void {
+    // Spread rather than a second five-way branch for the empty case: the gate has already run, so
+    // everything reaching here is doing a console call, and that dwarfs the spread. The path worth
+    // keeping cheap is the SUPPRESSED one, and it returns in `write` without ever arriving.
+    if (level === 'error') console.error(line, ...rest)
+    else if (level === 'warning') console.warn(line, ...rest)
+    else if (level === 'info') console.info(line, ...rest)
+    else if (level === 'debug') console.debug(line, ...rest)
+    else console.log(line, ...rest)
 }
 
 /**
