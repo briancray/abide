@@ -31,10 +31,21 @@
      one more observer on every memo, which changes the graph work it is there to report. -->
 <script module>
 import { memo, route, state } from 'abide'
-import { type CatalogueEntry, OBJECTS_PER_ENTRY } from '#shared/catalogue.ts'
+import type { CatalogueEntry } from './catalogue.ts'
+// From the LEAF and not from `catalogue.ts`, which is where it is declared: the type above elides, so
+// taking the number out of the builder would be this browser view's one live edge onto ~6 kB of
+// server-only row construction it can never call.
+import { OBJECTS_PER_ENTRY } from './ENTRY_SHAPE.ts'
 import { catalogue } from '#server/rpc/catalogue.ts'
 
-/** The default. `?size=` overrides it, which is what the n-sweep drives. */
+/**
+ * The default, and it is a PAGE WEIGHT rather than a preference: at 39 objects an entry this is the
+ * ~10,000 the blurb claims, and a server render of it is about 0.6 MB. Ten thousand ENTRIES is 390,000
+ * objects and 21 MB down the wire before anybody has pressed anything.
+ *
+ * `?size=` overrides it, which is what the n-sweep drives — so the sweep asks for its own number
+ * rather than making every reader pay for the largest one it wanted.
+ */
 const DEFAULT_SIZE = 300
 
 /** How many contributors the `people` aggregate keeps. */
@@ -242,10 +253,12 @@ const sample = (): void => {
 }
 </script>
 
-<h1>data</h1>
-<p>{SIZE} entries over one rpc, about {SIZE * OBJECTS_PER_ENTRY} objects five levels deep, and six
-derived values over them. The counters below are memo BODY RUNS — the work, which is what moving one
-cell is supposed to change and what nothing about the rendered numbers can tell you.</p>
+<!-- The COUNT and not the framing: `USECASES.blurb` says what this demo is and `/demos/data` prints
+     it directly above, so the only thing left to say here is the n — which is `?size=`'s to move and
+     so the one number that page head cannot carry. -->
+<p>{SIZE} entries, about {SIZE * OBJECTS_PER_ENTRY} objects. The counters below are memo BODY RUNS —
+the work, which is what moving one cell is supposed to change and what nothing about the rendered
+numbers can tell you.</p>
 
 <div class="controls">
     <input id="query" placeholder="filter titles" bind:value={query}/>

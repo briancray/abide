@@ -14,10 +14,10 @@
  * rather than a part of it. Neither can blank a working app, so neither has to be asked for.
  *
  * The other two the baseline calls free are NOT here, and this repo's own app is the counterexample
- * for one of them: `/demos` frames the fleet, so `frame-ancestors 'none'` would break abide's own
- * dogfood — which is why `app.ts` passes `'self'`. `form-action 'self'` is the same shape one step
- * out: an app posting to a payment processor is ordinary, and abide cannot see that either. Both
- * stay in `csp()`.
+ * for one of them: a `visit` case frames a real route of its own app to watch what the response did,
+ * so `frame-ancestors 'none'` would break abide's own dogfood — which is why `app.ts` passes `'self'`.
+ * `form-action 'self'` is the same shape one step out: an app posting to a payment processor is
+ * ordinary, and abide cannot see that either. Both stay in `csp()`.
  *
  * A constant rather than a per-request join: nothing here takes the nonce. `csp()` REPLACES the
  * header wholesale, and its baseline is a superset, so an app that installs it loses nothing here.

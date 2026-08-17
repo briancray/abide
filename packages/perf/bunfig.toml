@@ -1,7 +1,0 @@
-# The root's `[test] preload`, repeated for the reason `packages/dogfood/bunfig.toml` states: a bunfig
-# shadows rather than merges, so a `bun test` typed in this package had no DOM and no `.abide` loader —
-# six of its eight cases failed, and the pages this app exists to measure could not be loaded at all.
-#
-# `packages/dogfood/test/preloaded.test.ts` is what holds every copy of this list to the same answer.
-[test]
-preload = ["../harness/internal/happydom.ts", "../abide/compiler/preload.ts"]

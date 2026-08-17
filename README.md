@@ -56,7 +56,7 @@ first, so it costs nothing at run time. The rest of the config is one line:
 { "extends": "abide/tsconfig.json", "include": ["**/*.ts", ".abide/types/**/*.ts"] }
 ```
 
-`packages/dogfood` and `packages/perf` are both written this way, which is what keeps it honest.
+`packages/dogfood` is written this way, which is what keeps it honest.
 
 ## The packages
 
@@ -64,8 +64,7 @@ first, so it costs nothing at run time. The rest of the config is one line:
 | --- | --- |
 | `packages/abide` | the framework: the reactive core, both renderers, the `.abide` compiler, the CLI |
 | `packages/harness` | the harness everything is tested and measured with. `harness/measure` has **no abide in its graph**, which is what lets a hand-written arm be timed by the same clock as an abide one |
-| `packages/dogfood` | the dogfood: one app, three views of every capability |
-| `packages/perf` | full use cases at scale, on a shell that ships no stylesheet |
+| `packages/dogfood` | the dogfood: one app, three views of every capability, plus the use cases at scale on `/demos` |
 
 ## Running it
 

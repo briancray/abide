@@ -1,6 +1,0 @@
-// The perf app's own program. The same three lines the dogfood app's is, which is the point: two
-// apps written against one convention, neither reaching into the framework's config.
-{
-    "extends": "abide/tsconfig.json",
-    "include": ["**/*.ts", ".abide/types/**/*.ts"]
-}

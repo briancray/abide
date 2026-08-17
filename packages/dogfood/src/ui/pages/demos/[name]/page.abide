@@ -1,0 +1,50 @@
+<!-- One use case: running, readable and priced, on the page a reader arrived at.
+
+     `/demos` indexes six of these and this is what one of them IS. Everything that used to require a
+     second process is here — the demo mounts with the page, its files come off disk through `?source`,
+     and its ops are driven against the box it rendered into.
+
+     THE VIEW IS A LOOKUP, keyed by the same name as the blurb and the source. `VIEWS.ts` carries why
+     that is allowed: the syntactic rule for a `<Name/>` tag constrains the TAG, not what the
+     identifier holds, so `<View/>` on a local const emits `component(View, …)` like any other. The
+     three modules keyed by name are gated against each other in `#tests/unit/usecases.test.ts`. -->
+<script module>
+import { route } from 'abide'
+import { SOURCES } from '#shared/demos/usecases/SOURCES.ts'
+import { USECASES_BY_NAME } from '#shared/demos/usecases/USECASES.ts'
+import { VIEWS } from '#shared/demos/usecases/VIEWS.ts'
+import UseCase from '#ui/lib/UseCase.abide'
+
+/** A demo with no files is a demo whose source nothing carries — see the gate in `usecases.test.ts`. */
+const NO_FILES: never[] = []
+</script>
+
+<script>
+const asked = route().params.name ?? ''
+const usecase = USECASES_BY_NAME[asked]
+const View = VIEWS[asked]
+</script>
+
+{#if usecase}
+    <div class="page-head">
+        <h1 class="page-title">{usecase.name} · demo</h1>
+        <p class="page-blurb">{usecase.blurb}</p>
+    </div>
+
+    <!-- The view goes in through a SLOT so that the lookup stays here, where the route parameter is,
+         and the card stays a card. `UseCase` owns the box the driver is handed; what goes in it is
+         the caller's. -->
+    <UseCase usecase={usecase} files={SOURCES[usecase.name] ?? NO_FILES}>
+        {#if View}
+            <View/>
+        {/if}
+    </UseCase>
+
+    <p class="note"><a href="/demos" class="link">every use case →</a></p>
+{:else}
+    <div class="page-head">
+        <h1 class="page-title">nothing here</h1>
+        <p class="page-blurb">There is no use case named “{asked}”.</p>
+    </div>
+    <p class="note"><a href="/demos" class="link">every use case →</a></p>
+{/if}

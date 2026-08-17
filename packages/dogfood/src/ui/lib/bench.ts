@@ -2,9 +2,9 @@
 //
 // The measuring half is `harness`'s — `benchRowsOf` builds the rows and runs the arms, and what it
 // hands back says which arm is the subject, which is the harness floor, how full a bar would be and
-// which way the ratio went. None of that is a class, on purpose: the perf app draws the same rows and
-// may not ship a stylesheet at all, so a row carrying `is-abide` would be a row only one app can
-// use. This file is the other side of that seam, and it is the whole of what this app adds.
+// which way the ratio went. None of that is a class, on purpose: `harness` is used outside this repo
+// too, so a row carrying `is-abide` would be a row only this app's stylesheet can draw. This file is
+// the other side of that seam, and it is the whole of what this app adds.
 
 import type { ArmRow, BenchRow } from 'harness'
 import { benchRowsOf } from 'harness'

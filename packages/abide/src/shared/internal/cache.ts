@@ -4,7 +4,7 @@
 // than a tidying one. `internal/graph.ts` imports the stream ceiling, and `graph.ts` is in every
 // client entry's static closure — so a module reached from that closure keeps every export ANYTHING
 // in the build uses, and the LRU below shipped to every page even though its only consumer, `memo.ts`,
-// is not in the closure at all. Measured against `packages/perf`, the app with no demos in it: the
+// is not in the closure at all. Measured against the perf app, which had no demos in it: the
 // class, the order, the three verbs and the stringifying charge are 888 bytes nothing on a first
 // paint can reach. The same inversion `lines.ts` and `STREAMING.ts` already are.
 //

@@ -43,7 +43,6 @@ UNITS=(
   packages/dogfood/test
   packages/dogfood/pages
   packages/dogfood/site
-  packages/perf
 )
 
 units() {
@@ -121,9 +120,9 @@ gate || exit 1
 # name | CLAUDE.md section the hits are judged against | command
 CHECKS=(
   "seam escapes|seams and imports|grep -rn \"from ['\\\"]\\.\\./\\.\\./\" --include=*.ts --include=*.abide packages/abide"
-  "alias leaks|seams and imports|grep -rn \"from ['\\\"][\$]\\(server\\|ui\\|shared\\|compiler\\)/\" --include=*.ts --include=*.abide --exclude-dir=.abide --exclude-dir=node_modules packages/harness packages/dogfood packages/perf"
+  "alias leaks|seams and imports|grep -rn \"from ['\\\"][\$]\\(server\\|ui\\|shared\\|compiler\\)/\" --include=*.ts --include=*.abide --exclude-dir=.abide --exclude-dir=node_modules packages/harness packages/dogfood"
   "measure graph|seams and imports|grep -rn \"from ['\\\"]abide\" packages/harness/measure.ts packages/harness/internal/assert.ts packages/harness/internal/bench.ts packages/harness/internal/dom.ts packages/harness/internal/probes.ts"
-  "spawn reaches an app|seams and imports|grep -rn \"packages/\\(dogfood\\|perf\\)\" packages/harness/spawn.ts | grep -v ':[[:space:]]*\\(\\*\\|//\\)'"
+  "spawn reaches an app|seams and imports|grep -rn \"packages/dogfood\" packages/harness/spawn.ts | grep -v ':[[:space:]]*\\(\\*\\|//\\)'"
   "node: imports|writing code|grep -rn \"from ['\\\"]node:\" --include=*.ts packages/abide"
   "style= props|writing code|grep -rn \"style=\" --include=*.abide --include=*.ts --exclude-dir=.abide --exclude-dir=node_modules packages"
   "lowercase constants|writing code|grep -rnE \"^const [a-z][A-Za-z0-9_]* = (['\\\"\\\`]|[0-9]|true|false)\" --include=*.ts packages/abide packages/harness"
@@ -132,7 +131,6 @@ CHECKS=(
   "isThenable guards|hot paths|grep -rn \"isThenable\" --include=*.ts packages/abide/src packages/abide/compiler"
   "toString as source|demos and docs|grep -rn \"Function.prototype.toString\" --include=*.ts --include=*.abide --exclude-dir=.abide --exclude-dir=node_modules packages/dogfood"
   "misnamed e2e specs|checks|find packages -name '*.spec.ts' -not -path '*/node_modules/*'"
-  "perf stylesheet|directory structure|grep -rnE \"<link[^>]*stylesheet|<style|[.]css['\\\"]\" --include=*.html --include=*.ts --include=*.abide --exclude-dir=.abide --exclude-dir=node_modules packages/perf"
 )
 
 echo
@@ -182,11 +180,10 @@ done
 
 cat <<'NOTE'
 
-  three of those read backwards, and the count alone is the wrong answer:
+  two of those read backwards, and the count alone is the wrong answer:
     measure graph      — the harness MAY import abide; `harness/measure` may not, and
                          this greps only measure.ts's own graph. any hit is a violation.
     unguarded await    — a ratio against isThenable, not a list. read the per-row ones.
-    perf stylesheet    — app.html's comment about NOT shipping one matches too.
 NOTE
 
 echo

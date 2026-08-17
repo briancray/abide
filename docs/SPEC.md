@@ -263,7 +263,7 @@ starts nothing — those two are how a caller asks about a key it does not inten
 A document render resolves a read to build the markup; the client then adopts that markup with a cold
 slot of its own, so its first read of the same call would reach the network for an answer already on
 screen — and the handler would run a SECOND time, because a slot is per-caller and the browser is a
-different caller. On the perf app's `/data` that was a 254 KB document followed by a 623 KB fetch,
+different caller. On the `data` use case (`/demos/data`) that was a 254 KB document followed by a 623 KB fetch,
 120 ms of handler on each side, and a client-side filter that could not run until the second landed.
 
 So the render collects what it resolved and writes it into the document as a
@@ -859,7 +859,7 @@ a guarded slot, a `{#for}` row's own load and an attribute value are all covered
 and each of those is a shape a compile-time pass could not enter. The three sections render in 62ms.
 
 This replaced a compiler pass — `start([…])`, emitted above a template naming its unconditional plain
-slots — which reached only the flattest of those shapes and, on both apps, resolved to sync
+slots — which reached only the flattest of those shapes and, across the whole app, resolved to sync
 derivations with no load in them at all.
 
 A probe starts what it asks about, so a deferring region needs nothing either: `{#if x.pending()}`

@@ -13,7 +13,8 @@
        the METRICS     when a case carries a bench, its headline number and the ratio it exists to
                        state — the same two `/bench` puts in a table, without the table
 
-     Handed a record rather than a case, so a demo app's own profile view mounts this same component. -->
+     Handed a record rather than a case, so `UseCase.abide` — which hand-builds its `Profile` from what
+     driving a demo's ops reported — mounts this same component. -->
 <script module>
 import type { Face, Profile } from 'harness'
 import { LINE, TONE } from './table.ts'

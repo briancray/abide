@@ -40,7 +40,6 @@ this table is stale and so is whatever else it says.
 | `packages/dogfood/test` | 28 | 7.2k |
 | `packages/dogfood/pages` | 18 | 0.9k |
 | `packages/dogfood/site` | 16 | 1.9k |
-| `packages/perf` | 38 | 2.0k |
 
 `demos/fixtures` is no longer its own row — `checks.sh --units` counts it inside
 `packages/dogfood/demos`, which is why that number jumped. The 173 fixture files are ~2.5k of
@@ -70,7 +69,7 @@ Run in this order. Clusters do not multiply across units — each names the unit
 | C | cross-seam reuse | the reuse bullet in `# seams and imports` | `$shared` read against server/ui/compiler | 1 |
 | D | hot paths | `# hot paths` | shared, ui, compiler, bench | 4 |
 | E | writing code | `# writing code`, plus the bun-apis bullet of `# project goals` | compiler, cli, shared, server, ui, bench | 6 |
-| F | measurement | `# performance and measurement` | demos `bench` faces + `vanilla.ts`, `packages/perf`, `harness/measure` | 3 |
+| F | measurement | `# performance and measurement` | demos `bench` faces + `vanilla.ts`, `demos/usecases`, `harness/measure` | 3 |
 | G | demos & docs | `# demos and docs`, the spec-and-demos bullet of `# simplification`, the browser-gate bullets of `# checks` | demos `run`/`interact`/`examples` + fixtures, pages+site, `docs/spec.md` + e2e | 3 |
 
 **Round A first.** Those rules describe silent failures — right output, wrong work — and

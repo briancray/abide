@@ -7,7 +7,15 @@
 // Derived purely from an id, like `rows.ts` and `media.ts`, so the server can build a shard per
 // request without a fixture on disk and two shards differ in their DATA rather than only their size.
 
+import { CREDITS_PER_PERSON, EPISODES_PER_SEASON, PEOPLE_PER_ENTRY, SEASONS_PER_ENTRY } from './ENTRY_SHAPE.ts'
 import { titleFor } from './media.ts'
+
+/**
+ * Not in `ENTRY_SHAPE.ts` with the four counts, because the leaf is the numbers `OBJECTS_PER_ENTRY` is
+ * arithmetic over and this is not one of them — the histogram is the hardcoded `2 +` in that sum. Its
+ * only reader is the loop below.
+ */
+const HISTOGRAM_BUCKETS = 10
 
 export interface Image {
     url: string
@@ -68,24 +76,6 @@ const KINDS = ['series', 'film', 'documentary'] as const
 const STATUSES = ['returning', 'ended', 'upcoming'] as const
 const ROLES = ['cast', 'director', 'writer'] as const
 const TAGS = ['archive', 'restored', 'subtitled', 'hdr', 'dubbed', 'commentary', 'extended', 'silent']
-
-const PEOPLE_PER_ENTRY = 3
-const CREDITS_PER_PERSON = 2
-const SEASONS_PER_ENTRY = 2
-const EPISODES_PER_SEASON = 6
-const HISTOGRAM_BUCKETS = 10
-
-/** How many objects and arrays one entry is, so a per-entry memory figure has a denominator. */
-export const OBJECTS_PER_ENTRY =
-    1 + // the entry
-    1 + // tags
-    3 + // artwork, and the two images' dominant colours
-    2 + // the two images
-    2 + // ratings and its histogram
-    1 + // people
-    PEOPLE_PER_ENTRY * (1 + 1 + CREDITS_PER_PERSON) + // person, its credits array, the credits
-    1 + // seasons
-    SEASONS_PER_ENTRY * (1 + 1 + EPISODES_PER_SEASON) // season, its episodes array, the episodes
 
 function imageFor(id: number, kind: 'poster' | 'backdrop'): Image {
     const wide = kind === 'backdrop'

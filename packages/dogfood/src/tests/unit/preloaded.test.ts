@@ -4,14 +4,14 @@
 // A bunfig SHADOWS rather than merges: bun reads the one in the directory it was invoked from and no
 // other, and it does not walk up. So a `bun test` typed inside a package gets whatever that package
 // declares — or nothing, which is how `packages/dogfood` produced 19 failures reading `document is not
-// defined` and `.abide` pages reporting no default export, and how `packages/perf` lost six of eight.
+// defined` and `.abide` pages reporting no default export.
 //
-// Worse than either is the case that does not fail: without the DOM the harness's own cases go on PASSING
+// Worse than that is the case that does not fail: without the DOM the harness's own cases go on PASSING
 // while measuring a code path the repo never ships. That is the failure CLAUDE.md names and no count
 // reports, and it is why the rule is EVERY package holding a `*.test.ts` rather than the ones that
 // happen to need a document this week.
 //
-// Four copies of a two-line list, taken deliberately. The alternatives are a preload barrel — a module
+// Three copies of a two-line list, taken deliberately. The alternatives are a preload barrel — a module
 // whose whole job is to be two imports — or leaving a trap whose symptom points anywhere but at it. A
 // repetition that can drift owes a gate; this is the gate.
 
@@ -57,7 +57,7 @@ test('every package holding a test declares the preload, and declares the same o
     const packages = await packagesWithTests()
     // The list itself, so a package that stops carrying tests is a line to read rather than a silent
     // shrink — and so a glob that matched nothing cannot pass this by asserting over an empty loop.
-    expect(packages).toEqual(['abide', 'dogfood', 'harness', 'perf'])
+    expect(packages).toEqual(['abide', 'dogfood', 'harness'])
 
     for (const name of packages) {
         const at = `${ROOT}packages/${name}/`

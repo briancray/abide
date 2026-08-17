@@ -1,7 +1,7 @@
 <script>
 import { memo, state } from 'abide'
-import Poster from '#ui/components/Poster.abide'
-import { buildMedia, type Media } from '#shared/media.ts'
+import Poster from './Poster.abide'
+import { buildMedia, type Media } from './media.ts'
 
 const SIZE = 500
 
@@ -29,10 +29,6 @@ const visible = memo(() => {
     return matched.sort(SORTS[sort] ?? SORTS.title)
 })
 </script>
-
-<h1>media</h1>
-<p>{SIZE} keyed rows, a component per row with a nested component and a branch chain inside it — the
-shape ~/code/media's list page has. The query filters, the sort REORDERS the same rows.</p>
 
 <div class="controls">
     <input id="query" placeholder="filter" bind:value={query}/>

@@ -5,11 +5,12 @@
 // also what makes the measurement honest, because the arms run against the same counters and the same
 // clock whoever is asking and nothing about a screen is inside the loop that times them.
 //
-// So no class strings, and that is a constraint rather than a preference: `packages/perf` may not ship
-// a stylesheet at all — its shell records that one CSS rule was the whole of a "4.5x faster" reading,
-// because Blink builds its style invalidation sets from the stylesheets — so the only table it is
-// allowed to draw is a bare one. A row therefore reports FACTS a page can paint: which arm is the
-// subject, which is the harness floor, how full a bar would be, and which way the ratio went.
+// So no class strings, and that is a constraint rather than a preference: this package is reusable
+// outside this repo — the cross-repo comparison in ~/code times other frameworks' arms with it — and a
+// row carrying `is-abide` is a row only one app's stylesheet can draw. It was also what let the perf
+// app, which shipped no stylesheet at all, draw the same rows bare. A row reports FACTS a page can
+// paint: which arm is the subject, which is the harness floor, how full a bar would be, and which way
+// the ratio went.
 //
 // There is no separate list of bench cases anywhere. A bench is a face of the case that already
 // demonstrates and tests the same claim, so a row's prose is the case's own note — the three cannot

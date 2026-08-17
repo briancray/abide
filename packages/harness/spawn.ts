@@ -89,7 +89,7 @@ function environment(declared: Record<string, string | undefined>): Record<strin
  * what keeps that from re-slicing the held text once per line, which is the same shape `wire.ts`'s
  * line reader settled on for the same reason.
  */
-export async function* readLines(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+async function* readLines(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
     const decoder = new TextDecoder()
     let held = ''
     let from = 0

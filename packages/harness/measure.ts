@@ -8,7 +8,7 @@
 // that had already paid to load the thing it is the control for.
 //
 // It is also what makes the layer reusable outside this repo. The cross-repo comparison harness in
-// ~/code times other frameworks' arms, and `packages/perf` times a hand-written signal ladder; both
+// ~/code times other frameworks' arms, and the `wake` use case times a hand-written signal ladder; both
 // hand-rolled their own median and batch calibration before this was importable on its own, which is
 // two more places for "a timing sample must be at least 100x the clock's resolution" to be got wrong.
 //

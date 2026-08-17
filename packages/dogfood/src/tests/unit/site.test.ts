@@ -14,13 +14,14 @@ import { navigate } from 'abide'
 import { isolate } from 'abide/internal'
 import { component } from 'abide/runtime'
 import { renderToString } from 'abide/server/internal'
-import { APPS } from '#shared/demos/APPS.ts'
+import { SOURCES } from '#shared/demos/usecases/SOURCES.ts'
+import { USECASES } from '#shared/demos/usecases/USECASES.ts'
 import { allSuites } from '#shared/demos/index.ts'
 import { NAV } from '#shared/demos/SUITES.ts'
 import Arms from '#ui/lib/Arms.abide'
 import { benchRows } from '#ui/lib/bench.ts'
 import Cases from '#ui/lib/Cases.abide'
-import Demo from '#ui/lib/Demo.abide'
+import UseCase from '#ui/lib/UseCase.abide'
 import { type Face, painted, scan, sliceOf } from '#ui/lib/code.ts'
 import { marked, terms } from '#ui/lib/table.ts'
 import { DEMOS } from '#tests/PATHS.ts'
@@ -211,31 +212,34 @@ test('an unfiltered title is ONE plain run, and overlapping terms are ONE mark',
     ])
 })
 
-test('/demos frames every app in the fleet, and says so when one is not there', async () => {
-    // The page and `fleet.ts` read ONE list, and this is what says so. A prefix written in two places
-    // is a demo served at one address and shown at another — which renders as an empty box rather
-    // than as anything a reader could diagnose.
+test('a use case card carries the demo, its files and somewhere to price it', async () => {
+    // The card the demo goes IN, rendered without the demo — the view is the caller's and arrives
+    // through a slot, so what is asserted here is the box rather than what somebody put in it.
     //
-    // BOTH STATES, and the component directly rather than the page: whether a demo is up is a live
-    // fact about another process, so the page asks an rpc and under `bun test` the honest answer is
-    // always "no". Rendering `Demo` with the answer supplied is what lets the up state be asserted at
-    // all — and the down state matters just as much, because it is the one a reader meets first.
-    for (const app of APPS) {
-        const up = await renderToString(component(Demo, { app, up: true }))
-        expect(up, `${app.name} has no frame`).toContain(`src="${app.prefix}${app.entry}"`)
-        expect(up, `${app.name} is not named`).toContain(app.title)
+    // The server render is the state a reader meets first, and it is deliberately UNPRICED: the ops
+    // are driven by a button, so a card that arrived with numbers on it would be a card that had run
+    // its ops during a render nobody clicked.
+    for (const usecase of USECASES) {
+        const files = SOURCES[usecase.name] ?? []
+        const markup = await renderToString(component(UseCase, { usecase, files }))
 
-        const down = await renderToString(component(Demo, { app, up: false }))
-        expect(down, `${app.name} frames a demo that is not running`).not.toContain('<iframe')
-        // The PORT, because "not running" without it does not tell anybody what to go and start.
-        expect(down, `${app.name} does not say what is missing`).toContain(String(app.port))
-        expect(down, `${app.name} does not say how to serve it`).toContain('bun run fleet')
+        expect(markup, `${usecase.name} is not named on its card`).toContain(`data-usecase="${usecase.name}"`)
+        // The box the driver is handed. Every op selector is resolved inside it, so a card without one
+        // is a card whose ops would be looked up against the whole document.
+        expect(markup, `${usecase.name} has no box for the demo`).toContain('usecase-live')
+        // The FIRST file's label, which is the tab a reader lands on.
+        expect(markup, `${usecase.name} does not show its source`).toContain(files[0]?.label ?? '—')
+
+        if (usecase.ops.length > 0) {
+            expect(markup, `${usecase.name} cannot be priced`).toContain('id="price"')
+            expect(markup, `${usecase.name} arrived already priced`).toContain('is-waiting')
+        } else {
+            // `wake` reports its own numbers, and the card says why rather than showing an empty panel
+            // — which is what a demo that is broken also looks like.
+            expect(markup, `${usecase.name} offers to drive a demo that measures itself`).not.toContain('id="price"')
+            expect(markup, `${usecase.name} does not say why it has no ops`).toContain('IS the instrument')
+        }
     }
-
-    // Every prefix is distinct, because the door forwards by longest match: two apps sharing one
-    // would send both to whichever sorted first, and the second would never be reachable at all.
-    const prefixes = new Set(APPS.map((app) => app.prefix))
-    expect(prefixes.size, 'two demo apps claim the same prefix').toBe(APPS.length)
 })
 
 test('the bench table spends verdigris on the verdict and nothing else', async () => {

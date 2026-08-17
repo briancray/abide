@@ -1,6 +1,6 @@
 <script>
 import { props, type State } from 'abide'
-import type { Media } from '#shared/media.ts'
+import type { Media } from './media.ts'
 import Progress from './Progress.abide'
 
 // `details` is declared as a CELL, not a boolean: a prop is recognised as reactive at the binding

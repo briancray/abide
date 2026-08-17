@@ -5,8 +5,8 @@
 // that test this package reach for, and the wiring `abide start` does on an app's behalf. They are
 // still real exports and still typechecked; they are simply not the surface anyone is asked to learn.
 //
-// A specifier rather than a comment, because the two apps may not use abide's `#server` alias — that
-// alias is `packages/abide`'s own. Without an entry point here, demoting a name would mean the
+// A specifier rather than a comment, because an app may not use abide's `#server` alias — that alias
+// is `packages/abide`'s own. Without an entry point here, demoting a name would mean the
 // example's own tests could no longer import it at all, and the split would have to be enforced by
 // prose. It is now enforced by resolution.
 //

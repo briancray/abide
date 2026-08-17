@@ -27,9 +27,9 @@ const LINKS: { href: string; label: string }[] = [
     { href: '/docs', label: 'docs' },
     { href: '/tests', label: 'tests' },
     { href: '/bench', label: 'bench' },
-    // The fourth is not a view of THIS app: `/demos` frames separate applications served under a
-    // prefix by `bun run fleet`. In the nav because a reader looking for "what does one of these look
-    // like at scale" has nowhere else to be sent.
+    // The fourth is the same app at a different SIZE: `/demos` is the use cases — whole pages at
+    // scale rather than a case or a rung. In the nav because a reader looking for "what does one of
+    // these look like at a thousand rows" has nowhere else to be sent.
     { href: '/demos', label: 'demos' },
 ]
 

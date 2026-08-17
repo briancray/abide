@@ -1,6 +1,6 @@
 <script>
 import { props } from 'abide'
-import type { Media } from '#shared/media.ts'
+import type { Media } from './media.ts'
 
 const { media } = props<{ media: Media }>()
 </script>

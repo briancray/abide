@@ -38,11 +38,13 @@ test('a directory is a pattern and a filename is a kind', async () => {
         '/',
         '/bench',
         '/bench/[suite]',
-        // A literal with no parameter under it, and the one route here that is not a view of THIS
-        // app: `/demos` frames SEPARATE applications served under `/demo/<name>` by `bun run fleet`.
-        // Nothing in this table answers those — they are other processes behind a front door, which
-        // is exactly why they can ship a shell this app never could.
+        // The third vocabulary: `/demos` indexes the use cases and `/demos/[name]` is one of them
+        // running, readable and priced. They used to be a separate application framed here, which is
+        // why the index reads as a hub rather than as a page of six live demos — `complex` builds a
+        // thousand keyed rows and `data` fetches ten thousand objects, so one at a time is the cost
+        // decision as much as the layout one.
         '/demos',
+        '/demos/[name]',
         '/docs',
         '/docs/[callable]',
         // The second vocabulary, and the reason precedence is load-bearing twice over: `syntax` is a

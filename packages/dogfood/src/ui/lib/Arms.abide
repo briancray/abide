@@ -12,7 +12,7 @@
 
      What arrives from `harness` is FACTS — which arm is the subject, which is the harness floor, how
      full a bar would be, which way the ratio went — and this file is the only place those become
-     colours. That seam is why the perf app can draw the same rows without a stylesheet. -->
+     colours. That seam is why the cross-repo comparison can draw the same rows with its own. -->
 <script module>
 import type { ArmRow, BenchRow } from 'harness'
 import { armBar, armTone, armWidth, tailTone } from './bench.ts'

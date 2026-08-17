@@ -34,10 +34,22 @@
 import type { Example } from 'harness'
 import { proofsOf } from '#shared/demos/proofs.ts'
 import { type SpellingName, SPELLINGS } from '#shared/demos/SPELLINGS.ts'
+import type { SourceFile } from '#shared/demos/usecases/SOURCES.ts'
 import Code from './Code.abide'
 import Files from './Files.abide'
 import Proofs from './Proofs.abide'
 import type { NavItem } from './sidebar.ts'
+
+/**
+ * A rung's files, named for the LANES — because which lane a file is in is the whole of what
+ * `server/rpc/**` decides, and a rung that crosses the seam is the declaration plus the browser half
+ * that calls it. `server` first: it is what the rung is about, and the client half is how you reach it.
+ */
+function filesOf(rung: Example): SourceFile[] {
+    const files: SourceFile[] = [{ label: 'server', source: rung.source }]
+    if (rung.client !== undefined) files.push({ label: 'client', source: rung.client })
+    return files
+}
 
 /**
  * What both vocabularies have: a name, a line, and — for one of them — a specifier.
@@ -127,9 +139,8 @@ const { head, crumb, rungs } = props<{ head: ReferenceHead; crumb: NavItem; rung
             <!-- ONE file for a rung that is one file, and TWO where the demonstration crosses the
                  seam — an endpoint under `server/rpc/**` is the declaration a reader came for AND the
                  half their browser never receives, so showing it alone documents a call whose spelling
-                 the reader is left to guess. The tabs are named for the LANES, because which lane a
-                 file is in is the whole of what `server/rpc/**` decides. -->
-            <Files server={rung.source} client={rung.client}/>
+                 the reader is left to guess. -->
+            <Files files={filesOf(rung)}/>
             <Proofs spec={proofsOf(rung)}/>
         </section>
     {/for}

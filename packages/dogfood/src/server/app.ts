@@ -17,6 +17,7 @@ import { csp, type Middleware } from 'abide/server'
 import { CALLABLES } from '#shared/demos/CALLABLES.ts'
 import { SPELLINGS } from '#shared/demos/SPELLINGS.ts'
 import { META } from '#shared/demos/SUITES.ts'
+import { USECASES_BY_NAME } from '#shared/demos/usecases/USECASES.ts'
 
 /**
  * The paths the pages directory cannot answer for itself.
@@ -45,10 +46,11 @@ export default function notFound(): Response | undefined {
  * The patterns whose one segment is a NAME, and the vocabulary each is a name from — a route's NAME is
  * its pattern.
  *
- * THREE vocabularies, which is the shape of the site rather than an accident: `/docs` is keyed by the
- * callable you import AND by the spelling you type, and `/tests` and `/bench` by the capability whose
- * cases run and are priced. A suite is not an address under `/docs` and a callable is not one under
- * `/bench`, so asking one list about another would 404 a third of the site.
+ * FOUR vocabularies, which is the shape of the site rather than an accident: `/docs` is keyed by the
+ * callable you import AND by the spelling you type, `/tests` and `/bench` by the capability whose
+ * cases run and are priced, and `/demos` by the use case a whole page at scale is one of. A suite is
+ * not an address under `/docs` and a callable is not one under `/bench`, so asking one list about
+ * another would 404 a quarter of the site.
  *
  * Enumerated rather than matched on a prefix, so a route added under one of these sections is a name
  * this does not claim to know about until somebody puts it here.
@@ -58,6 +60,10 @@ const PARAMETERISED = new Map<string, { parameter: string; kind: string; known: 
     ['/docs/syntax/[spelling]', { parameter: 'spelling', kind: 'spelling', known: SPELLINGS }],
     ['/tests/[suite]/[...rest]', { parameter: 'suite', kind: 'suite', known: META }],
     ['/bench/[suite]', { parameter: 'suite', kind: 'suite', known: META }],
+    // The LEAF, not `VIEWS` or `SOURCES` — the three are gated key-for-key against each other in
+    // `#tests/unit/usecases.test.ts`, so all three answer this, and only one of them costs nothing to
+    // ask. `VIEWS` lands on six compiled views and, through them, on the browser's mount runtime.
+    ['/demos/[name]', { parameter: 'name', kind: 'use case', known: USECASES_BY_NAME }],
 ])
 
 /**

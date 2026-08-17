@@ -1,35 +1,39 @@
-<!-- A rung's files, as an editor shows files: one pane, and a tab per file above it.
+<!-- Some files, as an editor shows files: one pane, and a tab per file above it.
 
-     Two files is what a rung that crosses the seam is — an endpoint under `server/rpc/**` and the
-     browser half that calls it — and they were stacked, one under the other, each with a label over it.
-     That reads as two examples rather than as two halves of one: the second is below the fold on every
-     rung, so the page's answer to "what do I write" is the half a reader scrolls past.
+     A LIST rather than the `server` / `client` pair this used to be, because the pair was the ladder's
+     shape and not the shape of showing files. A rung that crosses the seam is two halves — an endpoint
+     under `server/rpc/**` and the browser half that calls it — but a use case on `/demos` is a view,
+     the data builder behind it, the components it composes, and for `data` the endpoint as well. Four
+     files is not a pair, and the alternative to widening was a second tab strip beside this one.
 
-     A COMPONENT rather than a branch inside `#ui/lib/Reference.abide`, because which file is showing is
-     per rung and a component is per position — two rungs on a page hold two of these, and `{#for}`
-     gives each its own. The alternative is one cell in the page keyed by rung, which is the same state
-     with an index to keep in step.
+     Stacked panes were what it replaced, one under the other with a label over each. That reads as
+     several examples rather than as the halves of one: everything after the first is below the fold, so
+     the page's answer to "what do I write" is the part a reader scrolls past.
+
+     A COMPONENT rather than a branch inside a caller, because which file is showing is per POSITION —
+     six rungs on a page hold six of these, and `{#for}` gives each its own. The alternative is one cell
+     in the page keyed by rung, which is the same state with an index to keep in step.
 
      One file is still one pane and NO tab strip: a lone tab is chrome that says nothing, and most of
      the ladder is one file. -->
 <script>
 import { props, state } from 'abide'
+import type { SourceFile } from '#shared/demos/usecases/SOURCES.ts'
 import Code from './Code.abide'
 
-// `client: string | undefined` rather than `client?: string`. Under `exactOptionalPropertyTypes` an
-// OPTIONAL prop is not the same thing as one that may be undefined, and every caller has a rung whose
-// second file may be absent — so the honest declaration is the one that says so.
-const { server, client } = props<{ server: string; client: string | undefined }>()
+const { files } = props<{ files: SourceFile[] }>()
 
 /**
- * Which half is showing. `server` first, because it is the declaration the rung is about — the browser
- * half is how you call it.
+ * WHICH file is showing, as an index into `files`.
  *
- * The same value on both substrates, which is what keeps the rung's own proof honest: `#shared/demos/proofs.ts`
- * renders every view on a server and mounts it on a client and compares, and a tab remembered anywhere
- * outside this cell would be a third thing that has to agree.
+ * The first, because a caller orders its list so that the first is the one the reader came for — the
+ * declaration a rung is about, or the view a demo just ran.
+ *
+ * The same value on both substrates, which is what keeps a rung's own proof honest:
+ * `#shared/demos/proofs.ts` renders every view on a server, mounts it on a client and compares, and a
+ * tab remembered anywhere outside this cell would be a third thing that has to agree.
  */
-const showing = state<'server' | 'client'>('server')
+const showing = state(0)
 </script>
 
 <!-- ONE ROOT, and it is the component's rather than the caller's: a compiled `.abide` component is a
@@ -37,31 +41,27 @@ const showing = state<'server' | 'client'>('server')
      them in — which put the pane in the column beside the one it belongs to. The box that holds them
      together is the thing being built here, so it is built here. -->
 <div class="files">
-    {#if client}
+    {#if files.length > 1}
         <div class="tabs" role="tablist">
-            <!-- `aria-selected` as a STRING, not a boolean: a boolean attribute is present or absent,
-                 and this one is read as `"true"` / `"false"` — by a screen reader, and by the rule
-                 that paints the selected tab. -->
-            <button
-                type="button"
-                role="tab"
-                class="tab"
-                aria-selected={String(showing === 'server')}
-                onclick={() => showing = 'server'}
-            >server</button>
-            <button
-                type="button"
-                role="tab"
-                class="tab"
-                aria-selected={String(showing === 'client')}
-                onclick={() => showing = 'client'}
-            >client</button>
+            {#for file, at of files}
+                <!-- `aria-selected` as a STRING, not a boolean: a boolean attribute is present or
+                     absent, and this one is read as `"true"` / `"false"` — by a screen reader, and by
+                     the rule that paints the selected tab. -->
+                <button
+                    type="button"
+                    role="tab"
+                    class="tab"
+                    aria-selected={String(showing === at)}
+                    onclick={() => showing = at}
+                >{file.label}</button>
+            {/for}
         </div>
     {/if}
 
-    <!-- `??` for the TYPE, not the runtime: `showing` is only ever `client` where the tabs exist, and
-         a slot is its own thunk that no narrowing crosses into. -->
+    <!-- `?? ''` for the TYPE and not the runtime: `showing` is only ever written from the strip above,
+         so it indexes a file that exists — but an index signature says otherwise and a slot is its own
+         thunk that no narrowing crosses into. -->
     <div class="code-block">
-        <Code source={showing === 'client' ? (client ?? '') : server}/>
+        <Code source={files[showing]?.source ?? ''}/>
     </div>
 </div>

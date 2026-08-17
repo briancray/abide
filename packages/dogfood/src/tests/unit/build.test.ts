@@ -174,6 +174,36 @@ test('a page is its own chunk, absent from the entry until somebody navigates', 
     expect(holding('<h1>user ')).not.toEqual(holding('<h1>files '))
 })
 
+test('the demos index carries six links, not six demos worth of source text', () => {
+    // The whole reason `SOURCES.ts` is a module apart from `USECASES.ts`, and until now the whole of
+    // that reason was a comment. `usecases.test.ts` gates that the two lists AGREE — a drift gate —
+    // and nothing gated that they stay APART, so folding the source text back into `USECASES.ts`
+    // would put every demo's files in the chunk that renders a list of links and turn nothing red.
+    //
+    // Verified by revert: adding `import { SOURCES }` to `demos/page.abide` fails this.
+    const index = [...texts].filter(([, text]) => text.includes('Full use cases, each an ordinary'))
+    expect(index, 'the demos index page is not in the build').toHaveLength(1)
+
+    // THE CLOSURE, not the chunk's own text, and the difference is the whole gate: written against one
+    // asset this passed with the revert IN. Two route chunks importing `SOURCES` is a chunk bun hoists
+    // it into and both of them import — so the text was never in the index's own file, and it was in
+    // everything the index page loads. The build's file list cannot answer this; `graph.imports` can.
+    const [indexName] = index[0] as [string, string]
+    const reached = new Set<string>()
+    const walk = (name: string): void => {
+        if (reached.has(name)) return
+        reached.add(name)
+        for (const held of manifest.graph?.imports?.[name] ?? []) walk(held)
+    }
+    walk(indexName)
+
+    // `server/rpc/catalogue.ts` is a LABEL in `SOURCES.ts` and can be nowhere else in a client build:
+    // the module it names elides to its address in the client lane, so the string is the source list
+    // or it is nothing.
+    const carrying = [...reached].filter((name) => (texts.get(name) ?? '').includes('server/rpc/catalogue.ts'))
+    expect(carrying, 'the demos index reaches the use-case source text').toEqual([])
+})
+
 test('the first load carries the renderer and the router, and nothing a page has not asked for', () => {
     // The FIRST LOAD is the entry plus its static import closure — what a browser must have before
     // anything paints. Route chunks are lazy and are not it, which is what the case above asserts.
@@ -185,8 +215,9 @@ test('the first load carries the renderer and the router, and nothing a page has
     //
     // The three markers are runtime strings rather than module names, because the closure is minified
     // and a name is exactly what minification takes away. Each fails on its own revert, and the number
-    // beside it is what that revert costs, measured against `packages/perf` — the app with no demos in
-    // it, and so the honest floor.
+    // beside it is what that revert costs, measured against the perf app — which had no demos in it,
+    // and so was the honest floor. There is no such app now: THIS closure carries the demos, so the
+    // three markers still gate the edges and a fresh byte count needs a fresh app with nothing in it.
     const closure = new Set<string>()
     const walk = (name: string): void => {
         if (closure.has(name)) return

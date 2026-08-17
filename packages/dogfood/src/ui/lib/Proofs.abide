@@ -50,8 +50,8 @@ watch(() => {
         <span class="badge {TONE[held.status()]}">{held.status()}</span>
     </summary>
 
-    <!-- The whole record rather than its lines: the same component a demo app's profile view mounts,
-         so a rung's card and a demo's page cannot come to show different things about one case. -->
+    <!-- The whole record rather than its lines: the same component `UseCase.abide` mounts, so a rung's
+         card and a demo's page cannot come to show different things about one case. -->
     <ProfileView profile={profileFor(spec(), held)}/>
 
     <!-- The live area the queue needs, and it is the case's own scratch space rather than anything a

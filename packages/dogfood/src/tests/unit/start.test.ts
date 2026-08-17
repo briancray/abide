@@ -273,6 +273,13 @@ test('a path that is no route is a 404, and a method that is no page falls throu
     expect(noSuite.status).toBe(404)
     expect(await noSuite.text()).toContain('no suite named nowhere')
 
+    // And the fourth, added last and the reason to assert all of them here: a section can be put in the
+    // route table and left off `PARAMETERISED`, and then it is the ONE part of the site answering 200
+    // with an apology on it. Nothing about the page it renders says so.
+    const noUseCase = await fetch(`${app.base}demos/nowhere`)
+    expect(noUseCase.status).toBe(404)
+    expect(await noUseCase.text()).toContain('no use case named nowhere')
+
     // And this one is abide's, on the same route the app just declined to claim: a POST is not a page
     // read, the app's own route answers `undefined`, and `handle` decides what that means. Which is
     // why an app writes a 404 only for the case its route table cannot express.

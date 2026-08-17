@@ -1,0 +1,140 @@
+<!-- One use case: the thing running, the files it is written in, and what its ops cost.
+
+     A demo that is only a picture rots the same way a demo that is only a demo does — it renders
+     something plausible and nobody notices when the plausible thing is wrong. So the card is not just
+     the demo: the ops the use case declares are DRIVEN here and priced, and the result is the same
+     `Profile` record `/tests` and `/docs` paint.
+
+     INLINE, in a slot, rather than framed — which is what puts the demo, its source and its cost on
+     one page: a frame has no way to hand its files over. `#shared/demos/usecases/USECASES.ts` carries
+     what the frame bought and why nothing here needed it.
+
+     DRIVEN BY A BUTTON, not on sight, and this is the third place on the site to land on that answer:
+     `/docs` mounts a rung's preview on a press, and the `data` demo samples its own counters on one.
+     The reasons here are both halves of what the page is for. A reader watching a demo drive itself
+     through five ops on arrival cannot see the demo — it is a table reordering itself while they read
+     the blurb. And a run that starts on mount is a run racing whoever else is on the page: an `e2e`
+     spec that navigates and clicks is measuring against a driver already halfway through `#sort`.
+
+     FOUR STATES, and each is a different thing to say:
+       waiting   mounted, nothing driven yet
+       running   the ops are going
+       benched   they ran, and these are the numbers
+       failed    they threw, and the card says so rather than showing no metrics
+
+     The last one exists because the alternative is a card with an empty cost panel, and that is
+     exactly what a demo that is broken, or one that got faster, also looks like.
+
+     THE OPS RUN ON A REAL BROWSER ONLY. `bind:element` is client-only, so a server render writes the
+     card and drives nothing — which is what lets a page of these server-render in one pass. -->
+<script module>
+import type { Metric, Profile } from 'harness'
+import { substrate } from 'harness'
+import type { SourceFile } from '#shared/demos/usecases/SOURCES.ts'
+import type { UseCase } from '#shared/demos/usecases/USECASES.ts'
+import { priceOps } from './priceOps.ts'
+import Files from './Files.abide'
+import ProfileView from './Profile.abide'
+
+/** What the card shows before anything has been driven. One identity, so it wakes nobody. */
+const NOTHING: Metric[] = []
+</script>
+
+<script>
+import { props, state } from 'abide'
+
+const { usecase, files } = props<{ usecase: UseCase; files: SourceFile[] }>()
+
+const demo = state<HTMLElement | null>(null)
+const priced = state<Metric[]>(NOTHING)
+const trouble = state('')
+const running = state(false)
+
+/**
+ * Drive the demo, and price what each op did.
+ *
+ * The ELEMENT is what the driver is given, not the document: every selector in `USECASES.ts` is
+ * resolved inside this box, so a demo's `#sort` cannot be the page's and the page's chrome cannot be
+ * clicked by mistake. That was free while each demo was a frame with its own realm; inline it is the
+ * whole of what keeps an op honest.
+ */
+async function run(): Promise<void> {
+    const element = demo.peek()
+    if (element === null || running.peek()) return
+    running = true
+    trouble = ''
+    try {
+        priced = await priceOps(element, usecase().ops)
+    } catch (error: unknown) {
+        // Said out loud. A demo whose ops threw is a demo that is broken, and a card that silently
+        // showed no metrics would be reporting that it is fast.
+        trouble = `the ops did not run — ${String(error)}`
+    } finally {
+        running = false
+    }
+}
+
+/** The record, built from what this lane actually saw. */
+function profile(): Profile {
+    return {
+        title: usecase().name,
+        note: usecase().blurb,
+        // The VOCABULARY this name is from, not the name again. `/tests` and `/bench` put a capability
+        // here; a use case's is `demos`, and writing the name twice was the one thing a second field
+        // could do that the address does not already say.
+        suite: 'demos',
+        // ASKED rather than asserted. This card server-renders too — `/demos/[name]` writes it on
+        // every request — so a hardcoded `'browser'` is a bun render claiming a lane it was not in.
+        substrate: substrate(),
+        // ONE face, and `visit` is not it. A `visit` frames a real route and asserts what the response
+        // did — which is what these demos used to be and is exactly what this change ended. The card
+        // mounts the view through a slot and frames nothing, so claiming it advertised a prover that
+        // left with the frame.
+        faces: ['bench'],
+        status: trouble !== '' ? 'failed' : running ? 'running' : priced.length > 0 ? 'benched' : 'waiting',
+        lines: trouble === '' ? [] : [{ label: 'trouble', value: trouble, kind: 'fail' }],
+        metrics: priced,
+    }
+}
+</script>
+
+<section class="usecase" data-usecase={usecase.name}>
+    <!-- The demo's own box, and the one the driver is handed. `usecase-live` is also the selector
+         every rule for a demo's markup hangs off in `app.css` — see the note there for what that
+         scoping does and, more importantly, what it does not. -->
+    <div class="usecase-live panel" bind:element={demo}>
+        <slot/>
+    </div>
+
+    <div class="usecase-under">
+        <div class="usecase-source">
+            <h2 class="label usecase-head">what it is written in</h2>
+            <Files files={files}/>
+        </div>
+
+        <div class="usecase-cost">
+            <h2 class="label usecase-head">what its ops cost</h2>
+            {#if usecase.ops.length > 0}
+                <!-- OUTSIDE `usecase-live`, so the button that drives the demo is not itself inside
+                     the box the driver counts. A control in there would be a node the reconcile walks
+                     and, worse, a selector the ops could reach. -->
+                <button type="button" class="button" id="price" disabled={running} onclick={() => run()}>
+                    {running ? 'driving…' : priced.length > 0 ? 'price it again' : `price ${usecase.ops.length} ops`}
+                </button>
+                <div class="panel"><ProfileView profile={profile()}/></div>
+                <p class="note">The DOM calls are exact and are the number to read. The clock is
+                closed when the microtask flush is, so it holds the SCRIPT and none of the frame —
+                which is why these ops sit under its floor even when one moves nine thousand nodes.
+                What the frame cost is <code>bun run e2e</code>’s to say: style, layout and paint are
+                only reachable over the devtools protocol, which a page cannot speak.</p>
+            {:else}
+                <!-- No ops is a real entry rather than a missing one — see `wake`. A driver that
+                     clicked its button and read 60 ms later would report the click and miss the
+                     measurement the demo is still taking. -->
+                <p class="note">This demo IS the instrument — it reports its own numbers above, on
+                its own clock and with its own batching. Driving it from out here would price the
+                click rather than the ladder.</p>
+            {/if}
+        </div>
+    </div>
+</section>

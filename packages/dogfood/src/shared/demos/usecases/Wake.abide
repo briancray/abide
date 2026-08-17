@@ -1,6 +1,6 @@
 <script>
 import { state } from 'abide'
-import { profileWakePath, type Arm } from '#shared/wake.ts'
+import { profileWakePath, type Arm } from './wake.ts'
 
 // Not run on load: the arms build four thousand-row structures and the page would be measuring its
 // own startup. The harness clicks the button, then reads `#wake-out`.
@@ -20,10 +20,6 @@ async function run(attached: boolean): Promise<void> {
     }
 }
 </script>
-
-<h1>wake</h1>
-<p>Where a wake's time goes, in the browser rather than in the emulator. Each arm adds one layer to
-the one above it, so the difference between two neighbours is what that layer costs.</p>
 
 <button id="wake-run" onclick={() => run(false)}>profile (detached)</button>
 <button id="wake-run-live" onclick={() => run(true)}>profile (in the document)</button>

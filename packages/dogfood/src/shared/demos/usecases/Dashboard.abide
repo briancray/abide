@@ -1,7 +1,7 @@
 <script>
 import { memo, state } from 'abide'
-import Card from '#ui/components/Card.abide'
-import { buildRecords } from '#shared/rows.ts'
+import Card from './Card.abide'
+import { buildRecords } from './rows.ts'
 
 const ALL = buildRecords(1, 200)
 
@@ -21,9 +21,6 @@ const total = memo(() => {
     return sum
 })
 </script>
-
-<h1>dashboard</h1>
-<p>A filtered table of 200 records: two cells, two derived values, a component reused four times.</p>
 
 <div class="cards">
     <Card title="records" value={`${visible.length}`}/>

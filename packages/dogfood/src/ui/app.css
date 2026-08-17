@@ -932,34 +932,12 @@
      its columns. Left to the implicit flow it landed under the preview and read as part of it. */
   .rung > .proofs { grid-column: 1 / -1; }
 
-  /* ── a demo app, framed ─────────────────────────────────────────────────────────────────────── */
-  /* The frame is a whole application, so it is given room to be one rather than a thumbnail of one.
-     No border of its own: the panel around it is the chrome, and a second edge inside reads as two. */
-  .demo { display: grid; gap: var(--s-3); }
-  /* The thing running and what it cost, side by side — the frame takes the width it needs to be an
-     application and the profile takes what a column of numbers needs. Below 64rem they stack, because
-     a 20rem profile beside a squeezed app is two things neither of which can be read. */
-  .demo-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 22rem); gap: var(--s-4); align-items: start; }
-  @media (max-width: 64rem) { .demo-body { grid-template-columns: minmax(0, 1fr); } }
-  .demo-profile { padding: 0; overflow: hidden; }
-  .demo-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-4); }
-  .demo-title { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: var(--text-lead); letter-spacing: var(--tracking-display); }
-  .demo-frame {
-    width: 100%;
-    height: 30rem;
-    border: 1px solid var(--color-rule);
-    border-radius: var(--radius-card);
-    /* WHITE, not the page's ground: the app inside brings its own colours, or none, and tinting the
-       box would be this app's stylesheet reaching the one thing it must not reach. */
-    background: #fff;
-  }
-
   /* ── a profile, shown ───────────────────────────────────────────────────────────────────────── */
   /* One `Profile` from the harness. The three rows are the three questions a status alone cannot
      answer: where it ran, what it could be asked, and what it cost. */
   .profile { display: grid; gap: var(--s-2); }
   /* Inside a disclosure that already carries the status on its summary, the record's own badge is the
-     same word twice. The component keeps it — a demo app mounting a profile on its own page has no
+     same word twice. The component keeps it — `UseCase.abide` mounts a profile in a bare panel with no
      summary above it — and the duplicate is suppressed at the one place there is one. */
   .proofs .profile-head .badge { display: none; }
   .profile-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-3); margin: 0; padding: var(--s-2) var(--s-3) 0; }
@@ -1228,6 +1206,117 @@
     color: var(--color-brass);
   }
   .card-blurb { margin: 0; font-size: var(--text-ui); color: var(--color-ink-soft); }
+
+  /* ── use cases ──────────────────────────────────────────────────────────────────────────────────
+     A demo, its files and its cost. The demo goes FULL WIDTH above the other two: `complex` is a
+     thousand-row table and `media` is a poster grid, and either in a column is a demo you cannot
+     read. Source and cost sit under it side by side, because the question "what does this cost" is
+     asked while looking at the code that costs it.
+
+     EVERY RULE FOR A DEMO'S OWN MARKUP IS SCOPED TO `.usecase-live`, so that nothing written for a
+     demo can reach the site around it. These views were written for a shell with no stylesheet at
+     all, so their classes are the generic names that were free there — `card`, `badge`, `grid`,
+     `value` — and several of those already mean something here.
+
+     THE SCOPING IS ONE-WAY and that is worth knowing before touching either side: `.usecase-live .x`
+     cannot escape, but the site's own `.card` and `.cards` still MATCH inside a demo, because a
+     descendant selector adds specificity rather than a boundary. The rules below are overrides on top
+     of the site's, not an isolation layer — `.usecase-live .cards` deliberately inherits the site's
+     `display: grid` and only re-tracks it. So a new site rule for `.card` / `.badge` / `.grid` does
+     reach these demos, silently, and no check in this repo can see it. Component-scoped `<style>` in
+     each view is the real fix and is a larger change than this block. */
+  .usecase { display: grid; gap: var(--s-4); }
+  /* CAPPED and scrolled, because these are use cases at SCALE: `complex` is a thousand rows and
+     `dashboard` is two hundred, and uncapped the demo is several screens of table with the source and
+     the cost panels somewhere below all of it. The whole point of the page is having the three
+     together, so the demo gets a viewport rather than the page. */
+  .usecase-live { padding: var(--s-4); max-height: 32rem; overflow: auto; }
+  .usecase-under { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--s-4); align-items: start; }
+  /* `min-width: 0` on both, and not belt-and-braces: a `<pre>` of source is wider than its track, and
+     a grid item's default `min-width: auto` sizes to the content rather than to the column — so the
+     code pane pushes the cost panel off the page instead of scrolling inside its own. */
+  .usecase-source, .usecase-cost { display: grid; gap: var(--s-2); min-width: 0; }
+  /* The same 24rem a `/tests` source pane gets, and for the same reason: a whole file is longer than
+     anything a reader wants between them and the next thing on the page. */
+  .usecase-source .code-block { max-height: 24rem; overflow: auto; }
+  /* `.label` carries the recipe — display face, micro size, tracked, uppercase. This is the two things
+     an `<h2>` in this position needs on top of it. */
+  .usecase-head { margin: 0; color: var(--color-pencil); }
+
+  /* The demo's own markup. Enough to read it by — these are use cases, not a second design. */
+  .usecase-live h2, .usecase-live h3 { margin: 0; font-family: var(--font-display); font-size: var(--text-ui); font-weight: 700; }
+  .usecase-live p { margin: 0 0 var(--s-2); font-size: var(--text-ui); }
+  .usecase-live table { width: 100%; border-collapse: collapse; font-size: var(--text-small); }
+  .usecase-live td { padding: 2px var(--s-2); border-bottom: 1px solid var(--color-rule); }
+  .usecase-live .col-id { font-family: var(--font-data); color: var(--color-pencil); width: 6rem; }
+  .usecase-live tr.danger td { background: var(--color-sunk); }
+  .usecase-live ul { margin: 0; padding: 0; list-style: none; font-size: var(--text-small); }
+
+  .usecase-live .controls { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; margin-bottom: var(--s-3); }
+  .usecase-live button, .usecase-live input[type="text"], .usecase-live input:not([type]), .usecase-live select {
+    padding: 2px var(--s-2);
+    font: inherit;
+    font-size: var(--text-small);
+    background: var(--color-ground);
+    border: 1px solid var(--color-rule);
+    border-radius: var(--radius-chip);
+  }
+  .usecase-live button:hover { background: var(--color-lifted); }
+  .usecase-live a { color: var(--color-verdigris); cursor: pointer; }
+
+  .usecase-live .cards { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--s-2); margin-bottom: var(--s-3); }
+  .usecase-live .card { padding: var(--s-3); box-shadow: none; }
+  .usecase-live .card:hover { background: var(--color-paper); box-shadow: none; }
+  .usecase-live .value { font-family: var(--font-data); font-size: var(--text-lead); }
+
+  .usecase-live .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--s-2); }
+  .usecase-live .poster, .usecase-live .entry {
+    display: grid;
+    gap: 2px;
+    align-content: start;
+    padding: var(--s-2);
+    font-size: var(--text-small);
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule);
+    border-radius: var(--radius-chip);
+  }
+  /* The `data` demo is 10,000 entries in a 32rem box — a 355,003px grid of which 512px can be seen —
+     so laying every one of them out is 26x the work of laying out the ones on screen. Gated by
+     `#tests/e2e/data-at-scale.e2e.ts` on the COUNT, which is the half that holds: 14,316 layout boxes
+     with this rule against 382,894 without it, verified by revert, while the node count is 750,887
+     either way. Layout 132ms against 653ms, style 41 against 175 — reported there, gated on neither.
+
+     `.entry` ONLY, and not every demo in a capped box, because this property does not remove layout
+     work — it trades one layout of everything for a relevance check per element, and which way that
+     goes is decided by the off-screen fraction. On `/demos/media`'s 500 posters the same rule measured
+     a net LOSS (431 recalcs and 431 layouts against 19 and 19). At 10,000 the checks are 38ms against
+     ~500ms of layout. `complex` is excluded for a second reason: it is what `reorder-layers.e2e.ts`
+     measures layout layers ON, and skipping them is not a demo of a reconcile.
+
+     `auto 189px` is measured, not guessed — the six-column grid's true height is 355,003px and this
+     estimate puts the scrollbar at 358,710px, +1.0%. Dropping the size entirely collapses it to
+     43,643px, so the declaration is load-bearing rather than decorative. */
+  .usecase-live .entry { content-visibility: auto; contain-intrinsic-size: auto 189px; }
+  .usecase-live .unmatched { opacity: .55; }
+  .usecase-live .swatch { height: var(--s-4); border-radius: 2px; }
+  .usecase-live .details, .usecase-live .meta, .usecase-live .cast { color: var(--color-ink-soft); font-size: var(--text-micro); }
+  .usecase-live .done { color: var(--color-verdigris); }
+  .usecase-live .part { color: var(--color-brass); }
+  .usecase-live .none { color: var(--color-pencil); }
+  .usecase-live .tag, .usecase-live .facet, .usecase-live .decade, .usecase-live .person, .usecase-live .hours, .usecase-live .badge {
+    display: inline-block;
+    margin-right: 4px;
+    padding: 0 4px;
+    font-family: var(--font-display);
+    font-size: var(--text-micro);
+    color: var(--color-pencil);
+    background: var(--color-sunk);
+    border-radius: 2px;
+  }
+
+  @media (max-width: 60rem) {
+    .usecase-under { grid-template-columns: minmax(0, 1fr); }
+  }
 
 
   /* ── state moves; nothing else does ─────────────────────────────────────────────────────────── */

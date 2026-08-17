@@ -1,6 +1,6 @@
 <script>
 import { state } from 'abide'
-import { buildRows, type Row } from '#shared/rows.ts'
+import { buildRows, type Row } from './rows.ts'
 
 const SIZE = 1000
 
@@ -45,9 +45,6 @@ function remove(id: number): void {
     rows = rows.filter((row) => row.id !== id)
 }
 </script>
-
-<h1>complex</h1>
-<p>A keyed table of {SIZE} rows, server-rendered and adopted.</p>
 
 <div class="controls">
     <button id="create" onclick={() => create()}>create</button>

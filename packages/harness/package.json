@@ -9,8 +9,7 @@
         "./spawn": "./spawn.ts",
         "./e2e": "./e2e.ts",
         "./engine": "./engine.ts",
-        "./server": "./server.ts",
-        "./fleet": "./fleet.ts"
+        "./server": "./server.ts"
     },
     "scripts": {
         "typecheck": "tsc --noEmit",
