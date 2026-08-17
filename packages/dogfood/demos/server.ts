@@ -1494,6 +1494,61 @@ export default suite({
             },
         },
         {
+            title: 'an ATTRIBUTE that waits is never what a spill gives up',
+            note: 'A spill turns an open hole into a placeholder ELEMENT and patches the region in later, which works because every branch that takes a hole writes a REGION — markup that stands on its own between two nodes. An attribute slot does not: what it writes is ` class="tone"`, and its hole sits INSIDE a start tag. Give that one up the same way and the document says `<div <slot-s id="s0"></slot-s>>`, which is not markup, and there is no element for the client to patch into. So an attribute hole is a buffer segment and nothing more — it is never offered to the cap. The case needs all three parts to bite: an attribute that suspends, then more than the cap in bytes behind it, then a LATER branch that waits and triggers the spill for everybody. It reads as a correctness test and it is one, but the mechanism it guards is a cost decision — which is why the assertion is on the SHAPE of the start tag rather than on the page rendering at all.',
+            async run({ is }) {
+                const tone = memo(async () => {
+                    await sleep(20)
+                    return 'settled-tone'
+                })
+                const panel = memo(async (label: string) => {
+                    await sleep(40)
+                    return label
+                })
+                // Two of these behind the attribute is more than the walk may hold.
+                const filler = html`<p>${'x'.repeat(60000)}</p>`
+                let markup = ''
+                const drained = (async () => {
+                    for await (const chunk of renderDocument(
+                        '<title>attribute spill</title>',
+                        () =>
+                            html`<div class=${() => tone()}>${filler}${() => panel('ONE')}${filler}${() => panel('TWO')}</div>`,
+                    )) {
+                        markup += chunk
+                        // A consumer paying for BYTES, like the case above: back-pressure is what
+                        // keeps the walk at the cap while the spill lands beside it.
+                        await sleep(Math.max(1, Math.round(chunk.length / 4000)))
+                    }
+                })()
+                let deadline: ReturnType<typeof setTimeout> | undefined
+                try {
+                    await Promise.race([
+                        drained,
+                        new Promise<never>((_, fail) => {
+                            deadline = setTimeout(() => fail(new Error('the render never finished')), 4000)
+                        }),
+                    ])
+                } finally {
+                    clearTimeout(deadline)
+                }
+                // The whole of it: a placeholder opening while a start tag is still open. Written as
+                // a scan for `<slot-s` with no `>` between it and the tag that precedes it, because
+                // the broken shape is legal-looking text and `includes` cannot tell it from the
+                // legitimate placeholders this page also has.
+                // No `\s` before `<slot-s`: an attribute slot's cut takes the ` class=` INCLUDING the
+                // space in front of it, so the broken shape is `<div<slot-s ...>`. A `>` cannot appear
+                // between the two, which is what keeps this off the legitimate placeholders — those
+                // all sit after a tag that closed.
+                is('no placeholder was written inside a start tag', /<[a-z][^>]*<slot-s/.test(markup), false)
+                is('the attribute arrived on the element', markup.includes('class="settled-tone"'), true)
+                is(
+                    'and the regions that CAN spill still did',
+                    ['ONE', 'TWO'].every((label) => markup.includes(label)),
+                    true,
+                )
+            },
+        },
+        {
             title: 'a region that PROBED defers, whatever the spelling',
             note: 'Deferring used to be decided by the compiler matching `{#if <cell>.pending()}` as the whole of a chain’s first test, so every other spelling fell through to a read and BLOCKED — right markup, one round trip later, and no way to say which you wanted. The walk decides now: a producer that asked about a load and did not get one has, by that fact, something to show while it runs, so what it made is the placeholder and it is called again on the settle. A ternary is the case no regex reached. A plain read is the case this must NOT catch — it signals rather than probing, so it still blocks and its markup is complete, which is what a reader running no scripts needs.',
             async run({ is }) {

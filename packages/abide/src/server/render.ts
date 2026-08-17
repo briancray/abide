@@ -40,7 +40,6 @@ import {
     type TemplateResult,
 } from '$shared/html.ts'
 import { abideLog } from '$shared/log.ts'
-import { numberKnob } from '$shared/internal/knobs.ts'
 import {
     forgetProbedLoad,
     hasProbedLoad,
@@ -80,6 +79,7 @@ import {
 // under `ABIDE_APP_NAME`, which is what names `log`'s default channel. Importing `abide/server` at
 // all is the signal that there is a filesystem to ask.
 import './app.ts'
+import { knobOf } from './config.ts'
 import { closeSeeding, heldPump, holdScope, isServing, nonce, openSeeding } from './scopes.ts'
 import { type Shell, shellAround } from './shell.ts'
 
@@ -150,7 +150,37 @@ interface Out {
      * the EARLIEST open hole, and that one is still open. What has to be given up is every hole at
      * once, which is why this list exists rather than a count.
      */
-    open: { at: number; markup: Promise<string>; patched: boolean }[] | null
+    open: Hole[] | null
+}
+
+/** One position held open behind the walk: where it goes, what fills it, and whether a spill took it. */
+interface Hole {
+    at: number
+    markup: Promise<string>
+    patched: boolean
+    /**
+     * May the cap give this one up?
+     *
+     * True for a REGION — markup that stands on its own between two nodes, which is what a placeholder
+     * element can stand in for. False for an ATTRIBUTE or a spread: what those write is ` class="…"`
+     * inside a start tag that is still open, so a placeholder there reads `<div<slot-s></slot-s>>`,
+     * which is not markup and has no element for the patch to land in. Such a hole is a buffer segment
+     * and nothing more — it still holds, and that is the one thing the cap cannot buy its way out of.
+     */
+    spillable: boolean
+}
+
+/**
+ * An empty buffer.
+ *
+ * ONE literal, which is what makes the shape rule hold by construction rather than by three comments
+ * asking a reader to check field order across three sites. A document render has two `Out`s alive at
+ * once — this walk, plus a string one per deferred boundary — and `emit` reads both per node, so two
+ * orders would be two hidden classes under every one of those reads. `stream` builds its own because
+ * its `flush` is a method rather than a field assigned after.
+ */
+function newOut(): Out {
+    return { text: '', flush: null, segments: null, fills: null, sent: 0, held: 0, open: null }
 }
 
 /** `null` means the node is fully written; a promise means the rest of it will be. */
@@ -252,11 +282,19 @@ function spill(out: Out, document: DocumentContext): void {
     const open = out.open
     if (open === null || open.length === 0) return
     const segments = out.segments as (string | null)[]
-    const given = open.length
+    // What the cap may not have — see `Hole.spillable`. Carried over rather than dropped, so the fill
+    // that lands later still finds its entry to `take`.
+    const kept: Hole[] = []
+    let given = 0
     for (let i = 0; i < open.length; i++) {
-        const entry = open[i] as { at: number; markup: Promise<string>; patched: boolean }
+        const entry = open[i] as Hole
+        if (!entry.spillable) {
+            kept.push(entry)
+            continue
+        }
         if (entry.patched) continue
         entry.patched = true
+        given++
         const id = document.nextId++
         document.deferred.push({
             id,
@@ -270,6 +308,10 @@ function spill(out: Out, document: DocumentContext): void {
         out.held += placeholder.length
     }
     open.length = 0
+    for (let i = 0; i < kept.length; i++) open.push(kept[i] as Hole)
+    // Nothing was given up, so nothing became sendable and there is no trade to announce: the walk
+    // is behind a hole it may not spill and blocks exactly as it did before any of this.
+    if (given === 0) return
     renderLog.warning(
         `a render passed ${HOLD_LIMIT} held bytes and patched ${given} region(s) instead of ` +
             'blocking — that markup now needs javascript to appear',
@@ -308,7 +350,7 @@ function streams(out: Out, run: (into: Out) => Promise<void>): Rest {
  * that would otherwise have started one at a time live. `assembled` joins a string render back up;
  * `sendable` is what lets a stream give away the part in front of a hole while it is still open.
  */
-function hole(out: Out, run: (into: Out) => Promise<void>): Rest {
+function hole(out: Out, run: (into: Out) => Promise<void>, spillable = true): Rest {
     let segments = out.segments
     if (segments === null) {
         segments = []
@@ -329,12 +371,11 @@ function hole(out: Out, run: (into: Out) => Promise<void>): Rest {
     out.text = ''
     const at = segments.length
     segments.push(null)
-    // Field order matches every other `Out` in the file — see `stream`'s note.
-    const into: Out = { text: '', flush: null, segments: null, fills: null, sent: 0, held: 0, open: null }
+    const into = newOut()
     // The region's MARKUP, which is what a spill hands to the drain — so the two endings share one
     // run of the body rather than the walk having to choose between them up front.
     const markup = run(into).then(() => assembled(into))
-    const entry = { at, markup, patched: false }
+    const entry: Hole = { at, markup, patched: false, spillable }
     open.push(entry)
     fills.push(
         markup.then(
@@ -342,7 +383,7 @@ function hole(out: Out, run: (into: Out) => Promise<void>): Rest {
                 // Spilled while it was in flight: the placeholder is already on the wire and this
                 // markup belongs to the patch, not to the segment it used to own.
                 if (entry.patched) return
-                take(open as typeof open & object, entry)
+                take(open, entry)
                 ;(segments as (string | null)[])[at] = text
                 out.held += text.length
                 // A stream may now be able to give away everything up to the NEXT hole, and nothing
@@ -353,7 +394,7 @@ function hole(out: Out, run: (into: Out) => Promise<void>): Rest {
                 // A patched region reports its own failure through `deferralFailed`. An open one is
                 // still part of this walk, and fails it exactly as blocking there did.
                 if (entry.patched) return
-                take(open as typeof open & object, entry)
+                take(open, entry)
                 throw error
             },
         ),
@@ -362,8 +403,8 @@ function hole(out: Out, run: (into: Out) => Promise<void>): Rest {
 }
 
 /** Drop a hole that filled on its own, so a later spill has only the ones still open to give up. */
-function take(open: { at: number; markup: Promise<string>; patched: boolean }[], entry: unknown): void {
-    const at = open.indexOf(entry as never)
+function take(open: Hole[], entry: Hole): void {
+    const at = open.indexOf(entry)
     if (at !== -1) open.splice(at, 1)
 }
 
@@ -498,41 +539,19 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
 }
 
 /**
- * An attribute that arrived late: write it, then resume the walk after it.
+ * A slot that waits INSIDE a start tag: into a hole where the walk can carry on past it, in place
+ * where it cannot.
  *
- * The two ways one can arrive late — a read that signalled, and a thunk that handed back a promise —
- * end identically, so the continuation is here rather than spelled twice inside the `attr` case.
- * Resumed at the NEXT slot: the static text in front of this one is already in the buffer, so the
- * walk cannot re-enter at it.
+ * `waits`'s shape for the four branches `waits` may not serve. The fork is the same one and the
+ * difference is the whole reason this exists: a hole taken here is never offered to the cap, because
+ * what an attribute writes is not a region a placeholder can stand in for — see `Hole.spillable`.
+ * So there is no `spill` call and no `context`, and over the cap this blocks rather than patching.
  *
- * A free function rather than a closure built in the case body, so the common branch — an attribute
- * whose value is already in hand — allocates nothing. Only the two branches that waited build the
- * arrow that calls this.
+ * The two ways such a slot can arrive late — a read that signalled, and a thunk that handed back a
+ * promise — end identically, which is why both arms of both cases come through here.
  */
-function resumeAttribute(
-    result: TemplateResult,
-    context: RenderContext,
-    out: Out,
-    slot: number,
-    name: string,
-    settled: unknown,
-): Promise<void> | undefined {
-    out.text += attribute(name, settled)
-    const rest = emitTemplate(result, context, out, slot + 1)
-    return rest === null ? undefined : rest
-}
-
-/** A spread that arrived late. `resumeAttribute`'s rule one hole kind over — see its note. */
-function resumeSpread(
-    result: TemplateResult,
-    context: RenderContext,
-    out: Out,
-    slot: number,
-    settled: unknown,
-): Promise<void> | undefined {
-    writeSpread(settled, out)
-    const rest = emitTemplate(result, context, out, slot + 1)
-    return rest === null ? undefined : rest
+function heldInTag(out: Out, run: (into: Out) => Promise<void>): Rest {
+    return holds(out) ? hole(out, run, false) : run(out)
 }
 
 /**
@@ -595,17 +614,12 @@ function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, 
                     // A hole holds the ATTRIBUTE TEXT, which is the whole of what this slot writes —
                     // so the element it belongs to, and every load in the slots after it, carry on
                     // rather than waiting behind one `class=${() => tone()}`.
-                    if (holds(out)) {
-                        const signal = error
-                        hole(out, async (into) => {
-                            into.text += attribute(name, await awaitedProduce(signal, () => unwrap(value), into))
-                        })
-                        continue
-                    }
-                    const slot = i
-                    return awaitedProduce(error, () => unwrap(value), out).then((settled) =>
-                        resumeAttribute(result, context, out, slot, name, settled),
-                    )
+                    const signal = error
+                    const rest = heldInTag(out, async (into) => {
+                        into.text += attribute(name, await awaitedProduce(signal, () => unwrap(value), into))
+                    })
+                    if (rest === null) continue
+                    return then_(rest, () => emitTemplate(result, context, out, i + 1))
                 }
                 if (isThenable(produced)) {
                     // Awaited in place, the way a child slot's promise is. `attributeText` is
@@ -616,17 +630,12 @@ function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, 
                     // `Promise.resolve` for the TYPE, not for a wrap: a native promise comes straight
                     // back out of it, and only a foreign thenable — which `isThenable` also admits —
                     // costs the adapter.
-                    if (holds(out)) {
-                        const settling = produced
-                        hole(out, async (into) => {
-                            into.text += attribute(name, await settling)
-                        })
-                        continue
-                    }
-                    const slot = i
-                    return Promise.resolve(produced).then((settled) =>
-                        resumeAttribute(result, context, out, slot, name, settled),
-                    )
+                    const settling = produced
+                    const rest = heldInTag(out, async (into) => {
+                        into.text += attribute(name, await settling)
+                    })
+                    if (rest === null) continue
+                    return then_(rest, () => emitTemplate(result, context, out, i + 1))
                 }
                 out.text += attribute(name, produced)
                 break
@@ -649,34 +658,24 @@ function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, 
                     if (!isPending(error)) throw error
                     // The attribute rule one hole kind over: what this slot writes is a run of
                     // attributes, and a run of attributes is a string like any other.
-                    if (holds(out)) {
-                        const signal = error
-                        hole(out, async (into) => {
-                            writeSpread(await awaitedProduce(signal, () => unwrap(value), into), into)
-                        })
-                        continue
-                    }
-                    const slot = i
-                    return awaitedProduce(error, () => unwrap(value), out).then((settled) =>
-                        resumeSpread(result, context, out, slot, settled),
-                    )
+                    const signal = error
+                    const rest = heldInTag(out, async (into) => {
+                        writeSpread(await awaitedProduce(signal, () => unwrap(value), into), into)
+                    })
+                    if (rest === null) continue
+                    return then_(rest, () => emitTemplate(result, context, out, i + 1))
                 }
                 if (isThenable(spread)) {
                     // The same rule as an attribute's, and it has to be: `{...await props}` compiles
                     // to an async thunk, so what arrives here IS a promise. `writeSpread` reads
                     // `Object.keys` off it, and a promise has none — so the whole spread rendered as
                     // nothing at all, silently, on a template that compiled clean.
-                    if (holds(out)) {
-                        const settling = spread
-                        hole(out, async (into) => {
-                            writeSpread(await settling, into)
-                        })
-                        continue
-                    }
-                    const slot = i
-                    return Promise.resolve(spread).then((settled) =>
-                        resumeSpread(result, context, out, slot, settled),
-                    )
+                    const settling = spread
+                    const rest = heldInTag(out, async (into) => {
+                        writeSpread(await settling, into)
+                    })
+                    if (rest === null) continue
+                    return then_(rest, () => emitTemplate(result, context, out, i + 1))
                 }
                 writeSpread(spread, out)
                 break
@@ -885,19 +884,8 @@ function emitProbed(
             }
         })(),
     })
-    out.text += `<${PLACEHOLDER_TAG} id="${placeholderId(id)}">`
-    // PLAIN: the placeholder is markup the client adopts as one piece and replaces whole, so it must
-    // not defer again from inside itself. Already produced, so this emits the VALUE rather than
-    // calling the thunk a second time.
-    const waiting = emit(placeholder, IN_PLACEHOLDER, out)
-    if (waiting !== null) {
-        return then_(waiting, () => {
-            out.text += PLACEHOLDER_CLOSE
-            return null
-        })
-    }
-    out.text += PLACEHOLDER_CLOSE
-    return null
+    // Already produced, so this emits the VALUE rather than calling the thunk a second time.
+    return placeholderAround(out, id, () => emit(placeholder, IN_PLACEHOLDER, out))
 }
 
 /**
@@ -1031,7 +1019,7 @@ function deferredContext(context: RenderContext): RenderContext {
  * `renderToString`'s own inner loop, reached once per deferred subtree.
  */
 async function intoString(node: Renderable, context: RenderContext): Promise<string> {
-    const out: Out = { text: '', flush: null, segments: null, fills: null, sent: 0, held: 0, open: null }
+    const out = newOut()
     try {
         const waiting = emit(node, context, out)
         if (waiting !== null) await waiting
@@ -1117,11 +1105,22 @@ function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
             }
         })(),
     })
+    // Through `emitProduced` because the arm is a BODY like every other — a `{#if x.pending()}` chain
+    // reads the very cell this block is waiting for.
+    return placeholderAround(out, id, () =>
+        emitProduced(node.branches.pending as () => Renderable, IN_PLACEHOLDER, out),
+    )
+}
+
+/**
+ * The placeholder's own tags, around whatever stands in the gap until the real region arrives.
+ *
+ * `produce` runs under `IN_PLACEHOLDER`, which is PLAIN: a placeholder is markup the client adopts as
+ * one piece and replaces whole, so it must not defer again from inside itself.
+ */
+function placeholderAround(out: Out, id: number, produce: () => Rest): Rest {
     out.text += `<${PLACEHOLDER_TAG} id="${placeholderId(id)}">`
-    // PLAIN, because a placeholder must not itself defer: it is markup the client adopts as one
-    // piece and replaces whole. Through `emitProduced` because the arm is a BODY like every other —
-    // a `{#if x.pending()}` chain reads the very cell this block is waiting for.
-    const waiting = emitProduced(node.branches.pending as () => Renderable, IN_PLACEHOLDER, out)
+    const waiting = produce()
     if (waiting !== null) {
         return then_(waiting, () => {
             out.text += PLACEHOLDER_CLOSE
@@ -1145,7 +1144,13 @@ function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
  * this side — a browser has no walk to budget and could not set the knob if it did.
  */
 function renderBudget(): number {
-    return numberKnob('ABIDE_SSR_STREAM_BUDGET')
+    return knobOf('ABIDE_SSR_STREAM_BUDGET')
+}
+
+/** The clock a render races against, or `null` when nothing capped it — the three faces all ask this. */
+function budgetClock(): Budget | null {
+    const limit = renderBudget()
+    return limit === NO_LIMIT ? null : new Budget(limit)
 }
 
 /**
@@ -1291,11 +1296,8 @@ function stream(node: Renderable, context: RenderContext, budget: Budget | null)
      */
     function racing(waiting: Promise<void>): Promise<void> {
         if (clock === null) {
-            const limit = renderBudget()
-            if (limit !== NO_LIMIT) {
-                ownClock = new Budget(limit)
-                clock = ownClock
-            }
+            ownClock = budgetClock()
+            clock = ownClock
         }
         return clock === null ? waiting : clock.race(waiting)
     }
@@ -1369,7 +1371,7 @@ export async function renderToString(node: Renderable, options?: RenderOptions):
     // No `flush`, so nothing in the walk can pause: a tree with no promises in it produces the whole
     // document without a single microtask, which is the entire reason `emit` is shaped this way. It
     // is also what lets a region that waits take a hole rather than hold the walk — see `Out`.
-    const out: Out = { text: '', flush: null, segments: null, fills: null, sent: 0, held: 0, open: null }
+    const out = newOut()
     try {
         const waiting = emit(node, contextFor(options), out)
         if (waiting !== null) await waiting
@@ -1438,8 +1440,7 @@ export async function* renderDocument(
     // it exists for: the page that suspends. Read here rather than inside `stream`, because this is
     // where the render begins; the clock arms itself on the first phase that actually waits, so a
     // document with nothing to await still costs no timer.
-    const limit = renderBudget()
-    const clock = limit === NO_LIMIT ? null : new Budget(limit)
+    const clock = budgetClock()
     try {
         // Every scoped `<style>` registers at MODULE scope, so by the time a render starts, every
         // component that was imported has already declared its rules — which is why the whole sheet
@@ -1557,8 +1558,7 @@ export async function* renderFragment(
 ): AsyncGenerator<string> {
     const deferrals = { nextId: 0, deferred: [] as Deferred[] }
     const context: RenderContext = { hydratable: options?.hydratable === true, document: deferrals, placeholder: false }
-    const limit = renderBudget()
-    const clock = limit === NO_LIMIT ? null : new Budget(limit)
+    const clock = budgetClock()
     try {
         openSeeding()
         yield* stream(body(), context, clock)

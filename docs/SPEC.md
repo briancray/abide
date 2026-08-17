@@ -863,11 +863,19 @@ asserts the PEAK NUMBER IN FLIGHT rather than a clock.
 
 **A streamed render holds bytes, up to a cap, and then SPILLS.** The consumer is given everything up
 to the first open hole, so document order survives however the holes settle. Past eight chunks' worth
-of held bytes, every open hole becomes an empty placeholder and a patch — see below — which bounds the
-buffer without putting the loads back in series. It is announced on abide's own `render` channel,
-because a patched region needs JAVASCRIPT to appear and the size it happens at is not visible in an
-author's source. A STRING render never reaches it: its buffer is its output, so `renderToString` and
-`renderDocumentToString` always produce complete markup.
+of held bytes, every open hole that CAN be given up becomes an empty placeholder and a patch — see
+below — which bounds the buffer without putting the loads back in series. It is announced on abide's
+own `render` channel, because a patched region needs JAVASCRIPT to appear and the size it happens at
+is not visible in an author's source. A STRING render never reaches it: its buffer is its output, so
+`renderToString` and `renderDocumentToString` always produce complete markup.
+
+**An ATTRIBUTE's hole may not SPILL.** A spill stands a placeholder ELEMENT where the region was and
+patches the markup in later, which works because what a hole holds is normally a region — markup that
+stands on its own between two nodes. What `class=${…}` holds is not: its position is inside a start
+tag that is still open, so a placeholder there reads `<div<slot-s></slot-s>>`, which is not markup and
+offers the patch no element to land in. An attribute or spread slot still takes a hole — the walk
+carries on past it, which is the point — but the cap is never offered that one, so a render behind an
+unsettled attribute blocks where a region would have been patched.
 
 **A SOURCE may not take a hole.** `{#for await}` and a bare async iterable hand over a row at a time,
 while a hole hands over a region when it is COMPLETE — eight rows became three chunks, and a channel,
