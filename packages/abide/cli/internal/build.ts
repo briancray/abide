@@ -13,11 +13,12 @@
 // question for both commands, and this one answers only the three below.
 
 // `Bun.write` builds a tree but never removes one, and `node:path` stands in for nothing — Bun
-// ships no path api. `node:util`/`node:zlib` are the brotli lane; see `brotliOf` below for why.
+// ships no path api. `node:util`/`node:zlib` are the COMPRESSION lane, both encodings: Bun has no
+// brotli at all, and its gzip is sync-only. See `brotliOf` and `gzipOf` below for why that matters.
 import { rm } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { promisify } from 'node:util'
-import { brotliCompress, constants as ZLIB } from 'node:zlib'
+import { brotliCompress, gzip, constants as ZLIB } from 'node:zlib'
 import { messageOf } from '$shared/internal/probes.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { pathsOnly } from '../COMMANDS.ts'
@@ -142,6 +143,10 @@ async function written(out: string, name: string, artifact: Bun.BuildArtifact): 
 // max-quality compress that holds the thread, which is what stopped the artifacts overlapping.
 const brotliOf = promisify(brotliCompress)
 
+// `Bun.gzipSync` is the only gzip Bun has, and at level 9 it holds the thread for the same reason
+// the sync brotli did — so the one place both encodings are taken, they are taken through promises.
+const gzipOf = promisify(gzip)
+
 /**
  * The `.br` and `.gz` beside one asset, smallest first.
  *
@@ -163,21 +168,29 @@ async function compress(
 ): Promise<Sidecar[]> {
     const sidecars: Sidecar[] = []
 
-    const brotli = await brotliOf(bytes, {
-        params: {
-            [ZLIB.BROTLI_PARAM_QUALITY]: ZLIB.BROTLI_MAX_QUALITY,
-            // The window and the size hint together are what let it beat gzip on a bundle rather than
-            // tie with it; both are free to declare and neither is guessed — the size is known here.
-            [ZLIB.BROTLI_PARAM_LGWIN]: ZLIB.BROTLI_MAX_WINDOW_BITS,
-            [ZLIB.BROTLI_PARAM_SIZE_HINT]: bytes.byteLength,
-        },
-    })
+    // BOTH encodings at once, for the reason the caller fans the artifacts out: they are independent,
+    // and one waiting on the other is wall time spent on nothing. `Bun.gzipSync` at level 9 is the
+    // same max-quality compress that holds the thread the async brotli exists to avoid — so with it
+    // here every artifact serialised through gzip in between the brotli awaits, and half of what the
+    // `promisify` bought was spent again one call below it.
+    const [brotli, gzip] = await Promise.all([
+        brotliOf(bytes, {
+            params: {
+                [ZLIB.BROTLI_PARAM_QUALITY]: ZLIB.BROTLI_MAX_QUALITY,
+                // The window and the size hint together are what let it beat gzip on a bundle rather
+                // than tie with it; both are free to declare and neither is guessed — the size is
+                // known here.
+                [ZLIB.BROTLI_PARAM_LGWIN]: ZLIB.BROTLI_MAX_WINDOW_BITS,
+                [ZLIB.BROTLI_PARAM_SIZE_HINT]: bytes.byteLength,
+            },
+        }),
+        gzipOf(bytes, { level: 9 }),
+    ])
     if (brotli.byteLength < bytes.byteLength) {
         await Bun.write(`${out}/${name}.br`, brotli)
         sidecars.push({ encoding: 'br', file: `${name}.br`, size: brotli.byteLength })
     }
 
-    const gzip = Bun.gzipSync(bytes, { level: 9 })
     if (gzip.byteLength < bytes.byteLength) {
         await Bun.write(`${out}/${name}.gz`, gzip)
         sidecars.push({ encoding: 'gzip', file: `${name}.gz`, size: gzip.byteLength })
