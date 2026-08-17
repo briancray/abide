@@ -361,8 +361,12 @@ function hole(out: Out, run: (into: Out) => Promise<void>, spillable = true): Re
         fills = []
         out.fills = fills
     }
+    // Only a STREAM keeps this list: `spill` is its one reader, and `holds` is unconditionally true
+    // when `flush` is null, so no string render can reach it. Skipping it there is not a micro-saving
+    // — `take` is an `indexOf` plus a `splice` per fill, so a thousand awaiting rows into one buffer
+    // walked half a million entries to maintain a list nothing was able to ask for.
     let open = out.open
-    if (open === null) {
+    if (open === null && out.flush !== null) {
         open = []
         out.open = open
     }
@@ -376,14 +380,14 @@ function hole(out: Out, run: (into: Out) => Promise<void>, spillable = true): Re
     // run of the body rather than the walk having to choose between them up front.
     const markup = run(into).then(() => assembled(into))
     const entry: Hole = { at, markup, patched: false, spillable }
-    open.push(entry)
+    if (open !== null) open.push(entry)
     fills.push(
         markup.then(
             (text) => {
                 // Spilled while it was in flight: the placeholder is already on the wire and this
                 // markup belongs to the patch, not to the segment it used to own.
                 if (entry.patched) return
-                take(open, entry)
+                if (open !== null) take(open, entry)
                 ;(segments as (string | null)[])[at] = text
                 out.held += text.length
                 // A stream may now be able to give away everything up to the NEXT hole, and nothing
@@ -394,7 +398,7 @@ function hole(out: Out, run: (into: Out) => Promise<void>, spillable = true): Re
                 // A patched region reports its own failure through `deferralFailed`. An open one is
                 // still part of this walk, and fails it exactly as blocking there did.
                 if (entry.patched) return
-                take(open, entry)
+                if (open !== null) take(open, entry)
                 throw error
             },
         ),
@@ -859,31 +863,20 @@ function emitProbed(
     context: RenderContext,
     out: Out,
 ): Rest {
-    const document = context.document as DocumentContext
-    const id = document.nextId++
-    document.deferred.push({
-        id,
-        html: (async () => {
+    const id = defer(
+        context,
+        out,
+        async () => {
             try {
                 await settling
             } catch {
                 // Waited out, not handled — the re-run below reports it from the author's own
                 // expression, exactly as `awaitedProduce` leaves a failed load.
             }
-            try {
-                let again: Renderable
-                try {
-                    again = retryable(produce)
-                } catch (error) {
-                    if (!isPending(error)) throw error
-                    again = (await awaitedProduce(error, produce, out)) as Renderable
-                }
-                return await intoString(again, deferredContext(context))
-            } catch (error) {
-                return deferralFailed(id, error, 'threw while re-running its region')
-            }
-        })(),
-    })
+            return produce
+        },
+        'threw while re-running its region',
+    )
     // Already produced, so this emits the VALUE rather than calling the thunk a second time.
     return placeholderAround(out, id, () => emit(placeholder, IN_PLACEHOLDER, out))
 }
@@ -1053,22 +1046,63 @@ function deferralFailed(id: number, error: unknown, what: string): string {
 }
 
 /**
+ * Register a region as a PATCH: an id reserved now, markup pushed when the settle lands.
+ *
+ * ONE registration for the two deferring constructs, because the invariant above is one and it is
+ * load-bearing: every path out of the body below returns markup and none of them rejects. A third
+ * construct written beside these would have had to know that, and the two that exist each carried
+ * their own copy of the rule.
+ *
+ * `awaited` is the whole of what the two differ by — it decides what the settle MEANS, and hands
+ * back either the producer for the second pass or a string it would rather return outright, which is
+ * how `{#await}` answers a failed load that named no `{:catch}`.
+ */
+function defer(
+    context: RenderContext,
+    out: Out,
+    awaited: (id: number) => Promise<(() => Renderable) | string>,
+    what: string,
+): number {
+    const document = context.document as DocumentContext
+    const id = document.nextId++
+    document.deferred.push({
+        id,
+        html: (async () => {
+            try {
+                const produce = await awaited(id)
+                if (typeof produce === 'string') return produce
+                let again: Renderable
+                try {
+                    again = retryable(produce)
+                } catch (error) {
+                    if (!isPending(error)) throw error
+                    again = (await awaitedProduce(error, produce, out)) as Renderable
+                }
+                return await intoString(again, deferredContext(context))
+            } catch (error) {
+                return deferralFailed(id, error, what)
+            }
+        })(),
+    })
+    return id
+}
+
+/**
  * A block sent as a placeholder now and patched in when it settles.
  *
  * Reached only with a document to patch AND a pending arm to send — the dispatch above decides both,
  * so there is no guard to repeat here.
  */
 function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
-    const document = context.document as DocumentContext
-    const id = document.nextId++
     // The operand itself, awaited below. It used to go through `started`, which reached a lazy
     // cell's `then` synchronously so the load was running before the pending arm asked about it —
     // `await` alone would not have, and the arm would have been told there was no load. The arm
     // starts it now, because a probe starts what it reports.
     const settling = node.value as PromiseLike<unknown>
-    document.deferred.push({
-        id,
-        html: (async () => {
+    const id = defer(
+        context,
+        out,
+        async (deferralId) => {
             let settled: unknown
             let failed = false
             try {
@@ -1079,32 +1113,24 @@ function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
                 // path gained over the `suspend` it replaced, where a failed load had no arm to reach
                 // for. Without one it is a comment, because the author did not say what to show.
                 if (node.branches.catch === undefined) {
-                    return deferralFailed(id, error, 'failed with no failure arm')
+                    return deferralFailed(deferralId, error, 'failed with no failure arm')
                 }
                 settled = error
                 failed = true
             }
-            try {
-                // The arms are a producer here too, and this walk is the one that waits for them: a
-                // deferred boundary renders through `renderToString`, which is handed what they MADE.
-                let arms: Renderable
-                try {
-                    arms = retryable(() => armsOf(node, settled, failed))
-                } catch (error) {
-                    if (!isPending(error)) throw error
-                    arms = (await awaitedProduce(error, () => armsOf(node, settled, failed), out)) as Renderable
-                }
-                return await intoString(arms, deferredContext(context))
-            } catch (error) {
-                // The failure arm THREW, and for the compiled shape that is the ordinary outcome
-                // rather than an exotic one: the compiler hands the same `{#if}` chain to all three
-                // branches, so on a rejected load the chain falls past its own `pending()` test —
-                // false now — to an arm that READS the cell, and the read throws the very failure the
-                // arm was called to report. `{:else if x.error()}` is what asks instead.
-                return deferralFailed(id, error, 'threw while rendering its arms')
-            }
-        })(),
-    })
+            // The arms are a producer here too, and this walk is the one that waits for them: a
+            // deferred boundary renders through `renderToString`, which is handed what they MADE.
+            // ONE thunk: written twice it was provably the same function allocated a second time on
+            // the pending arm, which is the arm a load that signals always takes.
+            return () => armsOf(node, settled, failed)
+        },
+        // The failure arm THREW, and for the compiled shape that is the ordinary outcome rather than
+        // an exotic one: the compiler hands the same `{#if}` chain to all three branches, so on a
+        // rejected load the chain falls past its own `pending()` test — false now — to an arm that
+        // READS the cell, and the read throws the very failure the arm was called to report.
+        // `{:else if x.error()}` is what asks instead.
+        'threw while rendering its arms',
+    )
     // Through `emitProduced` because the arm is a BODY like every other — a `{#if x.pending()}` chain
     // reads the very cell this block is waiting for.
     return placeholderAround(out, id, () =>
