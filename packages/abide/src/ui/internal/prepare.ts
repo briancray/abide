@@ -19,6 +19,15 @@ import type { SlotKind, TemplateResult } from '$shared/html.ts'
 import { closeMarker, SLOT_CLOSE, SLOT_CLOSE_CODE } from '$shared/internal/MARKERS.ts'
 import { planOf } from '$shared/internal/slots.ts'
 
+/**
+ * Where a non-child slot's position is written down, between the emit above and the walk below.
+ *
+ * Both ends are in this file, but the sigil is a CONTRACT either end can break silently — a prefix
+ * changed in one place and a `slice(6)` left behind reads the wrong substring with no compile error
+ * and no failing test, which is the exact bug `MARKERS.ts` records the project already paying for.
+ */
+const SLOT_ATTRIBUTE = 'data-$'
+
 export interface PreparedPart {
     slot: number
     /** Position in a document-order ELEMENT|COMMENT walk. What the adopt walk counts against. */
@@ -93,7 +102,7 @@ export function prepare(result: TemplateResult): Prepared {
         const kind = kinds[i]
         if (kind === undefined) continue
         // A non-child slot owns the `name=` the cut took off; it becomes a locator attribute.
-        markup += kind.kind === 'child' ? closeMarker(i) : ` data-$${i}=""`
+        markup += kind.kind === 'child' ? closeMarker(i) : ` ${SLOT_ATTRIBUTE}${i}=""`
     }
 
     // The ELEMENT, not just its fragment: `Prepared` holds it, and every instance clones from it.
@@ -175,8 +184,8 @@ function record(
             // Copied, because removing an attribute shortens the live map underneath the loop. This
             // runs once per call site, so the array costs nothing a row ever pays for.
             for (const attribute of Array.from(element.attributes)) {
-                if (!attribute.name.startsWith('data-$')) continue
-                const slot = Number(attribute.name.slice(6))
+                if (!attribute.name.startsWith(SLOT_ATTRIBUTE)) continue
+                const slot = Number(attribute.name.slice(SLOT_ATTRIBUTE.length))
                 parts.push({
                     slot,
                     nodeIndex: counter.index,

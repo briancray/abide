@@ -146,10 +146,12 @@ function refusal(payload: unknown): string {
  * frame is a throw there — and delegating to it from here would put a generator hand-off, and so a
  * microtask, on every chunk of every rpc stream to save these fifteen lines.
  *
- * So this is a deliberate COPY of `chunksOf`'s buffer loop, and the two cursors are the whole of what
- * has to stay in step with it — a fix to one that does not reach the other is what this comment is
- * for. It has already happened once: the `scanned` cursor landed there and not here, and a tail is
- * exactly where a long line arrives in pieces.
+ * It is no longer the same ALGORITHM, and that is deliberate rather than drift. `chunksOf` moved to a
+ * piece list because `held += piece` builds a cons string that the following `indexOf` flattens, which
+ * is quadratic in the length of one line on V8 — 9.26 ms against 0.46 over a 512 KiB line. This reader
+ * only ever runs in the CLI, so JSC is its whole substrate, and there the same measurement runs the
+ * other way: 0.23 buffered against 0.30 pieced, because a cons string costs JSC nothing. So the two
+ * scanners answer to two engines, and converging them would pay the loss on the only one this sees.
  */
 async function readLines(response: Response, onLine: (line: string) => void): Promise<void> {
     const body = response.body

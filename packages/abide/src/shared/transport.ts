@@ -301,7 +301,9 @@ export function remote<Args, T, F extends Failed = never>(
             yield (await payloadOf(response)) as T
             return
         }
-        for await (const chunk of chunksOf(id, response)) yield chunk as T
+        // `yield*` rather than a re-yielding `for await`: the loop existed only to carry the cast, and
+        // paid an iterator result and a promise hop per chunk for it.
+        yield* chunksOf(id, response) as AsyncGenerator<T>
     }
 
     /**

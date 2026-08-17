@@ -114,6 +114,21 @@ function textOf(value: unknown): string {
 }
 
 /**
+ * Every sibling from `from` up to but NOT including `stop`, appended to `into`. `null` runs to the end.
+ *
+ * Not `Array.from(childNodes)`: a NodeList's iterator is ~646 ns per instance against ~130 ns for
+ * this walk, on a list that is one node most of the time. Six sites wanted exactly this loop with
+ * only the terminator and the destination differing, and one of them had reached for `Array.from`
+ * anyway — so the measurement is stated once, here, where the next caller reads it instead of
+ * rediscovering it. One call per RANGE rather than per node, so nothing walked per row pays a frame.
+ */
+function collectSiblings(into: ChildNode[], from: ChildNode | null, stop: ChildNode | null): void {
+    for (let node = from; node !== null && node !== stop; node = node.nextSibling) {
+        into.push(node as ChildNode)
+    }
+}
+
+/**
  * A failure the author never claimed, sent where an unhandled rejection goes.
  *
  * Three positions produce one: a bare promise in a slot, a `{#for await}` with no `{:catch}`, and a
@@ -357,7 +372,9 @@ export class ChildPart {
             // screen is the most expensive way there is to produce the same nodes.
             if (this.rawHtml === value.html) return
             this.clearExcept(null)
-            this.owned = Array.from(fragmentOf(value.html).childNodes) as ChildNode[]
+            const owned: ChildNode[] = []
+            collectSiblings(owned, fragmentOf(value.html).firstChild, null)
+            this.owned = owned
             this.anchor.before(...this.owned)
             this.rawHtml = value.html
             return
@@ -835,9 +852,7 @@ export class ChildPart {
                 // `done()` re-derives the range this is the ONLY reference to what went in, and a
                 // part disposed mid-stream — a route change, a teardown, an abandoned navigation —
                 // would otherwise leave the page it had already painted in the document.
-                for (let node = fragment.firstChild; node !== null; node = node.nextSibling) {
-                    this.owned.push(node as ChildNode)
-                }
+                collectSiblings(this.owned, fragment.firstChild, null)
                 this.anchor.before(fragment)
             },
             patch: (id: string, fragment: DocumentFragment): boolean => {
@@ -858,9 +873,7 @@ export class ChildPart {
                 const at = this.owned.indexOf(target as ChildNode)
                 if (at !== -1) {
                     const replacement: ChildNode[] = []
-                    for (let node = fragment.firstChild; node !== null; node = node.nextSibling) {
-                        replacement.push(node as ChildNode)
-                    }
+                    collectSiblings(replacement, fragment.firstChild, null)
                     this.owned.splice(at, 1, ...replacement)
                 }
                 target.replaceWith(fragment)
@@ -872,9 +885,7 @@ export class ChildPart {
                 const nodes: ChildNode[] = []
                 const parent = this.anchor.parentNode as ParentNode | null
                 const first = before === null ? (parent?.firstChild ?? null) : before.nextSibling
-                for (let node = first; node !== null && node !== this.anchor; node = node.nextSibling) {
-                    nodes.push(node as ChildNode)
-                }
+                collectSiblings(nodes, first, this.anchor)
                 this.claimed = nodes
             },
         }
@@ -1469,9 +1480,7 @@ class Instance {
             const first = cursor.node
             this.level(plan.element.content, cursor, plan, { index: -1, partAt: 0 })
             const claimed: ChildNode[] = []
-            for (let node = first; node !== null && node !== cursor.node; node = node.nextSibling) {
-                claimed.push(node)
-            }
+            collectSiblings(claimed, first, cursor.node)
             this.nodes = claimed
             if (plan.root !== null) {
                 this.leading = null
@@ -1541,12 +1550,8 @@ class Instance {
         // the anchor, so the caller inserted the anchor and left the content orphaned in the
         // fragment: the template painted blank until some later update happened to re-place it.
         this.update(result.values)
-        // Not `Array.from`: a NodeList's iterator is ~646 ns per instance against ~130 ns for the
-        // sibling walk, on a list that is one node most of the time.
         const nodes: ChildNode[] = []
-        for (let node = clone.firstChild; node !== null; node = node.nextSibling) {
-            nodes.push(node as ChildNode)
-        }
+        collectSiblings(nodes, clone.firstChild, null)
         this.nodes = nodes
     }
 

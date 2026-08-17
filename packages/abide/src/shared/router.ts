@@ -545,13 +545,24 @@ function cellsFor(fallback?: string): Cells {
     return made
 }
 
-/** Two params objects a reader cannot tell apart. Flat string maps, so this is the whole of it. */
+/**
+ * Two params objects a reader cannot tell apart. Flat string maps, so this is the whole of it.
+ *
+ * `for…in` rather than `Object.keys`, for the reason `buildPath` and `url` both give below: this runs
+ * per navigation and again on every `routes()` re-install, and the two keys arrays would be garbage
+ * every time. A name `right` lacks reads `undefined` against a string, so the value test alone puts
+ * `left`'s names inside `right`'s and the counts settle the rest.
+ */
 function sameParams(left: Params, right: Params): boolean {
     if (left === right) return true
-    const names = Object.keys(left)
-    if (names.length !== Object.keys(right).length) return false
-    for (const name of names) if (left[name] !== right[name]) return false
-    return true
+    let mine = 0
+    for (const name in left) {
+        if (left[name] !== right[name]) return false
+        mine++
+    }
+    let theirs = 0
+    for (const _name in right) theirs++
+    return mine === theirs
 }
 
 // Write the three cells a match decides — name, params and url. `navigating` and `adopted` are the
