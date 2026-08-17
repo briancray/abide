@@ -529,7 +529,17 @@ export class ChildPart {
                     `a list left ${describe(cursor.node)} over — the server wrote more rows than this one has`,
                 )
             }
-            this.owned = claimed
+            // `owned` is deliberately NOT given `claimed` here, and that is a memory fix rather than a
+            // tidy-up. The rows are the LIST's, and holding a second reference to them pinned the
+            // first generation for the part's lifetime: `set`'s array arm reaches `clearExcept('list')`,
+            // which returns early once a list exists, so nothing ever drained it. Every row the list
+            // then dropped stayed reachable — 590,019 nodes on `/demos/data?size=10000` with the filter
+            // matching nothing, and one generation's worth on every `{#for}` in any app.
+            //
+            // Nothing needed it. `firstNode` prefers `list.firstNode()` and only falls back to
+            // `owned[0]` when there is no list, and `clear` tears the rows down through
+            // `list.dispose(detach)` — which runs BEFORE the `owned` drain precisely because the list
+            // walks a live range, so the drain was re-removing already-detached nodes.
             return
         }
 
