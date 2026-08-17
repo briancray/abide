@@ -387,7 +387,12 @@ export class Node {
             settleValue(this, next)
             return
         }
-        if (this.transform !== null) next = transformed(this, next)
+        if (this.transform !== null) {
+            next = transformValue(this, next)
+            // The transform is async: the body settled, the transform did not. `memo(deps, async fn)`
+            // lands here, which is the whole of the declared-dependency form's async arm.
+            if (next === ADOPTED) return
+        }
         // Memoise: only wake observers when the derived value actually moved.
         if (before !== next) {
             const observers = this.observers
@@ -491,20 +496,47 @@ function freshBuffer(track: Async): void {
  * Put a value through the node's `transform` before it is stored, reading nothing under tracking —
  * a transform is UNTRACKED by definition, and `set` is routinely called from inside an effect.
  *
- * Applied at exactly the six places a value becomes the node's own: `state`'s initial, a sync write
- * on a cell with no tracker, a settle, a derivation's sync result, each CHUNK a live stream keeps,
- * and each chunk `adoptTranscript` replays from a SEEDED one — a chunk lands through `hold` rather
- * than through a settle, so it is its own site and not one of the other five, and a replay is its
- * own again because the stream it carries already happened. `resetNode` deliberately is NOT one of
- * them — dropping to `undefined` is
- * un-settling, not a write, and a clamp that turned it back into a number would make `invalidate`
- * unable to go cold.
+ * Applied at exactly the six places a value becomes the node's own, split by whether the result is
+ * the node's VALUE or one CHUNK of a stream. The four value sites — `state`'s initial, a sync write
+ * on a cell with no tracker, a settle, and a derivation's sync result — go through `transformValue`
+ * below, which adds the one law they share and the chunks do not. The other two call this directly:
+ * each chunk a live stream keeps, and each chunk `adoptTranscript` replays from a SEEDED one — a
+ * chunk lands through `hold` rather than through a settle, so it is its own site, and a replay is its
+ * own again because the stream it carries already happened. `resetNode` deliberately is NOT one of them — dropping to
+ * `undefined` is un-settling, not a write, and a clamp that turned it back into a number would make
+ * `invalidate` unable to go cold.
  */
 function transformed(node: Node, value: unknown): unknown {
     // A non-null `transform` is the caller's precondition. Each of the six tests it before calling,
     // which is what keeps a cell WITHOUT one from paying a call at all — so re-testing here would be
     // a second guard on every settle, every chunk and every sync write of the cells that do have one.
     return untrackCall(node.transform as (value: unknown) => unknown, value)
+}
+
+/** `transformValue` started a load of its own — the caller is DONE, and the settle writes the node. */
+const ADOPTED = Symbol('abide.adopted')
+
+/**
+ * The transform at the four sites where its result becomes the node's VALUE, and the law that a
+ * promise it hands back is a LOAD rather than a value — the same rule the body follows, one stage
+ * along. Written once here rather than at each of the three, which is also where it went missing:
+ * `memo(deps, async fn)` stored the `Promise` itself, so the read handed one back with `pending()`
+ * false and `await` on the cell resolved to a promise. A cell holding a promise as a value is the one
+ * shape "a promise is a load" has nowhere else.
+ *
+ * The adoption does NOT re-apply the transform — it has already run — which is the same trap
+ * `consume` names when it declines to route its last chunk back through `settleValue`.
+ *
+ * The other two sites are the STREAM ones and stay on `transformed`: a chunk is ordered, so `consume`
+ * awaits it in the loop instead of adopting it, and `adoptTranscript` replays a stream that already
+ * happened. A transcript cannot meet an async transform anyway — `Transcript` is off the public
+ * surface and the one thing that builds one (`transport.ts`) passes no transform.
+ */
+function transformValue(node: Node, value: unknown): unknown {
+    const next = transformed(node, value)
+    if (!isThenable(next)) return next
+    adopt(node, next, false)
+    return ADOPTED
 }
 
 // --- async cells ----------------------------------------------------------
@@ -597,7 +629,9 @@ function markStarted(node: Node, track: Async): void {
     else track.pending.write(true)
 }
 
-function adopt(node: Node, promise: PromiseLike<unknown>): void {
+// `applyTransform` is false for exactly one caller: `transformValue`, whose promise IS the
+// transform's own result. Running it again on the way in would put the value through twice.
+function adopt(node: Node, promise: PromiseLike<unknown>, applyTransform = true): void {
     const track = trackerFor(node)
     const generation = ++track.generation
     markStarted(node, track)
@@ -606,7 +640,7 @@ function adopt(node: Node, promise: PromiseLike<unknown>): void {
     // it is here to make a foreign thenable safe to adopt.
     Promise.resolve(promise).then(
         (value) => {
-            if (generation === track.generation) settleValue(node, value)
+            if (generation === track.generation) settleValue(node, value, applyTransform)
         },
         (error: unknown) => {
             if (generation === track.generation) settleError(node, error)
@@ -625,18 +659,20 @@ function wakeReaders(node: Node): void {
     for (let i = 0; i < observers.length; i++) (observers[i] as Node).mark(DIRTY)
 }
 
-function settleValue(node: Node, value: unknown): void {
+function settleValue(node: Node, value: unknown, applyTransform = true): void {
     if (node.status === DEAD) return
     const track = trackerFor(node)
-    if (node.transform !== null) {
+    if (applyTransform && node.transform !== null) {
         // A transform that throws is a failed settle, not a throw out of a promise callback nobody
         // is standing under — the cell reports it exactly as a rejected load.
         try {
-            value = transformed(node, value)
+            value = transformValue(node, value)
         } catch (error) {
             settleError(node, error)
             return
         }
+        // It handed back a promise instead: still loading, so nothing settles here.
+        if (value === ADOPTED) return
     }
     hold(node, track, value)
     markSettled(track)
@@ -744,7 +780,14 @@ function consume(node: Node, source: AsyncIterable<unknown>): void {
                 // A newer load, a `set`, an `invalidate` or a disposal all bump the generation, and
                 // any of them means nobody wants the rest of this stream.
                 if (generation !== track.generation) return
-                const chunk = node.transform === null ? raw : transformed(node, raw)
+                let chunk = node.transform === null ? raw : transformed(node, raw)
+                // An async transform is a LOAD on the value path; here it is an ordered await
+                // instead, because chunk n must land before n+1 is pulled and `adopt` would race
+                // them. Guarded, so a sync transform — every one of them today — costs no tick.
+                if (isThenable(chunk)) {
+                    chunk = await chunk
+                    if (generation !== track.generation) return
+                }
                 if (keeping) {
                     if (ceiling !== NO_LIMIT) charged += chunkCharge(chunk)
                     if (charged > ceiling) {
@@ -1705,9 +1748,18 @@ function makeCell(node: Node, beforeRead: (() => void) | null): State<unknown> {
         if (track !== null) {
             track.generation++
             settleValue(node, value) // transforms on the way in
-        } else {
+        } else if (node.transform === null) {
             node.hasValue = true
-            node.write(node.transform === null ? value : transformed(node, value))
+            node.write(value)
+        } else {
+            const shaped = transformValue(node, value)
+            // ADOPTED: the transform handed back a promise and it is in flight, so nothing is held
+            // yet — `hasValue` stays where it was and the settle writes the node. The `CLEAN` below
+            // is still owed either way: the write is the newer answer whether or not it has landed.
+            if (shaped !== ADOPTED) {
+                node.hasValue = true
+                node.write(shaped)
+            }
         }
         // On a DERIVATION the write is now the current value, so the body must not be re-run out
         // from under it on the next read. It runs again when a dependency moves, or on `refresh` —
@@ -1739,11 +1791,26 @@ export function state(initial: unknown, transform?: (value: unknown) => unknown)
         adopt(node, initial)
     } else if (isAsyncIterable(initial)) {
         consume(node, initial)
+    } else if (transform === undefined) {
+        node.value = initial
+        node.hasValue = true
     } else {
         // The initial IS the first write — a clamp that let an out-of-range initial through would be
         // a clamp with a hole in it exactly where the value came from the author rather than a user.
-        node.value = transform === undefined ? initial : transformed(node, initial)
-        node.hasValue = true
+        //
+        // And it is a write, so it obeys the write's law: a promise back from the transform is a LOAD.
+        // Excluding this site on the strength of `(value: T) => T` was excluding it by a CHECKER fact
+        // in a project whose first rule is that the javascript lane compiles too — and the hole was
+        // exactly the shape `transformValue` exists to close, one call earlier. `state(5, async …)`
+        // held the promise as its value, `pending()` was false and the read handed a promise back
+        // forever, while the SAME transform through `set` adopted correctly: one cell, two laws.
+        const shaped = transformValue(node, initial)
+        // ADOPTED: the initial is in flight, so `hasValue` stays false — which is what `markStarted`
+        // reads as cold — and the settle writes the node.
+        if (shaped !== ADOPTED) {
+            node.value = shaped
+            node.hasValue = true
+        }
     }
     return makeCell(node, null)
 }

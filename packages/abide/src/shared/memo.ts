@@ -462,22 +462,30 @@ function arglessMemo<T>(
 // `transform` first, because it is the more specific second argument: an options bag is a WEAK type
 // (every member optional), so a function with none of its members is not assignable to it and the
 // overload that takes one is skipped rather than matched by accident.
+//
+// `Awaited<Out>` on all four, because a transform that hands back a promise is a LOAD like any other
+// — the read serves what it resolves to. Sync transforms, which is every one of them today, are
+// unaffected: `Awaited<string>` is `string`.
 export function memo<T, Out>(
     body: () => Promise<T>,
     transform: (value: T) => Out,
     options?: MemoOptions,
-): Memo<Out>
+): Memo<Awaited<Out>>
 export function memo<T, Out>(
     body: () => AsyncIterable<T>,
     transform: (value: T) => Out,
     options?: MemoOptions,
-): Memo<Out>
-export function memo<T, Out>(body: () => T, transform: (value: T) => Out, options?: MemoOptions): Memo<Out>
+): Memo<Awaited<Out>>
+export function memo<T, Out>(
+    body: () => T,
+    transform: (value: T) => Out,
+    options?: MemoOptions,
+): Memo<Awaited<Out>>
 export function memo<Args, T, Out>(
     body: (args: Args) => T | Promise<T> | AsyncIterable<T>,
     transform: (value: T) => Out,
     options?: MemoOptions<Args>,
-): KeyedMemo<Args, Out>
+): KeyedMemo<Args, Awaited<Out>>
 export function memo<T>(body: () => Promise<T>, options?: MemoOptions): Memo<T>
 // A body that YIELDS is a stream, and what the memo holds is a chunk. No widening for either shape:
 // a read that has nothing yet signals rather than reporting `undefined`, so the absence shows up on

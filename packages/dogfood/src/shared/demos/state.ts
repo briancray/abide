@@ -477,6 +477,21 @@ export default suite({
                 await tick()
                 is('a loaded value is a write like any other', volume(), 10)
 
+                // The same law on the INITIAL, which is the one write that used to escape it. A
+                // transform is typed `(value: T) => T`, so an async one is only reachable from the
+                // javascript lane — and a checker fact is not a mechanism. Held as a VALUE, this read
+                // `pending()` false and handed a promise back forever, while the identical transform
+                // through `set` adopted: one cell, two laws.
+                //
+                // A REAL delay, not a resolved promise: `pending()` true is the claim, and a settled
+                // fixture is true for free on the first microtask.
+                const slowly = ((n: number) => sleep(10).then(() => n * 2)) as unknown as (n: number) => number
+                const doubled = state(5, slowly)
+                is('an async transform on the initial is a LOAD', doubled.pending(), true)
+                is('…so nothing is held yet', doubled.peek(), undefined)
+                await until(() => doubled.settled(), 'the initial to land')
+                is('…and the settle writes what landed', doubled(), 10)
+
                 const heard = reader(() => volume())
                 volume.set(50) // clamps to the value already held
                 await tick()

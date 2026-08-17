@@ -1,0 +1,26 @@
+<script module>
+import { memo, state } from 'abide'
+
+// Module scope for rung 7's reason: one cache per caller, so the two substrates agree about
+// `pending()` instead of each starting a cold load. See `#shared/demos/proofs.ts`.
+const first = state('ada')
+const last = state('lovelace')
+
+// Rung 7's transform shaped what a load returned. Read the pair the other way and the same two
+// arguments are a DECLARED DEPENDENCY SET: only the first is tracked, so it says what wakes this,
+// and the second is an untracked body free to read anything without subscribing to it. That is
+// `watch(source, handler)` with a value on the end, and an array is how it declares more than one.
+//
+// The one new thing: that body may LOAD. A transform handing back a promise is a load like any
+// other, so the cell holds what it RESOLVED to — never the promise — and says `pending()` meanwhile.
+const badge = memo(
+    () => [first, last],
+    async ([given, family]: string[]) => {
+        await new Promise((settle) => setTimeout(settle, 200))
+        return `${given} ${family}`.toUpperCase()
+    },
+)
+</script>
+
+<input bind:value={first} class="rounded border px-2 py-1" />
+<p>{badge.pending() ? 'checking…' : badge}</p>

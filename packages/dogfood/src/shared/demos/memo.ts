@@ -1230,6 +1230,56 @@ export default suite({
         },
 
         {
+            title: 'a transform that hands back a PROMISE is a load like any other',
+            note: 'The same law the body follows, one stage along — so the declared-dependency form has an async arm: the first argument says what wakes it, the second is an untracked body that may load. What the cell holds is what the transform RESOLVED to, never the promise itself.',
+            async run({ is }) {
+                const id = state(1)
+                let transforms = 0
+                const label = memo(
+                    () => id(),
+                    async (n: number) => {
+                        transforms++
+                        await sleep(20)
+                        return `row ${n}`
+                    },
+                )
+                // Asking is what starts it, and `peek` is the one member that does not ask.
+                is('cold, so the first probe kicks the load', label.pending(), true)
+                is('and nothing is retained meanwhile', label.peek(), undefined)
+
+                is('await serves what the transform RESOLVED to', await label, 'row 1')
+                is('the read hands back the value, not the promise', label(), 'row 1')
+                is('transforms', transforms, 1)
+
+                id.set(2)
+                await tick()
+                is('a dependency moved: the old value is still served', label.peek(), 'row 1')
+                is('over a load in flight', label.refreshing(), true)
+                is('and the new answer replaces it', await label, 'row 2')
+                is('transforms', transforms, 2)
+            },
+        },
+
+        {
+            title: 'an async transform over a STREAM is awaited in ORDER, not raced',
+            note: 'A chunk is ordered, so this is the one place the promise is awaited in the loop rather than adopted: chunk n lands before n+1 is pulled. The delays below DECREASE, so a transform that ran concurrently would land them backwards.',
+            async run({ is }) {
+                async function* counted(): AsyncGenerator<number> {
+                    yield 1
+                    yield 2
+                    yield 3
+                }
+                const doubled = memo(counted, async (n: number) => {
+                    await sleep(24 - n * 6) // 18ms, 12ms, 6ms — later chunks resolve SOONER
+                    return n * 2
+                })
+                await until(() => doubled.done())
+                is('the transcript is in source order', doubled.chunks(), [2, 4, 6])
+                is('and the value is the last chunk', doubled(), 6)
+            },
+        },
+
+        {
             title: 'a transform on a keyed slot sees the LOADED value',
             note: 'It is the same rule one argument along: the args pick the slot, the body loads it, and the transform is what the slot ends up holding. That is what lets the shape a caller wants live next to the call rather than at every read site.',
             async run({ is }) {

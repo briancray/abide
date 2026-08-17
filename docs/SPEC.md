@@ -33,7 +33,7 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 | `dependencies` | In a 0-arity function, discovered by reading. In a 1-arity function, they are `args` |
 | `tracked` | Re-runs when `dependencies` change |
 | `untracked` | Has no `dependencies`; re-runs imperatively |
-| `transform` | An untracked function that returns a value |
+| `transform` | An untracked function that returns a value, or a promise of one — which is a `load` |
 | `source` | `state`, `memo` or `channel` — anything whose CALL is a reactive read |
 | `cell` | A `source` you can also `set` and `await`. A `channel` is a source that is not a cell |
 | `handler` | A function whose return value is a `dispose` function |
@@ -46,7 +46,7 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 | `state` | `<T>(initial: T, transform?: (v: T) => T) => State<T>` | A cell holding a value you write yourself. |
 | `state` | `<T>(initial: Promise<T>, transform?) => Cell<T>` | The same cell started cold on a LOAD; `pending` until it lands. A `Cell` rather than a `State` because it starts with nothing retained, which is the one thing `peek` can see. |
 | `state` | `<T>(initial: AsyncIterable<T>, transform?) => Cell<T>` | The same cell started on a STREAM: it holds the latest chunk, `chunks()` holds the transcript. |
-| `transform` | `(value: T) => T` | Every write passes through it before storage, the `initial` included. Untracked; on a load or stream it sees what LANDED. A throw is a failed write. |
+| `transform` | `(value: T) => T` | Every write passes through it before storage, the `initial` included. Untracked; on a load or stream it sees what LANDED. A promise it RETURNS is a load like any other — on the `initial` too, so the cell starts `pending` and holds what it resolved to. A throw is a failed write. |
 | `state.shared` | `<T>(key: string, initial: T, transform?) => State<T>` | A cell shared by `key` across component instances, per-caller. The first call decides the value; a later one gets the existing cell. |
 
 ## `memo` — the loaded value
@@ -55,7 +55,7 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 | --- | --- | --- |
 | `memo` | `<T>(body: () => T, options?: MemoOptions) => Memo<T>` | A derived value that recomputes whenever anything it read changes. A promise or async iterable body is the same `Memo<T>`: a load that has not landed is not part of the read's type, because the read signals instead. |
 | `memo` | `<Args, T>(body: (args: Args) => T, options?: MemoOptions<Args>) => KeyedMemo<Args, T>` | A value computed per argument key, one independently cached slot per distinct args. Only the key is tracked; the body is untracked. |
-| `memo` | `(body, transform: (v: T) => Out, options?) => Memo<Out>` | The derived value passes through `transform`, untracked, and the memo becomes its return. Options still follow third. |
+| `memo` | `(body, transform: (v: T) => Out, options?) => Memo<Awaited<Out>>` | The derived value passes through `transform`, untracked, and the memo becomes its return. Options still follow third. This is also the DECLARED-DEPENDENCY form — `memo(() => [a, b], ([a, b]) => …)` — since only `body` is tracked: what `transform` reads does not subscribe, exactly as in `watch(source, handler)`. A `transform` that returns a promise is a LOAD like any other, so the form has an async arm and the cell holds what it RESOLVED to; over a stream it is awaited per chunk, in source order. |
 | `m` | `(args: Args) => MemoHandle<T>` | SELECTS the slot and hands back its cell. Selecting starts nothing; ASKING it anything — a read, an `await`, a probe — kicks the load. |
 | `m.invalidate` | `(pattern?: Partial<Args>) => void` | Every slot matching a subset of the args, compared the way slots are keyed. No pattern means every slot. |
 | `m.refresh` | `(pattern?: Partial<Args>) => void` | The same match, re-running each slot's body while it keeps serving what it holds. |
