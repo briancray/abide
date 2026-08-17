@@ -15,7 +15,7 @@ import { type Health, useHealthSource } from '$shared/health.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { abideLog } from '$shared/log.ts'
 import { appVersion } from './app.ts'
-import { NO_STORE } from './internal/CACHE.ts'
+import { NO_STORE_HEADER } from './internal/CACHE.ts'
 import { HookSlot } from './internal/hooks.ts'
 import { failedInto, merged } from './internal/merge.ts'
 import { json, refuse } from './responses.ts'
@@ -53,6 +53,9 @@ const ORIGIN =
         ? performance.timeOrigin
         : Date.now() - performance.now()
 const STARTED_AT = new Date(ORIGIN).toISOString()
+
+/** The healthy answer's init, built once: this endpoint is polled on a schedule. */
+const HEALTHY: ResponseInit = { headers: NO_STORE_HEADER }
 
 function baseline(): Health {
     return {
@@ -119,7 +122,6 @@ function answer(document: Health): Response {
     // `no-store` is the whole point of this answer: it describes this process at this moment, and a
     // cached one is a load balancer being told a drained instance is healthy — the one failure a
     // health check exists to prevent.
-    const init: ResponseInit = { headers: { 'cache-control': NO_STORE } }
-    if (document.error !== undefined) init.status = 503
-    return json(document, init)
+    if (document.error !== undefined) return json(document, { status: 503, headers: NO_STORE_HEADER })
+    return json(document, HEALTHY)
 }

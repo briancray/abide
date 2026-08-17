@@ -15,7 +15,20 @@ import { health, html, identity, log, memo, route } from 'abide'
 import type { RouteEntry } from 'abide/runtime'
 import { outlet, ready, routes } from 'abide/runtime'
 import { remote } from 'abide/runtime/transport'
-import { bag, cookies, GET, json, jsonl, onIdentity, page, redirect, request, trace } from 'abide/server'
+import {
+    bag,
+    config,
+    cookies,
+    GET,
+    json,
+    jsonl,
+    onConfig,
+    onIdentity,
+    page,
+    redirect,
+    request,
+    trace,
+} from 'abide/server'
 import { appDataDir, documentToStream, renderToString, toStream } from 'abide/server/internal'
 import { dispatch, heldStream, isServing, register, serve, shell } from 'abide/server/internal'
 import { sleep } from 'harness'
@@ -812,6 +825,31 @@ test('production refuses to seal without a declared secret', async () => {
             as(cookieOf(line), () => identity()),
         )
         expect(rotated.authenticated).toBe(false)
+    })
+})
+
+// An app may declare production through `onConfig` rather than through the environment — that is what
+// the defaults layer is for, and `config()` publishes the result either way. What `Secure` and the
+// signing-key demand used to be drawn from was `Bun.env` directly, so this app got a document saying
+// `production` and a session cookie with neither: the one disagreement `config.ts`'s own rule about
+// reading the document rather than the environment exists to prevent. Nothing about the response is
+// wrong on that path, which is why only the cookie LINE can catch it.
+test('production declared through onConfig seals the same as production declared by the operator', async () => {
+    await withEnv({ NODE_ENV: undefined, ABIDE_IDENTITY_SECRET: undefined }, async () => {
+        const off = onConfig(() => ({ NODE_ENV: 'production' }))
+        try {
+            expect(config().NODE_ENV).toBe('production')
+
+            // The secret is demanded, exactly as it is when the operator declared production.
+            await expect(
+                serve(new Request('https://x.test/'), () => identity.set({ id: 'u1' })),
+            ).rejects.toThrow('ABIDE_IDENTITY_SECRET is required in production')
+
+            const line = await withEnv({ ABIDE_IDENTITY_SECRET: 'a-real-secret' }, () => login({ id: 'u1' }))
+            expect(line).toContain('Secure')
+        } finally {
+            off()
+        }
     })
 })
 

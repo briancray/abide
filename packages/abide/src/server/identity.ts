@@ -25,11 +25,10 @@
 // correct outcome for a lane that may not decide who a caller is.
 
 import { anonymous, type Identity, type IdentitySource, useIdentitySource } from '$shared/identity.ts'
-import { isProduction } from '$shared/internal/env.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { abideLog } from '$shared/log.ts'
 import { knobOf } from './config.ts'
-import { NO_STORE } from './internal/CACHE.ts'
+import { NO_STORE_HEADER } from './internal/CACHE.ts'
 import { HookSlot } from './internal/hooks.ts'
 import { failedInto, merged } from './internal/merge.ts'
 import { json, refuse } from './responses.ts'
@@ -55,8 +54,20 @@ const decoder = new TextDecoder()
 const SEAL_ENCODING = { alphabet: 'base64url', omitPadding: true } as const
 const SEAL_DECODING = { alphabet: 'base64url' } as const
 
-/** The endpoint's one header, built once — this answer is per-caller, so nothing may cache it. */
-const NO_STORE_HEADER = { 'cache-control': NO_STORE }
+/**
+ * `NODE_ENV === 'production'`, off the config DOCUMENT rather than off the environment.
+ *
+ * A conclusion rather than a field, so it is drawn here — where it is acted on — instead of being
+ * published by `config()`: a document saying `production: false` while the cookie was sealed as
+ * though it were true is the one lie an operator has no way to catch. But it is drawn through
+ * `knobOf`, because `config.ts`'s own rule is that every knob abide reads is answered from the
+ * document, and a path reading the environment itself is a second answer. Reading `Bun.env` here
+ * meant an app declaring production through `onConfig` got `config().NODE_ENV === 'production'` and
+ * a session cookie with no `Secure` on it, and no demand for a signing key.
+ */
+function isProduction(): boolean {
+    return knobOf('NODE_ENV') === 'production'
+}
 
 /** What `set` hands back. One promise for the process: the work it reports is already done. */
 const SETTLED = Promise.resolve()
