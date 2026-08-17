@@ -529,8 +529,19 @@ export function total(counts_: Counts): number {
 /**
  * Count the calls one method makes across a region. Narrower than the counters above: this pins ONE
  * method, which is what a claim like "the class attribute was not touched" needs.
+ *
+ * `counts` narrows it further, and on a BUILT-IN prototype that is the difference between measuring
+ * the framework and measuring the substrate. Patching `Map.prototype.get` catches every Map in the
+ * process, and happy-dom's DOM is JavaScript — so 200 `<li>` mutations charge their own internal map
+ * reads to whatever the caller thought it was counting, while a real browser's native DOM charges
+ * nothing and the same assertion reads a different number in each. A predicate over the arguments
+ * pins the calls the caller MEANT, and the count is then the same on both substrates.
  */
-export function countCalls<T extends object>(target: T, method: keyof T): { calls: number; restore(): void } {
+export function countCalls<T extends object>(
+    target: T,
+    method: keyof T,
+    counts?: (...args: unknown[]) => boolean,
+): { calls: number; restore(): void } {
     const original = target[method] as unknown as (...args: unknown[]) => unknown
     const record = {
         calls: 0,
@@ -539,7 +550,7 @@ export function countCalls<T extends object>(target: T, method: keyof T): { call
         },
     }
     target[method] = function (this: unknown, ...args: unknown[]) {
-        record.calls++
+        if (counts === undefined || counts(...args)) record.calls++
         return original.apply(this, args)
     } as unknown as T[keyof T]
     return record

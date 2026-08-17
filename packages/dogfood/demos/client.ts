@@ -852,22 +852,28 @@ export default suite({
 
         {
             title: 'the key index is not built for a shift, and one row does not decide it for the rest',
-            note: 'A keyed row that is not at its own index is looked for at its NEIGHBOURS before a `Map` of every previous row is built, because a row that moved usually moved one place. What that probe was missing is that it used to stop once the index existed: the FIRST row to miss all three tests built the map, and every row after it went through a hash lookup even when the answer was sitting at `previous[i - 1]`. A relocation is exactly that shape — its first row is the one that came from far away, and the 197 behind it have each shifted by one — so it paid 204 lookups where 7 will do. So did an insert at the FRONT, which is what a feed does on every poll. Counted rather than timed on purpose: this is a "does less work" contract, the output is identical either way, and the count is the same number on any machine while the wall clock here moved 4x between two runs of the same build. `Map.prototype` is patched rather than one instance, which is the hazard the reorder case warns about for `Node.prototype` — it is sound only because the identical-order row reads 0, which is what says nothing else on this path touches a Map.',
+            note: 'A keyed row that is not at its own index is looked for at its NEIGHBOURS before a `Map` of every previous row is built, because a row that moved usually moved one place. What that probe was missing is that it used to stop once the index existed: the FIRST row to miss all three tests built the map, and every row after it went through a hash lookup even when the answer was sitting at `previous[i - 1]`. A relocation is exactly that shape — its first row is the one that came from far away, and the 197 behind it have each shifted by one — so it paid 198 lookups where 1 will do. So did an insert at the FRONT, which is what a feed does on every poll. Counted rather than timed on purpose: this is a "does less work" contract, the output is identical either way, and the count is the same number on any machine while the wall clock here moved 4x between two runs of the same build. The count is FILTERED to this list\'s own row ids, and that is what makes it the same number on both substrates rather than a style point: `Map.prototype` is every map in the process, happy-dom\'s DOM is JavaScript, and its internal map reads landed in an unfiltered count while a real browser\'s native DOM contributed none — so four of these six rows read one number under `bun test` and another in chromium, and the page was red for it. An identical-order row reading 0 does not catch that, because the pass it measures mutates no DOM at all.',
             async run({ is, log }) {
                 const base = build(200)
                 const shapes: [string, Item[], number][] = [
                     ['identical order', base.slice(), 0],
-                    ['drop the first row', base.slice(1), 3],
-                    ['adjacent swap', swapped(base, 1, 2), 6],
-                    ['distant swap', swapped(base, 1, 198), 14],
-                    ['relocation 198 → 1', lifted(base, 198, 1), 7],
-                    ['insert at the front', [{ id: 9999, label: 'row 9999' }, ...base], 4],
+                    ['drop the first row', base.slice(1), 0],
+                    ['adjacent swap', swapped(base, 1, 2), 0],
+                    ['distant swap', swapped(base, 1, 198), 2],
+                    ['relocation 198 → 1', lifted(base, 198, 1), 1],
+                    ['insert at the front', [{ id: 9999, label: 'row 9999' }, ...base], 1],
                 ]
+                // Only lookups keyed by one of OUR row ids. `Map.prototype` is every map in the
+                // process, and happy-dom's DOM is JavaScript — its own internal map reads, keyed by
+                // strings like `class` and `click`, landed in this count while a real browser's
+                // native DOM contributed none, so the same assertion read 3 here and 0 in chromium.
+                const ours = new Set<unknown>(base.map((item) => item.id))
+                ours.add(9999)
                 for (const [label, target, expected] of shapes) {
                     const rows = state(base)
                     const host = scratch(() => keyedList(rows))
                     await tick()
-                    const gets = countCalls(Map.prototype, 'get')
+                    const gets = countCalls(Map.prototype, 'get', (key) => ours.has(key))
                     rows.set(target)
                     await tick()
                     gets.restore()
@@ -878,7 +884,7 @@ export default suite({
                     is(`${label} — the order`, shown, target.map((item) => item.label))
                     is(`${label} — key-index lookups`, gets.calls, expected)
                 }
-                log('', 'with the neighbour probe behind the index instead of in front of it, the last two read 204')
+                log('', 'with the neighbour probe behind the index instead of in front of it, the relocation reads 198')
             },
         },
 
