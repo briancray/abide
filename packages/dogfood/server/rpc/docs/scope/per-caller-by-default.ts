@@ -16,7 +16,9 @@ const basket = memo(async () => ({ builtOnRun: ++ran }))
  * the next request brought a cache of its own.
  */
 export const readTwice = GET(async () => {
-    const first = await basket()
-    const second = await basket()
+    // AWAIT the memo, never `basket()`: a handler is not a position anything re-runs, so a read whose
+    // load has not landed hands back `undefined` rather than signalling. `await` is the settled value.
+    const first = await basket
+    const second = await basket
     return { first: first.builtOnRun, second: second.builtOnRun, ranSoFar: ran }
 })

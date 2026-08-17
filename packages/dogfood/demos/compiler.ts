@@ -599,6 +599,32 @@ export default suite({
         },
 
         {
+            title: '`await source` hands the source OVER, because the await IS the read',
+            note: '`then` is on the reserved surface, so `x.then(…)` already reached the handle — and `await x` is the same call written the way anybody writes it. Read as a VALUE instead, the await resolves whatever the cell held at that instant, which for a load still in flight is `undefined`. It shipped: `demos/fixtures/transport/3-a-mutation.abide` writes `const done = await rename({ id, name })` and emitted `await rename({ id, name })()`, so `/docs/POST` threw `Cannot read properties of undefined (reading \'name\')` in a browser while `bun test`, `abide check` and the whole `/docs` e2e sweep stayed green — a preview that renders is not a preview that WORKS, and nothing in the repo pressed one. Both branches take the guard, because a keyed call and a plain name are the same claim about the same token.',
+            run({ is }) {
+                const cell = "<script>import { state } from 'abide'\nconst row = state(fetch('/x'))</script>"
+                const keyed = "<script>import { memo } from 'abide'\nconst m = memo(async ({ id }) => id)</script>"
+                is(
+                    'a keyed call after `await` keeps its handle',
+                    template(`${keyed}<button onclick={async () => { const v = await m({ id: 1 }) }}>x</button>`),
+                    '<button @click=${async () => { const v = await m({ id: 1 }) }}>x</button>',
+                )
+                is(
+                    'and so does a plain name',
+                    template(`${cell}<button onclick={async () => { const v = await row }}>x</button>`),
+                    '<button @click=${async () => { const v = await row }}>x</button>',
+                )
+                // The guard is on `await` alone — a member reached off the call is still read through,
+                // which is what stops this reading as "a keyed call is never read".
+                is(
+                    'without it the call is still the read',
+                    template(`${keyed}<p>{m({ id: 1 }).length}</p>`),
+                    '<p>${() => m({ id: 1 })().length}</p>',
+                )
+            },
+        },
+
+        {
             title: 'the JavaScript lane: a callback prop reaches the handler with no type to say so',
             note: 'A `.abide` may carry no types at all, and then `props()` has no type argument for `classifyMember` to read — every prop classifies as a cell, `propCell` wraps the callback, and `onpick(row.id)` used to call the CELL and discard the handler. The rule that fixes it needs no classification: a cell read takes no arguments, so a call carrying some is a call of what the cell HOLDS. The two lanes then agree about behaviour while differing in text, which is the honest parity claim — the typed lane knows it is a callback and passes it through, the untyped one wraps it and reads it back.',
             run({ is }) {

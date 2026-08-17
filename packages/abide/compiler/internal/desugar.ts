@@ -15,6 +15,7 @@
 //   source += v       both        -> source.set(source.peek() + v)     peek: a write must not subscribe
 //   source = source+v the same    -> source.set(source.peek() + v)     the TARGET on its own RHS peeks
 //   source()          untouched   -> an identifier in callee position is already an explicit read
+//   await source      untouched   -> the await IS the read, and `then` is already reserved below
 //   source.set(v)     untouched   -> the shared surface in SPEC is reserved; every OTHER property is
 //                                    the value's own, so `state('abc').length` is `source().length`
 //
@@ -58,6 +59,23 @@ const SOURCE_SURFACE = new Set([
     'watch',
     'then',
 ])
+
+/**
+ * Whether the token in front of a source is `await`, which HANDS THE SOURCE OVER rather than reading it.
+ *
+ * `then` is already on the surface above, so `x.then(…)` reaches the handle — and `await x` is the same
+ * call written the way anybody writes it. Read as a value instead, the await resolves whatever the cell
+ * held at that instant, which for a load still in flight is `undefined`: `await rename({ id })` emitted
+ * `await rename({ id })()` and a documented rung threw on `undefined.name` in a browser while every gate
+ * in the repo stayed green.
+ *
+ * Matched on TEXT for `SOURCE_SURFACE`'s reason — `await` is contextual, so it scans as an identifier in
+ * a lane the scanner does not know is async. Nothing else can sit here: `await` is reserved inside a
+ * module, so an identifier preceding another identifier is not a name an author could have bound.
+ */
+function awaited(previous: Token | undefined): boolean {
+    return previous !== undefined && previous.text === 'await'
+}
 
 /** The constructors whose result is a SOURCE, so `const x = state(…)` makes `x` reactive. */
 export const REACTIVE_CONSTRUCTORS = new Set(['state', 'memo', 'channel'])
@@ -612,7 +630,7 @@ export function desugar(
                 (after?.kind === SyntaxKind.DotToken || after?.kind === SyntaxKind.QuestionDotToken) &&
                 member !== undefined &&
                 SOURCE_SURFACE.has(member.text)
-            if (!explicit && !verb) {
+            if (!explicit && !verb && !awaited(previous)) {
                 const end = (tokens[close] as Token).end
                 const key = source.slice(token.start, end).replace(/\s+/g, ' ')
                 reads.push({ key, start: token.start, end, keyed: true })
@@ -646,6 +664,8 @@ export function desugar(
 
         // `.source` / `?.source` — a property, not this binding.
         if (previous?.kind === SyntaxKind.DotToken || previous?.kind === SyntaxKind.QuestionDotToken) continue
+        // `await source` — the await IS the read. See `awaited`.
+        if (awaited(previous)) continue
         // `{ source: … }` — an object literal key. NOT every `:`: a ternary's consequent is followed
         // by one too, and skipping `b` in `a ? b : c` left the cell unread — rendered as its own
         // function in a slot, and unconditionally truthy in a condition, so the true arm always won.

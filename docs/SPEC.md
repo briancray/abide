@@ -171,13 +171,15 @@ It signals only where RE-RUNNING is the recovery, which is where somebody is sta
 | slot thunk · `memo` body · `watch` body | signals — the region paints nothing and repaints on the wake |
 | the server walk | signals — the walk waits for that load and calls the thunk again |
 | `await x` | waits — it is the settled value by definition |
-| `<script>` setup · event handler · module scope | hands back what is there (`undefined`) |
+| `<script>` setup · event handler · module scope · an rpc handler body | hands back what is there (`undefined`) |
 
 The type follows the position, because the compiler already knows it: a template read is `T` and
 needs no narrowing, and a `<script>` statement is emitted as `peek()` and is honestly
 `T | undefined`. The split inside a `<script>` is STATEMENT vs FUNCTION BODY — a `memo` or `watch`
 body is re-run, and nothing syntactic tells one from an event handler, so a function body there reads
-rather than peeking. Write `x.peek()` for the honest type in a handler.
+rather than peeking. Write `x.peek()` for the honest type in a handler. An rpc handler is the same
+position and the one it costs most: nothing re-runs it, so `await x` is how it asks a memo for a
+value — `x()` there is the retained value or nothing, and a member access on nothing is a 500.
 
 A `memo` is transparent to it: the signal names the CELL it started at, since that is the only thing
 that can be waited for, and the derivation is left to run its body again on the next read. A

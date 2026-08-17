@@ -16,7 +16,7 @@ const currencies = memo(async () => ({ builtOnRun: ++ran }), { global: true })
  * number stays where it was, because the request that follows finds the cache the last one filled.
  */
 export const readTwice = GET(async () => {
-    const first = await currencies()
-    const second = await currencies()
+    const first = await currencies
+    const second = await currencies
     return { first: first.builtOnRun, second: second.builtOnRun, ranSoFar: ran }
 })

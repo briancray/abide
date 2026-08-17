@@ -11,12 +11,24 @@
 // await and one variable cannot tell two of them apart.
 
 import { memo, online, state, watch } from 'abide'
+import { serve } from 'abide/server/internal'
 import { suite } from 'harness'
 import { tick } from 'harness/measure'
 import { isolate } from '$shared/internal/scopes.ts'
+import { readTwice as onePerProcess } from '../server/rpc/docs/scope/opt-into-one-cache.ts'
+import { readTwice as onePerCaller } from '../server/rpc/docs/scope/per-caller-by-default.ts'
 import { button, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
+
+/** One press of a rung's button, in process: the same `respond` the wire goes through. */
+async function press(endpoint: { raw(args: Record<string, never>): Promise<Response> }): Promise<{
+    status: number
+    answer: { first: number; second: number; ranSoFar: number }
+}> {
+    const answered = await serve(new Request('https://example.test/press'), () => endpoint.raw({}))
+    return { status: answered.status, answer: await answered.json() }
+}
 
 export default suite({
     ...META.scope,
@@ -259,6 +271,25 @@ export default suite({
                 is('…with that answer', seen, true)
 
                 stop()
+            },
+        },
+
+        {
+            title: 'the two rungs, pressed — a handler AWAITS a memo rather than reading it',
+            note: 'The rungs on `/docs/memo` are the only place this capability is stated over a real request, and both answered 500 for as long as the page existed: `await basket()` reads the cell, and a handler is not a position anything re-runs, so a first load still in flight hands back `undefined` and the member access under it throws. `bun test` could not see it — nothing here drove the endpoints — and neither could the rung proofs, which mount a view rather than press its button. So the claim is made where the failure was: two presses through `respond`, which is what the wire does.',
+            async server({ is }) {
+                const first = await press(onePerCaller)
+                const second = await press(onePerCaller)
+
+                is('the endpoint answered', [first.status, second.status], [200, 200])
+                is('the second read inside a request is the cache', first.answer.first, first.answer.second)
+                is('and the next request brought its own', second.answer.first, first.answer.first + 1)
+
+                const shared = await press(onePerProcess)
+                const again = await press(onePerProcess)
+
+                is('{ global } answered too', [shared.status, again.status], [200, 200])
+                is('and the next request found the cache the last one filled', again.answer, shared.answer)
             },
         },
 
