@@ -9,13 +9,18 @@ const hits = memo(async ({ text }: { text: string }) => {
     await new Promise((settle) => setTimeout(settle, 200))
     return text === '' ? [] : [`${text}-one`, `${text}-two`]
 })
+
+// The slot for the query AS IT STANDS, named once so the two arms below ask one question instead of
+// spelling the same one twice. A derivation over a load answers the probes for the load it could not
+// read: nothing to serve is `pending()`, and it stands down when that load lands.
+const found = memo(() => hits({ text: query }))
 </script>
 
 <input bind:value={query} />
 
 <!-- Nothing here awaits: the read SIGNALS, and the walk runs this body again when the load lands. -->
-{#if hits({ text: query }).pending()}
+{#if found.pending()}
     <p>searching…</p>
 {:else}
-    <ul>{#for hit of hits({ text: query })()}<li>{hit}</li>{/for}</ul>
+    <ul>{#for hit of found}<li>{hit}</li>{/for}</ul>
 {/if}

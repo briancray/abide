@@ -514,6 +514,33 @@ export default suite({
         },
 
         {
+            title: '…and it answers the PROBES for the load it could not read',
+            note: 'Transparency has to reach the PROBES or a derivation is only half a cell: `memo(() => rows({ q })())` settles nothing of its own, so its own tracker is never written and `pending()` reported false while there was nothing to show — an `{#if}` gate over a derived load rendered its else arm at once, on both substrates. The probe’s kick could not see it either, because it pulled untracked: a signal with nobody standing under it unwinds the body and is dropped where the pull catches it, which is right for a caller that will not ask again and is the opposite of what a probe is. So the kick pulls RETRYABLY, and the signal it catches IS the answer — with the asker subscribed to the cell that signalled, since that cell owns the only flip that can stand the probe down.',
+            async run({ is }) {
+                const rows = memo(async ({ q }: { q: string }) => {
+                    // A REAL delay for the reason the case above states: a resolved promise is read
+                    // warm, nothing signals, and every line here passes with the probe still lying.
+                    await sleep(20)
+                    return [`${q}-one`, `${q}-two`]
+                })
+                const query = state('ab')
+                const found = memo(() => rows({ q: query() })())
+
+                is('pending() — there is nothing to serve', found.pending(), true)
+                is('settled()', found.settled(), false)
+                is('done()', found.done(), false)
+
+                // The probe ALONE, with nothing reading the value: what stands it down is the flip
+                // on the cell one level down, which is the subscription the probe has to have made.
+                const asked = reader(() => found.pending())
+                await sleep(60)
+                is('the probe-only reader saw it stand down', asked.seen, ['true', 'false'])
+                is('…and the value is there', found(), ['ab-one', 'ab-two'])
+                asked.dispose()
+            },
+        },
+
+        {
             title: 'a probe ASKS, and asking KICKS',
             note: 'Every member that asks ABOUT the value starts the load: `()`, `await`, and the probes. `pending()` on a cell nobody had kicked used to report `false` — which reads as "no load is running" and meant "none has begun", a different fact wearing the same answer. Kicking makes it true, and makes a probe-first template work on its own: `{#if a.pending() || b.pending()}` starts both, with no compiler recognising the spelling. `peek` is the one member left that only observes, and SELECTING a keyed slot still starts nothing — the two places a caller can ask about a key without paying for it.',
             async run({ is }) {

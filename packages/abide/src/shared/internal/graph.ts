@@ -943,6 +943,11 @@ function pullNode(node: Node): void {
     node.pull()
 }
 
+/** The same pull, for a caller that will ask again — see `kicker`. Threaded, so it captures nothing. */
+function pullRetryably(node: Node): void {
+    retryableCall(pullNode, node)
+}
+
 /**
  * Call `fn(arg)` with a pending read allowed to signal, for a caller that will call it AGAIN once
  * the load lands. Synchronous by contract — see `willRetry`.
@@ -1151,13 +1156,20 @@ export function probedLoad(atFirstChunk: boolean): Promise<unknown> | null {
 }
 
 /**
- * What a probe does before it answers: START the work without taking the value, and NOTE the load if
- * it has not landed.
+ * What a probe does before it answers: START the work without taking the value, NOTE the load if it
+ * has not landed, and say whether the body SIGNALLED — the answer the tracker cannot give.
  *
  * The two kinds of not-yet-started are different nodes, which is why the start is not just
  * `beforeRead`. A KEYED slot kicks through `beforeRead`. A DERIVATION holds its load in a body that
  * has not run, and the tracker a probe reads is only written once it does — so a probe that skipped
  * the pull reported `false` on an argless `memo` forever, which is the same lie this change removed.
+ *
+ * RETRYABLE, and that is the third kind of not-yet: a derivation whose body reads a load ONE LEVEL
+ * DOWN settles nothing of its own, so its tracker is never written however often it is pulled. Under
+ * a bare `untrack` that read is not allowed to signal either — it hands back the `undefined` the
+ * load has not produced, and the body MEMOISES it as a settled value, so `{#if x.pending()}` reported
+ * false and the else arm rendered an empty list. The pull is a caller that will ask again, which is
+ * exactly `retryableCall`'s contract: the signal comes back out, and it is this probe's answer.
  *
  * UNTRACKED, because the probes carry their own signals: subscribing the asker to the VALUE here
  * would wake a region that only asked `pending()` on every value that lands after.
@@ -1168,10 +1180,11 @@ export function probedLoad(atFirstChunk: boolean): Promise<unknown> | null {
  * hide exactly the load a deferring region is built around. A cell that never met a promise has no
  * tracker and pays one null check for all of it.
  */
-function kicker(node: Node, beforeRead: (() => void) | null): () => void {
+function kicker(node: Node, beforeRead: (() => void) | null): () => boolean {
     const startable = beforeRead !== null || node.fn !== null
     return () => {
-        if (!kicking) return
+        if (!kicking) return false
+        let signalled: Pending | null = null
         if (startable) {
             const previous = kickedBy
             kickedBy = current
@@ -1180,13 +1193,25 @@ function kicker(node: Node, beforeRead: (() => void) | null): () => void {
                 // Threaded, not captured: a kick runs on EVERY probe, and `iterate` reads eight of
                 // them per chunk — the captured form allocated one closure per probe per chunk to
                 // make a call the engine can make directly. The same reason that loop hoists its own.
-                if (node.fn !== null) untrackCall(pullNode, node)
-            } catch {
-                // Starting is never where a failure surfaces — a signal or a throw out of the body is
-                // reported by the read that renders, exactly as `start` in `html.ts` leaves it.
+                if (node.fn !== null) untrackCall(pullRetryably, node)
+            } catch (error) {
+                // Starting is never where a FAILURE surfaces — a throw out of the body is reported by
+                // the read that renders, exactly as `start` in `html.ts` leaves it. A SIGNAL is the
+                // other way a body ends, and it is not a failure at all: it is this probe's answer.
+                if (error instanceof Pending) signalled = error
             } finally {
                 kickedBy = previous
             }
+        }
+        // The load is a CELL ONE LEVEL DOWN, and the signal is what carries it. Nothing settles this
+        // derivation, so writing `pending` on its own tracker would be a flag with no writer to stand
+        // it down; the cell that signalled has both — the flip that ends the load, and the promise a
+        // server walk defers on. So the asker subscribes to THAT one and the walk notes THAT one,
+        // which is what a direct probe of it would have done.
+        if (signalled !== null) {
+            probedPending = signalled.node
+            relayed(signalled)
+            return true
         }
         // Two facts, and they are NOT the same answer at hydration.
         //
@@ -1207,6 +1232,7 @@ function kicker(node: Node, beforeRead: (() => void) | null): () => void {
             if (track.pending.value === true) probedPending = node
             else if (track.streaming.value === true) probedStream = true
         }
+        return false
     }
 }
 
@@ -1222,8 +1248,12 @@ function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) |
     const kick = kicker(node, beforeRead)
     // Written on every cell, so the shape stays monomorphic and `nodeOf` never misses.
     ;(read as unknown as Record<symbol, Node>)[CELL] = node
+    // A body that SIGNALLED is answered from the kick rather than from this node's tracker, and the
+    // three answers are the cold ones: there is nothing to serve, so `pending` is true and `settled`
+    // is false. `refreshing` stays what the tracker says — a derivation that cannot finish its body
+    // has no retained value to be refreshing OVER, whatever it held before the deps moved.
     read.pending = () => {
-        kick()
+        if (kick()) return true
         return trackerFor(node).pending.read() as boolean
     }
     read.refreshing = () => {
@@ -1231,7 +1261,7 @@ function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) |
         return trackerFor(node).refreshing.read() as boolean
     }
     read.settled = () => {
-        kick()
+        if (kick()) return false
         return trackerFor(node).settled.read() as boolean
     }
     // The arm that DID ask — `{:else if x.error()}`, and an app asking the same question by hand.
@@ -1276,7 +1306,7 @@ function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) |
     // a warm reload has an OUTCOME already — the last load finished, and `done` reports that — while
     // a stream mid-flight has not produced one yet, however many chunks it has handed over.
     read.done = () => {
-        kick()
+        if (kick()) return false
         const track = trackerFor(node)
         return (
             track.settled.read() === true &&

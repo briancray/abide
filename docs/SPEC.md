@@ -231,6 +231,20 @@ It can only start what is EVALUATED. `||` short-circuits, so `{#if a.pending() |
 them. `peek` is the one member left that observes without causing, and SELECTING a keyed slot still
 starts nothing — those two are how a caller asks about a key it does not intend to show.
 
+**A DERIVATION answers for the load it reads.** `memo(() => rows({ q })())` settles nothing of its
+own, so it has no `pending` of its own to report; what it has is the read that could not finish. A
+probe on it therefore answers from the SIGNAL — `pending()` true, `settled()` and `done()` false —
+and subscribes the asker to the cell that signalled, which owns the flip that stands the probe back
+down. So a load named once and asked about twice reads the way the direct spelling does:
+
+```
+const found = memo(() => rows({ q: query }))
+{#if found.pending()}<p>searching…</p>{:else}<ul>{#for row of found}…{/for}</ul>{/if}
+```
+
+`refreshing()` is the one probe that stays the derivation's own, because a body that cannot finish
+has nothing retained to be refreshing OVER.
+
 ## `rpc` — `memo` + transport
 
 | Name | Type Signature | Description |
