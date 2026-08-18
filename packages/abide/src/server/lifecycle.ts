@@ -114,12 +114,19 @@ function noop(): void {}
  * app would otherwise write at every entry point and forget at one: the request scope every ambient
  * answers off, `/__abide/**`, the middleware chain, and one rule for a route that throws.
  *
- * The onion is around the APP's routes rather than around the whole request, and that is a
- * consequence rather than a convenience. A websocket upgrade has no response — Bun answers the
- * handshake itself — so a rung wrapping one could not keep the `Promise<Response>` its own signature
- * promises. Everything under the reserved prefix already gates itself per DECLARATION anyway:
- * `GET(fn, { middleware })` and `socket({ middleware })` are the rungs for a call and a subscribe,
- * and they see the args and the room, which an onion over the raw request never could.
+ * THE ONION IS AROUND EVERYTHING THIS ANSWERS, `/__abide/**` included. It was around the app's
+ * routes alone, with `dispatch` in front, and that was a hole rather than a saving: an app whose auth
+ * rung refuses anonymous callers was not refusing them at its own rpcs, its sockets or — once there
+ * was one — its MCP surface, and nothing about writing the rung said so. A rule with one invisible
+ * exception is worse than either rule.
+ *
+ * What stays in front is FILES: the client bundle and `ui/public`, mounted by the command rather than
+ * here (see `cli/internal/layers.ts`). Those have no caller to be about, which is the same reason
+ * they are allowed to shadow nothing under the reserved prefix.
+ *
+ * The per-DECLARATION rungs are unchanged and are still the sharper tool where they apply:
+ * `GET(fn, { middleware })` and `socket({ middleware })` see the args and the room, which an onion
+ * over the raw request never could. This is the coarse one that now genuinely covers everything.
  */
 export function handle(route: Route): (request: Request, server: Server<never>) => ReturnType<Route> {
     return (request: Request, server: Server<never>): ReturnType<Route> =>
@@ -158,34 +165,78 @@ function said(request: Request, answered: Response | undefined, started: number)
     requestLog.debug(`${request.method} ${new URL(request.url).pathname} ${outcome} ${elapsed}ms`)
 }
 
+/**
+ * A socket that UPGRADED, as something a middleware rung can hold.
+ *
+ * Bun answers the handshake itself, so a successful upgrade has no response — and `Middleware` is
+ * `(next) => Response | Promise<Response>`, with no room to say "there is nothing". Passing the raw
+ * `undefined` through the chain would meet `settle` and come back a 404. So the upgrade travels as
+ * this object and `unwrapped` turns it back into `undefined` at the top, which is what Bun wants.
+ *
+ * Compared by IDENTITY, never sent, and cut once: a rung that hands `next()`'s answer back — every
+ * rung that is not itself replacing the response — passes it through untouched. One that builds a
+ * NEW response around it breaks the upgrade, and that is the documented cost of a rung being able to
+ * refuse one at all.
+ *
+ * `204` and NOT the `101` an upgrade really is, because this is CONSTRUCTED AT MODULE LOAD and this
+ * module reaches a browser: the dogfood app's demos import `abide/server` for their `server` faces,
+ * so `abide/server` is in its client bundle. Bun accepts any status; a browser enforces the fetch
+ * standard's 200–599 and THROWS, which killed the page's JavaScript at import — every e2e page test
+ * timing out, with the server itself perfectly healthy. The status is only ever read by a rung, and
+ * "no content" is true of it, so the legal one costs nothing that mattered.
+ */
+const UPGRADED = new Response(null, { status: 204 })
+
 function answering(request: Request, server: Server<never>, route: Route): ReturnType<Route> {
-    // Synchronously `undefined` for anything outside `/__abide/`, so an app's own routes pay one
-    // string comparison. A PROMISE of `undefined` is a socket that upgraded, and Bun wants that
-    // undefined handed straight back — which is why the two are told apart by their shape.
-    // Cast because `dispatch` names the socket data it attaches at upgrade and this does not: the
-    // shape is the registry's own, and an app's `fetch` is handed Bun's server before anything has
-    // decided what a connection carries.
-    //
+    // Latched HERE as well as inside `dispatch`, because `dispatch` is no longer what runs first: a
+    // rung that asks `server()` before calling `next()` would otherwise find nothing on the very
+    // first request an app takes. One pointer store, and `dispatch` keeps its own for the app that
+    // mounts it directly.
+    running.set(server as never)
     // Guarded for a SYNCHRONOUS throw only, and the asymmetry is the cost: every lane under
     // `/__abide/` already turns its own failure into a response — rpc through `failed`, identity
-    // through its anonymous floor — so a rejection out of here is an abide bug rather than an app's,
-    // and a `.catch` to carry one would put a promise and a tick on every rpc call in exchange. The
-    // try is free when nothing throws, which is what makes the near half worth guarding at all.
+    // through its anonymous floor — so a rejection out of there is an abide bug rather than an app's.
+    // The try is free when nothing throws, which is what makes the near half worth guarding at all.
     try {
-        const abide = dispatch(request, server as never)
-        // Handed straight back, and deliberately without a `.catch`: a rejection out of `dispatch` is
-        // an abide bug rather than an app's, and one that upgraded a socket has no response to carry.
-        if (abide !== undefined) return abide
-
         const rungs = RUNGS
         const settled =
-            rungs.length === 0
-                ? settle(route(request, server), request)
-                : onion(rungs, 0, request, server, route)
-        return isThenable(settled) ? settled.catch(failing) : settled
+            rungs.length === 0 ? served(request, server, route) : onion(rungs, 0, request, server, route)
+        // Both arms of ONE `then`, not a `then` and a `catch`: `unwrapped` is a comparison and cannot
+        // throw, so the second link would only ever cost a promise and a tick per request.
+        return isThenable(settled) ? settled.then(unwrapped, failing) : unwrapped(settled)
     } catch (failure) {
         return failing(failure)
     }
+}
+
+/** The sentinel back to what Bun is waiting for. Every other answer is itself. */
+function unwrapped(answered: Response): Response | undefined {
+    return answered === UPGRADED ? undefined : answered
+}
+
+/** The inverse, for the socket that upgraded: absence has to survive a chain typed `=> Response`. */
+function orUpgraded(answered: Response | undefined): Response {
+    return answered ?? UPGRADED
+}
+
+/**
+ * What actually answers, at the CENTRE of the onion: abide's endpoints, then the app's own route.
+ *
+ * `dispatch` is synchronously `undefined` for anything outside `/__abide/`, so an app's own routes
+ * pay one string comparison for the endpoints existing. A PROMISE of `undefined` is a socket that
+ * upgraded — the two are told apart by their shape, which is why this cannot simply `await`.
+ *
+ * Cast because `dispatch` names the socket data it attaches at upgrade and this does not: the shape
+ * is the registry's own, and an app's `fetch` is handed Bun's server before anything has decided
+ * what a connection carries.
+ */
+function served(request: Request, server: Server<never>, route: Route): Response | Promise<Response> {
+    const abide = dispatch(request, server as never)
+    if (abide !== undefined) {
+        if (!isThenable(abide)) return abide
+        return abide.then(orUpgraded)
+    }
+    return settle(route(request, server), request)
 }
 
 /**
@@ -217,7 +268,7 @@ function onion(
     server: Server<never>,
     route: Route,
 ): Promise<Response> {
-    if (at >= rungs.length) return Promise.resolve(settle(route(request, server), request))
+    if (at >= rungs.length) return Promise.resolve(served(request, server, route))
     const rung = rungs[at] as Middleware
     let entered = false
     const next = (): Promise<Response> => {

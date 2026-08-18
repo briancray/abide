@@ -23,7 +23,7 @@ import { isFile, isThenable, messageOf } from '#shared/internal/probes.ts'
 import type { JsonSchema, JsonType } from '#shared/internal/shapes.ts'
 import { type Failed, HttpError } from '#shared/internal/wire.ts'
 
-export type { EndpointShape, JsonSchema, JsonType, Shapes } from '#shared/internal/shapes.ts'
+export type { Clients, EndpointShape, JsonSchema, JsonType, Shapes } from '#shared/internal/shapes.ts'
 
 /**
  * The Standard Schema interface, version 1 — declared, not imported.

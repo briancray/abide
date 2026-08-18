@@ -1,5 +1,5 @@
 import { renderToString } from 'abide/server/internal'
-import Page from '../server/2-suspend-and-stream.abide'
+import Page from '../Suspending.abide'
 
 /**
  * `hydratable` is what puts the markers in — two comments bracketing every slot. Without them there is

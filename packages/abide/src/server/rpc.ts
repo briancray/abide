@@ -12,12 +12,13 @@ import { type Channel, type ChannelOptions, channel, type KeyedChannel } from '#
 import { internals } from '#shared/internal/graph.ts'
 import { isThenable } from '#shared/internal/probes.ts'
 import { seedKey } from '#shared/internal/keys.ts'
-import type { JsonSchema, Shapes } from '#shared/internal/shapes.ts'
+import { type Clients, EVERY_CLIENT, type JsonSchema, type Shapes } from '#shared/internal/shapes.ts'
 import { NO_LIMIT, race, timeoutError } from '#shared/internal/timers.ts'
 import {
     type Answer,
     errorPayload,
     failedLine,
+    type Framed,
     JSON_TYPE,
     OCTET_TYPE,
     jsonLine,
@@ -27,7 +28,7 @@ import {
 } from '#shared/internal/wire.ts'
 import { abideLog } from '#shared/log.ts'
 import { type KeyedMemo, type MemoOptions, memo } from '#shared/memo.ts'
-import { asRpc, type Method, type Rpc } from '#shared/transport.ts'
+import { addressWithArgs, asRpc, type Method, type Rpc } from '#shared/transport.ts'
 import { knobOf } from './config.ts'
 import { PRIVATE_NO_STORE } from './internal/CACHE.ts'
 import { failed, headersFor } from './responses.ts'
@@ -42,10 +43,7 @@ import { heldFrames, recordSeed, seedsTable } from './scopes.ts'
  * middleware that `await`s turns a handler's own return value into a promise, which is why a
  * streaming handler is recognised from the declaration rather than from what comes back.
  */
-export type RpcMiddleware<Args, T> = (
-    next: () => T | Promise<T> | AsyncIterable<T>,
-    args: Args,
-) => T | Promise<T> | AsyncIterable<T>
+export type RpcMiddleware<Args, T> = (next: () => Produced<T>, args: Args) => Produced<T>
 
 /**
  * The declared shape of a call, in each direction.
@@ -69,6 +67,8 @@ export interface RpcSchemas<Args, T> {
 export interface RpcOptions<Args = unknown, T = unknown> {
     /** The human description carried onto every generated surface. */
     description?: string
+    /** Which generated surfaces this appears on. Every one unless this says otherwise. */
+    clients?: Clients
     /** What the call retains, how long, and under which tags. */
     memo?: MemoOptions<Args>
     /** The declared shape of the input and the output, enforced at every door the call arrives through. */
@@ -105,6 +105,8 @@ interface RpcPolicy {
      */
     address: string
     crossOrigin: string[] | null
+    /** Which generated surfaces this is on, with the default already applied — see `clientsOf`. */
+    clients: Required<Clients>
     /** What the declaration named, or `null` for "ask the process" — see `bodyCeiling`. */
     maxBodySize: number | null
     /** How long the client may serve what it loads, in ms. `Infinity` says nothing on the wire. */
@@ -133,6 +135,19 @@ const RPC_POLICY = new WeakMap<object, RpcPolicy>()
 
 export function policyOf(rpc: object): RpcPolicy | undefined {
     return RPC_POLICY.get(rpc)
+}
+
+/**
+ * What a declaration said about the generated surfaces, with the default filled in.
+ *
+ * Resolved at the DECLARATION rather than read at each door, because both projections walk every
+ * endpoint and `?? true` per surface per endpoint is the same answer recomputed — and because a
+ * resolved pair is one shape for `endpoints()` to carry, where an optional one would make every
+ * reader restate what absent means. Shared by both laws: a socket opts out of a tool the same way.
+ */
+function clientsOf(declared: Clients | undefined): Required<Clients> {
+    if (declared === undefined) return EVERY_CLIENT
+    return { mcp: declared.mcp ?? true, openapi: declared.openapi ?? true }
 }
 
 /**
@@ -183,7 +198,15 @@ function isGenerator(body: unknown): boolean {
     return tag === '[object AsyncGeneratorFunction]' || tag === '[object GeneratorFunction]'
 }
 
-type Produced<T> = T | Promise<T> | AsyncIterable<T>
+/**
+ * What a handler may hand back for ONE value of `T`.
+ *
+ * The `Framed` arm is a response whose body is a sequence of `T` — `jsonl()` / `sse()` — and it is
+ * what lets an endpoint framed for somebody else's reader still declare its element type. Without it
+ * `T` inferred as `Response` and every caller of such an endpoint was untyped at exactly the point
+ * the stub had started decoding chunks for them.
+ */
+type Produced<T> = T | Promise<T> | AsyncIterable<T> | Framed<T> | Promise<Framed<T>>
 
 /**
  * The onion a chain WITH A PAYLOAD is, written once.
@@ -255,6 +278,7 @@ function declare<Args, T>(
     const policy: RpcPolicy = {
         address: method,
         crossOrigin: options.crossOrigin ?? null,
+        clients: clientsOf(options.clients),
         // `null` is "ask the process" — resolved by `bodyCeiling` at the door, for the reason
         // above: a declaration cannot see a config that is registered after it.
         maxBodySize: options.maxBodySize ?? null,
@@ -413,6 +437,10 @@ function declare<Args, T>(
         method,
         description: options.description,
         raw: (args) => Promise.resolve(respond(rpc, args)),
+        // Where a CLIENT would call this, which is the same question on both lanes and therefore the
+        // same answer: an in-process caller has no URL of its own, and the address it hands back is
+        // the one the browser's stub was built with.
+        url: (args) => addressWithArgs(policy.address, method, args),
     })
     RPC_POLICY.set(rpc, policy)
     // The split is a claim about the TYPE and about nothing at runtime: a declared failure is thrown,
@@ -642,6 +670,8 @@ export interface SocketOptions<T = unknown, Args = unknown> {
     schema?: Schema<T>
     middleware?: SocketMiddleware<T, Args>[]
     crossOrigin?: string[]
+    /** Which generated surfaces this appears on. Every one unless this says otherwise. */
+    clients?: Clients
 }
 
 export interface SocketPolicy {
@@ -650,10 +680,22 @@ export interface SocketPolicy {
     clientPublish: false | ((message: unknown, room: unknown, into: Channel<unknown>) => void | Promise<void>)
     /** The PUBLISHED message shape — declared, or derived from the socket's first type argument. */
     message: JsonSchema | null
+    /**
+     * The PUBLISHED room shape, derived from a keyed socket's SECOND type argument. `null` on a
+     * socket with one stream, which is addressed by nothing.
+     *
+     * Published and never checked, unlike the message beside it: the room is decoded off the query by
+     * `decodeQuery`, and a room nobody has published into is an empty stream rather than an error —
+     * so there is nothing here for a gate to refuse. What it is for is the generated surface, which
+     * cannot offer a tail or a publish without naming the room it acts on.
+     */
+    room: JsonSchema | null
     /** The gate over an inbound one, or `null` when there is nothing to check. */
     checkMessage: Gate<unknown> | null
     middleware: SocketMiddleware<unknown, unknown>[]
     crossOrigin: string[] | null
+    /** Which generated surfaces this is on, with the default already applied — see `clientsOf`. */
+    clients: Required<Clients>
 }
 
 const SOCKET_POLICY = new WeakMap<object, SocketPolicy>()
@@ -675,7 +717,11 @@ export function describeSocket(stream: object, address: string, shapes: Shapes |
     const policy = SOCKET_POLICY.get(stream)
     if (policy === undefined) return
     policy.address = address
-    if (shapes?.input === undefined) return
+    if (shapes === undefined) return
+    // The ROOM has no declared spelling to lose to — a socket names it in its type and nowhere else —
+    // so it is taken whenever the derivation had one, rather than filling in behind an author.
+    policy.room ??= shapes.room ?? null
+    if (shapes.input === undefined) return
     policy.message ??= shapes.input
     policy.checkMessage ??= gate(shapes.input, 'message', 422, policy) as Gate<unknown>
 }
@@ -695,9 +741,11 @@ export function socket<T, Args>(options: SocketOptions<T, Args> = {}): Channel<T
         address: 'socket',
         clientPublish: (options.clientPublish ?? false) as SocketPolicy['clientPublish'],
         message: publishable(options.schema as Schema<unknown> | undefined),
+        room: null,
         checkMessage: null,
         middleware: (options.middleware ?? []) as SocketMiddleware<unknown, unknown>[],
         crossOrigin: options.crossOrigin ?? null,
+        clients: clientsOf(options.clients),
     }
     // After the policy exists, because the gate reads the address off it at the throw — it is the
     // same object `describeSocket` writes to when the module registers.

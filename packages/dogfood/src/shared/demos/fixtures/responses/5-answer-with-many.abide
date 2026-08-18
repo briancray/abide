@@ -2,25 +2,16 @@
 import { catalogue } from '#server/rpc/docs/responses/answer-with-many.ts'
 import { state } from 'abide'
 
-// Read as a STREAM rather than as one body, because arriving-as-they-are-produced is the claim: each
-// line is appended as it lands, and nothing here waited for the last one.
-const lines = state<string[]>([])
+// Nothing here decodes anything. The stub is a keyed memo whose body happens to be the request, so
+// `for await` over the call is the same loop a local async iterable gets — `application/jsonl` on
+// the response is what told it to read chunks, and each row is a value rather than a line of text.
+const rows = state<{ id: number }[]>([])
 
 const ask = async (): Promise<void> => {
-    lines = []
-    const answered = await catalogue.raw({})
-    const reader = answered.body?.getReader()
-    if (reader === undefined) return
-    const decoder = new TextDecoder()
-    for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        for (const line of decoder.decode(value, { stream: true }).split('\n')) {
-            if (line !== '') lines = [...lines, line]
-        }
-    }
+    rows = []
+    for await (const row of catalogue({})) rows = [...rows, row]
 }
 </script>
 
 <button onclick={ask}>ask for them</button>
-<ul>{#for line of lines}<li><code>{line}</code></li>{/for}</ul>
+<ul>{#for row of rows}<li><code>{row.id}</code></li>{/for}</ul>

@@ -17,18 +17,21 @@ import Five from './5-answer-with-many.abide'
 import FIVE_CLIENT from './5-answer-with-many.abide?source'
 import Six from './6-answer-with-events.abide'
 import SIX_CLIENT from './6-answer-with-events.abide?source'
-import Seven from './7-where-a-logins-cookie-goes.abide'
-import SEVEN_CLIENT from './7-where-a-logins-cookie-goes.abide?source'
-import Eight from './8-a-failure-with-a-shape-on-it.abide'
-import EIGHT_CLIENT from './8-a-failure-with-a-shape-on-it.abide?source'
+import Seven from './7-read-those-events.abide'
+import SEVEN_CLIENT from './7-read-those-events.abide?source'
+import Eight from './8-where-a-logins-cookie-goes.abide'
+import EIGHT_CLIENT from './8-where-a-logins-cookie-goes.abide?source'
+import Nine from './9-a-failure-with-a-shape-on-it.abide'
+import NINE_CLIENT from './9-a-failure-with-a-shape-on-it.abide?source'
 import ONE from '#server/rpc/docs/responses/answer-with-json.ts?source'
 import TWO from '#server/rpc/docs/responses/answer-with-a-page.ts?source'
 import THREE from '#server/rpc/docs/responses/answer-with-a-location.ts?source'
 import FOUR from '#server/rpc/docs/responses/refuse-with-a-status.ts?source'
 import FIVE from '#server/rpc/docs/responses/answer-with-many.ts?source'
 import SIX from '#server/rpc/docs/responses/answer-with-events.ts?source'
-import SEVEN from '#server/rpc/docs/responses/where-a-logins-cookie-goes.ts?source'
-import EIGHT from '#server/rpc/docs/responses/a-failure-with-a-shape-on-it.ts?source'
+import SEVEN from '#server/rpc/docs/responses/read-those-events.ts?source'
+import EIGHT from '#server/rpc/docs/responses/where-a-logins-cookie-goes.ts?source'
+import NINE from '#server/rpc/docs/responses/a-failure-with-a-shape-on-it.ts?source'
 
 export const LADDER: Example[] = [
     {
@@ -68,32 +71,45 @@ export const LADDER: Example[] = [
         client: FIVE_CLIENT,
         view: Five,
     },
+    // The framing is the SERVER's whole half of this pair. Read the two clients side by side: they
+    // differ in one import, because the stub asks the response what it is rather than being told —
+    // so what a route picks is a question about who else has to read the address.
     {
-        adds: 'frame that same source as events, for an EventSource to read',
+        adds: 'frame that same source as events — and the caller does not change',
         of: ['sse'],
         source: SIX,
         client: SIX_CLIENT,
         view: Six,
     },
+    // The same endpoint read by something that is not a stub, which is the half the rung above cannot
+    // show: a caller reading its own app would be as happy with `jsonl`, so what `sse` is FOR only
+    // appears when the reader is somebody else's.
+    {
+        adds: 'read that stream with the browser’s own client, which needs an ADDRESS',
+        of: ['sse'],
+        source: SEVEN,
+        client: SEVEN_CLIENT,
+        view: Seven,
+    },
     // The last two are the same six helpers again, asked what happens at the edges: what else rides on
     // the response, and what a refusal can CARRY.
     //
-    // A THIRD is written and not here — `9-when-a-stream-fails-mid-body.ts`, on what is left to say once
+    // A THIRD is written and not here — `10-when-a-stream-fails-mid-body.ts`, on what is left to say once
     // the status line is out. Wiring it means moving it under `server/rpc/**`, and a source that throws
     // part way through a `jsonl` body reaches `process.on('unhandledRejection')` in `lifecycle.ts` and
     // takes the server down with it, so an addressable one is a page whose button ends the process.
     {
         adds: 'the third argument, where the caller’s own headers ride',
         of: ['redirect'],
-        source: SEVEN,
-        client: SEVEN_CLIENT,
-        view: Seven,
+        source: EIGHT,
+        client: EIGHT_CLIENT,
+        view: Eight,
     },
     {
         adds: 'a DECLARED refusal, returned rather than thrown, so it carries data a caller can read',
         of: ['error'],
-        source: EIGHT,
-        client: EIGHT_CLIENT,
-        view: Eight,
+        source: NINE,
+        client: NINE_CLIENT,
+        view: Nine,
     },
 ]

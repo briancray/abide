@@ -8,12 +8,12 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 
 | Specifier | Holds |
 | --- | --- |
-| `abide` | What an author TYPES — **16 values and 22 types**, and the file behind it is CURATED rather than collected: `./abide.ts`, one line per decision, not a barrel over a directory. `state` / `memo` / `channel`, `watch`, `html` / `raw` / `props` (with `Props`, the type a compiled component's parameter is written in), `log`, `online()` / `health()` / `identity()`, `route()` / `navigate()` / `url()`, `invalidate` / `refresh`. Nothing about the PENDING SIGNAL is on it — see "a read that signals": a total `catch` cannot commit the value it builds, so an author's own `try` owes nothing, and the one shape that has to ask is `swallowed()` on `abide/runtime`. A VALUE is here because a user-facing app types it — the standard is the dogfood app's own pages and server, never its demos, which test the framework rather than use it. A TYPE is here because it is the input or output of one of those values, which is why `Route` is here and `RouteEntry` is not. `scope`, `untrack` and `isolate` are on no entry point at all: nothing an app writes calls one, so the suites that test the graph reach `$shared/*` directly |
+| `abide` | What an author TYPES — **16 values and 23 types**, and the file behind it is CURATED rather than collected: `./abide.ts`, one line per decision, not a barrel over a directory. `state` / `memo` / `channel`, `watch`, `html` / `raw` / `props` (with `Props`, the type a compiled component's parameter is written in), `log`, `online()` / `health()` / `identity()`, `route()` / `navigate()` / `url()`, `invalidate` / `refresh`. Nothing about the PENDING SIGNAL is on it — see "a read that signals": a total `catch` cannot commit the value it builds, so an author's own `try` owes nothing, and the one shape that has to ask is `swallowed()` on `abide/runtime`. A VALUE is here because a user-facing app types it — the standard is the dogfood app's own pages and server, never its demos, which test the framework rather than use it. A TYPE is here because it is the input or output of one of those values, which is why `Route` is here and `RouteEntry` is not. `scope`, `untrack` and `isolate` are on no entry point at all: nothing an app writes calls one, so the suites that test the graph reach `$shared/*` directly |
 | `abide/runtime` | What only the COMPILER writes, plus the predicates that read what it wrote. Emitted: `classes` / `styles` (a `class:` / `style:` toggle), `adopt` (a `<style>` block), `boundary` / `streamed` (the blocks), `awaited` (no longer emitted for any spelling — a hand-written `.ts` component still builds one, and both renderers read it back), `component` / `propCell` (a `<Name/>` tag and the props it binds), `keyed` (`by` on a `{#for}`), and `routes` / `outlet` / `ready` / `navigate` (what `abide build` writes into the client entry). Read-back: `isTemplate`, `isKeyed`, `classifySlots`, `escape`, `cellProps`, and `swallowed` — did a read in the body running now signal and get caught on the way out. That last one is the only thing about the pending signal on any entry point, and it is here rather than on `abide` because a body that RETURNS needs nothing: the run boundary discards what a total `catch` built. Only a body that ACTS mid-run — a slot binder, the harness's recording reader — has already acted by then. `navigate` is the one name on both this specifier and `abide`, and the duplication is a BUNDLING one, the same kind the row below states: the generated entry's link handler reached for it on the barrel, and that pulled `identity`, `online`, `memo` and `tags` into the chunk every page loads — 4,338 minified bytes of the perf app's first load, 7.3% of it, for a name already one import down in `router.ts`. An author still types `navigate` and still finds it on `abide`. Each emitted name is what the compiler writes for a SPELLING, never a name a source file says. `html` and `raw` are the two that stay on `abide`: the template tag and the escape hatch, both of which a hand-written `.ts` component writes too. Nothing here may import a renderer, which is why `hydrate` is on `abide/ui` |
 | `abide/runtime/transport` | What a server module ELIDES TO in the client lane — `remote` / `remoteSocket` / `asRpc` and the shapes describing one (`Rpc`, `RpcHandle`, `RemoteOptions`, `RemoteSocket`, `RemoteSocketOptions`, `CallOptions`, `Kind`, `Method`, `Wire`). Split off `abide/runtime` for a BUNDLING reason and no other: that module is what the generated client entry imports for `routes` / `outlet` / `ready`, so anything re-exported from it sits in the chunk every page loads, and one lazy route with one rpc put the whole call-and-decode path in front of every page — 4,066 bytes of the perf app's shared entry, on a page that calls nothing. Reached by its own specifier it lands in the chunk of whatever page imports it |
 | `abide/ui` | The DOM substrate: `mount`, `hydrate`. Reached by `abide build`'s GENERATED client entry and by benches, never by an app's own pages — so it is a real entry point that is NOT on `/docs`, which lists what an author types. The `client` and `hydrate` ladders document these two and claim no name; `dogfood/test/docs.test.ts` holds that exclusion in both directions |
 | `abide/server` | What a SERVER-SIDE author types — the declaring half of both transports (`GET` / `POST` / `PUT` / `PATCH` / `DELETE` / `socket`), what a route answers with (`error` / `json` / `jsonl` / `page` / `redirect` / `sse` / `HttpError`), `render`, the process lifecycle as an app DECLARES it (`server()` / `middleware` / `onError` / `onStart` / `onStop`), the request scope as an app READS it (`request()` / `bag()` / `cookies()` / `nonce()` / `trace()`), `config()` / `onConfig`, the server half of the two ambients (`onHealth` / `onIdentity` / `identity`), and `csp()`. Curated by the same rule as `abide` and one more: **what the docs app covers is what is public** — every name here has its own page at `/docs/<name>` with at least one rung on it, and a name with no page belongs on the entry point below. Asserted in both directions in `dogfood/test/docs.test.ts`, against `Object.keys` of the module rather than against prose |
-| `abide/server/internal` | The server surface an APP does not type: what `abide start` does on its behalf. Running the process rather than declaring it (`boot`, `handle`, `shutdown`), INSTALLING the request scope rather than reading it (`serve`, plus the `heldStream` / `isServing` probes only a body-building path asks), the SERVING half of the transport seam (`dispatch`, `endpoints`, `register`, `registered`, `websocket` — `register` is what a compiled transport module imports), the route table read off a directory (`pages`), the document pages are served IN (`shell`, `Shell`, `styleTags`), and running a declared shape check (`validateJson`, `SCHEMA_ERROR`). A specifier rather than a comment because the apps may not use abide's `$server` alias: without it a demoted name would be unreachable from the suites that test it, and the split would rest on prose. Anyone hand-rolling a `Bun.serve` reaches here and gets the same functions the CLI uses — there is no second implementation |
+| `abide/server/internal` | The server surface an APP does not type: what `abide start` does on its behalf. Running the process rather than declaring it (`boot`, `handle`, `shutdown`), INSTALLING the request scope rather than reading it (`serve`, plus the `heldStream` / `isServing` probes only a body-building path asks), the SERVING half of the transport seam (`dispatch` and `websocket` are the DOORS, in `registry.ts`; `endpoints` / `register` / `registered` are the CATALOGUE, in `catalogue.ts`, which the doors and both projections read without reaching back through each other — `register` is what a compiled transport module imports), the route table read off a directory (`pages`), the document pages are served IN (`shell`, `Shell`, `styleTags`), and running a declared shape check (`validateJson`, `SCHEMA_ERROR`). A specifier rather than a comment because the apps may not use abide's `$server` alias: without it a demoted name would be unreachable from the suites that test it, and the split would rest on prose. Anyone hand-rolling a `Bun.serve` reaches here and gets the same functions the CLI uses — there is no second implementation |
 | `harness` | Its own PACKAGE, not an entry point of this one. The `Case` shape, the assertions, the headless runner and `loopback()`; `harness/measure` is the half with no abide in its graph (timing, ratios, DOM counters) and `harness/spawn` is the bun-only half. See "The harness" below |
 | `abide/compiler` | `compile()`, `elide()`, and their diagnostics. Pure: text in, text out, no filesystem |
 | `abide/compiler/check` | `emitFor`, `emitAll`, `remap`, `diagnose` and `TYPES_DIR` — the lane `abide check` runs |
@@ -80,7 +80,7 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 | `ch` | `(args: Args) => Channel<T>` | SELECTS a room and hands back an ordinary channel. A room that has been subscribed to is FORGOTTEN when its last subscriber leaves, with whatever it retained — rooms are named by the caller, so a table that only grew is one an arriving connection could grow without bound. Selecting the same args again builds a fresh room. |
 | `ch.publish` | `(message: T) => void` | Sends one message to every current subscriber. Delivery is against a snapshot of subscribers. |
 | `ch.subscribe` | `(listener: (m: T) => void) => () => void` | A plain listener outside the graph; returns its own unsubscribe. |
-| `ch.tail` | `() => AsyncGenerator<T>` | The transcript replayed, then every message after it. Snapshot and subscribe happen in one synchronous run, so nothing is missed. |
+| `ch.tail` | `(options?: TailOptions) => AsyncGenerator<T>` | The transcript replayed, then every message after it. Snapshot and subscribe happen in one synchronous run, so nothing is missed. `{ limit, idle }` ENDS it — how many messages are enough, and ms to wait for the next before giving up — which is what makes the same sequence answerable to a reader that has to return. Both end it normally, so it unsubscribes on the way out exactly as an abandoned reader does; imposing either from outside could not, because a parked generator does not process a `return()` until a message arrives. |
 | `ch[Symbol.asyncIterator]` | `() => AsyncIterator<T>` | Subscribes and receives every message published from that moment on. |
 | `ch.invalidate` | `(pattern?: Partial<Args>) => void` | Forgets what has arrived. On the room form, every room matching the pattern; no pattern reaches every room and the bare stream. |
 | `options.tail` | `number` | How many past messages `chunks()` retains. Default 0 — latest only. |
@@ -254,8 +254,9 @@ has nothing retained to be refreshing OVER.
 | `fn` | `(args: Args, options?: { signal?: AbortSignal }) => RpcHandle<T>` | SELECTS the slot and hands back its cell, exactly as a keyed memo does. Reading it reaches the handler. `signal` abandons this await alone. |
 | `fn(args).isError` | `(failure: unknown, name: DeclaredName) => failure is Failed<name, Data>` | The cell's `isError`, NARROWED by what the handler declared: matching the name gives back `.data` with the schema's type on it, `.status` and `.name`. A name the endpoint never declared is the ordinary boolean. |
 | `fn.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The same call handed back as the raw response instead of a decoded value. |
+| `fn.url` | `(args: Args) => string` | WHERE that call would go — mounted, with a read's args on the query, through the same expression `raw` addresses with. For the consumers that are not a fetch: an `EventSource` over an `sse()` handler, a `curl` line. THROWS for a mutation and for args carrying a file or too long for a URL, because those travel in a body and have no address; returning the bare one would 404 at a plausible-looking path. |
 | `fn.method` / `fn.description` | `Method` / `string \| undefined` | What the declaration said, readable off the handle. |
-| `for await (const c of fn(args))` | `AsyncIterable<T>` | Consumes a handler that yields, replaying what already happened before following what comes next. A handler yields iff declared `function*`. |
+| `for await (const c of fn(args))` | `AsyncIterable<T>` | Consumes a handler that streams, replaying what already happened before following what comes next. A handler streams iff declared `function*` OR framed with `jsonl()` / `sse()` — the compiler reads both off the syntax, and `isChunked` reads the framing off the response. In a `.abide`, the head HOLDS the source: `for await` iterates the cell, where a synchronous `for … of` reads it. |
 | a `File` in `args` | — | Travels as multipart, the JSON keeping a reference where the file sat. Nothing in the declaration or call says "upload". |
 | `remote` | `<Args, T, F extends Failed>(id: string, options?: RemoteOptions) => Rpc<Args, T, F>` | The client half: the address and nothing else. What a generated stub imports, and identical written by hand. `F` is how a HAND-written stub says what the endpoint refuses with; a generated one says nothing, because the caller's checker reads the handler's own declaration. |
 
@@ -269,6 +270,7 @@ has nothing retained to be refreshing OVER.
 | `memo` | `MemoOptions<Args>` | What the call retains, how long, and under which tags. |
 | `timeout` | `number` | ms the call may go without progress before it fails. Per chunk on a handler that yields. |
 | `crossOrigin` | `string[]` | Which other origins may call it, closed unless declared. `'*'` opens it; the websocket upgrade is gated by the same list. |
+| `clients` | `Clients` | Which generated surfaces this appears on — `{ mcp?, openapi? }`, both on unless said otherwise. See "The projection". |
 | `maxBodySize` | `number` | The largest request body a mutation will accept, in bytes. |
 | `seed` | `boolean` | Whether a render hands what this resolved to the client that adopts it. **Default on.** See below. |
 
@@ -324,8 +326,9 @@ ever consume them.
 | `options.channel` | `ChannelOptions` | The underlying stream's own memory: how many messages it keeps and how long one stays current. |
 | `options.clientPublish` | `false \| ((message: T, room: Args \| undefined, into: Channel<T>) => void \| Promise<void>)` | Whether clients may publish, and what happens to what they send. `false` by default — a socket is a broadcast until an app says otherwise. `into` is the sender's own room, already resolved, so an echoing policy never names the declaration it is inside. |
 | `options.schema` | `Schema<T>` | The declared shape of a message a CLIENT sends — the wire is the only door one arrives through from outside the process. |
-| `options.middleware` | `SocketMiddleware<T, Args>[]` | `(next, event) => …` where `event` is `{ kind: 'subscribe' \| 'publish', room, message, request }`. A throw refuses it. |
-| `options.crossOrigin` | `string[]` | Which origins may upgrade, closed unless declared. |
+| `options.middleware` | `SocketMiddleware<T, Args>[]` | `(next, event) => …` where `event` is `{ kind: 'subscribe' \| 'publish', room, message, request }`. A throw refuses it. Runs on the HTTP tail and publish too — a `subscribe` and a `publish` respectively. |
+| `options.crossOrigin` | `string[]` | Which origins may upgrade, closed unless declared. Gates the two HTTP arms as well as the websocket. |
+| `options.clients` | `Clients` | Which generated surfaces this appears on — `{ mcp?, openapi? }`, both on unless said otherwise. |
 
 ## How a handler is addressed
 
@@ -357,7 +360,7 @@ ever consume them.
 | what decodes as text | Everything else, and anything with no `content-type` at all. The allowlist points that way on purpose: the bodies abide did not write are a proxy's error page and a gateway's plain-text refusal, and reading one as bytes turns a diagnostic a human can read into a byte array |
 | a read | HTTP GET with ONE QUERY PARAMETER PER ARGUMENT — `?id=7&q=ada`, so the URL is the call and anyone can type it. Past a URL length ceiling it falls back to a POST body, accepted for a read only |
 | a mutation | Its own method with a JSON body |
-| the query | A value JSON would read as something other than a string travels as its JSON text (`42`, `true`, `{"from":1}`); a STRING that would be misread that way travels quoted (`"42"`). At the door the declared shape decides — `?name=42` on a `name: string` is the string — and without one the text speaks for itself. `?tag=a&tag=b` is a list, and one `?tag=a` against a declared list is a list of one. A socket's ROOM travels the same way, with no shape to consult — a socket's derived one is its message |
+| the query | A value JSON would read as something other than a string travels as its JSON text (`42`, `true`, `{"from":1}`); a STRING that would be misread that way travels quoted (`"42"`). At the door the declared shape decides — `?name=42` on a `name: string` is the string — and without one the text speaks for itself. `?tag=a&tag=b` is a list, and one `?tag=a` against a declared list is a list of one. A socket's ROOM travels the same way, and is decoded with the room shape the compiler derives from a keyed socket's SECOND type argument — its `input` is the MESSAGE, and the two are separate derivations because a generated tail or publish arm has to name the room it acts on |
 | a form body | `multipart/form-data` and `application/x-www-form-urlencoded` are a door IN, not just what the stub writes for a file: with no `__abide_args` part their ENTRIES ARE THE ARGUMENTS, one each, read by the same reader the query goes through — same shape coercion, same repeated-name list, and a file entry lands on a declared `File` as itself. So a submitted form element is the same call, with no per-door declaration and no second handler. Two encodings, one door: `Request.formData()` reads both, and only multipart can hold a file. A checkbox sends `on`, which is not a declared `boolean` — the form says `value="true"` |
 | `__abide_args=` | The escape hatch: every argument as one JSON value. What carries args that are not an object, what an over-long read's body holds, and what the stub writes beside a file — its presence in a form is what says the parts are that encoding rather than plain arguments |
 | coalescing | Three concurrent readers of one key cost one request — the memo slot does that, not the transport |
@@ -440,15 +443,90 @@ never differ; a union's `type` list is sorted for the same reason.
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `endpoints` | `() => EndpointShape[]` | Every registered endpoint as `{ id, kind, method, description, streams, input, output }`, sorted by address. |
+| `endpoints` | `() => EndpointShape[]` | Every registered endpoint as `{ id, kind, method, description, streams, input, output, room, clientPublish, clients }`, sorted by address. |
 | `GET /__abide/schema` | — | The same document over the wire. Open: every address in it is already in the client bundle. |
+| `openapi` | `(options?: OpenApiOptions) => OpenApiDocument` | The same catalogue as an OpenAPI 3.1 document. `title` / `version` default to `APP_NAME` / `APP_VERSION`. |
+| `GET /__abide/openapi.json` | — | The document over the wire, open like the schema. `.json` because the consumer is somebody else's generator. |
+| `POST /__abide/mcp` | — | The MCP surface, revision **`2026-07-28`** and that one only: JSON-RPC 2.0 carrying `server/discover`, `tools/list` and `tools/call`, ONE request per POST. CLOSED to a cross-origin caller — an ordinary MCP client is a process and sends no `Origin`, and the only caller a declared origin would admit is the browser the DNS-rebinding mitigation exists to keep out. `GET` and `DELETE` answer 405. See "The MCP revision" below. |
 | `dispatch` | `(request: Request, server?: Server) => Response \| Promise<Response> \| undefined` | The endpoints and nothing else. `undefined`, synchronously, for a path outside `/__abide/`. Opens one `serve(request, …)` around every lane, and latches `server()`. |
 | `websocket` | Bun websocket handlers | Handed straight to `Bun.serve({ websocket })`. |
 | `register` | `(kind: Kind, pairs: [string, string][], exports: object, shapes?) => void` | What the compiler appends to a transport module: the addresses and the exports behind them. |
 | `registered` | `(kind: Kind) => string[]` | Every address registered under one law. |
 
 An MCP tool is `{ name: id, description, inputSchema: input }`; an OpenAPI operation is the same
-three facts under other names.
+three facts under other names. Neither projection DERIVES anything — the shape is already JSON
+Schema, which is why 3.1 is what is emitted: its schema object IS JSON Schema, where 3.0 would need
+translating on the way out. What they add is only what the catalogue has no reason to know:
+
+| Fact | Where it shows |
+| --- | --- |
+| a read spends its args one query parameter EACH | `parameters` on the operation; a non-object goes through the `__abide_args` hatch |
+| a mutation's args are a body | `requestBody`, as JSON — or `multipart/form-data` when a member is `format: 'binary'` |
+| a handler that yields answers ndjson | `application/x-ndjson` on the 200, with `output` as the CHUNK |
+| a socket is not a call | two HTTP arms rather than an operation — see below |
+| an address is not a legal tool name | MCP sanitises `users/getUser` to `users_getUser` and keeps the address as `title` |
+| a schema refusal is actionable | an MCP RESULT with `isError`, not a JSON-RPC error: an agent can act on "q: expected string" and cannot act on `-32602` |
+
+### The MCP revision
+
+`2026-07-28` made MCP **stateless**, and that is what decides the size of this surface: there is no
+`initialize` handshake, no session, no `ping` and no batch, so there is no connection state to
+establish, carry or expire. Every request states its own version and capabilities and is checked on
+its own, which is why the door is three methods and a validator rather than a lifecycle.
+
+| What a request carries | Where |
+| --- | --- |
+| `io.modelcontextprotocol/protocolVersion` | `params._meta`, required — mirrored in the `MCP-Protocol-Version` header |
+| `io.modelcontextprotocol/clientCapabilities` | `params._meta`, required |
+| the method | mirrored in the `Mcp-Method` header |
+| the tool name | mirrored in the `Mcp-Name` header on a `tools/call`, Base64-wrapped as `=?base64?…?=` when it will not survive as ASCII |
+
+The mirroring is what lets an intermediary route without parsing the body, and the server MUST check
+that the two agree — a load balancer routing on the header while the server executes on the body is
+the vulnerability the mirroring would otherwise introduce. Every refusal carries the status the
+revision fixes for it, because that status is how a client tells a modern server from a legacy one
+before it reads the body:
+
+| Refusal | Code | Status |
+| --- | --- | --- |
+| a header disagrees with the body, or a required one is missing | `-32020` `HeaderMismatch` | 400 |
+| a revision abide does not speak — answered with `data.supported` | `-32022` `UnsupportedProtocolVersion` | 400 |
+| `_meta` is missing a required field | `-32602` | 400 |
+| a method that does not exist | `-32601` | 404 |
+| a batch, which no revision since `2025-06-18` has | `-32600` | 400 |
+
+Every result carries `resultType: 'complete'` and `_meta['io.modelcontextprotocol/serverInfo']`;
+`tools/list` and `server/discover` also carry `ttlMs` and `cacheScope`, which are the only thing
+telling a client to look again — the list GROWS as lanes register, and there is no
+`subscriptions/listen` here to announce it. `Mcp-Session-Id` and `Last-Event-ID` are ignored rather
+than echoed.
+
+`tools/call` does not reach a handler. It builds a request to the app's own `/__abide/` door and
+re-enters `dispatch`, so every policy, middleware rung, cross-origin rule and schema gate applies
+exactly once — a second path to a handler would be a second security posture. Cookies and
+`authorization` are carried onto the re-entered call, so an app's auth middleware sees the caller it
+would have seen.
+
+`clients` on either declaration is the opt-out, per surface: `{ mcp: false }` keeps an endpoint out
+of the tool list, `{ openapi: false }` out of the document, and silence means both. Two flags rather
+than one `publish`, because an OpenAPI operation is a description a human reads and an MCP tool is a
+call an agent may make on its own.
+
+### A socket over ordinary HTTP
+
+One address, three doors — `GET` with `Upgrade: websocket` is the connection, and the other two are
+what a generated client, a `curl` and a tool call can actually reach.
+
+| Door | What it is |
+| --- | --- |
+| `GET /__abide/socket/<id>?<room>` | The transcript, then everything after it, as `application/jsonl`. |
+| `POST /__abide/socket/<id>?<room>` | One JSON message into the room, through `clientPublish`, the declared message schema and the socket's middleware. Answers `202 {"accepted":true}` — what happens to the message is `clientPublish`'s to decide. A socket that declared none answers 405. |
+| `__abide_tail=n` / `__abide_wait=ms` | How much is enough, and how long to wait for it. Absent, the response never ends, which is right for a browser and a hang for anything that must return: a count ALONE never completes on a room nobody has published into. Both are handed to `channel.tail({ limit, idle })` rather than wrapped around it, because a generator parked awaiting its next message does not process a `return()` until one arrives — a bound applied from outside would leave the subscription alive on exactly the quiet rooms it is for. |
+
+A refusal here is a STATUS where the frame path drops silently, and that is not a second policy: a
+websocket frame has no response to carry a refusal in. The ROOM is decoded with the socket's declared
+room shape at every door, so a query resolves to ONE room — decoded as `"7"` by one and `7` by another
+would be a publish landing where nobody is listening.
 
 ## The caller scope
 
@@ -1280,7 +1358,7 @@ same-route move is painted here" below.
 
 | Rule | Detail |
 | --- | --- |
-| the address | The TARGET url, marked with `x-abide-navigation`. Not an endpoint under `/__abide/**`, which `handle` dispatches in FRONT of the onion — a rung would never see one. Same path, same cookies, same request scope a full page load has, so there is one chain and no authorization written twice |
+| the address | The TARGET url, marked with `x-abide-navigation`. Not an endpoint under `/__abide/**`, which would run the onion at an address that is not the one being navigated to — every rung deciding by path would answer about the wrong page. Same path, same cookies, same request scope a full page load has, so there is one chain and no authorization written twice |
 | what comes back | The outlet alone, in the same hydratable markup the document was served in — no second head, no shell, no `<script>` the browser has already run. Less than the outlet when the caller already has some of it, which is the next section. Marked with `x-abide-navigation` and `Vary`-ing on that AND on `x-abide-navigation-from`, since two request headers now change the body |
 | a refusal | A rung short-circuiting with a `Response` — a redirect, a 403 — hands the url to the BROWSER, so the server's own answer is what renders. There is no second refusal protocol, and nothing for an app to spell twice |
 | the paint | The part showing the outlet ADOPTS the fragment, so a navigation costs the same near-nothing hydration does. The page's own module is then what makes it interactive rather than what makes it visible |
@@ -1425,7 +1503,7 @@ that runs on both sides of the thing it wraps.
 | --- | --- | --- |
 | `boot` | `<T>(bind: () => T \| Promise<T>) => Promise<T \| null>` | Resolve `config()`, run `onStart` around `bind`, and hand back what `bind` made. The socket binds INSIDE the hook. `null` means the hook returned without calling `start()`. |
 | `shutdown` | `() => Promise<void>` | Run `onStop` around the socket closing. Idempotent while in flight, so two signals are one teardown both callers await. |
-| `handle` | `(route: Route) => (request: Request, server: Server) => Promise<Response>` | The app's routes with abide's endpoints in front and the app's onion around them. Opens the request scope, runs the chain, carries a throw to a status. A route answering `undefined` is a 404. |
+| `handle` | `(route: Route) => (request: Request, server: Server) => Promise<Response>` | The app's onion around everything it answers — `/__abide/**` first, then the app's own route. Opens the request scope, runs the chain, carries a throw to a status. A route answering `undefined` is a 404. |
 | `middleware` | `(...rungs: Middleware[]) => () => void` | Register rungs, outermost first. APPENDS where the other three replace. Returns the way off, removing exactly what that call added. |
 | `onStart` | `(hook: StartHook) => () => void` | `(start) => …` — WRAPS the real boot. Awaited; a second registration replaces the first. |
 | `onStop` | `(hook: StopHook) => () => void` | `(stop) => …` — mirrors `onStart` for teardown. Backstopped, so teardown still happens if the hook skips it. |
@@ -1435,7 +1513,11 @@ that runs on both sides of the thing it wraps.
 | --- | --- |
 | config first | Resolved before the hook that might ask for it, so an `onConfig` that throws is a boot that rejects rather than a 500 later |
 | signals | `boot` installs SIGINT, SIGTERM, `uncaughtException` and `unhandledRejection`, and only when `bind` produced something closeable |
-| the onion's reach | Around the APP's routes. A websocket upgrade has no response to wrap, and `/__abide/**` gates itself per declaration |
+| the onion's reach | EVERYTHING `handle` answers, `/__abide/**` included — so an auth rung covers the rpcs, the sockets, the schema, the OpenAPI document and the MCP surface, not only the pages. It was around the app's routes alone, and that was a hole rather than a saving: nothing about writing the rung said the endpoints were exempt. A rung that never calls `next()` refuses them all |
+| what stays in front | FILES — the client bundle and `ui/public`, mounted by the command rather than by `handle`. A page waiting on an auth rung for its own JavaScript is a page that cannot log in, and a favicon has no caller to be about |
+| a websocket upgrade | Goes through the chain too, so a rung can REFUSE one. A successful upgrade has no response — Bun answers the handshake — so it travels the onion as a sentinel `101` and becomes `undefined` again at the top. A rung that passes `next()`'s answer through is unaffected; one that builds a NEW response around it breaks the upgrade |
+| the sharper tool | `GET(fn, { middleware })` and `socket({ middleware })` are unchanged and still see the args and the room, which an onion over the raw request never could. The onion is the coarse one |
+| the cost of no exceptions | An auth rung that refuses anonymous callers now also refuses `GET /__abide/health`, so a load balancer's check fails until the rung skips it. That is the app's call to make explicitly rather than abide's to make silently |
 | an `HttpError` | A deliberate outcome, so it answers with what it says and never reaches `onError`. Either way the failure is written to `abide:lifecycle` |
 | `onStart` vs `onStop` | A hook that skips `start()` has SAID something and is believed. A hook that skips `stop()` has said nothing, so the close happens anyway — including when it throws mid-drain |
 
@@ -1512,8 +1594,8 @@ caller's headers ride in.
 | --- | --- | --- |
 | `page` | `(body: string \| ReadableStream<Uint8Array>, init?: ResponseInit) => Response` | A rendered document as `text/html`. Takes what a render PRODUCED rather than doing the render. |
 | `json` | `(data: unknown, init?: ResponseInit) => Response` | Serialize and tag `application/json`. `undefined` sends `null`, not the text `undefined`. |
-| `jsonl` | `<T>(values: Values<T>, init?: ResponseInit) => Response` | One JSON value per line from a sync or async iterable; `application/jsonl`. Written per `pull`, so back-pressure reaches the source. |
-| `sse` | `<T>(values: Values<T>, init?: ResponseInit) => Response` | The same machine framed as `data: <json>\n\n`; `text/event-stream`, `no-cache`, `X-Accel-Buffering: no`. |
+| `jsonl` | `<T>(values: Values<T>, init?: ResponseInit) => Framed<T>` | One JSON value per line from a sync or async iterable; `application/jsonl`. Written per `pull`, so back-pressure reaches the source. |
+| `sse` | `<T>(values: Values<T>, init?: ResponseInit) => Framed<T>` | The same machine framed as `data: <json>\n\n`; `text/event-stream`, `no-cache`, `X-Accel-Buffering: no`. |
 | `redirect` | `(to: string, status?: RedirectStatus, init?: ResponseInit) => Response` | NAVIGATE. The status is restricted to `301`/`302`/`303`/`307`/`308` (default `302`), and there is an `init`, which is where a login's cookie goes. |
 | `error` | `(status: number, message?: string, options?: FailureOptions) => never` | THROWS an `HttpError` (`status`, `name`, `data`). A handler writes `return error(404)` beside its other returns; `never` disappears from the union, so the returned form costs the type nothing and the throw stays abide's business. Declared `never` so a bare call also stands as a guard. The message defaults to the registry's phrase, so `error(404)` is a whole refusal. `options.data` rides along undeclared — an `error.typed` schema is what gives one a type on the other side. |
 | `error.typed` | `(kind: string, status?: number, message?: string, options?: { schema }) => Failure` | A reusable factory for a named, narrowable failure, its message optional the same way. The status defaults to 500 — a fault is ours until an app says whose it is — and the phrase is resolved at the DECLARATION. With a `schema` the factory takes the data first, checked synchronously, and returns `Failed<Name, Data>` instead of `never` so a `return` can carry the declaration into the handler's type. |
@@ -1524,6 +1606,19 @@ caller's headers ride in.
 Every response built through one of these carries `traceresponse`, the rpc wire and `dispatch`'s
 refusals included; outside a request the header is absent and a caller that set its own is not
 overruled. A source that throws mid-`jsonl`/`sse` ERRORS the body — the status line is already out.
+
+Both are read back by a caller's own stub with nothing written to decode them: `isChunked` asks the
+RESPONSE what it is, so `application/jsonl` and `text/event-stream` are consumed as chunks exactly as
+the rpc wire's own `application/x-ndjson` is, and one line reader walks all three — an event stream is
+line-delimited too, and what differs is only that `data: ` comes off the front and the other fields
+(`event:`, `id:`, a keep-alive comment) carry no value. So `for await (const row of catalogue({}))` is
+the whole of the client, and the framing is a question about who ELSE has to read the address.
+
+`Framed<T>` is what carries `T` across that: a `Response` says nothing about its own body, so the
+element type lives in a phantom member. It is REQUIRED, which is what keeps a plain `new Response(…)`
+out of it — a handler answering with an ordinary response still declares `Response`. The compiler
+marks such an endpoint `stream: true` from the same syntax it reads everything else off: a handler
+that CALLS `jsonl(` or `sse(` frames a sequence, exactly as one that yields does.
 The rpc lane's `application/x-ndjson` stream is the same machine with one extra frame, so it says the
 failure in a line.
 

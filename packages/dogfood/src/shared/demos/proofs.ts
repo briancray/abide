@@ -22,7 +22,8 @@
 // arm sampled an empty list against a full one and called the framework wrong. And WHETHER adoption
 // may remove: a `{#for await}` that nothing seeds is drained by the server and re-run from the top
 // here, so its rows are dropped by design — while a suspending region arrives just as late and adopts
-// perfectly. Folding the two into one flag turns `/docs/render` red, which is how they were told apart.
+// perfectly. Folding the two into one flag turns every `{#if x.pending()}` rung red, which is how they
+// were told apart.
 //
 // None of them is new. `#shared/demos/hydrate.ts` already makes all three about a list of template SHAPES;
 // what is new is the subject. A shape list is chosen by whoever wrote it and a ladder is chosen by
@@ -108,9 +109,9 @@ async function settles(host: HTMLElement, target: string): Promise<string> {
  * a flag there would be gated too, and `isStreamed` beside `isKeyed` would be the same fact the code
  * under test branches on.
  *
- * NOT the same question as whether a rung settles late. A suspending region — `/docs/render`'s second
- * rung — arrives after the same four microtask turns and adopts perfectly, which is what caught a
- * first pass at this that folded the two into one flag.
+ * NOT the same question as whether a rung settles late. A suspending region — `/docs/memo`'s third
+ * rung, and every other `{#if x.pending()}` — arrives after the same four microtask turns and adopts
+ * perfectly, which is what caught a first pass at this that folded the two into one flag.
  */
 const DRAINS_A_STREAM = /\{#for\s+await\b/
 

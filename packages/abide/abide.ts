@@ -39,7 +39,13 @@
 // name a path into `node_modules` to typecheck a stylesheet import. Erased at emit, so the browser
 // lane pays nothing.
 
-export { type Channel, type ChannelOptions, channel, type KeyedChannel } from './src/shared/channel.ts'
+export {
+    type Channel,
+    type ChannelOptions,
+    channel,
+    type KeyedChannel,
+    type TailOptions,
+} from './src/shared/channel.ts'
 // The app's own account of whether it is working, asked the same way on both sides. `useHealthSource`
 // is deliberately absent: it is how `abide/server` installs the LOCAL answer — the same shape as the
 // app-name source under `log` — and a caller installing one would be answering for an app it is not.

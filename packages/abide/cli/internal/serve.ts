@@ -33,7 +33,8 @@
 
 import { config } from '#server/config.ts'
 import { boot, shutdown } from '#server/lifecycle.ts'
-import { register, websocket } from '#server/registry.ts'
+import { register } from '#server/catalogue.ts'
+import { websocket } from '#server/registry.ts'
 import { socket } from '#server/rpc.ts'
 import { mountBase } from '#shared/internal/mount.ts'
 import { messageOf } from '#shared/internal/probes.ts'

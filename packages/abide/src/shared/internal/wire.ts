@@ -29,6 +29,38 @@ export const OCTET_TYPE = 'application/octet-stream'
 export const JSONL_TYPE = 'application/jsonl'
 
 /**
+ * The same sequence framed as events, `data: ` per value and a blank line between.
+ *
+ * Here rather than beside the response that writes it for the reason `JSONL_TYPE` is here, and the
+ * reason is now literal rather than prospective: `isChunked` below reads this off a response and
+ * `chunksOf` decodes the frame, so the client half NAMES it too.
+ */
+export const SSE_TYPE = 'text/event-stream'
+
+/** The phantom below, declared and never written: it exists in the type and nowhere at runtime. */
+declare const FRAMING: unique symbol
+
+/**
+ * A `Response` that says what its body is a SEQUENCE OF.
+ *
+ * A bare `Response` says nothing about its own body, so a handler answering `jsonl(rows)` used to be
+ * declared `Rpc<Args, Response>` — and the caller's `for await`, which the stub genuinely does now,
+ * had no element type to be. The phantom is the only place that fact can live.
+ *
+ * REQUIRED rather than optional, which is the whole of what makes it safe: a plain `new Response(…)`
+ * is not assignable to it, so a handler answering with an ordinary response still declares `Response`
+ * as its value and nothing about a route-shaped endpoint moves.
+ *
+ * What it describes is the CHUNKS, which is what both a remote caller and the body itself see. A
+ * server-side caller that `await`s such a declaration directly holds the `Response` instead — the
+ * same imprecision `Response` already carries on the client lane, where `payloadOf` hands back the
+ * decoded body rather than the response object.
+ */
+export interface Framed<T> extends Response {
+    readonly [FRAMING]: T
+}
+
+/**
  * How long the client may serve what it just loaded, in MILLISECONDS.
  *
  * The one option that crosses the wire, and it crosses as a response header rather than as source
@@ -601,20 +633,60 @@ export async function askWire<T>(
     return floor()
 }
 
-/** Is the response a stream of chunks rather than one value? */
+/**
+ * Is the response a stream of chunks rather than one value?
+ *
+ * The CONTENT TYPE decides, which is what lets one stub read all three framings a handler can answer
+ * with: the rpc wire's own ndjson, and the two an app reaches for by name when it wants an address
+ * anything can read — `jsonl()` for a line-delimited body and `sse()` for an event stream. Before
+ * this, only the wire's own framing was seen as chunks and the other two decoded as one blob of text,
+ * so reading either one meant a hand-written reader and a `TextDecoder` in the caller.
+ */
 export function isChunked(response: Response): boolean {
-    return (response.headers.get('content-type') ?? '').includes(NDJSON_TYPE)
+    const type = response.headers.get('content-type') ?? ''
+    return type.includes(NDJSON_TYPE) || type.includes(JSONL_TYPE) || type.includes(SSE_TYPE)
+}
+
+/**
+ * The JSON carried by one line of a framed body, or `null` when the line carries none.
+ *
+ * Chosen ONCE per response rather than asked per line, so the framing costs one indirect call where
+ * a content-type test per line would re-answer a question the headers already settled. The call is
+ * beside a `JSON.parse` of the same string, which is what makes it affordable at all.
+ */
+type LinePayload = (line: string) => string | null
+
+/** A line-delimited body IS its payload — the frame and the value are the same string. */
+function jsonPayload(line: string): string {
+    return line
+}
+
+/**
+ * The `data:` field of one event, and nothing else.
+ *
+ * Every other line is a field this decoder has no use for — `event:`, `id:`, `retry:`, and a `:`
+ * comment, which is what a keep-alive is — so they are SKIPPED rather than parsed. One optional space
+ * after the colon is part of the format rather than of the value.
+ */
+function eventPayload(line: string): string | null {
+    if (!line.startsWith('data:')) return null
+    return line.charCodeAt(5) === 32 ? line.slice(6) : line.slice(5)
 }
 
 /**
  * A response body as the chunks it carries.
  *
  * Line-delimited rather than framed: a chunk is a JSON value and JSON has no unescaped newline, so
- * the delimiter costs one character and needs no length prefix to be re-read.
+ * the delimiter costs one character and needs no length prefix to be re-read. That is what makes ONE
+ * reader enough for all three framings — an event stream is line-delimited too, and the only thing
+ * that differs is which lines carry a value and what has to come off the front of them.
  */
 export async function* chunksOf(id: string, response: Response): AsyncGenerator<unknown> {
     const body = response.body
     if (body === null) return
+    const payloadOfLine: LinePayload = (response.headers.get('content-type') ?? '').includes(SSE_TYPE)
+        ? eventPayload
+        : jsonPayload
     // A READER rather than `for await` over the stream: async iteration of a `ReadableStream` is a
     // recent addition and not everything that answers `Symbol.asyncIterator` actually iterates, so
     // the portable spelling is the one that works in every lane this runs in.
@@ -649,12 +721,18 @@ export async function* chunksOf(id: string, response: Response): AsyncGenerator<
                 line = pending.join('')
                 pending.length = 0
             }
-            if (line !== '') yield chunk(id, line)
+            if (line !== '') {
+                const payload = payloadOfLine(line)
+                if (payload !== null) yield chunk(id, payload)
+            }
         }
         if (from < piece.length) pending.push(from === 0 ? piece : piece.slice(from))
     }
     const rest = pending.join('') + decoder.decode()
-    if (rest.trim() !== '') yield chunk(id, rest)
+    if (rest.trim() !== '') {
+        const payload = payloadOfLine(rest.trim())
+        if (payload !== null) yield chunk(id, payload)
+    }
 }
 
 function chunk(id: string, line: string): unknown {
@@ -761,6 +839,18 @@ export function framedBody<T>(
 /** One JSON value per line — the frame both line-delimited bodies are written in. */
 export function jsonLine(value: unknown): string {
     return `${JSON.stringify(value)}\n`
+}
+
+/**
+ * One `data:` line per value, blank-line terminated — the event framing of the same sequence.
+ *
+ * Beside `jsonLine` rather than in the response that calls it, because `eventPayload` below is its
+ * inverse and a framing whose two halves live in different files is one they can disagree about.
+ * JSON has no unescaped newline, so a value is always ONE `data:` line and the reader never has to
+ * join two.
+ */
+export function sseFrame(value: unknown): string {
+    return `data: ${JSON.stringify(value)}\n\n`
 }
 
 /**

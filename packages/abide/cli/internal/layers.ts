@@ -28,8 +28,10 @@
 //   the public files    the same rule for the files an author dropped in a directory — a favicon has
 //                       no caller either, and its addresses are the ones abide did not choose, so it
 //                       is asked SECOND and cannot shadow anything under the reserved prefix
-//   /__abide/**         `dispatch`, which `handle` already puts in front of the app's routes
-//   the app's route     the default export, if it has one, wrapped in its own middleware onion
+//   the middleware      the app's onion, around EVERYTHING below — `/__abide/**` included, so an
+//                       auth rung covers the endpoints and the sockets and not only the pages
+//   /__abide/**         `dispatch`, which `handle` asks before the app's own route
+//   the app's route     the default export, if it has one
 //   the pages           whatever the app did not answer, rendered into its shell. `undefined` here
 //                       is a 404, and an app with no pages is one made of endpoints
 //
@@ -72,7 +74,7 @@ import {
     type StopHook,
 } from '#server/lifecycle.ts'
 import { type PageFiles, pages, pagesFrom } from '#server/pages.ts'
-import { registered } from '#server/registry.ts'
+import { registered } from '#server/catalogue.ts'
 import { page } from '#server/responses.ts'
 import type { Schema } from '#server/schema.ts'
 import type { Shell } from '#server/shell.ts'

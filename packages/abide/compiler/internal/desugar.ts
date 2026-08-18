@@ -77,6 +77,32 @@ function awaited(previous: Token | undefined): boolean {
     return previous !== undefined && previous.text === 'await'
 }
 
+/**
+ * Is this identifier the SOURCE of a `for await` head?
+ *
+ * `for await` iterates the cell itself — a slot's async iterator is its transcript cursor, and that
+ * is the whole of what makes a streamed read spell the same on both sides. Reading it first hands the
+ * loop the LATEST CHUNK, which is a value and not iterable at all, so the sugar turned a working
+ * `for await (const row of catalogue({}))` into a type error with nothing saying why.
+ *
+ * A synchronous `for … of` is deliberately untouched: there the cell holds the array and the read is
+ * exactly what the author means.
+ *
+ * Walked back to the head's own `(` rather than read off `previous` alone, because `of` is the only
+ * token that would otherwise distinguish the two loops and both spell it.
+ */
+function asyncIterated(tokens: Token[], at: number): boolean {
+    if (tokens[at - 1]?.kind !== SyntaxKind.OfKeyword) return false
+    for (let i = at - 2; i >= 0; i--) {
+        const kind = (tokens[i] as Token).kind
+        // A `for` with no paren between it and the `of` is not a head this can read.
+        if (kind === SyntaxKind.ForKeyword) return false
+        if (kind !== SyntaxKind.OpenParenToken) continue
+        return awaited(tokens[i - 1]) && tokens[i - 2]?.kind === SyntaxKind.ForKeyword
+    }
+    return false
+}
+
 /** The constructors whose result is a SOURCE, so `const x = state(…)` makes `x` reactive. */
 export const REACTIVE_CONSTRUCTORS = new Set(['state', 'memo', 'channel'])
 
@@ -630,7 +656,7 @@ export function desugar(
                 (after?.kind === SyntaxKind.DotToken || after?.kind === SyntaxKind.QuestionDotToken) &&
                 member !== undefined &&
                 SOURCE_SURFACE.has(member.text)
-            if (!explicit && !verb && !awaited(previous)) {
+            if (!explicit && !verb && !awaited(previous) && !asyncIterated(tokens, i)) {
                 const end = (tokens[close] as Token).end
                 const key = source.slice(token.start, end).replace(/\s+/g, ' ')
                 reads.push({ key, start: token.start, end, keyed: true })
@@ -807,6 +833,9 @@ export function desugar(
         ) {
             continue
         }
+        // The same hold the keyed branch takes one screen up, for the same reason: a cell is an async
+        // iterable and `for await` wants the cell.
+        if (asyncIterated(tokens, i)) continue
         const peeking = selfReads.has(i) || (insideFunction !== null && insideFunction[i] === 0)
         const read = local ?? (peeking ? `${name}.peek()` : `${name}()`)
         edits.push({

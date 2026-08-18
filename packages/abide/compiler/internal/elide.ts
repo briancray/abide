@@ -315,12 +315,14 @@ export function registration(modulePath: string, kind: Kind, endpoints: Endpoint
     for (const endpoint of endpoints) {
         pairs.push([addressOf(address, endpoint), endpoint.name])
         names += names === '' ? endpoint.name : `, ${endpoint.name}`
-        if (endpoint.input === undefined && endpoint.output === undefined) continue
+        if (endpoint.input === undefined && endpoint.output === undefined && endpoint.room === undefined) {
+            continue
+        }
         derived = true
-        // Both fields, whatever they hold: `shapesAt` writes them on every endpoint it builds, so
+        // Every field, whatever it holds: `shapesAt` writes them all on every endpoint it builds, so
         // there is nothing left for a conditional spread to decide — and `JSON.stringify` below
         // drops an undefined value, so the emitted registration is byte-identical.
-        shapes[endpoint.name] = { input: endpoint.input, output: endpoint.output }
+        shapes[endpoint.name] = { input: endpoint.input, output: endpoint.output, room: endpoint.room }
     }
     // Omitted entirely when nothing was derivable, so a module whose types this cannot read emits
     // exactly the text it emitted before there was a derivation at all.

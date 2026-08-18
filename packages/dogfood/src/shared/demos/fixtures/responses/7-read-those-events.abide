@@ -1,0 +1,31 @@
+<script>
+import { feed } from '#server/rpc/docs/responses/read-those-events.ts'
+import { state } from 'abide'
+
+// The other consumer of the same framing, and the reason `sse` is not `jsonl` with different bytes:
+// `EventSource` is built into the browser and knows nothing about abide. What it needs is an
+// ADDRESS, which is what `url` hands back — the same string `raw` would have fetched, mounted, so
+// this keeps working under a sub-path.
+//
+// `onerror` CLOSES rather than reporting: an `EventSource` reconnects by itself, and a source that
+// ends is indistinguishable to it from one that dropped, so a stream of five would otherwise restart
+// forever.
+const ticks = state<string[]>([])
+const live = state(false)
+
+const listen = (): void => {
+    ticks = []
+    live = true
+    const source = new EventSource(feed.url({}))
+    source.onmessage = (event: MessageEvent<string>) => {
+        ticks = [...ticks, event.data]
+    }
+    source.onerror = () => {
+        source.close()
+        live = false
+    }
+}
+</script>
+
+<button onclick={listen} disabled={live}>listen</button>
+<ul>{#for tick of ticks}<li><code>{tick}</code></li>{/for}</ul>

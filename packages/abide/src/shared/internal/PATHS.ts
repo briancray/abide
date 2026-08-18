@@ -25,6 +25,24 @@ export const LOGS_PATH = `${ABIDE_PREFIX}logs`
 export const SCHEMA_PATH = `${ABIDE_PREFIX}schema`
 
 /**
+ * The same catalogue as an OpenAPI 3.1 document — one address, like the schema above it.
+ *
+ * `.json` on the end where nothing else here carries an extension, because this one is READ BY TOOLS
+ * that key off it: a generator handed a URL with no extension guesses, and every one of them guesses
+ * differently. It is the one path abide serves whose consumer is somebody else's program.
+ */
+export const OPENAPI_PATH = `${ABIDE_PREFIX}openapi.json`
+
+/**
+ * The MCP surface — one JSON-RPC endpoint, which is what the protocol's streamable HTTP transport is.
+ *
+ * Not a prefix: every method travels in the BODY as `{"method": "tools/call"}`, so there is nothing
+ * under it to address. That is also why it is a single `POST` where the rest of `/__abide/` is REST —
+ * the shape is the protocol's, not abide's.
+ */
+export const MCP_PATH = `${ABIDE_PREFIX}mcp`
+
+/**
  * The app's own account of whether it is working — one document, like the catalogue above it. Here
  * rather than in the server half because the CLIENT half of `health()` is what asks for it, and an
  * address only one side knows is an address the two can spell differently.
@@ -78,13 +96,42 @@ export const RELOAD_PATH = `${ABIDE_PREFIX}reload.js`
 export const ARGS_PARAM = '__abide_args'
 
 /**
+ * How many messages an HTTP tail takes before the response ENDS.
+ *
+ * A socket is a stream that never ends, which is the right answer for a browser holding the
+ * connection open and a useless one for anything that has to RETURN — a generated client, a `curl`,
+ * an MCP tool call. So the bound is the caller's, said per request, and absent means what a socket
+ * has always meant: keep the connection and keep writing.
+ *
+ * Spelled in full for the reason `__abide_args` is: everything else on this query string is the ROOM,
+ * so a name an app might write as a room member would be swallowed. It comes off the parameters
+ * before the room is decoded, and is therefore never part of the address a subscriber resolves to.
+ */
+export const TAIL_PARAM = '__abide_tail'
+
+/**
+ * ms an HTTP tail waits for the NEXT message before the response ends.
+ *
+ * The other half of the bound, and it is needed because the two questions are different: `__abide_tail`
+ * is how much is enough, this is how long to wait for it. A count alone blocks forever on a quiet
+ * room — the transcript runs out and the count is never reached — which reads to a caller as a hang
+ * rather than as the empty answer it is.
+ *
+ * Absent means what a socket has always meant: wait, indefinitely. That is right for the browser
+ * holding a connection open and wrong for everything that has to return, so the callers that have to
+ * return are the ones that say so.
+ */
+export const WAIT_PARAM = '__abide_wait'
+
+/**
  * What a client-side navigation puts on its request so the pages layer answers with the outlet alone
  * rather than the whole document.
  *
  * A HEADER rather than a path or a query, and that is the whole point: a navigation asks for the URL
- * it is actually navigating to, so it passes through the app's middleware onion with the same path,
+ * it is actually navigating to, so it passes through the app's middleware onion AT THAT PATH, with
  * the same cookies and the same request scope a full page load would have. A `/__abide/` address
- * would sit in FRONT of that chain — see `handle` — and an app's auth rung would never see it.
+ * would run the onion at an address that is not the one being navigated to, so every rung deciding
+ * by path — an auth rung above all — would answer about the wrong page.
  *
  * It also has to reach `Vary`, because two callers asking for one URL get two different bodies.
  */

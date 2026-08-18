@@ -199,8 +199,8 @@ export default suite({
         },
 
         {
-            title: 'abide’s own endpoints are served IN FRONT of the onion',
-            note: 'A websocket upgrade has no response — Bun answers the handshake itself — so a rung wrapping one could not keep the `Promise<Response>` its own signature promises. Everything under `/__abide/` already gates itself per DECLARATION anyway: `GET(fn, { middleware })` and `socket({ middleware })` are the rungs for a call and a subscribe, and they see the args and the room, which an onion over the raw request never could.',
+            title: 'the onion is around EVERYTHING this answers, `/__abide/` included',
+            note: 'abide’s endpoints used to be served in front of the chain, and that was a hole rather than a saving: an app whose auth rung refuses anonymous callers was not refusing them at its own rpcs, its sockets, or its MCP surface — and nothing about writing the rung said so. A rule with one invisible exception is worse than either rule. What stays in front is FILES: the client bundle and `ui/public`, mounted by the command rather than by `handle`, because a favicon has no caller to be about. The per-DECLARATION rungs are unchanged and still sharper where they apply — `GET(fn, { middleware })` and `socket({ middleware })` see the args and the room, which an onion over the raw request never could. This is the coarse one, and it now genuinely covers everything.',
             async run({ is }) {
                 let rungs = 0
                 let routes = 0
@@ -214,13 +214,20 @@ export default suite({
                 })
 
                 const health = await serving(new Request(`${HOME}__abide/health`), NO_SERVER)
-                is('abide answered', health?.status, 200)
-                is('the app’s chain did not run', rungs, 0)
-                is('and neither did its routes', routes, 0)
+                is('abide still answers its own endpoint', health?.status, 200)
+                is('…and the app’s chain ran in front of it', rungs, 1)
+                is('…without the app’s routes being asked', routes, 0)
 
                 await serving(new Request(HOME), NO_SERVER)
-                is('the app’s own path is the app’s', [rungs, routes], [1, 1])
+                is('the app’s own path runs both', [rungs, routes], [2, 1])
+
+                // The refusal is the whole point: a rung that never calls `next()` is what an auth
+                // rung IS, and abide's endpoints are behind it now like everything else.
                 off()
+                const closed = middleware(() => new Response('denied', { status: 401 }))
+                const refused = await serving(new Request(`${HOME}__abide/health`), NO_SERVER)
+                is('a rung that does not call next() refuses an abide endpoint', refused?.status, 401)
+                closed()
             },
         },
 

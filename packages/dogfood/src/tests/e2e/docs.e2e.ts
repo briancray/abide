@@ -207,6 +207,35 @@ test('a mounted rung is live, not a picture of itself', async ({ page }) => {
     await expect(line).toHaveText(/count 1/)
 })
 
+test('an sse rung actually receives its events, over a real EventSource', async ({ page, complaints }) => {
+    // The one claim on `/docs/sse` that no headless lane can make at all. Rung 2 reads the stream
+    // through the stub, which `bun test` already proves in-process; rung 3 hands the ADDRESS to the
+    // browser's own `EventSource`, and nothing about that exists outside a browser — happy-dom has no
+    // `EventSource`, and `loopback()` never puts an HTTP server on an origin one could point at.
+    //
+    // So this is what stops the rung from being a picture: the ticker yields five values 300ms apart,
+    // and rows appearing one after another is the only evidence that a mounted `url()` resolved to a
+    // route that answered `text/event-stream` and that the browser parsed the frames.
+    //
+    // Rung TWO, not three: `/docs/<callable>` numbers the rungs it shows, and it shows only the ones
+    // `of` that name — so a ladder position is not a page position.
+    await page.goto('/docs/sse')
+    await interactive(page)
+
+    const rung = page.locator('[data-rung="2"]')
+    const rows = rung.locator('.rung-preview li')
+    await expect(rows).toHaveCount(0)
+
+    await rung.getByRole('button', { name: 'listen' }).click()
+    // The whole sequence, so a stream that delivered one frame and stalled is not read as a pass.
+    await expect(rows).toHaveCount(5, { timeout: 15_000 })
+    // The LAST one, because arriving in order is half of what a stream claims — and `toHaveText` is
+    // exact and case-sensitive, so this cannot pass on a substring the way `hasText` would.
+    await expect(rows.last()).toHaveText('{"at":5}')
+
+    expect(complaints.unexpected(), 'sse logged errors').toEqual([])
+})
+
 test('a preview scrolls a long line rather than painting across the page', async ({ page, complaints }) => {
     // The per-page spill check in `sourcesAreOnThePage` is written as the net for exactly this, and it
     // could not see it: a preview is DORMANT until somebody presses it, so the answer that overflows

@@ -1,0 +1,22 @@
+<!-- An ARGUMENT rather than a rung: the page the `hydrate` ladder renders and then adopts.
+
+     A region that WAITS is what makes it worth adopting — the markers have to bracket a slot whose
+     content the walk could not write on its first pass, which is the case a first update would
+     otherwise rebuild. A snapshot renderer has nothing to wake later, so a read with nothing to serve
+     yet SIGNALS and the walk runs the body again; `renderToString` awaits it in place. -->
+<script>
+import { memo } from 'abide'
+
+const report = memo(async ({ month }: { month: string }): Promise<string[]> => {
+    await new Promise((settle) => setTimeout(settle, 400))
+    return [`${month}: 41 open`, `${month}: 7 closed`]
+})
+</script>
+
+<h1>this month</h1>
+
+{#if report({ month: 'may' }).pending()}
+    <p>counting…</p>
+{:else}
+    <ul>{#for line of report({ month: 'may' })()}<li>{line}</li>{/for}</ul>
+{/if}

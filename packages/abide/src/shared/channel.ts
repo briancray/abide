@@ -80,8 +80,12 @@ export interface Channel<T> {
      *
      * What iterating gives you plus the replay — the snapshot and the subscribe happen in the same
      * synchronous run, so a message published between them is missed by neither.
+     *
+     * Unless a bound is given, which is what makes the same sequence answerable to a caller that has
+     * to RETURN — a generated client, an MCP tool call, a `curl`. Both bounds end the sequence
+     * normally, so the reader unsubscribes on its way out exactly as an abandoned one does.
      */
-    tail(): AsyncGenerator<T>
+    tail(options?: TailOptions): AsyncGenerator<T>
     [Symbol.asyncIterator](): AsyncIterator<T>
 }
 
@@ -93,6 +97,26 @@ export interface KeyedChannel<Args, T> {
      * pattern means every room, and the stream the bare `ch()` reads along with them.
      */
     invalidate(pattern?: Partial<Args>): void
+}
+
+/**
+ * What ENDS a tail, for a reader that cannot hold one open forever.
+ *
+ * Two bounds and not one, because they answer different questions and a caller usually wants both:
+ * `limit` is how much is enough, and `idle` is how long to wait for it. A tail bounded only by
+ * `limit` blocks forever on a quiet room — the transcript runs out, and the count is never reached —
+ * which is the shape that reads as a hang rather than as an empty answer.
+ *
+ * Here rather than imposed by the caller around the sequence, because only the reader itself can end
+ * a park: a generator suspended awaiting its next message does not process a `return()` until one
+ * arrives, so a bound wrapped around `tail()` would leave the subscription alive until the next
+ * publish — a leak per abandoned reader on exactly the idle rooms this is for.
+ */
+export interface TailOptions {
+    /** How many messages to take before the sequence ends. Unbounded by default. */
+    limit?: number
+    /** ms to wait for the next message before ending. Unbounded by default. */
+    idle?: number
 }
 
 export interface ChannelOptions {
@@ -386,7 +410,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
     // way out. The seed is read INSIDE the body rather than at the call, so it and the `subscribe`
     // land in the same synchronous run — a message published between them would otherwise be missed
     // by the snapshot and dropped by the not-yet-subscriber.
-    async function* follow(replay: boolean): AsyncGenerator<T> {
+    async function* follow(replay: boolean, limit = NO_LIMIT, idle = NO_LIMIT): AsyncGenerator<T> {
         const pending: T[] = replay ? buffer.slice(head) : []
         // A CURSOR WITH SLACK — `buffer`/`head`/`compact` one screen up, spelled again for the queue
         // a reader drains. A generator spends its life parked at the `yield` and `subscribe` pushes
@@ -397,11 +421,30 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
         // of the session. So the dead head is spliced off once it is worth a memmove, which is the
         // trade `compact` already makes: O(1) per message, one O(k) copy per k messages.
         let sent = 0
+        let taken = 0
         let wake: (() => void) | null = null
         // Built once for the whole loop, not one executor per park: this runs per message.
         const park = (resolve: () => void): void => {
             wake = resolve
         }
+        /**
+         * The same park with a deadline: `true` when a message woke it, `false` when the wait ran out.
+         *
+         * The timer is cleared by the wake so a busy channel does not leave one armed per message,
+         * and `arm` unrefs, so the one still pending on a quiet room is not a reason for the process
+         * to stay up.
+         */
+        const parkUntilIdle = (ms: number): Promise<boolean> =>
+            new Promise<boolean>((resolve) => {
+                const timer = arm(() => {
+                    wake = null
+                    resolve(false)
+                }, ms)
+                wake = () => {
+                    clearTimeout(timer)
+                    resolve(true)
+                }
+            })
         const off = self.subscribe((message) => {
             pending.push(message)
             wake?.()
@@ -421,10 +464,14 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
                         sent = 0
                     }
                     yield message
+                    // Ended by RETURNING, so the `finally` below unsubscribes on the way out — the
+                    // same exit an abandoned reader takes, rather than a second teardown path.
+                    if (++taken >= limit) return
                 }
                 pending.length = 0
                 sent = 0
-                await new Promise<void>(park)
+                if (idle === NO_LIMIT) await new Promise<void>(park)
+                else if (!(await parkUntilIdle(idle))) return
             }
         } finally {
             // Reached when the consumer goes away — a cancelled reader calls `return()`, which is what
@@ -432,7 +479,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
             off()
         }
     }
-    self.tail = () => follow(true)
+    self.tail = (options?: TailOptions) => follow(true, options?.limit ?? NO_LIMIT, options?.idle ?? NO_LIMIT)
     self[Symbol.asyncIterator] = () => follow(false)
     return self
 }

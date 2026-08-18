@@ -39,7 +39,8 @@ test('boot binds inside onStart, serves through handle, and drains on SIGTERM', 
     // request scope that makes one answerable.
     expect(answered.headers.get('traceresponse')).toMatch(/^00-[\da-f]{32}-[\da-f]{16}-[\da-f]{2}$/)
 
-    // `/__abide/**` is served in front of the app's routes without the app mounting anything.
+    // `/__abide/**` is answered without the app mounting anything — inside its middleware onion,
+    // and before its own route.
     const health = await fetch(`${url}__abide/health`)
     expect(health.status).toBe(200)
     expect(((await health.json()) as { reachable: boolean }).reachable).toBe(true)

@@ -32,9 +32,8 @@ import {
     type Wire,
 } from 'abide/runtime/transport'
 import { ElisionError, elide, endpointId, type ImportedModule, kindOf, type TypeSource } from 'abide/compiler'
-import { config, DELETE, error, GET, type HttpError, json, jsonl, onConfig, POST, page, redirect, type Schema, type SchemaRefusal, type StandardSchemaV1, socket, sse } from 'abide/server'
-import { renderToString } from 'abide/server/internal'
-import { endpoints, register, SCHEMA_ERROR, validateJson } from 'abide/server/internal'
+import { config, DELETE, error, GET, type HttpError, json, jsonl, type JsonSchema, onConfig, POST, page, redirect, type Schema, type SchemaRefusal, type StandardSchemaV1, socket, sse } from 'abide/server'
+import { endpoints, openapi, register, renderToString, SCHEMA_ERROR, validateJson } from 'abide/server/internal'
 import { loopback, reader, sleep, suite, until } from 'harness'
 import { countCalls, duration, nsPerOp, tick } from 'harness/measure'
 import { hydrate } from 'abide/ui'
@@ -46,6 +45,13 @@ import * as vanilla from './vanilla.ts'
 const USERS = '/app/server/rpc/users.ts'
 const AUDIT = '/app/server/rpc/admin/audit.ts'
 const FEED = '/app/server/sockets/feed.ts'
+
+/** A keyed socket's room, as the three cases below declare it. The shape is the case's WIRING. */
+const ROOM_BY_NAME: JsonSchema = {
+    type: 'object',
+    properties: { room: { type: 'string' } },
+    required: ['room'],
+}
 
 /** One `dispatch`, shared by the cases, so the request counter is the whole transport's. */
 const wire = loopback()
@@ -721,6 +727,77 @@ export default suite({
         },
 
         {
+            title: 'a read has an ADDRESS, for the callers that need one instead of a fetch',
+            note: '`raw` makes the call; `url` says where it would go. What needs the second is anything that is not a `fetch` — an `EventSource` over a handler framed with `sse()`, which is the browser’s own client for that framing and knows nothing about abide, plus the `curl` line in a bug report. Built through the SAME expression `ask` addresses with, so a server’s answer about where a call goes cannot drift from where a client sent it — and mounted, so it survives a sub-path the way every other address abide writes does. The two refusals are the contract rather than an omission: a mutation and a read carrying a file both travel in a BODY, so there is no address to hand back, and returning the bare one would be a URL missing its arguments — a 404 at a plausible-looking path.',
+            run({ is, throws }) {
+                const search = client<{ q: string }, string[]>('demo/address/search')
+                is('a read is its address plus its args', search.url({ q: 'ada' }), `${wire.base}/__abide/rpc/demo/address/search?q=ada`)
+                is('and with no args, just the address', client<void, number>('demo/address/count').url(undefined), `${wire.base}/__abide/rpc/demo/address/count`)
+
+                // Both doors that have no address, named as such rather than answering with one that
+                // would not work.
+                throws(
+                    'a mutation has none, because it travels in a body',
+                    () => client<{ id: number }, void>('demo/address/rename', { method: 'POST' }).url({ id: 1 }),
+                    /no address to hand back/,
+                )
+                throws(
+                    '…and neither does a read too long for a URL',
+                    () => search.url({ q: 'x'.repeat(3000) }),
+                    /past the \d+ a URL may carry/,
+                )
+            },
+        },
+
+        {
+            title: 'a FRAMED body is chunks too, and the content type is the whole of what decides',
+            note: 'The two framing helpers answer with a sequence exactly as a generator does — the only difference is that the address is one anything can read, `jsonl()` for a line-delimited body and `sse()` for an event stream. So the reader is the same reader: `isChunked` asks the response what it is rather than trusting what the stub was told, and one decoder walks all three framings because an event stream is line-delimited too. What differs is which lines carry a value — an `sse` body’s `event:`, `id:` and keep-alive comment lines carry none, and `data: ` comes off the front of the ones that do. Before this only the wire’s own ndjson was seen as chunks, so a `jsonl()` or `sse()` body decoded as one blob of text and reading either meant a `getReader()` and a `TextDecoder` in the page.',
+            async run({ is }) {
+                async function* items(): AsyncGenerator<{ id: number }> {
+                    for (let id = 1; id <= 3; id++) yield { id }
+                }
+                const lines = GET(() => jsonl(items()))
+                const events = GET(() => sse(items()))
+                // The TYPE half of the same claim, and it needs saying separately: a `Response` says
+                // nothing about its own body, so before `Framed<T>` both of these declared `Response`
+                // and the loops below had no element type to be — green `tsc`, useless caller.
+                assertType<Exact<ReturnType<ReturnType<typeof lines>>, { id: number }>>()
+                assertType<Exact<ReturnType<ReturnType<typeof events>>, { id: number }>>()
+                register(
+                    'rpc',
+                    [
+                        ['demo/framed/lines', 'lines'],
+                        ['demo/framed/events', 'events'],
+                    ],
+                    { lines, events },
+                )
+                const remoteLines = client<Record<string, never>, { id: number }>('demo/framed/lines', {
+                    stream: true,
+                })
+                const remoteEvents = client<Record<string, never>, { id: number }>('demo/framed/events', {
+                    stream: true,
+                })
+
+                const framed: { id: number }[] = []
+                for await (const item of remoteLines({})) framed.push(item)
+                is('a jsonl body arrives as its VALUES', framed, [{ id: 1 }, { id: 2 }, { id: 3 }])
+
+                const evented: { id: number }[] = []
+                for await (const item of remoteEvents({})) evented.push(item)
+                is('an sse body as the same ones, unframed', evented, [{ id: 1 }, { id: 2 }, { id: 3 }])
+
+                // The rest of the slot's vocabulary follows for free, because it is the vocabulary a
+                // keyed memo already had — which is the whole claim of `rpc = memo + transport`.
+                is('chunks() is the transcript either way', remoteEvents({}).chunks(), [
+                    { id: 1 },
+                    { id: 2 },
+                    { id: 3 },
+                ])
+                is('and the read is the LATEST chunk', remoteEvents({})(), { id: 3 })
+            },
+        },
+
+        {
             title: 'middleware runs for every caller, including the in-process one',
             note: 'The chain authorizes and observes the CALL, not the request — so a handler another handler calls directly goes through the same rungs, which is the half a request-level middleware cannot reach. `next()` takes no arguments, like every onion in abide; the args are beside it, because an authorization that cannot see what was asked for can only ever be per-endpoint.',
             async run({ is, rejects }) {
@@ -1075,6 +1152,7 @@ export default suite({
                             additionalProperties: undefined,
                         },
                         output: undefined,
+                        room: undefined,
                     },
                 )
 
@@ -1248,7 +1326,7 @@ export default suite({
                 is(
                     '…and with no resolver the same file derives nothing rather than a guess',
                     derive(crossing),
-                    { name: 'a', method: 'GET', asDefault: false, streams: false, input: undefined, output: undefined },
+                    { name: 'a', method: 'GET', asDefault: false, streams: false, input: undefined, output: undefined, room: undefined },
                 )
                 is(
                     'a type from a module that does not resolve is the same answer',
@@ -1275,7 +1353,7 @@ export default suite({
                 is(
                     '…and so does a handler with no annotation at all',
                     derive(`export const a = GET((args) => 1)\n`),
-                    { name: 'a', method: 'GET', asDefault: false, streams: false, input: undefined, output: undefined },
+                    { name: 'a', method: 'GET', asDefault: false, streams: false, input: undefined, output: undefined, room: undefined },
                 )
 
                 // The two places a declaration can say BOTH directions.
@@ -1299,6 +1377,7 @@ export default suite({
                             required: ['name'],
                             additionalProperties: undefined,
                         },
+                        room: undefined,
                     },
                 )
                 // A stream's type argument is its CHUNK, which is exactly what an output schema
@@ -1526,7 +1605,7 @@ export default suite({
 
         {
             title: 'every endpoint publishes the shape a machine reads before calling it',
-            note: 'This is what the shape story is FOR. Standard Schema is validate-only — it hands over a `validate` function and nothing that says what the shape IS — so a schema declared through one cannot become a tool definition or an OpenAPI operation. That is why JSON Schema is what a declaration MEANS rather than something abide converts to on the way out: an MCP tool is `{ name: id, description, inputSchema: input }` and an OpenAPI operation is the same three facts under other names, so neither needs a generator in here. `endpoints()` answers in-process and `GET /__abide/schema` answers over the wire — open, because every address in it is already in the client bundle and the shape beside it is the contract for calling one.',
+            note: 'This is what the shape story is FOR. Standard Schema is validate-only — it hands over a `validate` function and nothing that says what the shape IS — so a schema declared through one cannot become a tool definition or an OpenAPI operation. That is why JSON Schema is what a declaration MEANS rather than something abide converts to on the way out: an MCP tool is `{ name: id, description, inputSchema: input }` and an OpenAPI operation is the same three facts under other names, so neither projection derives anything — they add only what the catalogue has no reason to know, which is the wire. This is the document both read: `endpoints()` answers in-process and `GET /__abide/schema` answers over the wire — open, because every address in it is already in the client bundle and the shape beside it is the contract for calling one.',
             async run({ is }) {
                 const search = GET(({ q, page }: { q: string; page?: number }) => ({ q, page: page ?? 1 }), {
                     description: 'Search the catalogue',
@@ -1560,6 +1639,9 @@ export default suite({
                             properties: { q: { type: 'string' }, page: { type: 'number' } },
                             required: ['q'],
                         },
+                        // Resolved rather than declared: this endpoint said nothing, and what silence
+                        // means is every surface — see `clients` on the declaration.
+                        clients: { mcp: true, openapi: true },
                     },
                 ])
 
@@ -1598,6 +1680,412 @@ export default suite({
                     document.some((one) => one.id === 'demo/catalogue/search'),
                     true,
                 )
+            },
+        },
+
+        {
+            title: 'a socket answers over ordinary HTTP as well as over a websocket',
+            note: 'One address, three doors. A `GET` carrying `Upgrade: websocket` is the connection; a `GET` without one is the transcript-then-follow as ndjson; a `POST` is one message into the room. The two HTTP arms exist because a websocket is exactly what a generated client, a `curl` and an MCP tool call cannot hold — and they are the same room, through the same gates: `clientPublish` still decides whether a client may write at all, the declared message schema still refuses what does not match, and the socket’s middleware still runs on both the subscribe and the publish. What differs is only that a refusal here is a STATUS, because an HTTP request has a response to carry one in and a frame does not. `__abide_tail=n` is what makes a stream that never ends answerable: it takes n messages and closes, and breaking the iteration is what drops the subscription.',
+            async run({ is }) {
+                const lobby = socket<string, { room: string }>({
+                    channel: { tail: 4 },
+                    clientPublish: (message, _room, into) => {
+                        into.publish(`echoed: ${message}`)
+                    },
+                })
+                const broadcast = socket<{ n: number }>({ channel: { tail: 4 } })
+                register(
+                    'socket',
+                    [
+                        ['demo/http/lobby', 'lobby'],
+                        ['demo/http/broadcast', 'broadcast'],
+                    ],
+                    { lobby, broadcast },
+                    {
+                        // The ROOM beside the message — the second type argument, which is what a tail
+                        // or a publish has to name to reach one stream rather than another.
+                        lobby: {
+                            input: { type: 'string' },
+                            room: ROOM_BY_NAME,
+                        },
+                    },
+                )
+
+                const sent = await wire.fetch('/__abide/socket/demo/http/lobby?room=one', {
+                    method: 'POST',
+                    body: JSON.stringify('hello'),
+                })
+                is('a POST is one message into the room', sent.status, 202)
+                is('…and it says ACCEPTED, because what happens to it is the socket’s', await sent.json(), {
+                    accepted: true,
+                })
+
+                // The bound is what makes this answerable at all — without it the response is a
+                // stream that never ends, which is right for a browser and unusable here.
+                const tailed = await wire.fetch('/__abide/socket/demo/http/lobby?room=one&__abide_tail=1', {})
+                is('a GET with no upgrade header tails it', tailed.status, 200)
+                is('…as one JSON value per line', tailed.headers.get('content-type'), 'application/jsonl')
+                is('…carrying what the handler published', await tailed.text(), '"echoed: hello"\n')
+
+                // The ROOM is what selects the stream, so a different one is a different transcript —
+                // and this is the case that needs both bounds. A count alone never completes on a
+                // room nobody has published into: the transcript is empty, so the first message it
+                // is waiting for is one that may never come, and an empty answer and a hang are the
+                // same thing to whoever asked.
+                const elsewhere = await wire.fetch(
+                    '/__abide/socket/demo/http/lobby?room=two&__abide_tail=1&__abide_wait=25',
+                    {},
+                )
+                is('another room has none of it', await elsewhere.text(), '')
+
+                const refused = await wire.fetch('/__abide/socket/demo/http/broadcast', {
+                    method: 'POST',
+                    body: JSON.stringify({ n: 1 }),
+                })
+                is('a socket that declared no `clientPublish` takes nothing', refused.status, 405)
+            },
+        },
+
+        {
+            title: 'the same catalogue, as an OpenAPI document nobody wrote',
+            note: 'Not a second derivation — a PROJECTION. The shape is already JSON Schema, so an operation is the facts `endpoints()` carries under OpenAPI’s names for them, and 3.1 is what makes that free: its schema object IS JSON Schema, where a 3.0 document would need translating on the way out — the exact projection the shape language was inverted to avoid. What the projection adds is the WIRE, which the catalogue has no reason to know: a read spends its args one query parameter EACH, so they become `parameters`; a mutation’s become a JSON body; a `format: "binary"` member makes that body multipart; a handler that yields answers `x-ndjson`; and a socket contributes its tail and publish arms rather than an operation it cannot have.',
+            async run({ is }) {
+                const find = GET(({ q }: { q: string }) => [q], { description: 'Find things' })
+                const upload = POST(({ file }: { file: File }) => file.name, { description: 'Take a file' })
+                const quiet = POST(({ x }: { x: number }) => x, { clients: { openapi: false } })
+                // Its own socket rather than the one the case above registered: a case that reads
+                // what another case wrote passes or fails on the ORDER they run in, which is not
+                // what either of them is about.
+                const feed = socket<string, { room: string }>({
+                    clientPublish: (message, _room, into) => {
+                        into.publish(message)
+                    },
+                })
+                register(
+                    'socket',
+                    [['demo/api/feed', 'feed']],
+                    { feed },
+                    {
+                        feed: {
+                            input: { type: 'string' },
+                            room: ROOM_BY_NAME,
+                        },
+                    },
+                )
+                register(
+                    'rpc',
+                    [
+                        ['demo/api/find', 'find'],
+                        ['demo/api/upload', 'upload'],
+                        ['demo/api/quiet', 'quiet'],
+                    ],
+                    { find, upload, quiet },
+                    {
+                        find: { input: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] } },
+                        upload: {
+                            input: {
+                                type: 'object',
+                                properties: { file: { type: 'string', format: 'binary' } },
+                                required: ['file'],
+                            },
+                        },
+                        quiet: { input: { type: 'object', properties: { x: { type: 'number' } }, required: ['x'] } },
+                    },
+                )
+
+                const served = await wire.fetch('/__abide/openapi.json', {})
+                const document = (await served.json()) as {
+                    openapi: string
+                    paths: Record<string, Record<string, { parameters?: { name: string }[]; requestBody?: unknown }>>
+                }
+                is('the document is served beside the schema', served.status, 200)
+                is('…as OpenAPI 3.1, whose schema object IS JSON Schema', document.openapi, '3.1.0')
+
+                const read = document.paths['/__abide/rpc/demo/api/find']?.get
+                is(
+                    'a read spends its args as query parameters, one each',
+                    read?.parameters?.map((one) => one.name),
+                    ['q'],
+                )
+
+                const file = document.paths['/__abide/rpc/demo/api/upload']?.post
+                const body = file?.requestBody as { content: Record<string, unknown> } | undefined
+                is(
+                    'a `binary` member is what makes a body multipart',
+                    Object.keys(body?.content ?? {}),
+                    ['multipart/form-data'],
+                )
+
+                // A socket has no operation of its own — an upgrade is not a call — so what it
+                // publishes is the pair of HTTP arms the case above serves.
+                const tail = document.paths['/__abide/socket/demo/api/feed']
+                is('a socket contributes its tail and its publish', Object.keys(tail ?? {}).sort(), ['get', 'post'])
+                is(
+                    '…the ROOM is what a tail names to reach one, and both bounds are how it ends',
+                    tail?.get?.parameters?.map((one) => one.name),
+                    ['room', '__abide_tail', '__abide_wait'],
+                )
+
+                is(
+                    'and a declaration that opted out is not in it',
+                    Object.hasOwn(document.paths, '/__abide/rpc/demo/api/quiet'),
+                    false,
+                )
+
+                // The same document WITHOUT the wire, which is what the `abide/server/internal` door
+                // is for: a build step writing the spec to a file has no server to fetch from, and it
+                // is the one caller that needs to say what the API is called when that is not what
+                // the package is called. Everything else is still derived.
+                const named = openapi({ title: 'The Catalogue', version: '9.9.9', description: 'Hand-named.' })
+                is(
+                    'called directly, only the prose is the caller’s to name',
+                    [named.info.title, named.info.version, named.info.description],
+                    ['The Catalogue', '9.9.9', 'Hand-named.'],
+                )
+                is(
+                    '…and the paths are the same ones the wire served',
+                    Object.keys(named.paths).sort(),
+                    Object.keys(document.paths).sort(),
+                )
+            },
+        },
+
+        {
+            title: 'every declaration is a tool an agent can call, over MCP',
+            note: 'The same projection, aimed at the other reader. An MCP tool IS `{ name, description, inputSchema }`, so `tools/list` is the catalogue with nothing converted — and `tools/call` does not reach a handler at all: it builds a request to the app’s OWN `/__abide/` door and re-enters `dispatch`, so every policy, middleware rung, schema gate and refusal applies exactly once, in the place that already owned it. A second path to a handler would be a second security posture. The transport is JSON-RPC 2.0 over one POST — a `switch` over four method names, and no dependency. Two things it must translate: an address is not a legal tool name for the clients that consume these, so `users/getUser` is sanitised and the true address kept as the `title`; and a SCHEMA REFUSAL comes back as a RESULT with `isError`, not as a protocol error, because an agent can act on "q: expected string" and cannot act on `-32602`.',
+            async run({ is }) {
+                // Its own endpoints, for the reason the case above registers its own: a case that
+                // reads what another wrote passes or fails on the order they ran in.
+                const find = GET(({ q }: { q: string }) => [q], { description: 'Find things' })
+                const hidden = POST(({ x }: { x: number }) => x, { clients: { mcp: false } })
+                const events = GET(() =>
+                    sse(
+                        (async function* () {
+                            yield { at: 1 }
+                            yield { at: 2 }
+                        })(),
+                    ),
+                )
+                const lobby = socket<string, { room: string }>({
+                    channel: { tail: 4 },
+                    clientPublish: (message, _room, into) => {
+                        into.publish(`echoed: ${message}`)
+                    },
+                })
+                const outward = socket<{ n: number }>()
+                register(
+                    'rpc',
+                    [
+                        ['demo/tool/find', 'find'],
+                        ['demo/tool/hidden', 'hidden'],
+                        ['demo/tool/events', 'events'],
+                    ],
+                    { find, hidden, events },
+                    {
+                        find: { input: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] } },
+                        hidden: { input: { type: 'object', properties: { x: { type: 'number' } }, required: ['x'] } },
+                    },
+                )
+                register(
+                    'socket',
+                    [
+                        ['demo/tool/lobby', 'lobby'],
+                        ['demo/tool/outward', 'outward'],
+                    ],
+                    { lobby, outward },
+                    {
+                        lobby: {
+                            input: { type: 'string' },
+                            room: ROOM_BY_NAME,
+                        },
+                    },
+                )
+
+                // What a conforming client sends, and the whole of what this revision needs: the
+                // version and the capabilities travel in `_meta` on EVERY request, because there is
+                // no handshake left to have settled them, and the two are mirrored into headers so
+                // an intermediary can route without parsing the body.
+                const VERSION = '2026-07-28'
+                const ask = (body: Record<string, unknown>, extra?: Record<string, string>): Promise<Response> =>
+                    wire.fetch('/__abide/mcp', {
+                        method: 'POST',
+                        headers: {
+                            'content-type': 'application/json',
+                            'mcp-protocol-version': VERSION,
+                            'mcp-method': String(body.method),
+                            ...extra,
+                        },
+                        body: JSON.stringify(body),
+                    })
+                const called = (method: string, params: Record<string, unknown> = {}): Record<string, unknown> => ({
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method,
+                    params: {
+                        ...params,
+                        _meta: {
+                            'io.modelcontextprotocol/protocolVersion': VERSION,
+                            'io.modelcontextprotocol/clientCapabilities': {},
+                        },
+                    },
+                })
+                const call = async (method: string, params?: Record<string, unknown>): Promise<Record<string, never>> => {
+                    const body = called(method, params)
+                    // `Mcp-Name` is required on a tools/call and must match the body, so it rides here
+                    // rather than at each call site.
+                    const named = method === 'tools/call' ? { 'mcp-name': String(params?.name) } : undefined
+                    const answered = await ask(body, named)
+                    return (await answered.json()) as Record<string, never>
+                }
+
+                const found = (await call('server/discover')) as unknown as {
+                    result: { resultType: string; supportedVersions: string[]; capabilities: { tools: object } }
+                }
+                is(
+                    'discovery replaces the handshake — one request, and no state behind it',
+                    [found.result.supportedVersions, Object.hasOwn(found.result.capabilities, 'tools')],
+                    [[VERSION], true],
+                )
+                is('and every result says which KIND of result it is', found.result.resultType, 'complete')
+
+                const listed = (await call('tools/list')) as unknown as {
+                    result: { tools: { name: string; title: string }[] }
+                }
+                const byTitle = new Map(listed.result.tools.map((one) => [one.title, one.name]))
+                is(
+                    'an address is sanitised into a name a tool client accepts',
+                    byTitle.get('demo/tool/find'),
+                    'demo_tool_find',
+                )
+                is(
+                    '…and a socket is two tools, because it has two arms',
+                    [byTitle.get('demo/tool/lobby (tail)'), byTitle.get('demo/tool/lobby (publish)')],
+                    ['demo_tool_lobby_tail', 'demo_tool_lobby_publish'],
+                )
+                is(
+                    'a broadcast socket offers no publish tool at all',
+                    byTitle.has('demo/tool/outward (publish)'),
+                    false,
+                )
+                is('and a declaration that opted out is not a tool', byTitle.has('demo/tool/hidden'), false)
+
+                const answered = (await call('tools/call', {
+                    name: 'demo_tool_find',
+                    arguments: { q: 'ada' },
+                })) as unknown as { result: { content: { text: string }[] } }
+                is('calling one runs the real handler', JSON.parse(answered.result.content[0]?.text ?? ''), ['ada'])
+
+                // The gate the endpoint already had, reached through the tool door — nothing about
+                // the check is MCP's, which is the whole claim.
+                const wrong = (await call('tools/call', {
+                    name: 'demo_tool_find',
+                    arguments: { q: 7 },
+                })) as unknown as { result: { isError: boolean; content: { text: string }[] } }
+                is('a refusal is a RESULT an agent can act on', wrong.result.isError, true)
+                is(
+                    '…carrying what the declared shape actually said',
+                    /q: expected string/.test(wrong.result.content[0]?.text ?? ''),
+                    true,
+                )
+
+                // The rooms of the socket case above, reached as tools.
+                const published = (await call('tools/call', {
+                    name: 'demo_tool_lobby_publish',
+                    arguments: { room: { room: 'three' }, message: 'over mcp' },
+                })) as unknown as { result: { content: { text: string }[] } }
+                is('publishing through a tool is the same publish', JSON.parse(published.result.content[0]?.text ?? ''), {
+                    accepted: true,
+                })
+                const drained = (await call('tools/call', {
+                    name: 'demo_tool_lobby_tail',
+                    arguments: { room: { room: 'three' }, limit: 1 },
+                })) as unknown as { result: { content: { text: string }[] } }
+                is(
+                    '…and tailing it reaches the same room',
+                    JSON.parse(drained.result.content[0]?.text ?? ''),
+                    ['echoed: over mcp'],
+                )
+
+                // EVERY framing the wire can answer in, decoded — the tool door drains the response
+                // through `chunksOf` rather than a reader of its own, so `sse()` arrives as values.
+                // Read as text, this is `data: {"at":1}` lines and an agent has to parse the frame.
+                const streamed = (await call('tools/call', {
+                    name: 'demo_tool_events',
+                    arguments: {},
+                })) as unknown as { result: { content: { text: string }[] } }
+                is(
+                    'an event-stream answer reaches the agent as values, not as frames',
+                    JSON.parse(streamed.result.content[0]?.text ?? ''),
+                    [{ at: 1 }, { at: 2 }],
+                )
+
+                // A name the client chose to WRAP. abide sanitises every tool name into the safe
+                // set, so nothing here needs the sentinel — but a conforming client must wrap any
+                // value that merely LOOKS like one, so the server has to decode before comparing or
+                // it refuses exactly the names the encoding exists to carry.
+                const wrapped = await ask(
+                    called('tools/call', { name: 'demo_tool_find', arguments: { q: 'ada' } }),
+                    { 'mcp-name': `=?base64?${btoa('demo_tool_find')}?=` },
+                )
+                const unwrapped = (await wrapped.json()) as { result: { content: { text: string }[] } }
+                is(
+                    'a Base64-wrapped `Mcp-Name` is decoded before it is compared',
+                    JSON.parse(unwrapped.result.content[0]?.text ?? ''),
+                    ['ada'],
+                )
+
+                // WHAT THE STATELESS REVISION REFUSES, and each one with the status a client reads
+                // before the body: it is how a modern server is told apart from a legacy one.
+                const mismatched = await ask({ ...called('tools/list'), method: 'tools/list' }, {
+                    'mcp-method': 'tools/call',
+                })
+                is(
+                    'a header that disagrees with the body is refused, not preferred',
+                    [mismatched.status, ((await mismatched.json()) as { error: { code: number } }).error.code],
+                    [400, -32020],
+                )
+
+                const old = await ask(
+                    {
+                        jsonrpc: '2.0',
+                        id: 1,
+                        method: 'tools/list',
+                        params: { _meta: { 'io.modelcontextprotocol/protocolVersion': '2025-06-18' } },
+                    },
+                    { 'mcp-protocol-version': '2025-06-18' },
+                )
+                const refused = ((await old.json()) as { error: { code: number; data: unknown } }).error
+                is(
+                    'a revision abide does not speak comes back NAMING the ones it does',
+                    [old.status, refused.code, refused.data],
+                    [400, -32022, { supported: [VERSION], requested: '2025-06-18' }],
+                )
+
+                const unknown = await ask(called('resources/list'))
+                is(
+                    'a method that does not exist is a 404, which is what tells a client to stop asking',
+                    [unknown.status, ((await unknown.json()) as { error: { code: number } }).error.code],
+                    [404, -32601],
+                )
+
+                // Removed in 2025-06-18 and never coming back — accepting one would be answering for
+                // a protocol nobody speaks.
+                const batched = await ask([called('tools/list')] as unknown as Record<string, unknown>)
+                is('a batch is refused outright', batched.status, 400)
+
+                // The GET that opened a standalone stream and the DELETE that ended a session, both
+                // removed with sessions themselves.
+                const streaming = await wire.fetch('/__abide/mcp', {})
+                is('and the GET an older client opens a stream with is 405', streaming.status, 405)
+
+                // The mitigation this transport's own spec asks for by name: a page the user merely
+                // visited must not be able to drive every tool the app publishes.
+                const rebound = await wire.fetch('/__abide/mcp', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json', origin: 'http://elsewhere.test' },
+                    body: '{}',
+                })
+                is('and it is closed to a cross-origin caller', rebound.status, 403)
             },
         },
 
@@ -1717,6 +2205,33 @@ export default suite({
                     true,
                 )
 
+                // The other way a handler says its answer arrives in chunks. An arrow cannot be a
+                // generator, so before this the stub for a framed endpoint claimed one value and the
+                // caller had to take the body apart by hand.
+                const framed = `export const feed = GET(() => jsonl(items()))\n`
+                is(
+                    'a handler that FRAMES one says so too',
+                    elide(framed, { filename: USERS, browser: true })?.code.includes('stream: true'),
+                    true,
+                )
+                const evented = `export const feed = GET(() => sse(items()))\n`
+                is(
+                    '…by either helper',
+                    elide(evented, { filename: USERS, browser: true })?.code.includes('stream: true'),
+                    true,
+                )
+                // The claim is about a SEQUENCE, so a response holding one value must not be caught
+                // by it — a `stream: true` here would hand every caller a transcript where they asked
+                // for the value.
+                is(
+                    'and a handler answering with one value does NOT',
+                    elide(`export const feed = GET(() => json({ ok: true }))\n`, {
+                        filename: USERS,
+                        browser: true,
+                    })?.code.includes('stream: true'),
+                    false,
+                )
+
                 throws(
                     'a non-endpoint export is an error naming the export',
                     () => elide(`export function helper() { return 1 }\n`, { filename: USERS }),
@@ -1783,6 +2298,34 @@ export default suite({
                             streams: false,
                             input: { type: 'number' },
                             output: undefined,
+                            // One stream, addressed by nothing — a room is what a KEYED socket has.
+                            room: undefined,
+                        },
+                    ],
+                )
+                is(
+                    '…and a keyed one derives the ROOM beside the message',
+                    elide(`export const rooms = socket<string, { room: string }>()\n`, { filename: FEED })
+                        ?.endpoints,
+                    // The second type argument ADDRESSES a subscriber rather than travelling to one,
+                    // so it is carried under its own name. Without it the generated tail and publish
+                    // arms have no way to say which room they act on, which is a tool nobody can call.
+                    [
+                        {
+                            name: 'rooms',
+                            method: 'socket',
+                            asDefault: false,
+                            streams: false,
+                            input: { type: 'string' },
+                            output: undefined,
+                            room: {
+                                type: 'object',
+                                properties: { room: { type: 'string' } },
+                                required: ['room'],
+                                // Written, like every field of a derived object schema — see the
+                                // note on the inline literal above.
+                                additionalProperties: undefined,
+                            },
                         },
                     ],
                 )

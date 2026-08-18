@@ -1,0 +1,26 @@
+<script>
+import { report } from '#server/rpc/docs/server/stream-a-render.ts'
+import { state } from 'abide'
+
+// The same call as the rung above and the same `raw`, read a chunk at a time instead of as one
+// string — which is the only way to see what the rung is about, since `text()` on either response
+// returns the same markup. Each line is stamped with when it arrived: the heading is out before the
+// first row is rendered, and the rows follow at the pace the slot produces them.
+const chunks = state<string[]>([])
+
+const ask = async (): Promise<void> => {
+    chunks = []
+    const answered = await report.raw({})
+    const started = performance.now()
+    const reader = (answered.body as ReadableStream<Uint8Array>).getReader()
+    const decoder = new TextDecoder()
+    for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        chunks = [...chunks, `${Math.round(performance.now() - started)}ms  ${decoder.decode(value, { stream: true })}`]
+    }
+}
+</script>
+
+<button onclick={ask}>stream it</button>
+<ul>{#for chunk of chunks}<li><code>{chunk}</code></li>{/for}</ul>

@@ -413,6 +413,33 @@ export default suite({
         },
 
         {
+            title: 'tail — the same sequence, ENDED, for a reader that has to return',
+            note: 'The case above ends the loop from OUTSIDE, with a `break`, and that is the only tool a consumer has — which is exactly what a reader that is not a loop cannot use. A generated client, a `curl` and an MCP tool call all have to answer, and the transcript-then-follow they want is infinite by construction. So the bound is the sequence’s own: `limit` is how many messages are enough and `idle` is how long to wait for the next, and BOTH are needed — a count alone never completes on a room nobody is publishing into, which reads as a hang rather than as the empty answer it is. Ending it here rather than around it is what makes the teardown work at all: a generator parked awaiting its next message does not process a `return()` until one arrives, so a bound wrapped around `tail()` would leave the subscription alive on exactly the quiet rooms it is for.',
+            async run({ is }) {
+                const chat = channel<string, { room: string }>({ tail: 3 })
+                const lobby = chat({ room: 'lobby' })
+                lobby.publish('one')
+                lobby.publish('two')
+
+                const replayed: string[] = []
+                for await (const message of lobby.tail({ limit: 2 })) replayed.push(message)
+                is('a limit ends it once it has enough', replayed, ['one', 'two'])
+
+                // The room nobody writes to, which is the case a count alone cannot answer: the
+                // transcript is empty, so the first message it waits for may never come.
+                const quiet = chat({ room: 'quiet' })
+                const drained: string[] = []
+                for await (const message of quiet.tail({ limit: 5, idle: 20 })) drained.push(message)
+                is('a wait is what makes an empty room ANSWER instead of hang', drained, [])
+
+                // The room identity is the observable proof, and it is the assertion that matters:
+                // ending normally runs the generator's own `finally`, so the reader unsubscribes on
+                // its way out — and the last subscriber leaving is what forgets a room.
+                is('…and the ended tail left no subscriber behind', chat({ room: 'quiet' }) === quiet, false)
+            },
+        },
+
+        {
             title: 'rooms — the CALL selects one, the way a keyed memo selects a slot',
             note: '`channel<T, Args>()` splits one stream into independent rooms, and the call is what tells the two forms apart: with no argument it is the read every source spells the same way, with one it hands back an ordinary channel. Rooms are process-wide, because a channel is not a cache — a publisher has to reach subscribers that arrived some other way.',
             async run({ is }) {

@@ -112,6 +112,7 @@ export { type RunningServer, server } from './running.ts'
 // schema is checked where the handler is, and the browser lane gets the address alone. Running that
 // check is `respond`'s, so `validateJson` and `SCHEMA_ERROR` are on `abide/server/internal`.
 export type {
+    Clients,
     EndpointShape,
     Issue,
     JsonSchema,

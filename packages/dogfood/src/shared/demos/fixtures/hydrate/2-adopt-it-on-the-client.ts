@@ -1,5 +1,5 @@
 import { hydrate } from 'abide/ui'
-import Page from '../server/2-suspend-and-stream.abide'
+import Page from '../Suspending.abide'
 
 /**
  * Every part claims the range its two markers mark out, then runs the ordinary first update — which

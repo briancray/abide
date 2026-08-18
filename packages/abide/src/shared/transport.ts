@@ -77,6 +77,20 @@ export interface Rpc<Args, T, F extends Failed = never> extends KeyedMemo<Args, 
     (args: Args, options?: CallOptions): RpcHandle<T, F>
     /** The same call, handed back as the raw response instead of a decoded value. */
     raw(args: Args, init?: RequestInit): Promise<Response>
+    /**
+     * Where this call GOES — mounted, and with a read's args on the query exactly as `raw` sends
+     * them.
+     *
+     * For the callers that need an address rather than a fetch: an `EventSource` over a handler
+     * framed with `sse()`, the `curl` line in a bug report, the string a network panel shows. Built
+     * from the same address and the same encoder the request uses, because an address computed a
+     * second way is one that can disagree with where the call actually went.
+     *
+     * A read whose args are too long for a URL travels in a body instead — see `MAX_GET_URL` — and
+     * so does anything carrying a file. There is no address for either, and this says so by throwing
+     * rather than by handing back one that would 404.
+     */
+    url(args: Args): string
     readonly method: Method
     readonly description: string | undefined
 }
@@ -127,6 +141,7 @@ export function asRpc<Args, T>(
         method: Method
         description: string | undefined
         raw(args: Args, init?: RequestInit): Promise<Response>
+        url(args: Args): string
     },
 ): Rpc<Args, T> {
     const rpc = ((args: Args, options?: CallOptions): RpcHandle<T> => {
@@ -139,6 +154,7 @@ export function asRpc<Args, T>(
     rpc.invalidate = call.invalidate
     rpc.refresh = call.refresh
     rpc.raw = spec.raw
+    rpc.url = spec.url
     Object.defineProperty(rpc, 'method', { value: spec.method, enumerable: true })
     Object.defineProperty(rpc, 'description', { value: spec.description, enumerable: true })
     return rpc
@@ -200,6 +216,42 @@ function continued(carried: Record<string, string> | undefined): Record<string, 
     return { ...traced, ...carried }
 }
 
+/**
+ * Where an endpoint lives, as the one expression that answers it.
+ *
+ * Mounted, because this is an ADDRESS rather than an id: the endpoint is still `demo/query/search`
+ * wherever the app is served, and a proxy forwarding one sub-path forwards `/__abide/**` under it
+ * like everything else. The id stays app-space, so a trace and a refusal still name the endpoint.
+ */
+function rpcAddress(id: string, base?: string): string {
+    return addressed(mounted(RPC_PREFIX + id), base)
+}
+
+/**
+ * The address a READ travels to, args and all — or the reason it has none.
+ *
+ * Shared by the two lanes rather than written in each, because the guards ARE the contract: a call
+ * that cannot travel as a URL has no address to hand back, and two copies of that rule are two
+ * chances for a server's answer about where a call goes to disagree with where a client sent it.
+ *
+ * It throws rather than returning the bare address, which would be a URL missing its arguments — a
+ * `404` at a plausible-looking path is the failure that takes longest to read.
+ */
+export function addressWithArgs(id: string, method: Method, args: unknown, base?: string): string {
+    if (method !== 'GET' || hasFile(args)) {
+        throw new Error(
+            `abide: ${id} has no address to hand back — url() is for a read whose args travel on the query, and this is ${hasFile(args) ? 'carrying a file' : `a ${method}`}. Use raw() to make the call.`,
+        )
+    }
+    const url = rpcAddress(id, base) + argsQuery(args)
+    if (url.length > MAX_GET_URL) {
+        throw new Error(
+            `abide: ${id} has no address to hand back — its args are ${url.length} characters, past the ${MAX_GET_URL} a URL may carry, so the call travels in a body. Use raw() to make it.`,
+        )
+    }
+    return url
+}
+
 export function remote<Args, T, F extends Failed = never>(
     id: string,
     options: RemoteOptions = {},
@@ -207,10 +259,7 @@ export function remote<Args, T, F extends Failed = never>(
     const method = options.method ?? 'GET'
     const streams = options.stream === true
     const send = options.fetch ?? sendWith
-    // Mounted, because this is an ADDRESS rather than an id: the endpoint is still `demo/query/search`
-    // wherever the app is served, and a proxy forwarding one sub-path forwards `/__abide/**` under it
-    // like everything else. The id stays app-space, so a trace and a refusal still name the endpoint.
-    const address = addressed(mounted(RPC_PREFIX + id), options.base)
+    const address = rpcAddress(id, options.base)
 
     // A read is an HTTP GET with one query parameter per argument, so the address says what was
     // asked and an intermediary may cache it; a mutation is its own method with a JSON body. Two
@@ -342,6 +391,7 @@ export function remote<Args, T, F extends Failed = never>(
         method,
         description: undefined,
         raw: (args, init) => ask(args, init),
+        url: (args) => addressWithArgs(id, method, args, options.base),
     }) as Rpc<Args, T, F>
 }
 

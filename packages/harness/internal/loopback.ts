@@ -115,7 +115,21 @@ export function loopback(base = 'http://abide.test'): Loopback {
                         return true
                     },
                 } as unknown as Parameters<typeof dispatch>[1]
-                const refused = await dispatch(new Request(url.replace(/^ws/, 'http')), server)
+                // The two headers a real client MUST send (RFC 6455), and the reason this stand-in
+                // has to send them: the same address now serves the upgrade, an ndjson tail and a
+                // publish, and what tells them apart is this header. A browser's `WebSocket` writes
+                // it natively and Bun's server sees the real one, so leaving it off here would make
+                // the loopback the one caller in the repo that asks for a socket without asking to
+                // upgrade — and every socket case would quietly measure the HTTP arm instead.
+                // Through `requestKeepingHeaders` and NOT `new Request`, for the reason that helper
+                // exists: `upgrade` and `connection` are FORBIDDEN header names, so a browser's
+                // constructor drops both in silence — and every socket case then measured the HTTP
+                // arm in a browser while staying green under `bun test`. Caught by the e2e gate,
+                // which is the only substrate that could have caught it.
+                const handshake = requestKeepingHeaders(url.replace(/^ws/, 'http'), {
+                    headers: { upgrade: 'websocket', connection: 'Upgrade' },
+                })
+                const refused = await dispatch(handshake, server)
                 if (refused !== undefined || data === undefined) {
                     wire.onclose?.()
                     return

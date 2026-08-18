@@ -1,127 +1,48 @@
-// The server's side of the address: id → declaration, and the one entry point that dispatches by it.
-//
-// Nothing here is discovered by scanning the filesystem. The compiler appends a `register(...)` call
-// to every transport module it loads, so a handler is reachable exactly when its module was imported
-// — the same rule the runtime already follows for scoped `<style>` blocks.
+// The DOORS: how a request reaches a declaration. What has been declared is `catalogue.ts`, which
+// this reads and the two projections read without reaching back through here.
 //
 // `dispatch` returns `undefined` for anything outside the reserved prefix, which is what lets an app
 // mount it in front of its own routes and never think about it again.
 
 import type { Server, ServerWebSocket } from 'bun'
-import type { Channel, KeyedChannel } from '#shared/channel.ts'
+import type { Channel } from '#shared/channel.ts'
 import { reserved } from '#shared/internal/mount.ts'
 import {
     ABIDE_PREFIX,
     HEALTH_PATH,
     IDENTITY_PATH,
     LOGS_PATH,
+    MCP_PATH,
+    OPENAPI_PATH,
     RPC_PREFIX,
     SCHEMA_PATH,
     SOCKET_PREFIX,
+    TAIL_PARAM,
+    WAIT_PARAM,
 } from '#shared/internal/PATHS.ts'
 import { isThenable } from '#shared/internal/probes.ts'
-import type { EndpointShape, Shapes } from '#shared/internal/shapes.ts'
+import { NO_LIMIT } from '#shared/internal/timers.ts'
 import { decodeArgs, decodeForm, decodeQuery, isForm } from '#shared/internal/wire.ts'
 import { abideLog } from '#shared/log.ts'
-import type { Kind, Rpc } from '#shared/transport.ts'
+import { type AnySocket, endpoints, RPCS, SOCKETS } from './catalogue.ts'
 import { config } from './config.ts'
 import { serveHealth } from './health.ts'
 import { serveIdentity } from './identity.ts'
 import { logs } from './logs.ts'
-import { headersFor, json, refuse } from './responses.ts'
+import { headersFor, json, jsonl, refuse } from './responses.ts'
 import {
     authorize,
     bodyCeiling,
-    describeRpc,
-    describeSocket,
     policyOf,
     respond,
     type SocketEvent,
     type SocketPolicy,
     socketPolicyOf,
 } from './rpc.ts'
+import { mcp } from './mcp.ts'
+import { openapi } from './openapi.ts'
 import { server as running } from './running.ts'
 import { serveIfScoped } from './scopes.ts'
-
-type AnyRpc = Rpc<unknown, unknown>
-type AnySocket = Channel<unknown> & KeyedChannel<unknown, unknown>
-
-const RPCS = new Map<string, AnyRpc>()
-const SOCKETS = new Map<string, AnySocket>()
-
-/**
- * What the compiler appends to a transport module. Also the hand-written spelling — nothing stops an
- * app registering a declaration it built itself, which is what makes a demo of the seam possible.
- */
-export function register(
-    kind: Kind,
-    entries: [id: string, name: string][],
-    module: Record<string, unknown>,
-    /**
-     * What the compiler read off each declaration's TYPE, by export name.
-     *
-     * Absent when the module's types said nothing this could read, and absent entirely from a
-     * hand-written `register` — so a shape is something an endpoint gains, never something it needs.
-     */
-    shapes?: Record<string, Shapes>,
-): void {
-    for (const [id, name] of entries) {
-        const declared = module[name]
-        if (declared === undefined) continue
-        if (kind === 'rpc') {
-            describeRpc(declared as object, id, shapes?.[name])
-            RPCS.set(id, declared as AnyRpc)
-        } else {
-            describeSocket(declared as object, id, shapes?.[name])
-            SOCKETS.set(id, declared as AnySocket)
-        }
-    }
-}
-
-/** Every address a lane has registered. What a test asks to prove the seam wired itself. */
-export function registered(kind: Kind): string[] {
-    return [...(kind === 'rpc' ? RPCS : SOCKETS).keys()]
-}
-
-/**
- * Every endpoint, as the document a machine reads BEFORE it calls one.
- *
- * This is what the whole shape story is for. An MCP tool definition is `{ name: id, description,
- * inputSchema: input }` and an OpenAPI operation is the same three facts under different names, so
- * neither needs a generator of its own in here — what they needed was for the shape to exist in a
- * form other than a validator, which is why JSON Schema is what a declaration MEANS rather than
- * something abide converts to on the way out.
- *
- * Sorted by address, so two runs of the same app produce the same document and a diff of one is a
- * diff of the API.
- */
-export function endpoints(): EndpointShape[] {
-    const all: EndpointShape[] = []
-    for (const [id, rpc] of RPCS) {
-        const policy = policyOf(rpc)
-        all.push({
-            id,
-            kind: 'rpc',
-            method: rpc.method,
-            ...(rpc.description === undefined ? {} : { description: rpc.description }),
-            ...(policy?.streams === true ? { streams: true } : {}),
-            ...(policy?.input == null ? {} : { input: policy.input }),
-            ...(policy?.output == null ? {} : { output: policy.output }),
-        })
-    }
-    for (const [id, stream] of SOCKETS) {
-        const policy = socketPolicyOf(stream)
-        all.push({
-            id,
-            kind: 'socket',
-            // A socket never ends, so it is the one endpoint whose `streams` is not worth saying: it
-            // is true by construction, and a flag that is always true tells a reader nothing.
-            ...(policy?.message == null ? {} : { input: policy.message }),
-        })
-    }
-    all.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-    return all
-}
 
 /**
  * The catalogue as a response. Open, unlike the log feed: every address in it is already in the
@@ -131,6 +52,43 @@ export function endpoints(): EndpointShape[] {
 function schema(request: Request): Response {
     if (request.method !== 'GET') return refuse('the schema is a GET', 405)
     return json(endpoints())
+}
+
+/**
+ * The same catalogue as an OpenAPI document, open for the same reason the schema is.
+ *
+ * Built per request rather than cut once, because `endpoints()` is: a lane registers a module when
+ * it is first imported, so a document cached at boot would be missing every endpoint behind a route
+ * nobody had asked for yet. It is a walk of a map an app has tens of entries in, on an address a
+ * generator reads once.
+ */
+function described(request: Request): Response {
+    if (request.method !== 'GET') return refuse('the openapi document is a GET', 405)
+    return json(openapi())
+}
+
+/**
+ * The MCP surface, behind the origin gate — CLOSED to a cross-origin caller unless one is named.
+ *
+ * Gated HERE rather than inside `mcp.ts` so the rule and its default are written once, beside the one
+ * every rpc gets. It is also the mitigation that transport's own spec asks for by name: a local MCP
+ * server that answers any origin is reachable by DNS rebinding from a page the user merely visited,
+ * and every tool it publishes is reachable with it.
+ *
+ * Closed with nothing to open it, where an rpc has `crossOrigin`, and the asymmetry is the point: an
+ * ordinary MCP client is a PROCESS rather than a page, so it sends no `Origin` at all and this gate
+ * never sees it. The only caller a declared origin would admit is a browser, which is the exact
+ * caller the mitigation exists to keep out.
+ */
+function tooling(request: Request, url: URL): Response | Promise<Response> {
+    const headers = crossOrigin(request, url, null)
+    if (headers === null) {
+        return refuse(`the mcp surface is not open to ${request.headers.get('origin')}`, 403)
+    }
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: headersFor(headers, NO_DEFAULTS) })
+    }
+    return mcp(request, url, headers)
 }
 
 // --- the cross-origin gate ---------------------------------------------------
@@ -271,9 +229,17 @@ export function dispatch(
 }
 
 function served(request: Request, url: URL, path: string): Response | Promise<Response | undefined> {
-    if (path.startsWith(SOCKET_PREFIX)) return upgrade(request, url, path)
+    // An upgrade NAMES ITSELF, so the same address serves all three doors of one socket — see the
+    // section above `overHttp`. A browser sends this header and nothing else does.
+    if (path.startsWith(SOCKET_PREFIX)) {
+        const wants = request.headers.get('upgrade')
+        if (wants !== null && wants.toLowerCase() === 'websocket') return upgrade(request, url, path)
+        return overHttp(request, url, path)
+    }
     if (path === LOGS_PATH) return logs(request)
     if (path === SCHEMA_PATH) return schema(request)
+    if (path === OPENAPI_PATH) return described(request)
+    if (path === MCP_PATH) return tooling(request, url)
     if (path === HEALTH_PATH) return serveHealth(request)
     if (path === IDENTITY_PATH) return serveIdentity(request)
     if (!path.startsWith(RPC_PREFIX)) return refuse(`nothing is served at ${path}`, 404)
@@ -331,30 +297,68 @@ async function call(request: Request, url: URL, path: string): Promise<Response>
     return respond(rpc, args, headers)
 }
 
-function upgrade(request: Request, url: URL, path: string): Response | Promise<Response | undefined> {
+/** One socket address, resolved: the gates both of its doors share, and what they resolved to. */
+interface SocketAddress {
+    id: string
+    stream: AnySocket
+    policy: SocketPolicy | undefined
+    /** The cross-origin answer. Carried by the HTTP arm; the upgrade has no response to put it on. */
+    headers: Record<string, string>
+    room: unknown
+    /** `TAIL_PARAM` / `WAIT_PARAM` as they arrived, for the one door that bounds a tail. */
+    bound: string | null
+    waited: string | null
+}
+
+/**
+ * The socket an address names, with every gate the two doors SHARE already run.
+ *
+ * One resolver rather than one per door, because the room is the thing they must agree about: a query
+ * read by the upgrade as `7` and by the HTTP arm as `"7"` is two rooms, and a publish landing where
+ * nobody is listening is the quietest failure there is. Written twice, that agreement was a comment;
+ * written once it is the only way to reach either door.
+ *
+ * The bounds come OFF the query before the room is decoded, for the same reason: everything left on
+ * this query string is the ADDRESS, so a bound left in it would make `?room=a&__abide_tail=2` a
+ * different room from `?room=a`.
+ *
+ * A websocket upgrade is not subject to CORS, so the declaration has to gate it here or a page
+ * anywhere could open one.
+ */
+function socketAt(request: Request, url: URL, path: string): SocketAddress | Response {
     const id = path.slice(SOCKET_PREFIX.length)
     const stream = SOCKETS.get(id)
     if (stream === undefined) return refuse(`no socket at ${id}`, 404)
+    const policy = socketPolicyOf(stream)
+    const headers = crossOrigin(request, url, policy?.crossOrigin ?? null)
+    if (headers === null) {
+        return refuse(`${id} is not open to ${request.headers.get('origin')}`, 403)
+    }
+    const bound = url.searchParams.get(TAIL_PARAM)
+    const waited = url.searchParams.get(WAIT_PARAM)
+    url.searchParams.delete(TAIL_PARAM)
+    url.searchParams.delete(WAIT_PARAM)
+    let room: unknown
+    try {
+        // The DECLARED room shape — a socket's `input` is its MESSAGE, and this is the separate
+        // derivation that says what ADDRESSES it.
+        room = decodeQuery(url.searchParams, policy?.room ?? null)
+    } catch {
+        return refuse(`${id} was addressed with a room it could not decode`, 400, headers)
+    }
+    return { id, stream, policy, headers, room, bound, waited }
+}
+
+function upgrade(request: Request, url: URL, path: string): Response | Promise<Response | undefined> {
+    const at = socketAt(request, url, path)
+    if (at instanceof Response) return at
     // `dispatch` latches its `server` argument before the prefix test and nothing awaits in between,
     // so by here the latch already holds THIS server whenever the caller named one.
     const target = running.peek<SocketData>()
     if (target === null) {
         return refuse('a socket needs the Bun server — `dispatch(request, server)`', 500)
     }
-    const policy = socketPolicyOf(stream)
-    // A websocket upgrade is not subject to CORS, so the same declaration has to gate it here or a
-    // page anywhere could open one.
-    if (crossOrigin(request, url, policy?.crossOrigin ?? null) === null) {
-        return refuse(`${id} is not open to ${request.headers.get('origin')}`, 403)
-    }
-    let room: unknown
-    try {
-        // No shape: a socket's derived one is its MESSAGE, and the room is what selects the stream.
-        room = decodeQuery(url.searchParams, null)
-    } catch {
-        return refuse(`${id} was subscribed to with a room it could not decode`, 400)
-    }
-    return authorized(request, target, id, room, policy)
+    return authorized(request, target, at.id, at.room, at.policy)
 }
 
 async function authorized(
@@ -365,20 +369,10 @@ async function authorized(
     policy: SocketPolicy | undefined,
 ): Promise<Response | undefined> {
     if (policy !== undefined) {
-        const event: SocketEvent<unknown, unknown> = {
-            kind: 'subscribe',
-            room,
-            message: undefined,
-            request,
-        }
-        try {
-            // Guarded, not awaited: a socket with no middleware — the default — has nothing to wait
-            // for, and an unconditional await costs a promise wrap and a tick on every upgrade.
-            const ran = authorize(policy, event)
-            if (isThenable(ran)) await ran
-        } catch (error) {
-            return refuse(String((error as Error).message ?? error), 403)
-        }
+        // The same gate the HTTP tail runs, from the same helper: a subscribe admitted by one door and
+        // refused by the other would be one socket with two security postures.
+        const why = await refused(policy, { kind: 'subscribe', room, message: undefined, request })
+        if (why !== null) return refuse(why, 403)
     }
     const data: SocketData = {
         id,
@@ -396,6 +390,130 @@ async function authorized(
 
 function roomFor(stream: AnySocket, room: unknown): Channel<unknown> {
     return room === undefined ? (stream as Channel<unknown>) : stream(room)
+}
+
+// --- the socket over ordinary http -------------------------------------------
+//
+// The SAME address as the upgrade, because it is the same endpoint: `GET` with an `Upgrade` header is
+// a websocket, `GET` without one is the transcript-then-follow as ndjson, and `POST` is one message
+// into the room. A second address would be a second thing to name, secure and keep in step, and it
+// would put the two doors of one socket in different places in a generated document.
+//
+// What it is FOR is everything that cannot hold a websocket: an MCP tool call, a generated OpenAPI
+// client, a shell. Those are the same callers that need the tail to END, which is what `TAIL_PARAM`
+// is — see its comment. Every gate the frame path runs, this runs; what it does NOT share is the
+// silent drop, because that exists for a frame having no response to refuse in and this has one.
+
+function overHttp(request: Request, url: URL, path: string): Response | Promise<Response> {
+    const at = socketAt(request, url, path)
+    if (at instanceof Response) return at
+    const { id, stream, policy, headers, room } = at
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: headersFor(headers, NO_DEFAULTS) })
+    }
+    if (request.method === 'GET') return tailed(request, stream, id, room, policy, headers, at.bound, at.waited)
+    if (request.method === 'POST') return sent(request, stream, id, room, policy, headers)
+    return refuse(`${id} tails on GET and takes a publish on POST`, 405, headers)
+}
+
+/** The chain, with a refusal as a MESSAGE rather than a throw — both doors below answer with one. */
+async function refused(policy: SocketPolicy, event: SocketEvent<unknown, unknown>): Promise<string | null> {
+    try {
+        const ran = authorize(policy, event)
+        if (isThenable(ran)) await ran
+        return null
+    } catch (refusal) {
+        return String((refusal as Error)?.message ?? refusal)
+    }
+}
+
+/**
+ * The transcript, then everything published after it, as ndjson.
+ *
+ * `channel.tail()` is the whole of it — the same generator a local reader iterates, which is what
+ * makes this a door onto the socket rather than a second implementation of one. The snapshot and the
+ * subscribe happen in one synchronous run in there, so a message published between them is missed by
+ * neither, and `jsonl` holds the request scope until the last chunk.
+ *
+ * The two bounds are handed to `tail` rather than wrapped around it, and that is not tidiness: a
+ * generator parked awaiting its next message does not process a `return()` until one arrives, so a
+ * bound applied from out here would leave the subscription alive on exactly the quiet rooms it is
+ * for. See `TailOptions`.
+ */
+async function tailed(
+    request: Request,
+    stream: AnySocket,
+    id: string,
+    room: unknown,
+    policy: SocketPolicy | undefined,
+    headers: Record<string, string>,
+    bound: string | null,
+    waited: string | null,
+): Promise<Response> {
+    if (policy !== undefined) {
+        const why = await refused(policy, { kind: 'subscribe', room, message: undefined, request })
+        if (why !== null) return refuse(why, 403, headers)
+    }
+    const limit = bound === null ? NO_LIMIT : Number(bound)
+    if (!(limit > 0)) {
+        return refuse(`${id} was tailed with a ${TAIL_PARAM} that is not a count`, 400, headers)
+    }
+    const idle = waited === null ? NO_LIMIT : Number(waited)
+    if (!(idle > 0)) {
+        return refuse(`${id} was tailed with a ${WAIT_PARAM} that is not a duration`, 400, headers)
+    }
+    return jsonl(roomFor(stream, room).tail({ limit, idle }), { headers })
+}
+
+/**
+ * One message into the room, through every gate the frame path runs.
+ *
+ * The refusals are STATUSES here where the websocket drops silently, and that is not a second policy:
+ * a frame has no response to carry a refusal in, so the drop was the only answer available there.
+ * Nothing is disclosed by saying so — whether a socket takes a client publish at all is already in
+ * the published catalogue, which is what a generated surface reads to know the arm exists.
+ *
+ * The chain is spelled twice rather than shared, and the reason is the await: `websocket.message`
+ * guards every step because it runs per FRAME, and this awaits because it answers one request. A GATE
+ * ADDED HERE BELONGS THERE TOO — the failure of adding it to one is that the other door stays open,
+ * and nothing about either function says so on its own.
+ */
+async function sent(
+    request: Request,
+    stream: AnySocket,
+    id: string,
+    room: unknown,
+    policy: SocketPolicy | undefined,
+    headers: Record<string, string>,
+): Promise<Response> {
+    if (policy === undefined || policy.clientPublish === false) {
+        return refuse(`${id} is a broadcast — it does not take what a client sends`, 405, headers)
+    }
+    const accept = policy.clientPublish
+    let message: unknown
+    try {
+        message = await request.json()
+    } catch {
+        return refuse(`${id} takes one JSON message as the body`, 400, headers)
+    }
+    const declared = policy.checkMessage
+    if (declared !== null) {
+        try {
+            const gated = declared(message)
+            message = isThenable(gated) ? await gated : gated
+        } catch (refusal) {
+            return refuse(String((refusal as Error)?.message ?? refusal), 422, headers)
+        }
+    }
+    const why = await refused(policy, { kind: 'publish', room, message, request })
+    if (why !== null) return refuse(why, 403, headers)
+    // The room the sender is on, resolved the same way `open` resolves it for a connection — the
+    // handler is handed the channel rather than re-selecting it, exactly as `clientPublish` documents.
+    const ran = accept(message, room, roomFor(stream, room))
+    if (isThenable(ran)) await ran
+    // ACCEPTED rather than "published": what happens to a client's message is `clientPublish`'s to
+    // decide, and a handler that transforms it, routes it elsewhere or drops it has still taken it.
+    return json({ accepted: true }, { status: 202, headers })
 }
 
 /** The websocket half of the mount point, handed straight to `Bun.serve({ websocket })`. */
@@ -434,6 +552,9 @@ export const websocket = {
             FANOUT.delete(room)
         }
     },
+    // THE SAME GATES AS `sent`, IN THE SAME ORDER, and deliberately not shared with it: every step
+    // here is guarded rather than awaited because this runs per FRAME, where `sent` answers one
+    // request and may await. A gate added to one belongs in the other — see `sent`.
     message(connection: ServerWebSocket<SocketData>, raw: string | Buffer): void | Promise<void> {
         // Narrowed ONCE, here, and handed down: `data.policy` is written at the upgrade and never
         // again, so re-reading it per frame past this gate was a second load and a branch that

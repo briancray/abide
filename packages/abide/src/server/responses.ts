@@ -23,8 +23,11 @@ import {
     type FailureOptions,
     HttpError,
     JSON_TYPE,
+    type Framed,
     JSONL_TYPE,
     jsonLine,
+    SSE_TYPE,
+    sseFrame,
     TRANSPORT_ERROR,
 } from '#shared/internal/wire.ts'
 import { PRIVATE_NO_STORE } from './internal/CACHE.ts'
@@ -37,7 +40,6 @@ export type { Failed, FailureOptions } from '#shared/internal/wire.ts'
 // rebuilds a refusal as exactly this, so a caught failure has the same four members on both sides.
 export { HttpError } from '#shared/internal/wire.ts'
 
-const SSE_TYPE = 'text/event-stream'
 const HTML_TYPE = 'text/html; charset=utf-8'
 
 type Values<T> = AsyncIterable<T> | Iterable<T>
@@ -84,22 +86,21 @@ export function json(data: unknown, init?: ResponseInit): Response {
 }
 
 /** A sequence as one JSON value per line, written as the consumer asks for it. */
-export function jsonl<T>(values: Values<T>, init?: ResponseInit): Response {
+export function jsonl<T>(values: Values<T>, init?: ResponseInit): Framed<T> {
     return new Response(heldFrames(values, jsonLine), {
         ...init,
         headers: headersFor(init?.headers, { 'content-type': JSONL_TYPE }),
-    })
+    }) as Framed<T>
 }
 
 /**
  * The same machine as `jsonl`, framed as server-sent events.
  *
- * One `data:` line per value, because JSON has no unescaped newline and an event's payload is
- * delimited by one. The two extra headers are what stops the stream being held: `no-cache` for the
- * browser, `x-accel-buffering` for the reverse proxies that buffer a response until it ends — an SSE
- * stream that arrives all at once at the end is not a stream.
+ * The two extra headers are what stops the stream being held: `no-cache` for the browser,
+ * `x-accel-buffering` for the reverse proxies that buffer a response until it ends — an SSE stream
+ * that arrives all at once at the end is not a stream.
  */
-export function sse<T>(values: Values<T>, init?: ResponseInit): Response {
+export function sse<T>(values: Values<T>, init?: ResponseInit): Framed<T> {
     return new Response(heldFrames(values, sseFrame), {
         ...init,
         headers: headersFor(init?.headers, {
@@ -107,7 +108,7 @@ export function sse<T>(values: Values<T>, init?: ResponseInit): Response {
             'cache-control': 'no-cache',
             'x-accel-buffering': 'no',
         }),
-    })
+    }) as Framed<T>
 }
 
 /**
@@ -125,10 +126,6 @@ function bodyOf(body: string | ReadableStream<Uint8Array> | Values<string>): str
     if (typeof body === 'string') return body
     if (body instanceof ReadableStream) return heldStream(body)
     return heldFrames(body, (chunk) => chunk)
-}
-
-function sseFrame(value: unknown): string {
-    return `data: ${JSON.stringify(value)}\n\n`
 }
 
 /**

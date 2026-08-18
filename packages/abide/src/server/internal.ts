@@ -49,7 +49,14 @@ export { outletFrom, sharedLayoutDepth } from '#shared/router.ts'
 export { mountBase, useMountBase } from '#shared/internal/mount.ts'
 // The transport seam's SERVING half. `GET` / `POST` / `socket` declare an endpoint; these five are how
 // one gets answered, and `abide start` mounts them.
-export { dispatch, endpoints, register, registered, websocket } from './registry.ts'
+export { endpoints, register, registered } from './catalogue.ts'
+export { dispatch, websocket } from './registry.ts'
+// The OpenAPI projection of that same catalogue. HERE rather than on the public door for the reason
+// `endpoints` is: both are what a TOOL reads, not what an app types — `abide start` already serves
+// each of them at an address, and an app wanting the document at build time or under a name of its
+// own is reaching past the front door on purpose. The MCP projection has no export at all, because
+// its only caller is the endpoint that serves it.
+export { openapi, type OpenApiDocument, type OpenApiOptions } from './openapi.ts'
 // Checking a declared shape, which happens inside `respond` before a handler is called. An app
 // declares `{ schema }` on an rpc and never runs the check itself.
 export { SCHEMA_ERROR, validateJson } from './schema.ts'

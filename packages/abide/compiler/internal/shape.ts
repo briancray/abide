@@ -688,7 +688,7 @@ export function crossing(resolve: TypeSource): Crossing {
  */
 export interface Declared extends Shapes {
     /**
-     * The handler YIELDS, so the value arrives as chunks rather than at once.
+     * The value arrives as CHUNKS rather than at once.
      *
      * Read off the tokens for the same reason the export itself is: the browser lane builds a stub
      * that streams from a file it never loads, so the syntax is the whole answer.
@@ -708,15 +708,18 @@ export function shapesAt(reader: TypeReader, methodAt: number, rpc: boolean): De
     const tokens = reader.tokens
     let input: JsonSchema | undefined
     let output: JsonSchema | undefined
+    let room: JsonSchema | undefined
     let at = methodAt + 1
 
     if (tokens[at]?.kind === SyntaxKind.LessThanToken) {
         const explicit = reader.typeArguments(at)
         at = explicit.at
         // A socket's first type argument is its MESSAGE; its second is the room, which addresses a
-        // subscriber rather than travelling in one.
+        // subscriber rather than travelling in one — so it is carried under its own name rather than
+        // dropped, because a generated surface has to say which room it is publishing to.
         input = explicit.args[0]
         if (rpc) output = explicit.args[1]
+        else room = explicit.args[1]
     }
 
     let streams = false
@@ -725,7 +728,7 @@ export function shapesAt(reader: TypeReader, methodAt: number, rpc: boolean): De
         // and where its parameter list starts. Two walks that could disagree would emit a stub that
         // streams from an endpoint whose published shape says it does not.
         const handler = prologue(tokens, at)
-        streams = rpc && handler.streams
+        streams = rpc && (handler.streams || frames(tokens, at))
         if (input === undefined || output === undefined) {
             const annotated = fromHandler(reader, handler.at)
             input ??= annotated.input
@@ -740,7 +743,39 @@ export function shapesAt(reader: TypeReader, methodAt: number, rpc: boolean): De
         streams,
         input: usable(input) ? input : undefined,
         output: usable(output) ? output : undefined,
+        room: usable(room) ? room : undefined,
     }
+}
+
+/**
+ * The two helpers that frame a SEQUENCE as a response body — the second way a handler says its value
+ * arrives in chunks.
+ *
+ * A handler that yields says so in its own syntax; one that returns `jsonl(items())` or `sse(items())`
+ * says so in the helper it calls, and the caller's `for await` is identical either way. Without this
+ * the stub for such an endpoint was built without `stream: true`, so its whole body decoded as one
+ * blob of text and reading it meant a hand-written `TextDecoder` loop in the page.
+ */
+const FRAMING = new Set(['jsonl', 'sse'])
+
+/**
+ * Does the handler frame its answer as a stream?
+ *
+ * The bare NAME, matched the same way `GET` / `POST` already are a few frames up the stack: this
+ * file recognises the vocabulary rather than resolving it, so a local function shadowing one of the
+ * two names is read as the framing helper. That is the same documented cost `prologue` carries and
+ * it is one grep from being checked, where an import resolver here would be a second, weaker copy of
+ * what the checker does in the lane that has one.
+ */
+function frames(tokens: Token[], call: number): boolean {
+    const close = balancedFrom(tokens, call, SyntaxKind.OpenParenToken, SyntaxKind.CloseParenToken)
+    if (close < 0) return false
+    for (let i = call + 1; i < close; i++) {
+        const token = tokens[i] as Token
+        if (token.kind !== SyntaxKind.Identifier || !FRAMING.has(token.text)) continue
+        if ((tokens[i + 1] as Token | undefined)?.kind === SyntaxKind.OpenParenToken) return true
+    }
+    return false
 }
 
 /**
@@ -766,12 +801,12 @@ function fromHandler(reader: TypeReader, params: number): Shapes {
     const tokens = reader.tokens
     // Anything but a function LITERAL carries no annotation here to read. One shape on every path,
     // including the two that read nothing at all.
-    const nothing: Shapes = { input: undefined, output: undefined }
+    const nothing: Shapes = { input: undefined, output: undefined, room: undefined }
     if (tokens[params]?.kind !== SyntaxKind.OpenParenToken) return nothing
     const close = balancedFrom(tokens, params, SyntaxKind.OpenParenToken, SyntaxKind.CloseParenToken)
     if (close < 0) return nothing
 
-    const found: Shapes = { input: undefined, output: undefined }
+    const found: Shapes = { input: undefined, output: undefined, room: undefined }
     const colon = firstAnnotation(tokens, params, close)
     if (colon >= 0) {
         const read = reader.read(colon + 1)

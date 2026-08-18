@@ -164,7 +164,9 @@ function membersOf(checker: Checker, type: Type, seen: Set<number>, depth: numbe
 function shapesFor(checker: Checker, type: Type | undefined, kind: 'rpc' | 'socket'): Shapes {
     // One shape from every path, as `shape.ts`'s `shapesAt` answers — the two derivations differing
     // about the SPELLING of an answer is the whole failure this file's header is about.
-    if (type === undefined || !type.isTypeReference()) return { input: undefined, output: undefined }
+    if (type === undefined || !type.isTypeReference()) {
+        return { input: undefined, output: undefined, room: undefined }
+    }
     const name = type.getSymbol()?.name
     const args = checker.getTypeArguments(type)
     const seen = new Set<number>()
@@ -173,15 +175,26 @@ function shapesFor(checker: Checker, type: Type | undefined, kind: 'rpc' | 'sock
         return held === undefined ? ANYTHING : schemaOf(checker, held, seen, 0)
     }
     if (kind === 'socket') {
-        // A room channel addresses subscribers by its FIRST argument and carries its second.
-        const schema = at(name === 'KeyedChannel' ? 1 : 0)
-        return { input: usable(schema) ? schema : undefined, output: undefined }
+        // A room channel addresses subscribers by its FIRST argument and carries its second. Both
+        // are read: the message is what travels, the room is what selects the stream it travels on,
+        // and a generated tail or publish arm needs the second to name a target at all.
+        const keyed = name === 'KeyedChannel'
+        const schema = at(keyed ? 1 : 0)
+        const address = keyed ? at(0) : undefined
+        return {
+            input: usable(schema) ? schema : undefined,
+            output: undefined,
+            room: usable(address) ? address : undefined,
+        }
     }
     const input = at(0)
     const output = at(1)
     return {
         input: usable(input) ? input : undefined,
         output: usable(output) ? output : undefined,
+        // An rpc's args ARE its input, so it never has one — written rather than omitted, for the
+        // reason the two below are: one hidden class per `Shapes`, and one record to compare.
+        room: undefined,
     }
 }
 

@@ -625,6 +625,32 @@ export default suite({
         },
 
         {
+            title: '`for await` hands the source over too — the loop wants the CELL, not its value',
+            note: 'The sibling of the `await` guard above, found the same way and one loop along. A slot’s async iterator IS its transcript cursor, which is what makes a streamed read spell identically on both sides — so reading it first hands the loop the LATEST CHUNK, which is a value and not iterable at all. It shipped the moment a framed endpoint became readable as chunks: `for await (const row of catalogue({}))` in a rung emitted `catalogue({})()` and failed to compile with nothing pointing at the sugar. The guard is on `for await` ALONE, because a synchronous `for … of` over a cell holding an array is exactly the read the author meant — which is the line the two loops are told apart by, and the reason this walks back to the head’s own paren rather than reading the `of`.',
+            run({ is }) {
+                const cell = "<script>import { state } from 'abide'\nconst rows = state([1])</script>"
+                const keyed = "<script>import { memo } from 'abide'\nconst m = memo(async ({ id }) => id)</script>"
+                is(
+                    'a keyed call in a `for await` head keeps its handle',
+                    template(`${keyed}<button onclick={async () => { for await (const r of m({ id: 1 })) log(r) }}>x</button>`),
+                    '<button @click=${async () => { for await (const r of m({ id: 1 })) log(r) }}>x</button>',
+                )
+                is(
+                    'and so does a plain name',
+                    template(`${cell}<button onclick={async () => { for await (const r of rows) log(r) }}>x</button>`),
+                    '<button @click=${async () => { for await (const r of rows) log(r) }}>x</button>',
+                )
+                // The other loop, which is what stops this reading as "an `of` is never a read". A
+                // synchronous walk of a cell holding an array is the read it has always been.
+                is(
+                    'a synchronous `for … of` still reads',
+                    template(`${cell}<button onclick={() => { for (const r of rows) log(r) }}>x</button>`),
+                    '<button @click=${() => { for (const r of rows()) log(r) }}>x</button>',
+                )
+            },
+        },
+
+        {
             title: 'the JavaScript lane: a callback prop reaches the handler with no type to say so',
             note: 'A `.abide` may carry no types at all, and then `props()` has no type argument for `classifyMember` to read — every prop classifies as a cell, `propCell` wraps the callback, and `onpick(row.id)` used to call the CELL and discard the handler. The rule that fixes it needs no classification: a cell read takes no arguments, so a call carrying some is a call of what the cell HOLDS. The two lanes then agree about behaviour while differing in text, which is the honest parity claim — the typed lane knows it is a callback and passes it through, the untyped one wraps it and reads it back.',
             run({ is }) {

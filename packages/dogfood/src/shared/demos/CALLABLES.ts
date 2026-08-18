@@ -254,8 +254,9 @@ export const CALLABLES = {
         name: 'render',
         from: 'abide/server',
         blurb:
-            'Streaming SSR: one walk in document order, out-of-order for anything that suspends. An async ' +
-            'generator, so a caller wanting a string drains it.',
+            'Streaming SSR: one walk over a `Renderable`, in document order, handing over what it has ' +
+            'written whenever it is about to wait. An async generator, so a caller wanting a string drains ' +
+            'it and `page(render(view))` streams it.',
         ladders: ['server'],
     },
 
