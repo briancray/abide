@@ -46,10 +46,6 @@ export const PLAIN: RenderContext = { hydratable: false, document: null, placeho
 /** The same, inside a placeholder. Shared for the same reason `PLAIN` is. */
 export const IN_PLACEHOLDER: RenderContext = { hydratable: false, document: null, placeholder: true }
 
-export interface RenderOptions {
-    hydratable?: boolean
-}
-
 // The server's markup is a string, so the escaping here is the only thing between an interpolated
 // value and injected markup. WHICH values are absent, bare or written comes from `attributeText`,
 // shared with the client so a hydrating page writes what the server wrote.

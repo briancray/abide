@@ -8,12 +8,15 @@
 // genuinely this app's: what wraps a request, what happens around the boot, and what it says about
 // its own health.
 //
-// Every export below is optional. An app that wants none of them is an empty file, and an app that
-// wants a route of its own adds `export default` beside these — it is asked first, and `undefined` is
-// how it hands a path back to the pages.
+// Every registration below is optional. An app that wants none of them is an empty file, and an app
+// that wants a route of its own adds `export default` beside them — it is asked first, and
+// `undefined` is how it hands a path back to the pages. The route is the only EXPORT the boot reads,
+// because a route is the only one of these with no call to make: the rest are registrations, made
+// here at module scope and checked against their own types by this app's typecheck.
 
 import { log, route } from 'abide'
-import { csp, type Middleware } from 'abide/server'
+import { csp, middleware, onConfig, onError, onHealth, onIdentity, onStart, onStop } from 'abide/server'
+import { exportSpans } from '#server/lib/otlp.ts'
 import { CALLABLES } from '#shared/demos/CALLABLES.ts'
 import { SPELLINGS } from '#shared/demos/SPELLINGS.ts'
 import { META } from '#shared/demos/SUITES.ts'
@@ -69,10 +72,14 @@ const PARAMETERISED = new Map<string, { parameter: string; kind: string; known: 
 /**
  * One rung, and what a rung is for: it sees the request going down and the response coming back.
  *
- * An array because a chain is plural — `abide start` hands the whole of it to `middleware(...)`, in
- * this order, outermost first.
+ * Variadic because a chain is plural, and in this order — outermost first. The one registration that
+ * APPENDS rather than replaces, which is why it keeps its own name instead of an `onRequest` that
+ * would read as a point in time and as one answer per process.
  */
-export const middleware: Middleware[] = [
+middleware(
+    // Outermost, so the span it times covers every rung under it and the route itself. The rung about
+    // it is `/docs/trace`'s last, and this is the one it points at.
+    exportSpans,
     async (next) => {
         const answered = await next()
         answered.headers.set('x-dogfood', 'served')
@@ -91,42 +98,38 @@ export const middleware: Middleware[] = [
     // real. `'self'` is the narrowest form of that: same origin only, and every other origin is still
     // refused exactly as before.
     csp({ 'frame-ancestors': ["'self'"] }),
-]
+)
 
 /** WRAPS the bind: everything before `start()` happens before the socket exists. */
-export async function onStart(start: () => Promise<void>): Promise<void> {
+onStart(async (start) => {
     log('warming')
     await start()
-}
+})
 
 /** And mirrors it on the way out. `stop()` is the socket closing. */
-export async function onStop(stop: () => Promise<void>): Promise<void> {
+onStop(async (stop) => {
     log('draining')
     await stop()
-}
+})
 
 /** Fields merged OVER the baseline `{ reachable, version, startedAt, uptime }`. */
-export function onHealth(): unknown {
-    return { example: { serving: true } }
-}
+onHealth(() => ({ example: { serving: true } }))
 
 // The three hooks below exist so that the `/docs` rungs about them have a RUNNING one to point at.
 // Every rung's preview presses a button against this process, and a hook nothing registered is a rung
 // whose preview would have to describe what would have happened — which is the thing the previews
-// replaced. They are app EXPORTS rather than calls made from a demo module on purpose: one process has
-// one answer to each of these, so a second registration replaces the first, and the boot is the single
+// replaced. They are registered HERE rather than from a demo module on purpose: one process has one
+// answer to each of these, so a second registration replaces the first, and the boot is the single
 // place that should make it.
 
 /** The middle layer — under the environment, which is what makes it a default rather than a knob. */
-export function onConfig(): Record<string, unknown> {
-    return { DOCS_GREETING: 'hello' }
-}
+onConfig(() => ({ DOCS_GREETING: 'hello' }))
 
 /** What an unexpected failure means here. `undefined` falls through to abide's own answer. */
-export function onError(thrown: unknown): Response | undefined {
+onError((thrown) => {
     if (thrown instanceof RangeError) return new Response('that number is out of range', { status: 400 })
     return undefined
-}
+})
 
 /**
  * What the sealed claims MEAN — the cookie carries an id and the principal carries a row.
@@ -134,8 +137,8 @@ export function onError(thrown: unknown): Response | undefined {
  * Anonymous is left exactly as it was: a caller with no seal reaches here with `null`, and merging
  * nothing over the floor is how this app says it has nothing to add about somebody it does not know.
  */
-export function onIdentity(claims: unknown): unknown {
+onIdentity((claims) => {
     const { id } = (claims ?? {}) as { id?: string }
     if (id === undefined) return {}
     return { name: `user ${id}`, roles: ['reader'] }
-}
+})

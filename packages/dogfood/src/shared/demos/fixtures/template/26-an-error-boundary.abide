@@ -10,9 +10,15 @@ const nameOf = (text: string): string => {
 }
 </script>
 
-<!-- JavaScript semantics, and therefore SYNCHRONOUS. The body is evaluated as ONE unit rather than one
-     thunk per expression, which is what lets `{:catch}` see a throw from anywhere inside it — and what
-     makes a dep read in there re-run the whole body rather than one hole.
+<!-- A REGION, not a guard around one call: the boundary owns what it renders, so a throw from anywhere
+     under it — this expression, a nested component's setup, a markup thunk two templates down — is
+     caught and the `{:catch}` arm replaces the whole region. It has to be a region rather than a `try`,
+     because an arm can only stand where nothing has been sent yet; what the body had already written
+     is discarded rather than left with the arm appended to it.
+
+     The cost is that the region lands whole instead of chunking as it goes. That is already true of
+     every region with something slow in it, and it is capped — past `HOLD_LIMIT` the same spill every
+     other held region gets converts it to a placeholder and a patch.
 
      What it does NOT catch is a pending read. That signal is how the graph says "run me again", and a
      boundary that swallowed it would turn waiting into a permanent error — which is why an unlanded

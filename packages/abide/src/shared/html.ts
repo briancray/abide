@@ -391,14 +391,15 @@ export function pendingArm(branches: Branches): unknown {
 }
 
 /**
- * What a failed body renders to, or a rethrow. ONE rule with two arrival paths — the body throwing
- * synchronously, and an awaited hole rejecting a tick later — so it is written once:
+ * What a failed body renders to, or a rethrow. ONE rule with THREE arrival paths — the body throwing
+ * synchronously, an awaited hole rejecting a tick later, and the server's walk failing anywhere under
+ * the region (`boundaryRegion`) — so it is written once:
  *
  * a read with nothing to serve YET is not a failure, and this is not the boundary that recovers from
  * it; the signal passes through to whoever will run the body again. Without a `{:catch}` the author
  * did not claim to handle anything either, so that throw passes through too.
  */
-function caughtArm(block: Boundary, error: unknown): unknown {
+export function caughtArm(block: Boundary, error: unknown): unknown {
     if (isPending(error) || block.branches.catch === undefined) throw error
     return settledArms(block.branches, true, error)
 }

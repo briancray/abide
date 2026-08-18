@@ -1,0 +1,18 @@
+<script>
+import { served } from '#server/rpc/docs/server/in-the-apps-shell.ts'
+import { state } from 'abide'
+
+// Rung 1's button and `<pre>` unchanged, because the diff that is the lesson is the option on the
+// server side: what comes back is a whole document — this app's own `app.html`, with the report's
+// scoped rules in the head — rather than the markup alone. Nothing is asked until the button is
+// pressed; see `#shared/demos/proofs.ts`.
+const shown = state('nothing asked yet')
+
+const ask = async (): Promise<void> => {
+    const answered = await served.raw({})
+    shown = await answered.text()
+}
+</script>
+
+<button onclick={ask}>render it in the app’s shell</button>
+<pre>{shown}</pre>

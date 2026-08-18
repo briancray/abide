@@ -21,7 +21,14 @@ const HERE = new URL(`file://${PAGES}/`)
 
 test('a directory is a pattern and a filename is a kind', async () => {
     const table = await pages(HERE)
-    const paths = table.map((entry) => entry.path).sort()
+    // ROUTABLE rows only. `error.abide` is the third kind and rides in the same table — one walk, so
+    // the server's loaders and the generated client table cannot disagree about it — but its `path` is
+    // the directory it COVERS rather than an address, so it does not belong in a list of what this app
+    // serves. The case below is where it is asserted.
+    const paths = table
+        .filter((entry) => entry.kind !== 'error')
+        .map((entry) => entry.path)
+        .sort()
     // Three sections over TWO vocabularies: `/docs/[callable]` is one public name written down,
     // `/tests/[suite]/[...rest]` is a capability's cases running, and `/bench/[suite]` is what they cost.
     // Docs is keyed by callable and the other two by capability, because a reader looking up `cookies`
@@ -58,6 +65,21 @@ test('a directory is a pattern and a filename is a kind', async () => {
         '/tests/[suite]/[...rest]',
         '/users/[id]',
     ])
+})
+
+test('an error page is a row of its own kind, at the directory it covers', async () => {
+    const table = await pages(HERE)
+    const failing = table.filter((entry) => entry.kind === 'error')
+    // This app writes one, at the root, so it stands behind every path nothing else serves.
+    expect(failing.map((entry) => entry.path)).toEqual(['/'])
+    // NOT addressable, and this is the assertion that says so: `/` is also a real page here, and the
+    // two rows share that path. An error row installed as a route would be a second `/` — precedence
+    // would pick one of them and the index would be a coin flip.
+    const addressable = table.filter((entry) => entry.kind !== 'error').map((entry) => entry.path)
+    expect(addressable.filter((path) => path === '/')).toHaveLength(1)
+    // It renders in the layouts above its OWN directory, exactly as a page there would — which is what
+    // keeps a 404 wearing the chrome of the section it happened in.
+    expect(failing[0]?.layouts).toEqual(table.find((entry) => entry.path === '/')?.layouts)
 })
 
 test('every layout above a page wraps it, outermost first', async () => {

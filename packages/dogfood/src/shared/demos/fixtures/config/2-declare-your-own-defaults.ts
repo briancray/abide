@@ -1,3 +1,5 @@
+import { onConfig } from 'abide/server'
+
 /**
  * The middle layer: abide's floor, then this, then what the operator declared.
  *
@@ -5,11 +7,9 @@
  * nothing — and the hook is handed the environment already assembled, so a default may be computed from
  * one without a null check of its own.
  *
- * An app EXPORT rather than a call, which is the form the boot registers for you: one process has one
- * answer, so a second registration replaces the first and the boot is the single place to make it.
- * `packages/dogfood/app.ts` carries exactly this, which is why the preview beside it has a value to
- * read back rather than a description of one.
+ * A REGISTRATION, made where the app's module runs: one process has one answer, so a second call
+ * replaces the first and `packages/dogfood/app.ts` is the single place that makes it. Carrying exactly
+ * this is why the preview beside it has a value to read back rather than a description of one. A
+ * second argument — `onConfig(hook, { schema })` — is how a key an app cannot work without is declared.
  */
-export function onConfig(): Record<string, unknown> {
-    return { DOCS_GREETING: 'hello' }
-}
+onConfig(() => ({ DOCS_GREETING: 'hello' }))

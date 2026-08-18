@@ -10,14 +10,47 @@
 // different claim and has its own case below.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { rm } from 'node:fs/promises'
+// `cp`/`rm` — bun has no recursive copy or remove of its own, and `Bun.$` would put a shell between
+// this file and the one thing it is asserting about.
+import { cp, readdir, rm } from 'node:fs/promises'
 import { brotliDecompressSync } from 'node:zlib'
 import { CLIENT_DIR, type ClientAsset, type ClientManifest, GENERATED_ENTRY, MANIFEST_FILE } from 'abide/cli'
 import { type Ended, abide as spawnAbide } from 'harness/spawn'
 import { SERVER_ONLY_MARKER } from '#server/lib/db.ts'
-import { APP_ROOT as ROOT } from '#tests/PATHS.ts'
+import { APP_ROOT } from '#tests/PATHS.ts'
+
+/**
+ * This file's OWN copy of the app, because it is the only one that BUILDS one.
+ *
+ * `abide build` starts by removing `.abide/client` outright — a hash makes a chunk immutable at its
+ * address, so merging would pile every build's output up forever. That `rm` is half a second wide,
+ * and for all of it the directory is empty. `start.test.ts` and `mount.test.ts` SERVE the app out of
+ * that same directory, so with the files running as separate processes one of them read a chunk this
+ * one had just deleted: `ENOENT page-<hash>.js`, in the file that builds nothing.
+ *
+ * Sequentially it could not happen, which is why it never had. The copy is what makes the claims here
+ * about a build the same claims when something else is reading a build at the same time — and it costs
+ * 3.4 MB and ~10 ms, against the half second the build itself takes.
+ *
+ * UNDER the app rather than beside it, which is a resolution fact rather than a tidy one:
+ * `bun-plugin-tailwind` is the app's own devDependency and bun did not hoist it, so a copy anywhere
+ * but inside `packages/dogfood` walks up past a `node_modules` that has never heard of it and the
+ * build stops on the stylesheet. Copied ENTRY BY ENTRY for the same reason it is here at all — `cp`
+ * refuses a destination inside its own source however the filter is written, and `.abide` is where
+ * this lives.
+ */
+const ROOT = `${APP_ROOT}/.abide/build-root`
 
 const OUT = `${ROOT}/${CLIENT_DIR}`
+
+/**
+ * Source, as against anything generated — at ANY depth, which is the whole reason it is a predicate
+ * rather than the two names skipped at the top level.
+ *
+ * `src/tests/apps/tiny/.abide/` holds a compiled BINARY, and a copy that took the top-level rule only
+ * was 71 MB instead of 3.4 MB: every entry in it was source by that rule, one directory down.
+ */
+const isSource = (from: string): boolean => !from.includes('/.abide') && !from.includes('/node_modules')
 
 /** Every case here builds the dogfood app unless it names a root of its own. */
 function abide(argv: string[], cwd = ROOT, env?: Record<string, string>): Promise<Ended> {
@@ -34,6 +67,14 @@ const texts = new Map<string, string>()
 // reference ladders added forty-odd modules to compile, and then the whole file failed on a hook rather
 // than on anything it asserts. `start.test.ts` builds too and has said 30s all along.
 beforeAll(async () => {
+    await rm(ROOT, { recursive: true, force: true })
+    // Every entry the app has, minus the two that are not source — a RULE rather than a list of the
+    // four names a build happens to read today, because a file added to the app and missed here would
+    // not fail, it would build something slightly smaller than the app and go on passing.
+    for (const entry of await readdir(APP_ROOT)) {
+        if (entry === '.abide' || entry === 'node_modules') continue
+        await cp(`${APP_ROOT}/${entry}`, `${ROOT}/${entry}`, { recursive: true, filter: isSource })
+    }
     built = await abide(['build'])
     manifest = (await Bun.file(`${ROOT}/${MANIFEST_FILE}`).json()) as ClientManifest
     for (const name of Object.keys(manifest.assets)) {

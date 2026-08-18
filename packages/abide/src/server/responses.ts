@@ -33,7 +33,7 @@ import {
 import { PRIVATE_NO_STORE } from './internal/CACHE.ts'
 import { ALWAYS_POLICY } from './internal/POLICY.ts'
 import { gate, type Schema } from './schema.ts'
-import { ambientHeaders, heldFrames, heldStream } from './scopes.ts'
+import { ambientHeaders, framedOver, heldFrames, heldStream, holdScope } from './scopes.ts'
 
 export type { Failed, FailureOptions } from '#shared/internal/wire.ts'
 // The class itself lives on the wire seam, because the browser lane builds one too: `wireError`
@@ -85,30 +85,123 @@ export function json(data: unknown, init?: ResponseInit): Response {
     })
 }
 
-/** A sequence as one JSON value per line, written as the consumer asks for it. */
-export function jsonl<T>(values: Values<T>, init?: ResponseInit): Framed<T> {
-    return new Response(heldFrames(values, jsonLine), {
-        ...init,
-        headers: headersFor(init?.headers, { 'content-type': JSONL_TYPE }),
-    }) as Framed<T>
+/** A framing as DECLARED — the constant `jsonl` and `sse` are each built from, and nothing per call. */
+interface FramingSpec {
+    /**
+     * `unknown` rather than the value's own type, and that is what keeps the call sites cast-free: a
+     * writer that takes anything is assignable to one that takes a `T`.
+     */
+    frame: (value: unknown) => string
+    type: string
+    /** What this framing sets beyond its type — `sse`'s two, and nothing for `jsonl`. */
+    extra: Record<string, string>
 }
 
 /**
- * The same machine as `jsonl`, framed as server-sent events.
+ * How a framing WRITES — everything `reframed` needs, and nothing that holds a request open.
  *
- * The two extra headers are what stops the stream being held: `no-cache` for the browser,
- * `x-accel-buffering` for the reverse proxies that buffer a response until it ends — an SSE stream
- * that arrives all at once at the end is not a stream.
+ * Split from `Framing` so a per-call framing can be COPIED down to it: `rpc.ts` keeps one on the
+ * per-declaration policy for the life of the process, and the two members `Framing` adds would pin
+ * that one call's generator and its whole request scope there with it.
  */
-export function sse<T>(values: Values<T>, init?: ResponseInit): Framed<T> {
-    return new Response(heldFrames(values, sseFrame), {
+export interface FramingWritten extends FramingSpec {
+    /** The handler's own `init`, so a re-frame keeps its status and its headers. */
+    init: ResponseInit | undefined
+}
+
+/**
+ * What a framed response was built FROM — the source, and how to write it again.
+ *
+ * A framing helper is TWO answers to two callers, and until this existed only one of them was right.
+ * Somebody else's reader wants the response: `application/jsonl` or `text/event-stream`, framed for a
+ * client that knows nothing about abide. A caller IN PROCESS — an SSR pass, a test, a page reading
+ * its own app — wants the values, because `for await` over the same declaration in a browser hands
+ * back chunks. Handed the envelope instead, an ungated `{#for await}` rendered one stray row on the
+ * server and `await catalogue()` answered a `Response`.
+ *
+ * So the rpc lane takes `values` and gives `release` back, and `respond` writes the framing again
+ * over the cell's own transcript. The response built here is then never read — which is exactly why
+ * the hold is out here rather than inside `heldFrames`, and why it is a release rather than a cancel:
+ * cancelling would call `return()` on the generator the lane is about to iterate.
+ */
+export interface Framing extends FramingWritten {
+    /**
+     * The source, ONCE — `null` to whoever asks second.
+     *
+     * A generator has one pass and both lanes reach for it, so this is WHOEVER ASKED FIRST rather than
+     * an ordering to get right. It has to be: a `ReadableStream` pulls once at construction to fill
+     * its queue, so the body built below took a chunk out from under the rpc lane a microtask after
+     * the handler returned — three rows went out as `{"id":1}` and `{"id":3}`, in process and on the
+     * wire alike, with nothing anywhere reporting a gap.
+     */
+    take(): Values<unknown> | null
+    /** The scope hold the unread body would have given back. */
+    release: (() => void) | null
+}
+
+const FRAMED = Symbol.for('abide.framed')
+
+/** The framing this response was built with, or `null` for every other response. */
+export function framingOf(held: unknown): Framing | null {
+    if (!(held instanceof Response)) return null
+    return (held as unknown as Record<symbol, Framing | undefined>)[FRAMED] ?? null
+}
+
+const JSONL_FRAMING: FramingSpec = { frame: jsonLine, type: JSONL_TYPE, extra: {} }
+// `no-cache` for the browser and `x-accel-buffering` for the reverse proxies that hold a response
+// until it ends — an SSE stream arriving all at once at the end is not a stream.
+const SSE_FRAMING: FramingSpec = {
+    frame: sseFrame,
+    type: SSE_TYPE,
+    extra: { 'cache-control': 'no-cache', 'x-accel-buffering': 'no' },
+}
+
+/**
+ * The response a framing writes, over any source — used to build one and, in `respond`, to write the
+ * same one again over the cell that took its values.
+ *
+ * NOT branded here: a re-frame is the body somebody is about to read, and marking it would invite a
+ * second lane to take those values too.
+ */
+export function reframed<T>(framing: FramingWritten, source: Values<T>): Response {
+    return new Response(heldFrames(source, framing.frame), {
+        ...framing.init,
+        headers: headersFor(framing.init?.headers, { 'content-type': framing.type, ...framing.extra }),
+    })
+}
+
+function framed<T>(spec: FramingSpec, values: Values<T>, init: ResponseInit | undefined): Framed<T> {
+    let source: Values<T> | null = values
+    const framing: Framing = {
+        ...spec,
+        init,
+        take: () => {
+            const held = source
+            source = null
+            return held
+        },
+        release: holdScope(),
+    }
+    // NO READ-AHEAD, which is what makes the claim above a claim: a stream built with a queue pulls
+    // once at construction, and that pull ran the handler's generator for one value before the rpc
+    // lane had taken anything. See `framedOver` for what this replaced.
+    const body = framedOver(values, spec.frame, undefined, framing.release, 0)
+    const response = new Response(body, {
         ...init,
-        headers: headersFor(init?.headers, {
-            'content-type': SSE_TYPE,
-            'cache-control': 'no-cache',
-            'x-accel-buffering': 'no',
-        }),
-    }) as Framed<T>
+        headers: headersFor(init?.headers, { 'content-type': spec.type, ...spec.extra }),
+    })
+    ;(response as unknown as Record<symbol, Framing>)[FRAMED] = framing
+    return response as Framed<T>
+}
+
+/** A sequence as one JSON value per line, written as the consumer asks for it. */
+export function jsonl<T>(values: Values<T>, init?: ResponseInit): Framed<T> {
+    return framed(JSONL_FRAMING, values, init)
+}
+
+/** The same machine as `jsonl`, framed as server-sent events. */
+export function sse<T>(values: Values<T>, init?: ResponseInit): Framed<T> {
+    return framed(SSE_FRAMING, values, init)
 }
 
 /**

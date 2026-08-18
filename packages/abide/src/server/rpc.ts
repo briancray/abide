@@ -10,7 +10,7 @@
 
 import { type Channel, type ChannelOptions, channel, type KeyedChannel } from '#shared/channel.ts'
 import { internals } from '#shared/internal/graph.ts'
-import { isThenable } from '#shared/internal/probes.ts'
+import { isAsyncIterable, isThenable } from '#shared/internal/probes.ts'
 import { seedKey } from '#shared/internal/keys.ts'
 import { type Clients, EVERY_CLIENT, type JsonSchema, type Shapes } from '#shared/internal/shapes.ts'
 import { NO_LIMIT, race, timeoutError } from '#shared/internal/timers.ts'
@@ -24,6 +24,7 @@ import {
     jsonLine,
     NDJSON_TYPE,
     type Refusals,
+    statusOf,
     TTL_HEADER,
 } from '#shared/internal/wire.ts'
 import { abideLog } from '#shared/log.ts'
@@ -31,7 +32,7 @@ import { type KeyedMemo, type MemoOptions, memo } from '#shared/memo.ts'
 import { addressWithArgs, asRpc, type Method, type Rpc } from '#shared/transport.ts'
 import { knobOf } from './config.ts'
 import { PRIVATE_NO_STORE } from './internal/CACHE.ts'
-import { failed, headersFor } from './responses.ts'
+import { failed, type FramingWritten, framingOf, headersFor, reframed } from './responses.ts'
 import { type Gate, gate, publishable, type Schema, type SchemaRefusal } from './schema.ts'
 import { heldFrames, recordSeed, seedsTable } from './scopes.ts'
 
@@ -129,6 +130,18 @@ interface RpcPolicy {
      */
     checkInput: Gate<unknown> | null
     checkOutput: Gate<unknown> | null
+    /**
+     * The framing the handler answered with, once one has. `respond` writes it AGAIN over the cell:
+     * the lane took the values, so the response the helper built is empty and the transcript is where
+     * the chunks are. Without this a framed endpoint came back out as abide's own ndjson, and `sse`
+     * stopped being something an `EventSource` could read.
+     *
+     * The WRITTEN half only, copied field by field off that call's `Framing`. This record is the
+     * declaration's and lives as long as the process; the two members left behind are a closure over
+     * one call's generator and one call's request scope, and storing them here would hold both until
+     * the next call to this endpoint replaced them.
+     */
+    framing: FramingWritten | null
 }
 
 const RPC_POLICY = new WeakMap<object, RpcPolicy>()
@@ -205,8 +218,14 @@ function isGenerator(body: unknown): boolean {
  * what lets an endpoint framed for somebody else's reader still declare its element type. Without it
  * `T` inferred as `Response` and every caller of such an endpoint was untyped at exactly the point
  * the stub had started decoding chunks for them.
+ *
+ * `Promise<Framed<T>>` is NOT here, and the reason is the one written above `streamed`: the cell
+ * decides between a load and a stream by what it is HANDED IN THE CALL, so a framing that arrives a
+ * microtask later is a load holding a `Response`. It never worked — this only says so. An `async`
+ * handler that has to await first frames an async generator instead, which is the shorter spelling
+ * anyway: `({ id }) => jsonl(rowsFor(id))` over `async ({ id }) => jsonl(await rowsFor(id))`.
  */
-type Produced<T> = T | Promise<T> | AsyncIterable<T> | Framed<T> | Promise<Framed<T>>
+type Produced<T> = T | Promise<T> | AsyncIterable<T> | Framed<T>
 
 /**
  * The onion a chain WITH A PAYLOAD is, written once.
@@ -288,6 +307,11 @@ function declare<Args, T>(
         output: publishable(declared?.output),
         checkInput: null,
         checkOutput: null,
+        // Learned on the first call rather than declared: `isGenerator` cannot see a framing, because
+        // `() => jsonl(items())` is an ordinary arrow. The compiler CAN — `frames()` reads it off the
+        // syntax for the client stub — but a hand-written `register`, which every case in the demos
+        // is, never goes through it, so the answer has to come from the value.
+        framing: null,
     }
     // Built once, at the declaration, and `null` when no shape was declared — which is the whole
     // cost of a schema to an endpoint that has none. The gates take the policy rather than its
@@ -303,7 +327,6 @@ function declare<Args, T>(
     // therefore INSIDE the generator rather than in `load` below, for the same reason.
     async function* streamed(args: Args): AsyncGenerator<T> {
         const input = policy.checkInput
-        const output = policy.checkOutput
         let checked = args
         if (input !== null) {
             const gated = input(args)
@@ -311,6 +334,18 @@ function declare<Args, T>(
         }
         const produced = run(checked)
         const source = (isThenable(produced) ? await produced : produced) as AsyncIterable<T>
+        yield* pumped(source)
+    }
+
+    /**
+     * The chunks of one source, timed out and gated per chunk.
+     *
+     * Lifted out of `streamed` so a FRAMED handler is pumped by the same loop a `function*` one is —
+     * which is the whole claim being fixed here. Two loops would be two answers to "what does a
+     * timeout mean mid-stream", and the caller cannot tell the two kinds of handler apart.
+     */
+    async function* pumped(source: AsyncIterable<T>): AsyncGenerator<T> {
+        const output = policy.checkOutput
         const limit = limitOf()
         if (limit === NO_LIMIT && output === null) {
             yield* source
@@ -356,6 +391,24 @@ function declare<Args, T>(
     function produce(args: Args): Produced<T> {
         const produced = run(args)
         const output = policy.checkOutput
+        // A framing is a STREAM, and this is the one place both lanes can be right about it. The
+        // values go to the cell — so `await fn()` and `for await (const c of fn())` mean in process
+        // exactly what they mean in a browser, and the seed is a transcript rather than an envelope —
+        // and `respond` writes the framing again over that cell. The response the helper built is
+        // therefore never read, so its scope hold is given back here; cancelling it instead would
+        // call `return()` on the generator `pumped` is about to iterate.
+        const framing = framingOf(produced)
+        const source = framing === null ? null : framing.take()
+        if (framing !== null && source !== null) {
+            policy.framing = {
+                frame: framing.frame,
+                type: framing.type,
+                extra: framing.extra,
+                init: framing.init,
+            }
+            framing.release?.()
+            return pumped(source as AsyncIterable<T>)
+        }
         // Guarded, never awaited: a synchronous handler must settle IN THE CALL, with no promise
         // wrap and no microtask before the first read sees it.
         if (!isThenable(produced)) return output === null ? produced : (output(produced) as Produced<T>)
@@ -388,21 +441,31 @@ function declare<Args, T>(
      * The address is `policy.address`, which the registry set when it learned where this declaration
      * lives — the same string the client's stub was built with, which is what makes the two sides
      * agree without either being told about the other.
+     *
+     * A `Response` is NOT SEEDABLE and is skipped. A handler that built its own — `json`, `page`,
+     * `redirect`, and either framing helper — hands the in-process caller the envelope rather than a
+     * value, and `JSON.stringify` writes that as `{}`. Seeded, the browser adopts `{}` as a settled
+     * answer and never asks: an SSR pass that so much as touched a `jsonl()` endpoint left every
+     * client reader of it permanently empty, with no request in the network panel to explain it.
+     * Skipping means the browser fetches, which is what it would have done with no seed at all.
      */
     const seeds = options.seed !== false
     function collected(args: Args, produced: Produced<T>): Produced<T> {
         if (!seeds) return produced
         const table = seedsTable()
         if (table === null) return produced
-        if (streams) return recorded(args, produced as AsyncIterable<T>) as Produced<T>
+        // The VALUE decides, not `streams`: a framing is discovered in the call and is a stream from
+        // here on, so it is seeded by its transcript exactly as a `function*` handler is. Read off
+        // `streams` alone it took the branch below and seeded the generator object, which is `{}`.
+        if (streams || isAsyncIterable(produced)) return recorded(args, produced as AsyncIterable<T>) as Produced<T>
         if (!isThenable(produced)) {
-            table.set(seedKey(policy.address, args), produced)
+            if (!(produced instanceof Response)) table.set(seedKey(policy.address, args), produced)
             return produced
         }
         // `recordSeed` rather than the table above: `closeSeeding` DETACHES it when the document
         // serialises, so a load landing after that must find nothing to write to.
         return (produced as Promise<T>).then((value) => {
-            recordSeed(seedKey(policy.address, args), value)
+            if (!(value instanceof Response)) recordSeed(seedKey(policy.address, args), value)
             return value
         }) as Produced<T>
     }
@@ -449,12 +512,6 @@ function declare<Args, T>(
 }
 
 // --- the response ------------------------------------------------------------
-
-function statusOf(error: unknown): number {
-    if (error === null || typeof error !== 'object') return 500
-    const held = (error as Record<string, unknown>).status
-    return typeof held === 'number' && held >= 400 && held <= 599 ? held : 500
-}
 
 /**
  * The rpc wire's headers: the shape's own, plus the one option that crosses as a header.
@@ -505,6 +562,12 @@ export function respond<Args, T>(
         // when this returns, and a duration covering work that has not happened is a number that
         // means nothing. What the line reports is that the call became a stream and how fast.
         if (watching) told(policy, 'streaming', started)
+        // A handler that FRAMED its answer said what the bytes look like, and it said it for a reader
+        // that is not a stub — an `EventSource`, a `curl`. Written again over the cell, through
+        // `carried` so the wire's headers land UNDER the framing's own exactly as they did when the
+        // helper's response went out whole: `sse`'s `no-cache` still wins.
+        const framing = policy?.framing ?? null
+        if (framing !== null) return carried(reframed(framing, handle), ttl, extra)
         return new Response(heldFrames(handle, jsonLine, failedLine), {
             headers: wireHeaders(ttl, NDJSON_TYPE, extra),
         })

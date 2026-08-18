@@ -14,7 +14,7 @@ import { type EndpointShape, EVERY_CLIENT, type Shapes } from '#shared/internal/
 import type { Kind, Rpc } from '#shared/transport.ts'
 import { describeRpc, describeSocket, policyOf, socketPolicyOf } from './rpc.ts'
 
-export type AnyRpc = Rpc<unknown, unknown>
+type AnyRpc = Rpc<unknown, unknown>
 export type AnySocket = Channel<unknown> & KeyedChannel<unknown, unknown>
 
 export const RPCS = new Map<string, AnyRpc>()
@@ -97,7 +97,7 @@ export function endpoints(): EndpointShape[] {
             ...(policy?.room == null ? {} : { room: policy.room }),
             // Said only when TRUE, like `streams` above: the ordinary socket speaks outward only, so
             // `clientPublish: false` on almost every one of them would be noise carrying no fact.
-            ...(policy?.clientPublish === false || policy === undefined ? {} : { clientPublish: true }),
+            ...(policy?.clientPublish ? { clientPublish: true } : {}),
             clients: policy?.clients ?? EVERY_CLIENT,
         })
     }

@@ -113,3 +113,17 @@ export function reserved(pathname: string, prefix: string): string | null {
     const path = pathname.slice(BASE.length)
     return path.startsWith(prefix) ? path : null
 }
+
+/**
+ * A reserved path under a base URL that may itself carry a mount.
+ *
+ * `new URL('/__abide/schema', 'https://host/v2')` throws the mount away and asks an address the app
+ * is not serving, which is the bug `abide logs` found first — so the path is resolved RELATIVE, and
+ * the base is given the trailing slash that makes a relative join keep its last segment.
+ *
+ * The caller's half of the same crossing `mounted` is on this side: `mounted` answers for an app that
+ * knows its own base, and this for one asking a base somebody else typed.
+ */
+export function under(base: string, path: string): string {
+    return new URL(path.startsWith('/') ? path.slice(1) : path, base.endsWith('/') ? base : `${base}/`).href
+}

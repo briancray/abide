@@ -181,7 +181,7 @@ async function fragmentFor(path: string, settledPanel: string, from = 0): Promis
             const asking = new Request(new URL(path, 'http://localhost').href)
             return await serve(asking, async () => {
                 const pieces: string[] = []
-                for await (const chunk of renderFragment(() => outletFrom(from), { hydratable: true })) {
+                for await (const chunk of renderFragment(() => outletFrom(from), { hydrate: true })) {
                     pieces.push(chunk)
                 }
                 return pieces
@@ -528,10 +528,15 @@ test('a disposed renderer stops being the one a navigation paints into', async (
 
 test('a response that is not a navigation is the browser’s, and commits nothing here', async () => {
     const pieces = await fragmentFor('/users/5', 'the panel')
-    // The app refused, or answered with something that is not a page. The SERVER has written the
-    // response for this URL, so the browser renders it rather than this side inventing a second
-    // refusal beside it — and nothing is committed against a document that is going.
-    answerWith(pieces, { ok: false })
+    // UNMARKED is what "not a navigation" means, and the status is not: an app's own route may answer
+    // this URL with anything, and a proxy's error body is not a page either. The SERVER has written
+    // the response, so the browser renders it rather than this side inventing a second refusal beside
+    // it — and nothing is committed against a document that is going.
+    //
+    // It used to be `{ ok: false }`, which read the same and was wrong for the case that matters: an
+    // `error.abide` answers a 404 with a rendered page and the mark on it, and leaving for that meant
+    // reloading the document to show markup already in hand. The case below is that one.
+    answerWith(pieces, { header: false })
     const into = container()
     const view = mount(into, outlet)
     try {
@@ -540,6 +545,24 @@ test('a response that is not a navigation is the browser’s, and commits nothin
         expect(into.textContent).not.toContain('user 5')
         // Nothing moved on this side: the address the router answers about is the one it already had.
         expect(route().url.pathname).toBe(before)
+    } finally {
+        view.dispose()
+    }
+})
+
+test('a MARKED answer is painted whatever its status, because abide rendered it', async () => {
+    const pieces = await fragmentFor('/users/5', 'the panel')
+    // A 404 carrying the mark is an `error.abide` render: abide built it for this URL, so it is a page
+    // and it belongs on screen. The status is what the response SAYS, not what this side decides by.
+    answerWith(pieces, { ok: false })
+    const into = container()
+    const view = mount(into, outlet)
+    try {
+        await navigate('/users/5')
+        expect(into.textContent).toContain('user 5')
+        // And the address moved with it — a page a reader cannot link to or reload is the same defect
+        // from the other side.
+        expect(route().url.pathname).toBe('/users/5')
     } finally {
         view.dispose()
     }

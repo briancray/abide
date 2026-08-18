@@ -17,8 +17,13 @@
 
 // The eight-faced renderer, of which exactly one is public: an async generator, which a caller
 // wanting a string drains. The document and fragment faces are `abide start`'s and are on
-// `abide/server/internal`.
-export { render, type Renderable } from './render.ts'
+// `abide/server/internal` — an app reaches a document through `render`'s own `shell` option instead,
+// so there is one name to learn and one place the two decisions about a render are written down.
+//
+// `RenderOptions` is beside it rather than in the walk's own module for that reason: `shell` is a
+// decision about the DOCUMENT and the walk knows nothing about one. `RenderContext` stays internal —
+// it is the walk's state, and its `document` field is typed by a `DocumentContext` no caller can name.
+export { render, type Renderable, type RenderOptions } from './render.ts'
 
 // The principal, and the half only the server can supply. `identity` itself is on the isomorphic
 // surface — asking is the same call anywhere — and it is re-exported here, straight from the module
@@ -55,9 +60,6 @@ export { csp } from './csp.ts'
 // asking is the same call anywhere — and this is the half only the app being asked about can supply.
 export { type HealthReporter, onHealth } from './health.ts'
 export { type IdentityResolver, onIdentity } from './identity.ts'
-// What every renderer here takes. `RenderContext` stays internal: it is the walk's own state, and
-// its `document` field is typed by a `DocumentContext` no caller can name.
-export type { RenderOptions } from './internal/emit.ts'
 // The process's own lifecycle, as an app DECLARES it. The half of the CLI that boots reads these off
 // an app's exports and hands each to the function of the same name; what does the running —
 // `boot`, `handle`, `shutdown` — is on `abide/server/internal`, because `abide start` is what calls it.

@@ -1,0 +1,27 @@
+<!-- What this app answers with when no page was chosen, or when something threw before one could be.
+
+     A PAGE rather than a line in `app.ts`, and that is the whole of the convention: it sits beside
+     `page.abide` and `layout.abide`, it is picked up by the same scan, and it renders in the layouts
+     above its own directory. So a 404 under `/docs` would arrive wearing the docs sidebar, and this
+     one — at the root — wears whatever the root layout is.
+
+     It covers everything BEFORE the first byte: nothing matched, a middleware rung threw, a page's own
+     module failed to load. A page that throws once its shell is already on the wire is a different
+     failure and a different mechanism — see `{#try}`, which can still take back a region it has not
+     flushed. That split is not a limitation to apologise for, it is what a stream makes true. -->
+<script>
+import { props } from 'abide'
+
+/** What the router hands an error page. The status is the whole of what tells a 404 from a 500. */
+const { status, name, message } = props<{ status: number; name: string; message: string }>()
+</script>
+
+<main class="mx-auto flex max-w-2xl flex-col gap-4 px-6 py-24">
+    <p class="font-mono text-sm tracking-widest text-neutral-500">{status}</p>
+    <h1 class="text-3xl font-semibold text-neutral-900">
+        {status === 404 ? 'nothing is served here' : 'this request did not finish'}
+    </h1>
+    <p class="text-neutral-600">{message}</p>
+    <p class="font-mono text-xs text-neutral-400">{name}</p>
+    <p><a class="text-sm text-neutral-500 underline" href="/">back to the index</a></p>
+</main>

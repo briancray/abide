@@ -226,6 +226,7 @@ export function heldPump(
     read: () => Step | Promise<Step>,
     end: (reason: unknown) => void,
     release: (() => void) | null,
+    highWaterMark?: number,
 ): ReadableStream<Uint8Array> {
     return markHeld(
         new ReadableStream<Uint8Array>({
@@ -259,7 +260,12 @@ export function heldPump(
                 release?.()
                 end(reason)
             }),
-        }),
+        },
+        // A stream with no strategy pulls ONCE at construction to fill its queue, which is a chunk
+        // taken out of the source before anybody asked for one. That is read-ahead worth having on a
+        // body somebody is about to read, and theft on one that may never be read at all — see
+        // `framedOver`, which is where the two part company.
+        highWaterMark === undefined ? undefined : { highWaterMark }),
     )
 }
 
@@ -306,10 +312,37 @@ export function heldFrames<T>(
     frame: (value: T) => string,
     failed?: (error: unknown) => string,
 ): ReadableStream<Uint8Array> {
-    const release = holdScope()
-    if (release === null) return framedBody(source, frame, failed)
+    return framedOver(source, frame, failed, holdScope())
+}
+
+/**
+ * The same body over a hold the CALLER already took — for a producer that has to be able to give the
+ * hold back without touching the source.
+ *
+ * `jsonl()` and `sse()` are that producer. An rpc lane takes their VALUES rather than their body, so
+ * the stream this returns is never read and never cancelled: cancelling it would call `return()` on
+ * the very generator the caller is about to iterate, and leaving the hold taken keeps the request
+ * scope open for the life of the process. Holding the release out here is what lets the third thing
+ * happen — drop the hold, leave the source alone, let the unread stream be collected.
+ *
+ * `highWaterMark: 0` is the other half of "leave the source alone", and it is what those callers pass:
+ * a stream built with no strategy pulls once at CONSTRUCTION, which ran the handler's generator for
+ * one value before the rpc lane had taken anything. That used to be answered by a deferred-claim
+ * protocol in `responses.ts` — an iterator standing in for the source until its first `next()` landed
+ * after the lane's synchronous `take()`. Asking for no read-ahead deletes the race instead of timing
+ * it. The cost is one chunk of read-ahead, which is why it is passed rather than assumed: a body
+ * somebody IS about to read wants the first chunk ready.
+ */
+export function framedOver<T>(
+    source: AsyncIterable<T> | Iterable<T>,
+    frame: (value: T) => string,
+    failed: ((error: unknown) => string) | undefined,
+    release: (() => void) | null,
+    highWaterMark?: number,
+): ReadableStream<Uint8Array> {
+    if (release === null) return framedBody(source, frame, failed, highWaterMark)
     const framed = framedSteps(source, frame, failed)
-    return heldPump(framed.read, framed.cancel, release)
+    return heldPump(framed.read, framed.cancel, release, highWaterMark)
 }
 
 /**

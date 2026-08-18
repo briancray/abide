@@ -1,0 +1,28 @@
+<script>
+import { arriving } from '#server/rpc/docs/responses/answer-as-they-arrive.ts'
+import { state } from 'abide'
+
+// The same framing as the two rungs above, with the loop moved into the MARKUP. `{#for await}`
+// iterates the cell itself rather than its value, so each row is appended as it LANDS and there is
+// nothing to collect it into — where rung 5 holds the transcript and renders it, this holds nothing
+// at all. Either framing reaches this block; the head names the call, not the content type.
+//
+// The source pauses between rows, which is what makes the difference visible rather than merely
+// true: a generator that never suspends lands every row in one turn and this reads as a plain
+// `{#for}`.
+//
+// `{:catch}` is the arm a plain `{#for}` has no need of: a source can fail part of the way through,
+// and the rows already on the page stay there.
+const asked = state(false)
+</script>
+
+<button onclick={() => (asked = true)} disabled={asked}>ask for them</button>
+<ul>
+    {#if asked}
+        {#for await row of arriving()}
+            <li><code>{row.id}</code></li>
+        {:catch failure}
+            <li>stopped: {String(failure)}</li>
+        {/for}
+    {/if}
+</ul>

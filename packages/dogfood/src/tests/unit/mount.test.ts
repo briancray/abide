@@ -11,8 +11,9 @@
 // address the browser is given, and moved nothing the app calls things by.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { CLIENT_ROUTE, type ClientManifest, GENERATED_ENTRY, MANIFEST_FILE } from 'abide/cli'
-import { abide, addressOf, BINARY, LISTENING, reading, type Running } from 'harness/spawn'
+import { CLIENT_ROUTE, GENERATED_ENTRY } from 'abide/cli'
+import { addressOf, BINARY, LISTENING, reading, type Running } from 'harness/spawn'
+import { builtManifest } from '#tests/builtApp.ts'
 import { APP_ROOT as ROOT } from '#tests/PATHS.ts'
 
 /** The sub-path this app is mounted at for the length of this file. */
@@ -22,9 +23,8 @@ let app: Running
 let entry: string
 
 beforeAll(async () => {
-    const built = await abide(['build'], { cwd: ROOT })
-    expect(built.code).toBe(0)
-    const manifest = (await Bun.file(`${ROOT}/${MANIFEST_FILE}`).json()) as ClientManifest
+    // Read rather than built — see `#tests/builtApp.ts`.
+    const manifest = await builtManifest()
     entry = manifest.entries[GENERATED_ENTRY] as string
 
     // Port `0` and a declared `APP_URL` together, which reads like a contradiction and is not: the

@@ -1,0 +1,17 @@
+<script>
+import { receipt } from '#server/rpc/docs/server/in-your-own-shell.ts'
+import { state } from 'abide'
+
+// The same call as the rung above, against a route that passes its own document instead of asking for
+// the app's. The `<pre>` is where the two are worth comparing: same report, same scoped rules in the
+// head, and everything around them is the other file's.
+const shown = state('nothing asked yet')
+
+const ask = async (): Promise<void> => {
+    const answered = await receipt.raw({})
+    shown = await answered.text()
+}
+</script>
+
+<button onclick={ask}>render it in a shell of its own</button>
+<pre>{shown}</pre>

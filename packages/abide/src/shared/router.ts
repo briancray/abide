@@ -63,6 +63,16 @@ export interface RouteEntry {
     /** The layouts wrapping it, OUTERMOST first. Each receives the level below as its children. */
     layouts?: Loader[]
     /**
+     * A row nothing routes TO. Absent is a page, which is what a hand-written table means by saying
+     * nothing — an `error` row's `path` is the DIRECTORY it covers rather than an address, and
+     * `errorFor` is the only thing that reads one.
+     *
+     * In the same table rather than beside it because both lanes have to carry it: a browser's table
+     * is written by a build and a server's by a scan, and an error page in one and not the other is a
+     * 404 that renders differently depending on whether the reader arrived by link or by URL bar.
+     */
+    kind?: 'page' | 'error'
+    /**
      * The FILES this entry was read out of, relative to the pages directory. Optional because only a
      * scanner knows them — a table written by hand is loaders and nothing else, and routing itself
      * never reads this.
@@ -135,6 +145,22 @@ interface Match {
 let TABLE: Installed[] = []
 const BY_NAME = new Map<string, Installed>()
 
+/**
+ * An `error.abide` and the directory it stands for, as segments — `/docs/[callable]` is
+ * `['docs', '[callable]']`.
+ *
+ * Segments rather than the string, because what is asked of it is a PREFIX and a string prefix is
+ * the wrong test: `/doc` prefixes `/docs` and covers none of it. Split once at install, since the
+ * alternative is splitting every entry on every failure.
+ */
+interface ErrorRoute {
+    covers: string[]
+    held: Installed
+}
+
+// Deepest first — see `routes()`. Separate from `TABLE` because nothing may ROUTE to one of these.
+let ERRORS: ErrorRoute[] = []
+
 // The entries the current table was installed FROM, so `routes()` can hand them back. The ENTRIES,
 // not the `Installed` records built from them: what a borrower gives back has to be something
 // `routes` accepts, and an install is a rebuild — a view resolved into one record does not carry
@@ -164,19 +190,28 @@ export function routes(table: RouteEntry[]): void
 export function routes(table?: RouteEntry[]): RouteEntry[] | undefined {
     if (table === undefined) return ENTRIES
     const installed: Installed[] = []
+    const failing: ErrorRoute[] = []
     for (const entry of table) {
-        installed.push({
+        const held: Installed = {
             pattern: parsePattern(entry.path),
             page: entry.page,
             layouts: entry.layouts ?? NO_LAYOUTS,
             view: state<View | null>(null),
             wraps: NO_WRAPS,
             loading: null,
-        })
+        }
+        // An error row is not a route: leaving it out of `TABLE` and `BY_NAME` is the whole of what
+        // makes it unaddressable, so there is no path to serve it at and no name to navigate to.
+        if (entry.kind === 'error') failing.push({ covers: splitPath(entry.path), held })
+        else installed.push(held)
     }
     installed.sort((left, right) => comparePatterns(left.pattern, right.pattern))
+    // DEEPEST first, so the walk in `errorFor` stops at the first hit — the same "sorted once, match
+    // is a walk that stops" rule the route table above gets, for the same reason.
+    failing.sort((left, right) => right.covers.length - left.covers.length)
     ENTRIES = table
     TABLE = installed
+    ERRORS = failing
     BY_NAME.clear()
     for (const held of installed) BY_NAME.set(held.pattern.path, held)
     // A table installed after something already asked where it is — a test, or an app declaring its
@@ -186,6 +221,15 @@ export function routes(table?: RouteEntry[]): RouteEntry[] | undefined {
     if (here.cells !== null) {
         const url = here.cells.url.peek()
         commit(here.cells, url, lookup(url.pathname))
+        // And the new record needs its VIEW kicked, which the commit above cannot do for it: every
+        // `Installed` built here starts at `view: null`, and `outlet()` re-runs on the route's NAME —
+        // which an install that lands on the same route does not move. So nothing ever asks, the view
+        // stays null for the life of the page, and a route with no view is one the client cannot
+        // paint: every same-route move went back to the server and rebuilt what it was already
+        // holding. Guarded by `here.cells` above, so this asks about a caller that exists rather than
+        // constructing one — which is what a `ready()` out here would do, and under a headless runner
+        // that means reading an address bar that is `about:blank` on purpose.
+        void readying()
     }
 }
 
@@ -319,7 +363,15 @@ export function outletFrom(from: number): TemplateResult {
     // moved both still costs this ONE run.
     cells.adopted()
     const name = cells.name()
-    if (name === '') return NOTHING
+    // Nothing matched. That is a 404 when the server said so, and this is where its page is drawn —
+    // the same `errorOutlet` the server rendered, so the view CLAIMS the range that arrived rather
+    // than replacing it. Without this the empty name answers `NOTHING` and wipes it.
+    if (name === '') {
+        const failure = cells.failure
+        if (failure === null) return NOTHING
+        const failing = errorFor(cells.url.peek().pathname)
+        return failing === null ? NOTHING : errorOutlet(failing, failure)
+    }
     const held = BY_NAME.get(name)
     if (held === undefined) return NOTHING
     // Kicked BEFORE the view is read: a table that hands its modules back in the call resolves here,
@@ -356,6 +408,101 @@ export function outletFrom(from: number): TemplateResult {
 /** What each layout of the current render was handed as children. Indexed by DEPTH. */
 export function outletChain(): TemplateResult[] {
     return cellsFor().chain
+}
+
+// --- the error page ----------------------------------------------------------
+
+/** What an `error.abide` is handed. The status is the whole of what tells a 404 from a 500. */
+export interface Failure {
+    status: number
+    name: string
+    message: string
+}
+
+/**
+ * The failure as a header, and back — the two halves BESIDE each other, because a framing whose ends
+ * live in different packages is one they can disagree about. `#server` writes it and `#ui` reads it.
+ *
+ * URI-encoded because a header is latin-1 and a message is whatever an app threw. The STATUS is not
+ * in the text: the response already carries one, so `failureFrom` is handed that instead of a second
+ * copy to keep in step.
+ */
+export function failureHeader(said: Failure): string {
+    return encodeURIComponent(JSON.stringify({ name: said.name, message: said.message }))
+}
+
+/** `null` for a header this side cannot read — see `failureHeader`. */
+export function failureFrom(header: string, status: number): Failure | null {
+    let read: { name?: unknown; message?: unknown }
+    try {
+        read = JSON.parse(decodeURIComponent(header)) as { name?: unknown; message?: unknown }
+    } catch {
+        return null
+    }
+    if (typeof read?.name !== 'string' || typeof read?.message !== 'string') return null
+    return { status, name: read.name, message: read.message }
+}
+
+/**
+ * The nearest `error.abide` above `pathname`, or `null` for an app that wrote none.
+ *
+ * A PREFIX match rather than the whole-path match `lookup` makes, and that is the difference between
+ * the two tables: a route answers one address, an error page covers everything under a directory. So
+ * `/docs/nonsense` finds `pages/docs/error.abide` even though nothing routes to that path — which is
+ * the 404 case, and the one an app most wants its own chrome around.
+ *
+ * A bracketed directory segment matches any one URL segment, exactly as it does in a route, so an
+ * error page inside `[callable]/` covers that route's own failures. A rest segment covers everything
+ * from where it stands, so the prefix is satisfied there and the walk stops.
+ */
+export function errorFor(pathname: string): Installed | null {
+    const base = mountBase()
+    if (base !== '' && !pathname.startsWith(base)) return null
+    const parts = splitPath(unmounted(pathname))
+    for (let i = 0; i < ERRORS.length; i++) {
+        const entry = ERRORS[i] as ErrorRoute
+        if (covers(entry.covers, parts)) return entry.held
+    }
+    return null
+}
+
+function covers(directory: string[], parts: string[]): boolean {
+    if (directory.length > parts.length) return false
+    for (let i = 0; i < directory.length; i++) {
+        const want = directory[i] as string
+        if (want.charCodeAt(0) !== OPEN_BRACKET) {
+            if (want !== parts[i]) return false
+            continue
+        }
+        // A rest segment swallows what is left, so everything from here on is covered by definition.
+        if (want.startsWith('[...')) return true
+    }
+    return true
+}
+
+const OPEN_BRACKET = 91
+
+/** The error page's module, and its layouts'. `null` when there is nothing left to load. */
+export function errorReady(held: Installed): Promise<void> | null {
+    return loadFor(held)
+}
+
+/**
+ * An error page wrapped in the layouts above it — what a failure renders as when the app wrote one.
+ *
+ * `outletFrom`'s shape with two differences, and both are the same fact: this render is TERMINAL. It
+ * takes its entry rather than reading the route, because the route is what failed or never matched;
+ * and it writes no `cells.chain`, because that record exists so a later navigation can patch INTO a
+ * layout, and there is no fragment depth to answer for a page nothing navigated to.
+ */
+export function errorOutlet(held: Installed, failure: Failure): TemplateResult {
+    const view = held.view.peek()
+    if (view === null) return NOTHING
+    let node = view(failure as never)
+    for (let i = held.wraps.length - 1; i >= 0; i--) {
+        node = (held.wraps[i] as View)({ children: node })
+    }
+    return node
 }
 
 /**
@@ -449,6 +596,19 @@ interface Cells {
      * Not a cell: nothing renders from it, and the two readers are decisions taken inside `navigate`.
      */
     stood: boolean
+    /**
+     * The failure the range now standing in the outlet was rendered from, or `null` for every
+     * ordinary page.
+     *
+     * Not a cell, and it does not need to be: the write that puts one here is the same commit that
+     * moves `name` to `''` and bumps `adopted`, and `outletFrom` reads both. So the wake is already
+     * paid for, and a cell would be a second record of one fact for every commit to keep in step.
+     *
+     * It is what stops a served 404 from blanking: without it `outletFrom` reads an empty name,
+     * answers `NOTHING`, and wipes the range the server just filled — the error page appears and is
+     * gone one microtask later.
+     */
+    failure: Failure | null
 }
 
 interface Here {
@@ -514,6 +674,14 @@ export interface Entered {
     left: boolean
     /** Every piece after the first, applied. Never settles for a navigation that left. */
     complete: Promise<void>
+    /**
+     * The answer was an `error.abide` render, and this is what it was rendered FROM.
+     *
+     * Absent for every ordinary navigation. It travels back through the sink rather than being read
+     * off the route, because nothing MATCHED — the server is the only side that knows a path it does
+     * not serve failed rather than simply not existing, and which of its error pages answered.
+     */
+    failure?: Failure | null
 }
 
 /**
@@ -577,6 +745,7 @@ function cellsFor(fallback?: string): Cells {
         url: state(url),
         navigating: state(false),
         adopted: state(0),
+        failure: null,
         chain: NO_CHAIN,
         entering: 0,
         stood: false,
@@ -613,7 +782,11 @@ function sameParams(left: Params, right: Params): boolean {
 //
 // The match is handed IN rather than looked up here: `navigate` already resolved this exact pathname
 // to decide what to load, and a table walk per navigation is the whole cost of the second lookup.
-function commit(cells: Cells, url: URL, found: Match | null): void {
+function commit(cells: Cells, url: URL, found: Match | null, failure: Failure | null = null): void {
+    // Written on EVERY commit, including the ordinary ones that pass nothing — a failure left behind
+    // by the page a reader has already navigated away from is a 404 rendered over a route that
+    // matched perfectly well.
+    cells.failure = found === null ? failure : null
     const heldParams = cells.params.peek()
     if (found === null) {
         cells.name.set('')
@@ -982,8 +1155,23 @@ async function enter(
         place(cells, url, options)
         await entered.complete
         if (loading !== null) await loading
+        // The ERROR page's own module, and it has to be awaited here for the same reason `loading`
+        // above is: a view that has not arrived is not a tree. `found` is null for a 404, so the load
+        // kicked at the top of this function was never started — and committing without it left
+        // `errorOutlet` reading a null view, answering `NOTHING`, and wiping the range the server had
+        // just filled. The tell was a hydration mismatch naming a leftover `<header>`: the layouts had
+        // arrived in the fragment and this side had nothing to claim them with.
+        const failure = entered.failure ?? null
+        if (failure !== null) {
+            const failing = errorFor(url.pathname)
+            const failingLoad = failing === null ? null : errorReady(failing)
+            if (failingLoad !== null) await failingLoad
+        }
         if (cells.entering !== mine) return
-        commit(cells, url, found)
+        // The sink's own answer about what it stood there, which for a served `error.abide` is the
+        // only route the failure has: nothing MATCHED, so `found` is null either way and the null
+        // cannot tell a 404 the server rendered from a path this table simply has no row for.
+        commit(cells, url, found, failure)
         // In the same synchronous region as the commit, so the renderer takes both in ONE flush and
         // the page's view runs once for the navigation however many cells moved.
         cells.adopted.set(cells.adopted.peek() + 1)

@@ -142,12 +142,42 @@ export async function clientAssets(root: string): Promise<LoadedClient | null> {
     }
     const manifest = JSON.parse(text) as ClientManifest
     const directory = `${root}/${CLIENT_DIR}`
+    return loadedWith(manifest, (file) => `${directory}/${file}`)
+}
 
+/**
+ * Every name the manifest declares, as what serves it — the half the two lanes share.
+ *
+ * `at` is the ONLY thing that differs between a build on a disk and one embedded in a binary, which
+ * is the whole reason this is one function: the headers, the sidecar ordering and the allowlist rule
+ * are the build's, not the medium's.
+ */
+function loadedWith(manifest: ClientManifest, at: (file: string) => string): LoadedClient {
     const held = new Map<string, Held>()
-    for (const name in manifest.assets)
-        held.set(name, formsOf(directory, name, manifest.assets[name] as ClientAsset))
-
+    for (const name in manifest.assets) {
+        held.set(name, formsOf(at, name, manifest.assets[name] as ClientAsset))
+    }
     return { assets: new ClientAssets(held), manifest }
+}
+
+/**
+ * The same build, EMBEDDED — what a binary from `abide compile` serves.
+ *
+ * A standalone executable has no directory to read, so the entry that binary was compiled from
+ * imports each file `with { type: 'file' }` and Bun writes it into the executable. What comes back is
+ * a path inside that binary, which `Bun.file` reads exactly as it reads one on a disk: `paths` is
+ * that map, keyed by the name the manifest already uses.
+ *
+ * So the only thing that differs from the lane above is where a name resolves TO, which is why both
+ * hand `loadedWith` a resolver and nothing else. A name in the manifest with no embedded path is a
+ * compile that missed a file, and it throws rather than serving a 404 nobody could explain.
+ */
+export function embeddedClient(manifest: ClientManifest, paths: Record<string, string>): LoadedClient {
+    return loadedWith(manifest, (file) => {
+        const path = paths[file]
+        if (path === undefined) throw new Error(`abide: "${file}" was not embedded in this binary`)
+        return path
+    })
 }
 
 /**
@@ -233,7 +263,13 @@ const FOREVER = 'public, max-age=31536000, immutable'
  */
 export const NOSNIFF = 'nosniff'
 
-function formsOf(directory: string, name: string, asset: ClientAsset): Held {
+/**
+ * One asset's forms, from wherever its bytes live.
+ *
+ * `at` is that "wherever": a path under `.abide/client` for a build on a disk, and a path inside the
+ * executable for an embedded one. Everything else here is the same fact about the same bytes.
+ */
+function formsOf(at: (file: string) => string, name: string, asset: ClientAsset): Held {
     // The identity form's type for every form of it. A `.br` sidecar is the same JavaScript compressed
     // — `Content-Encoding` is what says how — and Bun would otherwise read the type off the `.br`
     // extension and hand a browser an octet-stream it will not execute.
@@ -247,13 +283,13 @@ function formsOf(directory: string, name: string, asset: ClientAsset): Held {
         vary: 'accept-encoding',
         'x-content-type-options': NOSNIFF,
     }
-    const identity: Form = { file: Bun.file(`${directory}/${name}`), headers: new Headers(shared) }
+    const identity: Form = { file: Bun.file(at(name)), headers: new Headers(shared) }
     const encoded: Form[] = []
     const names: string[] = []
     for (const sidecar of asset.encodings) {
         const headers = new Headers(shared)
         headers.set('content-encoding', sidecar.encoding)
-        encoded.push({ file: Bun.file(`${directory}/${sidecar.file}`), headers })
+        encoded.push({ file: Bun.file(at(sidecar.file)), headers })
         names.push(sidecar.encoding)
     }
     return { identity, encoded, names }

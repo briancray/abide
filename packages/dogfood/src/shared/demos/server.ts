@@ -8,7 +8,7 @@
 
 import { channel, html, memo, raw, state, type TemplateResult } from 'abide'
 import { awaited, boundary, streamed } from 'abide/runtime'
-import { GET, type Renderable, render, server } from 'abide/server'
+import { GET, json, jsonl, type Renderable, render, server } from 'abide/server'
 import { register, renderDocument, renderDocumentToString, renderToString, serve, toStream } from 'abide/server/internal'
 import { remote } from 'abide/runtime/transport'
 import { heldStream, isServing, shell } from 'abide/server/internal'
@@ -16,6 +16,7 @@ import { container, loopback, scratch, sleep, suite } from 'harness'
 import { floorTicks, keep, microtasks, settled, tick } from 'harness/measure'
 import { hydrate, mount } from 'abide/ui'
 import { button, el, output, row } from './dom.ts'
+import Card from './fixtures/Card.abide'
 import Deferring, { peakInFlight as peakDeferring, reset as resetDeferring } from './fixtures/Deferring.abide'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
@@ -344,7 +345,7 @@ export default suite({
                 const view = (): TemplateResult =>
                     html`<ul>${ROWS_200.map((r) => html`<li>${r.label}</li>`)}</ul>`
                 const plain = await renderToString(view())
-                const hydratable = await renderToString(view(), { hydratable: true })
+                const hydratable = await renderToString(view(), { hydrate: true })
                 is(
                     'the same document, once the markers are stripped',
                     hydratable.replace(/<!--(\[|\$\d+)-->/g, ''),
@@ -358,12 +359,12 @@ export default suite({
                 per: { n: 200, label: 'row' },
                 arms: [
                     {
-                        label: 'abide — renderToString({ hydratable: true })',
+                        label: 'abide — renderToString({ hydrate: true })',
                         run: async () => {
                             keep(
                                 await renderToString(
                                     html`<ul>${ROWS_200.map((r) => html`<li>${r.label}</li>`)}</ul>`,
-                                    { hydratable: true },
+                                    { hydrate: true },
                                 ),
                             )
                         },
@@ -602,6 +603,71 @@ export default suite({
         },
 
         {
+            title: '`render(view, { shell })` — a document from the one public renderer',
+            note: 'The two decisions a render is asked for, and both default to OFF: `shell` is the document around the markup and `hydrate` is whether a client takes it over. `shell: true` is the APP’s own `app.html` — the same document `abide start` serves a page in, with the build’s stylesheets and every scoped `<style>` block in the head — and a STRING is one of the caller’s own, which is a whole html file with a `<slot></slot>` in it rather than a fragment or a head. That last part is why a route no longer writes a doctype by hand around `render(view)`: a scoped `<style>` is written by the DOCUMENT, so the hand-written form shipped the markup and none of the rules. The document faces themselves stay on `abide/server/internal` — an app reaches one through this option, so there is one name to learn.',
+            async run({ is }) {
+                const answer = 'the answer'
+                // A child slot, because that is what a marker brackets — the `hydrate` claim below is
+                // about markup a client can adopt, and a template with no slot in it has none.
+                const view = (): TemplateResult => html`<p>${answer}</p>`
+                const written =
+                    '<!doctype html><html lang="en"><head><title>mine</title></head>' +
+                    '<body><header>chrome</header><slot>loading…</slot></body></html>'
+
+                let bare = ''
+                for await (const chunk of render(view())) bare += chunk
+                is('markup, when nothing was asked for', bare, '<p>the answer</p>')
+
+                let own = ''
+                for await (const chunk of render(view(), { shell: written })) own += chunk
+                is('the caller’s own document', own.startsWith('<!doctype html><html lang="en">'), true)
+                is('its own chrome, above the render', own.includes('<header>chrome</header>'), true)
+                is('the render lands in the slot', own.includes('<slot><p>the answer</p></slot>'), true)
+                is('the placeholder is replaced', own.includes('loading…'), false)
+                is('and the document closes', own.endsWith('</body></html>'), true)
+
+                // The reason the option exists rather than a hand-written doctype: a `.abide` file's
+                // `<style>` block is written into the HEAD, which a route concatenating its own
+                // document around `render(view)` has no way to do.
+                let styled = ''
+                for await (const chunk of render(Card(), { shell: written })) styled += chunk
+                is('a component’s scoped rules ride in the head', styled.indexOf('<style data-abide=') < styled.indexOf('</head>'), true)
+                is('…and the markup carries the scope they are keyed by', styled.includes('data-a'), true)
+
+                // `shell: true` is the app's own document, and the app HERE is nobody: this process
+                // booted nothing, so what comes back is the document an app that wrote no `app.html`
+                // is served in. A real app's own document is a boot fact and therefore a browser
+                // claim — `docs.e2e.ts` makes it against a served route.
+                let abides = ''
+                for await (const chunk of render(view(), { shell: true })) abides += chunk
+                is('abide’s own document, when nothing published one', abides.includes('<meta name="viewport"'), true)
+                is('with the render in its slot', abides.includes('<slot><p>the answer</p></slot>'), true)
+
+                // The second decision, independent of the first.
+                is('no markers unless a client is going to adopt', own.includes('<!--[-->'), false)
+                let live = ''
+                for await (const chunk of render(view(), { shell: written, hydrate: true })) live += chunk
+                is('markers when one is', live.includes('<!--[-->'), true)
+                // The lane is the BUILD's — the generated entry, named in the manifest — so a render
+                // in a process that never built one has none to write, and that is the same reason
+                // `hydrate` cannot be the default: the client mounts the pages route table at the
+                // outlet, which on a path no page owns replaces what the route just served.
+                is('and nothing to boot, because nothing was built', live.includes('<script type="module"'), false)
+
+                // Refused where the response has not started, rather than on the first chunk: the
+                // shell is resolved by the call, so a document with nowhere to render never serves a
+                // byte.
+                let refused = ''
+                try {
+                    render(view(), { shell: '<html><body><main></main></body></html>' })
+                } catch (failure) {
+                    refused = (failure as Error).message
+                }
+                is('a shell with nowhere to render is refused', refused.includes('<slot></slot>'), true)
+            },
+        },
+
+        {
             title: 'a document for a reader that runs nothing',
             note: '`renderDocumentToString(body)` is the same shell around `renderToString`’s walk, and the difference is where a `suspend` lands. A streamed document defers it into a `<template>` and a two-line script that puts it back; an email client runs no script, so that subtree would sit in the template forever. Rendering to a string there is nowhere to patch, so the load is awaited in place and the markup is complete when the string is. The head trails and defaults to nothing — abide’s own document is the whole of what a mail needs around it — and the body is a NODE rather than a thunk, because a plain async function has nothing to delay.',
             async run({ is }) {
@@ -826,7 +892,7 @@ export default suite({
                         }, catch: undefined, finally: undefined })}</p>`
                 }
                 const server = container()
-                server.innerHTML = await renderToString(hydrating(), { hydratable: true })
+                server.innerHTML = await renderToString(hydrating(), { hydrate: true })
                 const element = server.querySelector('b')
                 const live = hydrate(server, hydrating)
                 try {
@@ -890,7 +956,7 @@ export default suite({
                 const warm = document.createElement('div')
                 mount(warm, view).dispose()
                 const host = container()
-                host.innerHTML = await renderToString(view(), { hydratable: true })
+                host.innerHTML = await renderToString(view(), { hydrate: true })
                 is('the server settled it inline', host.textContent, 'hello ada')
 
                 const paragraph = host.querySelector('p')
@@ -1619,6 +1685,67 @@ export default suite({
                 const key = Object.keys(seeded).find((name) => name.startsWith('demo/render/tokens'))
                 is('…keyed by the address the stub was built with', key !== undefined, true)
                 is('…holding the whole transcript', seeded[key as string], ['the', 'quick', 'brown', 'fox'])
+            },
+        },
+
+        {
+            title: 'a handler that built its own RESPONSE is not seeded — and a FRAMING is not one',
+            note: 'A seed is a VALUE the browser can adopt instead of asking, and a `Response` is not one: `json`, `page` and `redirect` hand an in-process caller the envelope, which `JSON.stringify` writes as `{}`. Seeded, the browser adopts `{}` as a settled answer and never asks — a render that so much as TOUCHED such an endpoint left every client reader of it permanently empty, with no request in the network panel to explain it. `jsonl()` and `sse()` used to be in that set and are not any more: a framing is a STREAM, so the lane takes its values, the cell holds the chunks and the seed is the transcript — the same seed a `function*` handler gets, which is the point. What decides is the VALUE and not the declaration, because `isGenerator` cannot see a framing and a hand-written `register` never goes near the compiler that can.',
+            async server({ is }) {
+                async function* items(): AsyncGenerator<{ id: number }> {
+                    for (let id = 1; id <= 3; id++) yield { id }
+                }
+                const framed = GET(() => jsonl(items()))
+                const built = GET(() => json({ ok: true }))
+                // The control: an ordinary value, which must STILL be seeded. A fix that simply
+                // stopped seeding would pass every assertion above and none of this one.
+                const plain = GET(() => ({ name: 'ada' }))
+                register(
+                    'rpc',
+                    [
+                        ['demo/seed/framed', 'framed'],
+                        ['demo/seed/built', 'built'],
+                        ['demo/seed/plain', 'plain'],
+                    ],
+                    { framed, built, plain },
+                )
+
+                let markup = ''
+                const rendering = renderDocument(
+                    '<title>t</title>',
+                    () =>
+                        html`<article>${() =>
+                            streamed(framed(), (row: { id: number }) => html`<span>${row.id}</span>`)}</article>
+                            <p>${() => (built()() instanceof Response ? 'envelope' : 'value')}</p>
+                            <p>${() => plain()().name}</p>`,
+                )
+                await serve(new Request('http://x/'), async () => {
+                    for await (const chunk of rendering) markup += chunk
+                })
+
+                // The isomorphism, in the one place it used to break: a framed handler hands a caller
+                // IN PROCESS what the same call hands a browser. It answered its own `Response` here.
+                is(
+                    'a framed handler answers its VALUES in process',
+                    /<span>1<[\s\S]*<span>2<[\s\S]*<span>3</.test(markup),
+                    true,
+                )
+                is('…and one that built a Response still answers that', markup.includes('envelope'), true)
+
+                const block = /id="abide-seed"[^>]*>([\s\S]*?)<\/script>/.exec(markup)
+                const seeded = JSON.parse((block as RegExpExecArray)[1] as string) as Record<string, unknown>
+                const keyed = (prefix: string): string | undefined =>
+                    Object.keys(seeded).find((name) => name.startsWith(prefix))
+
+                is('a hand-built Response seeds nothing', keyed('demo/seed/built'), undefined)
+                is('…an ordinary value still does', seeded[keyed('demo/seed/plain') as string], { name: 'ada' })
+                // By its TRANSCRIPT, which is what stops the browser re-streaming what is already on
+                // the page — and what it got before was the generator object, written as `{}`.
+                is('…and a framing by its whole transcript', seeded[keyed('demo/seed/framed') as string], [
+                    { id: 1 },
+                    { id: 2 },
+                    { id: 3 },
+                ])
             },
         },
     ],

@@ -2,11 +2,17 @@
 // runs `onStart`, `tearDown` runs `onStop`, `answering` runs the middleware chain and `failing` runs
 // `onError`. Two of the four are per PROCESS and two are per REQUEST, which is why it is not a pair.
 //
-// A REGISTRATION is the primitive and the module export is sugar over it: `abide dev` and `abide
-// start` import an app's module and hand each export to the function of the same name — the `HOOKS`
-// table in `cli/internal/layers.ts`, which covers `onConfig`, `onHealth` and `onIdentity` too. So an app run by
-// the binary and a hand-written entry point that registers them itself mean the same thing, and
-// nothing here waits for a bundler: a boot is a socket and four hooks, and only one needs a build.
+// A REGISTRATION is the whole of it. `abide dev` and `abide start` import an app's `app.ts`, and
+// IMPORTING IT IS WHAT REGISTERS — the calls run in its body. So an app run by the binary and a
+// hand-written entry point mean the same thing by making the same calls, and nothing here waits for a
+// bundler: a boot is a socket and four hooks, and only one needs a build.
+//
+// There was a second lane, in which the binary read `onStart` / `onStop` / `onError` / `middleware`
+// (and `onConfig` / `onHealth` / `onIdentity`) off that module's exports and handed each to the
+// function of the same name. It was deleted rather than kept beside this one: an export is typed
+// against nothing on its way through a namespace, so every hook it carried had to be shape-checked at
+// runtime and refused at boot — a check the call form gets from the app's own typecheck for free.
+// `export default` stays an export because a route is the one of these with no call to make.
 //
 // Three of the four are onions, and each is an onion for the same reason: the interesting hook is
 // the one that does something on BOTH sides of the thing it wraps. `onStart` binds the socket inside
@@ -199,8 +205,18 @@ function answering(request: Request, server: Server<never>, route: Route): Retur
     // The try is free when nothing throws, which is what makes the near half worth guarding at all.
     try {
         const rungs = RUNGS
-        const settled =
-            rungs.length === 0 ? served(request, server, route) : onion(rungs, 0, request, server, route)
+        if (rungs.length === 0) {
+            // No onion, so nothing here needs the sentinel: `dispatch`'s answer goes back to Bun as
+            // it is, and a PROMISE of `undefined` is a socket that upgraded, which is exactly what
+            // Bun is waiting for. `UPGRADED` exists only to carry that absence through a chain typed
+            // `=> Response`, and wrapping it in one when there is no chain would put two `then` links
+            // — two promises and two ticks — on every rpc call an app without middleware takes.
+            const abide = dispatch(request, server as never)
+            if (abide !== undefined) return abide
+            const answered = settle(route(request, server), request)
+            return isThenable(answered) ? answered.catch(failing) : answered
+        }
+        const settled = onion(rungs, 0, request, server, route)
         // Both arms of ONE `then`, not a `then` and a `catch`: `unwrapped` is a comparison and cannot
         // throw, so the second link would only ever cost a promise and a tick per request.
         return isThenable(settled) ? settled.then(unwrapped, failing) : unwrapped(settled)

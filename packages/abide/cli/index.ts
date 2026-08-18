@@ -30,6 +30,10 @@ export {
     type Sidecar,
 } from './CLIENT_BUILD.ts'
 export { COMMANDS, type Command, commandNamed, usage } from './COMMANDS.ts'
+// The front door of a COMPILED app — what the entry `abide compile` generates calls, and the only
+// name in this map an app's own generated code imports. The image is the app's tree as the compile
+// read it; everything done with it is the same assembly `abide start` runs.
+export { type BinaryImage, binary } from './internal/console.ts'
 // The REPL's line editor, which takes its terminal as HOOKS — so the one part of this binary that
 // cannot be driven by spawning a process (a keystroke needs a tty) is driven by feeding it a string.
 export { type EditorHooks, LineEditor, suggest } from './internal/editor.ts'

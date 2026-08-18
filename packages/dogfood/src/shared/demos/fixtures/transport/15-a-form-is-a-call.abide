@@ -1,0 +1,58 @@
+<script>
+import { enrol } from '#server/rpc/docs/transport/a-form-is-a-call.ts'
+import { state } from 'abide'
+
+const shown = state('nothing sent yet')
+
+// Where the endpoint LIVES, which is all a form needs. A mutation's arguments are in the BODY, so
+// `url` ignores what it is handed and every call goes to this one address — mounted, so the rung
+// works under a sub-path where a hand-typed `/__abide/rpc/…` would not.
+const AT = enrol.url()
+
+// The two spellings of ONE door, chosen by which button was pressed. `new FormData(element)` is what
+// a `<form enctype="multipart/form-data">` sends; the same entries through `URLSearchParams` are what
+// a form with no `enctype` sends. The server branches on neither — `Request.formData()` reads both
+// into the same entries — and the only difference is that a file can ride in the first.
+const send = async (event: SubmitEvent): Promise<void> => {
+    // Held back so the page stays here. An unintercepted submit sends these same bytes to this same
+    // address; what it does with the answer is render it, which is the wrong place for it.
+    event.preventDefault()
+    const fields = new FormData(event.target as HTMLFormElement)
+    const urlencoded = (event.submitter as HTMLButtonElement).value === 'urlencoded'
+
+    let body: BodyInit = fields
+    let headers: Record<string, string> | undefined
+    if (urlencoded) {
+        const text = new URLSearchParams()
+        // The file is dropped by the WALK rather than by a flag: it is not a string, and a
+        // urlencoded body has nowhere to put one.
+        for (const [field, held] of fields) if (typeof held === 'string') text.append(field, held)
+        body = text.toString()
+        headers = { 'content-type': 'application/x-www-form-urlencoded' }
+    }
+
+    // No `content-type` for the multipart arm: `fetch` writes the one naming the boundary it chose,
+    // and a header claiming another is a body nothing can read.
+    const answered = await fetch(AT, headers === undefined ? { method: 'POST', body } : { method: 'POST', headers, body })
+    shown = `${urlencoded ? 'urlencoded' : 'multipart'} — ${JSON.stringify(await answered.json())}`
+}
+</script>
+
+<!-- A REAL form, and its field NAMES are the argument names the handler destructures. There is no
+     upload vocabulary and no second declaration anywhere: `tags` twice is the conventional spelling of
+     a list, and the declared shape is what makes `age` a number though an input can only hand over text.
+
+     The two buttons are the form's own submitters, so `name`/`value` is how the handler learns which
+     was pressed — and `new FormData(form)` leaves a submitter out, so `as` is not one of the arguments. -->
+<form class="flex w-full flex-wrap items-center gap-2" onsubmit={send}>
+    <!-- Widths only, and they earn the classes: a file input's min-content is wider than this rung's
+         column, so left alone the form overflows onto the source pane beside it. -->
+    <input class="w-24" name="name" value="ada"/>
+    <input class="w-16" name="age" value="36"/>
+    <input class="w-16" name="tags" value="x"/>
+    <input class="w-16" name="tags" value="y"/>
+    <input class="w-full min-w-0" type="file" name="avatar"/>
+    <button name="as" value="multipart">post it as multipart</button>
+    <button name="as" value="urlencoded">post it urlencoded</button>
+</form>
+<pre>{shown}</pre>

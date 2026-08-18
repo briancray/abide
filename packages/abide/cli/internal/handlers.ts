@@ -21,6 +21,30 @@
 import { TRANSPORT_ROOTS } from '#compiler/TRANSPORT.ts'
 
 /**
+ * Every transport module under `root`, sorted — absolute for an import, relative for a specifier
+ * somebody is going to WRITE.
+ *
+ * Split out of the import below because `abide compile` asks the same question for the other reason:
+ * a binary has no directory to scan at boot, so the scan happens once at compile time and becomes a
+ * static import per row. Two scanners is a compile that embeds a different set of endpoints from the
+ * one `abide start` serves, which is the failure that shows up as a 404 in production only.
+ */
+export async function transportFiles(root: string, absolute: boolean): Promise<string[]> {
+    const found: string[] = []
+    for (const pattern of Object.values(TRANSPORT_ROOTS)) {
+        const glob = new Bun.Glob(pattern)
+        for await (const path of glob.scan({ cwd: root, absolute, onlyFiles: true })) {
+            // A declaration is not a module. An app may keep its own `.d.ts`, and importing one is a
+            // runtime error about a file that exists only for the checker.
+            if (path.endsWith('.d.ts')) continue
+            found.push(path)
+        }
+    }
+    found.sort()
+    return found
+}
+
+/**
  * Import every handler under `root`. The registry is the answer — that is what an import is FOR here.
  *
  * Sorted, so two boots of one tree register in one order — the addresses are a Map's keys, and a
@@ -35,17 +59,7 @@ import { TRANSPORT_ROOTS } from '#compiler/TRANSPORT.ts'
  * from the registry says "this app has endpoints" about a directory that has none.
  */
 export async function handlers(root: string): Promise<number> {
-    const found: string[] = []
-    for (const pattern of Object.values(TRANSPORT_ROOTS)) {
-        const glob = new Bun.Glob(pattern)
-        for await (const path of glob.scan({ cwd: root, absolute: true, onlyFiles: true })) {
-            // A declaration is not a module. An app may keep its own `.d.ts`, and importing one is a
-            // runtime error about a file that exists only for the checker.
-            if (path.endsWith('.d.ts')) continue
-            found.push(path)
-        }
-    }
-    found.sort()
+    const found = await transportFiles(root, true)
     // In series, deliberately. These modules are the app's own graph — a database pool, a rate
     // limiter, a client for something else — and their module bodies run here. Two of them opening
     // the same resource concurrently is a race an app never wrote, in an order it cannot see.

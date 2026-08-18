@@ -348,6 +348,34 @@ export default suite({
         },
 
         {
+            title: 'a CELL handed to a cell is a stream, not a load',
+            note: 'A cell answers BOTH shapes — `PromiseLike`, so `await` works, and async-iterable, because it retains a transcript — and a classifier asking `isThenable` first reads only its LAST chunk. That is what `state(someRpcHandle)` did: the outer cell settled to the final row with `chunks()` empty, which is a wrong answer nothing reports, because the value it does hold is right. The stream arm is asked FIRST now at all three places a value is classified — `state()`, `set()`, and the value a derivation produced. What the wrapper does NOT gain is a body to re-run: this is the latest chunk and the transcript, and `refresh` still belongs to whoever owns the load.',
+            async run({ is }) {
+                async function* words(): AsyncGenerator<string> {
+                    for (const word of ['the', 'quick', 'brown']) {
+                        await sleep(5)
+                        yield word
+                    }
+                }
+                const constructed = state(state(words()))
+                const written = state<string | undefined>(undefined)
+                written.set(state(words()))
+
+                is('await the wrapper', await constructed, 'brown')
+                is('the transcript survived the wrap', constructed.chunks(), ['the', 'quick', 'brown'])
+                is('the value is the latest chunk', constructed(), 'brown')
+                is('await the written one', await written, 'brown')
+                is('…and set() classifies it the same way', written.chunks(), ['the', 'quick', 'brown'])
+
+                // The half that must NOT move. A promise has no async iterator, so it still takes the
+                // load arm — and a load has no transcript at all.
+                const loaded = state(Promise.resolve('ada'))
+                is('a promise is still a LOAD', await loaded, 'ada')
+                is('…with no transcript', loaded.chunks(), [])
+            },
+        },
+
+        {
             title: 'a stream SUPERSEDED mid-flight stands the probes down, like one that ended',
             note: 'Setting a plain value over a live stream bumps the generation, and the consume loop drops out at its next guard rather than running to either of its own two ends. Those ends used to be the only places `streaming` was cleared, so the cell settled holding the new value while still reporting that it was streaming — for good, because nothing else was ever going to ask. Nothing about the VALUE is wrong on that path, which is why only a probe can catch it.',
             async run({ is }) {

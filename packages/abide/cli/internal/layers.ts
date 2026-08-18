@@ -57,33 +57,31 @@ import { APP_MODULES, PUBLIC_DIR } from '#compiler/LAYOUT.ts'
 // The transport directories by their one definition, for the refusal that names them. The globs come
 // from the compiler rather than being written again here, exactly as the boot's own scan takes them.
 import { TRANSPORT_ROOTS } from '#compiler/TRANSPORT.ts'
-import { type Config, type ConfigDefaults, isPort, onConfig } from '#server/config.ts'
-import { type HealthReporter, onHealth } from '#server/health.ts'
-import { type IdentityResolver, onIdentity } from '#server/identity.ts'
+import { isPort } from '#server/config.ts'
 import { documentToStream, fragmentToStream } from '#server/render.ts'
-import {
-    type ErrorHook,
-    handle,
-    type Middleware,
-    middleware,
-    onError,
-    onStart,
-    onStop,
-    type Route,
-    type StartHook,
-    type StopHook,
-} from '#server/lifecycle.ts'
+import { boot, handle, type Route } from '#server/lifecycle.ts'
 import { type PageFiles, pages, pagesFrom } from '#server/pages.ts'
 import { registered } from '#server/catalogue.ts'
+import { websocket } from '#server/registry.ts'
 import { page } from '#server/responses.ts'
-import type { Schema } from '#server/schema.ts'
-import type { Shell } from '#server/shell.ts'
+import { type Shell, useAppDocument } from '#server/shell.ts'
 import { mounted } from '#shared/internal/mount.ts'
-import { NAVIGATION_DEPTH_HEADER, NAVIGATION_FROM_HEADER, NAVIGATION_HEADER } from '#shared/internal/PATHS.ts'
+import {
+    NAVIGATION_DEPTH_HEADER,
+    NAVIGATION_FAILURE_HEADER,
+    NAVIGATION_FROM_HEADER,
+    NAVIGATION_HEADER,
+} from '#shared/internal/PATHS.ts'
 import { isThenable, messageOf } from '#shared/internal/probes.ts'
-import { JSON_TYPE } from '#shared/internal/wire.ts'
+import { JSON_TYPE, statusOf } from '#shared/internal/wire.ts'
 import { appName } from '#shared/log.ts'
 import {
+    errorFor,
+    errorOutlet,
+    errorReady,
+    type Failure,
+    failureHeader,
+    type Loader,
     outlet,
     outletFrom,
     type RouteEntry,
@@ -103,7 +101,7 @@ import { type PublicFiles, publicFiles } from './publics.ts'
 import { APP_HTML, type AppShell, appShell } from './shell.ts'
 
 /** Hoisted: the render reads it once and keeps nothing, so a literal here would be per request. */
-const HYDRATABLE = { hydratable: true }
+const HYDRATABLE = { hydrate: true }
 
 /** What answers a request: the bundle in front, then `handle`'s pipeline. What `Bun.serve` is given. */
 export type Answer = ReturnType<typeof handle>
@@ -135,6 +133,48 @@ export interface Assembling {
      * entry from the same list on the same save. Absent means "scan it here", which is `abide start`.
      */
     pages?: PageFiles[]
+    /**
+     * The app as a COMPILE saw it, for a process that has no directory to look in.
+     *
+     * Everything else in this file reads a tree: the entry is found by probing four names, the
+     * handlers by a glob, the pages by a walk, the shell and the public files by reading them. A
+     * standalone binary has none of that, so `abide compile` asks the same four questions AT BUILD
+     * TIME and writes the answers into the entry it compiles — see `internal/binary.ts`.
+     *
+     * One field rather than five loose ones because it is one fact and they are all-or-nothing: an
+     * image that named its pages and not its handlers would assemble half an app out of a tree that
+     * is not there.
+     */
+    image?: AppImage
+}
+
+/**
+ * An app that is not a directory — what a compiled binary carries.
+ *
+ * The same shapes the scans produce, which is the point: past `assemble`, nothing downstream can tell
+ * the two apart, so a binary serves the app through the code that serves it under `abide start`
+ * rather than through a second renderer that agrees with it today.
+ */
+export interface AppImage {
+    /** What `app.ts` exported, ALREADY imported. `null` for an app that wrote no module of its own. */
+    app: AppModule | null
+    /** Its filename, for the report — the compile's answer to `firstPresent`. */
+    entry: string | null
+    /** How many transport modules the compile imported, which is what `handlers()` would have counted. */
+    endpoints: number
+    /** The pages, or `null` for an app made of endpoints. */
+    pages: ImagedPages | null
+    /** The public files, embedded and ready to serve. `null` for an app with no public directory. */
+    publics: PublicFiles | null
+}
+
+/** A pages directory as a compile recorded it: the walk, a loader per file, and the document. */
+interface ImagedPages {
+    files: PageFiles[]
+    /** One `import()` thunk per file in `files`, keyed by the same relative path — see `pagesFrom`. */
+    loaders: Record<string, Loader>
+    /** `app.html` as text, or `null` for an app that wrote none and gets abide's. */
+    html: string | null
 }
 
 /** The assembled app: what serves it, and the three facts the report is built from. */
@@ -158,40 +198,57 @@ export interface Assembly {
  * `failed` for an app that is there and broken — the same split every other command makes.
  */
 export async function assemble(asked: Assembling): Promise<Assembly | number> {
-    const { root, label } = asked
+    const { root, label, image } = asked
 
-    const entry = await firstPresent(root, APP_MODULES)
+    const entry = image === undefined ? await firstPresent(root, APP_MODULES) : image.entry
 
     // The endpoints FIRST, so everything under `/__abide/` is registered before a line of the app's
     // own module runs — an `onStart` that calls one of its own handlers is calling something that is
     // already there, and no file has to import another for its side effect.
+    // An image is past that already: the modules are static imports of the entry this binary was
+    // compiled from, so they registered before anything here ran, and the count is what the compile
+    // saw.
     let answering: number
-    try {
-        answering = await handlers(root)
-    } catch (failure) {
-        console.error(`${label}: a handler did not load — ${messageOf(failure)}`)
-        return CLI_EXIT_CODES.failed
+    if (image !== undefined) answering = image.endpoints
+    else {
+        try {
+            answering = await handlers(root)
+        } catch (failure) {
+            console.error(`${label}: a handler did not load — ${messageOf(failure)}`)
+            return CLI_EXIT_CODES.failed
+        }
     }
 
     // No module is an app that said nothing about itself, which is every default: no route of its
     // own, no hooks, and the pages and endpoints below unchanged by its absence.
+    //
+    // IMPORTING IS WHAT REGISTERS: the module's own `onStart(…)` / `middleware(…)` calls run in its
+    // body, so a hook that throws on the way in is the same failure as a syntax error and lands in
+    // the same catch. Nothing is read off the namespace but the route.
     let declared: Route | null = null
     if (entry !== null) {
         let app: AppModule
-        try {
-            app = (await import(Bun.pathToFileURL(entry).href)) as AppModule
-        } catch (failure) {
-            // The import ran the app's module body, so this is as likely to be the app's own top-level
-            // work failing as it is to be a syntax error. Either way it never bound a socket.
-            console.error(`${label}: ${entry} did not load — ${messageOf(failure)}`)
+        if (image !== undefined) app = image.app as AppModule
+        else {
+            try {
+                app = (await import(Bun.pathToFileURL(entry).href)) as AppModule
+            } catch (failure) {
+                // The import ran the app's module body, so this is as likely to be the app's own
+                // top-level work failing as it is to be a syntax error. Either way it never bound a
+                // socket.
+                console.error(`${label}: ${entry} did not load — ${messageOf(failure)}`)
+                return CLI_EXIT_CODES.failed
+            }
+        }
+        // `undefined` is an export that was something else; `null` is an app that exported no route.
+        const route = routeOf(app.default)
+        if (route === undefined) {
+            console.error(
+                `${label}: ${entry} \`export default\` must be a route — \`(request, server) => Response | undefined\` — or \`{ fetch }\``,
+            )
             return CLI_EXIT_CODES.failed
         }
-        const wired = wire(app)
-        if (typeof wired === 'string') {
-            console.error(`${label}: ${entry} ${wired}`)
-            return CLI_EXIT_CODES.failed
-        }
-        declared = wired
+        declared = route
     }
 
     // The pages and the document they render in — both read ONCE, here, because neither can change
@@ -204,10 +261,28 @@ export async function assemble(asked: Assembling): Promise<Assembly | number> {
     try {
         // Started before the bundle is waited on: the public directory has no bearing on either, so
         // its scan overlaps the build rather than following the pages walk.
-        const reading = publicFiles(root)
+        // An image did both at compile time, so there is nothing here to overlap.
+        const reading = image === undefined ? publicFiles(root) : image.publics
         built = isThenable(asked.client) ? await asked.client : asked.client
-        paged = await pageLayer(root, built?.manifest ?? null, asked.head, asked.pages)
-        publics = await reading
+        // The app's own document, for EVERY app rather than only a paged one: `render(view, { shell:
+        // true })` is a route asking for it, and an app made of endpoints has one to give. Read once
+        // here, because it cannot change under a running process — and published before anything is
+        // serving, since the first request is where a route would ask.
+        //
+        // In the image lane there is no file to read: `pages` is `null` for a binary made of
+        // endpoints, which is that compile saying the app wrote no document rather than this process
+        // being asked to look for one.
+        const document = await appShell(
+            root,
+            built?.manifest ?? null,
+            appName(),
+            image === undefined ? undefined : (image.pages?.html ?? null),
+        )
+        useAppDocument({ parts: document.parts, lane: document.lane })
+        paged = await pageLayer(root, document, asked.head, asked.pages, image?.pages)
+        // Guarded rather than awaited: in the image lane `reading` is already the value, and an
+        // unconditional await there is a promise wrap and a tick for nothing.
+        publics = isThenable(reading) ? await reading : reading
         serving = composed(declared, paged, built?.manifest ?? null)
     } catch (failure) {
         // An `app.html` with nowhere to render is the loud one, and it is caught HERE rather than on
@@ -256,9 +331,63 @@ export async function assemble(asked: Assembling): Promise<Assembly | number> {
               ? (request: Request, server: Parameters<typeof handled>[1]): ReturnType<typeof handled> =>
                     first.serve(request) ?? compressing(request, handled(request, server))
               : (request: Request, server: Parameters<typeof handled>[1]): ReturnType<typeof handled> =>
-                    first.serve(request) ?? second.serve(request) ?? compressing(request, handled(request, server))
+                    first.serve(request) ??
+                    second.serve(request) ??
+                    compressing(request, handled(request, server))
 
     return { entry, paged, assets, publics, answer }
+}
+
+/**
+ * The assembled app on a socket — or the exit code of a refusal already PRINTED.
+ *
+ * `null` is neither: an `onStart` that returned without calling `start()` is the app deciding this
+ * process should not serve, which `boot` says so on `abide:lifecycle` and is an outcome rather than a
+ * failure.
+ *
+ * Here rather than in `abide start`, because there are three callers now — `start`, and the console's
+ * `serve` in both of its shapes — and what they share is every line of it: the two `Bun.serve`
+ * options that are spelled rather than inferred, and what a taken port means. `abide dev` is not one
+ * of them and cannot be: it HOPS, which is a loop around this rather than an argument to it.
+ */
+export async function bind(
+    assembled: Assembly,
+    port: number,
+    label: string,
+): Promise<ReturnType<typeof Bun.serve> | null | number> {
+    try {
+        return await boot(() =>
+            Bun.serve({
+                port,
+                // Off, deliberately. Bun's development mode answers an uncaught throw with a page
+                // describing the stack, which is a debugging tool and an information leak in the same
+                // response. `onError` is where an app decides what a failure looks like here.
+                development: false,
+                // Spelled, because Bun infers it from `development` and infers the wrong one here:
+                // `development: false` turns SO_REUSEPORT ON, so a second production process binds
+                // the same port instead of failing, both listen, and the kernel hands the requests to
+                // whichever bound first. That is precisely the case the refusal below exists to make
+                // loud — a deploy answering from the process it was meant to replace — and it is
+                // silent, because both processes print `listening` on the port they agree on.
+                reusePort: false,
+                fetch: assembled.answer,
+                websocket,
+            }),
+        )
+    } catch (failure) {
+        // A port in use is the one failure with something to say beyond the message, and it is HARD
+        // here on purpose: `abide dev` hops to the next free port because a developer wants the thing
+        // to come up, and a deploy that quietly listened somewhere else is a health check passing
+        // against the process it was meant to replace. The port asked for is the port or it is
+        // nothing.
+        if ((failure as { code?: string }).code === 'EADDRINUSE') {
+            console.error(`${label}: port ${port} is already in use`)
+            console.error('       stop what is on it, or name another with `--port <n>`')
+        } else {
+            console.error(`${label}: ${messageOf(failure)}`)
+        }
+        return CLI_EXIT_CODES.failed
+    }
 }
 
 // --- the pages, and the document they are served in --------------------------
@@ -278,21 +407,33 @@ interface Paged {
  */
 async function pageLayer(
     root: string,
-    manifest: ClientManifest | null,
+    document: AppShell,
     head: string | undefined,
     scanned: PageFiles[] | undefined,
+    imaged: ImagedPages | null | undefined,
 ): Promise<Paged | null> {
     const directory = `${root}/${PAGES}`
-    try {
-        if (!(await Bun.file(directory).stat()).isDirectory()) return null
-    } catch {
-        return null
-    }
-    const shell = await appShell(root, manifest, appName())
+    if (imaged === undefined) {
+        try {
+            if (!(await Bun.file(directory).stat()).isDirectory()) return null
+        } catch {
+            return null
+        }
+    } else if (imaged === null) return null
+
+    // A PAGE is the one render that always hydrates, so the lane goes in here rather than in the
+    // document itself — what was published is what a route asking for `{ shell: true }` gets, and
+    // that render adds the lane only if it asked to hydrate.
+    //
     // `head` is BY DEFINITION the text before `</head>`, so appending lands exactly where a second
-    // scan for `</head>` would have. After the stylesheets `appShell` already appended, which is what
-    // keeps a dev client from being the thing that decides where an app's own css goes.
-    if (head !== undefined) shell.parts.head += head
+    // scan for `</head>` would have. Copied rather than appended to, because the parts this is built
+    // from are the ones every other render in the process is now holding.
+    const shell: AppShell = {
+        parts: { ...document.parts, head: document.parts.head + document.lane + (head ?? '') },
+        lane: document.lane,
+        own: document.own,
+    }
+    if (imaged !== undefined) return { table: pagesFrom(directory, imaged.files, imaged.loaders), shell }
     return { table: scanned === undefined ? await pages(directory) : pagesFrom(directory, scanned), shell }
 }
 
@@ -310,13 +451,109 @@ function composed(declared: Route | null, paged: Paged | null, manifest: ClientM
     if (paged === null) return declared ?? ((): undefined => undefined)
     routes(paged.table)
     const rendered = renderer(paged.shell.parts, shellsPerRoute(paged, manifest))
-    if (declared === null) return rendered
+    const ordinary: Route =
+        declared === null
+            ? rendered
+            : (request: Request, server: Parameters<Route>[1]): ReturnType<Route> => {
+                  const answered = declared(request, server)
+                  if (answered === undefined) return rendered(request)
+                  if (isThenable(answered)) return answered.then((settled) => settled ?? rendered(request))
+                  return answered
+              }
+    return failingPage(ordinary, paged.shell.parts)
+}
+
+/**
+ * The app's route with its `error.abide` behind it: nothing answered is a 404 page, and a throw is a
+ * page at whatever status the throw carries.
+ *
+ * HERE rather than in `lifecycle.ts` beside the JSON refusals it stands in front of, and the reason
+ * is the shell: an error page is a PAGE, so it is owed the document, the layouts above it and the
+ * hydration lane, and this is the innermost layer that holds one. `lifecycle.ts` keeps the JSON — an
+ * app that wrote no `error.abide` is unchanged, and so is every `/__abide/**` endpoint, which is not
+ * a page and must not answer one.
+ *
+ * BEFORE THE FIRST BYTE is the whole of what this can cover, and the boundary is exact rather than a
+ * limitation to apologise for: a document is a stream, so a page that throws once its shell is on the
+ * wire cannot be replaced by another page. That failure is `{#try}`'s, which can still take back a
+ * region it has not flushed. This one takes the cases where nothing has been written at all — no
+ * route matched, a middleware rung threw, a page's own module failed to load.
+ */
+function failingPage(ordinary: Route, shell: Shell): Route {
     return (request: Request, server: Parameters<Route>[1]): ReturnType<Route> => {
-        const answered = declared(request, server)
-        if (answered === undefined) return rendered(request)
-        if (isThenable(answered)) return answered.then((settled) => settled ?? rendered(request))
-        return answered
+        let answered: ReturnType<Route>
+        try {
+            answered = ordinary(request, server)
+        } catch (failure) {
+            return errorPage(request, shell, failure)
+        }
+        if (answered === undefined) return errorPage(request, shell, null)
+        if (!isThenable(answered)) return answered
+        return answered.then(
+            (settled) => settled ?? errorPage(request, shell, null),
+            (failure: unknown) => errorPage(request, shell, failure),
+        )
     }
+}
+
+/**
+ * The failure as a rendered document, or `undefined`/a rethrow for an app with no `error.abide` above
+ * this path — which is what leaves `lifecycle.ts`'s JSON exactly as it was.
+ *
+ * `null` for the failure is the 404: nothing threw, nothing answered. Anything else keeps the status
+ * it declared, so an `error(403)` reaches the page as a 403 rather than being flattened to a fault.
+ */
+function errorPage(
+    request: Request,
+    shell: Shell,
+    failure: unknown,
+): Promise<Response | undefined> | undefined {
+    const url = new URL(request.url)
+    // An error page is a PAGE, and a page is a read — the same rule `renderer` opens with. A POST that
+    // matched no route is not a reader who took a wrong link, and answering it with a document would
+    // hand markup to a caller that asked for none. Those keep the JSON refusal, which is what every
+    // non-browser caller already decodes, and so does a path with no `error.abide` above it.
+    const reading = request.method === 'GET' || request.method === 'HEAD'
+    const held = reading ? errorFor(url.pathname) : null
+    if (held === null) {
+        if (failure === null) return undefined
+        throw failure
+    }
+    const status = failure === null ? 404 : statusOf(failure)
+    const said: Failure = {
+        status,
+        name: failure === null ? 'AbideRouteError' : nameOf(failure),
+        message: failure === null ? `nothing is served at ${url.pathname}` : messageOf(failure),
+    }
+    // Awaited rather than kicked, for the reason the page renderer awaits its own: a module that has
+    // not arrived is not a tree, and an error page rendering as empty is the one page where there is
+    // nothing else on screen to say what happened.
+    const loading = errorReady(held)
+    // A NAVIGATION asked, so it gets what every navigation gets: the outlet on its own, marked, and
+    // no second copy of a head the reader is already looking at. Without this the client saw a
+    // document it could not place, handed the URL to the browser and reloaded the whole page to show
+    // a 404 it was already holding the markup for.
+    //
+    // Depth 0 always, and deliberately: `sharedLayoutDepth` compares two ROUTE names and an error
+    // page has none, so there is no honest number to send. The client then fills the outlet's own
+    // range, which is the one place a page with no route can go.
+    const navigating = request.headers.get(NAVIGATION_HEADER) !== null
+    const answer = (): Response =>
+        navigating
+            ? page(fragmentToStream(() => errorOutlet(held, said), HYDRATABLE), {
+                  status,
+                  headers: {
+                      ...NAVIGATION_HEADERS,
+                      [NAVIGATION_FAILURE_HEADER]: failureHeader(said),
+                  },
+              })
+            : page(documentToStream(shell, () => errorOutlet(held, said), HYDRATABLE), { status })
+    return loading === null ? Promise.resolve(answer()) : loading.then(answer)
+}
+
+function nameOf(failure: unknown): string {
+    if (failure instanceof Error) return failure.name
+    return 'Error'
 }
 
 /**
@@ -517,6 +754,24 @@ function compressing(
 const COMPRESSIBLE_BYTES = 4096
 
 /**
+ * Is this `content-type` that media type, as against one whose NAME MERELY STARTS WITH IT?
+ *
+ * `application/jsonl` starts with `application/json`, so a `startsWith` admitted the very framing the
+ * allow-list below names as excluded and buffered it whole: five rows produced 150ms apart arrived
+ * together at 763ms, under a `content-length` on a body that is supposed to have none. Nothing was
+ * red — a buffered stream is the same bytes, and only the arrival time says otherwise.
+ *
+ * Not `===`, because a type may carry parameters (`application/json; charset=utf-8`) and that is
+ * still the same type. `;` and the space some writers put before one are the two ends that count.
+ */
+function isMedia(type: string, name: string): boolean {
+    if (!type.startsWith(name)) return false
+    if (type.length === name.length) return true
+    const next = type[name.length]
+    return next === ';' || next === ' '
+}
+
+/**
  * One response, compressed or handed back as it is.
  *
  * Markup at any size, streamed through a sync-flushed gzip so the parser still gets the head early.
@@ -545,8 +800,8 @@ function compressed(request: Request, response: Response): Response | Promise<Re
     // ones to exclude, because a framing added later then defaults to being left alone. `NDJSON_TYPE`,
     // `JSONL_TYPE` and `text/event-stream` are absent for that reason: each is framed so a browser can
     // read it as it arrives, and buffering one to measure it would undo the framing.
-    const markup = type.startsWith('text/html')
-    if (!markup && !type.startsWith(JSON_TYPE)) return response
+    const markup = isMedia(type, 'text/html')
+    if (!markup && !isMedia(type, JSON_TYPE)) return response
 
     const headers = new Headers(response.headers)
     // Appended rather than set: the navigation branch above already varies on its own header, and a
@@ -615,83 +870,20 @@ async function buffered(response: Response, headers: Headers, init: ResponseInit
 // --- what an app's module says about itself ----------------------------------
 
 /**
- * Every export this binary reads. `unknown` throughout, because a module is whatever it was written
- * as — the checks below are what turn that into the registrations and the route.
+ * The one export this binary reads. `unknown` because a module is whatever it was written as, and
+ * `routeOf` below is what turns that into a route.
+ *
+ * ONE, because a hook is a REGISTRATION and a registration is a call the module makes for itself —
+ * `onStart(…)` at module scope, checked against `StartHook` by the app's own typecheck. There was a
+ * second lane here that read `onStart` / `onStop` / `onError` / `onConfig` / `onHealth` /
+ * `onIdentity` / `middleware` off this namespace and handed each to the function of the same name,
+ * and every hook it carried was typed against nothing on the way through — which is why it had to
+ * check shapes at runtime and answer with a refusal an app could only find by booting. A route has
+ * no call form, so `default` stays; nothing else needs one.
  */
 interface AppModule {
     default?: unknown
-    middleware?: unknown
-    onStart?: unknown
-    onStop?: unknown
-    onError?: unknown
-    onConfig?: unknown
-    onHealth?: unknown
-    onIdentity?: unknown
 }
-
-/**
- * Hand each export to the function of the same name, and answer with the app's route.
- *
- * A string back is a refusal naming what is wrong, and every export is checked BEFORE any of it takes
- * effect: an app that exported `middleware` as one function rather than an array should be told that
- * rather than have its auth rung silently not run. Wrong SHAPE is the failure worth catching here —
- * an export that is simply absent is an app that did not want that hook.
- *
- * `onConfig` is registered like the rest and lands before `boot` asks for the document, which is what
- * makes a config an app cannot resolve a process that never listens.
- */
-function wire(app: AppModule): Route | null | string {
-    const wrong: string[] = []
-    const rungs = app.middleware
-    if (rungs !== undefined && !Array.isArray(rungs)) wrong.push('`middleware` must be an array of rungs')
-    for (const [name] of HOOKS) {
-        const hook = app[name]
-        if (hook !== undefined && typeof hook !== 'function') wrong.push(`\`${name}\` must be a function`)
-    }
-    // Last, so `wrong` is complete either way and one message carries every complaint.
-    const route = routeOf(app.default)
-    if (route === undefined) {
-        wrong.push(
-            '`export default` must be a route — `(request, server) => Response | undefined` — or `{ fetch }`',
-        )
-    }
-    // `route === undefined` again rather than only `wrong.length`, because it is what narrows the
-    // return below to a `Route` without a cast asserting what was just checked.
-    if (wrong.length > 0 || route === undefined) return `exports what this cannot read: ${wrong.join('; ')}`
-
-    if (Array.isArray(rungs)) middleware(...(rungs as Middleware[]))
-    for (const [name, register] of HOOKS) {
-        const hook = app[name]
-        if (hook !== undefined) register(hook)
-    }
-    return route
-}
-
-/**
- * Every hook an app may export, beside the function it is handed to.
- *
- * ONE table rather than a list to validate against and a block to register from, because those two
- * kept in step by hand is exactly the failure this file exists to remove: a name added to one and
- * not the other is an export that checks out and is never registered, with nothing said about it.
- */
-const HOOKS: readonly (readonly [keyof AppModule, (hook: unknown) => void])[] = [
-    ['onStart', (hook) => onStart(hook as StartHook)],
-    ['onStop', (hook) => onStop(hook as StopHook)],
-    ['onError', (hook) => onError(hook as ErrorHook)],
-    [
-        'onConfig',
-        (hook) => {
-            // The schema rides on the hook, because `onConfig` takes two things and a module export
-            // is one. An app that would rather say it in a sentence calls `onConfig(fn, { schema })`
-            // itself at module scope — the registration is on `abide/server` and this is sugar over
-            // it, exactly as `x.set(v)` stays spellable under the template sugar.
-            const schema = (hook as { schema?: Schema<Config> }).schema
-            onConfig(hook as ConfigDefaults, schema === undefined ? undefined : { schema })
-        },
-    ],
-    ['onHealth', (hook) => onHealth(hook as HealthReporter)],
-    ['onIdentity', (hook) => onIdentity(hook as IdentityResolver)],
-]
 
 /**
  * The default export as a route: the function, the `fetch` of an object, or nothing at all.
@@ -723,9 +915,10 @@ function routeOf(exported: unknown): Route | null | undefined {
  * than as a number, because `--port 70000` is a typo that would otherwise be found by a bind failing.
  *
  * Behind `portAsked`, which is what both commands call: they must not disagree about what a port IS.
- * They differ about what to do when one is TAKEN, which is a decision each makes afterwards.
+ * They differ about what to do when one is TAKEN, which is a decision each makes afterwards. The
+ * console's `serve` action reads it directly, because its refusal is not `abide serve`'s.
  */
-function portFrom(argv: string[]): number | null | string {
+export function portFrom(argv: string[]): number | null | string {
     let asked: number | null = null
     for (let at = 0; at < argv.length; at++) {
         const argument = argv[at] as string

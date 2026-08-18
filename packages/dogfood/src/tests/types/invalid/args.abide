@@ -1,0 +1,12 @@
+<script module>
+import { remote } from 'abide/runtime/transport'
+
+// An argument nothing requires may be left off; one with a REQUIRED field may not, and `Selecting`
+// is what has to keep the two apart. Nothing else asserts the second half — every call that omits an
+// argument compiles by construction, so a `Selecting` that widened to `[args?: Args]` for everything
+// would leave the whole repo green.
+export const byId = remote<{ id: number }, string>('demo/args/byId')
+export const shown = byId()
+</script>
+
+<p>{shown}</p>

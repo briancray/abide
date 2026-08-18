@@ -10,7 +10,7 @@
 // `abide deploy` exits `2` like any other word it was not given.
 
 import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
-import { BOLD, colored, DIM, paint } from './internal/paint.ts'
+import { aligned, BOLD, colored, DIM, paint } from './internal/paint.ts'
 
 /** What a command does with the arguments after its own name. The number it answers is the exit code. */
 type CommandBody = (argv: string[]) => Promise<number>
@@ -71,6 +71,18 @@ export const COMMANDS: Command[] = [
         load: async () => (await import('./internal/start.ts')).start,
     },
     {
+        name: 'console',
+        args: '[<action|endpoint> [--arg=…]]',
+        blurb: "The app's own console: its endpoints by name, plus connect/serve/health/logs. A prompt with none.",
+        load: async () => (await import('./internal/console.ts')).runConsole,
+    },
+    {
+        name: 'compile',
+        args: '[--out <path>] [--target <t>]',
+        blurb: 'ONE standalone executable — the app, its bundle and its console, via `bun build --compile`.',
+        load: async () => (await import('./internal/compile.ts')).compile,
+    },
+    {
         name: 'logs',
         args: '',
         blurb: "Tail a running app's log feed. ABIDE_APP_URL names it; ABIDE_APP_TOKEN is its bearer.",
@@ -129,10 +141,6 @@ export function takesNothing(name: string, argv: string[]): number | null {
 
 /**
  * The usage screen, built from the table above and nothing else.
- *
- * Widths come off the rows rather than a constant, so adding a longer command name lines the column
- * up instead of breaking it — the one piece of formatting worth computing, because it is the one a
- * hand-written screen always gets wrong first.
  */
 export function usage(): string {
     const on = colored()
@@ -145,10 +153,7 @@ export function usage(): string {
     }
     rows.push(['-h, --help', 'This.'])
 
-    let width = 0
-    for (const [left] of rows) if (left.length > width) width = left.length
-
     const lines = [bold('abide'), '', `${dim('usage:')} abide <command> [args…]`, '']
-    for (const [left, right] of rows) lines.push(`  ${left.padEnd(width)}  ${dim(right)}`)
+    for (const line of aligned(rows, on)) lines.push(line)
     return lines.join('\n')
 }

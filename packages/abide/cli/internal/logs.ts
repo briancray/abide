@@ -14,10 +14,11 @@
 
 import { config } from '#server/config.ts'
 import { formatLogLine, logShape } from '#shared/internal/lines.ts'
+import { under } from '#shared/internal/mount.ts'
 import { LOGS_PATH } from '#shared/internal/PATHS.ts'
 import { messageOf } from '#shared/internal/probes.ts'
 import { STREAMING } from '#shared/internal/STREAMING.ts'
-import { JSONL_TYPE, payloadOf } from '#shared/internal/wire.ts'
+import { errorMessage, JSONL_TYPE, payloadOf } from '#shared/internal/wire.ts'
 import { type LogRecord, writeLogLine } from '#shared/log.ts'
 import { CLI_EXIT_CODES, exitForStatus } from '../CLI_EXIT_CODES.ts'
 import { takesNothing } from '../COMMANDS.ts'
@@ -41,17 +42,19 @@ function appTarget(): string {
     return declared.ABIDE_APP_URL ?? declared.APP_URL ?? `http://localhost:${declared.PORT}`
 }
 
-export async function logs(argv: string[]): Promise<number> {
-    // Named around `refusal` below, which is this file's own word for what a REFUSED FEED said.
+export async function logs(argv: string[], at?: string): Promise<number> {
+    // Named around `errorMessage`, which is what a REFUSED FEED said.
     const refused = takesNothing('logs', argv)
     if (refused !== null) return refused
 
-    const base = appTarget()
+    // `at` is the console's: a session is already pointed at an app, and resolving the target a
+    // second time from the environment would tail a different one from the one the prompt names.
+    const base = at ?? appTarget()
     // Resolved UNDER whatever path the target named, rather than at its origin: `ABIDE_APP_URL` and
     // `APP_URL` both carry the app's mount, and `new URL('/__abide/logs', 'https://host/v2')` throws
     // that away and tails an address the app is not serving. Root-relative for a target with no path,
     // which is the same string it always was.
-    const address = new URL(LOGS_PATH.slice(1), base.endsWith('/') ? base : `${base}/`).href
+    const address = under(base, LOGS_PATH)
     const token = config().ABIDE_APP_TOKEN
     // A bearer if there is one. The feed itself is gated by `ABIDE_LOGS` rather than by a token — the
     // header is here for what an operator put IN FRONT of the app, which is the only thing between a
@@ -71,7 +74,7 @@ export async function logs(argv: string[]): Promise<number> {
     if (!answered.ok) {
         // Reported rather than swallowed: a 404 here means the feed is closed, and `set ABIDE_LOGS`
         // is the one thing the operator needs to read.
-        const said = refusal(await payloadOf(answered).catch(() => null))
+        const said = errorMessage(await payloadOf(answered).catch(() => null))
         console.error(`abide logs: ${address} answered ${answered.status}${said === '' ? '' : ` — ${said}`}`)
         return exitForStatus(answered.status)
     }
@@ -122,21 +125,6 @@ export async function logs(argv: string[]): Promise<number> {
     // The body ended: the app stopped, or something in the middle closed the connection. A tail whose
     // subject went away has done its job — `tail -f` on a file that is removed does not fail either.
     return CLI_EXIT_CODES.ok
-}
-
-/**
- * What a refusal actually said, out of whatever `payloadOf` made of the body.
- *
- * Every failure abide builds crosses as `{ error: { name, message } }`, so the message is read out of
- * one rather than printed as the JSON it arrived in — a person reading `abide logs:` on a terminal
- * should not have to decode a frame to find the sentence. Anything else — a proxy's HTML page, a
- * plain-text refusal — is its first line, which is as much of an unknown body as belongs on one.
- */
-function refusal(payload: unknown): string {
-    const carried = (payload as { error?: { message?: unknown } } | null)?.error?.message
-    if (typeof carried === 'string') return carried
-    if (typeof payload !== 'string') return ''
-    return payload.trim().split('\n')[0] as string
 }
 
 /**

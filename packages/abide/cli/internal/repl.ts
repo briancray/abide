@@ -30,11 +30,11 @@ import * as SURFACE from '#abide'
 import { isSource } from '#shared/internal/BRANDS.ts'
 import { internals } from '#shared/internal/graph.ts'
 import { isThenable, messageOf } from '#shared/internal/probes.ts'
-import { STREAMING } from '#shared/internal/STREAMING.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { takesNothing } from '../COMMANDS.ts'
-import { LineEditor, suggest } from './editor.ts'
+import { suggest } from './editor.ts'
 import { BOLD, colored, DIM, paint, RED } from './paint.ts'
+import { prompted as atTerminal, piped as fromPipe } from './prompt.ts'
 
 /** Both are the same width, so a continued line sits under the one that started it. */
 const PROMPT = 'abide> '
@@ -309,8 +309,7 @@ export async function repl(argv: string[]): Promise<number> {
  * errors go past, so one that threw ends `1`.
  */
 async function piped(session: Session): Promise<number> {
-    const text = await Bun.stdin.text()
-    for (const line of text.split('\n')) await session.take(line)
+    await fromPipe((line) => session.take(line))
     if (session.continuing) {
         process.stderr.write('abide repl: the input ended in the middle of a line\n')
         return CLI_EXIT_CODES.failed
@@ -319,47 +318,19 @@ async function piped(session: Session): Promise<number> {
 }
 
 async function prompted(session: Session, colors: boolean): Promise<number> {
-    process.stdout.write(banner(colors))
-
-    let leaving = false
-    const lines: string[] = []
-    const editor = new LineEditor(
+    await atTerminal(
         {
-            write: (text) => void process.stdout.write(text),
+            prompt: PROMPT,
+            banner: banner(colors),
             // Asked per KEYSTROKE, which is why `names()` holds its list: the ghost is on the repaint
             // path, and the answer can only change when a line has run.
             complete: (prefix) => suggest(prefix, session.names()),
-            onLine: (line) => void lines.push(line),
+            take: (line) => session.take(line),
             onInterrupt: () => session.abandon(),
-            onEnd: () => {
-                leaving = true
-            },
+            after: () => (session.continuing ? CONTINUE : PROMPT),
         },
         colors,
     )
-    editor.prompt = PROMPT
-    editor.refresh()
-
-    process.stdin.setRawMode(true)
-    const decoder = new TextDecoder()
-    try {
-        for await (const chunk of process.stdin) {
-            editor.feed(decoder.decode(chunk as Uint8Array, STREAMING))
-            // Reading is OUR loop, so nothing is read while a line is being evaluated and a keystroke
-            // typed during a slow one waits in the terminal's own buffer rather than in ours.
-            const ran = lines.length > 0
-            while (lines.length > 0) await session.take(lines.shift() as string)
-            if (leaving) break
-            // Only after a line: `feed` already repainted for the keystroke, and what a run leaves
-            // behind is a printed result the prompt has to be put back under.
-            if (!ran) continue
-            editor.prompt = session.continuing ? CONTINUE : PROMPT
-            editor.refresh()
-        }
-    } finally {
-        process.stdin.setRawMode(false)
-        process.stdout.write('\n')
-    }
     return CLI_EXIT_CODES.ok
 }
 

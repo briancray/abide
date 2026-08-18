@@ -2574,7 +2574,15 @@ export function emit(
     // which would otherwise become real text nodes.
     const markup = children(blocks.template, context).replace(/^\s+/, '\n').replace(/\s+$/, '\n')
     const lifted = liftTypes(replaced, declaredTypes(replacedTokens, replacedTypes))
-    const args = `args: ${signature(declared)}`
+    // A component that declares no props may be CALLED with none — `Report()` rather than `Report({})`
+    // — which is the whole of what a `.ts` route writing `render(Report(), …)` needs. The default is
+    // `{}` rather than an optional parameter because the body reads `args.children` for a `<slot/>`,
+    // and it is only for the no-props case: with a declared type, whether every member is optional is
+    // a question ABOUT that type, and a named one could not be answered without a type-checker.
+    //
+    // The inline `{#component}` arrow keeps the bare parameter. Nothing but this emitter can call one,
+    // and `component()` always hands it an object.
+    const args = declared === null ? `args: ${signature(null)} = {}` : `args: ${signature(declared)}`
 
     // `html` and the return type are always needed; everything else is imported only if the file
     // turned out to use it, so a component that never toggles a class does not import `classes`.

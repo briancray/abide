@@ -14,9 +14,9 @@
 // manifest key that existed to keep the fiction working.
 
 import { APP_HTML } from '#compiler/LAYOUT.ts'
-import { DOCUMENT_OPEN, type Shell, shell } from '#server/shell.ts'
+import { ownDocument, type Shell, shell } from '#server/shell.ts'
 import { escape } from '#shared/html.ts'
-import { mountBase, mounted, MOUNT_META } from '#shared/internal/mount.ts'
+import { MOUNT_META, mountBase, mounted } from '#shared/internal/mount.ts'
 import { CLIENT_ROUTE, type ClientAsset, type ClientManifest, GENERATED_ENTRY } from '../CLIENT_BUILD.ts'
 
 /**
@@ -29,9 +29,18 @@ import { CLIENT_ROUTE, type ClientAsset, type ClientManifest, GENERATED_ENTRY } 
  */
 export { APP_HTML }
 
-/** The document, and whether the app wrote it. `own` is only for what the command REPORTS. */
+/** The document, the lane, and whether the app wrote it. `own` is only for what the command REPORTS. */
 export interface AppShell {
+    /** The app's own document, cut, with the build's stylesheets already in the head. */
     parts: Shell
+    /**
+     * The `<meta>` and the `<script type="module">` that boot the client, held APART from the head.
+     *
+     * A page always wants them and a render outside the pages directory usually does not — `render`'s
+     * `hydrate` is that ask, and the client mounts the pages route table at the outlet, so a document
+     * carrying the lane on a path no page owns renders that table's answer over what was served.
+     */
+    lane: string
     own: boolean
 }
 
@@ -45,27 +54,39 @@ export async function appShell(
     root: string,
     manifest: ClientManifest | null,
     name: string,
+    /**
+     * The document, when the caller already has it — a compiled binary, where `app.html` is text the
+     * compile read and embedded rather than a file this process can open. `null` is that caller
+     * saying the app wrote none. Absent is every other caller: read it off the disk.
+     */
+    written?: string | null,
 ): Promise<AppShell> {
     // Read rather than probed-then-read, the rule `lane.ts` states for the same shape: `exists()` is a
     // second syscall in front of the one that already answers the question, and whether the app wrote
     // its own shell falls out of whether the read threw.
     let own = true
     let text: string
-    try {
-        text = await Bun.file(`${root}/${APP_HTML}`).text()
-    } catch (failure) {
-        // Only NOT THERE means the app wrote none. An `app.html` that is there and cannot be read is a
-        // shell somebody meant to serve, so it throws rather than being quietly replaced by abide's.
-        if ((failure as { code?: string }).code !== 'ENOENT') throw failure
-        own = false
-        text = fallback(name)
+    if (written !== undefined) {
+        own = written !== null
+        text = written ?? ownDocument(name)
+    } else {
+        try {
+            text = await Bun.file(`${root}/${APP_HTML}`).text()
+        } catch (failure) {
+            // Only NOT THERE means the app wrote none. An `app.html` that is there and cannot be read
+            // is a shell somebody meant to serve, so it throws rather than being quietly replaced by
+            // abide's.
+            if ((failure as { code?: string }).code !== 'ENOENT') throw failure
+            own = false
+            text = ownDocument(name)
+        }
     }
     const parts = shell(text)
-    // `head` is BY DEFINITION the text before `</head>`, so appending to it puts all three exactly
-    // where a second scan for `</head>` would have — found once, by the function that owns where a
-    // head ends. An app's own `<link>` is already in there and still comes first.
-    parts.head += mountMeta() + clientScript(manifest) + stylesheets(manifest)
-    return { parts, own }
+    // `head` is BY DEFINITION the text before `</head>`, so appending to it puts the stylesheets
+    // exactly where a second scan for `</head>` would have — found once, by the function that owns
+    // where a head ends. An app's own `<link>` is already in there and still comes first.
+    parts.head += stylesheets(manifest)
+    return { parts, lane: mountMeta() + clientScript(manifest), own }
 }
 
 /**
@@ -117,24 +138,3 @@ function stylesheets(manifest: ClientManifest | null): string {
     return tags
 }
 
-/**
- * What an app with no `app.html` is served in.
- *
- * Deliberately the shortest document that works, and it is here rather than in the renderer so that
- * reading it tells an app exactly what to copy into an `app.html` of its own: a head, and the slot
- * the page renders into. No script, because that is not an app's to write in either document — the
- * caller appends it to this one by the same line that appends it to a hand-written shell.
- */
-function fallback(name: string): string {
-    return (
-        // The same opening `renderDocument` wraps a bare head in, rather than a second spelling of
-        // it: there is one answer to what abide's own document is, and an app reading this one to
-        // copy into an `app.html` should be reading that answer.
-        DOCUMENT_OPEN +
-        '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-        // Through the same escaper every text node the renderer writes goes through. An app name is
-        // a package.json field or an `ABIDE_APP_NAME`, so it is text rather than markup.
-        `<title>${escape(name)}</title>` +
-        '</head><body><slot></slot></body></html>'
-    )
-}

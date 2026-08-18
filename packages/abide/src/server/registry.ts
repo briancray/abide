@@ -20,7 +20,7 @@ import {
     TAIL_PARAM,
     WAIT_PARAM,
 } from '#shared/internal/PATHS.ts'
-import { isThenable } from '#shared/internal/probes.ts'
+import { isThenable, messageOf } from '#shared/internal/probes.ts'
 import { NO_LIMIT } from '#shared/internal/timers.ts'
 import { decodeArgs, decodeForm, decodeQuery, isForm } from '#shared/internal/wire.ts'
 import { abideLog } from '#shared/log.ts'
@@ -39,7 +39,6 @@ import {
     type SocketPolicy,
     socketPolicyOf,
 } from './rpc.ts'
-import { mcp } from './mcp.ts'
 import { openapi } from './openapi.ts'
 import { server as running } from './running.ts'
 import { serveIfScoped } from './scopes.ts'
@@ -80,7 +79,7 @@ function described(request: Request): Response {
  * never sees it. The only caller a declared origin would admit is a browser, which is the exact
  * caller the mitigation exists to keep out.
  */
-function tooling(request: Request, url: URL): Response | Promise<Response> {
+async function tooling(request: Request, url: URL): Promise<Response> {
     const headers = crossOrigin(request, url, null)
     if (headers === null) {
         return refuse(`the mcp surface is not open to ${request.headers.get('origin')}`, 403)
@@ -88,6 +87,12 @@ function tooling(request: Request, url: URL): Response | Promise<Response> {
     if (request.method === 'OPTIONS') {
         return new Response(null, { status: 204, headers: headersFor(headers, NO_DEFAULTS) })
     }
+    // LAZY, and that is a bundle fact rather than a startup one: `registry.ts` is reached from
+    // `abide/server/internal`, which every demo imports for `renderToString`, so a static edge onto
+    // this module put the whole MCP projection — 14 kB, mostly protocol strings that minify badly —
+    // into the client chunks. An edge is priced by the module it lands on, and nothing else in the
+    // tree imports `mcp.ts` at all. What it costs is one dynamic import on an address a tool calls.
+    const { mcp } = await import('./mcp.ts')
     return mcp(request, url, headers)
 }
 
@@ -371,8 +376,8 @@ async function authorized(
     if (policy !== undefined) {
         // The same gate the HTTP tail runs, from the same helper: a subscribe admitted by one door and
         // refused by the other would be one socket with two security postures.
-        const why = await refused(policy, { kind: 'subscribe', room, message: undefined, request })
-        if (why !== null) return refuse(why, 403)
+        const why = await gateway(policy, { kind: 'subscribe', room, message: undefined, request })
+        if (why !== null) return refuse(why.why, why.status)
     }
     const data: SocketData = {
         id,
@@ -407,24 +412,109 @@ function roomFor(stream: AnySocket, room: unknown): Channel<unknown> {
 function overHttp(request: Request, url: URL, path: string): Response | Promise<Response> {
     const at = socketAt(request, url, path)
     if (at instanceof Response) return at
-    const { id, stream, policy, headers, room } = at
     if (request.method === 'OPTIONS') {
-        return new Response(null, { status: 204, headers: headersFor(headers, NO_DEFAULTS) })
+        return new Response(null, { status: 204, headers: headersFor(at.headers, NO_DEFAULTS) })
     }
-    if (request.method === 'GET') return tailed(request, stream, id, room, policy, headers, at.bound, at.waited)
-    if (request.method === 'POST') return sent(request, stream, id, room, policy, headers)
-    return refuse(`${id} tails on GET and takes a publish on POST`, 405, headers)
+    if (request.method === 'GET') return tailed(request, at)
+    if (request.method === 'POST') return sent(request, at)
+    return refuse(`${at.id} tails on GET and takes a publish on POST`, 405, at.headers)
 }
 
-/** The chain, with a refusal as a MESSAGE rather than a throw — both doors below answer with one. */
-async function refused(policy: SocketPolicy, event: SocketEvent<unknown, unknown>): Promise<string | null> {
+/**
+ * What a gate refused, and the status the REQUEST door says it with.
+ *
+ * A sentinel rather than a throw, because both doors answer a refusal rather than propagating one —
+ * and a class rather than a tuple so the happy path allocates nothing: `admitted` hands the message
+ * itself back, and a decoded JSON value is never one of these.
+ *
+ * The frame door reads `why` and drops; only the request door has a response to put `status` in.
+ */
+class Refusal {
+    constructor(
+        readonly why: string,
+        readonly status: number,
+    ) {}
+}
+
+/**
+ * EVERY GATE BETWEEN A READABLE MESSAGE AND THE HANDLER, IN THE ORDER BOTH DOORS RUN THEM.
+ *
+ * The declared schema, then the middleware chain — and the message that came out of them, because a
+ * gate may REPLACE what it checked. A `Refusal` is one of them refusing.
+ *
+ * Written once for the two doors, and that is the whole point: they ran the same gates in the same
+ * order and what held them in step was a comment on each saying so. A gate added to one left the
+ * other open, and nothing went red — each door on its own was still correct. `#shared/demos`'s
+ * transport suite now asserts the two AGAINST each other, and this is what makes the assertion
+ * structural rather than a thing to remember.
+ *
+ * What the doors keep is what genuinely differs: where the message came from (`await request.json()`
+ * against a `JSON.parse` of a frame), whether `clientPublish` was declared at all, what the room and
+ * the channel are, and how a refusal is SAID.
+ *
+ * Guarded rather than `async`, because the frame path runs this per MESSAGE: the ordinary socket has
+ * no middleware and a synchronous schema, and an unconditional promise wrap would cost an allocation
+ * and a tick on every inbound frame.
+ */
+function admitted(
+    policy: SocketPolicy,
+    message: unknown,
+    room: unknown,
+    request: Request,
+): unknown | Promise<unknown> {
+    const declared = policy.checkMessage
+    if (declared === null) return chained(policy, message, room, request)
+    let gated: unknown
     try {
-        const ran = authorize(policy, event)
-        if (isThenable(ran)) await ran
-        return null
+        gated = declared(message)
     } catch (refusal) {
-        return String((refusal as Error)?.message ?? refusal)
+        return new Refusal(messageOf(refusal), 422)
     }
+    if (!isThenable(gated)) return chained(policy, gated, room, request)
+    return gated.then(
+        (checked) => chained(policy, checked, room, request),
+        (refusal: unknown) => new Refusal(messageOf(refusal), 422),
+    )
+}
+
+/**
+ * The socket's own chain, as a refusal rather than a throw — `null` when it let the event through.
+ *
+ * The one place `authorize` is turned into an answer, for BOTH kinds of event: a subscribe (the
+ * upgrade and the HTTP tail) and a publish (the two doors below). A subscribe admitted by one door
+ * and refused by another would be one socket with two security postures.
+ *
+ * Guarded rather than `async`, because the publish arm runs it per FRAME and the ordinary socket has
+ * no middleware at all — `authorize` already returns synchronously for an empty chain, and an
+ * unconditional promise wrap here would throw that away.
+ */
+function gateway(
+    policy: SocketPolicy,
+    event: SocketEvent<unknown, unknown>,
+): Refusal | null | Promise<Refusal | null> {
+    let ran: void | Promise<void>
+    try {
+        ran = authorize(policy, event)
+    } catch (refusal) {
+        return new Refusal(messageOf(refusal), 403)
+    }
+    if (!isThenable(ran)) return null
+    return (ran as Promise<void>).then(
+        () => null,
+        (refusal: unknown) => new Refusal(messageOf(refusal), 403),
+    )
+}
+
+/** The last gate before the handler, and the message that came through it. */
+function chained(
+    policy: SocketPolicy,
+    message: unknown,
+    room: unknown,
+    request: Request,
+): unknown | Promise<unknown> {
+    const why = gateway(policy, { kind: 'publish', room, message, request })
+    if (!isThenable(why)) return why === null ? message : why
+    return (why as Promise<Refusal | null>).then((settled) => (settled === null ? message : settled))
 }
 
 /**
@@ -440,19 +530,11 @@ async function refused(policy: SocketPolicy, event: SocketEvent<unknown, unknown
  * bound applied from out here would leave the subscription alive on exactly the quiet rooms it is
  * for. See `TailOptions`.
  */
-async function tailed(
-    request: Request,
-    stream: AnySocket,
-    id: string,
-    room: unknown,
-    policy: SocketPolicy | undefined,
-    headers: Record<string, string>,
-    bound: string | null,
-    waited: string | null,
-): Promise<Response> {
+async function tailed(request: Request, at: SocketAddress): Promise<Response> {
+    const { id, stream, policy, headers, room, bound, waited } = at
     if (policy !== undefined) {
-        const why = await refused(policy, { kind: 'subscribe', room, message: undefined, request })
-        if (why !== null) return refuse(why, 403, headers)
+        const why = await gateway(policy, { kind: 'subscribe', room, message: undefined, request })
+        if (why !== null) return refuse(why.why, why.status, headers)
     }
     const limit = bound === null ? NO_LIMIT : Number(bound)
     if (!(limit > 0)) {
@@ -473,19 +555,11 @@ async function tailed(
  * Nothing is disclosed by saying so — whether a socket takes a client publish at all is already in
  * the published catalogue, which is what a generated surface reads to know the arm exists.
  *
- * The chain is spelled twice rather than shared, and the reason is the await: `websocket.message`
- * guards every step because it runs per FRAME, and this awaits because it answers one request. A GATE
- * ADDED HERE BELONGS THERE TOO — the failure of adding it to one is that the other door stays open,
- * and nothing about either function says so on its own.
+ * The gates themselves are `admitted`'s, shared with the frame door: what is left here is reading the
+ * message off a REQUEST, and saying a refusal as a status.
  */
-async function sent(
-    request: Request,
-    stream: AnySocket,
-    id: string,
-    room: unknown,
-    policy: SocketPolicy | undefined,
-    headers: Record<string, string>,
-): Promise<Response> {
+async function sent(request: Request, at: SocketAddress): Promise<Response> {
+    const { id, stream, policy, headers, room } = at
     if (policy === undefined || policy.clientPublish === false) {
         return refuse(`${id} is a broadcast — it does not take what a client sends`, 405, headers)
     }
@@ -496,20 +570,12 @@ async function sent(
     } catch {
         return refuse(`${id} takes one JSON message as the body`, 400, headers)
     }
-    const declared = policy.checkMessage
-    if (declared !== null) {
-        try {
-            const gated = declared(message)
-            message = isThenable(gated) ? await gated : gated
-        } catch (refusal) {
-            return refuse(String((refusal as Error)?.message ?? refusal), 422, headers)
-        }
-    }
-    const why = await refused(policy, { kind: 'publish', room, message, request })
-    if (why !== null) return refuse(why, 403, headers)
+
+    const checked = await admitted(policy, message, room, request)
+    if (checked instanceof Refusal) return refuse(checked.why, checked.status, headers)
     // The room the sender is on, resolved the same way `open` resolves it for a connection — the
     // handler is handed the channel rather than re-selecting it, exactly as `clientPublish` documents.
-    const ran = accept(message, room, roomFor(stream, room))
+    const ran = accept(checked, room, roomFor(stream, room))
     if (isThenable(ran)) await ran
     // ACCEPTED rather than "published": what happens to a client's message is `clientPublish`'s to
     // decide, and a handler that transforms it, routes it elsewhere or drops it has still taken it.
@@ -552,9 +618,9 @@ export const websocket = {
             FANOUT.delete(room)
         }
     },
-    // THE SAME GATES AS `sent`, IN THE SAME ORDER, and deliberately not shared with it: every step
-    // here is guarded rather than awaited because this runs per FRAME, where `sent` answers one
-    // request and may await. A gate added to one belongs in the other — see `sent`.
+    // THE SAME GATES AS `sent`, THROUGH THE SAME `admitted` — what is left here is reading the
+    // message off a FRAME, and dropping rather than answering. Guarded rather than awaited, because
+    // this runs per frame where `sent` answers one request.
     message(connection: ServerWebSocket<SocketData>, raw: string | Buffer): void | Promise<void> {
         // Narrowed ONCE, here, and handed down: `data.policy` is written at the upgrade and never
         // again, so re-reading it per frame past this gate was a second load and a branch that
@@ -571,21 +637,10 @@ export const websocket = {
         } catch (bad) {
             return dropped(connection, bad)
         }
-        const declared = policy.checkMessage ?? null
-        if (declared === null) return published(connection, policy, accept, message)
-        // Guarded like every other step on this path: a schema over a plain object refuses or passes
-        // in the call, and this runs once per inbound message.
-        let gated: unknown
-        try {
-            gated = declared(message)
-        } catch (refusal) {
-            return dropped(connection, refusal)
-        }
-        if (!isThenable(gated)) return published(connection, policy, accept, gated)
-        return (gated as Promise<unknown>).then(
-            (checked) => published(connection, policy, accept, checked),
-            (refusal: unknown) => dropped(connection, refusal),
-        )
+        const checked = admitted(policy, message, connection.data.room, connection.data.request)
+        // `admitted` answers a refusal rather than throwing one, so there is no rejection arm here.
+        if (!isThenable(checked)) return published(connection, accept, checked)
+        return (checked as Promise<unknown>).then((settled) => published(connection, accept, settled))
     },
 }
 
@@ -601,60 +656,29 @@ const socketLog = abideLog.channel('socket')
  */
 function dropped(connection: ServerWebSocket<SocketData>, why: unknown): void {
     socketLog.debug(
-        `${connection.data.id} dropped a client publish: ${String((why as Error)?.message ?? why)}`,
-    )
-}
-
-/** Past every gate: the chain runs, and what it lets through is what the app said to do with it. */
-function published(
-    connection: ServerWebSocket<SocketData>,
-    policy: SocketPolicy,
-    accept: (message: unknown, room: unknown, into: Channel<unknown>) => void | Promise<void>,
-    message: unknown,
-): void | Promise<void> {
-    const event: SocketEvent<unknown, unknown> = {
-        kind: 'publish',
-        room: connection.data.room,
-        message,
-        request: connection.data.request,
-    }
-    // Guarded rather than awaited: the ordinary socket has no middleware and a synchronous
-    // `clientPublish`, and this runs once per inbound message.
-    let ran: void | Promise<void>
-    try {
-        ran = authorize(policy, event)
-    } catch (refusal) {
-        return dropped(connection, refusal)
-    }
-    if (!isThenable(ran)) return accepted(connection, accept, message)
-    return ran.then(
-        () => accepted(connection, accept, message),
-        // A refusal is a drop, the same as one thrown synchronously above.
-        (refusal: unknown) => dropped(connection, refusal),
+        `${connection.data.id} dropped a client publish: ${messageOf(why)}`,
     )
 }
 
 /**
- * The handler runs, and the operator hears about it.
+ * What `admitted` let through, or what it refused.
  *
  * The counterpart to `dropped`: an operator reading `abide:socket` to find out why nothing arrives
  * cannot tell "every frame was refused" from "no frame was sent" when only the refusals are said.
- * BEFORE the handler rather than after, so a publish whose handler throws is still accounted for —
- * the line reports that the frame got through the gates, which is what the channel is answering.
- *
- * Both call sites in `published` — the sync arm and the `then` — funnel here rather than each
- * reading the room and the channel back off the connection.
+ * The line goes out BEFORE the handler rather than after, so a publish whose handler throws is still
+ * accounted for — it reports that the frame got through the gates, which is what the channel answers.
  */
-function accepted(
+function published(
     connection: ServerWebSocket<SocketData>,
     accept: (message: unknown, room: unknown, into: Channel<unknown>) => void | Promise<void>,
-    message: unknown,
+    checked: unknown,
 ): void | Promise<void> {
+    if (checked instanceof Refusal) return dropped(connection, checked.why)
     if (socketLog.enabled()) socketLog.debug(`${connection.data.id} accepted a client publish`)
     // Written by `open`, and a message cannot arrive before it: the only way past this is the socket
     // having been declared away between the handshake and the frame, and there is nothing to publish
     // into then.
     const room = connection.data.channel
     if (room === null) return
-    return accept(message, connection.data.room, room)
+    return accept(checked, connection.data.room, room)
 }

@@ -1,9 +1,9 @@
 // The four hooks a process has, and the two functions that run them.
 //
-// `middleware`, `onStart`, `onStop` and `onError` are the exports `abide dev` and `abide start` will
-// read off an app's own module. Until that binary exists they are registrations, exactly as
-// `onHealth` and `onIdentity` are, and for the same reason — so what is demonstrated here is what the
-// binary will hand each export to, not a stand-in for it.
+// `middleware`, `onStart`, `onStop` and `onError` are REGISTRATIONS, exactly as `onHealth` and
+// `onIdentity` are. An app's own `app.ts` makes these same calls at module scope and `abide dev` /
+// `abide start` register them by importing it, so what is demonstrated here is what a booting binary
+// does rather than a stand-in for it. The route is the one thing that is still an export.
 //
 // Three of the four are ONIONS, and that is the whole design: the interesting hook is the one that
 // runs on both sides of the thing it wraps. `onStart` binds the socket INSIDE itself, so an app

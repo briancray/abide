@@ -2,16 +2,15 @@
 import { catalogue } from '#server/rpc/docs/responses/answer-with-many.ts'
 import { state } from 'abide'
 
-// Nothing here decodes anything. The stub is a keyed memo whose body happens to be the request, so
-// `for await` over the call is the same loop a local async iterable gets — `application/jsonl` on
-// the response is what told it to read chunks, and each row is a value rather than a line of text.
-const rows = state<{ id: number }[]>([])
-
-const ask = async (): Promise<void> => {
-    rows = []
-    for await (const row of catalogue({})) rows = [...rows, row]
-}
+// The call IS the cell, so nothing here collects anything: a handle retains its own TRANSCRIPT and
+// `chunks()` is every line that has landed, growing as they arrive. Accumulating by hand instead —
+// `rows = [...rows, row]` around a `for await` — copies the whole list per chunk, which is quadratic
+// over a stream and is exactly the copy `chunks()` handing back the LIVE buffer exists to avoid.
+//
+// `asked` is only the trigger. A READ is what starts a load, so the rows stay off the page — and off
+// the server render — until the button has been pressed.
+const asked = state(false)
 </script>
 
-<button onclick={ask}>ask for them</button>
-<ul>{#for row of rows}<li><code>{row.id}</code></li>{/for}</ul>
+<button onclick={() => (asked = true)}>ask for them</button>
+<ul>{#if asked}{#for row of catalogue().chunks()}<li><code>{row.id}</code></li>{/for}{/if}</ul>

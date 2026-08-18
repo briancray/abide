@@ -369,16 +369,17 @@ export class Node {
             this.cleanup = typeof next === 'function' ? (next as () => void) : null
             return
         }
-        // A promise is a LOAD, not a value: keep serving what is retained and write the node when it
-        // lands. Deps read before the body's first `await` are already tracked by the run above, so
-        // a re-run re-adopts and the stale settle is discarded by generation.
-        if (isThenable(next)) {
-            adopt(this, next)
-            return
-        }
-        // …and an async iterable is a STREAM, by the same law: the value is the latest chunk.
+        // An async iterable is a STREAM: the value is the latest chunk. Asked FIRST — see
+        // `isAsyncIterable` — because a cell answers both and only this arm keeps its transcript.
         if (isAsyncIterable(next)) {
             consume(this, next)
+            return
+        }
+        // …and a promise is a LOAD, not a value: keep serving what is retained and write the node
+        // when it lands. Deps read before the body's first `await` are already tracked by the run
+        // above, so a re-run re-adopts and the stale settle is discarded by generation.
+        if (isThenable(next)) {
+            adopt(this, next)
             return
         }
         // A body that went back to a sync value clears whatever the async side was reporting.
@@ -1727,12 +1728,14 @@ function makeCell(node: Node, beforeRead: (() => void) | null): State<unknown> {
               }) as State<unknown>,
     )
     read.set = (value: unknown) => {
-        if (isThenable(value)) {
-            adopt(node, value)
-            return
-        }
+        // Stream before load — see `isAsyncIterable` for why the order is the contract and not an
+        // accident. `x = someRpcHandle` lands here, and a handle is both shapes.
         if (isAsyncIterable(value)) {
             consume(node, value)
+            return
+        }
+        if (isThenable(value)) {
+            adopt(node, value)
             return
         }
         // The third shape, and the rule reads the same as the other two: a promise is a LOAD, an
@@ -1787,10 +1790,11 @@ export function state<T>(initial: T, transform?: (value: T) => T): State<T>
 export function state(initial: unknown, transform?: (value: unknown) => unknown): any {
     const node = new Node(undefined, null)
     if (transform !== undefined) node.transform = transform
-    if (isThenable(initial)) {
-        adopt(node, initial)
-    } else if (isAsyncIterable(initial)) {
+    // Same order as `set` below, for the same reason — see `isAsyncIterable`.
+    if (isAsyncIterable(initial)) {
         consume(node, initial)
+    } else if (isThenable(initial)) {
+        adopt(node, initial)
     } else if (transform === undefined) {
         node.value = initial
         node.hasValue = true

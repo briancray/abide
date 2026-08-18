@@ -33,7 +33,7 @@ async function served(view: () => TemplateResult): Promise<HTMLElement> {
     const warm = document.createElement('div')
     mount(warm, view).dispose()
     const host = container()
-    host.innerHTML = await renderToString(view(), { hydratable: true })
+    host.innerHTML = await renderToString(view(), { hydrate: true })
     return host
 }
 
@@ -57,7 +57,7 @@ async function servedDocument(view: () => TemplateResult): Promise<HTMLElement> 
     mount(warm, view).dispose()
 
     let text = ''
-    for await (const chunk of renderDocument(SHELL, view, { hydratable: true })) text += chunk
+    for await (const chunk of renderDocument(SHELL, view, { hydrate: true })) text += chunk
 
     const host = container()
     host.innerHTML = text.slice(text.indexOf('<body>') + '<body>'.length, text.lastIndexOf('</body>'))
@@ -132,7 +132,7 @@ async function sized(n: number): Promise<Sized> {
         n,
         rows,
         view,
-        served: await renderToString(view(), { hydratable: true }),
+        served: await renderToString(view(), { hydrate: true }),
         byHand: vanilla.rowsToString(rows),
     }
 }
@@ -207,13 +207,13 @@ function roundTrip(size: Sized, note: string): Case {
                 {
                     label: 'abide — the whole trip: render + parse + adopt',
                     run: async () => {
-                        const markup = await renderToString(size.view(), { hydratable: true })
+                        const markup = await renderToString(size.view(), { hydrate: true })
                         hold(hydrate(benchHost(markup), size.view))
                     },
                 },
                 {
-                    label: '…of which the server: renderToString({ hydratable: true })',
-                    run: async () => keep(await renderToString(size.view(), { hydratable: true })),
+                    label: '…of which the server: renderToString({ hydrate: true })',
+                    run: async () => keep(await renderToString(size.view(), { hydrate: true })),
                 },
                 {
                     label: '…of which the parse: innerHTML, no adoption',
@@ -276,7 +276,7 @@ export default suite({
                     )}`
 
                 const host = container()
-                host.innerHTML = await renderToString(view(), { hydratable: true })
+                host.innerHTML = await renderToString(view(), { hydrate: true })
                 const before = host.querySelector('#keep')
                 is('the server sent the element', before !== null, true)
 
@@ -285,6 +285,41 @@ export default suite({
 
                 is('the SAME element is still there', host.querySelector('#keep') === before, true)
                 is('…and the awaiting hole landed', host.querySelector('#keep')?.textContent?.trim(), 'V')
+                host.remove()
+            },
+        },
+
+        {
+            title: 'a `{#try}` that CAUGHT on the server reaches the same arm on the client',
+            note: 'The isomorphism half of the boundary, and the one that broke first. The server\'s `{#try}` owns a buffer and catches a throw from anywhere under it, so a body that blows up in a slot thunk renders the `{:catch}` arm; the client used to catch only what running the BODY threw, and a body returns a template whose slots are thunks — so it re-ran the body, hit the same throw one level down and let it escape. A page whose server render succeeded then failed to hydrate, which is strictly worse than the original bug because only one substrate was wrong. The region cannot be ADOPTED either way: this side has to reach the throw to know which arm it is, and by then the walk has compared structure against the arm\'s markup — so it mismatches, rebuilds, and renders the arm. The claim below is that the two agree, not that no work happens.',
+            async run({ is }) {
+                const arms = {
+                    pending: undefined,
+                    then: undefined,
+                    catch: ((error: Error) => html`<b>caught: ${error.message}</b>`) as (e: unknown) => unknown,
+                    finally: undefined,
+                }
+                const blows = (): string => {
+                    throw new Error('deep')
+                }
+                // The shape a layout's `<slot/>` produces: the throw is in a THUNK, so it happens after
+                // the body returned and past the guard the boundary used to be.
+                const view = (): TemplateResult => html`${boundary(() => html`<p>${() => blows()}</p>`, arms)}`
+
+                const served = await renderToString(view(), { hydrate: true })
+                // In PIECES, because a hydratable render puts a slot marker between the arm's own text
+                // and its interpolated one — `caught: <!--[-->deep`. Asserting the joined string here
+                // would be asserting the absence of the markers this suite exists to be about.
+                is('the server rendered the arm', served.includes('caught:') && served.includes('deep'), true)
+
+                const host = container()
+                host.innerHTML = served
+                // THE CLAIM: this must not throw, and must land on the same arm. Before the client had
+                // its own guard this raised `deep` out of the mount.
+                hydrate(host, view)
+                await sleep(5)
+
+                is('the client reached it too', host.textContent?.includes('caught: deep'), true)
                 host.remove()
             },
         },
@@ -313,7 +348,7 @@ export default suite({
                 warm.remove()
 
                 const host = container()
-                host.innerHTML = await renderToString(view(), { hydratable: true })
+                host.innerHTML = await renderToString(view(), { hydrate: true })
                 is('the server wrote both arms', host.querySelector('small')?.textContent, 'asked either way')
                 const before = host.querySelector('#body')
 
@@ -406,7 +441,7 @@ export default suite({
                 host.append(
                     row(
                         button('render on the “server”, then adopt', async () => {
-                            out.innerHTML = await renderToString(view(), { hydratable: true })
+                            out.innerHTML = await renderToString(view(), { hydrate: true })
                             pane.textContent = out.innerHTML
                             const work = measure(() => void hydrate(out, view))
                             adopted = true
@@ -432,18 +467,18 @@ export default suite({
 
         {
             title: 'the markers are opt-in, and only child slots carry them',
-            note: 'A render nobody is going to hydrate should not read differently or pay for it, so `{ hydratable: true }` is asked for. An element holding an attribute slot needs no marker of its own: the prepared template and the live document agree on it POSITIONALLY, so the adopt walk finds it by shape. A child slot is the opposite — its content is a value the template does not contain, and the HTML parser would merge `<p>a${x}b</p>` into one text node.',
+            note: 'A render nobody is going to hydrate should not read differently or pay for it, so `{ hydrate: true }` is asked for. An element holding an attribute slot needs no marker of its own: the prepared template and the live document agree on it POSITIONALLY, so the adopt walk finds it by shape. A child slot is the opposite — its content is a value the template does not contain, and the HTML parser would merge `<p>a${x}b</p>` into one text node.',
             async run({ is }) {
                 const view = (): TemplateResult => html`<p class=${'card'}>a${'X'}b</p>`
                 is('plain — unchanged', await renderToString(view()), '<p class="card">aXb</p>')
                 is(
                     'hydratable — two comments around the child slot, none around the attribute',
-                    await renderToString(view(), { hydratable: true }),
+                    await renderToString(view(), { hydrate: true }),
                     '<p class="card">a<!--[-->X<!--$1-->b</p>',
                 )
                 // The pair is what stops the parser handing back one text node instead of three.
                 const host = container()
-                host.innerHTML = await renderToString(view(), { hydratable: true })
+                host.innerHTML = await renderToString(view(), { hydrate: true })
                 is('three text nodes, not one', host.querySelector('p')?.childNodes.length, 5)
                 host.remove()
             },
@@ -456,7 +491,7 @@ export default suite({
                 const shown = state<unknown>('first')
                 const view = (): TemplateResult => html`<p>a${() => shown()}b</p>`
                 const host = container()
-                host.innerHTML = await renderToString(view(), { hydratable: true })
+                host.innerHTML = await renderToString(view(), { hydrate: true })
                 is('the server wrote an opening marker', host.innerHTML.includes('<!--[-->'), true)
 
                 hydrate(host, view)
@@ -482,7 +517,7 @@ export default suite({
                 const empty = state<unknown>('')
                 const emptyView = (): TemplateResult => html`<p>a${() => empty()}b</p>`
                 const bare = container()
-                bare.innerHTML = await renderToString(emptyView(), { hydratable: true })
+                bare.innerHTML = await renderToString(emptyView(), { hydrate: true })
                 is('an empty range still gets a marker', bare.innerHTML.includes('<!--[-->'), true)
                 is('…and holds no nodes', bare.innerHTML.includes('<!--[--><!--$'), true)
 
@@ -531,7 +566,7 @@ export default suite({
                     built.remove()
 
                     const adopted = container()
-                    adopted.innerHTML = await renderToString(view(), { hydratable: true })
+                    adopted.innerHTML = await renderToString(view(), { hydrate: true })
                     hydrate(adopted, view)
                     await tick()
                     is(`${name} — adopted`, strip(adopted.innerHTML), expected)
@@ -576,7 +611,7 @@ export default suite({
                     built.remove()
 
                     const adopted = container()
-                    adopted.innerHTML = await renderToString(view(), { hydratable: true })
+                    adopted.innerHTML = await renderToString(view(), { hydrate: true })
                     hydrate(adopted, view)
                     await tick()
                     is(`${name} — adopted matches the server`, strip(adopted.innerHTML), expected)
@@ -595,7 +630,7 @@ export default suite({
                 const view = (): TemplateResult =>
                     html`<div>${() => rows().map((n) => keyed(n, html`${() => `p${n}`}<b>h${n}</b>`))}</div>`
                 const host = container()
-                host.innerHTML = await renderToString(view(), { hydratable: true })
+                host.innerHTML = await renderToString(view(), { hydrate: true })
                 hydrate(host, view)
                 await tick()
                 const opened = (markup: string): number => (markup.match(/<!--\[-->/g) ?? []).length
@@ -630,7 +665,7 @@ export default suite({
                               )
                             : 'gone'}</div>`
                 const host = container()
-                host.innerHTML = await renderToString(rowsView(), { hydratable: true })
+                host.innerHTML = await renderToString(rowsView(), { hydrate: true })
                 hydrate(host, rowsView)
                 await tick()
                 is('adopted the server’s rows', host.textContent, 'kepth1p1h2p2h3p3')
@@ -656,7 +691,7 @@ export default suite({
                               )
                             : 'gone'}</div>`
                 const grown = container()
-                grown.innerHTML = await renderToString(grownView(), { hydratable: true })
+                grown.innerHTML = await renderToString(grownView(), { hydrate: true })
                 hydrate(grown, grownView)
                 await tick()
                 sub.set([1, 2, 3])
@@ -713,7 +748,7 @@ export default suite({
                 host.append(
                     row(
                         button('server render + adopt 200 rows', async () => {
-                            out.innerHTML = await renderToString(view(), { hydratable: true })
+                            out.innerHTML = await renderToString(view(), { hydrate: true })
                             const work = measure(() => void hydrate(out, view))
                             log.live('adopt 200 rows', nonZero(work))
                         }),
@@ -856,7 +891,7 @@ export default suite({
                 const host = container()
                 host.innerHTML = await renderToString(
                     html`<p>${() => awaited('from the server', arms)}</p>`,
-                    { hydratable: true },
+                    { hydrate: true },
                 )
                 is('the server painted the settled arm', host.textContent, 'from the server')
 
@@ -1010,7 +1045,7 @@ export default suite({
                 // attribute — the prepare, billed to the hydrate.
                 mount(document.createElement('div'), view).dispose()
 
-                await frame.write(`<!doctype html><html><body>${await renderToString(view(), { hydratable: true })}</body></html>`)
+                await frame.write(`<!doctype html><html><body>${await renderToString(view(), { hydrate: true })}</body></html>`)
                 const root = frame.document.body
                 is('the server’s markup is in the frame', root.querySelector('p')?.textContent, 'hello ada!')
                 const paragraph = root.querySelector('p')

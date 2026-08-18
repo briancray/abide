@@ -2525,6 +2525,33 @@ export default suite({
         },
 
         {
+            title: 'a component that declares no props is CALLED with none',
+            note: 'The emitted parameter defaults to `{}`, so a `.ts` caller writes `Report()` rather than `Report({})` — which is the only spelling that reads right in a route, since `render(Report(), { shell: true })` is about the component and the empty object is about nothing. Only when there are NO props: with a declared type, whether every member is optional is a question about the TYPE, and answering it for a named one needs a checker — which nothing in the emit path may have. A DEFAULT rather than an optional parameter, because the body reads `args.children` for a `<slot/>` and an absent `args` would throw where a component simply has no children.',
+            run({ is }) {
+                const none = compile('<p>plain</p>', { filename: 'Report.abide' }).code
+                is(
+                    'no props, so the parameter has a default',
+                    none.includes('export default function Report(args: { children?: unknown } = {}): TemplateResult'),
+                    true,
+                )
+
+                // Declared props are the other half of the same claim, and they are what stops this
+                // being "always optional": a caller that forgot a required prop must still be wrong
+                // where it wrote the call.
+                const some = compile(
+                    "<script>\nimport { props } from 'abide'\nconst { row } = props<{ row: string }>()\n</script>\n<li>{row}</li>\n",
+                    { filename: 'Row.abide' },
+                ).code
+                is(
+                    'declared props, so the caller passes them',
+                    some.includes('export default function Row(args: Props$<{ row: string }> & { children?: unknown }): TemplateResult'),
+                    true,
+                )
+                is('and no default was written for them', some.includes('& { children?: unknown } = {}'), false)
+            },
+        },
+
+        {
             title: 'the header splits by who WRITES the name, not by what it does',
             note: '`abide` is what an author types and `abide/runtime` is what only the emitter does, so a name appearing in generated output and never in a source file is off the surface an app reads. `html` and `raw` are the two names on both sides — the template TAG and the escape HATCH, both of which a hand-written `.ts` component also writes — so they stay on `abide` and merge with the author’s own import, which is why no cross-module dedupe is needed. `keyed` reads like authoring vocabulary and is not: a key is spelled `by` on a `{#for}`, which is a SPELLING the emitter translates.',
             run({ is, log }) {

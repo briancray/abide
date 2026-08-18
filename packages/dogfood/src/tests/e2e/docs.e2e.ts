@@ -59,6 +59,22 @@ async function sourcesAreOnThePage(page: Page, name: string, rungs: number): Pro
         })
         expect(fits, `${where}: the source pane runs past the column that holds it`).toBe(true)
 
+        // The PREVIEW's half of the same claim, and it is not the pane's mirror image: a rung is two
+        // grid columns, so what the preview overflows is not the page but the SOURCE PANE next to it,
+        // and the sideways-scroll check above sees none of it. A `<form>` whose file input has a
+        // min-content wider than the column put a button 106px under `.files`, where the page rendered
+        // perfectly and the click landed on a comment span — which is a rung nobody can press.
+        const contained = await rung.evaluate((el) => {
+            const preview = el.querySelector('.rung-preview')
+            if (preview === null) return true
+            const edge = preview.getBoundingClientRect().right
+            for (const child of preview.children) {
+                if (child.getBoundingClientRect().right > edge + 1) return false
+            }
+            return true
+        })
+        expect(contained, `${where}: the preview runs past the column that holds it`).toBe(true)
+
         // A tab strip is two tabs or no strip at all. One tab is chrome that says nothing, and three
         // means a rung grew a file the page has no vocabulary for.
         const tabs = rung.locator('.tab')
@@ -207,6 +223,93 @@ test('a mounted rung is live, not a picture of itself', async ({ page }) => {
     await expect(line).toHaveText(/count 1/)
 })
 
+test('a form rung posts both spellings at one endpoint', async ({ page, complaints }) => {
+    // The claim `/docs/POST`'s form rung makes is that a body no stub encoded arrives as ARGUMENTS,
+    // and neither half of it is reachable headless: a `<form>` only serialises the way a browser
+    // serialises it, and only a browser can put a real file on a file input.
+    await page.goto('/docs/POST')
+    await interactive(page)
+
+    // Located by its own buttons rather than by `data-rung="4"`: this page filters the transport
+    // ladder down to the rungs `of: ['POST']`, so the index moves whenever any of them does.
+    const rung = page
+        .locator('[data-rung]')
+        .filter({ has: page.getByRole('button', { name: 'post it as multipart' }) })
+    const answer = rung.locator('.rung-preview pre')
+    await expect(answer).toHaveText('nothing sent yet')
+
+    await rung.locator('input[type="file"]').setInputFiles({
+        name: 'august.md',
+        mimeType: 'text/markdown',
+        buffer: Buffer.from('# august\n'),
+    })
+
+    // Multipart: the declared shape read `36` as a number, the repeated `tags` as a list, and the
+    // file — which is the one thing this spelling can carry — landed on the declared `File`.
+    await rung.getByRole('button', { name: 'post it as multipart' }).click()
+    await expect(answer).toHaveText(
+        'multipart — {"name":"ada","age":36,"tags":["x","y"],"isNumber":true,"avatar":{"name":"august.md","bytes":9}}',
+    )
+
+    // The other spelling at the SAME address with the SAME field names, differing only where the two
+    // genuinely differ: `avatar` is null because urlencoded has nowhere to put the file.
+    await rung.getByRole('button', { name: 'post it urlencoded' }).click()
+    await expect(answer).toHaveText(
+        'urlencoded — {"name":"ada","age":36,"tags":["x","y"],"isNumber":true,"avatar":null}',
+    )
+
+    expect(complaints.unexpected(), 'the form rung logged errors').toEqual([])
+})
+
+test('a framed rung fills from the handle\'s own transcript', async ({ page, complaints }) => {
+    // The rung that reads a `jsonl()` body through the STUB, which is the half `/docs/sse`'s test
+    // below does not cover — it presses the `EventSource` rung. Both rungs are one line apart on
+    // purpose, so this is also what says the pair still differ only in their import.
+    //
+    // Worth a browser rather than a `run` face for the reason the rungs were rewritten: they used to
+    // accumulate with `rows = [...rows, row]` around a `for await`, and now they render
+    // `catalogue().chunks()` — the handle's LIVE transcript — behind an `{#if}` the button opens. That
+    // a growing buffer with a version behind it still wakes a `{#for}` per chunk is a claim about the
+    // render path, and the render path is only real here.
+    await page.goto('/docs/jsonl')
+    await interactive(page)
+
+    const rung = page.locator('[data-rung="1"]')
+    const rows = rung.locator('.rung-preview li')
+    // A READ starts the load, so nothing has been asked for yet — which is also what keeps the rpc
+    // off the server render of this page.
+    await expect(rows).toHaveCount(0)
+
+    await rung.getByRole('button', { name: 'ask for them' }).click()
+    await expect(rows).toHaveCount(3, { timeout: 15_000 })
+    // Exact and case-sensitive, and the LAST row, so a transcript that delivered one chunk and
+    // stopped waking readers cannot read as a pass.
+    await expect(rows.last()).toHaveText('3')
+
+    expect(complaints.unexpected(), 'jsonl logged errors').toEqual([])
+})
+
+test('a template for-await rung appends its rows one at a time', async ({ page, complaints }) => {
+    // `{#for await}` in a block head, over a source that PAUSES between rows — which is the half a
+    // headless lane cannot make, because what the rung claims is that the page is complete after each
+    // row rather than after the last. Counting only the final five would pass against a loop that
+    // collected the whole stream and rendered it once, so the count is read WHILE it fills.
+    await page.goto('/docs/jsonl')
+    await interactive(page)
+
+    const rung = page.locator('[data-rung="2"]')
+    const rows = rung.locator('.rung-preview li')
+    await expect(rows).toHaveCount(0)
+
+    await rung.getByRole('button', { name: 'ask for them' }).click()
+    // Partway: the source pauses 150ms per row, so a page that only paints at the end cannot be here.
+    await expect(rows).toHaveCount(1, { timeout: 10_000 })
+    await expect(rows).toHaveCount(5, { timeout: 15_000 })
+    await expect(rows.last()).toHaveText('5')
+
+    expect(complaints.unexpected(), 'the template loop logged errors').toEqual([])
+})
+
 test('an sse rung actually receives its events, over a real EventSource', async ({ page, complaints }) => {
     // The one claim on `/docs/sse` that no headless lane can make at all. Rung 2 reads the stream
     // through the stub, which `bun test` already proves in-process; rung 3 hands the ADDRESS to the
@@ -234,6 +337,48 @@ test('an sse rung actually receives its events, over a real EventSource', async 
     await expect(rows.last()).toHaveText('{"at":5}')
 
     expect(complaints.unexpected(), 'sse logged errors').toEqual([])
+})
+
+test('a render rung answers in the APP’s own document, and one in its own', async ({ page, complaints }) => {
+    // `shell: true` is the only claim on `/docs/render` that no headless lane can make: the app's
+    // document is published by BOOT — `app.html` off the disk, with the stylesheets the build wrote —
+    // so `bun test` renders abide's own fallback and a served route renders this app's. Both rungs are
+    // driven here, because what they are worth is the DIFFERENCE: same report, same scoped rules, and
+    // everything around them is the app's in one and the route's in the other.
+    await page.goto('/docs/render')
+    await interactive(page)
+
+    const apps = page.locator('[data-rung="3"] .rung-preview pre')
+    await expect(apps).toHaveText('nothing asked yet')
+    await page.locator('[data-rung="3"]').getByRole('button', { name: 'shell' }).click()
+    // The app's own head, which is what `shell: true` MEANS — the title is `app.html`'s and nothing
+    // else in the repo writes it.
+    await expect(apps).toContainText('<title>abide dogfood</title>')
+    // The stylesheets are the build's, so this is also the assertion that a served route reaches the
+    // manifest rather than a document parsed from source alone.
+    await expect(apps).toContainText('<link rel="stylesheet"')
+    // The component's own scoped block, in the head — the one thing a hand-written doctype could not
+    // carry, and the reason the option exists.
+    await expect(apps).toContainText('tabular-nums')
+    // The opening tag alone, because a component carrying a scoped block has its scope attribute
+    // stamped on every element of it — which is the same fact `tabular-nums` above is about.
+    await expect(apps).toContainText('<slot><h1 data-a')
+    await expect(apps).toContainText('41 open · 7 closed')
+    // Off by default, and it stays off: the client mounts the pages route table at the outlet, and
+    // this path is not in it.
+    await expect(apps).not.toContainText('<script type="module"')
+
+    const own = page.locator('[data-rung="4"] .rung-preview pre')
+    await page.locator('[data-rung="4"]').getByRole('button', { name: 'shell' }).click()
+    await expect(own).toContainText('<title>may — filed</title>')
+    await expect(own).toContainText('<body class="filed">')
+    // The same scoped rules in a document that knows nothing about them, which is what makes the
+    // styles the RENDER's business rather than the shell's.
+    await expect(own).toContainText('tabular-nums')
+    // The app's document did not leak into the route's own.
+    await expect(own).not.toContainText('abide dogfood')
+
+    expect(complaints.unexpected(), 'the render rungs logged errors').toEqual([])
 })
 
 test('a preview scrolls a long line rather than painting across the page', async ({ page, complaints }) => {
@@ -297,6 +442,65 @@ test('a preview that answers in prose is not painted as code', async ({ page, co
     expect(runs, `the refusal is painted as JavaScript in ${runs} places`).toBe(0)
 
     expect(complaints.unexpected(), 'identity logged errors').toEqual([])
+})
+
+test('the exporting rung shapes a real span out of this app’s own middleware', async ({ page, complaints }) => {
+    // `/docs/trace`'s last rung, and the only claim on that page that a headless lane cannot make: the
+    // rung is really in `packages/dogfood/app.ts`'s middleware array, so what comes back was shaped by
+    // THIS process answering a request rather than by a fixture building a record.
+    await page.goto('/docs/trace')
+    await interactive(page)
+
+    // Third on the page — `trace` slices rungs 4, 10 and 11 out of the `request` ladder.
+    const rung = page.locator('[data-rung="3"]')
+    const answer = rung.locator('.rung-preview pre')
+    const press = rung.getByRole('button', { name: 'what would have been posted' })
+
+    await press.click()
+    // The two ids are the point: they are what `traceresponse` handed the caller, so a record carrying
+    // them is one a backend can stitch to. 32 and 16 hex, which is what makes this more than "not null".
+    await expect(answer).toContainText(/"traceId": "[0-9a-f]{32}"/)
+    await expect(answer).toContainText(/"spanId": "[0-9a-f]{16}"/)
+    // Shaped as OTLP rather than as whatever was handy: nanoseconds as a STRING, and `SERVER` kind.
+    await expect(answer).toContainText(/"startTimeUnixNano": "\d{19}"/)
+    await expect(answer).toContainText('"kind": 2')
+
+    // A second press is a second request, so the span it reports is a DIFFERENT hop — which is what
+    // says this is being shaped per request rather than built once and cached.
+    const first = (await answer.textContent()) ?? ''
+    await press.click()
+    await expect(answer).not.toHaveText(first)
+
+    expect(complaints.unexpected(), 'the exporting rung logged errors').toEqual([])
+})
+
+test('the policy page shows both halves — the one nobody asked for, and the one `csp()` adds', async ({
+    page,
+    complaints,
+}) => {
+    // `/docs/csp` used to be one rung about the middleware, which left a reader with no way to learn
+    // that a page carries a policy WITHOUT it. Two rungs now, and the diff between the two answers is
+    // the whole claim — so both are pressed here, in the browser that enforces the second one.
+    await page.goto('/docs/csp')
+    await interactive(page)
+
+    const free = page.locator('[data-rung="1"]')
+    await free.getByRole('button', { name: 'what a page carries with nothing installed' }).click()
+    // EXACT, because "contains `object-src`" would also pass against `csp()`'s eleven-directive
+    // baseline — which is the one wrong answer this rung could give.
+    const already = free.locator('.rung-preview pre')
+    await expect(already).toContainText('"policy": "object-src \'none\'; base-uri \'self\'"')
+
+    const opted = page.locator('[data-rung="2"]')
+    await opted.getByRole('button', { name: 'read the policy this page was served under' }).click()
+    const served = opted.locator('.rung-preview pre')
+    // This app installs `csp()`, so the document this test is reading was served under the whole
+    // thing: the two free directives are still in it, and so is the nonce that only a render can mint.
+    await expect(served).toContainText("object-src 'none'")
+    await expect(served).toContainText("base-uri 'self'")
+    await expect(served).toContainText(/script-src 'self' 'nonce-[\w-]{22}'/)
+
+    expect(complaints.unexpected(), 'csp logged errors').toEqual([])
 })
 
 test('a name abide does not export is a 404, not an apology', async ({ page }) => {

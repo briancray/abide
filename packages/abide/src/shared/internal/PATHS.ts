@@ -156,3 +156,15 @@ export const NAVIGATION_FROM_HEADER = 'x-abide-navigation-from'
  * own table would be a second implementation of one rule to keep in step.
  */
 export const NAVIGATION_DEPTH_HEADER = 'x-abide-navigation-depth'
+
+/**
+ * The failure an `error.abide` was rendered FROM, when the answer is one — `{"name","message"}` as
+ * JSON, URI-encoded, because a header is latin-1 and a message is whatever an app threw.
+ *
+ * The status is NOT in it: the response already carries one, and a second copy is a second thing to
+ * keep in step. What the client cannot get from the response is the other two, and it needs them for
+ * the reason every other served navigation needs the server's own markup — the view it runs to CLAIM
+ * those nodes has to produce the same text, and a message it guessed at is a rebuild of a region it
+ * was handed correctly.
+ */
+export const NAVIGATION_FAILURE_HEADER = 'x-abide-failure'

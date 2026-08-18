@@ -22,3 +22,20 @@ export function paint(text: string, code: string, on: boolean): string {
 export function plural(count: number, word: string): string {
     return `${count} ${word}${count === 1 ? '' : 's'}`
 }
+
+/**
+ * A two-column screen: the left column padded to the widest entry, the right one dim.
+ *
+ * The width comes off the rows rather than a constant, so a longer name lines the column up instead
+ * of breaking it — the one piece of formatting worth computing, because it is the one a hand-written
+ * screen always gets wrong first. Here rather than in either table, because there are two of them:
+ * `COMMANDS.ts` is this binary's subcommands and `ACTIONS.ts` is the console's, and a column that
+ * lined up differently between them would be two answers to one question.
+ */
+export function aligned(rows: [string, string][], on: boolean): string[] {
+    let width = 0
+    for (const [left] of rows) if (left.length > width) width = left.length
+    const lines: string[] = []
+    for (const [left, right] of rows) lines.push(`  ${left.padEnd(width)}  ${paint(right, DIM, on)}`)
+    return lines
+}

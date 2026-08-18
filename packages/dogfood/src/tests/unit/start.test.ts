@@ -13,8 +13,9 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { CLIENT_ROUTE, type ClientManifest, GENERATED_ENTRY, MANIFEST_FILE } from 'abide/cli'
+import { CLIENT_ROUTE, type ClientManifest, GENERATED_ENTRY } from 'abide/cli'
 import { abide, BINARY, ended, type Running, spawn, started } from 'harness/spawn'
+import { builtManifest } from '#tests/builtApp.ts'
 import { APP_ROOT as ROOT } from '#tests/PATHS.ts'
 
 let app: Running
@@ -27,9 +28,10 @@ let entry: string
 // about a port being taken, and it takes one it holds itself.
 
 beforeAll(async () => {
-    const built = await abide(['build'], { cwd: ROOT })
-    expect(built.code).toBe(0)
-    manifest = (await Bun.file(`${ROOT}/${MANIFEST_FILE}`).json()) as ClientManifest
+    // Read rather than built — see `#tests/builtApp.ts`. This file is about what `start` SERVES, and
+    // a build of its own is what made it race `mount.test.ts` for one directory the moment the suite
+    // stopped running one file at a time.
+    manifest = await builtManifest()
     entry = manifest.entries[GENERATED_ENTRY] as string
     app = await started(['start', '--port', '0'], ROOT)
 }, 30_000)
@@ -257,9 +259,14 @@ test('a path that is no route is a 404, and a method that is no page falls throu
     // ABIDE's: nothing in the pages directory matches `/nowhere` at all, so the router answers. There is
     // no catch-all any more — `[suite]` used to sit at the ROOT and match every single-segment path, so
     // this used to be the app's answer rather than the framework's.
+    //
+    // A DOCUMENT rather than the JSON frame, because this app writes a `pages/error.abide` — the
+    // framework's own refusal is still what an app without one gets, and the POST below is where it is
+    // still asserted on this same server.
     const missing = await fetch(`${app.base}nowhere`)
     expect(missing.status).toBe(404)
-    expect(((await missing.json()) as { error: { name: string } }).error.name).toBe('AbideRouteError')
+    expect(missing.headers.get('content-type')).toContain('text/html')
+    expect(await missing.text()).toContain('nothing is served here')
 
     // The APP's: `/docs/[callable]` matches anything in its one segment, so the only half of this app
     // that knows `nowhere` is not a name abide exports is `app.ts`, asked before the pages.
@@ -539,11 +546,22 @@ test('what makes a directory an app: nothing refuses, pages with no build refuse
         expect(unbuilt.code).toBe(1)
         expect(unbuilt.err).toContain('run `abide build`')
 
+        // Through the link the dogfood app itself resolves `abide` by, rather than a relative path into
+        // the framework: a fixture is an app, and an app reads the public specifier and its exports
+        // map. `node_modules` because that is where a resolver looks, wherever the fixture landed.
+        // Made HERE because the module below registers a hook, and a registration is a call — an app
+        // that says something about itself is one that imported the name it says it with.
+        await mkdir(`${empty}/node_modules`, { recursive: true })
+        await symlink(`${ROOT}/node_modules/abide`, `${empty}/node_modules/abide`)
+
         // And the shape that is NOT a mistake: no pages, and a module that exports no route at all.
         // That is an app made of endpoints, and it comes up — `/__abide/**` is served without the app
         // mounting anything, which is the whole reason this is allowed to start.
         await rm(`${empty}/src/ui/pages`, { recursive: true })
-        await Bun.write(`${empty}/src/server/app.ts`, 'export const onHealth = (): unknown => ({ empty: true })\n')
+        await Bun.write(
+            `${empty}/src/server/app.ts`,
+            "import { onHealth } from 'abide/server'\n\nonHealth((): unknown => ({ empty: true }))\n",
+        )
         const endpoints = await started(['start', '--port', '0'], empty)
         try {
             const account = (await (await fetch(`${endpoints.base}__abide/health`)).json()) as {
@@ -566,12 +584,6 @@ test('what makes a directory an app: nothing refuses, pages with no build refuse
             `${empty}/src/server/rpc/ping.ts`,
             "import { GET } from 'abide/server'\n\nexport const ping = GET((): unknown => ({ pong: true }))\n",
         )
-        // Through the link the dogfood app itself resolves `abide` by, rather than a relative path into
-        // the framework: a fixture is an app, and an app reads the public specifier and its exports
-        // map. `node_modules` because that is where a resolver looks, wherever the fixture landed.
-        await mkdir(`${empty}/node_modules`, { recursive: true })
-        await symlink(`${ROOT}/node_modules/abide`, `${empty}/node_modules/abide`)
-
         const bare = await started(['start', '--port', '0'], empty)
         try {
             const pong = (await (await fetch(`${bare.base}__abide/rpc/ping/ping`)).json()) as {
@@ -647,6 +659,24 @@ test('a BIG answer is compressed too, a small one is not, and a framed one is le
     expect(framed.headers.get('content-type')).toContain('ndjson')
     expect(framed.headers.get('content-encoding')).toBeNull()
     await framed.text()
+
+    // …and the framing whose type is a PREFIX of one on the list, which is the hole the assertion
+    // above could not see: `application/jsonl` starts with `application/json`, so `startsWith`
+    // admitted the one framing the allow-list names as excluded. The body was buffered whole to be
+    // measured and five rows produced 150 ms apart arrived together at 763 ms. Nothing was red — a
+    // buffered stream is the same bytes, and only the arrival time says otherwise.
+    const lines = await fetch(
+        `${app.base}__abide/rpc/docs/responses/answer-as-they-arrive/arriving?__abide_args=%7B%7D`,
+        { headers: { 'accept-encoding': 'gzip' } },
+    )
+    expect(lines.headers.get('content-type')).toContain('jsonl')
+    expect(lines.headers.get('content-encoding')).toBeNull()
+    // The PAUSING source, not `answer-with-many`: a generator that never suspends has its whole body
+    // enqueued before the response goes out, so the runtime writes a length on it either way and the
+    // assertion below cannot tell buffering from a stream that simply finished. 150 ms a row is what
+    // makes a length proof of somebody having waited for the last one.
+    expect(lines.headers.get('content-length')).toBeNull()
+    await lines.text()
 })
 
 /**
@@ -926,4 +956,63 @@ test('a nonce carrier is in the head even when the render had no scoped block', 
     // take a nonce from — so its rules were refused and the component rendered unstyled.
     const markup = await (await fetch(`${app.base}streaming?ms=50`)).text()
     expect(markup).toContain('data-abide=""')
+})
+
+test('a path nothing serves renders the app’s own error page, not a JSON refusal', async () => {
+    // The 404 an app WRITES, as against the one abide falls back to. `pages/error.abide` is picked up
+    // by the same scan as `page.abide` and rendered through the same shell, so what comes back is a
+    // document — with the status still 404, because an error page that answered 200 is a broken link
+    // every crawler would index.
+    const answered = await fetch(`${app.base}nothing-is-served-here`)
+    expect(answered.status).toBe(404)
+    expect(answered.headers.get('content-type')).toContain('text/html')
+
+    const markup = await answered.text()
+    // The page's own words, and the failure it was handed — the message names the path, which is what
+    // makes this the failure rather than a static file that happens to say 404.
+    expect(markup).toContain('nothing is served here')
+    expect(markup).toContain('/nothing-is-served-here')
+    // A DOCUMENT: the shell is around it, so the error page is hydratable like any other page rather
+    // than a bare fragment written into the socket.
+    expect(markup).toContain('<!doctype html>')
+    // And the LAYOUT above it. This is the half a plain-text refusal cannot have — a 404 that kept
+    // the app's chrome is a page a reader can navigate out of, which is the whole reason an error
+    // page is a page.
+    expect(markup).toContain('site-header')
+    expect(markup).toContain('site-footer')
+})
+
+test('a navigation onto a path nothing serves is answered as a marked fragment', async () => {
+    // The half of the client-side 404 that is not browser-only: what the SERVER sends when the
+    // navigation header is on the request. A document here is what made the client hand the URL to
+    // the browser and reload — it cannot place a second `<head>` into a page it is already showing.
+    const answered = await fetch(`${app.base}nothing-is-served-here`, {
+        headers: { 'x-abide-navigation': '1' },
+    })
+    expect(answered.status).toBe(404)
+    expect(answered.headers.get('x-abide-navigation')).toBe('1')
+
+    // The failure it was rendered from, so the client's own render produces the same text and CLAIMS
+    // the nodes rather than rebuilding them. The NAME and the MESSAGE and nothing else: the status is
+    // already on the response above, and the header carrying a second copy was a second thing to keep
+    // in step — see `failureHeader`.
+    const said = JSON.parse(decodeURIComponent(answered.headers.get('x-abide-failure') as string)) as {
+        status?: number
+        name: string
+        message: string
+    }
+    expect(said.status).toBeUndefined()
+    expect(said.name).toBe('AbideRouteError')
+    expect(said.message).toContain('/nothing-is-served-here')
+
+    // A FRAGMENT: the outlet on its own, with no document around it.
+    const markup = await answered.text()
+    expect(markup).toContain('nothing is served here')
+    expect(markup).not.toContain('<!doctype html>')
+    expect(markup).not.toContain('<script type="module"')
+    // WITH the layouts, and that is not a leak: they render INSIDE the outlet's range, so a depth-0
+    // answer is the whole of what that range holds. An error page has no route name, so there are no
+    // two entries to compare and no honest depth to send — it pays a layout re-render that an
+    // ordinary navigation between two known routes does not.
+    expect(markup).toContain('site-header')
 })

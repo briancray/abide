@@ -24,7 +24,7 @@ test('the prover can still SEE a rebuild — the negative control', async () => 
     // permanent instead — a subject whose server markup is deliberately not what the client builds.
     // If the counters ever stop noticing a rebuild, this goes green and the whole sweep is worthless.
     const served = container()
-    served.innerHTML = await renderToString(html`<p>what the server wrote</p>`, { hydratable: true })
+    served.innerHTML = await renderToString(html`<p>what the server wrote</p>`, { hydrate: true })
 
     const other = (): TemplateResult => html`<section>something else entirely</section>`
     const work = measure(() => void hydrate(served, other))

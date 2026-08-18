@@ -30,12 +30,19 @@
 // machinery on every rpc line to buy nothing.
 
 import { PATCH_FORM, PIECE_END, placeholderId } from '#shared/internal/MARKERS.ts'
-import { NAVIGATION_DEPTH_HEADER, NAVIGATION_FROM_HEADER, NAVIGATION_HEADER } from '#shared/internal/PATHS.ts'
+import {
+    NAVIGATION_DEPTH_HEADER,
+    NAVIGATION_FAILURE_HEADER,
+    NAVIGATION_FROM_HEADER,
+    NAVIGATION_HEADER,
+} from '#shared/internal/PATHS.ts'
 import { addSeeds, SEED_ELEMENT_ID } from '#shared/internal/seed.ts'
 import { STREAMING } from '#shared/internal/STREAMING.ts'
 import { abideLog } from '#shared/log.ts'
 import {
     type Entered,
+    type Failure,
+    failureFrom,
     type NavigationSink,
     outletChain,
     placeableRouteName,
@@ -163,6 +170,22 @@ class Filling {
     }
 }
 
+/**
+ * The failure an `error.abide` answer was rendered from, or `null` for an ordinary page.
+ *
+ * Guarded rather than trusted: this is a header, so it is whatever reached us. A malformed one is a
+ * navigation that still paints — the range is already correct markup — so it must not throw, and the
+ * route simply commits as an unrendered miss.
+ */
+function failureOf(answered: Response): Failure | null {
+    const held = answered.headers.get(NAVIGATION_FAILURE_HEADER)
+    if (held === null) return null
+    // The status off the RESPONSE, which is the one that carries it — see `failureHeader`.
+    const said = failureFrom(held, answered.status)
+    if (said === null) navigateLog.warning('the answer carried a failure header this side could not read')
+    return said
+}
+
 class DocumentNavigation implements NavigationSink {
     constructor(private readonly part: ChildPart) {}
 
@@ -194,9 +217,11 @@ class DocumentNavigation implements NavigationSink {
         // browser renders that response rather than this side inventing a second refusal beside it.
         const landed = new URL(answered.url, url)
         const body = answered.body
-        if (!answered.ok || answered.headers.get(NAVIGATION_HEADER) === null || body === null) {
-            return this.leave(url)
-        }
+        // THE MARK DECIDES, not the status. A marked answer is one abide RENDERED for this URL — an
+        // `error.abide` at a 404 is still a page, and handing it to the browser meant reloading the
+        // document to show markup already in hand. An unmarked answer is what this side cannot place:
+        // an app's own route answering with something that is not a page, or a proxy's error body.
+        if (answered.headers.get(NAVIGATION_HEADER) === null || body === null) return this.leave(url)
         if (landed.pathname !== url.pathname) return this.leave(landed)
 
         const reader = body.getReader()
@@ -222,6 +247,7 @@ class DocumentNavigation implements NavigationSink {
         return {
             left: false,
             complete: this.rest(reader, filling, remainder),
+            failure: failureOf(answered),
         }
     }
 

@@ -21,8 +21,9 @@
 // does speak. See `validated` and `mcp`.
 
 import { MCP_PATH, RPC_PREFIX, SOCKET_PREFIX, TAIL_PARAM, WAIT_PARAM } from '#shared/internal/PATHS.ts'
+import { messageOf } from '#shared/internal/probes.ts'
 import type { EndpointShape, JsonSchema } from '#shared/internal/shapes.ts'
-import { argsQuery, chunksOf, isChunked, payloadOf } from '#shared/internal/wire.ts'
+import { argsQuery, chunksOf, errorMessage, isChunked, payloadOf } from '#shared/internal/wire.ts'
 import { config } from './config.ts'
 import { endpoints } from './catalogue.ts'
 import { dispatch } from './registry.ts'
@@ -374,15 +375,14 @@ async function called(
     } catch (failure) {
         // A body that failed PART WAY: `chunksOf` throws on the failure frame the writer ends with.
         // An agent can act on that message, so it lands as a result for the reason a refusal does.
-        return toolFailure(String((failure as Error)?.message ?? failure))
+        return toolFailure(messageOf(failure))
     }
     // A REFUSAL IS A RESULT, not a JSON-RPC error. The protocol's errors are about the protocol —
     // a method that does not exist, params that are not readable — and an agent that gets one has no
     // way to act on it. A 422 from a schema gate is something the agent can fix by calling again with
     // better arguments, so it comes back as `isError` with the message, inside a well-formed result.
     if (!answered.ok) {
-        const said = (value as { error?: { message?: string } })?.error?.message
-        return toolFailure(said ?? `${name} failed with ${answered.status}`)
+        return toolFailure(errorMessage(value) || `${name} failed with ${answered.status}`)
     }
     return resultOf(value, isStructured(target.endpoint, target.arm))
 }
@@ -584,7 +584,7 @@ function failure(id: string | number | null, thrown: unknown, headers: Record<st
     const status = known ? thrown.status : 500
     const error: Record<string, unknown> = {
         code,
-        message: String((thrown as Error)?.message ?? thrown),
+        message: messageOf(thrown),
     }
     if (known && thrown.data !== undefined) error.data = thrown.data
     return json({ jsonrpc: '2.0', id, error }, { status, headers })

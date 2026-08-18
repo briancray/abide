@@ -85,8 +85,13 @@ function source(table: PageFiles[]): string {
     for (const row of rows) {
         const wraps: string[] = []
         for (const layout of row.layouts) wraps.push(named.get(layout) as string)
+        // Written only for an error row. Absent IS `page` — see `RouteEntry.kind` — and omitting it
+        // keeps a generated table that has no error page in it byte-identical to the one this wrote
+        // before error pages existed. Without it an `error.abide` installs as a ROUTE at its own
+        // directory, which is a row shadowing the real page at that address.
+        const kind = row.kind === 'error' ? ` kind: 'error',` : ''
         entries +=
-            `    { path: ${JSON.stringify(row.path)},` +
+            `    { path: ${JSON.stringify(row.path)},${kind}` +
             ` page: (): Promise<ViewModule> => import(${quoted(row.page)}),` +
             ` layouts: [${wraps.join(', ')}] },\n`
     }

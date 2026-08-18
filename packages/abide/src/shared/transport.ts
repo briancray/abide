@@ -36,7 +36,7 @@ import {
     TTL_HEADER,
     wireError,
 } from './internal/wire.ts'
-import { type KeyedMemo, type MemoHandle, memo } from './memo.ts'
+import { type KeyedMemo, type MemoHandle, memo, type Selecting } from './memo.ts'
 import { state } from './reactive.ts'
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -74,23 +74,28 @@ export interface RpcHandle<T, F extends Failed = never> extends MemoHandle<T> {
 }
 
 export interface Rpc<Args, T, F extends Failed = never> extends KeyedMemo<Args, T> {
-    (args: Args, options?: CallOptions): RpcHandle<T, F>
+    (...call: [...Selecting<Args>, options?: CallOptions]): RpcHandle<T, F>
     /** The same call, handed back as the raw response instead of a decoded value. */
-    raw(args: Args, init?: RequestInit): Promise<Response>
+    raw(...call: [...Selecting<Args>, init?: RequestInit]): Promise<Response>
     /**
      * Where this call GOES — mounted, and with a read's args on the query exactly as `raw` sends
      * them.
      *
      * For the callers that need an address rather than a fetch: an `EventSource` over a handler
-     * framed with `sse()`, the `curl` line in a bug report, the string a network panel shows. Built
-     * from the same address and the same encoder the request uses, because an address computed a
-     * second way is one that can disagree with where the call actually went.
+     * framed with `sse()`, a `<form method="post" action>` posted at an endpoint, the `curl` line in
+     * a bug report, the string a network panel shows. Built from the same address and the same
+     * encoder the request uses, because an address computed a second way is one that can disagree
+     * with where the call actually went.
      *
-     * A read whose args are too long for a URL travels in a body instead — see `MAX_GET_URL` — and
-     * so does anything carrying a file. There is no address for either, and this says so by throwing
-     * rather than by handing back one that would 404.
+     * A MUTATION's args travel in the body, so its address does not depend on them and every
+     * argument here is ignored: the bare address is the whole answer, and it is the one the OpenAPI
+     * document already publishes and a form posts at.
+     *
+     * A READ whose args are too long for a URL travels in a body instead — see `MAX_GET_URL` — and
+     * so does one carrying a file. There is no address for either, and this says so by throwing
+     * rather than by handing back one missing the arguments that were the whole request.
      */
-    url(args: Args): string
+    url(...select: Selecting<Args>): string
     readonly method: Method
     readonly description: string | undefined
 }
@@ -144,17 +149,32 @@ export function asRpc<Args, T>(
         url(args: Args): string
     },
 ): Rpc<Args, T> {
-    const rpc = ((args: Args, options?: CallOptions): RpcHandle<T> => {
+    // The ONE place the three faces agree about an omitted argument, which is what `Selecting` made
+    // reachable — `f()` is `f({})`, so the omitted call keys the same slot, travels as the same
+    // query and reaches a handler destructuring its parameter with something to destructure. An
+    // empty query would arrive as `undefined` and throw inside the body; see `argsQuery`, which
+    // takes the hatch for `{}` for this same reason.
+    //
+    // Each face is written with the VARIADIC list it is being cast to rather than as `(args?, …)`:
+    // `Selecting<Args>` is unresolved while `Args` is a type parameter, so the two forms are not
+    // comparable and the cast that used to be free would need an `unknown` under it.
+    // OMITTED, not `?? {}`: `Args` of `void` is a read whose argument is `undefined` and whose
+    // address is the bare one, and coalescing put `?$args=%7B%7D` on every such URL. The arity is
+    // the only place the two are distinguishable at runtime, since `Selecting` is erased.
+    const selected = (call: readonly unknown[]): Args =>
+        call.length === 0 ? ({} as Args) : (call[0] as Args)
+    const rpc = ((...given: [...Selecting<Args>, options?: CallOptions]): RpcHandle<T> => {
         // Nothing to attach: a handle IS a cell, and every cell carries its own iterator. The
         // per-slot attach this replaced existed only because the loop lived out here.
-        const handle = call(args) as RpcHandle<T>
+        const handle = call(selected(given)) as RpcHandle<T>
+        const options = given[1] as CallOptions | undefined
         if (options === undefined || options.signal === undefined) return handle
         return abandonable(handle, options.signal)
     }) as Rpc<Args, T>
     rpc.invalidate = call.invalidate
     rpc.refresh = call.refresh
-    rpc.raw = spec.raw
-    rpc.url = spec.url
+    rpc.raw = (...given) => spec.raw(selected(given), given[1] as RequestInit | undefined)
+    rpc.url = (...given) => spec.url(selected(given))
     Object.defineProperty(rpc, 'method', { value: spec.method, enumerable: true })
     Object.defineProperty(rpc, 'description', { value: spec.description, enumerable: true })
     return rpc
@@ -228,19 +248,27 @@ function rpcAddress(id: string, base?: string): string {
 }
 
 /**
- * The address a READ travels to, args and all — or the reason it has none.
+ * The address a call travels to, args and all — or the reason it has none.
  *
  * Shared by the two lanes rather than written in each, because the guards ARE the contract: a call
  * that cannot travel as a URL has no address to hand back, and two copies of that rule are two
  * chances for a server's answer about where a call goes to disagree with where a client sent it.
  *
- * It throws rather than returning the bare address, which would be a URL missing its arguments — a
- * `404` at a plausible-looking path is the failure that takes longest to read.
+ * A MUTATION's arguments are in the BODY, so its bare address is not one missing anything: it is
+ * where the call goes whatever the args say, it is what `openapi.json` already publishes for that
+ * endpoint, and it is what a `<form method="post" action>` has to name. Handed back rather than
+ * refused, because the form door otherwise has no public spelling for where to post.
+ *
+ * A READ is the case where the args ARE the address, and there the two refusals stand: a file has no
+ * text form and a long enough query does not fit, so both travel in a body and the bare address is a
+ * URL missing its arguments — a `404` at a plausible-looking path is the failure that takes longest
+ * to read.
  */
 export function addressWithArgs(id: string, method: Method, args: unknown, base?: string): string {
-    if (method !== 'GET' || hasFile(args)) {
+    if (method !== 'GET') return rpcAddress(id, base)
+    if (hasFile(args)) {
         throw new Error(
-            `abide: ${id} has no address to hand back — url() is for a read whose args travel on the query, and this is ${hasFile(args) ? 'carrying a file' : `a ${method}`}. Use raw() to make the call.`,
+            `abide: ${id} has no address to hand back — url() is for a read whose args travel on the query, and this one is carrying a file. Use raw() to make the call.`,
         )
     }
     const url = rpcAddress(id, base) + argsQuery(args)

@@ -17,6 +17,10 @@
 // an insertion point — see `close`. Splitting per request would be re-parsing a file that cannot
 // have changed.
 
+// The one thing written into a document here that did not come from the app: an app NAME is a
+// package.json field, so it is text where the document around it is markup.
+import { escape } from '#shared/html.ts'
+
 /**
  * An app's document, cut at the two places a render writes into.
  *
@@ -145,12 +149,113 @@ function first(pattern: RegExp, html: string, ranges: Range[]): RegExpExecArray 
  * is wrong in a way a browser papers over: it guesses an encoding, and the guess is right until the
  * first non-ASCII byte. A caller writing its own `<meta charset>` gets it too, inside `head`, and the
  * first one in a document is the one that counts.
+ *
+ * Not exported: both callers are in this file now — the head form below and `ownDocument` — which is
+ * the point of moving the fallback here. One answer to what abide's own document is, and one file
+ * that knows how it opens.
  */
-export const DOCUMENT_OPEN = '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+const DOCUMENT_OPEN = '<!doctype html><html lang="en"><head><meta charset="utf-8">'
 
 /** What `renderDocument(head, …)` means: abide's own document, with the app's head inside it. */
 export function shellAround(head: string): Shell {
     // No slot at all in this form, so the hydration root is the body and there is nothing between the
     // two — `close` is empty and everything is `tail`.
     return { head: `${DOCUMENT_OPEN}${head}`, open: '</head><body>', close: '', tail: '</body></html>' }
+}
+
+/**
+ * The shortest document that works, for an app that wrote no `app.html`.
+ *
+ * Here rather than in the CLI that serves it, because two callers now need the same answer: the page
+ * layer, for an app with no document of its own, and `render(view, { shell: true })` from anywhere
+ * else — a `bun test`, a demo card in a browser, a script. A second spelling would be two documents
+ * an app never wrote, differing in whichever detail was forgotten.
+ *
+ * Reading it should tell an app exactly what to copy into an `app.html` of its own: a head, and the
+ * slot the render goes into. No script, because that is not an app's to write in either document —
+ * the lane is appended to whichever shell is used, by the render that is hydrating.
+ *
+ * The name is optional because the two callers know different amounts: a serving process knows what
+ * the app is called and a render outside one may not, and `<title></title>` is worse than no title.
+ */
+export function ownDocument(name = ''): string {
+    return (
+        DOCUMENT_OPEN +
+        '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+        // Through the same escaper every text node the renderer writes goes through. An app name is a
+        // package.json field or an `ABIDE_APP_NAME`, so it is text rather than markup.
+        (name === '' ? '' : `<title>${escape(name)}</title>`) +
+        '</head><body><slot></slot></body></html>'
+    )
+}
+
+// --- the document a route may ask for ----------------------------------------
+
+/**
+ * The app's own document as a serving process knows it, for `render(view, { shell: true })`.
+ *
+ * `parts` is the app's `app.html` — or `ownDocument()` when it wrote none — cut, with the build's
+ * stylesheets already in the head. `lane` is the `<script type="module">` that boots the client and
+ * the `<meta>` naming where the app is mounted, held APART rather than in the head, because they are
+ * the two things only a hydrating render should write: the client mounts the pages route table at the
+ * outlet, so on a path no page owns it would render that table's answer over the markup the route
+ * just served. `hydrate` is the caller saying that is what they want.
+ */
+export interface AppDocument {
+    parts: Shell
+    lane: string
+}
+
+/**
+ * What boot published, or `null` before anything has served.
+ *
+ * An inversion for the reason `useLogSink` and `useAppNameSource` are: the document is read off the
+ * filesystem by the CLI, which is a layer the renderer must not import — and in a browser bundle
+ * there is no filesystem to read it from, so `null` is the honest answer rather than a branch.
+ */
+let published: AppDocument | null = null
+
+/** Boot's half. Called once per process, before the socket binds. */
+export function useAppDocument(document: AppDocument | null): void {
+    published = document
+}
+
+// Abide's own document, parsed at most once per process — the text is a constant, so a second parse
+// would be re-scanning a string that cannot have changed.
+let ownParts: Shell | null = null
+
+// One entry, not a map: a route's document is almost always a module-level constant, so the same
+// string arrives every request and is parsed once. A caller building one PER REQUEST — a title
+// interpolated into it — then pays the scan it asked for, where a map would grow a row per title.
+let lastAsked = ''
+let lastParts: Shell | null = null
+
+/**
+ * The shell a render asked for: the app's own, or one the caller wrote.
+ *
+ * A string is a whole html file with a `<slot></slot>` in it — the same thing `app.html` is, through
+ * the same `shell()`, so there is one answer to what a document is and one refusal when it has
+ * nowhere to render.
+ */
+export function askedShell(asked: true | string, hydrating: boolean): Shell {
+    let parts: Shell
+    if (asked !== true) {
+        if (asked !== lastAsked || lastParts === null) {
+            // Assigned after the parse, so a shell with no slot throws and is not remembered as one.
+            lastParts = shell(asked)
+            lastAsked = asked
+        }
+        parts = lastParts
+    } else if (published !== null) {
+        parts = published.parts
+    } else {
+        ownParts ??= shell(ownDocument())
+        parts = ownParts
+    }
+    const lane = hydrating ? (published?.lane ?? '') : ''
+    if (lane === '') return parts
+    // Copied rather than appended to: the published parts are read by every later render, and the
+    // `head` is BY DEFINITION the text before `</head>`, so the lane lands where a second scan for
+    // `</head>` would have put it.
+    return { head: parts.head + lane, open: parts.open, close: parts.close, tail: parts.tail }
 }

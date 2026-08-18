@@ -25,6 +25,7 @@
 import {
     Awaited,
     Boundary,
+    caughtArm,
     cellProps,
     Component,
     escape,
@@ -73,7 +74,6 @@ import {
     PLAIN,
     patchScript,
     type RenderContext,
-    type RenderOptions,
 } from './internal/emit.ts'
 // Imported for its side effect as much as for `appDataDir`: it installs the package.json fallback
 // under `ABIDE_APP_NAME`, which is what names `log`'s default channel. Importing `abide/server` at
@@ -81,7 +81,7 @@ import {
 import './app.ts'
 import { knobOf } from './config.ts'
 import { closeSeeding, heldPump, holdScope, isServing, nonce, openSeeding } from './scopes.ts'
-import { type Shell, shellAround } from './shell.ts'
+import { askedShell, type Shell, shellAround } from './shell.ts'
 
 /** Everything the walk knows how to write. */
 export type Renderable =
@@ -524,22 +524,72 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
         // over would work for every compiled `.abide` file and break every hand-written one.
         return emitProduced(() => node.view(cellProps(node.props)) as Renderable, context, out)
     }
-    if (node instanceof Boundary) {
-        // Synchronous, like the `try` it is named after. A body that returns a promise is rendered
-        // below in the ordinary way, and its rejection is NOT this boundary's to catch.
-        //
-        // Through `emitProduced` because the body runs HERE rather than in the thunk that handed the
-        // boundary over — outside a catcher a cold read inside a `{#try}` signals to nobody, and the
-        // region renders empty on a snapshot the walk could have waited for. One closure per
-        // boundary, which is per REGION rather than per row.
-        return emitProduced(() => settledBoundary(node) as Renderable, context, out)
-    }
+    if (node instanceof Boundary) return boundaryRegion(node, context, out)
     if (node instanceof Streamed) return streams(out, (into) => emitStreamed(node, context, into))
     if (isThenable(node)) return waits(out, (into) => emitPromise(node, context, into), context)
     if (isAsyncIterable(node)) return streams(out, (into) => emitAsyncIterable(node, context, into))
 
     out.text += escape(String(node))
     return null
+}
+
+/**
+ * A `{#try}` as a REGION the walk owns, rather than one call it guarded.
+ *
+ * The boundary used to be `emitProduced(() => settledBoundary(node))`, which caught exactly what
+ * running the BODY threw. That is a much smaller thing than it reads as: the body returns a
+ * `TemplateResult` whose slots are thunks, so everything the region actually renders — a nested
+ * component's setup, a block's thunk, a read of a load that rejected — happens after the body
+ * returned and went straight past the catch. A `{#try}` around a `<slot/>` in a layout caught nothing
+ * at all, silently, which is the worst shape a guard can have.
+ *
+ * So the region gets a BUFFER of its own and the walk runs inside it. A failure anywhere under here
+ * — this call or a promise it left behind — discards what was written and emits the arm instead,
+ * which is the only thing "catch anything inside it" can mean for markup: an arm can only replace a
+ * region nobody has been given yet.
+ *
+ * THE COST, stated: the region no longer chunks progressively — it lands whole. That is already true
+ * of every slow region (`waits` takes a hole, and a hole's `Out` has no `flush`), so it changes only a
+ * boundary with nothing slow under it, and only up to `HOLD_LIMIT`, past which `spill` converts it to
+ * a placeholder and a patch exactly as it does for anything else held.
+ *
+ * The sync arm allocates one `Out` and no promise, because the common `{#try}` has nothing to wait
+ * for and an unconditional hole would cost a tick per region — per ROW for one inside a `{#for}`.
+ */
+function boundaryRegion(node: Boundary, context: RenderContext, out: Out): Rest {
+    const inner = newOut()
+    let rest: Rest
+    try {
+        // THROUGH `emitProduced`, into the private buffer — not `emit` over the body's result. The
+        // difference is its probe bookkeeping, and it is load-bearing: a region that probes an
+        // unlanded load with nowhere to patch must WAIT for the settle and re-run, and calling
+        // `settledBoundary` outside that window left the probe unattributed, so a `{#try}` around an
+        // `{#if x.pending()}` rendered the pending arm as the final answer. Caught by rendering the
+        // same file with and without the boundary: `landed` became `waiting`.
+        rest = emitProduced(() => settledBoundary(node) as Renderable, context, inner)
+    } catch (error) {
+        return emit(caughtArm(node, error) as Renderable, context, out)
+    }
+    // Nothing under it waits, so the region is already whole and goes in where it stands.
+    if (rest === null && inner.fills === null) {
+        out.text += inner.text
+        return null
+    }
+    // Something does. A hole keeps the siblings in document order and puts the region under the same
+    // cap everything else is under; catching INSIDE it is what stops a failure from becoming the
+    // walk's, which is what it was before this.
+    return hole(out, async (into) => {
+        try {
+            if (rest !== null) await rest
+            into.text += inner.fills === null ? inner.text : await assembled(inner)
+        } catch (error) {
+            // The fills are settled before the arm is written, or a region that failed would go on
+            // resolving into a buffer nothing reads and raise its rejections as unhandled.
+            if (inner.fills !== null) await Promise.allSettled(inner.fills)
+            const armed = emit(caughtArm(node, error) as Renderable, context, into)
+            if (armed !== null) await armed
+        }
+    })
 }
 
 /**
@@ -1379,13 +1429,58 @@ function stream(node: Renderable, context: RenderContext, budget: Budget | null)
     })()
 }
 
-/** The walk as a stream of chunks — one per suspension, and one per buffer-full of markup. */
+/**
+ * What a render is asked for — the two decisions that are not the tree.
+ *
+ * Both default to OFF, and that is the same rule twice: a render pays for nothing it was not asked
+ * for. Markup with no document around it is what a fragment, a mail body and a cached partial all
+ * want, and markers nobody is going to adopt are two comments per slot for nothing.
+ */
+export interface RenderOptions {
+    /**
+     * The document to write around the markup. Absent or `false` is the markup alone.
+     *
+     * `true` is the app's OWN document — its `app.html`, the `lang` and the fonts and the meta tags in
+     * it, with the build's stylesheets and every scoped `<style>` block in the head — which is the
+     * same document `abide start` serves a page in. An app that wrote none gets abide's, so the ask
+     * cannot fail.
+     *
+     * A STRING is one of your own, and it is a whole html file with a `<slot></slot>` in it rather
+     * than a fragment or a head: the same shape `app.html` is, through the same `shell()`, so the
+     * caller owns `<html>`, `<head>` and `<body>` and a file with nowhere to render is refused rather
+     * than guessed at.
+     */
+    shell?: boolean | string
+    /**
+     * Write this render for a client to take over — the slot markers `hydrate()` adopts by, and, with
+     * a `shell`, the `<script type="module">` that boots the client into it.
+     *
+     * Off by default, and the reason is what the client DOES: it mounts the pages route table at the
+     * outlet, so on a path no page owns it renders that table's answer over the markup the route just
+     * served. A document nobody is going to adopt should not carry the lane that would.
+     */
+    hydrate?: boolean
+}
+
+/**
+ * The walk as a stream of chunks — one per suspension, and one per buffer-full of markup.
+ *
+ * The one public renderer, which is why the `shell` option lives here rather than being a face of its
+ * own: a document is the same walk with the app's own text around it, and the shape a route reaches
+ * for is `page(render(view, …))` either way.
+ */
 export function render(node: Renderable, options?: RenderOptions): AsyncGenerator<string> {
-    return stream(node, contextFor(options), null)
+    const asked = options?.shell
+    if (asked === undefined || asked === false) return stream(node, contextFor(options), null)
+    // A thunk, because `renderDocument` is a generator whose body does not run until the first
+    // `next()` — see there. The tree this closes over was already built by the caller, which is the
+    // caller's own decision: `Renderable` has a thunk arm, so `render(() => view(), …)` moves the
+    // build inside the walk for anybody who wants it there.
+    return renderDocument(askedShell(asked, options.hydrate === true), () => node, options)
 }
 
 function contextFor(options: RenderOptions | undefined): RenderContext {
-    if (options === undefined || options.hydratable !== true) return PLAIN
+    if (options === undefined || options.hydrate !== true) return PLAIN
     return { hydratable: true, document: null, placeholder: false }
 }
 
@@ -1460,7 +1555,7 @@ export async function* renderDocument(
 ): AsyncGenerator<string> {
     const parts = typeof document === 'string' ? shellAround(document) : document
     const deferrals = { nextId: 0, deferred: [] as Deferred[] }
-    const context: RenderContext = { hydratable: options?.hydratable === true, document: deferrals, placeholder: false }
+    const context: RenderContext = { hydratable: options?.hydrate === true, document: deferrals, placeholder: false }
     // ONE clock for the whole document. A deferred block does not hold the walk — it
     // defers into the drain below — so a budget that only reached the walk would miss the very case
     // it exists for: the page that suspends. Read here rather than inside `stream`, because this is
@@ -1583,7 +1678,7 @@ export async function* renderFragment(
     options?: RenderOptions,
 ): AsyncGenerator<string> {
     const deferrals = { nextId: 0, deferred: [] as Deferred[] }
-    const context: RenderContext = { hydratable: options?.hydratable === true, document: deferrals, placeholder: false }
+    const context: RenderContext = { hydratable: options?.hydrate === true, document: deferrals, placeholder: false }
     const clock = budgetClock()
     try {
         openSeeding()

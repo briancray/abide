@@ -37,8 +37,10 @@ import Thirteen from './13-a-handler-that-yields.abide'
 import THIRTEEN_CLIENT from './13-a-handler-that-yields.abide?source'
 import Fourteen from './14-a-file-is-an-argument.abide'
 import FOURTEEN_CLIENT from './14-a-file-is-an-argument.abide?source'
-import Fifteen from './15-the-raw-response.abide'
-import FIFTEEN from './15-the-raw-response.abide?source'
+import Fifteen from './15-a-form-is-a-call.abide'
+import FIFTEEN_CLIENT from './15-a-form-is-a-call.abide?source'
+import Sixteen from './16-the-raw-response.abide'
+import SIXTEEN from './16-the-raw-response.abide?source'
 import SEVEN from '#server/sockets/feed.ts?source'
 import ONE from '#server/rpc/docs/transport/a-get-is-a-keyed-memo.ts?source'
 import TWO from '#server/rpc/docs/transport/a-declared-failure.ts?source'
@@ -53,6 +55,7 @@ import ELEVEN from '#server/rpc/docs/transport/the-three-limits.ts?source'
 import TWELVE from '#server/rpc/docs/transport/the-answer-travels-with-the-markup.ts?source'
 import THIRTEEN from '#server/rpc/docs/transport/a-handler-that-yields.ts?source'
 import FOURTEEN from '#server/rpc/docs/transport/a-file-is-an-argument.ts?source'
+import FIFTEEN from '#server/rpc/docs/transport/a-form-is-a-call.ts?source'
 
 export const LADDER: Example[] = [
     {
@@ -160,13 +163,22 @@ export const LADDER: Example[] = [
         client: FOURTEEN_CLIENT,
         view: Fourteen,
     },
+    // Rung 14 sent multipart because the ARGS held a file. This is the same body arriving from
+    // somewhere that never saw a stub, which is why it follows: one door, two ways in.
+    {
+        adds: 'a FORM is a call — its entries are the arguments, in either of the two spellings',
+        of: ['POST'],
+        source: FIFTEEN,
+        client: FIFTEEN_CLIENT,
+        view: Fifteen,
+    },
     // One file: every line of it is the browser's, and the declaration it reads is rung 1's. A second
     // pane would be that rung's server half shown twice under a label claiming a seam this does cross
     // but does not DECLARE.
     {
         adds: 'the raw response, for when the envelope is the point',
         of: ['GET'],
-        source: FIFTEEN,
-        view: Fifteen,
+        source: SIXTEEN,
+        view: Sixteen,
     },
 ]

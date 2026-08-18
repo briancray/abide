@@ -1,0 +1,22 @@
+<script>
+// An argument rather than a rung: what the two shell rungs under `#server/rpc/docs/server/` hand to
+// `render`, so the walk's input is a compiled `.abide` file rather than a template written at the
+// call site. It takes no props, because a value reaching a component from a `.ts` caller is the props
+// ladder's subject and would be a second thing in a rung that adds one.
+//
+// The scoped block below is what makes the two shell rungs worth reading: those rules are written
+// into the HEAD by the document, which is the one thing a route concatenating its own doctype around
+// `render(view)` had no way to do — it shipped this markup and none of them.
+//
+// Nothing markup-shaped goes in the css itself. It rides inside a style element in every document
+// this renders in, and `#tests/unit/start.test.ts` reads that document back with a regex for tags.
+const open = 41
+const closed = 7
+</script>
+
+<h1>may</h1>
+<p class="counts">{open} open · {closed} closed</p>
+
+<style>
+.counts { font-variant-numeric: tabular-nums; opacity: 0.7 }
+</style>

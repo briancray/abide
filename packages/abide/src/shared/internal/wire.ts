@@ -418,6 +418,19 @@ export class HttpError extends Error {
 }
 
 /**
+ * The status a throw is OWED, which is the inverse of what the class above writes — and here beside
+ * it for that reason: an `HttpError` declared one, and anything else is a fault, so 500.
+ *
+ * Read structurally rather than by `instanceof`, because a refusal that crossed a wire arrives as a
+ * rebuilt error and a range check answers for both.
+ */
+export function statusOf(failure: unknown): number {
+    if (failure === null || typeof failure !== 'object') return 500
+    const held = (failure as { status?: unknown }).status
+    return typeof held === 'number' && held >= 400 && held <= 599 ? held : 500
+}
+
+/**
  * A DECLARED failure, as it is CAUGHT — the same four members on either side of a wire.
  *
  * This is the type `error.typed(...)` hands back from a call and therefore the one that rides a
@@ -487,6 +500,26 @@ export function errorPayload(error: unknown): { error: WireError } {
  * `false` for exactly the unparseable-refusal path.
  */
 export const TRANSPORT_ERROR = 'AbideTransportError'
+
+/**
+ * What a refusal actually SAID, out of whatever `payloadOf` made of the body — `''` for a body that
+ * says nothing.
+ *
+ * Every failure abide builds crosses as `{ error: { name, message } }`, so the message is read out of
+ * one rather than printed as the JSON it arrived in — somebody reading a terminal, or an agent
+ * reading a tool result, should not have to decode a frame to find the sentence. Anything else — a
+ * proxy's HTML page, a plain-text refusal — is its first line, which is as much of an unknown body as
+ * belongs on one.
+ *
+ * Beside `wireError`, which reads the same envelope for the client stub: three spellings of it is two
+ * of them printing a frame the day the envelope changes.
+ */
+export function errorMessage(payload: unknown): string {
+    const carried = (payload as { error?: WireError } | null)?.error?.message
+    if (typeof carried === 'string') return carried
+    if (typeof payload !== 'string') return ''
+    return payload.trim().split('\n')[0] as string
+}
 
 /**
  * The failure a caller sees, rebuilt with the name the server gave it — and with the status and the
@@ -728,9 +761,9 @@ export async function* chunksOf(id: string, response: Response): AsyncGenerator<
         }
         if (from < piece.length) pending.push(from === 0 ? piece : piece.slice(from))
     }
-    const rest = pending.join('') + decoder.decode()
-    if (rest.trim() !== '') {
-        const payload = payloadOfLine(rest.trim())
+    const rest = (pending.join('') + decoder.decode()).trim()
+    if (rest !== '') {
+        const payload = payloadOfLine(rest)
         if (payload !== null) yield chunk(id, payload)
     }
 }
@@ -820,20 +853,24 @@ export function framedBody<T>(
     source: AsyncIterable<T> | Iterable<T>,
     frame: (value: T) => string,
     failed?: (error: unknown) => string,
+    highWaterMark?: number,
 ): ReadableStream<Uint8Array> {
     const framed = framedSteps(source, frame, failed)
-    return new ReadableStream<Uint8Array>({
-        async pull(controller) {
-            const stepped = framed.read()
-            const step = isThenable(stepped) ? await stepped : (stepped as FramedStep)
-            if (step.done) {
-                controller.close()
-                return
-            }
-            controller.enqueue(ENCODER.encode(step.value))
+    return new ReadableStream<Uint8Array>(
+        {
+            async pull(controller) {
+                const stepped = framed.read()
+                const step = isThenable(stepped) ? await stepped : (stepped as FramedStep)
+                if (step.done) {
+                    controller.close()
+                    return
+                }
+                controller.enqueue(ENCODER.encode(step.value))
+            },
+            cancel: (reason) => framed.cancel(reason),
         },
-        cancel: (reason) => framed.cancel(reason),
-    })
+        highWaterMark === undefined ? undefined : { highWaterMark },
+    )
 }
 
 /** One JSON value per line — the frame both line-delimited bodies are written in. */

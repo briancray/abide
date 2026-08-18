@@ -2,18 +2,13 @@
 import { catalogue } from '#server/rpc/docs/responses/answer-with-events.ts'
 import { state } from 'abide'
 
-// The same loop as the rung above, and that IS the rung: the only line that differs between the two
-// clients is which module the stub came from. `isChunked` asks the response what it is, so
+// The same client as the rung above, and that IS the rung: the only line that differs between the
+// two is which module the stub came from. `isChunked` asks the response what it is, so
 // `text/event-stream` is read as chunks exactly as `application/jsonl` is, and `data: ` comes off
 // the front before the value gets here. Which framing a route answers with stays a question about
 // the address, not about the caller.
-const rows = state<{ id: number }[]>([])
-
-const ask = async (): Promise<void> => {
-    rows = []
-    for await (const row of catalogue({})) rows = [...rows, row]
-}
+const asked = state(false)
 </script>
 
-<button onclick={ask}>ask for them</button>
-<ul>{#for row of rows}<li><code>{row.id}</code></li>{/for}</ul>
+<button onclick={() => (asked = true)}>ask for them</button>
+<ul>{#if asked}{#for row of catalogue().chunks()}<li><code>{row.id}</code></li>{/for}{/if}</ul>

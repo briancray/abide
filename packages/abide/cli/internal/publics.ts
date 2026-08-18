@@ -48,9 +48,26 @@ export class PublicFiles {
         // and handing the same instance to two responses lets a middleware downstream of one edit the
         // other's. The type comes off the extension, which is what `Bun.file` already decided.
         return new Response(file, {
-            headers: { 'content-type': file.type, 'cache-control': BRIEFLY, 'x-content-type-options': NOSNIFF },
+            headers: {
+                'content-type': file.type,
+                'cache-control': BRIEFLY,
+                'x-content-type-options': NOSNIFF,
+            },
         })
     }
+}
+
+/**
+ * The same directory EMBEDDED — what a binary from `abide compile` serves.
+ *
+ * The addresses are the compile's, computed from the same rule the scan below uses: a name IS the
+ * address. What differs is only that the bytes live inside the executable, which `Bun.file` reads the
+ * same way — see `embeddedClient`, this file's sibling for the other static layer.
+ */
+export function embeddedPublics(paths: Record<string, string>): PublicFiles | null {
+    const held = new Map<string, BunFile>()
+    for (const address in paths) held.set(address, Bun.file(paths[address] as string))
+    return held.size === 0 ? null : new PublicFiles(held)
 }
 
 /**
@@ -73,9 +90,25 @@ export async function publicFiles(root: string): Promise<PublicFiles | null> {
         return null
     }
     const held = new Map<string, BunFile>()
-    const glob = new Bun.Glob('**/*')
-    for await (const found of glob.scan({ cwd: directory, absolute: false, onlyFiles: true })) {
-        held.set(`/${found}`, Bun.file(`${directory}/${found}`))
-    }
+    for (const found of await publicNames(root)) held.set(`/${found}`, Bun.file(`${directory}/${found}`))
     return held.size === 0 ? null : new PublicFiles(held)
+}
+
+/**
+ * The names under the public directory, relative to it — which are also the addresses, minus the
+ * leading slash.
+ *
+ * Split from the scan above because `abide compile` asks the same question for the other reason: a
+ * binary has no directory to walk at boot, so the walk happens once at compile time and each name
+ * becomes an embedded file. Two walks is a binary serving a different set of files from the one
+ * `abide start` serves out of the same tree.
+ */
+export async function publicNames(root: string): Promise<string[]> {
+    const found: string[] = []
+    const glob = new Bun.Glob('**/*')
+    for await (const name of glob.scan({ cwd: `${root}/${PUBLIC_DIR}`, absolute: false, onlyFiles: true })) {
+        found.push(name)
+    }
+    found.sort()
+    return found
 }

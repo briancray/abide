@@ -1,13 +1,14 @@
-import type { Middleware } from 'abide/server'
+import { middleware } from 'abide/server'
 
 /**
- * The chain, outermost first — an ARRAY because the order is the app's to declare rather than the
+ * The chain, outermost first — VARIADIC because the order is the app's to declare rather than the
  * framework's to infer from an import graph.
+ *
+ * The one registration that APPENDS: a second call adds a second rung rather than correcting the
+ * first, which is why it is not spelled `onRequest`. Every other hook is one answer per process.
  */
-export const middleware: Middleware[] = [
-    async (next) => {
-        const answered = await next()
-        answered.headers.set('x-served-by', 'the dogfood app')
-        return answered
-    },
-]
+middleware(async (next) => {
+    const answered = await next()
+    answered.headers.set('x-served-by', 'the dogfood app')
+    return answered
+})

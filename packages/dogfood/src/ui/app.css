@@ -297,6 +297,21 @@
   .rung-preview pre,
   .stage pre { justify-self: stretch; overflow-x: auto; }
 
+  /* The same frame, for the content a `<pre>` is not. An unbreakable token IS an item's min-content,
+     and a start-aligned item is fit-content sized, so one `mailto:` in a `<ul>` measured 226px inside
+     a 224px column on `/docs/url` and painted over the source pane beside it. The same URL, hash or
+     JSON blob can land in any of these, so the treatment is the FRAME's rather than a class each
+     example remembers — see the note above for why a rung's own markup stays class-free.
+
+     WRAPPING here and SCROLLING there, and the two are not interchangeable: a pre's text is an
+     artifact a reader copies, so a break inserted into it would falsify what it says; everything else
+     is prose, where a line lost off the right edge is one nobody notices is missing. `pre` is put back
+     to `normal` rather than left out of the selector, because it inherits this otherwise. */
+  .rung-preview,
+  .stage { overflow-wrap: anywhere; }
+  .rung-preview pre,
+  .stage pre { overflow-wrap: normal; }
+
   /* Named `.datatable`, not `.table`: `table` is one of Tailwind's DISPLAY utilities, and a utility
      beats a component whatever the specificity, because layer order decides first. The element
      silently became `display: table`, shrink-wrapped to its content and stopped filling its panel.

@@ -1,0 +1,26 @@
+<script>
+import { whatWasShipped } from '#server/rpc/docs/request/ship-the-span-to-a-collector.ts'
+import Answer from '#ui/lib/Answer.abide'
+import { state } from 'abide'
+
+const asked = state(false)
+const ask = (): void => {
+    asked = true
+    whatWasShipped({}).invalidate()
+}
+</script>
+
+<!-- PRESS IT TWICE. The rung is outermost, so it finishes its span on the way back OUT — after the
+     handler that would answer with it has already returned. The first press shows the request before
+     it; the second shows the first.
+
+     `traceId` and `spanId` are the pair rung 9 put on `traceresponse`, which is what makes this record
+     stitchable: a caller who read that header is holding the id of the span in this payload. -->
+<button onclick={ask}>what would have been posted</button>
+{#if asked}
+    {#if whatWasShipped({}).pending()}
+        <p>asking…</p>
+    {:else}
+        <Answer source={JSON.stringify(whatWasShipped({})(), null, 2)}/>
+    {/if}
+{/if}

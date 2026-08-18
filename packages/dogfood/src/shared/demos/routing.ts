@@ -23,7 +23,7 @@
 import type { NavigateOptions } from 'abide'
 import { html, navigate, route, url, watch } from 'abide'
 import type { Loader, RouteEntry, View } from 'abide/runtime'
-import { outlet, ready, routes } from 'abide/runtime'
+import { outlet, routes } from 'abide/runtime'
 import { mountBase, useMountBase } from 'abide/server/internal'
 import { mount } from 'abide/ui'
 import { reader, suite } from 'harness'
@@ -94,15 +94,10 @@ function borrowTable(table: RouteEntry[]): () => void {
     isolate(() => {
         routes(table)
     })
-    return () => {
-        routes(held)
-        // The restore REBUILT every record, so the app's own page is unresolved again — and nothing
-        // will ask: `outlet()` reads the route's NAME, which did not move, so it never re-runs and
-        // never kicks the load. The view then stays null for the life of the page, and a route with
-        // no view is one the client cannot paint, so every same-route move on this page went back to
-        // the server and rebuilt everything it was holding. Asking here is what closes it.
-        void ready()
-    }
+    // The restore rebuilds every record, so the app's own page needs its view kicked again — which
+    // `routes()` now does for whoever installs a table, because this suite was not the only caller it
+    // could happen to. See the note beside its commit.
+    return () => routes(held)
 }
 
 /**

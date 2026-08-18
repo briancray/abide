@@ -79,6 +79,16 @@ const EXPECTED: {
         message: /possibly 'undefined'/,
         where: 'script',
     },
+    // An rpc whose args have a REQUIRED field still demands one. The positive half — an endpoint that
+    // requires nothing being callable with nothing — compiles by construction and so proves nothing on
+    // its own; this is the line that fails if `Selecting` starts saying `[args?: Args]` for every call.
+    {
+        fixture: 'args.abide',
+        line: 12,
+        code: 'TS2554',
+        message: /Expected 1-2 arguments, but got 0/,
+        where: 'script',
+    },
     // A write desugars to `set`, and keeps the cell's type doing it.
     {
         fixture: 'write.abide',

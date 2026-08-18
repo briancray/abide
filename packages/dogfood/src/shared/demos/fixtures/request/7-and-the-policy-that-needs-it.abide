@@ -1,0 +1,25 @@
+<script>
+import { state } from 'abide'
+
+// The policy is a HEADER, so what shows it is a RESPONSE rather than a decoded value — and it has to
+// be a DOCUMENT's response. `csp()` sets the header on `text/html` alone, because a policy on a JSON
+// answer is a header nothing reads, so this asked an rpc endpoint for a whole page's worth of it and
+// got `this app sent no policy` back: the middleware had skipped the very answer it was reading.
+// The page a reader is already on is the honest subject, and it is one `fetch` away.
+//
+// What comes back is THIS app's policy, declared in `packages/dogfood/app.ts` exactly the way the
+// server half beside this declares one — the rung before this is what the same document would have
+// carried with none of it installed. The `nonce=` in `script-src` is the value rung 5 asked for.
+const policy = state('nothing asked yet')
+
+const ask = async (): Promise<void> => {
+    const answered = await fetch(location.href)
+    policy = answered.headers.get('content-security-policy') ?? 'this app sent no policy'
+    // The header is the whole of what this rung wanted, so the document behind it is dropped rather
+    // than left for a garbage collector to close.
+    await answered.body?.cancel()
+}
+</script>
+
+<button onclick={ask}>read the policy this page was served under</button>
+<pre>{policy}</pre>

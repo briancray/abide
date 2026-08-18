@@ -53,9 +53,21 @@ interface Slot<T> {
     bounded: Bounded | null
 }
 
+/**
+ * The argument, OPTIONAL when nothing is REQUIRED of it — a body that declares no parameter, or one
+ * whose every field has a default (`({ page = 1 }) => …`). `{}` is what the omission means, in
+ * process and on the wire alike, so the omitted call and `f({})` select the same slot.
+ *
+ * Written as a parameter LIST rather than `args?: Args` because the check is on the type and not on
+ * the position: `f(id: number)` must keep the argument mandatory, and an optional parameter would
+ * make every such call `f()` at the type level while throwing at runtime.
+ */
+// biome-ignore lint/complexity/noBannedTypes: `{}` is the question — is anything required of `Args` — and `Record<string, never>` answers it wrong, satisfying `{ id: string }` through `never`.
+export type Selecting<Args> = {} extends Args ? [args?: Args] : [args: Args]
+
 export interface KeyedMemo<Args, T> {
     /** Selects the slot. The handle is where everything else lives; the READ is what kicks a load. */
-    (args: Args): MemoHandle<T>
+    (...select: Selecting<Args>): MemoHandle<T>
     /**
      * Every slot MATCHING the pattern — a subset of the args, compared the same way slots are keyed.
      * No pattern means every slot. Exactly one slot is `m(args).invalidate()`, which is why this one

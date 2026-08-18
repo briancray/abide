@@ -67,7 +67,7 @@ export function mount(container: Element, view: () => TemplateResult): Mounted {
  * every part adopts the range the server's markers gave it instead of building one, and then runs the
  * ordinary first update — which writes nothing, because every binding compares before it writes.
  *
- * The markup must come from a render with `{ hydratable: true }`, and hydration must wait until the
+ * The markup must come from a render with `{ hydrate: true }`, and hydration must wait until the
  * whole document is there: `renderDocument` streams its out-of-order patches before `</body>`, so
  * `DOMContentLoaded` is the earliest safe moment.
  *

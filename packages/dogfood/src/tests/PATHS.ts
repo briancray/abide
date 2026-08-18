@@ -30,3 +30,14 @@ export const FIXTURES = `${DEMOS}/fixtures`
 
 /** The type fixtures, including the tree under `invalid/` that is supposed to fail. */
 export const TYPES = `${APP_ROOT}/src/tests/types`
+
+/**
+ * A whole APP that is an argument to a case — `apps/tiny` is the one `abide compile` is measured
+ * against.
+ *
+ * A directory rather than a file, because what a compile gate needs is every convention at once: a
+ * transport module, a socket, a page, a document and a public file. The dogfood app is the wrong
+ * subject for that claim — it is what the console is exercised against, and compiling it per run
+ * would price a gate about embedded layers at the cost of its own scale.
+ */
+export const APPS = `${APP_ROOT}/src/tests/apps`

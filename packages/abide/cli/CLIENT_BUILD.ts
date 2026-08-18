@@ -59,6 +59,15 @@ export const CLIENT_ENTRIES = ['client.ts', 'client.tsx', 'client.abide', 'clien
 export const GENERATED_ENTRY = '.abide/client.entry.ts'
 
 /**
+ * The SERVER lane, generated the same way and for the same reason — see `internal/binary.ts`.
+ *
+ * Beside the client's because they are one fact said twice: what an app IS, written down for a
+ * substrate that cannot read the tree. A browser is one such substrate and a standalone executable is
+ * the other.
+ */
+export const BINARY_ENTRY = '.abide/binary.entry.ts'
+
+/**
  * Where the pages are, re-exported from the one file that says where anything in an app is.
  *
  * Named here rather than only there because this module is what a server reading a build imports,

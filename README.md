@@ -75,6 +75,24 @@ bun run typecheck    # from the repo root
 bun test             # from the repo root — the preload lives in its bunfig
 ```
 
+An app is also a THING YOU TALK TO. `abide compile` writes one standalone executable — the runtime,
+the framework, the app, its pages, its bundle and its public files — whose front door is the app's own
+console:
+
+```sh
+abide compile                  # ./<app>, one file, nothing else to install
+./app serve --port 3000        # be the server
+./app getUser --id=1           # or call one: the flags are the endpoint's declared arguments
+./app connect https://prod/    # point it somewhere else — remembered for next time
+./app                          # the prompt, where you left it
+```
+
+What can be typed is the app's own endpoints — read from `GET /__abide/schema`, so it drives whatever
+it is pointed at rather than only what it was built with — plus `connect`, `disconnect`, `serve`,
+`health`, `identity` and `logs`. `help` lists both halves. The same line means the same thing at the
+prompt and in a script, and a call is a real request either way. Without compiling, `abide console` is
+the same console against the app in the working directory.
+
 `bun run dev` serves three views of the same nineteen capabilities:
 
 - **`/docs/<capability>`** — a LADDER of examples. Each rung is the one above it plus exactly one new

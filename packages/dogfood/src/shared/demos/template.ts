@@ -591,6 +591,57 @@ export default suite({
         },
 
         {
+            title: 'a `{#try}` catches a throw from anywhere UNDER it, not just from running its body',
+            note: 'The body returns a `TemplateResult` whose slots are thunks, so a nested component\'s setup and a markup expression both run AFTER the body returned — past the guard that used to be the whole boundary. A `{#try}` around a layout\'s `<slot/>` therefore caught nothing at all, silently, which is the worst shape a guard can have. The region now owns a buffer and the walk runs inside it, so a failure anywhere under it discards what was written and emits the arm — the only thing catching can mean for markup, since an arm can only replace a region nobody has been given yet. The cost is that the region lands whole rather than chunking, which is already true of every slow region and is capped by `spill`. The last two assertions are the ones that say the catch was not bought by swallowing everything: a Pending signal still passes through, so a suspending region still suspends.',
+            async run({ is }) {
+                const arms = {
+                    pending: undefined,
+                    then: undefined,
+                    catch: ((error: Error) => html`<b>caught: ${error.message}</b>`) as (e: unknown) => unknown,
+                    finally: undefined,
+                }
+                const blows = (): string => {
+                    throw new Error('deep')
+                }
+
+                // A THUNK in a slot — what every markup expression under a boundary compiles to, and
+                // what a `<slot/>` in a layout hands over. It runs when the walk reaches it, which is
+                // after the body returned.
+                is(
+                    'a throw from a slot thunk reaches `{:catch}`',
+                    await renderToString(html`${boundary(() => html`<p>${() => blows()}</p>`, arms)}`),
+                    '<b>caught: deep</b>',
+                )
+
+                // One level further down, through a nested template — the shape a component invocation
+                // under a boundary produces.
+                is(
+                    'a throw nested two templates deep reaches it too',
+                    await renderToString(
+                        html`${boundary(() => html`<div>${html`<p>${() => blows()}</p>`}</div>`, arms)}`,
+                    ),
+                    '<b>caught: deep</b>',
+                )
+
+                // AND THE REGION IS REPLACED, not appended to: everything the body had already written
+                // before the throw is discarded, or the arm would render after half a page.
+                is(
+                    'what the body wrote before the throw is discarded',
+                    await renderToString(html`${boundary(() => html`<p>before</p><p>${() => blows()}</p>`, arms)}`),
+                    '<b>caught: deep</b>',
+                )
+
+                // The boundary with nothing wrong under it is untouched — the arm is not reachable and
+                // the body's own markup is what lands.
+                is(
+                    'a body that does not throw is unaffected',
+                    await renderToString(html`${boundary(() => html`<p>${() => 'fine'}</p>`, arms)}`),
+                    '<p>fine</p>',
+                )
+            },
+        },
+
+        {
             title: 'a `{#try}` catches what its body AWAITED, and still defers what its body READ',
             note: 'A `{#try}` catches what happens in it — an `await` is the operand most likely to fail, so it has to be among them. It did not: the body is emitted EAGERLY, one unit, so that a throw anywhere in it happens while the body runs and `{:catch}` is reachable at all, and an `await` there compiled to an invoked async IIFE whose REJECTION arrived long after the body returned. So the boundary caught nothing for the operand it most needed to. The fix keeps the body synchronous and has `settledBoundary` collect the promises the body left in its slots, deciding between the body and the catch arm once they settle; the walk is behind a compiler flag, so a `{#try}` with no await pays nothing and does not change shape. The third assertion is the one that says the catch was not bought with the DEFERRAL — a read signals by throwing, and the boundary must still let that signal through.',
             async run({ is }) {

@@ -7,8 +7,12 @@
         "packages/*"
     ],
     "scripts": {
-        "test": "bun test",
+        "test": "bun run build && bun test --parallel",
+        "test:serial": "bun test",
+        "test:changed": "bun test --parallel --changed",
         "e2e": "playwright test",
+        "e2e:changed": "playwright test --only-changed",
+        "e2e:failed": "playwright test --last-failed",
         "profile": "ABIDE_PROFILE=1 playwright test --project=dogfood profile.e2e.ts --reporter=list",
         "cli": "bun packages/abide/cli/index.ts",
         "abide": "bun packages/abide/compiler/check.ts packages/dogfood",

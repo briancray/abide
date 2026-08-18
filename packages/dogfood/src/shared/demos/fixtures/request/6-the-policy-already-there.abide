@@ -1,0 +1,25 @@
+<script>
+import { whatAPageCarries } from '#server/rpc/docs/request/the-policy-already-there.ts'
+import Answer from '#ui/lib/Answer.abide'
+import { state } from 'abide'
+
+// Nothing is asked until this is written — see rung 1: the two arms of `#shared/demos/proofs.ts` are
+// compared before anything is pressed, so a read on sight would put a round trip inside it.
+const asked = state(false)
+const ask = (): void => {
+    asked = true
+    whatAPageCarries({}).invalidate()
+}
+</script>
+
+<!-- The rung the NEXT one is measured against: this is the whole policy an app that installs nothing
+     ships, and `csp()` replaces it with a superset. Two directives, no nonce — which is the part rung
+     7 adds, and the reason a document that defers a subtree needs it. -->
+<button onclick={ask}>what a page carries with nothing installed</button>
+{#if asked}
+    {#if whatAPageCarries({}).pending()}
+        <p>asking…</p>
+    {:else}
+        <Answer source={JSON.stringify(whatAPageCarries({})(), null, 2)}/>
+    {/if}
+{/if}

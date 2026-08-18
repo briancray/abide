@@ -64,9 +64,11 @@ export { SCHEMA_ERROR, validateJson } from './schema.ts'
 // per-request; `request` / `bag` / `cookies` / `nonce` / `trace` READ what it installed and stay
 // public. `heldStream` and `isServing` are the two probes only a body-building path asks.
 export { heldStream, isServing, serve } from './scopes.ts'
-// The document pages are served IN. `abide start` reads `app.html` and fills this; an app that wants
-// its own shell is hand-rolling the host, which is what this specifier is for.
-export { type Shell, shell } from './shell.ts'
+// The document pages are served IN. `abide start` reads `app.html`, cuts it here and publishes it
+// with `useAppDocument`, which is what `render(view, { shell: true })` then answers with from
+// anywhere in the app. An app reaching for these NAMES is hand-rolling the host — building a shell
+// itself, or standing in for the boot that publishes one — which is what this specifier is for.
+export { type AppDocument, type Shell, shell, useAppDocument } from './shell.ts'
 // The sheet every `adopt()` registered, as `<style>` tags. Written into `<head>` by the document
 // render, which is `abide start`'s job.
 export { styleTags } from '#shared/styles.ts'

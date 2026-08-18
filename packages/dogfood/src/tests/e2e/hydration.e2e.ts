@@ -53,7 +53,7 @@ const SWEEPS: { section: string; paths: string[] }[] = [
         section: 'every capability, running',
         // `hydrate` is the one suite excluded, and it is excluded for what it IS rather than because
         // it was inconvenient: its cases mismatch ON PURPOSE — markup rendered without
-        // `{ hydratable: true }`, a nested template left over — and assert about what the client does
+        // `{ hydrate: true }`, a nested template left over — and assert about what the client does
         // next. Nine warnings on that page are nine cases working. What is lost with it is that page's
         // OWN hydration, which nothing else here covers; separating the two would mean recording
         // warnings in-page against a hydration marker rather than reading the console from outside.

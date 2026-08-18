@@ -256,7 +256,8 @@ export const CALLABLES = {
         blurb:
             'Streaming SSR: one walk over a `Renderable`, in document order, handing over what it has ' +
             'written whenever it is about to wait. An async generator, so a caller wanting a string drains ' +
-            'it and `page(render(view))` streams it.',
+            'it and `page(render(view))` streams it. `shell` is the document around it — the app’s own, ' +
+            'or one you pass — and `hydrate` is whether a client takes it over.',
         ladders: ['server'],
     },
 
@@ -296,7 +297,9 @@ export const CALLABLES = {
     csp: {
         name: 'csp',
         from: 'abide/server',
-        blurb: 'The policy that makes that nonce mean something.',
+        blurb:
+            'The opt-in half of a page’s policy. A page carries `object-src` and `base-uri` already; ' +
+            'this adds every directive that names where a resource may load from, and the nonce.',
         ladders: ['request'],
     },
 
@@ -312,8 +315,11 @@ export const CALLABLES = {
     middleware: {
         name: 'middleware',
         from: 'abide/server',
-        blurb: 'Wrap every request, outermost first — an ARRAY, because the order is the app’s to declare.',
-        ladders: ['lifecycle', 'transport'],
+        blurb:
+            'Wrap every request, outermost first. The one registration that APPENDS rather than replaces, so ' +
+            'a rung declared late joins the chain instead of taking it over — and the disposer takes off its ' +
+            'own rungs and no others.',
+        ladders: ['lifecycle', 'transport', 'request'],
     },
     onStart: {
         name: 'onStart',

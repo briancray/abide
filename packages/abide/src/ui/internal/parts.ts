@@ -11,6 +11,7 @@ import {
     Awaited,
     attributeText,
     Boundary,
+    caughtArm,
     type Branches,
     cellProps,
     Component,
@@ -335,9 +336,20 @@ export class ChildPart {
             return
         }
         if (value instanceof Boundary) {
-            // Synchronous, exactly like the `try` it is named after — see `settledBoundary`, which is
-            // the same decision the server makes.
-            this.set(settledBoundary(value))
+            // The BUILD is inside the guard, not just the body call — which is what makes this the
+            // same boundary the server draws. `settledBoundary` alone catches only what running the
+            // body threw, and a body returns a `TemplateResult` whose slots are thunks: a nested
+            // component's setup and a markup expression both run in the `set` below, after the body
+            // returned. So the server rendered the catch arm and this side threw, and a page whose
+            // server render succeeded failed to hydrate — see `boundaryRegion` in `#server/render.ts`.
+            //
+            // `caughtArm` rethrows a Pending signal and a boundary with no `{:catch}`, so a suspending
+            // region still suspends and an unguarded one still fails outward.
+            try {
+                this.set(settledBoundary(value))
+            } catch (error) {
+                this.set(caughtArm(value, error))
+            }
             return
         }
         this.holding = NOTHING
@@ -444,7 +456,25 @@ export class ChildPart {
             // every node the server sent would be replaced on settle. Adopted here instead, and each
             // awaiting hole claims its own nodes one level down.
             const { produced, waiting } = producedBoundary(value)
-            this.take(claimed, produced)
+            try {
+                this.take(claimed, produced)
+            } catch (error) {
+                // The body did not fit these nodes, and with a `{:catch}` present the likeliest reason
+                // is that the SERVER rendered the arm into them. This side re-runs the body to know
+                // what to claim, and the body's throw lives in a thunk the walk reaches only AFTER
+                // comparing structure — so what arrives here is a shape complaint, not the failure.
+                //
+                // There is no adopting the arm from here: the error that selects it has not been
+                // raised, and the walk has already built parts against the wrong shape. The region is
+                // rebuilt instead, and `set`'s own guard is where the body throws and the arm renders
+                // — the same price every unclaimable range pays.
+                //
+                // Re-raised only to say so. The original names a missing marker, which reads as a
+                // framework bug when the boundary did exactly its job; without a `{:catch}` the server
+                // cannot have rendered one, and then that original message is the true one.
+                if (!(error instanceof Mismatch) || value.branches.catch === undefined) throw error
+                mismatch('a {#try} body did not fit the markup — its {:catch} arm is what the server rendered')
+            }
             if (waiting.length === 0) return
             // The body was adopted on the bet that it settles — which is the same bet the server
             // already made and wrote into the markup. If it does not, the catch arm replaces it, and
@@ -1656,7 +1686,7 @@ class Instance {
         if (!isOpen(open)) {
             mismatch(
                 `slot ${slot} has no opening marker (found ${describe(open)}) — ` +
-                    `was this rendered with { hydratable: true }?`,
+                    `was this rendered with { hydrate: true }?`,
             )
         }
         const claimed: ChildNode[] = []

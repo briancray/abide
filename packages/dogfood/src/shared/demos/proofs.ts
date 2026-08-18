@@ -166,7 +166,7 @@ function build(rung: Example): Case | null {
             mount(warm, render).dispose()
 
             const served = container()
-            served.innerHTML = await renderToString(render(), { hydratable: true })
+            served.innerHTML = await renderToString(render(), { hydrate: true })
 
             const built = container()
             const live = mount(built, render)
