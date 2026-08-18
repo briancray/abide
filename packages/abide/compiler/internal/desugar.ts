@@ -78,27 +78,40 @@ function awaited(previous: Token | undefined): boolean {
 }
 
 /**
- * Is this identifier the SOURCE of a `for await` head?
+ * Which loop does the `(` at `at` open, if it opens one at all?
  *
- * `for await` iterates the cell itself — a slot's async iterator is its transcript cursor, and that
- * is the whole of what makes a streamed read spell the same on both sides. Reading it first hands the
- * loop the LATEST CHUNK, which is a value and not iterable at all, so the sugar turned a working
- * `for await (const row of catalogue({}))` into a type error with nothing saying why.
- *
- * A synchronous `for … of` is deliberately untouched: there the cell holds the array and the read is
- * exactly what the author means.
- *
- * Walked back to the head's own `(` rather than read off `previous` alone, because `of` is the only
- * token that would otherwise distinguish the two loops and both spell it.
+ * `for (` and `for await (` differ by exactly one token, so both the head's BINDING and its
+ * iterable's sugar ask this one question — spelled twice, the two disagreed about `for await` and a
+ * head bound its name without shadowing the body that uses it.
  */
-function asyncIterated(tokens: Token[], at: number): boolean {
+function forHeadAt(tokens: Token[], at: number): 'plain' | 'await' | null {
+    if (tokens[at]?.kind !== SyntaxKind.OpenParenToken) return null
+    if (awaited(tokens[at - 1])) {
+        return tokens[at - 2]?.kind === SyntaxKind.ForKeyword ? 'await' : null
+    }
+    return tokens[at - 1]?.kind === SyntaxKind.ForKeyword ? 'plain' : null
+}
+
+/**
+ * Is this identifier the WHOLE iterable of a `for await` head?
+ *
+ * `for await` iterates the cell itself — a slot's async iterator is its transcript cursor, which is
+ * what makes a streamed read spell the same on both sides. Reading it first hands the loop the latest
+ * CHUNK, a value and not iterable at all.
+ *
+ * The whole of it, because only then is the cell what the loop wants: `for await (const r of
+ * rows.map(load))` iterates an array the cell HOLDS, so that one is an ordinary read and suppressing
+ * it hands `.map` to the handle. A synchronous `for … of` is untouched for the same reason.
+ *
+ * Walked back to the head's own `(` because `of` is the only token the two loops share.
+ */
+function asyncIterated(tokens: Token[], at: number, end: number): boolean {
     if (tokens[at - 1]?.kind !== SyntaxKind.OfKeyword) return false
+    // Nothing between the name and the head's `)`, or it is an expression the cell is only part of.
+    if (tokens[end + 1]?.kind !== SyntaxKind.CloseParenToken) return false
     for (let i = at - 2; i >= 0; i--) {
-        const kind = (tokens[i] as Token).kind
-        // A `for` with no paren between it and the `of` is not a head this can read.
-        if (kind === SyntaxKind.ForKeyword) return false
-        if (kind !== SyntaxKind.OpenParenToken) continue
-        return awaited(tokens[i - 1]) && tokens[i - 2]?.kind === SyntaxKind.ForKeyword
+        if ((tokens[i] as Token).kind !== SyntaxKind.OpenParenToken) continue
+        return forHeadAt(tokens, i) === 'await'
     }
     return false
 }
@@ -558,10 +571,9 @@ export function desugar(
             }
 
             // `for (const x of …)` binds across the head AND the body; everything else is scoped by
-            // the block it sits in, which the nesting rule already retires correctly.
-            const head =
-                tokens[i - 1]?.kind === SyntaxKind.OpenParenToken &&
-                tokens[i - 2]?.kind === SyntaxKind.ForKeyword
+            // the block it sits in, which the nesting rule already retires correctly. `for await` is
+            // the same head — read as anything else, its name never shadowed the body it names.
+            const head = forHeadAt(tokens, i - 1) !== null
             bind(names, i, head ? -1 : level, false, head ? forStatementEnd(cursor, i, level) : NO_END)
             continue
         }
@@ -656,7 +668,7 @@ export function desugar(
                 (after?.kind === SyntaxKind.DotToken || after?.kind === SyntaxKind.QuestionDotToken) &&
                 member !== undefined &&
                 SOURCE_SURFACE.has(member.text)
-            if (!explicit && !verb && !awaited(previous) && !asyncIterated(tokens, i)) {
+            if (!explicit && !verb && !awaited(previous) && !asyncIterated(tokens, i, close)) {
                 const end = (tokens[close] as Token).end
                 const key = source.slice(token.start, end).replace(/\s+/g, ' ')
                 reads.push({ key, start: token.start, end, keyed: true })
@@ -833,9 +845,9 @@ export function desugar(
         ) {
             continue
         }
-        // The same hold the keyed branch takes one screen up, for the same reason: a cell is an async
-        // iterable and `for await` wants the cell.
-        if (asyncIterated(tokens, i)) continue
+        // The same hold the keyed branch takes, for the same reason: a cell is an async iterable and
+        // `for await` wants the cell.
+        if (asyncIterated(tokens, i, i)) continue
         const peeking = selfReads.has(i) || (insideFunction !== null && insideFunction[i] === 0)
         const read = local ?? (peeking ? `${name}.peek()` : `${name}()`)
         edits.push({

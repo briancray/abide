@@ -647,6 +647,27 @@ export default suite({
                     template(`${cell}<button onclick={() => { for (const r of rows) log(r) }}>x</button>`),
                     '<button @click=${() => { for (const r of rows()) log(r) }}>x</button>',
                 )
+                // And the hold is on the WHOLE iterable, not on "a name next to `of`". Suppressing
+                // the read here would hand `.map` and `[0]` to the handle — the cell holds the array
+                // that is being iterated, so these are the ordinary reads they look like.
+                is(
+                    'a cell the head only PART of is read as usual',
+                    template(`${cell}<button onclick={async () => { for await (const r of rows.map(load)) log(r) }}>x</button>`),
+                    '<button @click=${async () => { for await (const r of rows().map(load)) log(r) }}>x</button>',
+                )
+                is(
+                    '…including an index into it',
+                    template(`${cell}<button onclick={async () => { for await (const r of rows[0]) log(r) }}>x</button>`),
+                    '<button @click=${async () => { for await (const r of rows()[0]) log(r) }}>x</button>',
+                )
+                // The head BINDS across the body, which `for await` was not read as for as long as
+                // the two spellings of "is this a for-head" disagreed: the name went unshadowed and
+                // the body's own `rows` compiled to a read of the outer cell.
+                is(
+                    'a `for await` head shadows the body it names',
+                    template(`${cell}<button onclick={async () => { for await (const rows of rows) log(rows) }}>x</button>`),
+                    '<button @click=${async () => { for await (const rows of rows) log(rows) }}>x</button>',
+                )
             },
         },
 

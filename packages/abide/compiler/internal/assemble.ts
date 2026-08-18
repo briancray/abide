@@ -19,10 +19,48 @@
 // enums, no namespaces — because `checked.ts` runs under Node, and the type import below is erased
 // rather than resolved, which is what lets an alias appear in a file Node loads.
 
-import type { JsonSchema, JsonType } from '#shared/internal/shapes.ts'
+import type { JsonSchema, JsonType, Shapes } from '#shared/internal/shapes.ts'
 
 /** Anything matches this, and it is what both derivations answer for a type they cannot describe. */
 export const ANYTHING: JsonSchema = {}
+
+/**
+ * An endpoint that declares nothing, in every direction there is.
+ *
+ * A factory rather than a shared constant because callers fill it in place, and one call rather than
+ * a literal per site because the field list is the thing that drifts: `room` arrived as the third
+ * direction and had to be written at ten sites, two of which were missed and silently dropped it.
+ */
+export function noShapes(): Shapes {
+    return { input: undefined, output: undefined, room: undefined }
+}
+
+/**
+ * Does this say anything at all — the guard both lanes use before publishing a record.
+ *
+ * Over the KEYS rather than over a list of them, so a fourth direction is carried by the same test
+ * that carried the third. Written out, the two lanes' guards drifted apart the moment one of them
+ * was updated and the other was not.
+ */
+export function describes(shapes: Shapes): boolean {
+    for (const key in shapes) {
+        if ((shapes as unknown as Record<string, unknown>)[key] !== undefined) return true
+    }
+    return false
+}
+
+/**
+ * The checker's better answer over the syntactic one, direction by direction.
+ *
+ * Assigned rather than ADDED: every derivation writes all three fields, so this overwrites a field
+ * that is already there rather than growing the record mid-loop.
+ */
+export function preferring(into: Shapes, known: Shapes): void {
+    for (const key in known) {
+        const better = (known as unknown as Record<string, unknown>)[key]
+        if (better !== undefined) (into as unknown as Record<string, unknown>)[key] = better
+    }
+}
 
 /**
  * DEFINED keys, not present ones. Every builder here writes the fields it does not know as

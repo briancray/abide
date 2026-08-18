@@ -20,7 +20,7 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 | `abide/compiler/shapes` | `deriveShapes` — the real checker over a project, for the shapes tokens cannot read |
 | `abide/compiler/assemble` | `NAMED_FORMATS` and the JSON Schema assembler — the closed set of `format` names abide will publish, so what `deriveShapes` emits and what `validateJson` accepts cannot drift |
 | `abide/compiler/plugin` | The Bun plugin: compiles `.abide` on import, elides a transport module per lane |
-| `abide/cli` | `cli(argv)`, `COMMANDS`, `commandNamed`, `usage`, `CLI_EXIT_CODES`, `exitForStatus`, the client-build manifest shape, and the REPL's `LineEditor` / `suggest` / `EditorHooks` |
+| `abide/cli` | `cli(argv)`, `COMMANDS`, `commandNamed`, `usage`, `CLI_EXIT_CODES`, `exitForStatus`, the client-build manifest shape, the REPL's `LineEditor` / `suggest` / `EditorHooks`, and the language server's `LanguageServer` / `LanguageHooks` |
 
 ## Terms
 
@@ -447,7 +447,7 @@ never differ; a union's `type` list is sorted for the same reason.
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `endpoints` | `() => EndpointShape[]` | Every registered endpoint as `{ id, kind, method, description, streams, input, output, room, clientPublish, clients }`, sorted by address. |
+| `endpoints` | `() => EndpointShape[]` | Every registered endpoint as `{ id, kind, method, description, streams, input, output, room, clientPublish, clients }`, sorted by address. `streams` is said only when true, and it is what the DECLARATION says rather than what a call turned out to do: a `function*` the runtime can see for itself, and a `jsonl()` / `sse()` framing only the compiler can, which is why it crosses `register` beside the shapes. Read off the value instead, a framed endpoint described itself as answering one value until something had already called it. |
 | `GET /__abide/schema` | — | The same document over the wire. Open: every address in it is already in the client bundle. |
 | `openapi` | `(options?: OpenApiOptions) => OpenApiDocument` | The same catalogue as an OpenAPI 3.1 document. `title` / `version` default to `APP_NAME` / `APP_VERSION`. |
 | `GET /__abide/openapi.json` | — | The document over the wire, open like the schema. `.json` because the consumer is somebody else's generator. |
@@ -1652,7 +1652,7 @@ failure in a line.
 | `abide console [<action\|endpoint> [--arg=…]]` | The APP's own console, not this binary's. One word is one command and an exit code; no words is a PROMPT. The app's endpoints are the surface, read from `GET /__abide/schema`; `connect` / `disconnect` / `serve` / `health` / `identity` / `logs` / `help` / `exit` are the console's own. `help` is where the endpoints are listed, because a second command printing the same list is the copy that goes stale. A flag IS a query parameter, so the endpoint's declared shape decides what one means; a socket is tailed with `--tail=<n>` / `--wait=<ms>`, which stand for `__abide_tail` / `__abide_wait` EXCEPT where the room declares a member by that name, in which case the name is the app's. |
 | `abide compile [--out <path>] [--target <t>]` | ONE standalone executable, via `bun build --compile`: the runtime, the framework, the app, its pages, its bundle and its public files, with that console as its front door. Builds the client first, every time. `--target` cross-compiles, and naming it more than once makes `--out` a DIRECTORY. |
 | `abide bundle` | A desktop launcher for the host platform: embedded assets and a first-run setup screen. Native windowing is best-effort — a system webview binary, or the default browser. |
-| `abide lsp` | The `.abide` language server, over stdio. |
+| `abide lsp` | The `.abide` language server, over stdio: diagnostics, completion and hover. Takes no arguments — which files to look at is the editor's to say, on the wire. |
 | `abide` · `-h` · `--help` | Usage, GENERATED from `COMMANDS`. Asking for help is a success (stdout, `0`); an unknown subcommand is not (stderr, `2`). `abide <command> --help` is the same success, answering with that command's own row — read from the FIRST argument only, so `abide run <file> --help` still belongs to the script. |
 
 Arguments are the command's own, and the rules are one set rather than one per command. A flag no row declares is REFUSED (stderr, `2`) rather than dropped — a `--minify` that was quietly ignored is a build that did not do what was asked and said nothing — and the usage line printed with a refusal is the `args` from the same table the help screen reads, so the two cannot disagree about how a command is spelled.
@@ -1753,6 +1753,31 @@ dead-code elimination off. A top-level `await` is the FALLBACK — the line fail
 has run, and the retry goes through an async wrapper. Ghost text is a dim completion of the word
 being typed, taken with Tab or a right arrow at the end of the line, and off wherever color is; the
 line editor takes its terminal as HOOKS, so a test drives it with a string of keystrokes.
+
+`abide lsp` answers at TWO SPEEDS, and the split is the whole design. The syntax speed is `compile()`
+— pure, no filesystem, sub-millisecond — and it publishes a parse failure as a range over the marker
+that failed, completes `{#`/`{:`/`{/` and `bind:`, and hovers any of them. It works on a file that
+does not parse, which is not a bonus but the case: an editor asks what may follow `{:` at exactly the
+moment there is an unclosed block, so the block a marker sits in is read out of the TEXT rather than
+off a parse tree. The type speed is the real checker: the buffer is emitted into the same
+`.abide/types` mirror `abide check` writes, and a `tsgo` program is held OPEN across the session — a
+project costs ~240 ms once and every ask after it ~3 ms, against seconds for a fresh `tsc`. Both
+publish separately, syntax first, and a type answer that arrives after the buffer moved on is
+dropped. A server whose checker will not start (no `node`) keeps every syntax answer and simply
+never contradicts the author about a type.
+
+The BUFFER and not the file: an editor's text is one save ahead of the disk, and a checker reading
+the disk reports the previous version's errors with total confidence. The mirror is generated and
+gitignored, so writing unsaved text into it costs nothing `abide check` was not already rewriting.
+What it does not read is anybody ELSE's unsaved buffer — a `.ts` file is read from disk, because
+`.ts` is the TypeScript extension's business and the seam is the file extension an editor already
+draws. The completion and hover answers are derived from `BRANCHES` and `BINDABLE` rather than from
+prose beside them, so an editor cannot offer a block the compiler does not have or miss one it does.
+Sync is FULL — the whole buffer per edit — and a type error's COLUMN carries the same drift
+`abide check` has: exact at the start of an expression, and within one off by however much the
+desugar inserted before that point. stdin and stdout ARE the protocol, so nothing this process has to
+say goes anywhere but stderr. An editor is pointed at it by running `abide lsp` for `.abide` files;
+there is no configuration, because there is nothing to configure.
 
 ## The client bundle
 

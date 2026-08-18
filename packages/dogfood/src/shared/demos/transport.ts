@@ -1766,6 +1766,38 @@ export default suite({
         },
 
         {
+            title: 'a FRAMED handler says it streams in the document, not only in the stub',
+            note: 'The document is what a machine reads BEFORE it calls, so a `streams` it gets wrong is wrong at exactly the moment it matters. `isGenerator` cannot see a framing — `() => jsonl(items())` is an ordinary arrow — and `policy.framing` is learned from the first call’s VALUE, so a freshly started process described every framed endpoint as answering one value while the browser stub it had just built was already decoding chunks. The compiler is the only half that can say it up front, which is why `streams` now rides across `register` beside the shapes. It lands on its OWN policy field: `policy.streams` decides the call path, and a framing must not take that branch — trusting it there seeded the generator object, which is `{}`.',
+            run({ is }) {
+                const framed = GET(() => jsonl([{ id: 1 }, { id: 2 }]))
+                const yielding = GET(async function* () {
+                    yield { id: 1 }
+                })
+                const plain = GET(() => ({ ok: true }))
+                register(
+                    'rpc',
+                    [
+                        ['demo/framing/framed', 'framed'],
+                        ['demo/framing/yielding', 'yielding'],
+                        ['demo/framing/plain', 'plain'],
+                    ],
+                    { framed, yielding, plain },
+                    // What `frames()` read off the syntax, which is the whole of what the runtime
+                    // could not work out for itself. A generator needs no entry: `isGenerator` sees it.
+                    { framed: { streams: true } },
+                )
+                const published = endpoints()
+                const at = (id: string): boolean | undefined =>
+                    published.find((one) => one.id === id)?.streams
+                is('a framed endpoint publishes streams', at('demo/framing/framed'), true)
+                is('…and so does one that yields, as it always did', at('demo/framing/yielding'), true)
+                // The half that stops this reading as "say true": an endpoint answering with one
+                // value must still say nothing, or the flag has stopped carrying a fact.
+                is('one answering with a value does not', at('demo/framing/plain'), undefined)
+            },
+        },
+
+        {
             title: 'a socket answers over ordinary HTTP as well as over a websocket',
             note: 'One address, three doors. A `GET` carrying `Upgrade: websocket` is the connection; a `GET` without one is the transcript-then-follow as ndjson; a `POST` is one message into the room. The two HTTP arms exist because a websocket is exactly what a generated client, a `curl` and an MCP tool call cannot hold — and they are the same room, through the same gates: `clientPublish` still decides whether a client may write at all, the declared message schema still refuses what does not match, and the socket’s middleware still runs on both the subscribe and the publish. What differs is only that a refusal here is a STATUS, because an HTTP request has a response to carry one in and a frame does not. `__abide_tail=n` is what makes a stream that never ends answerable: it takes n messages and closes, and breaking the iteration is what drops the subscription.',
             async run({ is }) {
@@ -2451,6 +2483,22 @@ export default suite({
                         filename: USERS,
                         browser: true,
                     })?.code.includes('stream: true'),
+                    false,
+                )
+
+                // Both lanes or neither. The stub is what a BROWSER was told; the registration is what
+                // the SERVER is told, and while only the first carried it the document described a
+                // framed endpoint as answering one value until somebody had already called it.
+                is(
+                    'the server lane is told the same thing',
+                    elide(framed, { filename: USERS })?.code.includes('"streams":true'),
+                    true,
+                )
+                is(
+                    '…and is not told it about a single value',
+                    elide(`export const feed = GET(() => json({ ok: true }))\n`, {
+                        filename: USERS,
+                    })?.code.includes('"streams":true'),
                     false,
                 )
 

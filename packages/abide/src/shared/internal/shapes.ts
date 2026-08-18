@@ -98,6 +98,24 @@ export interface Shapes {
 }
 
 /**
+ * What the compiler read off ONE declaration — its shapes, plus what the SYNTAX said about them.
+ *
+ * The record that crosses into `register`, and it is `Shapes` plus the one fact that is not a
+ * direction. A hand-written `register` sends shapes alone, which is why every member is optional.
+ */
+export interface Declaration extends Shapes {
+    /**
+     * The handler answers with a SEQUENCE — declared `function*`, or framed with `jsonl()` / `sse()`.
+     *
+     * Only the compiler can say the second: `() => jsonl(items())` is an ordinary arrow, so the
+     * runtime's own `isGenerator` reads it as a single value and only learns better from the first
+     * call's return. That left the document saying "one value" about an endpoint whose stub was
+     * already decoding chunks — and the document is what a machine reads BEFORE calling.
+     */
+    streams?: true | undefined
+}
+
+/**
  * Which GENERATED surfaces an endpoint appears on.
  *
  * Every one, unless a declaration says otherwise — the same default the catalogue already has, and

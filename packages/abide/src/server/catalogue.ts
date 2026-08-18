@@ -10,7 +10,7 @@
 // — the same rule the runtime already follows for scoped `<style>` blocks.
 
 import type { Channel, KeyedChannel } from '#shared/channel.ts'
-import { type EndpointShape, EVERY_CLIENT, type Shapes } from '#shared/internal/shapes.ts'
+import { type Declaration, type EndpointShape, EVERY_CLIENT } from '#shared/internal/shapes.ts'
 import type { Kind, Rpc } from '#shared/transport.ts'
 import { describeRpc, describeSocket, policyOf, socketPolicyOf } from './rpc.ts'
 
@@ -29,12 +29,13 @@ export function register(
     entries: [id: string, name: string][],
     module: Record<string, unknown>,
     /**
-     * What the compiler read off each declaration's TYPE, by export name.
+     * What the compiler read off each declaration, by export name — its shapes, and whether its
+     * syntax says the answer is a SEQUENCE.
      *
      * Absent when the module's types said nothing this could read, and absent entirely from a
      * hand-written `register` — so a shape is something an endpoint gains, never something it needs.
      */
-    shapes?: Record<string, Shapes>,
+    shapes?: Record<string, Declaration>,
 ): void {
     for (const [id, name] of entries) {
         const declared = module[name]
@@ -80,7 +81,9 @@ export function endpoints(): EndpointShape[] {
             kind: 'rpc',
             method: rpc.method,
             ...(rpc.description === undefined ? {} : { description: rpc.description }),
-            ...(policy?.streams === true ? { streams: true } : {}),
+            // `declaredStreams`, not `streams`: the second decides the call path and is blind to a
+            // framing, so publishing off it said "one value" about `() => jsonl(items())`.
+            ...(policy?.declaredStreams === true ? { streams: true } : {}),
             ...(policy?.input == null ? {} : { input: policy.input }),
             ...(policy?.output == null ? {} : { output: policy.output }),
             clients: policy?.clients ?? EVERY_CLIENT,

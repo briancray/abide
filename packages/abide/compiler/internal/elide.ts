@@ -22,11 +22,12 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 // Type-only, so nothing about the runtime reaches the compiler: the emitted `__register("rpc", …)`
 // IS the contract between the two, and a `Kind` declared twice is a rename that compiles on both
 // sides and fails on the wire.
-import type { Shapes } from '#shared/internal/shapes.ts'
+import type { Declaration } from '#shared/internal/shapes.ts'
 import type { Kind } from '#shared/transport.ts'
 // The directory rule, from the leaf that owns it: the cli and the boot scan with these too, and an
 // edge onto THIS module would hand them TypeScript's scanner for two glob strings.
 import { TRANSPORT_DIRECTORIES } from '../TRANSPORT.ts'
+import { describes } from './assemble.ts'
 import { SyntaxError_, type Token, tokensOf } from './lex.ts'
 import { crossing, type Declared, shapesAt, TypeReader, type TypeSource } from './shape.ts'
 
@@ -309,24 +310,28 @@ export function registration(modulePath: string, kind: Kind, endpoints: Endpoint
     if (endpoints.length === 0) return ''
     const address = moduleAddress(modulePath, kind)
     const pairs: [string, string][] = []
-    const shapes: Record<string, Shapes> = {}
+    const shapes: Record<string, Declaration> = {}
     let names = ''
-    let derived = false
     for (const endpoint of endpoints) {
         pairs.push([addressOf(address, endpoint), endpoint.name])
         names += names === '' ? endpoint.name : `, ${endpoint.name}`
-        if (endpoint.input === undefined && endpoint.output === undefined && endpoint.room === undefined) {
-            continue
-        }
-        derived = true
         // Every field, whatever it holds: `shapesAt` writes them all on every endpoint it builds, so
         // there is nothing left for a conditional spread to decide — and `JSON.stringify` below
         // drops an undefined value, so the emitted registration is byte-identical.
-        shapes[endpoint.name] = { input: endpoint.input, output: endpoint.output, room: endpoint.room }
+        //
+        // `streams` rides with them because it is the same journey: the stub already carries it and
+        // the SERVER could not read it, so a framed endpoint published itself as a single value.
+        const carried: Declaration = {
+            input: endpoint.input,
+            output: endpoint.output,
+            room: endpoint.room,
+            streams: endpoint.streams ? true : undefined,
+        }
+        if (describes(carried)) shapes[endpoint.name] = carried
     }
     // Omitted entirely when nothing was derivable, so a module whose types this cannot read emits
     // exactly the text it emitted before there was a derivation at all.
-    const carried = derived ? `, ${JSON.stringify(shapes)}` : ''
+    const carried = Object.keys(shapes).length > 0 ? `, ${JSON.stringify(shapes)}` : ''
     return (
         // `abide/server/internal`, not `abide/server`: registering is the SERVING half, which
         // `abide start` does and an app never types. What an app writes is the `GET(…)` above.

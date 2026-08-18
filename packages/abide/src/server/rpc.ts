@@ -12,7 +12,7 @@ import { type Channel, type ChannelOptions, channel, type KeyedChannel } from '#
 import { internals } from '#shared/internal/graph.ts'
 import { isAsyncIterable, isThenable } from '#shared/internal/probes.ts'
 import { seedKey } from '#shared/internal/keys.ts'
-import { type Clients, EVERY_CLIENT, type JsonSchema, type Shapes } from '#shared/internal/shapes.ts'
+import { type Clients, type Declaration, EVERY_CLIENT, type JsonSchema, type Shapes } from '#shared/internal/shapes.ts'
 import { NO_LIMIT, race, timeoutError } from '#shared/internal/timers.ts'
 import {
     type Answer,
@@ -112,8 +112,18 @@ interface RpcPolicy {
     maxBodySize: number | null
     /** How long the client may serve what it loads, in ms. `Infinity` says nothing on the wire. */
     ttl: number
-    /** The handler yields, so the answer arrives as chunks. Published, because a caller plans for it. */
+    /** The handler yields, so the answer arrives as chunks. Decides the CALL PATH — see `dispatch`. */
     streams: boolean
+    /**
+     * The same fact as the compiler read it, and it is separate because `streams` above is not only
+     * published: `dispatch` branches on it, and a framing must NOT take that branch. Trusting it for
+     * one seeded the generator object, which is `{}` — the bug the comment on `framing` records.
+     *
+     * So this says nothing about how a call runs and everything about what the DOCUMENT claims: a
+     * `() => jsonl(items())` answers with a sequence, the stub already knew, and `endpoints()` had no
+     * way to find out until somebody had already called.
+     */
+    declaredStreams: boolean
     /**
      * The PUBLISHED shape in each direction — what a tool definition or an OpenAPI document reads.
      *
@@ -188,11 +198,15 @@ export function bodyCeiling(policy: RpcPolicy | undefined): number {
  * because a validator and a library schema both answer "does this match" and neither answers "what is
  * it".
  */
-export function describeRpc(rpc: object, address: string, shapes: Shapes | undefined): void {
+export function describeRpc(rpc: object, address: string, shapes: Declaration | undefined): void {
     const policy = RPC_POLICY.get(rpc)
     if (policy === undefined) return
     policy.address = address
     if (shapes === undefined) return
+    // Only ever UPWARDS: the runtime saw a generator or it did not, and the compiler can additionally
+    // see a framing. Neither answer makes the other wrong, so the document says "sequence" if either
+    // does — and `streams`, which decides the call path, is left exactly as `declare` computed it.
+    if (shapes.streams === true) policy.declaredStreams = true
     const input = shapes.input
     if (input !== undefined) {
         policy.input ??= input
@@ -303,6 +317,9 @@ function declare<Args, T>(
         maxBodySize: options.maxBodySize ?? null,
         ttl,
         streams,
+        // False until a registration says otherwise, which is the honest default for the lane that
+        // has no compiler in it: a hand-written `register` never derives one.
+        declaredStreams: streams,
         input: publishable(declared?.input),
         output: publishable(declared?.output),
         checkInput: null,

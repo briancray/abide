@@ -2200,7 +2200,7 @@ function define(node: { name: string; parameters: string; body: Node[] }, contex
     // A parameter written by hand types itself. One written as `()` still BINDS `args` — that is what
     // `childrenOf` answers with — and an untyped binding is an implicit `any`, which the app's own
     // typecheck refuses: `{#component Loud()}` was a documented spelling that could not compile.
-    return `(${node.parameters || 'args: { children?: unknown }'}) => ${fragment(node.body, inner)}`
+    return `(${node.parameters || `args: ${signature(null)}`}) => ${fragment(node.body, inner)}`
 }
 
 /** Split on a character at the TOP level — outside every bracket, brace and string. */
@@ -2574,15 +2574,11 @@ export function emit(
     // which would otherwise become real text nodes.
     const markup = children(blocks.template, context).replace(/^\s+/, '\n').replace(/\s+$/, '\n')
     const lifted = liftTypes(replaced, declaredTypes(replacedTokens, replacedTypes))
-    // A component that declares no props may be CALLED with none — `Report()` rather than `Report({})`
-    // — which is the whole of what a `.ts` route writing `render(Report(), …)` needs. The default is
-    // `{}` rather than an optional parameter because the body reads `args.children` for a `<slot/>`,
-    // and it is only for the no-props case: with a declared type, whether every member is optional is
-    // a question ABOUT that type, and a named one could not be answered without a type-checker.
-    //
-    // The inline `{#component}` arrow keeps the bare parameter. Nothing but this emitter can call one,
-    // and `component()` always hands it an object.
-    const args = declared === null ? `args: ${signature(null)} = {}` : `args: ${signature(declared)}`
+    // `Report()` rather than `Report({})`, which is what a `.ts` route's `render(Report(), …)` needs.
+    // A default rather than an optional parameter because the body reads `args.children` for a
+    // `<slot/>` — and only here: with a declared type, whether every member is optional is a question
+    // about that type, which nothing in this lane can answer.
+    const args = `args: ${signature(declared)}${declared === null ? ' = {}' : ''}`
 
     // `html` and the return type are always needed; everything else is imported only if the file
     // turned out to use it, so a component that never toggles a class does not import `classes`.

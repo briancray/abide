@@ -21,7 +21,18 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 // halves, and a shape language declared twice is a keyword that means one thing here and another
 // there.
 import type { JsonSchema, Shapes } from '#shared/internal/shapes.ts'
-import { ANYTHING, arrayOf, formatOf, INTRINSICS, isAnything, NOTHING, objectOf, union, usable } from './assemble.ts'
+import {
+    ANYTHING,
+    arrayOf,
+    formatOf,
+    INTRINSICS,
+    isAnything,
+    noShapes,
+    NOTHING,
+    objectOf,
+    union,
+    usable,
+} from './assemble.ts'
 import { type Token, tokensOf } from './lex.ts'
 import { IDENTIFIER } from './parse.ts'
 
@@ -683,8 +694,8 @@ export function crossing(resolve: TypeSource): Crossing {
 /**
  * What one declaration says about itself: whether it streams, and the shapes it names.
  *
- * Over `Shapes` rather than restating its two members, so the shape language has one declaration and
- * a third direction added to it arrives here without an edit.
+ * Over `Shapes` rather than restating its members, so the shape language has one declaration and a
+ * direction added to it arrives here without an edit.
  */
 export interface Declared extends Shapes {
     /**
@@ -715,8 +726,7 @@ export function shapesAt(reader: TypeReader, methodAt: number, rpc: boolean): De
         const explicit = reader.typeArguments(at)
         at = explicit.at
         // A socket's first type argument is its MESSAGE; its second is the room, which addresses a
-        // subscriber rather than travelling in one — so it is carried under its own name rather than
-        // dropped, because a generated surface has to say which room it is publishing to.
+        // subscriber rather than travelling in one, so it is carried under its own name.
         input = explicit.args[0]
         if (rpc) output = explicit.args[1]
         else room = explicit.args[1]
@@ -747,33 +757,49 @@ export function shapesAt(reader: TypeReader, methodAt: number, rpc: boolean): De
     }
 }
 
-/**
- * The two helpers that frame a SEQUENCE as a response body — the second way a handler says its value
- * arrives in chunks.
- *
- * A handler that yields says so in its own syntax; one that returns `jsonl(items())` or `sse(items())`
- * says so in the helper it calls, and the caller's `for await` is identical either way. Without this
- * the stub for such an endpoint was built without `stream: true`, so its whole body decoded as one
- * blob of text and reading it meant a hand-written `TextDecoder` loop in the page.
- */
+/** The helpers that frame a SEQUENCE as a response body — `jsonl(rows())` streams as surely as a `yield`. */
 const FRAMING = new Set(['jsonl', 'sse'])
 
 /**
  * Does the handler frame its answer as a stream?
  *
- * The bare NAME, matched the same way `GET` / `POST` already are a few frames up the stack: this
- * file recognises the vocabulary rather than resolving it, so a local function shadowing one of the
- * two names is read as the framing helper. That is the same documented cost `prologue` carries and
- * it is one grep from being checked, where an import resolver here would be a second, weaker copy of
- * what the checker does in the lane that has one.
+ * The bare NAME, the way `GET` / `POST` already are: this file recognises the vocabulary rather than
+ * resolving it, so a local shadowing one of the two reads as the helper — `prologue`'s documented
+ * cost, where an import resolver here would be a second, weaker copy of what the checker does.
+ *
+ * Bounded to the HANDLER, not the whole declaration: an options object is the second argument, and a
+ * `jsonl` named in one describes an error arm rather than this endpoint's answer. What the bound
+ * cannot exclude is a mention inside a nested callback, which reads as framing and types the stub as
+ * chunks — a parser, not a wider vocabulary, is what would settle that.
  */
 function frames(tokens: Token[], call: number): boolean {
-    const close = balancedFrom(tokens, call, SyntaxKind.OpenParenToken, SyntaxKind.CloseParenToken)
-    if (close < 0) return false
-    for (let i = call + 1; i < close; i++) {
+    // One walk carrying its own depth, rather than `balancedFrom` to find the end and a second pass
+    // to the same place.
+    let depth = 0
+    for (let i = call; i < tokens.length; i++) {
         const token = tokens[i] as Token
-        if (token.kind !== SyntaxKind.Identifier || !FRAMING.has(token.text)) continue
-        if ((tokens[i + 1] as Token | undefined)?.kind === SyntaxKind.OpenParenToken) return true
+        const kind = token.kind
+        if (
+            kind === SyntaxKind.OpenParenToken ||
+            kind === SyntaxKind.OpenBraceToken ||
+            kind === SyntaxKind.OpenBracketToken
+        ) {
+            depth++
+            continue
+        }
+        if (
+            kind === SyntaxKind.CloseParenToken ||
+            kind === SyntaxKind.CloseBraceToken ||
+            kind === SyntaxKind.CloseBracketToken
+        ) {
+            depth--
+            if (depth === 0) return false
+            continue
+        }
+        if (kind === SyntaxKind.CommaToken && depth === 1) return false
+        if (kind === SyntaxKind.Identifier && FRAMING.has(token.text)) {
+            if (tokens[i + 1]?.kind === SyntaxKind.OpenParenToken) return true
+        }
     }
     return false
 }
@@ -801,12 +827,11 @@ function fromHandler(reader: TypeReader, params: number): Shapes {
     const tokens = reader.tokens
     // Anything but a function LITERAL carries no annotation here to read. One shape on every path,
     // including the two that read nothing at all.
-    const nothing: Shapes = { input: undefined, output: undefined, room: undefined }
-    if (tokens[params]?.kind !== SyntaxKind.OpenParenToken) return nothing
+    if (tokens[params]?.kind !== SyntaxKind.OpenParenToken) return noShapes()
     const close = balancedFrom(tokens, params, SyntaxKind.OpenParenToken, SyntaxKind.CloseParenToken)
-    if (close < 0) return nothing
+    if (close < 0) return noShapes()
 
-    const found: Shapes = { input: undefined, output: undefined, room: undefined }
+    const found: Shapes = noShapes()
     const colon = firstAnnotation(tokens, params, close)
     if (colon >= 0) {
         const read = reader.read(colon + 1)

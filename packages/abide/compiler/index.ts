@@ -18,6 +18,7 @@
 
 import type { Shapes } from '#shared/internal/shapes.ts'
 import type { Kind } from '#shared/transport.ts'
+import { preferring } from './internal/assemble.ts'
 import { type Endpoint, endpointId, endpointsOf, kindOf, registration, stub } from './internal/elide.ts'
 import { emit } from './internal/emit.ts'
 import { SyntaxError_ } from './internal/lex.ts'
@@ -32,13 +33,12 @@ import type { TypeSource } from './internal/shape.ts'
 // declare it between the two.
 export type { Kind } from '#shared/transport.ts'
 export { ElisionError, type Endpoint, endpointId, kindOf } from './internal/elide.ts'
-export { SHAPES_FILE } from './SHAPES_FILE.ts'
-export { TRANSPORT_MODULE } from './TRANSPORT.ts'
-
 export { BINDABLE } from './internal/emit.ts'
 export { original as originalPosition, type Segment } from './internal/map.ts'
 export { BRANCHES, ParseError } from './internal/parse.ts'
 export type { ImportedModule, TypeSource } from './internal/shape.ts'
+export { SHAPES_FILE } from './SHAPES_FILE.ts'
+export { TRANSPORT_MODULE } from './TRANSPORT.ts'
 
 export interface CompileOptions {
     /** Names the default export and every diagnostic. */
@@ -144,11 +144,7 @@ export function elide(source: string, options: ElideOptions): Elided | null {
         for (const endpoint of endpoints) {
             const known = better[endpointId(options.filename, endpoint.name)]
             if (known === undefined) continue
-            // Assigned, never ADDED: `shapesAt` writes both fields on every endpoint it builds, so
-            // a checker's better answer overwrites a field that is already there rather than growing
-            // the record mid-loop.
-            if (known.input !== undefined) endpoint.input = known.input
-            if (known.output !== undefined) endpoint.output = known.output
+            preferring(endpoint, known)
         }
     }
     const code =
@@ -156,6 +152,19 @@ export function elide(source: string, options: ElideOptions): Elided | null {
             ? stub(options.filename, kind, endpoints)
             : source + registration(options.filename, kind, endpoints)
     return { code, kind, endpoints }
+}
+
+/**
+ * WHERE a compile failed, as an offset in the source — `null` for a throw that is not a compile
+ * failure at all.
+ *
+ * `describe` below turns the same three errors into the line a shell PRINTS, which is everything a
+ * command-line caller wants and none of what an editor does: a squiggle is a range, and a range is
+ * built from the position rather than from a sentence containing it. `SyntaxError_` stays unexported
+ * for the reason it always was, and this is the one thing off it a caller outside can act on.
+ */
+export function failedAt(error: unknown): number | null {
+    return error instanceof SyntaxError_ ? error.position : null
 }
 
 export function describe(source: string, filename: string, error: unknown): string {

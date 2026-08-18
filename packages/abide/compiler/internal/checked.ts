@@ -26,7 +26,18 @@ import type { Checker, Type } from 'typescript/unstable/sync'
 import type { JsonSchema, Shapes } from '#shared/internal/shapes.ts'
 // The one place both derivations agree, reached RELATIVELY because Node resolves no alias — and it
 // holds no runtime import of its own for the same reason.
-import { ANYTHING, arrayOf, formatOf, INTRINSICS, NOTHING, objectOf, union, usable } from './assemble.ts'
+import {
+    ANYTHING,
+    arrayOf,
+    describes,
+    formatOf,
+    INTRINSICS,
+    noShapes,
+    NOTHING,
+    objectOf,
+    union,
+    usable,
+} from './assemble.ts'
 
 /** `SymbolFlags.Optional`. Spelled out because the enum is not on the API's public surface. */
 const OPTIONAL = 1 << 24
@@ -164,9 +175,7 @@ function membersOf(checker: Checker, type: Type, seen: Set<number>, depth: numbe
 function shapesFor(checker: Checker, type: Type | undefined, kind: 'rpc' | 'socket'): Shapes {
     // One shape from every path, as `shape.ts`'s `shapesAt` answers — the two derivations differing
     // about the SPELLING of an answer is the whole failure this file's header is about.
-    if (type === undefined || !type.isTypeReference()) {
-        return { input: undefined, output: undefined, room: undefined }
-    }
+    if (type === undefined || !type.isTypeReference()) return noShapes()
     const name = type.getSymbol()?.name
     const args = checker.getTypeArguments(type)
     const seen = new Set<number>()
@@ -176,8 +185,7 @@ function shapesFor(checker: Checker, type: Type | undefined, kind: 'rpc' | 'sock
     }
     if (kind === 'socket') {
         // A room channel addresses subscribers by its FIRST argument and carries its second. Both
-        // are read: the message is what travels, the room is what selects the stream it travels on,
-        // and a generated tail or publish arm needs the second to name a target at all.
+        // are read: a publish arm needs an address as well as a message.
         const keyed = name === 'KeyedChannel'
         const schema = at(keyed ? 1 : 0)
         const address = keyed ? at(0) : undefined
@@ -192,8 +200,6 @@ function shapesFor(checker: Checker, type: Type | undefined, kind: 'rpc' | 'sock
     return {
         input: usable(input) ? input : undefined,
         output: usable(output) ? output : undefined,
-        // An rpc's args ARE its input, so it never has one — written rather than omitted, for the
-        // reason the two below are: one hidden class per `Shapes`, and one record to compare.
         room: undefined,
     }
 }
@@ -241,7 +247,7 @@ async function main(): Promise<void> {
                 const symbol = checker.getSymbolAtLocation(at)
                 if (symbol === undefined) continue
                 const shapes = shapesFor(checker, checker.getTypeOfSymbol(symbol), endpoint.kind)
-                if (shapes.input !== undefined || shapes.output !== undefined) out[endpoint.id] = shapes
+                if (describes(shapes)) out[endpoint.id] = shapes
             }
         }
     } finally {

@@ -10,9 +10,10 @@
 // an upgrade rather than a correction.
 
 import { expect, test } from 'bun:test'
-import { elide } from 'abide/compiler'
+import { elide, endpointId } from 'abide/compiler'
 import { NAMED_FORMATS } from 'abide/compiler/assemble'
 import { deriveShapes } from 'abide/compiler/shapes'
+import type { JsonSchema } from 'abide/server'
 import { validateJson } from 'abide/server/internal'
 import { APP_ROOT, TYPES } from '#tests/PATHS.ts'
 
@@ -125,6 +126,15 @@ async function agrees(file: string, address: string): Promise<void> {
         expect(tokens, `the token pass derived nothing for ${endpoint.name}`).toBeDefined()
         expect(checked, `the checker derived nothing for ${endpoint.name}`).toBeDefined()
         expect(checked, `${endpoint.name} differs between the two derivations`).toEqual(tokens as never)
+
+        // The ROOM is the third direction and it agrees or it does not exist: an endpoint with no
+        // room derives `undefined` on both sides, and comparing that is what catches one pass
+        // learning a direction the other, or the merge between them, silently drops.
+        const room = (endpoint as { room?: unknown }).room
+        expect(
+            CHECKED[`${address}/${endpoint.name}`]?.room,
+            `${endpoint.name}'s room differs between the two derivations`,
+        ).toEqual(room as never)
     }
 }
 
@@ -138,6 +148,35 @@ test('the token pass and the checker pass agree on every type both can read', as
 // shape as the message gate, which refuses publishes that were correct.
 test('a socket message is the same shape from both derivations, either way round', async () => {
     await agrees(CHANNELS, 'channels')
+})
+
+// `agrees` compares the room field by field, and two `undefined`s agree — so this is the endpoint
+// that must actually HAVE one, on both sides. The checker's room reached nothing for as long as the
+// direction existed: `compile`'s merge copied `input` and `output` by name and dropped it.
+test('a keyed socket derives its ROOM from both derivations', async () => {
+    const syntax = elide(await Bun.file(CHANNELS).text(), { filename: CHANNELS })
+    const rooms = syntax?.endpoints.find((endpoint) => endpoint.name === 'rooms')
+    expect(rooms?.room, 'the token pass derived no room for a keyed socket').toBeDefined()
+    expect(CHECKED['channels/rooms']?.room, 'the checker derived no room for a keyed socket').toBeDefined()
+    expect(CHECKED['channels/rooms']?.room).toEqual(rooms?.room as never)
+})
+
+// The MERGE, which is the third place the direction list was written out by hand and the one with no
+// reader to notice: the checker derived a room, serialised it, and `elide` copied `input` and
+// `output` by name and dropped it on the floor. Every direction or the fourth one lands here too.
+test("the checker's answer upgrades every direction, not the two that were named", () => {
+    const file = `${TYPES}/checker/server/sockets/upgraded.ts`
+    const source = `import { socket } from 'abide/server'\nexport const feed = socket()\n`
+    const room: JsonSchema = {
+        type: 'object',
+        properties: { room: { type: 'string' } },
+        required: ['room'],
+    }
+    const elided = elide(source, { filename: file, shapes: { [endpointId(file, 'feed')]: { room } } })
+    const feed = elided?.endpoints.find((endpoint) => endpoint.name === 'feed')
+    expect(feed?.room, "the checker's room never reached the endpoint").toEqual(room)
+    // And it reaches the emitted registration, which is what the server actually reads.
+    expect(elided?.code).toContain('"room"')
 })
 
 test('every format the compiler publishes is one the validator accepts', () => {
