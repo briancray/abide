@@ -18,7 +18,7 @@
 // `abide logs`, which renders records somebody ELSE's process wrote and renders them by these rules.
 // Nothing in a client graph imports this file, which is the whole of what keeps it off a page.
 
-import { type Level, levelSuffix, type LineWriter, plainLine, shortTrace } from '../log.ts'
+import { type Level, type LineWriter, levelSuffix, plainLine, shortTrace } from '../log.ts'
 import { colorAllowed, stdoutIsTTY } from './env.ts'
 import { textKnob } from './knobs.ts'
 

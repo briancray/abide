@@ -43,8 +43,15 @@ export type Node =
     | { kind: 'text'; value: string }
     | { kind: 'expression'; value: Expr; raw: boolean }
     | { kind: 'element'; name: string; attributes: Attribute[]; children: Node[] }
-    | { kind: 'component'; name: string; attributes: Attribute[]; children: Node[] }
-    | { kind: 'slot'; start: number }
+    /** `start` is the TAG's offset — what a diagnostic about the invocation points at. */
+    | { kind: 'component'; name: string; attributes: Attribute[]; children: Node[]; start: number }
+    /**
+     * `<slot/>`, and `<slot>…</slot>` whose children are the FALLBACK.
+     *
+     * Empty for the self-closing form, which is what keeps that form free: `emit.ts` only reaches for
+     * the thunk and the effect `slotted` needs when there is something to fall back TO.
+     */
+    | { kind: 'slot'; start: number; fallback: Node[] }
     | { kind: 'script'; body: string; start: number }
     /** A nested `<style>` — subtree-scoped. A top-level one is lifted into `Blocks.styles` instead. */
     | { kind: 'style'; body: string; start: number }
@@ -73,18 +80,39 @@ export interface Blocks {
     template: Node[]
 }
 
-// Blocks whose body ends at `{/name}`, and the branch keywords each accepts.
+/**
+ * What a branch keyword takes after itself, and whether it may be left off.
+ *
+ * `tail` is the SPELLING rather than a grammar — `<value>`, `if <condition>` — because its readers are
+ * a hover and a docs page, which show it to a person. `optional: false` is the one field that changes
+ * what compiles: it makes the tail required.
+ */
+export interface BranchTail {
+    tail: string
+    optional: boolean
+}
+
+// Blocks whose body ends at `{/name}`, the branch keywords each accepts, and what each of those takes.
 //
 // Exported because it is the closed set of BLOCKS, and `/docs/syntax` claims to document all of them:
 // `dogfood/test/docs.test.ts` compares `SPELLINGS.ts` against this in both directions, so a sixth block
-// is a red gate until it has a page and a rung. Nothing else reads it from outside — the compiler's own
-// use is the two lookups below.
-export const BRANCHES: Record<string, Set<string>> = {
-    if: new Set(['else']),
-    for: new Set(['catch']),
-    switch: new Set(['case', 'default']),
-    try: new Set(['catch', 'finally']),
-    component: new Set(),
+// is a red gate until it has a page and a rung.
+export const BRANCHES: Record<string, Record<string, BranchTail>> = {
+    // `{:else}` and `{:else if c}` are ONE keyword: the `if` is read out of the tail by `parseIf`,
+    // which is why it could never be found by anything reading a list of branch names.
+    if: { else: { tail: 'if <condition>', optional: true } },
+    for: { catch: { tail: '<error>', optional: true } },
+    switch: {
+        // NOT optional, and this is the one entry that changes what compiles: a bare `{:case}` used to
+        // be accepted and emitted `a ===  ? …`, which is not JavaScript. The table refuses it now.
+        case: { tail: '<value>', optional: false },
+        default: { tail: '', optional: true },
+    },
+    try: {
+        catch: { tail: '<error>', optional: true },
+        finally: { tail: '', optional: true },
+    },
+    component: {},
 }
 
 /**
@@ -506,8 +534,7 @@ function parseTag(reader: Reader): Node {
     reader.at++
 
     if (name === 'slot') {
-        if (!selfClosing) parseNodes(reader, 'slot')
-        return { kind: 'slot', start }
+        return { kind: 'slot', start, fallback: selfClosing ? [] : parseNodes(reader, 'slot') }
     }
 
     const component = /^[A-Z]/.test(name)
@@ -515,7 +542,7 @@ function parseTag(reader: Reader): Node {
         selfClosing || (!component && VOID_ELEMENTS.has(name.toLowerCase())) ? [] : parseNodes(reader, name)
 
     return component
-        ? { kind: 'component', name, attributes, children }
+        ? { kind: 'component', name, attributes, children, start }
         : { kind: 'element', name, attributes, children }
 }
 
@@ -725,10 +752,16 @@ function takeMarker(reader: Reader, block: string): Marker {
     const body = named.trim()
     const space = body.search(/\s/)
     const keyword = space < 0 ? body : body.slice(0, space)
-    if (!(BRANCHES[block] as Set<string>).has(keyword)) {
+    const shape = (BRANCHES[block] as Record<string, BranchTail>)[keyword]
+    if (shape === undefined) {
         fail(reader, `{:${keyword}} is not a branch of {#${block}}`, open)
     }
     const tail = space < 0 ? '' : body.slice(space + 1)
+    // A required tail left off is the one branch-table entry that decides what COMPILES rather than
+    // what a hover says — `{:case}` with no value emitted `a ===  ? …`, which is not JavaScript.
+    if (!(shape as BranchTail).optional && tail.trim() === '') {
+        fail(reader, `{:${keyword}} takes ${(shape as BranchTail).tail}`, open)
+    }
     return {
         keyword,
         rest: tail.trim(),

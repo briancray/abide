@@ -1,0 +1,16 @@
+<script module>
+import { state } from 'abide'
+
+// The subject of the language server's type lane, and the one fixture here that is not about a type
+// on its own: a template read whose type is REAL, so a typo in one is an ordinary type error that
+// only the checker over the generated module can reach.
+//
+// Valid on disk on purpose. The case in `tests/unit/lsp.test.ts` introduces the mistake in a BUFFER
+// and never writes it out, which is the whole claim being made — a server reading the file would
+// report nothing at all and pass a laxer test.
+export const book = state({ title: 'abide', pages: 1 })
+</script>
+
+<article>
+    <h1>{book.title}</h1>
+</article>

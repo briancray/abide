@@ -13,6 +13,12 @@ export interface Book {
 
 export type Shelf = 'fiction' | 'reference'
 
+/**
+ * A callback type behind a NAME, which is the one shape the two prop rules answer differently: the
+ * emit reads a member's declaration TEXT and cannot follow this, the checker can and does.
+ */
+export type Rate = (pages: number) => void
+
 export interface Paged<T> {
     items: T[]
     total: number

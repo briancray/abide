@@ -1,0 +1,17 @@
+<script>
+import { state } from 'abide'
+import { FIRST } from '../models.ts'
+import Props from '../valid/props.abide'
+
+// The other half of `valid/calls.abide`: an optional prop takes the value OR the cell, and neither
+// of them is "anything". Widening `Given` far enough to let a literal through — to `unknown`, or by
+// dropping the conditional — compiles that file and this one, and nothing else in the tree would say.
+const note = state('scribbled')
+</script>
+
+<!-- The markup a prop diagnostic now lands ON. A prop expression is marked like an element
+     attribute is, so `footnote={3}` is reported against this line rather than against the generated
+     object literal two lines above it. The COLUMN is still the emitter's: tsc anchors a property
+     mismatch at the property NAME, which is text the emitter wrote. -->
+
+<Props book={FIRST} shelf="fiction" note={note} footnote={3} />

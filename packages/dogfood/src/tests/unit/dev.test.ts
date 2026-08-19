@@ -17,7 +17,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { CLIENT_ROUTE } from 'abide/cli'
-import { abide, addressOf, BINARY, LISTENING, type Running, reading, started } from 'harness/spawn'
+import { abide, BINARY, LISTENING, READY, type Running, reading, started } from 'harness/spawn'
 import { APP_ROOT as ROOT } from '#tests/PATHS.ts'
 
 let app: Running
@@ -207,10 +207,17 @@ test('a change restarts the app, and the socket a browser holds is what notices'
     // that is about to stop being the one serving the page.
     expect(await live.closed).toBe('closed')
 
-    const back = await app.until(LISTENING)
-    // The SAME address. The supervisor pinned it off the first child, so a restart is invisible to a
-    // page that was already open — which is the only thing that makes reconnecting a reload at all.
-    expect(addressOf(back)).toBe(app.base)
+    // The supervisor announces the restart before the worker comes back, and waiting for THAT is also
+    // what steps past the first boot's own `ready in` line — `started` stopped at the address, so the
+    // rest of that block is still in the stream and would answer this immediately.
+    await app.until('changed — restarting')
+    // `READY` and not `LISTENING`: a restart lands on the PINNED port, so it prints the one line
+    // rather than the block, and the address on the screen is still the first one. What proves the
+    // pin held is the two reads below — both against `app.base`, the address the FIRST boot printed.
+    const line = await app.until(READY)
+    // And the ONE line is the whole of it. A boot spends `ready in` on a line with the notes and puts
+    // the counts above it, so counts ON this line is what says the block was not printed again.
+    expect(line).toContain('pages')
 
     const again = await reloadSocket(app.base)
     expect(again.status).toContain('101')
@@ -299,7 +306,7 @@ test('killing it takes the server with it, because it is one process', async () 
 }, 30_000)
 
 test('Ctrl-C the instant it says it is listening still drains', async () => {
-    // No awaits between the line and the signal, deliberately. The worker prints `listening` on its
+    // No awaits between the line and the signal, deliberately. The worker prints the address on its
     // way up, and a developer who reads that and hits Ctrl-C lands in whatever window exists between
     // the line and the handler being installed — where the DEFAULT action applies and the app is
     // killed without its `onStop` ever running. `130`/`143` here is that window; `0` is the handler.

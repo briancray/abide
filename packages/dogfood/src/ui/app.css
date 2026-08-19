@@ -548,6 +548,29 @@
     border-radius: 0 var(--radius-card) var(--radius-card) 0;
     padding: var(--s-3) var(--s-4);
   }
+  /* The one thing easy to get wrong, level with the import rather than under the last rung. The same
+     left-marked shape, in the OTHER of the two accent colours: verdigris is what abide offers you and
+     brass is what it is warning you about, which is the distinction `.rung-number` already draws. */
+  .pitfall {
+    display: grid;
+    gap: var(--s-1);
+    max-width: var(--measure);
+    background: var(--color-lifted);
+    border-left: 3px solid var(--color-brass);
+    border-radius: 0 var(--radius-card) var(--radius-card) 0;
+    padding: var(--s-3) var(--s-4);
+  }
+  .pitfall-label {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: var(--text-micro);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--color-brass);
+  }
+  .pitfall-body { margin: 0; font-size: var(--text-ui); color: var(--color-ink-soft); }
+  /* A section's lead on `/docs`: what these names are to EACH OTHER, above the grid of them. */
+  .topic-lead { margin: 0; max-width: var(--measure); font-size: var(--text-ui); color: var(--color-ink-soft); }
 
   /* ── prose ──────────────────────────────────────────────────────────────────────────────────── */
   .prose { display: grid; gap: var(--s-4); max-width: var(--measure); font-size: var(--text-body); }
@@ -659,6 +682,9 @@
     color: var(--color-pencil);
   }
   .rung-of code { background: none; padding: 0; color: var(--color-verdigris); }
+  /* A rung's own aside, where the diff between two steps is not self-evident from the two files.
+     Under the claim line rather than beside the preview: it is about the STEP, not about the result. */
+  .rung-note { margin: 0; max-width: var(--measure); font-size: var(--text-small); color: var(--color-ink-soft); }
   .rung-preview {
     display: grid;
     gap: var(--s-2);

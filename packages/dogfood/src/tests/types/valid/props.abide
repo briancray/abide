@@ -1,6 +1,6 @@
 <script>
 import { props, type State } from 'abide'
-import type { Book, Shelf } from '../models.ts'
+import type { Book, Rate, Shelf } from '../models.ts'
 import { assertType, type Exact } from '../exact.ts'
 
 // The type argument to `props()` is what types a component's props, and the destructure beside it is
@@ -21,9 +21,16 @@ type Props = {
     footnote?: string
     /** A callback is CALLED, not read, so it is one of the two things a prop cell is not made of. */
     onpick?: (title: string) => void
+    /**
+     * …and the same callback behind a NAME, which the emit cannot follow and the checker can. The
+     * emit's answer is the one that stands, because the emit is what WROTE the `propCell` — so this
+     * arrives as a cell, and calling it reads the cell first. The arrow spelling above is what says
+     * "callback"; a name is data until something can resolve it.
+     */
+    onrate?: Rate
 }
 
-const { book, shelf, note, class: className = '', footnote, onpick } = props<Props>()
+const { book, shelf, note, class: className = '', footnote, onpick, onrate } = props<Props>()
 
 // The props arrive typed, not as `unknown` — the whole claim of declaring the type — and every one of
 // them that is data arrives behind a cell.
@@ -34,11 +41,16 @@ assertType<Exact<ReturnType<typeof footnote>, string | undefined>>()
 assertType<Exact<ReturnType<typeof className>, string>>()
 // A function prop is handed over as it was written.
 assertType<Exact<typeof onpick, ((title: string) => void) | undefined>>()
+// …and one behind a name is a cell OF it, which is what the emit beside it built.
+assertType<Exact<ReturnType<typeof onrate>, Rate | undefined>>()
 </script>
 
 <article class={className}>
     <h3>{book.title}</h3>
     <p>{book.author.name} · {shelf} · {book.pages} pages</p>
     <input bind:value={note} />
+    <!-- The read is explicit because the CALL has to be optional: `onrate` is a cell of a callback
+         that may not have been passed, so the guard belongs on what the cell holds. -->
+    <button @click={() => onrate()?.(book.pages)}>rate</button>
     {#if footnote}<small>{footnote}</small>{/if}
 </article>

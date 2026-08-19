@@ -21,8 +21,7 @@
 // has nothing to do with capabilities.
 
 import { expect, interactive, test } from 'harness/e2e'
-import { CALLABLE_ORDER } from '#shared/demos/CALLABLES.ts'
-import { SPELLING_ORDER } from '#shared/demos/SPELLINGS.ts'
+import { CALLABLE_ORDER, SPELLING_ORDER } from '#shared/demos/TOPICS.ts'
 import { CAPABILITIES } from '#shared/demos/SUITES.ts'
 
 /** Pages that render in one pass. */

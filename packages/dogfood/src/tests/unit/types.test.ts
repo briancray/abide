@@ -43,22 +43,23 @@ interface Reported {
 /**
  * What a fixture must be told, and where.
  *
- * `template` — the position is the `.abide` line and column, exactly.
- * `script` — the position is still in the GENERATED module, and `remap` says so with `[generated]`.
+ * `source` — the position is the `.abide` line the author wrote.
+ * `import` — the statement was HOISTED to the top of the module, so it has no line here to map to,
+ *   and `remap` says so with `[generated]`.
  *
- * That split is a real limit rather than a detail: every expression in a template is emitted behind
- * a marker and lifted into the source map, and a `<script>` body is not — its imports are hoisted
- * and merged, so it no longer lines up with the file and there is nothing to map it by. A type error
- * in a `<script>` therefore names a line the author did not write. It is the one part of "reported on
- * the `.abide` line" that is not true, it is asserted here so it cannot quietly become true or
- * quietly get worse, and the day the mapping lands this table is what says which rows to promote.
+ * This table used to split `template` from `script`, and every `script` row asserted a line the
+ * author had not written: a template expression was marked where it was copied and a `<script>` body
+ * was not marked at all. That is gone — a body carries one segment per LINE, which is what its
+ * transforms preserve — so the rows that documented the limit now assert the line instead. The one
+ * that cannot is `moved.abide`, whose error is ON an import: an import really does move to the top,
+ * so a position for it in the body would be a line the statement no longer occupies.
  */
 const EXPECTED: {
     fixture: string
     line: number
     code: string
     message: RegExp
-    where: 'template' | 'script'
+    where: 'source' | 'import'
 }[] = [
     // A template read has the LOADED type, so a typo in one is caught. If the read had been widened
     // to `any` — or to `unknown` — this line would compile.
@@ -67,27 +68,27 @@ const EXPECTED: {
         line: 9,
         code: 'TS2339',
         message: /'nmae' does not exist/,
-        where: 'template',
+        where: 'source',
     },
     // …and the same member access in a `<script>` is possibly-undefined, because setup runs once and
     // a read there peeks. The pair is the proof, and it is the one that says where the split falls:
     // one position has a real type, the other still has to handle the absence.
     {
         fixture: 'unnarrowed.abide',
-        line: 15,
+        line: 13,
         code: 'TS2532',
         message: /possibly 'undefined'/,
-        where: 'script',
+        where: 'source',
     },
     // An rpc whose args have a REQUIRED field still demands one. The positive half — an endpoint that
     // requires nothing being callable with nothing — compiles by construction and so proves nothing on
     // its own; this is the line that fails if `Selecting` starts saying `[args?: Args]` for every call.
     {
         fixture: 'args.abide',
-        line: 12,
+        line: 9,
         code: 'TS2554',
         message: /Expected 1-2 arguments, but got 0/,
-        where: 'script',
+        where: 'source',
     },
     // A write desugars to `set`, and keeps the cell's type doing it.
     {
@@ -95,7 +96,7 @@ const EXPECTED: {
         line: 7,
         code: 'TS2345',
         message: /'string' is not assignable/,
-        where: 'template',
+        where: 'source',
     },
     // An IMPORTED type is resolved across the module boundary the compiler's own scanner cannot see
     // across — by the checker, exactly as in any `.ts` file.
@@ -104,26 +105,24 @@ const EXPECTED: {
         line: 8,
         code: 'TS2339',
         message: /'nmae' does not exist/,
-        where: 'template',
+        where: 'source',
     },
     // A generic keeps its argument through a cell.
     {
         fixture: 'generics.abide',
-        line: 10,
+        line: 7,
         code: 'TS2322',
         message: /'Paged<Book>' is not assignable/,
-        where: 'script',
+        where: 'source',
     },
     // A prop the component never declared. This is what the type argument to `props()` buys, and what
     // a component that never calls it — children and nothing else — cannot be told.
     {
         fixture: 'props.abide',
-        // One line lower than the destructure it is on: the file now imports `propCell`, which is a
-        // second header statement.
-        line: 12,
+        line: 10,
         code: 'TS2339',
         message: /'missing' does not exist/,
-        where: 'script',
+        where: 'source',
     },
     // …and the half the binding spelling adds: a template can only reach a name something BOUND, so a
     // prop nobody destructured is not a silent `undefined`, it is a name that does not exist.
@@ -132,16 +131,38 @@ const EXPECTED: {
         line: 16,
         code: 'TS2304',
         message: /Cannot find name 'unbound'/,
-        where: 'template',
+        where: 'source',
+    },
+    // A prop CALL SITE, which is the only place a `Given` regression can show: the component's own
+    // file compiles either way. The optional prop is the one that broke — `Cell<T | undefined> |
+    // undefined` extends neither arm of `Given`'s conditional, so the plain-value arm was dropped and
+    // a literal stopped being passable at all — and the positive half of that is `valid/calls.abide`.
+    // This is the half that says the arm came back as the DECLARED type rather than as anything.
+    // …and what it pins beyond the type is the LINE, which used to be the generated one. A prop
+    // expression is now marked like an element attribute is, so the diagnostic lands on the markup
+    // the author wrote rather than two lines above it.
+    //
+    // The COLUMN is still not the author's, and that is the shape worth saying: tsc anchors a
+    // property mismatch at the property NAME, and a prop's name is the emitter's own text — only the
+    // `{3}` beside it came from the file. So the anchor maps through the nearest mark before it,
+    // which is a sibling prop's value on the same generated line. Right line, wrong column, against
+    // the previous answer of no position at all — which the live lane DROPS, so an editor showed
+    // nothing here.
+    {
+        fixture: 'optional.abide',
+        line: 17,
+        code: 'TS2322',
+        message: /'number' is not assignable/,
+        where: 'source',
     },
     // The regression that has no other guard: an annotation naming a cell must not bind it, so the
     // initialiser beside it is still a READ. Before the fix this file compiled clean.
     {
         fixture: 'shadowing.abide',
-        line: 7,
+        line: 5,
         code: 'TS2322',
         message: /'number' is not assignable/,
-        where: 'script',
+        where: 'source',
     },
     // A name that MOVED to `abide/runtime` says so. `keyed` reads like authoring vocabulary and is
     // not — `by` on a `{#for}` is the spelling, and `keyed(...)` is what the emitter writes for it —
@@ -152,12 +173,12 @@ const EXPECTED: {
     {
         fixture: 'moved.abide',
         line: 2,
+        where: 'import',
         // TS2305 and not TS2724: the "did you mean" form needs a near-match still on the module, and
         // the `Keyed` TYPE moved to `abide/runtime` alongside the value it describes. So the message
         // is the plain one — which is the honest report, since there is nothing on `abide` to mean.
         code: 'TS2305',
         message: /no exported member 'keyed'/,
-        where: 'script',
     },
 ]
 
@@ -229,7 +250,7 @@ test('every invalid fixture is rejected, and nothing else is', () => {
 
 for (const { fixture, line, code, message, where } of EXPECTED) {
     const place =
-        where === 'template' ? `line ${line} of the .abide` : `line ${line} (a <script>, still generated)`
+        where === 'source' ? `line ${line} of the .abide` : `line ${line} (a hoisted import, still generated)`
     test(`${fixture} is rejected on ${place}`, () => {
         const mine = REPORTED.filter((one) => one.file.endsWith(fixture))
         expect(mine.length).toBeGreaterThan(0)
@@ -242,6 +263,6 @@ for (const { fixture, line, code, message, where } of EXPECTED) {
         // so rather than that it is right.
         expect((matched as Reported).file).toMatch(/\.abide$/)
         expect((matched as Reported).line).toBe(line)
-        expect((matched as Reported).mapped).toBe(where === 'template')
+        expect((matched as Reported).mapped).toBe(where === 'source')
     })
 }

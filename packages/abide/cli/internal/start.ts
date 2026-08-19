@@ -17,6 +17,7 @@ import { clientAssets, type LoadedClient } from './assets.ts'
 import { assemble, bind, portAsked, report } from './layers.ts'
 
 export async function start(argv: string[]): Promise<number> {
+    const began = performance.now()
     if (!portAsked(argv, 'start')) return CLI_EXIT_CODES.usage
 
     const root = process.cwd()
@@ -55,7 +56,12 @@ export async function start(argv: string[]): Promise<number> {
     // the app deciding this process should not serve, so it is an outcome rather than a failure.
     if (running === null) return CLI_EXIT_CODES.ok
 
-    report(running.url.href, assembled)
+    report({
+        url: running.url.href,
+        assembly: assembled,
+        took: performance.now() - began,
+        doing: ['ctrl-c stops'],
+    })
 
     // A server command has no number to answer with. The process ends when it is SIGNALLED, and the
     // handler that ends it is `boot`'s — so returning an exit code here would have `cli` hand one to

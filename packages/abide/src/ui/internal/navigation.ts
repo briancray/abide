@@ -36,8 +36,8 @@ import {
     NAVIGATION_FROM_HEADER,
     NAVIGATION_HEADER,
 } from '#shared/internal/PATHS.ts'
-import { addSeeds, SEED_ELEMENT_ID } from '#shared/internal/seed.ts'
 import { STREAMING } from '#shared/internal/STREAMING.ts'
+import { addSeeds, SEED_ELEMENT_ID } from '#shared/internal/seed.ts'
 import { abideLog } from '#shared/log.ts'
 import {
     type Entered,

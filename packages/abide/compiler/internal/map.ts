@@ -145,6 +145,40 @@ export function sourceMap(segments: Segment[], sourceName: string, source: strin
 }
 
 /**
+ * The other direction: where a `.abide` position ENDED UP in the emitted module.
+ *
+ * `original` answers a diagnostic, which arrives from the checker and has to be shown on a page.
+ * This answers a QUESTION, which starts on the page and has to be asked of the checker — a hover or
+ * a go-to-definition is a cursor in the `.abide` file and nothing else, and the checker only knows
+ * the module. Same segment list read the same way, so the two cannot disagree about where a mapping
+ * begins; what they do not share is exactness, and it fails in the same direction for the same
+ * reason. Within an expression the offset drifts by whatever the desugar inserted before that point,
+ * so a cursor late in a long expression can land a character or two off in the module.
+ *
+ * That is survivable HERE in a way it is not for a squiggle: the checker is asked about a position
+ * and answers about the node CONTAINING it, so a couple of characters of drift inside one identifier
+ * is the same identifier. It stops being survivable at the identifier's edge, which is why a caller
+ * that has a choice asks from inside a name rather than at its end.
+ */
+export function generated(
+    segments: Segment[],
+    originalLine: number,
+    originalColumn: number,
+): { line: number; column: number } | null {
+    let best: Segment | null = null
+    for (const segment of segments) {
+        if (segment.originalLine !== originalLine) continue
+        if (segment.originalColumn > originalColumn) continue
+        if (best === null || segment.originalColumn > best.originalColumn) best = segment
+    }
+    if (best === null) return null
+    return {
+        line: best.generatedLine,
+        column: best.generatedColumn + (originalColumn - best.originalColumn),
+    }
+}
+
+/**
  * The `.abide` position a generated one came from — the nearest mapping at or before it on the same
  * line, which is what a diagnostic inside a copied expression needs.
  *

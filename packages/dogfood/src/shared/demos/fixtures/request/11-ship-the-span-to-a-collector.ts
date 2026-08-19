@@ -16,9 +16,10 @@ import { type Middleware, request, trace } from 'abide/server'
  * `await` the POST is a real choice and not a detail: awaiting holds the response for the length of the
  * collector's answer, and not awaiting means a failed flush is a rejection with nobody attached.
  *
- * This exact rung is installed on `packages/dogfood/app.ts` — with the `fetch` left out, because a docs
- * page that opened a socket to a third party is a network dependency and the first thing to break on a
- * machine with no egress. The preview beside this reads back the record it shaped.
+ * This rung is the SHAPE; what this app actually installs is `#server/lib/otlp.ts`, which is the same
+ * middleware with the protocol's numbers named and the record kept for a preview to read back. Both
+ * stop short of the `fetch`, because a docs page that opened a socket to a third party is a network
+ * dependency and the first thing to break on a machine with no egress.
  */
 export const exportSpans: Middleware = async (next) => {
     const started = performance.now()

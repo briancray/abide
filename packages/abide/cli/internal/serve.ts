@@ -103,6 +103,10 @@ scope.onmessage = (event): void => {
 scope.postMessage({ ready: true } satisfies Said)
 
 async function run(argv: string[], pin: number | null): Promise<void> {
+    // This WORKER's clock, which is what a restart costs and is the number somebody watching a save
+    // loop is reading. The first boot is a few milliseconds short of the whole command by the main
+    // thread's own startup, and that is the right trade: there is one number and it means one thing.
+    const began = performance.now()
     if (!portAsked(argv, 'dev')) return scope.postMessage({ refused: CLI_EXIT_CODES.usage } satisfies Said)
     // The pin beats the flag, for the reason the flag beats an app's own default: it is the more
     // specific statement about where this SESSION lives. It is the port a previous worker actually
@@ -172,8 +176,14 @@ async function run(argv: string[], pin: number | null): Promise<void> {
     process.env.APP_URL = running.url.origin + mountBase()
     config.invalidate()
 
-    const hopped = first !== 0 && landed !== first ? `hopped from ${first}` : undefined
-    report(running.url.href, assembled, hopped)
+    const doing: string[] = []
+    if (first !== 0 && landed !== first) doing.push(`hopped from ${first}`)
+    doing.push('watching for changes', 'ctrl-c stops')
+    // A restart, and the addresses on the screen are still this app's: `pin` is what the LAST worker
+    // bound, so landing on it is the whole claim the short line makes. A pinned port that was taken
+    // while this worker was coming up hops somewhere else, and that is a new address to print.
+    const again = pin !== null && landed === pin
+    report({ url: running.url.href, assembly: assembled, took: performance.now() - began, doing, again })
     scope.postMessage({ port: landed } satisfies Said)
 }
 

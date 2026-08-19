@@ -1,0 +1,9 @@
+<script>
+import { props } from 'abide'
+
+const { class: className = '' } = props<{ class?: string }>()
+</script>
+
+<!-- The fallback is what stands where the children would have. It is NOT the wrapper's condition:
+     this `<div>` is written either way, which is what `{#if children}` in a caller is for. -->
+<div class="fallback {className}"><slot><em>nothing yet</em></slot></div>

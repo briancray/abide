@@ -148,14 +148,26 @@ export function reading(command: string[], options?: SpawnOptions): Reading {
 }
 
 /**
- * What `report` prints the address under — one line, written once in `layers.ts` and printed by every
- * command that binds a socket. Named here so a case parses it rather than re-spelling the prefix.
+ * The banner row `report` prints the address under — written once in `layers.ts` and printed by every
+ * command that binds a socket. Named here so a case parses it rather than re-spelling the label.
+ *
+ * The INDENT is part of it. `local` on its own is a substring of `localhost`, so a line the app
+ * logged before the banner could be read as the banner. Spawned stdout is not a terminal, so the row
+ * arrives with no colour and no `➜` — see `report`, which drops the marker with the colour.
  */
-export const LISTENING = 'listening '
+export const LISTENING = '  local '
 
-/** The address off a `listening …` line. */
+/**
+ * What every banner carries, in both of its shapes — the block a boot prints and the ONE line an
+ * `abide dev` restart prints in place of it. So a case that waits for an app to come back up waits
+ * for this, where a case that wants the address waits for `LISTENING`: a restart prints no row,
+ * because the port is pinned and the address on the screen is still the right one.
+ */
+export const READY = '  ready in '
+
+/** The address off a banner row: the value is the last column, and no label or address holds a space. */
 export function addressOf(line: string): string {
-    return line.slice(LISTENING.length).trim()
+    return line.slice(line.lastIndexOf(' ') + 1).trim()
 }
 
 /** A live child, plus the one thing it says that a case cannot guess: where it is listening. */
@@ -167,7 +179,7 @@ export interface Running extends Reading {
  * Start the binary in an app's directory and wait for the address it printed.
  *
  * The app's own `log()` lines come first — `onStart` runs before the socket exists — and the report
- * has a second line under the address, so this waits for a line that ARRIVES rather than counting to
+ * has more lines under the address, so this waits for a line that ARRIVES rather than counting to
  * a line number. `abide start` and `abide dev` print the same one, which is why this is here rather
  * than in whichever file needed it first.
  *

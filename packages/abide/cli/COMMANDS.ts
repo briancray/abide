@@ -53,6 +53,12 @@ export const COMMANDS: Command[] = [
         load: async () => (await import('./internal/check.ts')).check,
     },
     {
+        name: 'lsp',
+        args: '',
+        blurb: 'The `.abide` language server, over stdio: diagnostics, completion and hover for an editor.',
+        load: async () => (await import('./internal/lsp.ts')).lsp,
+    },
+    {
         name: 'dev',
         args: '[--port <n>]',
         blurb: 'Serve the app and restart it on every change. --port HOPS to the next free one if taken.',

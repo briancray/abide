@@ -10,8 +10,9 @@
 // thunks, which is why a playwright process can read it without pulling one rung.
 
 import { expect, interactive, type Page, test } from 'harness/e2e'
-import { CALLABLE_ORDER, CALLABLES, SPECIFIERS } from '#shared/demos/CALLABLES.ts'
-import { SPELLING_ORDER, SPELLINGS } from '#shared/demos/SPELLINGS.ts'
+import { CALLABLES } from '#shared/demos/CALLABLES.ts'
+import { SPELLINGS } from '#shared/demos/SPELLINGS.ts'
+import { CALLABLE_ORDER, SPELLING_ORDER, TOPIC_ORDER, TOPICS } from '#shared/demos/TOPICS.ts'
 import { type Swept, sweepStatuses } from './internal/drive.ts'
 
 /**
@@ -122,9 +123,20 @@ test('/docs indexes the whole surface', async ({ page, complaints }) => {
     const cards = page.locator('[data-callable]')
     expect(await cards.count(), '/docs does not list every name').toBe(CALLABLE_ORDER.length)
 
-    // Grouped by the specifier you import from, which is half of what a reader came for.
-    const groups = page.locator('[data-specifier]')
-    expect(await groups.count(), '/docs lost an entry point').toBe(SPECIFIERS.length)
+    // And one per SPELLING, on this same page, which is what grouping by topic bought: the two
+    // vocabularies interleave by subject instead of sitting in two lists a reader has to choose between.
+    const spellings = page.locator('[data-spelling]')
+    expect(await spellings.count(), '/docs does not list every spelling').toBe(SPELLING_ORDER.length)
+
+    // Grouped by TOPIC — what a name is about, rather than which door it is behind.
+    const groups = page.locator('[data-topic]')
+    expect(await groups.count(), '/docs lost a topic').toBe(TOPIC_ORDER.length)
+
+    // The lead is the one thing a per-name page cannot say, so a section that lost it is a section that
+    // says nothing its heading did not. Exact rather than `hasText`, which is a case-insensitive
+    // substring match and would pass against a truncated one.
+    const first = TOPIC_ORDER[0] as (typeof TOPIC_ORDER)[number]
+    await expect(page.locator(`[data-topic="${first}"] .topic-lead`)).toHaveText(TOPICS[first].lead)
 
     expect(complaints.unexpected(), '/docs logged errors').toEqual([])
 })
@@ -137,6 +149,10 @@ for (const name of CALLABLE_ORDER) {
         // is asserted as an EXACT string. `hasText` matches case-insensitively and as a substring, which
         // would pass against `GET` on the `get` page.
         await expect(page.locator('pre').first()).toHaveText(`import { ${name} } from '${CALLABLES[name].from}'`)
+
+        // The pitfall, level with the import. Asserted as the EXACT string for the same reason the
+        // import line is: `hasText` would pass against a box that rendered the first clause and stopped.
+        await expect(page.locator('.pitfall-body')).toHaveText(CALLABLES[name].pitfall)
 
         // Every rung is a numbered section with the one thing it adds as its heading, located by the
         // `data-rung` the page numbers it with. At least one — `docs.test.ts` proves the count is not
@@ -185,6 +201,11 @@ for (const slug of SPELLING_ORDER) {
         // block imports nothing, and a `<pre>` telling somebody to import `{#for}` would be a lie the
         // shared component is one prop away from telling.
         expect(await page.locator('.import-line').count(), 'a spelling is not imported from anywhere').toBe(0)
+
+        // The pitfall IS on both axes, unlike the import line — which is the asymmetry worth asserting
+        // here rather than assuming: a template spelling fails more quietly than a callable does, so
+        // this is the axis the prose earns its place on.
+        await expect(page.locator('.pitfall-body')).toHaveText(SPELLINGS[slug].pitfall)
 
         const rungs = page.locator('[data-rung]')
         await expect(rungs.first()).toBeVisible()

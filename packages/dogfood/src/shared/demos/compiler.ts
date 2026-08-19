@@ -6,17 +6,24 @@
 // `counter.abide` and `counter.ts` are the same component written twice, and the compiler's whole claim is
 // that the two are indistinguishable at the output AND at the cost.
 
-import { html } from 'abide'
-import { styleTags } from 'abide/server/internal'
-import { adopt, keyed, streamed } from 'abide/runtime'
-import { compile, describe, locate, originalPosition, ParseError } from 'abide/compiler'
-import { renderToString } from 'abide/server/internal'
+import { html, state } from 'abide'
+import {
+    compile,
+    describe,
+    generatedPosition,
+    locate,
+    originalPosition,
+    ParseError,
+    placeAt,
+    startsOf,
+} from 'abide/compiler'
+import { adopt, component as carried, keyed, streamed } from 'abide/runtime'
+import { renderToString, styleTags } from 'abide/server/internal'
+import { mount } from 'abide/ui'
 import { container, scratch, sleep, suite, until } from 'harness'
 import { duration, install, keep, measureFlush, nonZero, nsPerOp, tick } from 'harness/measure'
-import { mount } from 'abide/ui'
 import { button, row, stage } from './dom.ts'
 import Card from './fixtures/Card.abide'
-// The parity pair: the same component in both spellings, which is what this suite is for.
 import Compiled, {
     count as compiledCount,
     filter as compiledFilter,
@@ -24,6 +31,8 @@ import Compiled, {
     session as compiledSession,
 } from './fixtures/Counter.abide'
 import { count, filter, search as handSearch, App as handWritten, session } from './fixtures/Counter.ts'
+// The parity pair: the same component in both spellings, which is what this suite is for.
+import Fallback from './fixtures/Fallback.abide'
 import Library, { details, query, shelf, summary } from './fixtures/Library.abide'
 // The same file's own text, inlined by the loader — a browser has no `Bun` to read it with.
 import LIBRARY from './fixtures/Library.abide?source'
@@ -32,6 +41,7 @@ import Narrow, { session as narrowSession } from './fixtures/Narrow.abide'
 import Rows, { items, rate } from './fixtures/Rows.abide'
 import Stream, { failing, room } from './fixtures/Stream.abide'
 import Tally, { name as tallyName, runs as tallyRuns } from './fixtures/Tally.abide'
+import Tree from './fixtures/Tree.abide'
 import Widget, { text as widgetText } from './fixtures/Widget.abide'
 import { META } from './SUITES.ts'
 
@@ -57,6 +67,35 @@ function template(source: string): string {
     const start = code.indexOf('return html`')
     return code.slice(start + 'return html`'.length, code.lastIndexOf('`')).trim()
 }
+
+/**
+ * Every position a `.abide` file can hold an author's expression: what it is called, a file that
+ * writes one, and the text to ask about. The needle is found from the END, so a case may mention it
+ * in its own markup without the search landing there.
+ */
+const WRITTEN: [string, string, string][] = [
+    ['child hole', '<div>{x}</div>', 'x'],
+    ['attribute expression', '<div a={x}>y</div>', 'x'],
+    ['attribute interpolated', '<div a="p {x}">y</div>', 'x'],
+    ['event handler', '<div onclick={x}>y</div>', 'x'],
+    ['bind:value', '<input bind:value={x}>', 'x'],
+    ['bind:checked', '<input type="checkbox" bind:checked={x}>', 'x'],
+    ['bind:group', '<input value="a" bind:group={x}>', 'x'],
+    ['bind:element', '<div bind:element={x}></div>', 'x'],
+    ['class: toggle', '<div class:on={x}>y</div>', 'x'],
+    ['style: value', '<div style:width={x}>y</div>', 'x'],
+    ['spread on an element', '<div {...x}></div>', 'x'],
+    ['spread on a component', '<Card {...x}/>', 'x'],
+    ['component prop', '<Card a={x}/>', 'x'],
+    ['component interpolated', '<Card a="p {x}"/>', 'x'],
+    ['{#if} condition', '{#if x}a{/if}', 'x'],
+    ['{:else if} condition', '{#if a}b{:else if x}c{/if}', 'x'],
+    ['{#for} list', '{#for i of x}a{/for}', 'x'],
+    ['{#for} key', '{#for i of ys by x}a{/for}', 'x'],
+    ['{#switch} subject', '{#switch x}{:case 1}a{/switch}', 'x'],
+    ['{:case} value', '{#switch a}{:case x}b{/switch}', 'x'],
+    ['raw()', '<div>{raw(x)}</div>', 'x'],
+]
 
 /** The `{#component}` arrow a file declares, which sits above the return rather than inside it. */
 function component(source: string): string {
@@ -121,7 +160,9 @@ export default suite({
                 // complaint on a prop killed the binding, because `n()!` type-checks and paints
                 // correctly exactly once.
                 const held = (hole: string): string =>
-                    template(`<script>import Child from './child.abide'\nconst n = state(0)</script><Child value={${hole}}/>`)
+                    template(
+                        `<script>import Child from './child.abide'\nconst n = state(0)</script><Child value={${hole}}/>`,
+                    )
                 for (const hole of ['(n)', 'n!', '((n))', 'n as never', '(n)!']) {
                     is(
                         `held through a wrapper: ${hole}`,
@@ -131,7 +172,11 @@ export default suite({
                 }
                 // The other side: an unbalanced paren is somebody else's, and a wrapper around a
                 // COMPOSED expression does not make it a hand-over.
-                is('a call around it still reads', held('f(n)'), '${() => component(Child, { value: f(n()), children: undefined })}')
+                is(
+                    'a call around it still reads',
+                    held('f(n)'),
+                    '${() => component(Child, { value: f(n()), children: undefined })}',
+                )
                 is(
                     'and parens around an expression still read',
                     held('(n) + 1'),
@@ -237,6 +282,21 @@ export default suite({
                 )
                 // An arrow with a BLOCK body is still a block, which is the case that would break if
                 // the rule above were widened past a ternary's arms.
+                // The brace enclosing a token is found by walking BACK at its own depth, and the walk
+                // has to stop when the depth drops below that — otherwise it keeps going and finds a
+                // brace in an earlier sibling group. A parameter's TYPE is the one that bites,
+                // because `{ id: number }` is a brace after a `:`, which is exactly the shape of an
+                // object literal: the read below was taken for a member of one and came out as the
+                // shorthand `rows: rows()`, which does not parse. The cell is a MIDDLE argument on
+                // purpose — a `,` after it is what makes the shorthand shape reachable at all, so a
+                // last argument cannot reach the misread and cannot gate it either.
+                is(
+                    'a type annotation’s brace is not an enclosing object literal',
+                    setup(
+                        '<script>const rows = state([] as { id: number }[])\nfunction pick(items: { id: number }[]) {\n    return choose(items, rows, (item) => item.id)\n}</script>',
+                    ),
+                    'const rows = state([] as { id: number }[])\nfunction pick(items: { id: number }[]) {\n    return choose(items, rows(), (item) => item.id)\n}',
+                )
                 is(
                     'a block body is still a block',
                     template(
@@ -305,7 +365,9 @@ export default suite({
                 )
                 is(
                     'and `state.shared`, whose callee is already stepped back over',
-                    template(`<script>${head}const s: State<number> = state.shared('k', 0)</script><p>{s + 1}</p>`),
+                    template(
+                        `<script>${head}const s: State<number> = state.shared('k', 0)</script><p>{s + 1}</p>`,
+                    ),
                     '<p>${() => s() + 1}</p>',
                 )
                 // A hold position too, since the registration is what both sides read.
@@ -320,12 +382,16 @@ export default suite({
                 // the walk simply searched backwards for one.
                 is(
                     'an object initializer is not an annotation',
-                    template(`<script>${head}const o = { a: 1 }\nconst n = state(0)</script><p>{o.a + n}</p>`),
+                    template(
+                        `<script>${head}const o = { a: 1 }\nconst n = state(0)</script><p>{o.a + n}</p>`,
+                    ),
                     '<p>${() => o.a + n()}</p>',
                 )
                 is(
                     'nor is a ternary’s colon',
-                    template(`<script>${head}const n = state(0)\nconst x = true ? 1 : 2</script><p>{x + n}</p>`),
+                    template(
+                        `<script>${head}const n = state(0)\nconst x = true ? 1 : 2</script><p>{x + n}</p>`,
+                    ),
                     '<p>${() => x + n()}</p>',
                 )
                 is(
@@ -393,7 +459,7 @@ export default suite({
 
         {
             title: 'a write desugars to `set`, and never subscribes',
-            note: 'A write reads through `peek`: a write that subscribed to what it is about to overwrite would wake itself on every OTHER writer\'s write — the same value, one extra run, and nothing about the output moves. All four spellings of an update agree on it, including the target named on its own right-hand side. Only the target: `n = other + 1` subscribes to `other`, which is a dependency the author does mean. `++` is statement-only, since a `set` has no value to hand back.',
+            note: "A write reads through `peek`: a write that subscribed to what it is about to overwrite would wake itself on every OTHER writer's write — the same value, one extra run, and nothing about the output moves. All four spellings of an update agree on it, including the target named on its own right-hand side. Only the target: `n = other + 1` subscribes to `other`, which is a dependency the author does mean. `++` is statement-only, since a `set` has no value to hand back.",
             run({ is }) {
                 const one = (body: string): string =>
                     template(
@@ -422,6 +488,42 @@ export default suite({
                     'the explicit read is left alone, so subscribing is still writable',
                     one('() => n = n() + 1'),
                     '<button @click=${() => n.set(n() + 1)}>x</button>',
+                )
+                // Where the right-hand side ENDS, in a file written without semicolons: the `)` goes
+                // in at the line break, and the token before that break is what decides there was
+                // one. `undefined` is a KEYWORD to the scanner, not an identifier — unlisted, the
+                // write never ended, so `n.set(undefined` swallowed the NEXT statement and closed
+                // its paren after it. The three below are the shapes an ordinary file reaches a line
+                // break on, and each is a statement the write must not have eaten.
+                const write = (statement: string): string =>
+                    setup(
+                        `<script>const n = state<string | undefined>(undefined)\nfunction later() {\n    ${statement}\n    report()\n}</script>`,
+                    )
+                is(
+                    'a write of `undefined` ends at its own line',
+                    write('n = undefined'),
+                    'const n = state<string | undefined>(undefined)\nfunction later() {\n    n.set(undefined)\n    report()\n}',
+                )
+                is(
+                    '…and one ending in a cast, whose last token is a type keyword',
+                    write('n = value as string'),
+                    'const n = state<string | undefined>(undefined)\nfunction later() {\n    n.set(value as string)\n    report()\n}',
+                )
+                is(
+                    '…and one ending in `?? undefined`, which is the same token one operator later',
+                    write('n = (await load()) ?? undefined'),
+                    'const n = state<string | undefined>(undefined)\nfunction later() {\n    n.set((await load()) ?? undefined)\n    report()\n}',
+                )
+                // A right-hand side that spans lines of its own. ASI is a STATEMENT-level rule, so a
+                // break inside the arrow's block ends nothing — read as an end, the `)` went in after
+                // the body's first statement and the module stopped parsing. The `}` on its own line
+                // is the second half: a closer cannot begin a statement either.
+                is(
+                    '…and a multi-line arrow, whose own line breaks end nothing',
+                    setup(
+                        '<script>const done = state<(() => void) | undefined>(undefined)\nfunction later() {\n    done = () => {\n        first()\n        second()\n    }\n    report()\n}</script>',
+                    ),
+                    'const done = state<(() => void) | undefined>(undefined)\nfunction later() {\n    done.set(() => {\n        first()\n        second()\n    })\n    report()\n}',
                 )
             },
         },
@@ -476,7 +578,9 @@ export default suite({
                 // walk pass one makes, which consults the type marks.
                 is(
                     'an identifier in an annotation binds nothing',
-                    component(`${source}{#component Row(props: { count: number })}<b>{count + 1}</b>{/component}`),
+                    component(
+                        `${source}{#component Row(props: { count: number })}<b>{count + 1}</b>{/component}`,
+                    ),
                     'const Row = (props: { count: number }) => html`<b>${() => count() + 1}</b>`',
                 )
                 is(
@@ -491,7 +595,8 @@ export default suite({
             title: '`as` is a contextual keyword, so a property of that name is not a cast',
             note: 'A type region is skipped by both desugar passes, which is right for a real cast and silent when it is not one. `as`, `satisfies` and `implements` are all contextual — `{ as: 1 }`, `row.as` and `const as = 1` are ordinary JavaScript — so matching the TEXT alone turned everything to the end of the expression into a type, and any cell read inside it was never desugared. The operand before it decides now: the same `ENDS_EXPRESSION` test the lexer uses to tell division from a regex, plus `>` for the one shape that needs it.',
             run({ is }) {
-                const source = "<script>import { state } from 'abide'\nconst count = state(1)\nconst row = { as: 'b' }</script>"
+                const source =
+                    "<script>import { state } from 'abide'\nconst count = state(1)\nconst row = { as: 'b' }</script>"
                 // The cell is on the FAR side of the `as`, which is the half that went missing: the
                 // mark ran from the keyword to the end of the expression.
                 is(
@@ -508,7 +613,9 @@ export default suite({
                 // still erased from the setup body rather than desugared into it.
                 is(
                     'a real cast is still a cast',
-                    template("<script>import { state } from 'abide'\nconst count = state(1)\nconst n = count as unknown as number</script><p>{count + 1}</p>"),
+                    template(
+                        "<script>import { state } from 'abide'\nconst count = state(1)\nconst n = count as unknown as number</script><p>{count + 1}</p>",
+                    ),
                     '<p>${() => count() + 1}</p>',
                 )
                 is(
@@ -573,7 +680,8 @@ export default suite({
             title: '`x?.()` and `x!()` are the author’s own call, punctuation and all',
             note: 'The explicit `x()` / `x.set(v)` spelling has to keep compiling — the sugar is over it, never instead of it. The guard for that read the token IMMEDIATELY after the name, so anything between the name and its call defeated it: an optional call `?.` or a non-null assertion `!`. Both then took the read branch and emitted `x()?.()` / `x()!()`, which call the CELL and then call whatever it handed back.',
             run({ is }) {
-                const source = "<script>import { state } from 'abide'\nconst f = state(() => 1)\nconst name = state('x')</script>"
+                const source =
+                    "<script>import { state } from 'abide'\nconst f = state(() => 1)\nconst name = state('x')</script>"
                 is('an optional call', template(`${source}<p>{f?.()}</p>`), '<p>${() => f?.()}</p>')
                 is('a non-null call', template(`${source}<p>{f!()}</p>`), '<p>${() => f!()}</p>')
                 // The reserved surface is reached through the same punctuation, so it moves with it.
@@ -589,10 +697,16 @@ export default suite({
                 )
                 // `x()` is the read. `x(a)` is not one — a cell read takes NO arguments, so they
                 // belong to what the cell holds and the read has to be emitted for them to reach it.
-                is('a call WITH arguments reads first', template(`${source}<p>{f(1)}</p>`), '<p>${() => f()(1)}</p>')
+                is(
+                    'a call WITH arguments reads first',
+                    template(`${source}<p>{f(1)}</p>`),
+                    '<p>${() => f()(1)}</p>',
+                )
                 is(
                     'a keyed memo is untouched, because its call selects',
-                    template("<script>import { memo } from 'abide'\nconst m = memo(({ id }) => id)</script><p>{m({ id: 1 })}</p>"),
+                    template(
+                        "<script>import { memo } from 'abide'\nconst m = memo(({ id }) => id)</script><p>{m({ id: 1 })}</p>",
+                    ),
                     '<p>${() => m({ id: 1 })}</p>',
                 )
             },
@@ -600,13 +714,16 @@ export default suite({
 
         {
             title: '`await source` hands the source OVER, because the await IS the read',
-            note: '`then` is on the reserved surface, so `x.then(…)` already reached the handle — and `await x` is the same call written the way anybody writes it. Read as a VALUE instead, the await resolves whatever the cell held at that instant, which for a load still in flight is `undefined`. It shipped: `#shared/demos/fixtures/transport/3-a-mutation.abide` writes `const done = await rename({ id, name })` and emitted `await rename({ id, name })()`, so `/docs/POST` threw `Cannot read properties of undefined (reading \'name\')` in a browser while `bun test`, `abide check` and the whole `/docs` e2e sweep stayed green — a preview that renders is not a preview that WORKS, and nothing in the repo pressed one. Both branches take the guard, because a keyed call and a plain name are the same claim about the same token.',
+            note: "`then` is on the reserved surface, so `x.then(…)` already reached the handle — and `await x` is the same call written the way anybody writes it. Read as a VALUE instead, the await resolves whatever the cell held at that instant, which for a load still in flight is `undefined`. It shipped: `#shared/demos/fixtures/transport/3-a-mutation.abide` writes `const done = await rename({ id, name })` and emitted `await rename({ id, name })()`, so `/docs/POST` threw `Cannot read properties of undefined (reading 'name')` in a browser while `bun test`, `abide check` and the whole `/docs` e2e sweep stayed green — a preview that renders is not a preview that WORKS, and nothing in the repo pressed one. Both branches take the guard, because a keyed call and a plain name are the same claim about the same token.",
             run({ is }) {
                 const cell = "<script>import { state } from 'abide'\nconst row = state(fetch('/x'))</script>"
-                const keyed = "<script>import { memo } from 'abide'\nconst m = memo(async ({ id }) => id)</script>"
+                const keyed =
+                    "<script>import { memo } from 'abide'\nconst m = memo(async ({ id }) => id)</script>"
                 is(
                     'a keyed call after `await` keeps its handle',
-                    template(`${keyed}<button onclick={async () => { const v = await m({ id: 1 }) }}>x</button>`),
+                    template(
+                        `${keyed}<button onclick={async () => { const v = await m({ id: 1 }) }}>x</button>`,
+                    ),
                     '<button @click=${async () => { const v = await m({ id: 1 }) }}>x</button>',
                 )
                 is(
@@ -629,15 +746,20 @@ export default suite({
             note: 'The sibling of the `await` guard above, found the same way and one loop along. A slot’s async iterator IS its transcript cursor, which is what makes a streamed read spell identically on both sides — so reading it first hands the loop the LATEST CHUNK, which is a value and not iterable at all. It shipped the moment a framed endpoint became readable as chunks: `for await (const row of catalogue({}))` in a rung emitted `catalogue({})()` and failed to compile with nothing pointing at the sugar. The guard is on `for await` ALONE, because a synchronous `for … of` over a cell holding an array is exactly the read the author meant — which is the line the two loops are told apart by, and the reason this walks back to the head’s own paren rather than reading the `of`.',
             run({ is }) {
                 const cell = "<script>import { state } from 'abide'\nconst rows = state([1])</script>"
-                const keyed = "<script>import { memo } from 'abide'\nconst m = memo(async ({ id }) => id)</script>"
+                const keyed =
+                    "<script>import { memo } from 'abide'\nconst m = memo(async ({ id }) => id)</script>"
                 is(
                     'a keyed call in a `for await` head keeps its handle',
-                    template(`${keyed}<button onclick={async () => { for await (const r of m({ id: 1 })) log(r) }}>x</button>`),
+                    template(
+                        `${keyed}<button onclick={async () => { for await (const r of m({ id: 1 })) log(r) }}>x</button>`,
+                    ),
                     '<button @click=${async () => { for await (const r of m({ id: 1 })) log(r) }}>x</button>',
                 )
                 is(
                     'and so does a plain name',
-                    template(`${cell}<button onclick={async () => { for await (const r of rows) log(r) }}>x</button>`),
+                    template(
+                        `${cell}<button onclick={async () => { for await (const r of rows) log(r) }}>x</button>`,
+                    ),
                     '<button @click=${async () => { for await (const r of rows) log(r) }}>x</button>',
                 )
                 // The other loop, which is what stops this reading as "an `of` is never a read". A
@@ -652,12 +774,16 @@ export default suite({
                 // that is being iterated, so these are the ordinary reads they look like.
                 is(
                     'a cell the head only PART of is read as usual',
-                    template(`${cell}<button onclick={async () => { for await (const r of rows.map(load)) log(r) }}>x</button>`),
+                    template(
+                        `${cell}<button onclick={async () => { for await (const r of rows.map(load)) log(r) }}>x</button>`,
+                    ),
                     '<button @click=${async () => { for await (const r of rows().map(load)) log(r) }}>x</button>',
                 )
                 is(
                     '…including an index into it',
-                    template(`${cell}<button onclick={async () => { for await (const r of rows[0]) log(r) }}>x</button>`),
+                    template(
+                        `${cell}<button onclick={async () => { for await (const r of rows[0]) log(r) }}>x</button>`,
+                    ),
                     '<button @click=${async () => { for await (const r of rows()[0]) log(r) }}>x</button>',
                 )
                 // The head BINDS across the body, which `for await` was not read as for as long as
@@ -665,7 +791,9 @@ export default suite({
                 // the body's own `rows` compiled to a read of the outer cell.
                 is(
                     'a `for await` head shadows the body it names',
-                    template(`${cell}<button onclick={async () => { for await (const rows of rows) log(rows) }}>x</button>`),
+                    template(
+                        `${cell}<button onclick={async () => { for await (const rows of rows) log(rows) }}>x</button>`,
+                    ),
                     '<button @click=${async () => { for await (const rows of rows) log(rows) }}>x</button>',
                 )
             },
@@ -675,17 +803,30 @@ export default suite({
             title: 'the JavaScript lane: a callback prop reaches the handler with no type to say so',
             note: 'A `.abide` may carry no types at all, and then `props()` has no type argument for `classifyMember` to read — every prop classifies as a cell, `propCell` wraps the callback, and `onpick(row.id)` used to call the CELL and discard the handler. The rule that fixes it needs no classification: a cell read takes no arguments, so a call carrying some is a call of what the cell HOLDS. The two lanes then agree about behaviour while differing in text, which is the honest parity claim — the typed lane knows it is a callback and passes it through, the untyped one wraps it and reads it back.',
             run({ is }) {
-                const js = "<script>import { props } from 'abide'\nconst { onpick } = props()</script><button onclick={() => onpick(1)}>x</button>"
+                const js =
+                    "<script>import { props } from 'abide'\nconst { onpick } = props()</script><button onclick={() => onpick(1)}>x</button>"
                 const ts =
                     "<script>import { props } from 'abide'\nconst { onpick } = props<{ onpick: (n: number) => void }>()</script><button onclick={() => onpick(1)}>x</button>"
-                is('untyped: the cell is read, then the handler called', template(js), '<button @click=${() => onpick()(1)}>x</button>')
-                is('typed: the handler is passed through as it always was', template(ts), '<button @click=${() => onpick(1)}>x</button>')
+                is(
+                    'untyped: the cell is read, then the handler called',
+                    template(js),
+                    '<button @click=${() => onpick()(1)}>x</button>',
+                )
+                is(
+                    'typed: the handler is passed through as it always was',
+                    template(ts),
+                    '<button @click=${() => onpick(1)}>x</button>',
+                )
                 // The shapes the two lanes DO emit identically, so a future divergence has somewhere
                 // to fail. The setup text differs by construction — the typed source contains the
                 // type argument — so it is the TEMPLATE the lanes are compared on.
                 const lanes: [string, string, string][] = [
                     ['a cell read', 'const n = state(0)', 'const n = state<number>(0)'],
-                    ['a value prop', 'const { row } = props()', 'const { row } = props<{ row: { n: number } }>()'],
+                    [
+                        'a value prop',
+                        'const { row } = props()',
+                        'const { row } = props<{ row: { n: number } }>()',
+                    ],
                 ]
                 for (const [label, untyped, typed] of lanes) {
                     const head = "import { state, props } from 'abide'\n"
@@ -776,7 +917,9 @@ export default suite({
                 // so a row that is open on the server is open in the markup it sends.
                 is(
                     'open is a boolean bind on a details, written back from toggle',
-                    template('<script>const on = state(false)</script><details bind:open={on}><summary>s</summary></details>'),
+                    template(
+                        '<script>const on = state(false)</script><details bind:open={on}><summary>s</summary></details>',
+                    ),
                     '<details .open=${() => !!on()} open=${() => !!on()} @toggle=${(event: Event) => on.set((event.currentTarget as HTMLDetailsElement).open)}><summary>s</summary></details>',
                 )
 
@@ -874,7 +1017,11 @@ export default suite({
                     template('<p>{obj.await}</p>'),
                     '<p>${obj.await}</p>',
                 )
-                is('the same through an optional chain', template('<p>{obj?.await}</p>'), '<p>${obj?.await}</p>')
+                is(
+                    'the same through an optional chain',
+                    template('<p>{obj?.await}</p>'),
+                    '<p>${obj?.await}</p>',
+                )
                 // An ATTRIBUTE says the same thing, and used to say something else: it emitted a bare
                 // `await` into a template function that is never async, so the emitted FILE did not
                 // compile — TS1308, pointing at generated code rather than at the hole.
@@ -1020,7 +1167,11 @@ export default suite({
                 // The FLAG a `{#try}` gets instead, which is the whole of what it costs: present only
                 // when the body awaits, so no `{#try}` ever written changes shape.
                 const flagged = (source: string): boolean => template(source).includes('}, true)')
-                is('an awaiting `{#try}` is flagged', flagged('{#try}<p>{await p}</p>{:catch e}<b>c</b>{/try}'), true)
+                is(
+                    'an awaiting `{#try}` is flagged',
+                    flagged('{#try}<p>{await p}</p>{:catch e}<b>c</b>{/try}'),
+                    true,
+                )
                 is('…and a plain one is not', flagged('{#try}<p>{v}</p>{:catch e}<b>c</b>{/try}'), false)
                 is(
                     '…and `obj.await` is a property here too, so the bind still emits its cell',
@@ -1032,8 +1183,8 @@ export default suite({
 
         {
             title: 'control flow is ordinary expressions, one thunk per hole',
-            note: 'The thunk around an `{#if}` subscribes to its CONDITION and nothing else, because evaluating an `html` tag does not call the thunks inside it. Wrapping a whole branch body in one thunk would produce identical output at a much coarser wake — which is why the shape is asserted, not just the render.',
-            run({ is }) {
+            note: 'The thunk around an `{#if}` subscribes to its CONDITION and nothing else, because evaluating an `html` tag does not call the thunks inside it. Wrapping a whole branch body in one thunk would produce identical output at a much coarser wake — which is why the shape is asserted, not just the render. What each branch may CARRY lives in `BRANCHES` beside which branches exist, so the branch that cannot be written bare is refused from the same table a hover and `/docs/syntax` read.',
+            run({ is, throws }) {
                 is(
                     'if / else if / else',
                     template('{#if a}<b>x</b>{:else if b}<i>y</i>{:else}z{/if}'),
@@ -1044,6 +1195,27 @@ export default suite({
                     template('{#switch m}{:case "a"}A{:default}D{/switch}'),
                     '${() => m === "a" ? html`A` : html`D`}',
                 )
+                // EVERY position an author can write an expression, and the claim is that each one
+                // has a mapping. It is one case rather than seventeen because the failure is always
+                // the same failure and was found the same way: a hover over `class="row {x}"` said
+                // nothing while `class={x}` beside it worked, and the sweep that answered why turned
+                // up nine more — every block header, both spreads, all three `bind:` arms.
+                //
+                // An unmapped position is not a small thing. `abide check` reports it against the
+                // GENERATED module and the editor lane DROPS it, so a type error in one is invisible
+                // in an editor and a hover over one is silent.
+                const unmapped: string[] = []
+                for (const [what, source, needle] of WRITTEN) {
+                    const { segments } = compile(source, { filename: 'Case.abide' })
+                    const at = placeAt(startsOf(source), source.lastIndexOf(needle))
+                    if (generatedPosition(segments, at.line, at.column) === null) unmapped.push(what)
+                }
+                is('every expression position maps back to the file', unmapped.join(', '), '')
+
+                // What a branch CARRIES is in `BRANCHES` beside which branches exist, so the one
+                // that cannot be written bare is refused from the same table a hover reads. A bare
+                // `{:case}` used to compile — to `m ===  ? …`, which is not JavaScript.
+                throws('a {:case} with no value', () => template('{#switch m}{:case}A{/switch}'), '<value>')
                 is(
                     'a keyed for MOVES its rows',
                     template('<ul>{#for w of ws by w}<li>{w}</li>{/for}</ul>'),
@@ -1300,7 +1472,7 @@ export default suite({
 
         {
             title: 'what LIFTS is decided by the token after `import`, so `import.meta` stays put',
-            note: 'A `<script>` body is inlined into the component setup, so a static import has to be lifted out to module scope. Which statements those are is read off the token FOLLOWING the keyword — a `(` is a dynamic import and a `.` is `import.meta`, and both are expressions that belong exactly where they were written. Reading it as an OFFSET instead — a `(` at `start + 6` — let the dot through, and the half-open statement then closed on the next string literal after any `from` in the body: an `Array.from(…(\'.row\'))` was enough to lift a line to module scope and leave its own tail behind in the setup.',
+            note: "A `<script>` body is inlined into the component setup, so a static import has to be lifted out to module scope. Which statements those are is read off the token FOLLOWING the keyword — a `(` is a dynamic import and a `.` is `import.meta`, and both are expressions that belong exactly where they were written. Reading it as an OFFSET instead — a `(` at `start + 6` — let the dot through, and the half-open statement then closed on the next string literal after any `from` in the body: an `Array.from(…('.row'))` was enough to lift a line to module scope and leave its own tail behind in the setup.",
             run({ is }) {
                 is(
                     '`import.meta` is left in the body',
@@ -1348,7 +1520,11 @@ export default suite({
                 // same line calls the CELL and discards what it hands back — a click that does
                 // nothing, with the markup and the types both still right.
                 is('a function member stays plain', resolved.code.includes('const onpick = propCell('), false)
-                is('…and a value member is still a cell', resolved.code.includes('const row = propCell($row)'), true)
+                is(
+                    '…and a value member is still a cell',
+                    resolved.code.includes('const row = propCell($row)'),
+                    true,
+                )
                 // The inline spelling of the same type is the control: the two must agree, because
                 // the whole defect was that they did not.
                 const inline = compile(
@@ -1361,10 +1537,15 @@ export default suite({
                 // Two spellings the resolver has to follow, and the answer when it cannot.
                 is(
                     'a renamed import',
-                    compile(source.replace('RowProps }', 'RowProps as P }').replace('props<RowProps>', 'props<P>'), {
-                        filename: 'C.abide',
-                        resolve: () => ({ path: '/models.ts', text: models }),
-                    }).code.includes('const onpick = propCell('),
+                    compile(
+                        source
+                            .replace('RowProps }', 'RowProps as P }')
+                            .replace('props<RowProps>', 'props<P>'),
+                        {
+                            filename: 'C.abide',
+                            resolve: () => ({ path: '/models.ts', text: models }),
+                        },
+                    ).code.includes('const onpick = propCell('),
                     false,
                 )
                 is(
@@ -1408,6 +1589,144 @@ export default suite({
         },
 
         {
+            title: 'a type that MOVED cannot name a value that stayed',
+            note: 'Every type declaration is lifted to module scope, because the signature that names the props type is written outside the body it was declared in — and a `<script>` statement is the setup, so it stays in the function and runs per instance. `type Props = { size?: keyof typeof sizes }` beside `const sizes = {…}` asks for both. Neither can give: lifting the const with it changes WHEN it is evaluated and is impossible the moment it reads a prop. So it is refused where it was written, which is what a `Cannot find name` in a generated file could not be — a `<script>` body carries no source mapping, so that diagnostic named a line nobody typed.',
+            run({ is, throws }) {
+                throws(
+                    'a const in the <script> the type was lifted out of',
+                    () =>
+                        compile(
+                            "<script>\nimport { props } from 'abide'\ntype Props = { size?: keyof typeof sizes }\nconst { size } = props<Props>()\nconst sizes = { md: 1 }\n</script><p>{size}</p>",
+                            { filename: 'Badge.abide' },
+                        ),
+                    'stays in the function',
+                )
+                is(
+                    'the same table in <script module> is where the type can see it',
+                    compile(
+                        "<script module>\nexport const sizes = { md: 1 }\n</script>\n<script>\nimport { props } from 'abide'\ntype Props = { size?: keyof typeof sizes }\nconst { size } = props<Props>()\n</script><p>{size}</p>",
+                        { filename: 'Badge.abide' },
+                    ).code.includes('type Props = { size?: keyof typeof sizes }'),
+                    true,
+                )
+                // An IMPORT is lifted too, so a type reaching one of those is reaching module scope.
+                is(
+                    'and so is an imported one',
+                    compile(
+                        "<script>\nimport { props } from 'abide'\nimport { SIZES } from './x.ts'\ntype Props = { size?: keyof typeof SIZES }\nconst { size } = props<Props>()\n</script><p>{size}</p>",
+                        { filename: 'Badge.abide' },
+                    ).code.includes('keyof typeof SIZES'),
+                    true,
+                )
+            },
+        },
+
+        {
+            title: '<slot> renders a FALLBACK when nothing was passed, and a bare one still costs nothing',
+            note: 'The contents of `<slot>…</slot>` used to be parsed to find the closing tag and then dropped — markup accepted and discarded, which no output can be wrong enough to report. What decides is one rule shared by both substrates: `undefined`, `null` and `false` are nothing, the same triple an absent attribute means, and an empty string is something a caller passed. The bare `<slot/>` is untouched and that is half the claim: it emits the member access with no thunk, because children are built by the CALLER and an effect there could never wake — a fallback is the only slot that has anything to decide, and the only one that pays.',
+            async run({ is }) {
+                const emitted = (markup: string): string =>
+                    template(
+                        `<script>import { props } from 'abide'\nconst {} = props<{}>()</script>${markup}`,
+                    )
+                is(
+                    'a bare slot is the member access, unthunked',
+                    emitted('<p><slot/></p>'),
+                    '<p>${args.children}</p>',
+                )
+                is(
+                    '…and a fallback is decided, so it takes a thunk',
+                    emitted('<p><slot>none</slot></p>'),
+                    '<p>${() => slotted(args.children, () => html`none`)}</p>',
+                )
+
+                // Rendered, because the emit alone cannot say which way the test goes. Both
+                // substrates: the server calls the view once and the client holds the instance, and
+                // the children arrive as a cell on both.
+                is(
+                    'the server shows children when given them',
+                    await renderToString(html`${carried(Fallback, { children: html`<b>given</b>` })}`),
+                    '<div class="fallback "><b>given</b></div>',
+                )
+                is(
+                    '…and the fallback when not',
+                    await renderToString(html`${carried(Fallback, { children: undefined })}`),
+                    '<div class="fallback "><em>nothing yet</em></div>',
+                )
+
+                // The reason the thunk is owed: children are a cell the position writes on every
+                // pass, so a caller that GAINS children has to replace the fallback. Asserted in the
+                // DOM, since a server render samples one instant and cannot show a second one.
+                const kids = state<unknown>(undefined)
+                const host = scratch(() => html`${carried(Fallback, { children: kids() })}`)
+                const shown = (): string => host.innerHTML.replace(/<!--[\s\S]*?-->/g, '')
+                is(
+                    'the client starts on the fallback',
+                    shown(),
+                    '<div class="fallback "><em>nothing yet</em></div>',
+                )
+                kids.set(html`<b>given</b>`)
+                await tick()
+                is('…and children replace it', shown(), '<div class="fallback "><b>given</b></div>')
+                kids.set(undefined)
+                await tick()
+                is('…and it comes back', shown(), '<div class="fallback "><em>nothing yet</em></div>')
+                host.remove()
+            },
+        },
+
+        {
+            title: 'a component is NOT in scope in its own file — recursion is an ordinary import',
+            note: "Every name a `<script>` uses was imported or bound by the person who wrote it, and the emitted component function used to be the one exception: `<Search/>` inside `Search.abide` resolved to it with nothing in the file saying so, and the declaration RESERVED that spelling — so `Search.abide` importing a `Search` icon was a duplicate declaration reported against a generated file. Both go away with the binding. The emitted name carries the house mark (`Search$`), which is what an author does not write, and a recursive component imports itself under whatever name it likes. The one thing lost is the diagnostic: tsc answers a forgotten self-import with `Did you mean 'Tree$'?` — the emitter's own insides offered as advice, at a position the map cannot place — so the file answers it first.",
+            async run({ is, throws }) {
+                const recursive =
+                    "<script>import { props } from 'abide'\nconst { depth } = props<{ depth?: number }>()"
+                const body = '<ul>{#if depth < 3}<li><Tree depth={depth + 1}/></li>{/if}</ul>'
+                throws(
+                    'the tag resolves to nothing without the import',
+                    () => compile(`${recursive}</script>${body}`, { filename: 'Tree.abide' }),
+                    'NOT in scope in its own file',
+                )
+                is(
+                    'and with it, to what the import bound',
+                    compile(`${recursive}\nimport Tree from './Tree.abide'</script>${body}`, {
+                        filename: 'Tree.abide',
+                    }).code.includes('component(Tree, { depth: $0 + 1'),
+                    true,
+                )
+                // The name is the author's to choose, which is what makes the icon case work at all:
+                // nothing about `Search.abide` reserves `Search` any more.
+                is(
+                    'a different module may take the name the file is called after',
+                    compile("<script>import Search from './icons/Search.abide'</script><p><Search/></p>", {
+                        filename: 'Search.abide',
+                    }).code.includes('function Search$('),
+                    true,
+                )
+                // A memo-named tag is a binding too, so the check must not fire on one.
+                is(
+                    'a reactive component of that name binds it',
+                    compile('<script>const Tree = memo(() => Other)</script><p><Tree/></p>', {
+                        filename: 'Tree.abide',
+                    }).code.includes('component(Tree(), {'),
+                    true,
+                )
+
+                // …and it RECURSES, which is the claim the emit alone cannot make: a module importing
+                // its own default is a cycle, and a function declaration is what makes it a safe one.
+                const rendered = '<ul><li>depth 0<ul><li>depth 1<ul><li>depth 2</li></ul></li></ul></li></ul>'
+                is(
+                    'the server walks it',
+                    await renderToString(html`<ul>${carried(Tree, { children: undefined })}</ul>`),
+                    rendered,
+                )
+                const host = scratch(() => html`<ul>${carried(Tree, { children: undefined })}</ul>`)
+                is('and so does the client', host.innerHTML.replace(/<!--[\s\S]*?-->/g, ''), rendered)
+                host.remove()
+            },
+        },
+
+        {
             title: 'a cell in a <script module> is scoped to the CALLER, not to the process',
             note: 'Module scope means one per REQUEST on a server and one per page in a browser — never one per server process, which is what it silently meant before. The compiler wraps the binding and the facade resolves it per caller on every member, which is the answer `scopedArgless` already gave an argless `memo`; a cell and a channel were the two spellings that never had it. Wrapped AFTER the desugar and not before: the sugar decides cell reads over this same text, so a wrapper spliced in first made `query.toUpperCase()` stop becoming `query().toUpperCase()`. Only a BINDING is wrapped, so a factory is left alone — what it builds is already one per call.',
             run({ is }) {
@@ -1415,7 +1734,9 @@ export default suite({
                     compile(`<script module>\n${body}\n</script>\n<p>ok</p>`).code
                 is(
                     'a cell binding is wrapped',
-                    moduleBlock('const count = state(0)').includes('const count = state.scoped(() => state(0))'),
+                    moduleBlock('const count = state(0)').includes(
+                        'const count = state.scoped(() => state(0))',
+                    ),
                     true,
                 )
                 is(
@@ -1659,9 +1980,7 @@ export default suite({
                 )
                 is(
                     '…and one declared as a plain number is read by its NAME, like every other prop',
-                    template(`${declared('    n: number', 'n')}<p>{n + 1}</p>`).includes(
-                        '${() => n() + 1}',
-                    ),
+                    template(`${declared('    n: number', 'n')}<p>{n + 1}</p>`).includes('${() => n() + 1}'),
                     true,
                 )
                 // The rename, which is the reason the pattern is what names them. Read off the
@@ -1769,16 +2088,12 @@ export default suite({
 
                 is(
                     'the CALL is the cell, so it is read where a name would be',
-                    template(page('<p>{orders({ id: 1 }).total}</p>')).includes(
-                        'orders({ id: 1 })().total',
-                    ),
+                    template(page('<p>{orders({ id: 1 }).total}</p>')).includes('orders({ id: 1 })().total'),
                     true,
                 )
                 is(
                     '…and the reserved surface still reaches the handle',
-                    template(page('<p>{orders({ id: 1 }).peek()}</p>')).includes(
-                        'orders({ id: 1 }).peek()',
-                    ),
+                    template(page('<p>{orders({ id: 1 }).peek()}</p>')).includes('orders({ id: 1 }).peek()'),
                     true,
                 )
                 is(
@@ -1790,16 +2105,14 @@ export default suite({
                 )
                 is(
                     'a rename binds the LOCAL name',
-                    template(
-                        page('<p>{recent({ id: 1 }).total}</p>', '{ orders as recent }'),
-                    ).includes('recent({ id: 1 })().total'),
+                    template(page('<p>{recent({ id: 1 }).total}</p>', '{ orders as recent }')).includes(
+                        'recent({ id: 1 })().total',
+                    ),
                     true,
                 )
                 is(
                     'a TYPE import declares nothing — it carries no value',
-                    template(
-                        page('<p>{Orders.length}</p>', 'type { Orders }'),
-                    ).includes('Orders({'),
+                    template(page('<p>{Orders.length}</p>', 'type { Orders }')).includes('Orders({'),
                     false,
                 )
                 // Both SPELLINGS of the same directory, because an app writes the seam and a file
@@ -1861,15 +2174,21 @@ export default suite({
                 // sentence in `#ui/pages/streaming`, which is the file this whole mechanism is for.
                 is(
                     'a block marker inside a comment opens nothing',
-                    compile('<!-- an {#if} with an {:else} arm -->\n<script module>\nconst A = 1\n</script>\n<p>ok</p>\n', {
-                        filename: 'C.abide',
-                    }).code.includes('const A = 1'),
+                    compile(
+                        '<!-- an {#if} with an {:else} arm -->\n<script module>\nconst A = 1\n</script>\n<p>ok</p>\n',
+                        {
+                            filename: 'C.abide',
+                        },
+                    ).code.includes('const A = 1'),
                     true,
                 )
                 // …and the refusal it was drowning out still fires, so this is not the check removed.
                 throws(
                     'a script module really nested in a branch is still refused',
-                    () => compile('{#if x}<script module>\nconst A = 1\n</script>{/if}\n', { filename: 'C.abide' }),
+                    () =>
+                        compile('{#if x}<script module>\nconst A = 1\n</script>{/if}\n', {
+                            filename: 'C.abide',
+                        }),
                     'module scope',
                 )
 
@@ -1879,9 +2198,12 @@ export default suite({
                 // which is what makes a comment, a string and a template literal all not-a-call.
                 is(
                     'a comment naming props() is not a call',
-                    compile('<script module>\n// props() must move to <script>\nconst A = 1\n</script>\n<p>ok</p>\n', {
-                        filename: 'C.abide',
-                    }).code.includes('const A = 1'),
+                    compile(
+                        '<script module>\n// props() must move to <script>\nconst A = 1\n</script>\n<p>ok</p>\n',
+                        {
+                            filename: 'C.abide',
+                        },
+                    ).code.includes('const A = 1'),
                     true,
                 )
                 throws(
@@ -1996,7 +2318,8 @@ export default suite({
                 // same value, one subscription instead of two, and the thing the branch narrowed.
                 // Without it the props were a second `s()` call the narrowing never reached, and an
                 // ordinary `{#if found}<Child head={found.name}/>` needed a `!` to compile at all.
-                const withChild = "<script>import Child from './child.abide'\nconst s = state({ name: 'a' })</script>"
+                const withChild =
+                    "<script>import Child from './child.abide'\nconst s = state({ name: 'a' })</script>"
                 const child = (source: string): string => {
                     const emitted = compile(withChild + source, { filename: 'Case.abide' }).code
                     const start = emitted.indexOf('return html`')
@@ -2176,11 +2499,18 @@ export default suite({
             title: '{#if x.pending()} is a plain chain, and the probe is what starts the load',
             note: 'This chain used to be wrapped in `awaited(cell, { pending, then, catch })` — one arm handed over three times — so that a document render knew to defer the region and the client’s settle landed on the same template. Neither is the wrapper’s to carry now: the walk defers whatever PROBED, and the settle rebuilt the region either way, because a compiled chain’s arms are different templates and only the same shape reached the identity cutoff. Measured identical, wrapper and none. What is left is the ordinary thunk, and the claim that matters is the one below it — the handle is LAZY, and the probe in the head is what starts the load it then reports, so the pending arm is asking about a load that exists.',
             async run({ is }) {
-                const emitted = compile('<script>const p = state(0)</script><p>{#if p.pending()}a{:else}b{/if}</p>', {
-                    filename: 'A.abide',
-                }).code
+                const emitted = compile(
+                    '<script>const p = state(0)</script><p>{#if p.pending()}a{:else}b{/if}</p>',
+                    {
+                        filename: 'A.abide',
+                    },
+                ).code
                 is('no wrapper around the chain', emitted.includes('awaited('), false)
-                is('the probe is in the head, untouched', emitted.includes('p.pending() ? html`a` : html`b`'), true)
+                is(
+                    'the probe is in the head, untouched',
+                    emitted.includes('p.pending() ? html`a` : html`b`'),
+                    true,
+                )
 
                 const before = calls()
                 const host = scratch(() => Loader({}) as never)
@@ -2398,6 +2728,27 @@ export default suite({
                     { filename: 'G.abide' },
                 ).code
                 is('…including through a nested `>>`', nested.includes('${() => s().size}'), true)
+                // A FUNCTION type in the argument, which is the one shape the walk back over `<…>`
+                // could not survive: `=>` carries a `>` that closes nothing, so the character count
+                // read it as a second close, ran off the front of the region and registered no cell
+                // at all. Everything downstream then went quiet at once — the read stayed bare, the
+                // write stayed an assignment to a `const`, and a `<script module>` declaration lost
+                // the `state.scoped` wrap that makes it one cell per caller.
+                const callback = compile(
+                    '<script>const on = state<((v: string) => void) | undefined>(undefined)\nfunction go() {\n    on = undefined\n}</script><p>{on ? 1 : 0}</p>',
+                    { filename: 'G.abide' },
+                ).code
+                is('a function type in the argument reads', callback.includes('${() => on() ? 1 : 0}'), true)
+                is('…and writes', callback.includes('on.set(undefined)'), true)
+                const scoped = compile(
+                    '<script module>const on = state<() => void>(() => {})</script><p>x</p>',
+                    { filename: 'G.abide' },
+                ).code
+                is(
+                    '…and is scoped to its caller like any other module cell',
+                    scoped.includes('state.scoped(() => state<() => void>(() => {}))'),
+                    true,
+                )
             },
         },
 
@@ -2552,7 +2903,9 @@ export default suite({
                 const none = compile('<p>plain</p>', { filename: 'Report.abide' }).code
                 is(
                     'no props, so the parameter has a default',
-                    none.includes('export default function Report(args: { children?: unknown } = {}): TemplateResult'),
+                    none.includes(
+                        'export default function Report$(args: { children?: unknown } = {}): TemplateResult',
+                    ),
                     true,
                 )
 
@@ -2565,10 +2918,25 @@ export default suite({
                 ).code
                 is(
                     'declared props, so the caller passes them',
-                    some.includes('export default function Row(args: Props$<{ row: string }> & { children?: unknown }): TemplateResult'),
+                    some.includes(
+                        'export default function Row$(args: Props$<{ row: string }, "row"> & { children?: unknown }): TemplateResult',
+                    ),
                     true,
                 )
-                is('and no default was written for them', some.includes('& { children?: unknown } = {}'), false)
+                // The second argument is the emit's OWN answer to what a prop is, handed to the type
+                // so the two do not each derive it — a callback behind a NAME is the one place they
+                // disagree, and the emit is what wrote the `propCell`. A member it left alone is
+                // absent from the list, which is how the type is told to keep asking about that one.
+                const callback = compile(
+                    "<script>\nimport { props } from 'abide'\nconst { row, onpick } = props<{ row: string; onpick: (r: string) => void }>()\n</script>\n<li @click={() => onpick(row)}>{row}</li>\n",
+                    { filename: 'Row.abide' },
+                ).code
+                is('a function member is not named', callback.includes('}, "row"> & {'), true)
+                is(
+                    'and no default was written for them',
+                    some.includes('& { children?: unknown } = {}'),
+                    false,
+                )
             },
         },
 

@@ -132,14 +132,17 @@ export class Session {
     /**
      * Bind the app this process carries, on the port it was asked for.
      *
-     * The exit code of a refusal already printed, or `ok`. `report` is the same two lines `abide
-     * start` prints, off the same assembly, so a session that is serving says what it is serving.
+     * The exit code of a refusal already printed, or `ok`. `report` is the same block `abide start`
+     * prints, off the same assembly, so a session that is serving says what it is serving.
      */
     async serve(port: number): Promise<number> {
+        const began = performance.now()
         await this.close()
         const bound = await this.open(port)
         if (typeof bound === 'number') return bound
-        report(bound.url, bound.assembly)
+        // No `ctrl-c stops`: this socket is held by a console that is still at its prompt, and Ctrl-C
+        // there answers the prompt rather than the server.
+        report({ url: bound.url, assembly: bound.assembly, took: performance.now() - began })
         // The port it actually BOUND, not the one it was asked for: `--port 0` is how a caller says
         // "any free one", and remembering the `0` would resume onto a different socket every time.
         const listening = new URL(bound.url).port

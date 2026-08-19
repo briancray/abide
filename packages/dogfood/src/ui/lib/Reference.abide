@@ -60,6 +60,14 @@ function filesOf(rung: Example): SourceFile[] {
 export interface ReferenceHead {
     name: string
     blurb: string
+    /**
+     * The one thing about this name that is easy to get wrong.
+     *
+     * REQUIRED, so both vocabularies owe one and the shape below can be drawn unconditionally. It is
+     * the answer to a different question from `blurb` — that one is read by somebody deciding whether
+     * they want this, and this one by somebody who already decided.
+     */
+    pitfall: string
     /** Absent for a spelling: `{#for}` is not imported from anywhere. */
     from?: string
 }
@@ -109,6 +117,13 @@ const { head, crumb, rungs } = props<{ head: ReferenceHead; crumb: NavItem; rung
             <Code source={importOf(head.name, head.from ?? '')}/>
         </div>
     {/if}
+    <!-- The one thing easy to get wrong, level with the import rather than buried under the last rung.
+         Unconditional: every name on either axis carries one, and `#tests/unit/docs.test.ts` is what
+         says so — an empty one fails there rather than drawing a labelled box with nothing in it. -->
+    <aside class="pitfall">
+        <p class="pitfall-label">easy to get wrong</p>
+        <p class="pitfall-body">{head.pitfall}</p>
+    </aside>
 </div>
 
 <div class="ladder">
@@ -130,6 +145,10 @@ const { head, crumb, rungs } = props<{ head: ReferenceHead; crumb: NavItem; rung
                     {#for name of rung.of}<a href="/docs/{name}" class="link"><code>{name}</code></a> {/for}
                     {#for slug of rung.spells}<a href="/docs/syntax/{slug}" class="link"><code>{spelt(slug)}</code></a> {/for}
                 </p>
+                <!-- The rung's own aside, where the diff between this step and the one above it is not
+                     self-evident from the two files. Conditional, because most rungs have nothing to
+                     add that `adds` did not already say. -->
+                {#if rung.note}<p class="rung-note">{rung.note}</p>{/if}
             </div>
             <!-- The RESULT first and the source beside it, which is the order the two columns are
                  sized in. Unconditional: every rung on either axis renders something now, and

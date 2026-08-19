@@ -14,7 +14,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { CLIENT_ROUTE, type ClientManifest, GENERATED_ENTRY } from 'abide/cli'
-import { abide, BINARY, ended, type Running, spawn, started } from 'harness/spawn'
+import { abide, BINARY, ended, LISTENING, type Running, spawn, started } from 'harness/spawn'
 import { builtManifest } from '#tests/builtApp.ts'
 import { APP_ROOT as ROOT } from '#tests/PATHS.ts'
 
@@ -516,7 +516,7 @@ test('--port binds directly, and a taken one is a refusal rather than a hop', as
     // was meant to replace.
     expect(taken.code).toBe(1)
     expect(taken.err).toContain(`port ${port} is already in use`)
-    expect(taken.out).not.toContain('listening')
+    expect(taken.out).not.toContain(LISTENING)
 }, 15_000)
 
 test('a port that is not one, and an option that is not ours, are usage', async () => {

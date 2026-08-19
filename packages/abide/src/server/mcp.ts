@@ -24,8 +24,8 @@ import { MCP_PATH, RPC_PREFIX, SOCKET_PREFIX, TAIL_PARAM, WAIT_PARAM } from '#sh
 import { messageOf } from '#shared/internal/probes.ts'
 import type { EndpointShape, JsonSchema } from '#shared/internal/shapes.ts'
 import { argsQuery, chunksOf, errorMessage, isChunked, payloadOf } from '#shared/internal/wire.ts'
-import { config } from './config.ts'
 import { endpoints } from './catalogue.ts'
+import { config } from './config.ts'
 import { dispatch } from './registry.ts'
 import { json, refuse } from './responses.ts'
 
@@ -187,7 +187,8 @@ function definitionFor(endpoint: EndpointShape, arm: Arm, name: string): ToolDef
             inputSchema: endpoint.input ?? objectSchema({}, []),
         }
         const output = endpoint.output
-        if (output !== undefined && isStructured(endpoint, arm)) definition.outputSchema = output
+        // `arm === 'call'` is settled by the branch this is in, so the question left is the shape's.
+        if (output?.type === 'object') definition.outputSchema = output
         return definition
     }
     if (arm === 'tail') {
@@ -230,7 +231,11 @@ function targetsOf(): Map<string, Target> {
     for (const endpoint of endpoints()) {
         if (!endpoint.clients.mcp) continue
         const arms: Arm[] =
-            endpoint.kind === 'rpc' ? ['call'] : endpoint.clientPublish === true ? ['tail', 'publish'] : ['tail']
+            endpoint.kind === 'rpc'
+                ? ['call']
+                : endpoint.clientPublish === true
+                  ? ['tail', 'publish']
+                  : ['tail']
         for (const arm of arms) {
             let name = nameFor(endpoint.id, arm)
             if (targets.has(name)) {
@@ -504,7 +509,11 @@ function completed(result: Record<string, unknown>): Record<string, unknown> {
     return result
 }
 
-function answer(request: Request, url: URL, call: Call): Promise<Record<string, unknown>> | Record<string, unknown> {
+function answer(
+    request: Request,
+    url: URL,
+    call: Call,
+): Promise<Record<string, unknown>> | Record<string, unknown> {
     const method = call.method
     const params = (call.params ?? {}) as Record<string, unknown>
     if (method === 'server/discover') {

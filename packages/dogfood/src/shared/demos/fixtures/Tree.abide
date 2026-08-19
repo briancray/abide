@@ -1,0 +1,10 @@
+<script>
+import { props } from 'abide'
+// A component is NOT in scope in its own file, so recursion is an ordinary import — under whatever
+// name the author wants, which is the whole point: nothing here resolves to something unwritten.
+import Branch from './Tree.abide'
+
+const { depth = 0 } = props<{ depth?: number }>()
+</script>
+
+<li>depth {depth}{#if depth < 2}<ul><Branch depth={depth + 1}/></ul>{/if}</li>

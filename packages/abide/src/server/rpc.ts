@@ -10,19 +10,25 @@
 
 import { type Channel, type ChannelOptions, channel, type KeyedChannel } from '#shared/channel.ts'
 import { internals } from '#shared/internal/graph.ts'
-import { isAsyncIterable, isThenable } from '#shared/internal/probes.ts'
 import { seedKey } from '#shared/internal/keys.ts'
-import { type Clients, type Declaration, EVERY_CLIENT, type JsonSchema, type Shapes } from '#shared/internal/shapes.ts'
+import { isAsyncIterable, isThenable } from '#shared/internal/probes.ts'
+import {
+    type Clients,
+    type Declaration,
+    EVERY_CLIENT,
+    type JsonSchema,
+    type Shapes,
+} from '#shared/internal/shapes.ts'
 import { NO_LIMIT, race, timeoutError } from '#shared/internal/timers.ts'
 import {
     type Answer,
     errorPayload,
-    failedLine,
     type Framed,
+    failedLine,
     JSON_TYPE,
-    OCTET_TYPE,
     jsonLine,
     NDJSON_TYPE,
+    OCTET_TYPE,
     type Refusals,
     statusOf,
     TTL_HEADER,
@@ -32,7 +38,7 @@ import { type KeyedMemo, type MemoOptions, memo } from '#shared/memo.ts'
 import { addressWithArgs, asRpc, type Method, type Rpc } from '#shared/transport.ts'
 import { knobOf } from './config.ts'
 import { PRIVATE_NO_STORE } from './internal/CACHE.ts'
-import { failed, type FramingWritten, framingOf, headersFor, reframed } from './responses.ts'
+import { type FramingWritten, failed, framingOf, headersFor, reframed } from './responses.ts'
 import { type Gate, gate, publishable, type Schema, type SchemaRefusal } from './schema.ts'
 import { heldFrames, recordSeed, seedsTable } from './scopes.ts'
 
@@ -474,7 +480,8 @@ function declare<Args, T>(
         // The VALUE decides, not `streams`: a framing is discovered in the call and is a stream from
         // here on, so it is seeded by its transcript exactly as a `function*` handler is. Read off
         // `streams` alone it took the branch below and seeded the generator object, which is `{}`.
-        if (streams || isAsyncIterable(produced)) return recorded(args, produced as AsyncIterable<T>) as Produced<T>
+        if (streams || isAsyncIterable(produced))
+            return recorded(args, produced as AsyncIterable<T>) as Produced<T>
         if (!isThenable(produced)) {
             if (!(produced instanceof Response)) table.set(seedKey(policy.address, args), produced)
             return produced
@@ -508,10 +515,10 @@ function declare<Args, T>(
     }
 
     const cache: MemoOptions<Args> = { ...retention, ttl }
-    const call = memo(
-        ((args: Args) => collected(args, load(args))) as (args: Args) => T,
-        cache,
-    ) as KeyedMemo<Args, T>
+    const call = memo(((args: Args) => collected(args, load(args))) as (args: Args) => T, cache) as KeyedMemo<
+        Args,
+        T
+    >
 
     const rpc: Rpc<Args, T> = asRpc(call, {
         method,
@@ -540,7 +547,8 @@ function declare<Args, T>(
  * says nobody in between may keep a copy.
  */
 function wireHeaders(ttl: number, type: string, extra: Record<string, string> | undefined): Headers {
-    if (ttl === Infinity) return headersFor(extra, { 'content-type': type, 'cache-control': PRIVATE_NO_STORE })
+    if (ttl === Infinity)
+        return headersFor(extra, { 'content-type': type, 'cache-control': PRIVATE_NO_STORE })
     return headersFor(extra, {
         'content-type': type,
         'cache-control': PRIVATE_NO_STORE,
@@ -674,6 +682,12 @@ function value(held: unknown, ttl: number, extra: Record<string, string> | undef
 // what happened, and it is the one thing that decides whether the answer is retained: a read is
 // worth keeping and a mutation is not.
 
+/**
+ * Declares a READ any surface may call, addressed by its arguments. The answer is worth
+ * retaining, which is the whole reason the name is the method.
+ *
+ * The handler's type is SPLIT: what it answers with, and the `error.typed` failures it `return`s.
+ */
 export function GET<Args, T>(
     body: (args: Args) => Produced<T>,
     options: RpcOptions<Args, T> = {},
@@ -681,6 +695,11 @@ export function GET<Args, T>(
     return declare('GET', body, options)
 }
 
+/**
+ * Declares a write. A mutation, so nothing about the answer is retained.
+ *
+ * The handler's type is SPLIT: what it answers with, and the `error.typed` failures it `return`s.
+ */
 export function POST<Args, T>(
     body: (args: Args) => Produced<T>,
     options: RpcOptions<Args, T> = {},
@@ -688,6 +707,11 @@ export function POST<Args, T>(
     return declare('POST', body, options)
 }
 
+/**
+ * Declares a write that REPLACES. A mutation, so nothing about the answer is retained.
+ *
+ * The handler's type is SPLIT: what it answers with, and the `error.typed` failures it `return`s.
+ */
 export function PUT<Args, T>(
     body: (args: Args) => Produced<T>,
     options: RpcOptions<Args, T> = {},
@@ -695,6 +719,11 @@ export function PUT<Args, T>(
     return declare('PUT', body, options)
 }
 
+/**
+ * Declares a write that amends. A mutation, so nothing about the answer is retained.
+ *
+ * The handler's type is SPLIT: what it answers with, and the `error.typed` failures it `return`s.
+ */
 export function PATCH<Args, T>(
     body: (args: Args) => Produced<T>,
     options: RpcOptions<Args, T> = {},
@@ -702,6 +731,11 @@ export function PATCH<Args, T>(
     return declare('PATCH', body, options)
 }
 
+/**
+ * Declares a removal. A mutation, so nothing about the answer is retained.
+ *
+ * The handler's type is SPLIT: what it answers with, and the `error.typed` failures it `return`s.
+ */
 export function DELETE<Args, T>(
     body: (args: Args) => Produced<T>,
     options: RpcOptions<Args, T> = {},

@@ -14,7 +14,9 @@
      The open half (`class:`, `style:`, a spread, an `on<event>`) takes any name there is and can only
      be gated on having a rung at all, which the same file checks. -->
 <script module>
-import { SPELLING_ORDER, SPELLINGS } from '#shared/demos/SPELLINGS.ts'
+import { SPELLINGS } from '#shared/demos/SPELLINGS.ts'
+// The order is the topics' flatten — this page is the flat view of the same list `/docs` groups.
+import { SPELLING_ORDER } from '#shared/demos/TOPICS.ts'
 
 const CARD = 'card'
 </script>

@@ -62,3 +62,22 @@ export function unwrap(value: unknown): unknown {
     const produced = (value as () => unknown)()
     return isSource(produced) ? produced() : produced
 }
+
+/**
+ * `<slot>fallback</slot>` — the children, or what to show when there are none.
+ *
+ * Here beside `unwrap` because it is the same read: children reach a component as a cell the position
+ * writes on every pass, so deciding whether any arrived means reading through one — and a second
+ * implementation of that step is the drift this file exists to stop.
+ *
+ * NOTHING is `undefined`, `null` or `false`, which is the triple `attributeText` already means by an
+ * absent value. An empty string is not one of them: a caller that passed something empty passed
+ * something, and the fallback is for a caller who passed nothing.
+ *
+ * The fallback is a THUNK so that what it reads is read only when it is shown — evaluated eagerly, a
+ * cell inside it would subscribe this slot to a value the caller's children have made invisible.
+ */
+export function slotted(children: unknown, fallback: () => unknown): unknown {
+    const value = unwrap(children)
+    return value === undefined || value === null || value === false ? fallback() : value
+}

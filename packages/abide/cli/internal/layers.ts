@@ -40,8 +40,6 @@
 // dev` builds into memory, injects its reload client into the shell and HOPS. Everything above that
 // seam is one assembly, so a layer that changes shape cannot change shape in only one of them.
 
-// `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
-import { basename } from 'node:path'
 // `Bun.gzipSync` is what these stand in for and cannot serve: it compresses a whole BUFFER, and a
 // streamed document is the one thing that does not have one. There is no flushing compressor on
 // `Bun.*` — see `compressed`, which needs a block ended at every write. `Duplex.toWeb` is the bridge
@@ -51,9 +49,9 @@ import { constants, createGzip } from 'node:zlib'
 // The `.abide` loader, registered by importing the module that owns the registration — the same one
 // `abide run` preloads and `abide repl` makes. An app importing a page compiles it on the way in.
 import '#compiler/preload.ts'
-// Where an app puts things, by its one definition — the module names for the entry this looks for,
-// and the public directory for the layer below. A leaf of strings, so naming it costs nothing.
-import { APP_MODULES, PUBLIC_DIR } from '#compiler/LAYOUT.ts'
+// Where an app puts things, by its one definition — the module names this looks for the entry under.
+// A leaf of strings, so naming it costs nothing.
+import { APP_MODULES } from '#compiler/LAYOUT.ts'
 // The transport directories by their one definition, for the refusal that names them. The globs come
 // from the compiler rather than being written again here, exactly as the boot's own scan takes them.
 import { TRANSPORT_ROOTS } from '#compiler/TRANSPORT.ts'
@@ -96,9 +94,10 @@ import { refuse } from '../COMMANDS.ts'
 import type { ClientAssets, LoadedClient } from './assets.ts'
 import { acceptedEncoding } from './encodings.ts'
 import { handlers } from './handlers.ts'
-import { BOLD, colored, DIM, paint, plural } from './paint.ts'
+import { networkAddress } from './networkAddress.ts'
+import { colored, DIM, GREEN, paint, plural } from './paint.ts'
 import { type PublicFiles, publicFiles } from './publics.ts'
-import { APP_HTML, type AppShell, appShell } from './shell.ts'
+import { type AppShell, appShell } from './shell.ts'
 
 /** Hoisted: the render reads it once and keeps nothing, so a literal here would be per request. */
 const HYDRATABLE = { hydrate: true }
@@ -158,7 +157,7 @@ export interface Assembling {
 export interface AppImage {
     /** What `app.ts` exported, ALREADY imported. `null` for an app that wrote no module of its own. */
     app: AppModule | null
-    /** Its filename, for the report — the compile's answer to `firstPresent`. */
+    /** Its filename — the compile's answer to `firstPresent`, so a binary skips the scan. */
     entry: string | null
     /** How many transport modules the compile imported, which is what `handlers()` would have counted. */
     endpoints: number
@@ -179,8 +178,6 @@ interface ImagedPages {
 
 /** The assembled app: what serves it, and the three facts the report is built from. */
 export interface Assembly {
-    /** `null` for an app that wrote no module of its own — pages and endpoints are the whole of it. */
-    entry: string | null
     paged: Paged | null
     /** The bundle this was assembled WITH, so a report cannot describe a different one. */
     assets: ClientAssets | null
@@ -335,7 +332,7 @@ export async function assemble(asked: Assembling): Promise<Assembly | number> {
                     second.serve(request) ??
                     compressing(request, handled(request, server))
 
-    return { entry, paged, assets, publics, answer }
+    return { paged, assets, publics, answer }
 }
 
 /**
@@ -431,7 +428,6 @@ async function pageLayer(
     const shell: AppShell = {
         parts: { ...document.parts, head: document.parts.head + document.lane + (head ?? '') },
         lane: document.lane,
-        own: document.own,
     }
     if (imaged !== undefined) return { table: pagesFrom(directory, imaged.files, imaged.loaders), shell }
     return { table: scanned === undefined ? await pages(directory) : pagesFrom(directory, scanned), shell }
@@ -965,45 +961,125 @@ export function portAsked(argv: string[], name: string): boolean {
     return true
 }
 
-/**
- * Two lines: where it is listening, and what it is serving.
- *
- * The URL is FIRST and on its own, because it is the one thing anybody reads — and because something
- * watching this process (a test, a supervisor, a dev script) should not have to parse a banner to
- * learn the address. The endpoint counts are on the second line for the question they answer: a
- * transport module that was never imported registers nothing, and `0 rpc` is what that looks like.
- */
-export function report(url: string, assembly: Assembly, note?: string): void {
-    const on = colored()
-    // The address an operator should OPEN, which under a mount is not the socket's own: the server
-    // binds an origin and the app is served under a path of it, so printing the origin sends a reader
-    // to a 404 in their own app. `new URL` rather than concatenation — `url` ends in `/`.
-    const at = new URL(mounted('/'), url).href
-    console.log(`listening ${paint(at, BOLD, on)}`)
+/** What a command that bound a socket says about it. */
+export interface Reported {
+    /** The origin the socket actually bound, as the server reports it. */
+    url: string
+    assembly: Assembly
+    /** Command start to socket answering, in ms, for the `ready in` note. */
+    took: number
+    /**
+     * What this PROCESS is doing, after `ready in` — `watching for changes`, `ctrl-c stops`, `hopped
+     * from 3000`. Per caller because they are not the same process: `abide dev` is watching a tree
+     * and `abide console`'s Ctrl-C answers a prompt rather than stopping a server.
+     */
+    doing?: string[]
+    /**
+     * The addresses are ALREADY on the screen, so print one line: the time and the counts.
+     *
+     * `abide dev`'s restart, and the only caller there will ever be. The port is pinned off the first
+     * worker, so a save that reprinted the block would put the same two addresses on the screen for
+     * every batch of keystrokes — six lines saying one new thing. What can still have changed is what
+     * the app is MADE of, which is why the counts stay rather than the line being `ready in 42ms`.
+     *
+     * `doing` is dropped with the rows for the same reason: what this process is doing was said when
+     * it started and is still true. The one note that could not be — `hopped from` — cannot occur
+     * here, because a worker that hopped did not land on the pin and is not a restart this is set for.
+     */
+    again?: boolean
+}
 
-    // Named only when there is one. An app with no module of its own has nothing to say here, and a
-    // line reading `app.ts` for a file that is not there is the one mistake this line exists to catch.
+/**
+ * The block a command prints once it is up.
+ *
+ * Two kinds of line, and the split is what makes it scannable. The ROWS are ADDRESSES — the thing
+ * somebody clicks or copies, so they are the only undimmed text in the block and they are aligned
+ * into a column. The NOTES are dim and read once: what the app turned out to BE, and what this
+ * process is doing about it.
+ *
+ * The `network` row is the whole reason the block has rows at all: an app on a laptop is opened from
+ * a phone often enough that hunting for `ipconfig` is a step worth deleting. It is omitted rather
+ * than printed as `unavailable` when there is no external interface — a row that says nothing still
+ * costs a line and a scan, every boot.
+ *
+ * There is no command HEADING, because the terminal already printed one: the line above this block
+ * is the prompt `abide dev` was typed on, or `bun run`'s own `$ abide dev` echo.
+ *
+ * The endpoint counts are a note for the question they answer: a transport module that was never
+ * imported registers nothing, and `0 rpc` is what that looks like.
+ *
+ * Something WATCHING this process (a test, a supervisor, a dev script) reads the `local` row, and
+ * `harness/spawn` is where that is spelled — the value is the last column of the line, and the
+ * marker is dropped along with the colour it is decoration for, so a pipe gets the same text with no
+ * escapes to strip. `again` is the exception it has to know about: a restart prints no row at all,
+ * so what a supervisor waits for THERE is `ready in`, which both shapes carry.
+ */
+export function report(said: Reported): void {
+    const on = colored()
+
+    // Five counts and no paths. What an app is MADE of is the question this line answers, and every
+    // address it could name is one the conventions already fix: the module is `app.ts`, the shell is
+    // `app.html`, the bundle is at `CLIENT_ROUTE` and the files come from `public/`. A count is the
+    // part that is this app's own, so a zero is the one thing worth reading — a transport directory
+    // that was never scanned registers nothing, and no `rpcs` at all is what that looks like.
+    const assembly = said.assembly
     const parts: string[] = []
-    if (assembly.entry !== null) parts.push(basename(assembly.entry))
     const paged = assembly.paged
-    if (paged !== null) {
-        // The shell is named because it is the one convention an app can have without knowing: a
-        // process saying `app.html` when the author wrote `App.html` is the shortest way to find out
-        // that the file is not being read.
-        const where = paged.shell.own ? APP_HTML : "abide's shell"
-        parts.push(`${plural(paged.table.length, 'page')} in ${where}`)
-    }
+    if (paged !== null) parts.push(plural(paged.table.length, 'page'))
     const rpcs = registered('rpc').length
     const sockets = registered('socket').length
-    // `rpc` is the one count with no plural, which is why this is not a loop over the three.
-    if (rpcs > 0) parts.push(`${rpcs} rpc`)
+    if (rpcs > 0) parts.push(plural(rpcs, 'rpc'))
     if (sockets > 0) parts.push(plural(sockets, 'socket'))
     const assets = assembly.assets
-    parts.push(assets === null ? 'no client bundle' : `${plural(assets.count, 'file')} at ${CLIENT_ROUTE}`)
+    parts.push(assets === null ? 'no client bundle' : plural(assets.count, 'client asset'))
     // Only when there ARE some. An app with no public directory is the common case, and a line saying
     // so every boot is noise about a convention it has not opted into.
     const publics = assembly.publics
-    if (publics !== null) parts.push(`${plural(publics.count, 'file')} from ${PUBLIC_DIR}`)
-    if (note !== undefined) parts.push(note)
+    if (publics !== null) parts.push(plural(publics.count, 'public asset'))
+
+    const ready = `ready in ${duration(said.took)}`
+    if (said.again === true) {
+        console.log(paint(`  ${ready} · ${parts.join(' · ')}`, DIM, on))
+        return
+    }
+
+    // The address an operator should OPEN, which under a mount is not the socket's own: the server
+    // binds an origin and the app is served under a path of it, so printing the origin sends a reader
+    // to a 404 in their own app. `new URL` rather than concatenation — `url` ends in `/`.
+    const at = new URL(mounted('/'), said.url).href
+    const rows: [string, string][] = [['local', at]]
+    const address = networkAddress()
+    if (address !== undefined) {
+        // The HOSTNAME only. The port is the one that bound and the path is where the app is mounted,
+        // and both are as true from another machine as from this one.
+        const away = new URL(at)
+        away.hostname = address
+        rows.push(['network', away.href])
+    }
+
+    // Two chars and a gap when there is colour to make it read as a marker, and nothing at all when
+    // there is not: the rows still hang at one indent, so the block is the same shape either way.
+    const marker = on ? `${paint('➜', GREEN, on)}  ` : ''
+    let width = 0
+    for (const [label] of rows) if (label.length > width) width = label.length
+    console.log('')
+    for (const [label, value] of rows) console.log(`  ${marker}${paint(label.padEnd(width), DIM, on)}   ${value}`)
+    console.log('')
     console.log(paint(`  ${parts.join(' · ')}`, DIM, on))
+
+    const doing = [ready]
+    if (said.doing !== undefined) doing.push(...said.doing)
+    console.log(paint(`  ${doing.join(' · ')}`, DIM, on))
+}
+
+/**
+ * `412ms` under a second, `1.2s` over it.
+ *
+ * Rounded on purpose: this number is read to NOTICE that a boot got slower, and anything sharper
+ * invites reading it as a measurement — which it is not, since what it times includes a bundler and
+ * whatever the app's own `onStart` went and did.
+ */
+function duration(milliseconds: number): string {
+    if (milliseconds < 1000) return `${Math.round(milliseconds)}ms`
+    return `${(milliseconds / 1000).toFixed(1)}s`
 }

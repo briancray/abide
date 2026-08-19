@@ -10,8 +10,8 @@ import { ENCODER } from './ENCODER.ts'
 import { mounted } from './mount.ts'
 import { ARGS_PARAM } from './PATHS.ts'
 import { isFile, isThenable } from './probes.ts'
-import type { JsonSchema } from './shapes.ts'
 import { STREAMING } from './STREAMING.ts'
+import type { JsonSchema } from './shapes.ts'
 import { traceHeaders } from './trace.ts'
 
 /** A stream of chunks, one JSON value per line — what a handler that YIELDS is served as. */

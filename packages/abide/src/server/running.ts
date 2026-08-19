@@ -34,6 +34,12 @@ export interface RunningServer {
     set<WebSocketData>(instance: Server<WebSocketData>): Server<WebSocketData>
 }
 
+/**
+ * The Bun server that is listening.
+ *
+ * A PROCESS fact, so it THROWS before anything has served rather than answering `undefined` — a
+ * caller that reached for it too early has a bug, and a null it forgot to check is a worse one.
+ */
 export const server: RunningServer = (<WebSocketData>(): Server<WebSocketData> => {
     if (RUNNING === null) {
         throw new Error(

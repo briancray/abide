@@ -14,9 +14,9 @@
 // `m(args)` is a slot.
 
 import { markSource } from './internal/BRANDS.ts'
-import { storeForLazy } from './internal/scopes.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { isNamedError } from './internal/probes.ts'
+import { storeForLazy } from './internal/scopes.ts'
 import { arm, NO_LIMIT } from './internal/timers.ts'
 import { state, watch } from './reactive.ts'
 
@@ -130,6 +130,12 @@ export interface ChannelOptions {
     maxAge?: number
 }
 
+/**
+ * One stream of messages anyone may publish to and anyone may subscribe to.
+ *
+ * A `Channel` is not a cell: it has no value to read, only messages that arrive. `state(channel())`
+ * is what turns one into a cell holding the latest.
+ */
 export function channel<T>(options?: ChannelOptions): Channel<T>
 export function channel<T, Args>(options?: ChannelOptions): KeyedChannel<Args, T>
 export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & KeyedChannel<Args, T> {

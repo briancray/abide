@@ -10,11 +10,8 @@
 // So the artifact this reads is nobody's to rewrite while the suite runs, and it is made ONCE, by the
 // gate, before any of them start.
 
-import { CLIENT_DIR, type ClientManifest, MANIFEST_FILE } from 'abide/cli'
+import { type ClientManifest, MANIFEST_FILE } from 'abide/cli'
 import { APP_ROOT } from './PATHS.ts'
-
-/** Where the shared build IS, for a case that wants a file out of it rather than the document. */
-export const BUILT_DIR = `${APP_ROOT}/${CLIENT_DIR}`
 
 /**
  * The manifest the app was last built to, or a failure that says how to get one.

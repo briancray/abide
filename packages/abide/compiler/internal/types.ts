@@ -98,7 +98,10 @@ export function typeRegions(
 
         // `x as T`, `x satisfies T`, `class C implements I` — and only where something an operand
         // could end sits in front, or the word is a property, a key or a name of the same spelling.
-        if (TYPE_CAST_KEYWORDS.has(text) && OPERAND_BEFORE.has((tokens[i - 1] as Token | undefined)?.kind as SyntaxKind)) {
+        if (
+            TYPE_CAST_KEYWORDS.has(text) &&
+            OPERAND_BEFORE.has((tokens[i - 1] as Token | undefined)?.kind as SyntaxKind)
+        ) {
             mark(i + 1, types.extent(i + 1))
             continue
         }
@@ -185,7 +188,15 @@ function annotates(tokens: Token[], nesting: number[], i: number, expression: bo
 export function inObjectLiteral(tokens: Token[], nesting: number[], i: number, expression: boolean): boolean {
     const level = nesting[i] as number
     for (let back = i - 1; back >= 0; back--) {
-        if ((nesting[back] as number) !== level) continue
+        const at = nesting[back] as number
+        // A token SHALLOWER than the search level is the end of the search, not a token to skip.
+        // Everything between a token and the brace enclosing it sits at or below that brace's own
+        // depth, so meeting a shallower one means there is no enclosing brace at this level — and
+        // scanning past it reached a brace in some earlier sibling group. `f(rows, cell)` inside
+        // `function f(rows: { id: number }[])` found the ANNOTATION's brace, read `cell` as being
+        // inside an object literal, and emitted the read as the shorthand `cell: cell()`.
+        if (at < level) return false
+        if (at !== level) continue
         const token = tokens[back] as Token
         if (token.kind !== SyntaxKind.OpenBraceToken) continue
         const before = tokens[back - 1]

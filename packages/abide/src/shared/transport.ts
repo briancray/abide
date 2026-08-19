@@ -15,10 +15,10 @@ import { type Channel, type ChannelOptions, channel, type KeyedChannel } from '.
 import { markSource } from './internal/BRANDS.ts'
 import { Transcript } from './internal/graph.ts'
 import { keyOf, matcher, seedKey } from './internal/keys.ts'
-import { takeSeed } from './internal/seed.ts'
 import { mounted } from './internal/mount.ts'
 import { RPC_PREFIX, SOCKET_PREFIX } from './internal/PATHS.ts'
 import { hasFile, isNamedError } from './internal/probes.ts'
+import { takeSeed } from './internal/seed.ts'
 import { arm } from './internal/timers.ts'
 import { traceHeaders } from './internal/trace.ts'
 import {

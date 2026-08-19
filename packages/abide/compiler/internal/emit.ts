@@ -31,10 +31,10 @@ import {
 } from './desugar.ts'
 import { kindOfImport } from './elide.ts'
 import { type Token, tokensOf } from './lex.ts'
-import { extract, mark, type Segment } from './map.ts'
+import { extract, mark, positionAt, type Segment, startsOf } from './map.ts'
 import type { Attribute, Blocks, Branch, Expr, Node } from './parse.ts'
 import { HTML_COMMENT, IDENTIFIER, ParseError } from './parse.ts'
-import { type TypeSource, TypeReader } from './shape.ts'
+import { TypeReader, type TypeSource } from './shape.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 export interface EmitOptions {
@@ -80,6 +80,11 @@ interface Context {
      */
     lifted: Map<string, string>
     reactive: Reactive
+    /**
+     * This file's own component name when NOTHING in the file binds it, and `null` otherwise — the
+     * one tag whose absence is worth a sentence rather than a `Cannot find name`. See `unboundSelf`.
+     */
+    unbound: string | null
     /**
      * Names bound to a `{get, set}` pair, which a `bind:` reads through instead of handing over.
      *
@@ -135,6 +140,7 @@ type Runtime =
     | 'streamed'
     | 'adopt'
     | 'scopedEffect'
+    | 'slotted'
 
 /**
  * The two an author also types, so the header keeps them on `abide`.
@@ -156,6 +162,8 @@ const NO_TOKENS: Token[] = []
 
 /** A file with no `props()` at all, which is most of them. Shared, never written. */
 const NO_KINDS: Map<string, PropKind> = new Map()
+/** An inline `{#component}` declares no props type, so it names no wrapped members either. */
+const NO_CELLS: string[] = []
 
 /** A keyword that is a deliberate error in a region, reported at the token that spelled it. */
 function forbidKeyword(tokens: Token[], kind: SyntaxKind, message: string): void {
@@ -215,7 +223,8 @@ function declaredNameBefore(tokens: Token[], equalsAt: number): Token | undefine
         const token = tokens[i] as Token
         if (token.depth < depth) return undefined
         if (token.depth > depth) continue
-        if (token.kind === SyntaxKind.SemicolonToken || token.kind === SyntaxKind.EqualsToken) return undefined
+        if (token.kind === SyntaxKind.SemicolonToken || token.kind === SyntaxKind.EqualsToken)
+            return undefined
         if (token.kind !== SyntaxKind.ColonToken) continue
         const named = tokens[i - 1]
         return named !== undefined && named.kind === SyntaxKind.Identifier ? named : undefined
@@ -281,8 +290,7 @@ function reactiveBindings(tokens: Token[], into: Reactive): void {
         }
         if (tokens[body + 1]?.kind === SyntaxKind.CloseParenToken) {
             into.cells.add(name.text)
-        }
-        else into.keyed.add(name.text)
+        } else into.keyed.add(name.text)
     }
 }
 
@@ -376,13 +384,22 @@ function calleeBefore(tokens: Token[], open: number): number {
     let at = open - 1
     const previous = tokens[at]
     if (previous === undefined) return -1
+    // `=>` is asked about by KIND, because its text ends in a `>` that closes nothing:
+    // `state<() => void>(…)` counted the arrow as a second close, walked off the front of the region
+    // and registered NO cell — so the write beside it stayed an assignment to a `const`, every read
+    // of it stayed bare, and a `<script module>` declaration lost its `state.scoped` wrap as well.
+    // `multipleTypeArguments` above skips it for the same reason, and did so first.
+    if (previous.kind === SyntaxKind.EqualsGreaterThanToken) return at
     if (!previous.text.endsWith('>')) return at
     // `>>` closing two nested lists scans as ONE token, so depth is counted in characters.
     let depth = 0
     while (at >= 0) {
-        for (const character of (tokens[at] as Token).text) {
-            if (character === '>') depth++
-            else if (character === '<') depth--
+        const token = tokens[at] as Token
+        if (token.kind !== SyntaxKind.EqualsGreaterThanToken) {
+            for (const character of token.text) {
+                if (character === '>') depth++
+                else if (character === '<') depth--
+            }
         }
         if (depth <= 0) break
         at--
@@ -574,7 +591,10 @@ function membersOf(type: string, rest: string, tokens: Token[], types: TypeReade
  * the props call is read from. Only a braced binding counts: a default import binds a value, and a
  * namespace reaches a type only through a qualified name that nothing here resolves.
  */
-function importBinding(imports: readonly string[], local: string): { specifier: string; exported: string } | null {
+function importBinding(
+    imports: readonly string[],
+    local: string,
+): { specifier: string; exported: string } | null {
     for (const statement of imports) {
         const tokens = tokensOfBody(statement)
         let specifier = ''
@@ -655,10 +675,14 @@ function importedMembers(
  * `ViewModule`, so the router has one type for the two of them, and a page that accepted strictly
  * nothing would not be assignable to it.
  */
-function signature(declared: Props | null): string {
+function signature(declared: Props | null, cells: string[]): string {
     if (declared === null) return CHILDREN
     const authored = declared.type === null ? 'Record<string, unknown>' : declared.type
-    return `${PROPS_TYPE}<${authored}> & ${CHILDREN}`
+    // The members this emit WRAPPED, handed to the type so it stops asking its own version of the
+    // question — see `Props` in `#shared/html.ts`. Quoted whatever they are: `class` is a prop name
+    // and not an identifier, and a key union takes the string either way.
+    const named = cells.length === 0 ? '' : `, ${cells.map((name) => JSON.stringify(name)).join(' | ')}`
+    return `${PROPS_TYPE}<${authored}${named}> & ${CHILDREN}`
 }
 
 const CHILDREN = '{ children?: unknown }'
@@ -929,7 +953,6 @@ function scopeCells(rest: string): string {
     return out
 }
 
-
 /**
  * Specifiers the emit compiles away, as `mergeImports` takes them: `${module} ${name}`.
  *
@@ -987,7 +1010,9 @@ function bindProps(rest: string, declared: Props, kinds: Map<string, PropKind>):
             cursor = binding.fallbackEnd
         }
         const fallback = binding.fallback === null ? '' : `, ${binding.fallback}`
-        declarations += `\nconst ${binding.local} = propCell($${binding.local}${fallback})`
+        // On the props statement's OWN line, not below it: these are the emitter's statements, and a
+        // newline each pushed the author's remaining setup down by one per bound prop.
+        declarations += `; const ${binding.local} = propCell($${binding.local}${fallback})`
     }
     // After the statement's own `;` when it has one, so the emitted file does not carry an empty
     // statement between two declarations.
@@ -1164,6 +1189,64 @@ function rpcImports(statements: string[], into: Reactive): void {
 }
 
 const IMPORT_CLAUSE = /^\s*import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]\s*$/
+
+/**
+ * Every VALUE an import clause binds — the default, a namespace, and each named entry's local.
+ *
+ * Type-only binds none: `import { type Media }` puts nothing in the vocabulary a tag resolves through.
+ */
+function boundValuesOf(clause: string, into: Set<string>): void {
+    if (/^type\s/.test(clause)) return
+    const open = clause.indexOf('{')
+    for (const entry of (open === -1 ? clause : clause.slice(0, open)).split(',')) {
+        // A default is its own name; a namespace is the `N` of `* as N`. Both end the entry.
+        const words = entry.trim().split(/\s+/)
+        const local = words[words.length - 1] as string | undefined
+        if (local !== undefined && IDENTIFIER.test(local)) into.add(local)
+    }
+    if (open === -1) return
+    for (const entry of clause.slice(open + 1, clause.lastIndexOf('}')).split(',')) {
+        const trimmed = entry.trim()
+        if (trimmed === '' || /^type\s/.test(trimmed)) continue
+        // `a as b` binds `b`; a bare `a` binds itself.
+        const renamed = trimmed.lastIndexOf(' as ')
+        const local = renamed === -1 ? trimmed : trimmed.slice(renamed + 4).trim()
+        if (IDENTIFIER.test(local)) into.add(local)
+    }
+}
+
+/**
+ * This file's own component name, but ONLY when nothing in the file binds it — otherwise `null`.
+ *
+ * The one thing a reader loses when the implicit binding goes: `<Tree/>` inside `Tree.abide` used to
+ * mean this component and now means whatever `Tree` was imported as, which is nothing. What tsc says
+ * about that is `Cannot find name 'Tree'. Did you mean 'Tree$'?` — a suggestion to write the emitter's
+ * own house mark into a template, at a position the map cannot place, which is the compiler's insides
+ * offered as advice. So the file answers it instead.
+ *
+ * NARROW on purpose: only this file's own name, and only when nothing binds it. Every other unbound
+ * tag is an ordinary missing import and reads as one.
+ */
+function unboundSelf(
+    name: string,
+    imports: readonly string[][],
+    regions: readonly Token[][],
+    props: ReadonlyMap<string, PropKind>,
+    inline: ReadonlySet<string>,
+): string | null {
+    // The mark is exactly what an author does not write, so the name asked about is it without one.
+    const self = name.endsWith('$') ? name.slice(0, -1) : name
+    if (inline.has(self) || props.has(self)) return null
+    const bound = new Set<string>()
+    for (const statements of imports) {
+        for (const statement of statements) {
+            const match = IMPORT_CLAUSE.exec(statement)
+            if (match !== null) boundValuesOf(match[1] as string, bound)
+        }
+    }
+    for (const region of regions) declaredValues(region, bound)
+    return bound.has(self) ? null : self
+}
 
 /**
  * A nested level's vocabulary: the enclosing one with `bound` taken OUT of it.
@@ -1606,6 +1689,16 @@ function child(node: Node, context: Context): string {
         case 'element':
             return element(node, context)
         case 'component': {
+            if (node.name === context.unbound) {
+                const base = context.filename.split('/').pop() ?? context.filename
+                throw new ParseError(
+                    `abide: <${node.name}/> names this file's own component, and nothing here binds ` +
+                        `\`${node.name}\` — a component is NOT in scope in its own file. Import it, ` +
+                        `under whatever name you want it to have: ` +
+                        `\`import ${node.name} from './${base}'\`.`,
+                    node.start,
+                )
+            }
             // Asked of the whole INVOCATION rather than of one prop: every prop is built inside the
             // one `component(…)` call, so any `await` among them is in this thunk. What it hands back
             // is then a promise where a component was, which is a child slot — the one position that
@@ -1629,6 +1722,13 @@ function child(node: Node, context: Context): string {
             // for a subscription that can never wake, and a component inside a `{#for}` paid it per
             // row. A function handed in from JS is still deferred: the part treats a function child
             // value as a thunk, which is the same mechanism `unthunked` relies on for a bare cell.
+            // A fallback is a DECISION, so it takes the thunk the bare form is careful not to: the
+            // children have to be read to know whether any arrived, and a read outside an effect is
+            // one that never hears the answer change. Only a slot that has one pays it.
+            if (node.fallback.length > 0) {
+                const otherwise = `() => ${fragment(node.fallback, context)}`
+                return slot(`${need(context, 'slotted')}(${held}, ${otherwise})`, context)
+            }
             return unthunked(held, context) ? `\${${held}}` : slot(held, context)
         }
         case 'script':
@@ -1857,9 +1957,10 @@ function element(
                 // nothing cannot wake, so the thunk bought a closure, a graph node and an observer
                 // set per row — and, being fresh per pass, defeated the slot's identity cutoff too.
                 const emitted = code(attribute.value, context)
+                const spread = mark(attribute.value.start, body(emitted))
                 open += unthunked(emitted, context)
-                    ? ` ...=\${${body(emitted)}}`
-                    : ` ...=\${${thunkArrow(awaits(emitted))} ${body(emitted)}}`
+                    ? ` ...=\${${spread}}`
+                    : ` ...=\${${thunkArrow(awaits(emitted))} ${spread}}`
                 break
             }
             case 'bind':
@@ -1903,7 +2004,7 @@ function toggled(
         const emitted = code(toggle.value, context)
         if (!unthunked(emitted, context)) reads = true
         names += `${names === '' ? '' : ', '}${JSON.stringify(toggle.name)}`
-        conditions += `, ${emitted}`
+        conditions += `, ${mark(toggle.value.start, emitted)}`
     }
     const call = `${need(context, helper)}(${JSON.stringify(base)}, ${liftArray(names, context)}${conditions})`
     // One scan for every toggle, since they share the one thunk. An awaiting toggle always HAS that
@@ -1980,7 +2081,11 @@ function interpolate(parts: (string | Expr)[], context: Context): Interpolated {
         }
         const emitted = code(part, context)
         if (!unthunked(emitted, context)) reads = true
-        text += `\${${emitted}}`
+        // MARKED, like the whole-value form beside it. `class={x}` carried a mapping and
+        // `class="row {x}"` did not, which is the same expression written the other way — so a type
+        // error inside one was reported against the generated template literal, and an editor could
+        // say nothing about it at all.
+        text += `\${${mark(part.start, emitted)}}`
     }
     return { text, reads }
 }
@@ -2015,7 +2120,9 @@ function bind(
               : bound(attribute.value, context)
 
     // The node itself, not a value — nothing to serialise, so SSR emits nothing for it.
-    if (key_ === 'element') return ` &ref=\${${source}}`
+    if (key_ === 'element') {
+        return ` &ref=\${${mark(attribute.value?.start ?? 0, source)}}`
+    }
 
     // BOTH halves have to exist on this element, and the message says which one does not: a bind
     // nothing can write back from is a control that reads correctly and then never moves again.
@@ -2058,8 +2165,10 @@ function bind(
         // stringified — which is why the attribute slot is handed the raw boolean, and what makes
         // the state survive SSR. `checked` and `open` differ only in the event, which the row
         // already carries, so this is one arm rather than the second copy of one.
+        // The read is the only half from the file; the `!!` and the second slot are the mirror.
+        const coerced = mark(attribute.value?.start ?? 0, read)
         return (
-            ` .${key_}=\${() => !!${read}}` +
+            ` .${key_}=\${() => !!${coerced}}` +
             ` ${key_}=\${() => !!${read}}` +
             ` @${legal.event}=\${(event: Event) => ${write(target(key_))}}`
         )
@@ -2090,8 +2199,12 @@ function bind(
         // what it narrowed on and the emit has no type-checker to have written just one arm. So the
         // cast is on the whole expression rather than on either half: it says "the runtime already
         // chose", and the wrong arm cannot be reached to be wrong.
+        // Marked on the READ, which is the only text in either half that came from the file — the
+        // rest is the hedge over an array cell and a scalar one, and belongs to no line an author
+        // wrote.
+        const held = mark(attribute.value?.start ?? 0, read)
         return (
-            ` .checked=\${() => { const held = ${read}; return Array.isArray(held) ? held.includes(${mine}) : held === ${mine} }}` +
+            ` .checked=\${() => { const held = ${held}; return Array.isArray(held) ? held.includes(${mine}) : held === ${mine} }}` +
             ` @${legal.event}=\${(event: Event) => { const held = ${read}; ${write(`(${next}) as never`)} }}`
         )
     }
@@ -2102,7 +2215,10 @@ function bind(
     // exceptions are the two `mirror` arms above and are exactly why they are arms: an accessor pair
     // is not a cell, and a boolean needs the `!!` coercion for the attribute half. A `<select>` lands
     // HERE — `.value` plus the `change` its row names — which is why it has no arm of its own.
-    const value = accessor ? `() => ${read}` : source
+    // MARKED at the splice and not where `source` is built: `source` is string-TESTED above —
+    // `startsWith('{')` for an accessor pair, and a lookup in `context.accessors` — and a marker in
+    // the middle of the text fails both, which would emit the wrong arm rather than a wrong position.
+    const value = mark(attribute.value?.start ?? 0, accessor ? `() => ${read}` : source)
     return ` .${key_}=\${${value}}` + ` @${legal.event}=\${(event: Event) => ${write(target(key_))}}`
 }
 
@@ -2117,7 +2233,14 @@ function invoke(node: { name: string; attributes: Attribute[]; children: Node[] 
                 props.push(`${key(attribute.name)}: ${JSON.stringify(attribute.value)}`)
                 break
             case 'expression':
-                props.push(`${key(attribute.name)}: ${held(attribute.value, context)}`)
+                // MARKED, like the element attribute one function up. A prop is the one place an
+                // author writes an expression and used to get nothing back for it: no mapping meant
+                // a type error on `<Card count={n} />` was reported against the generated object
+                // literal — `optional.abide` is the fixture that pinned exactly that, on a line two
+                // above the one somebody wrote — and an editor could say nothing about it at all.
+                props.push(
+                    `${key(attribute.name)}: ${mark(attribute.value.start, held(attribute.value, context))}`,
+                )
                 break
             case 'interpolated':
                 props.push(`${key(attribute.name)}: \`${interpolate(attribute.parts, context).text}\``)
@@ -2127,11 +2250,14 @@ function invoke(node: { name: string; attributes: Attribute[]; children: Node[] 
                 props.push(`on${attribute.name}: ${held(attribute.value, context)}`)
                 break
             case 'spread':
-                props.push(`...${held(attribute.value, context)}`)
+                props.push(`...${mark(attribute.value.start, held(attribute.value, context))}`)
                 spread = true
                 break
             case 'bind': {
-                const source = attribute.value === null ? attribute.target : bound(attribute.value, context)
+                const source =
+                    attribute.value === null
+                        ? attribute.target
+                        : mark(attribute.value.start, bound(attribute.value, context))
                 props.push(`${key(attribute.target)}: ${source}`)
                 break
             }
@@ -2200,7 +2326,7 @@ function define(node: { name: string; parameters: string; body: Node[] }, contex
     // A parameter written by hand types itself. One written as `()` still BINDS `args` — that is what
     // `childrenOf` answers with — and an untyped binding is an implicit `any`, which the app's own
     // typecheck refuses: `{#component Loud()}` was a documented spelling that could not compile.
-    return `(${node.parameters || `args: ${signature(null)}`}) => ${fragment(node.body, inner)}`
+    return `(${node.parameters || `args: ${signature(null, NO_CELLS)}`}) => ${fragment(node.body, inner)}`
 }
 
 /** Split on a character at the TOP level — outside every bracket, brace and string. */
@@ -2302,7 +2428,7 @@ function chained(branches: Branch[], context: Context): string {
             // Same operand rule as `switched`'s case values: `{#if a ?? b}` inlined bare emits
             // `a ?? b ? x : y`, which JavaScript reads as `a ?? (b ? x : y)`. The `if (…)` form
             // below is safe on its own, so only the ternary needs this.
-            out += `${operand(arm.text)} ? ${fragment(arm.branch.body, context)} : `
+            out += `${mark((arm.branch.test as Expr).start, operand(arm.text))} ? ${fragment(arm.branch.body, context)} : `
         }
         return `${arrow} ${out}null`
     }
@@ -2314,7 +2440,9 @@ function chained(branches: Branch[], context: Context): string {
             break
         }
         for (const declaration of arm.declarations) parts.push(declaration)
-        parts.push(`if (${code(arm.branch.test, arm.inner)}) return ${fragment(arm.branch.body, arm.inner)}`)
+        parts.push(
+            `if (${mark(arm.branch.test.start, code(arm.branch.test, arm.inner))}) return ${fragment(arm.branch.body, arm.inner)}`,
+        )
     }
     const last = parts[parts.length - 1] as string
     if (!last.startsWith('return ')) parts.push('return null')
@@ -2334,10 +2462,10 @@ function switched(node: { value: Expr; branches: Branch[] }, context: Context): 
     // and subscribed the slot's effect that many times to it. A switch subject is evaluated once in
     // JS anyway, so this is also the more faithful emit. `ATOMIC` rather than `unthunked`: the
     // question here is whether the text can be pasted into N comparisons, not whether it can read.
-    let subject = emitted
+    let subject = mark(node.value.start, emitted)
     if (!ATOMIC.test(emitted)) {
         subject = `$${context.counter.n++}`
-        declarations.push(`const ${subject} = ${emitted}`)
+        declarations.push(`const ${subject} = ${mark(node.value.start, emitted)}`)
     }
 
     let out = ''
@@ -2350,7 +2478,7 @@ function switched(node: { value: Expr; branches: Branch[] }, context: Context): 
         }
         // The case value goes in as an OPERAND: `{:case alt ? 'a' : 'b'}` pasted bare emits
         // `$0 === alt ? 'a' : 'b' ? … : …`, which is a different expression entirely.
-        out += `${subject} === ${operand(code(branch.test, inner))} ? ${fragment(branch.body, inner)} : `
+        out += `${subject} === ${mark(branch.test.start, operand(code(branch.test, inner)))} ? ${fragment(branch.body, inner)} : `
     }
     return declarations.length === 0
         ? `${arrow} ${out}null`
@@ -2402,29 +2530,28 @@ function loop(
     const keyedRow =
         node.key === null
             ? rowMarkup
-            : `${need(context, 'keyed')}(${code(node.key, branch.context)}, ${rowMarkup})`
+            : `${need(context, 'keyed')}(${mark(node.key.start, code(node.key, branch.context))}, ${rowMarkup})`
     const row =
         branch.statements === ''
             ? `(${parameters}) => ${keyedRow}`
             : `(${parameters}) => {${branch.statements}return ${keyedRow} }`
 
-    if (!node.streaming) return `(${code(node.list, context)} ?? []).map(${row})`
+    if (!node.streaming) {
+        return `(${mark(node.list.start, code(node.list, context))} ?? []).map(${row})`
+    }
 
     const failure =
         node.failure === null
             ? ''
             : `, (${node.failure.binding ?? '_error'}) => ${fragment(node.failure.body, inner)}`
-    const source = code(node.list, context, 'slot')
+    const source = mark(node.list.start, code(node.list, context, 'slot'))
     return `${need(context, 'streamed')}(${source}, ${row}${failure})`
 }
 
 function guarded(node: { body: Node[]; branches: Branch[] }, context: Context): string {
     const failure = node.branches.find((b) => b.test?.source === 'catch')
     const settled = node.branches.find((b) => b.test?.source === 'finally')
-    const inner: Context =
-        failure?.binding == null
-            ? context
-            : shadowing(context, [failure.binding])
+    const inner: Context = failure?.binding == null ? context : shadowing(context, [failure.binding])
 
     // All four keys, `undefined` included: `Branches` declares four, and an arm omitted here is a
     // different hidden class reaching the same reads in `settledArms` and `ChildPart`. Sixteen arm
@@ -2464,8 +2591,7 @@ export function emit(
     // over the same span.
     const moduleBody = blocks.module === null ? '' : blocks.module.body
     const moduleTo = blocks.module === null ? 0 : blocks.module.start + moduleBody.length
-    const moduleTokens =
-        blocks.module === null ? NO_TOKENS : tokensOf(source, blocks.module.start, moduleTo)
+    const moduleTokens = blocks.module === null ? NO_TOKENS : tokensOf(source, blocks.module.start, moduleTo)
     const moduleImports =
         blocks.module === null
             ? { imports: [], rest: '' }
@@ -2504,7 +2630,7 @@ export function emit(
                   declared.type === null
                       ? ''
                       : membersOf(declared.type, setup.rest, setupTokens, setupTypes) ||
-                        importedMembers(declared.type, setup.imports, options.filename, options.resolve),
+                            importedMembers(declared.type, setup.imports, options.filename, options.resolve),
               )
     const replaced = declared === null ? setup.rest : bindProps(setup.rest, declared, kinds)
     // No `props()` is the common shape — most `.abide` files are a page, and a page takes none. The
@@ -2527,10 +2653,18 @@ export function emit(
     accessorBindings(moduleTokens, accessors)
     accessorBindings(setupRegion, accessors)
 
+    const inline = inlineComponents(blocks.template)
     const context: Context = {
         source,
         filename: options.filename,
         reactive,
+        unbound: unboundSelf(
+            name,
+            [moduleImports.imports, setup.imports],
+            [moduleTokens, setupRegion],
+            kinds,
+            inline,
+        ),
         accessors,
         scope: null,
         sheets: new Map(),
@@ -2538,7 +2672,7 @@ export function emit(
         eager: false,
         hoisted: new Map(),
         children: 'args.children',
-        inline: inlineComponents(blocks.template),
+        inline,
         used: new Set(),
         counter: { n: 0 },
     }
@@ -2574,11 +2708,20 @@ export function emit(
     // which would otherwise become real text nodes.
     const markup = children(blocks.template, context).replace(/^\s+/, '\n').replace(/\s+$/, '\n')
     const lifted = liftTypes(replaced, declaredTypes(replacedTokens, replacedTypes))
+    checkTypesReachTheirValues(lifted, blocks.setup?.start ?? 0, options.filename)
     // `Report()` rather than `Report({})`, which is what a `.ts` route's `render(Report(), …)` needs.
     // A default rather than an optional parameter because the body reads `args.children` for a
     // `<slot/>` — and only here: with a declared type, whether every member is optional is a question
     // about that type, which nothing in this lane can answer.
-    const args = `args: ${signature(declared)}${declared === null ? ' = {}' : ''}`
+    // The member NAMES, not the locals: the type is over the authored props type, and `{ note: text }`
+    // renames only this file's binding.
+    const cellMembers: string[] = []
+    if (declared !== null) {
+        for (const binding of declared.bound) {
+            if (kinds.get(binding.local) === 'cell') cellMembers.push(binding.name)
+        }
+    }
+    const args = `args: ${signature(declared, cellMembers)}${declared === null ? ' = {}' : ''}`
 
     // `html` and the return type are always needed; everything else is imported only if the file
     // turned out to use it, so a component that never toggles a class does not import `classes`.
@@ -2586,7 +2729,22 @@ export function emit(
     // with a KICK for the setup below — an effect has no read to be lazy behind, so the component
     // that declared it is what asks for this caller's one. Before the import header is split, since
     // an effect here is what puts `scopedEffect` on it.
-    const moduleBlock = scopeEffects(scopeCells(desugarBody(moduleImports.rest, reactive)))
+    const scoped = scopeEffects(scopeCells(desugarBody(moduleImports.rest, reactive)))
+    // Marked HERE and not inside `desugarBody`, because `scopeCells` and `scopeEffects` tokenise what
+    // it returns and a marker in the middle of that reads as part of an identifier — see `markLines`.
+    const lineStarts = startsOf(source)
+    const moduleBlock = {
+        text:
+            blocks.module === null
+                ? scoped.text
+                : markLines(
+                      scoped.text,
+                      source,
+                      lineStarts,
+                      positionAt(lineStarts, blocks.module.start).line,
+                  ),
+        kicks: scoped.kicks,
+    }
     let kicked = ''
     if (moduleBlock.kicks.length > 0) {
         need(context, 'scopedEffect')
@@ -2605,7 +2763,8 @@ export function emit(
     // element, and a two-line element matches nothing and falls through unmerged.
     // `Props` only when there is a props call to map — a component that takes none never names it,
     // and an unused type import is what `lint` reports.
-    const types = declared === null ? 'type TemplateResult' : `type Props as ${PROPS_TYPE}, type TemplateResult`
+    const types =
+        declared === null ? 'type TemplateResult' : `type Props as ${PROPS_TYPE}, type TemplateResult`
     const header = [`import { ${authored.join(', ')}, ${types} } from 'abide'`]
     if (emitted.length > 0) header.push(`import { ${emitted.join(', ')} } from 'abide/runtime'`)
 
@@ -2616,7 +2775,12 @@ export function emit(
     // The same reasoning, for the static arrays a `class:`/`style:` toggle lifted out of its thunk.
     for (const [literal, name] of context.lifted) adopted += `const ${name} = ${literal}\n`
 
-    const setupBody = indent(desugarBody(lifted.body, reactive))
+    const indented = indent(desugarBody(lifted.body, reactive))
+    // Marked AFTER `indent`, which rewrites every line's leading whitespace — see `markLines`.
+    const setupBody =
+        blocks.setup === null
+            ? indented
+            : markLines(indented, source, lineStarts, positionAt(lineStarts, blocks.setup.start).line)
     const assembled =
         mergeImports([...header, ...moduleImports.imports, ...setup.imports], ERASED_IMPORTS) +
         `${moduleBlock.text}\n${adopted}` +
@@ -2673,6 +2837,13 @@ function declaredTypes(tokens: Token[], types: TypeReader): Declared[] {
     return found
 }
 
+/** Text reduced to its line breaks — what is left where something was lifted out of a body. */
+function newlinesOf(text: string): string {
+    let count = 0
+    for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) count++
+    return '\n'.repeat(count)
+}
+
 /**
  * The declarations taken OUT of the setup body, so the signature can name one.
  *
@@ -2690,9 +2861,130 @@ function liftTypes(rest: string, found: Declared[]): { declarations: string; bod
     for (const type of found) {
         declarations += `${rest.slice(type.start, type.end)}\n`
         body += rest.slice(at, type.start)
+        // The lifted declaration's own NEWLINES stay behind. A type moves to module scope and its
+        // lines went with it, which slid every statement below it up — and `markLines` pairs the Nth
+        // emitted line with the Nth source line, so the body below a lifted type mapped to the wrong
+        // one. The same idiom `parse.ts` lifts a whole `<script>` with.
+        body += newlinesOf(rest.slice(type.start, type.end))
         at = type.end
     }
     return { declarations, body: body + rest.slice(at) }
+}
+
+/**
+ * Every value a token region declares AT ITS OWN statement level.
+ *
+ * Depth 0 is that level; anything deeper is inside a function, where the name is not this file's
+ * vocabulary. Two readers — the lifted-type check below, and the one that asks whether a tag names
+ * something this file actually bound.
+ */
+function declaredValues(tokens: Token[], into: Set<string>): void {
+    for (let i = 0; i < tokens.length - 1; i++) {
+        const token = tokens[i] as Token
+        if (token.depth !== 0 || !DECLARES_VALUE.has(token.kind)) continue
+        const named = tokens[i + 1] as Token
+        if (named.kind === SyntaxKind.Identifier) into.add(named.text)
+    }
+}
+
+/** What a statement DECLARES a value under — the five words, at the body's own depth. */
+const DECLARES_VALUE = new Set<SyntaxKind>([
+    SyntaxKind.ConstKeyword,
+    SyntaxKind.LetKeyword,
+    SyntaxKind.VarKeyword,
+    SyntaxKind.FunctionKeyword,
+    SyntaxKind.ClassKeyword,
+])
+
+/**
+ * A type that MOVED may not reach a value that stayed.
+ *
+ * `liftTypes` above takes every type declaration to module scope, because the signature that names
+ * one is written outside the body it was declared in. A `<script>` statement does not move — it is
+ * the setup, and it runs per instance — so `type Props = { size?: keyof typeof sizes }` beside
+ * `const sizes = { … }` becomes a module-scope type naming a function-scope const.
+ *
+ * The two cannot both be satisfied: the type has to be outside for the signature, and lifting the
+ * const with it would change WHEN it is evaluated and be impossible the moment it reads a prop. So
+ * this is a refusal rather than a fix, and what it buys is the place: unchecked it was a
+ * `Cannot find name` on a line of a generated file, in the one direction a source map cannot follow.
+ *
+ * `typeof` is the whole of the reach — it is the only way a type names a value — so the scan is one
+ * pair of tokens and costs nothing on a file that writes none.
+ */
+function checkTypesReachTheirValues(
+    lifted: { declarations: string; body: string },
+    at: number,
+    filename: string,
+): void {
+    if (!lifted.declarations.includes('typeof')) return
+    const staying = new Set<string>()
+    declaredValues(tokensOfBody(lifted.body), staying)
+    if (staying.size === 0) return
+
+    const tokens = tokensOfBody(lifted.declarations)
+    for (let i = 0; i < tokens.length - 1; i++) {
+        if ((tokens[i] as Token).kind !== SyntaxKind.TypeOfKeyword) continue
+        const named = tokens[i + 1] as Token
+        if (named.kind !== SyntaxKind.Identifier || !staying.has(named.text)) continue
+        throw new ParseError(
+            `abide: a type in this file names \`typeof ${named.text}\` (${filename}), and ` +
+                `\`${named.text}\` is declared in the <script> — a type moves to module scope so the ` +
+                `component's signature can name it, and a <script> statement stays in the function. ` +
+                `Move \`${named.text}\` to a <script module>, or to a module beside this one.`,
+            at,
+        )
+    }
+}
+
+/** A line that is only a comment — `//`, a block opener, or the continuation of one. */
+const COMMENT_LINE = /^(\/\/|\/\*|\*)/
+
+/**
+ * One segment per LINE of an emitted script body, so a position in a `<script>` maps like a template
+ * expression does.
+ *
+ * A template expression is marked where it is COPIED, which is exact. A script body cannot be: its
+ * text is desugared, its cell makers are wrapped and its imports are hoisted out, so there is no
+ * single copy to mark. What survives all of that is the LINE — every transform splices within a line
+ * or appends after the body, and lifting an import removes its text while leaving the newline behind.
+ * Measured across the dogfood app: excluding the hoisted imports, every one of 54 files with a module
+ * body has its body lines at a single constant offset in the output.
+ *
+ * So the mapping is per line and the column rides along from the line's start, which is the same
+ * accuracy the rest of the map already promises — exact line, and a column that drifts by whatever
+ * the desugar inserted before it.
+ *
+ * Called LAST, after every transform: a marker is a private-use code point sitting in the middle of
+ * the text, and anything that tokenised it afterwards would read it as part of an identifier.
+ */
+function markLines(body: string, source: string, starts: number[], firstLine: number): string {
+    const lines = body.split('\n')
+    let out = ''
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i] as string
+        if (i > 0) out += '\n'
+        // A blank line has nothing to ask about, and a mark on one would answer a hover over the
+        // whitespace after a statement with the statement itself. A COMMENT is the same question with
+        // a worse answer: it is not an expression, so the checker asked about one falls back to the
+        // module and reports `typeof import("<the generated mirror>")` — a path the author never wrote
+        // and cannot act on. Failing to mark costs a hover that would have said nothing useful.
+        const start = starts[firstLine + i]
+        const trimmed = line.trim()
+        if (start === undefined || trimmed === '' || COMMENT_LINE.test(trimmed)) {
+            out += line
+            continue
+        }
+        // Anchored where the CODE begins on each side rather than at column zero, because `indent`
+        // re-indents a setup body to a fixed four spaces: a mark at the margin would map an author's
+        // column to a generated column that is off by the difference, which is the whole width of the
+        // indentation on every line of every component.
+        const emittedLead = line.length - line.trimStart().length
+        const sourceLine = source.slice(start, starts[firstLine + i + 1] ?? source.length)
+        const sourceLead = sourceLine.length - sourceLine.trimStart().length
+        out += line.slice(0, emittedLead) + mark(start + sourceLead, line.slice(emittedLead))
+    }
+    return out
 }
 
 /**
@@ -2724,18 +3016,41 @@ function indent(body: string): string {
     }
     if (common === Number.MAX_SAFE_INTEGER) common = 0
     let out = ''
-    for (const line of lines) {
-        if (line.trim() === '') continue
+    // A blank line is KEPT, as a blank line. Dropping them read as tidier and is what broke the one
+    // thing this body is mapped by: `markLines` pairs the Nth emitted line with the Nth source line,
+    // so every blank line removed here shifted everything below it by one more — measured across the
+    // dogfood app as offsets walking 0, -1, -2, -3 down a single file. The last element of the split
+    // is the empty string after the body's own final newline and is not a line at all.
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i] as string
+        if (line.trim() === '') {
+            if (i < lines.length - 1) out += '\n'
+            continue
+        }
         out += `    ${line.slice(common).trimEnd()}\n`
     }
     return out
 }
 
+/**
+ * What this file's component function is CALLED — the filename, in TitleCase, with the house mark.
+ *
+ * The `$` is what stops it being a name in the author's vocabulary. Without it the emitted
+ * declaration sat in the same scope as the author's own imports and RESERVED that spelling:
+ * `Search.abide` importing a `Search` icon was a duplicate declaration, reported as a TS2440 against
+ * a generated file. Reserving it also made `<Search/>` inside `Search.abide` resolve to the component
+ * with nothing in the file saying so — the one name in a `<script>` that was not imported or bound by
+ * the person who wrote it, which is the property every other line of one has. So the binding is gone
+ * and the import is the spelling: `import Tree from './Tree.abide'` to recurse, under whatever name
+ * the author picks, exactly as for any other component.
+ *
+ * It is still derived from the filename rather than made up, because it is what a stack trace says.
+ */
 function componentName(filename: string): string {
     const base = (filename.split('/').pop() ?? 'Component').replace(/\.abide$/, '')
     const cleaned = base.replace(/[^A-Za-z0-9]+(.)?/g, (_, c: string | undefined) =>
         c === undefined ? '' : c.toUpperCase(),
     )
     const titled = cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
-    return /^[A-Za-z]/.test(titled) ? titled : `Component${titled}`
+    return `${/^[A-Za-z]/.test(titled) ? titled : `Component${titled}`}$`
 }

@@ -198,6 +198,17 @@ export interface Example {
     /** What this rung introduces, as a phrase: `a promise is a load, not a value`. */
     adds: string
     /**
+     * The aside beside this rung — what is easy to get wrong about THIS step, in a sentence or two.
+     *
+     * OPTIONAL, unlike the `pitfall` a callable and a spelling each carry, and the asymmetry is the
+     * point: a page always has one thing worth warning about, and a rung usually does not. `adds`
+     * already says what the step is for, so a note that only restated it would be furniture.
+     *
+     * Written where the diff between two rungs is not self-evident from the two files — which is most
+     * often the rung that introduces a spelling whose WRONG version also works.
+     */
+    note?: string
+    /**
      * The names an AUTHOR TYPES that this rung introduces — what `/docs/<callable>` is keyed by.
      *
      * Almost always one: a rung adds one thing, and the name of that thing is this. More than one only

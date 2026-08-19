@@ -1594,18 +1594,31 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
 
 // --- the surface ----------------------------------------------------------
 
-// The vocabulary is abide's, not the textbook one: `state` (own) / `memo` (derive) / `watch`
-// (react). `signal` is deliberately not a name here — abide retired it to avoid colliding with the
-// TC39 Signals proposal, and a cell is CALLABLE (`x()` read, `x.set(v)` write, `x.peek()` untracked)
-// rather than an object with `.value`.
-//
-// Every cell carries the same async surface, and a purely sync cell answers it honestly: `settled()`
-// true, `pending()` false, `error()` undefined, `await x` already resolved.
-//
-// One surface, uniformly: reads (`()`, `peek`), probes (`pending`/`refreshing`/`error`/`settled`),
-// and the two verbs that need no body — `set` (this IS the value) and `invalidate` (this is WRONG).
-// `refresh` is the one verb that is NOT here, because re-running requires a body to re-run; it lives
-// on `Memo` and on a keyed handle. `dispose` likewise: only a derivation owns subscriptions.
+/**
+ * A CELL: a value that can change, and that tells whoever read it when it does.
+ *
+ * That is the whole reason it exists. A plain `string` cannot announce that it moved, so anything
+ * showing it would have to be told to look again. Reading a cell IS the subscription — no dependency
+ * list, no re-render call — which is why a template that names one updates itself.
+ *
+ * It is also the one public name an author reads without ever writing: `state()` returns one, every
+ * prop is one, and a `memo` is one with a body. So a hover says `Cell<string>` about a local that was
+ * declared as a `string` and never spelled a type. In markup the name alone is the read — `{title}` —
+ * and the explicit `title()` / `title.set(v)` spelling is what the sugar sits over, never instead of.
+ *
+ * The vocabulary is abide's, not the textbook one: `state` (own) / `memo` (derive) / `watch`
+ * (react). `signal` is deliberately not a name here — abide retired it to avoid colliding with the
+ * TC39 Signals proposal, and a cell is CALLABLE (`x()` read, `x.set(v)` write, `x.peek()` untracked)
+ * rather than an object with `.value`.
+ *
+ * Every cell carries the same async surface, and a purely sync cell answers it honestly: `settled()`
+ * true, `pending()` false, `error()` undefined, `await x` already resolved.
+ *
+ * One surface, uniformly: reads (`()`, `peek`), probes (`pending`/`refreshing`/`error`/`settled`),
+ * and the two verbs that need no body — `set` (this IS the value) and `invalidate` (this is WRONG).
+ * `refresh` is the one verb that is NOT here, because re-running requires a body to re-run; it lives
+ * on `Memo` and on a keyed handle. `dispose` likewise: only a derivation owns subscriptions.
+ */
 export interface Cell<T> extends PromiseLike<T> {
     /**
      * The other two thenable verbs, so `x.catch(…)` is not a `TypeError` on a value `await` accepts.
@@ -1783,6 +1796,13 @@ function makeCell(node: Node, beforeRead: (() => void) | null): State<unknown> {
 // between the two return types. The read is `T` either way, because a read that cannot answer yet
 // signals rather than reporting `undefined`; what a load costs is `peek`, which is the one place the
 // absence is still visible.
+/**
+ * A cell holding a value you write yourself — `state(0)`, then `count()` to read and `count.set(1)`
+ * to write. Inside a `.abide` file the sugar does both by name.
+ *
+ * A promise or async iterable starts the same cell COLD: it is `pending()` until the first value
+ * lands, and the read signals rather than answering `undefined`.
+ */
 export function state<T>(initial: Promise<T>, transform?: (value: T) => T): Cell<T>
 export function state<T>(initial: AsyncIterable<T>, transform?: (value: T) => T): Cell<T>
 export function state<T>(initial: T, transform?: (value: T) => T): State<T>
@@ -1970,6 +1990,13 @@ function makeDerived(
 // `watch(source, handler)` is the same effect with its dependency DECLARED rather than discovered:
 // the source is the only thing read under tracking, so the handler is free to read whatever it likes
 // without subscribing to it. That is the whole difference — one body, two ways of saying what wakes it.
+/**
+ * Runs side effects. Reading a source inside the body IS the subscription — there is nothing to
+ * declare — and the run is batched onto a microtask.
+ *
+ * Returns the disposer. A handler may return its own teardown, which runs before each re-run and
+ * once at dispose.
+ */
 // biome-ignore lint/suspicious/noConfusingVoidType: the union IS the contract — an effect either returns nothing or returns its teardown, and that is the whole lifecycle story.
 export function watch(fn: () => void | (() => void)): () => void
 export function watch<T>(

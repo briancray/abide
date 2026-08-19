@@ -21,9 +21,9 @@ import {
     errorFrame,
     type Failed,
     type FailureOptions,
+    type Framed,
     HttpError,
     JSON_TYPE,
-    type Framed,
     JSONL_TYPE,
     jsonLine,
     SSE_TYPE,
@@ -215,7 +215,9 @@ export function sse<T>(values: Values<T>, init?: ResponseInit): Framed<T> {
  *
  * `identity` as the frame: a render already yields the strings, so there is nothing to encode.
  */
-function bodyOf(body: string | ReadableStream<Uint8Array> | Values<string>): string | ReadableStream<Uint8Array> {
+function bodyOf(
+    body: string | ReadableStream<Uint8Array> | Values<string>,
+): string | ReadableStream<Uint8Array> {
     if (typeof body === 'string') return body
     if (body instanceof ReadableStream) return heldStream(body)
     return heldFrames(body, (chunk) => chunk)

@@ -25,22 +25,21 @@
 import {
     Awaited,
     Boundary,
+    Component,
     caughtArm,
     cellProps,
-    Component,
     escape,
     isAttributeName,
     isKeyed,
     isTemplate,
     type Keyed,
+    nonceAttribute,
     Raw,
     Streamed,
-    nonceAttribute,
     settledArms,
     settledBoundary,
     type TemplateResult,
 } from '#shared/html.ts'
-import { abideLog } from '#shared/log.ts'
 import {
     forgetProbedLoad,
     hasProbedLoad,
@@ -63,6 +62,7 @@ import { isAsyncIterable, isThenable, messageOf } from '#shared/internal/probes.
 import { seedScript } from '#shared/internal/seed.ts'
 import { planOf, unwrap } from '#shared/internal/slots.ts'
 import { arm, NO_LIMIT, timeoutError } from '#shared/internal/timers.ts'
+import { abideLog } from '#shared/log.ts'
 // Re-exported below as well: `<head>` is the only place a sheet is written as markup, so this is a
 // SERVER name that happened to live in `#shared` because `adopt()` fills the registry it reads.
 import { styleTags } from '#shared/styles.ts'
@@ -1555,7 +1555,11 @@ export async function* renderDocument(
 ): AsyncGenerator<string> {
     const parts = typeof document === 'string' ? shellAround(document) : document
     const deferrals = { nextId: 0, deferred: [] as Deferred[] }
-    const context: RenderContext = { hydratable: options?.hydrate === true, document: deferrals, placeholder: false }
+    const context: RenderContext = {
+        hydratable: options?.hydrate === true,
+        document: deferrals,
+        placeholder: false,
+    }
     // ONE clock for the whole document. A deferred block does not hold the walk — it
     // defers into the drain below — so a budget that only reached the walk would miss the very case
     // it exists for: the page that suspends. Read here rather than inside `stream`, because this is
@@ -1678,7 +1682,11 @@ export async function* renderFragment(
     options?: RenderOptions,
 ): AsyncGenerator<string> {
     const deferrals = { nextId: 0, deferred: [] as Deferred[] }
-    const context: RenderContext = { hydratable: options?.hydrate === true, document: deferrals, placeholder: false }
+    const context: RenderContext = {
+        hydratable: options?.hydrate === true,
+        document: deferrals,
+        placeholder: false,
+    }
     const clock = budgetClock()
     try {
         openSeeding()

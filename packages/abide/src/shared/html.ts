@@ -19,6 +19,13 @@ export interface TemplateResult {
     readonly values: readonly unknown[]
 }
 
+/**
+ * The one tagged template both substrates consume. ESCAPES every slot, and renders nothing by itself
+ * — a `TemplateResult` is a description that a renderer or a mount turns into output.
+ *
+ * The compiler writes this into every `.abide` file, and a hand-written `.ts` component writes it
+ * itself; there is no second template tag for either.
+ */
 export function html(strings: TemplateStringsArray, ...values: unknown[]): TemplateResult {
     return { [TEMPLATE_BRAND]: true, strings, values }
 }
@@ -51,6 +58,12 @@ export function props<T = Record<string, unknown>>(): T {
 export class Raw {
     constructor(readonly html: string) {}
 }
+/**
+ * Marks a string as already-HTML so the escape is skipped — `{raw(…)}` in a template.
+ *
+ * On `abide` rather than `abide/runtime`, which is where the rest of what the compiler emits lives:
+ * it is the escape HATCH, and a hatch is worth being greppable by one name in both kinds of file.
+ */
 export const raw = (html: string): Raw => new Raw(html)
 
 /**
@@ -188,14 +201,32 @@ export class Component {
  *
  * Two things pass through untouched — see `passedThrough`, which is the value-level spelling of the
  * same rule and the one both substrates test.
+ *
+ * `Cells` is the compiler's OWN answer to the same question, and it is here because the two ways of
+ * asking it disagree at exactly one place. The emit decides what a prop is SYNTACTICALLY, off the
+ * member's declaration text, and wraps every prop it calls data in a `propCell`. This type decides it
+ * with the checker, which sees through a name the emit cannot — so `identity?: Identity<unknown>`,
+ * where `Identity` is an imported alias for a function type, was wrapped by one and passed through by
+ * the other, and the local was a cell the type said was callable. Neither rule can be made to see what
+ * the other does, so the emit's answer is carried across rather than re-derived: it names the members
+ * it wrapped, and this stops asking about those.
+ *
+ * A hand-written `.ts` component names none, which is the default and the rule as it always was.
  */
 // `NonNullable` because an OPTIONAL member carries `undefined` into `T[K]`, and `fn | undefined`
 // extends neither arm — so `onpick?: (t: string) => void` mapped to a cell of a callback, and the
 // only thing that said so was the `@click` that attached the cell.
-export type Props<T> = {
-    [K in keyof T]: NonNullable<T[K]> extends ((...args: never[]) => unknown) | Cell<unknown>
+export type Props<T, Cells extends keyof T = never> = {
+    // Already a source is the first question and not part of the override: a `State<T>` passes
+    // through the wrapping either way, and the emit calls it data too — so an override that led with
+    // `Cells` would hand `note: State<string>` over as a cell OF a cell.
+    [K in keyof T]: NonNullable<T[K]> extends Cell<unknown>
         ? T[K]
-        : Cell<T[K]>
+        : K extends Cells
+          ? Cell<T[K]>
+          : NonNullable<T[K]> extends (...args: never[]) => unknown
+            ? T[K]
+            : Cell<T[K]>
 }
 
 /**
@@ -208,7 +239,13 @@ export type Props<T> = {
  * is what keeps a mistyped prop an error where the mistake is, now that the call goes through a
  * helper rather than being written out.
  */
-export type Given<P> = { [K in keyof P]: P[K] extends Cell<infer V> ? Cell<V> | V : P[K] }
+// `NonNullable` for the reason `Props` above needs it, one step later: an OPTIONAL prop arrives here
+// as `Cell<T | undefined> | undefined`, which extends neither arm — so the plain-value arm was
+// dropped and `<Child optional="b"/>` was an error at every call site that filled an optional prop
+// in. The union is put back by the mapped type, which keeps the `?` it is homomorphic over.
+export type Given<P> = {
+    [K in keyof P]: NonNullable<P[K]> extends Cell<infer V> ? Cell<V> | V : P[K]
+}
 
 export function component<P extends Record<string, unknown>>(
     view: (props: P) => unknown,

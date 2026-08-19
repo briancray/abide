@@ -463,10 +463,7 @@ export function desugar(
             // directly it bound the TYPE's name and the parameters bound nothing, which left every
             // annotated arrow parameter shadowing an outer cell of that name.
             let at = i - 1
-            while (
-                at >= 0 &&
-                (inType[at] === 1 || (tokens[at] as Token).kind === SyntaxKind.ColonToken)
-            ) {
+            while (at >= 0 && (inType[at] === 1 || (tokens[at] as Token).kind === SyntaxKind.ColonToken)) {
                 at--
             }
             const previous = tokens[at]
@@ -551,8 +548,7 @@ export function desugar(
             // correctly there and this went unnoticed — the two halves of one file disagreed about
             // what a prop is.
             const declares =
-                ((REACTIVE_CONSTRUCTORS.has(maker) || maker === 'propCell') &&
-                    opensCall(cursor, end + 2)) ||
+                ((REACTIVE_CONSTRUCTORS.has(maker) || maker === 'propCell') && opensCall(cursor, end + 2)) ||
                 (maker === 'state' &&
                     tokens[end + 2]?.kind === SyntaxKind.DotToken &&
                     tokens[end + 3]?.text === 'shared' &&
@@ -677,7 +673,9 @@ export function desugar(
                 // a `cell` position that beats a hoisted local, which is a VALUE. See `hold`.
                 const wholeRegion = token.start === (tokens[0] as Token).start && after === undefined
                 const handedOver =
-                    options.hold !== undefined && wholeRegion && (local === undefined || options.hold === 'cell')
+                    options.hold !== undefined &&
+                    wholeRegion &&
+                    (local === undefined || options.hold === 'cell')
                 if (handedOver) {
                     // Nothing to write: the call already spells the handle.
                 } else if (local !== undefined) {
@@ -764,8 +762,7 @@ export function desugar(
             operand !== undefined &&
             ENDS_EXPRESSION.has(operand.kind)
         const prefix =
-            (previous?.kind === SyntaxKind.PlusPlusToken ||
-                previous?.kind === SyntaxKind.MinusMinusToken) &&
+            (previous?.kind === SyntaxKind.PlusPlusToken || previous?.kind === SyntaxKind.MinusMinusToken) &&
             !spokenFor
         const update = postfix ? next : prefix ? previous : undefined
         if (update !== undefined) {
@@ -985,6 +982,13 @@ const CONTINUES_EXPRESSION = new Set<SyntaxKind>([
     SyntaxKind.QuestionDotToken,
     SyntaxKind.OpenParenToken,
     SyntaxKind.OpenBracketToken,
+    // A CLOSER can never begin a statement, so a line break in front of one ends nothing. The `}` on
+    // its own line at the end of `handler = () => {\n  step()\n}` is the whole of the case: read as
+    // a statement boundary, the write's `)` went in before it and the arrow body was left open. A
+    // closer that leaves the assignment's own group is caught one check earlier, by depth.
+    SyntaxKind.CloseParenToken,
+    SyntaxKind.CloseBracketToken,
+    SyntaxKind.CloseBraceToken,
     SyntaxKind.TemplateHead,
     SyntaxKind.NoSubstitutionTemplateLiteral,
     SyntaxKind.CommaToken,
@@ -1064,9 +1068,13 @@ function expressionEnd(cursor: Cursor, from: number, level: number): number {
             break
         }
         // Never on the first token: `x =` and its right-hand side on the next line is one statement,
-        // whatever that token is.
+        // whatever that token is. And never INSIDE a deeper group, which is what `at === level`
+        // holds: ASI is a statement-level rule, and a line break inside the block of
+        // `handler = () => {\n  step()\n  step()\n}` ends nothing — read as an end, the write's `)`
+        // landed after the first statement of its own arrow body and the module stopped parsing.
         if (
             i > from &&
+            at === level &&
             token.startsLine &&
             !CONTINUES_EXPRESSION.has(token.kind) &&
             ENDS_EXPRESSION.has((cursor.tokens[i - 1] as Token).kind)

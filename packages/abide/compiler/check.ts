@@ -32,7 +32,7 @@
 
 // `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
 import { dirname, relative, resolve } from 'node:path'
-import { compile, describe, originalPosition, type Segment } from './index.ts'
+import { compile, describe, generatedPosition, originalPosition, type Segment } from './index.ts'
 import { configAbove } from './internal/project.ts'
 
 export interface EmitResult {
@@ -91,41 +91,93 @@ async function walkToPackage(from: string): Promise<string> {
 }
 
 /**
- * Compile one file and write the module, its declaration and its map into its package's mirror.
+ * Where a source's mirror entries go, and what the module's banner says.
  *
  * The mirror preserves the path from the package root, so `pages/page.abide` becomes
  * `.abide/types/pages/page.abide.ts` — which is what lets one `rootDirs` pair cover every file in the
  * package, and what makes a compiled module's own `../models.ts` land back on the real one.
+ *
+ * Its own function because two lanes emit now, and the rule that a mirror entry is only ever swept
+ * by the path it was written to means the two must derive that path identically.
  */
+async function mirrorFor(path: string): Promise<{ module: string; declaration: string; base: string }> {
+    // A path this cannot mirror is refused HERE rather than by each caller. `sourceOf` below maps a
+    // mirror entry back to its source and only recognises what this wrote, so a `foo.ts.ts` emitted
+    // by a caller that forgot to check is one `pruneOrphans` can never remove.
+    if (!path.endsWith('.abide')) throw new Error(`abide: ${path} is not a \`.abide\` file`)
+    const root = await projectOf(dirname(resolve(path)))
+    const mirrored = `${root}/${TYPES_DIR}/${relative(root, resolve(path))}`
+    const module = `${mirrored}.ts`
+    return {
+        module,
+        declaration: mirrored.replace(/\.abide$/, '.d.abide.ts'),
+        base: module.split('/').pop() as string,
+    }
+}
+
+/** The module's text as it is WRITTEN — the banner counted by `HEADER_LINES`, then the emit. */
+function moduleText(code: string, base: string): string {
+    return (
+        `// Generated from ${base.replace(/\.ts$/, '')}. Do not edit.\n${code}` +
+        `//# sourceMappingURL=${base}.map\n`
+    )
+}
+
+/** Compile one file and write the module, its declaration and its map into its package's mirror. */
 export async function emitFor(path: string): Promise<EmitResult> {
     // Independent — the read does not wait on the climb, and `emitAll` starts every file at once.
-    const [source, root] = await Promise.all([Bun.file(path).text(), projectOf(dirname(resolve(path)))])
-    const mirrored = `${root}/${TYPES_DIR}/${relative(root, resolve(path))}`
-    const modulePath = `${mirrored}.ts`
-    const declarationPath = mirrored.replace(/\.abide$/, '.d.abide.ts')
+    const [source, where] = await Promise.all([Bun.file(path).text(), mirrorFor(path)])
     let compiled: ReturnType<typeof compile>
     try {
         compiled = compile(source, { filename: path })
     } catch (error) {
         throw new Error(describe(source, path, error))
     }
-    const base = modulePath.split('/').pop() as string
     // Three unrelated files, so they go out together.
     await Promise.all([
+        Bun.write(where.module, moduleText(compiled.code, where.base)),
+        Bun.write(`${where.module}.map`, compiled.map),
         Bun.write(
-            modulePath,
-            `// Generated from ${base.replace(/\.ts$/, '')}. Do not edit.\n${compiled.code}` +
-                `//# sourceMappingURL=${base}.map\n`,
-        ),
-        Bun.write(`${modulePath}.map`, compiled.map),
-        Bun.write(
-            declarationPath,
-            `// Generated. The file \`allowArbitraryExtensions\` resolves \`./${base.replace(/\.abide\.ts$/, '.abide')}\` to.\n` +
-                `export * from './${base}'\n` +
-                `export { default } from './${base}'\n`,
+            where.declaration,
+            `// Generated. The file \`allowArbitraryExtensions\` resolves \`./${where.base.replace(/\.abide\.ts$/, '.abide')}\` to.\n` +
+                `export * from './${where.base}'\n` +
+                `export { default } from './${where.base}'\n`,
         ),
     ])
-    return { source: path, module: modulePath, declaration: declarationPath, segments: compiled.segments }
+    return {
+        source: path,
+        module: where.module,
+        declaration: where.declaration,
+        segments: compiled.segments,
+    }
+}
+
+/**
+ * The MODULE alone, compiled from text the caller already holds.
+ *
+ * The language server's emit, and only its: an editor's buffer is what the author is looking at, so
+ * the bytes on disk are one save behind it and a checker reading them is confidently answering about
+ * the previous version. It runs per settled keystroke, which is why it is not `emitFor` with a flag —
+ * the map is a full VLQ encode of every segment behind a lazy getter, and the declaration is derived
+ * from the filename alone, so both would be rebuilt on every keystroke for a lane that reads neither.
+ * The declaration this lane skips is the one resolving THIS file's specifier, which only another file
+ * imports — and this lane reports on no other file.
+ */
+export async function emitModule(path: string, text: string): Promise<EmitResult> {
+    const where = await mirrorFor(path)
+    let compiled: ReturnType<typeof compile>
+    try {
+        compiled = compile(text, { filename: path })
+    } catch (error) {
+        throw new Error(describe(text, path, error))
+    }
+    await Bun.write(where.module, moduleText(compiled.code, where.base))
+    return {
+        source: path,
+        module: where.module,
+        declaration: where.declaration,
+        segments: compiled.segments,
+    }
 }
 
 /**
@@ -237,11 +289,66 @@ export async function emitAll(roots: string[]): Promise<EmitResult[]> {
 // `file(line,col): error TSxxxx: message` — tsc's one-line form, which is what `--pretty false` gives.
 const DIAGNOSTIC = /^(.+?)\((\d+),(\d+)\): (.+)$/
 
+/** How many lines `moduleText` writes above the emit. Private: both readers are in this file. */
+const HEADER_LINES = 1
+
+/**
+ * A place in a WRITTEN module as the place in the `.abide` it came from. Zero-based in, one-based out.
+ *
+ * The one reader of the banner's line count, which is a fact about `moduleText` above and nothing
+ * else: the map was built before that line existed, so it is counted off before the mapping is asked.
+ * Exported so the live lane asks this rather than redoing the arithmetic in another package — a
+ * two-line banner would otherwise fix `abide check` here and silently move every editor squiggle up
+ * a line, with nothing red.
+ */
+export function placeIn(
+    segments: Segment[],
+    line: number,
+    column: number,
+): { line: number; column: number } | null {
+    return originalPosition(segments, line - HEADER_LINES, column)
+}
+
+/**
+ * The inverse: a place on the `.abide` line as the place in the WRITTEN module. Zero-based both ways.
+ *
+ * `placeIn`'s mirror, and here for the same reason it is: the banner is a fact about `moduleText`
+ * above, so the two directions have to count it off the same way or a hover asks about the line below
+ * the one the cursor is on. Both readers of `HEADER_LINES` are now in this file, which is what stops
+ * a two-line banner from being a fix in one lane and a silent off-by-one in the other.
+ */
+export function positionIn(
+    segments: Segment[],
+    line: number,
+    column: number,
+): { line: number; column: number } | null {
+    const found = generatedPosition(segments, line, column)
+    return found === null ? null : { line: found.line + HEADER_LINES, column: found.column }
+}
+
+/**
+ * The `.abide` FILE a generated module was emitted from — the real one, outside the mirror.
+ *
+ * For the definition lane, which is the one caller that gets a path back from the checker rather than
+ * handing one to it: resolving `<Card>` lands in `<root>/.abide/types/ui/Card.abide.ts`, and sending
+ * an author to a generated file is worse than not answering. `sourceOf` above is the same question
+ * asked by the SWEEP, and it deliberately stops short of this — it decides whether the mirror wrote a
+ * path, so it stays inside the mirror. This has to come back OUT of it, which is the `TYPES_DIR`
+ * segment removed rather than a suffix trimmed.
+ */
+export function sourceFor(mirrored: string): string | null {
+    const marker = `/${TYPES_DIR}/`
+    const at = mirrored.indexOf(marker)
+    if (at === -1) return null
+    const inside = sourceOf(mirrored.slice(at + marker.length))
+    return inside === null ? null : `${mirrored.slice(0, at)}/${inside}`
+}
+
 /**
  * Move a diagnostic in a generated module back onto the `.abide` line it came from.
  *
- * The header line the emitter writes is counted off first: `tsc` reports 1-based lines in the file it
- * read, and the map was built before that line existed.
+ * The string face of `placeIn`: `tsc` reports 1-based lines in the file it read, and this is the lane
+ * that has to read them back out of a line of text.
  */
 export function remap(line: string, byModule: Map<string, EmitResult>): string {
     const match = DIAGNOSTIC.exec(line)
@@ -250,8 +357,7 @@ export function remap(line: string, byModule: Map<string, EmitResult>): string {
     const emitted = byModule.get(file)
     if (emitted === undefined) return line
 
-    const HEADER_LINES = 1
-    const position = originalPosition(emitted.segments, Number(row) - 1 - HEADER_LINES, Number(column) - 1)
+    const position = placeIn(emitted.segments, Number(row) - 1, Number(column) - 1)
     if (position === null) return `${emitted.source}(${row},${column}): ${rest}   [generated]`
     return `${emitted.source}(${position.line},${position.column}): ${rest}`
 }
@@ -302,7 +408,8 @@ export async function diagnose(roots: string[]): Promise<string[]> {
             stderr: 'pipe',
         })
         running.push(
-            (async () => `${await new Response(tsc.stdout).text()}${await new Response(tsc.stderr).text()}`)(),
+            (async () =>
+                `${await new Response(tsc.stdout).text()}${await new Response(tsc.stderr).text()}`)(),
         )
     }
 

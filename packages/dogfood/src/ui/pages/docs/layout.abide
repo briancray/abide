@@ -5,29 +5,38 @@
      its own nav. It is also what makes the nav a PRESERVED node across a move between two entries: the
      layout stays, the body is what the router swaps, and sixty links are not rebuilt to move one mark.
 
-     TWO VOCABULARIES in one list, which is the shape of the reference rather than a compromise: a name
-     is imported and a spelling is typed, and a reader arrives holding one or the other. They are two
-     groups and not two sidebars because they are one question — "what is this thing I am looking at" —
-     and a reader who guessed the wrong axis would otherwise have to find the other nav to recover. -->
+     TWO VOCABULARIES, INTERLEAVED, which is the shape of the reference rather than a compromise: a
+     name is imported and a spelling is typed, and a reader arrives holding one or the other. They used
+     to be two groups — forty-four names, then nineteen spellings — and that is what a flat list does to
+     a reader who guessed the wrong axis: `props` sat eleven rows from `<slot/>`, under a different
+     heading, for no reason except which file each is declared in.
+
+     GROUPED BY TOPIC now, and a topic holds both, so the two shelves a reader would look on are one
+     shelf. The groups are `TOPICS.ts` and the membership is gated as a partition — every name and
+     every spelling in exactly one — which is the thing a hand-written `sections` array beside a
+     file-based route tree cannot promise. -->
 <script module>
-import { CALLABLE_ORDER } from '#shared/demos/CALLABLES.ts'
-import { SPELLING_ORDER, SPELLINGS } from '#shared/demos/SPELLINGS.ts'
-import type { NavGroup } from '#ui/lib/sidebar.ts'
+import { SPELLINGS } from '#shared/demos/SPELLINGS.ts'
+import { TOPIC_ORDER, TOPICS } from '#shared/demos/TOPICS.ts'
+import type { NavGroup, NavItem } from '#ui/lib/sidebar.ts'
 import Sidebar from '#ui/lib/Sidebar.abide'
 
-/** Built once, at module scope: the list is the same on every page in this section. */
-const GROUPS: NavGroup[] = [
-    {
-        title: `callables · ${CALLABLE_ORDER.length}`,
-        items: CALLABLE_ORDER.map((name) => ({ href: `/docs/${name}`, label: name })),
-    },
-    {
-        // Labelled by how it is TYPED rather than by its slug, because the spelling is what a reader
-        // recognises: somebody looking for `{#for}` is not looking for the word "for".
-        title: `syntax · ${SPELLING_ORDER.length}`,
-        items: SPELLING_ORDER.map((slug) => ({ href: `/docs/syntax/${slug}`, label: SPELLINGS[slug].name })),
-    },
-]
+/**
+ * Built once, at module scope: the list is the same on every page in this section.
+ *
+ * Callables before spellings WITHIN a topic, because a name is what most readers arrive with — and
+ * both under one heading, because what they have in common is the heading.
+ */
+const GROUPS: NavGroup[] = TOPIC_ORDER.map((name) => {
+    const topic = TOPICS[name]
+    // Annotated, because the map alone infers `label` as the union of callable names and the spellings
+    // pushed after it are ordinary strings.
+    const items: NavItem[] = topic.callables.map((callable) => ({ href: `/docs/${callable}`, label: callable }))
+    // Labelled by how it is TYPED rather than by its slug, because the spelling is what a reader
+    // recognises: somebody looking for `{#for}` is not looking for the word "for".
+    for (const slug of topic.spells) items.push({ href: `/docs/syntax/${slug}`, label: SPELLINGS[slug].name })
+    return { title: topic.title, items }
+})
 </script>
 
 <div class="with-sidebar">

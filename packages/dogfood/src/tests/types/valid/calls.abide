@@ -1,0 +1,23 @@
+<script>
+import { state } from 'abide'
+import { FIRST } from '../models.ts'
+import Props from './props.abide'
+
+// The CALL SITE half of `props.abide`, which nothing else in this tree exercises: a component's own
+// file type-checks whatever the caller does, so a prop that stopped being checked — or one that
+// could no longer be filled at all — is invisible until something calls it.
+//
+// The claim is the one `docs/SPEC.md` makes: a caller passes the VALUE or the cell, either way, and
+// an optional prop is no different from a required one about that. `Given` used to read an optional
+// prop as `Cell<T | undefined> | undefined`, which extends neither arm of its own conditional, so
+// the plain-value arm was dropped and `footnote="…"` was an error at every call site that filled one.
+const note = state('scribbled')
+const picked = state('')
+</script>
+
+<!-- Every prop a literal, optional ones included. -->
+<Props book={FIRST} shelf="fiction" note={note} class="prose" footnote="first printing" />
+
+<!-- …and the same props as cells, which is the other arm. `class` is renamed in the child, so the
+     caller writes the attribute name and the child's local follows its own. -->
+<Props book={FIRST} shelf="reference" note={note} onpick={(title) => picked.set(title)} onrate={(pages) => picked.set(String(pages))} />

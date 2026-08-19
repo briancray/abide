@@ -161,7 +161,10 @@ export function endpointsOf(source: string, filename: string, kind: Kind, resolv
         if (what.kind === SyntaxKind.DefaultKeyword) {
             const target = tokens[i + 2]
             if (target === undefined) break
-            if (target.kind !== SyntaxKind.Identifier || (tokens[i + 3] as Token | undefined)?.kind === SyntaxKind.OpenParenToken) {
+            if (
+                target.kind !== SyntaxKind.Identifier ||
+                (tokens[i + 3] as Token | undefined)?.kind === SyntaxKind.OpenParenToken
+            ) {
                 throw new ElisionError(
                     `abide: ${filename} exports \`${target.text}(…)\` as its default directly — bind it first, \`const NAME = ${legal[0]}(…)\` and then \`export default NAME\`, because the registration this module gets appended has to name something`,
                     target.start,

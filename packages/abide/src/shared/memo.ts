@@ -23,7 +23,15 @@
 
 import { markSource } from './internal/BRANDS.ts'
 import { admit, Bounded, release, touch } from './internal/cache.ts'
-import { type Cell, cellForward, derive, internals, isPending, type Memo, untrackCall } from './internal/graph.ts'
+import {
+    type Cell,
+    cellForward,
+    derive,
+    internals,
+    isPending,
+    type Memo,
+    untrackCall,
+} from './internal/graph.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { isAsyncIterable, isThenable } from './internal/probes.ts'
 import { disposeWith, storeFor } from './internal/scopes.ts'
@@ -165,6 +173,12 @@ export interface TagSelector {
 export function invalidate(selector: TagSelector, scope?: unknown): void {
     for (const target of taggedTargets(selector.tags, scope)) target.invalidate()
 }
+/**
+ * Re-run everything carrying any of these tags, now. `scope` narrows it to one memo's slots.
+ *
+ * `invalidate` above is the other half and the commoner one: it says the value is WRONG and lets the
+ * next read pay for it. This says run the body, whether or not anybody is reading.
+ */
 export function refresh(selector: TagSelector, scope?: unknown): void {
     for (const target of taggedTargets(selector.tags, scope)) target.refresh()
 }
@@ -478,6 +492,12 @@ function arglessMemo<T>(
 // `Awaited<Out>` on all four, because a transform that hands back a promise is a LOAD like any other
 // — the read serves what it resolves to. Sync transforms, which is every one of them today, are
 // unaffected: `Awaited<string>` is `string`.
+/**
+ * A derived value that recomputes whenever anything it read changes.
+ *
+ * A promise or async-iterable body is the same `Memo<T>`: a load that has not landed is not part of
+ * the read's type, because the read SIGNALS instead of reporting `undefined`.
+ */
 export function memo<T, Out>(
     body: () => Promise<T>,
     transform: (value: T) => Out,

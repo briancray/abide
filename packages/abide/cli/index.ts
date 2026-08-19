@@ -37,6 +37,9 @@ export { type BinaryImage, binary } from './internal/console.ts'
 // The REPL's line editor, which takes its terminal as HOOKS — so the one part of this binary that
 // cannot be driven by spawning a process (a keystroke needs a tty) is driven by feeding it a string.
 export { type EditorHooks, LineEditor, suggest } from './internal/editor.ts'
+// The language server, for the same reason and with the same shape: a claim about it is a claim about
+// a CONVERSATION, so it takes its transport as hooks and a test hands it one.
+export { type LanguageHooks, LanguageServer, type Range } from './internal/language.ts'
 
 /**
  * The whole binary as one function, so it is testable without a process: argv in, exit code out.

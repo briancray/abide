@@ -1,4 +1,16 @@
 [test]
+# Where the tests ARE, which has to be said now that something else in the tree looks like them.
+#
+# Zed builds `editors/zed`'s grammar by cloning the repository that declares it into
+# `editors/zed/grammars/abide` — a whole second checkout of THIS repo, inside this one, because the
+# grammar it names lives here too. That copy carries `packages/dogfood/src/tests/**` with it, and a
+# discovery walk from the root then finds 27 more test files that cannot resolve `abide/…` because
+# nothing installed dependencies beside them: 55 files and 26 failures, none of them about the code.
+#
+# A path FILTER cannot fix it — `bun test packages` matches by substring, and the nested copy's paths
+# contain `packages` too. `.gitignore` does not either, since discovery does not read it. So the root
+# is named, which is also just true: every test in this repo is under `packages/`.
+root = "packages"
 # The ui substrate needs a DOM, and a demo that is also a test runs the SAME body in both places —
 # so the emulator is registered for every test file rather than per-suite. The `.abide` loader is
 # registered the same way and for the same reason: a compiled component is imported like any other

@@ -12,15 +12,15 @@
 // this file to translate every shape on the way out — the exact projection `shapes.ts` inverted the
 // whole design to avoid — and would lose `examples`, `const` and a union of types in the process.
 
+import { mountBase } from '#shared/internal/mount.ts'
 import { ARGS_PARAM, RPC_PREFIX, SOCKET_PREFIX, TAIL_PARAM, WAIT_PARAM } from '#shared/internal/PATHS.ts'
 import type { EndpointShape, JsonSchema } from '#shared/internal/shapes.ts'
 // Both, and they are NOT interchangeable: a streaming rpc answers `x-ndjson` and the socket tail
 // answers `application/jsonl`, because the two are served by different writers — `respond` and
 // `jsonl`. A document that guessed one for both would generate a client that refuses its own server.
 import { JSON_TYPE, JSONL_TYPE, NDJSON_TYPE } from '#shared/internal/wire.ts'
-import { mountBase } from '#shared/internal/mount.ts'
-import { config } from './config.ts'
 import { endpoints } from './catalogue.ts'
+import { config } from './config.ts'
 
 /** What an app can say that the declarations cannot. Everything else is derived. */
 export interface OpenApiOptions {

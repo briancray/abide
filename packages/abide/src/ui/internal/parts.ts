@@ -11,23 +11,23 @@ import {
     Awaited,
     attributeText,
     Boundary,
-    caughtArm,
     type Branches,
-    cellProps,
     Component,
+    caughtArm,
+    cellProps,
     html,
     isAttributeName,
     isKeyed,
-    type Keyed,
     isTemplate,
     KEY,
+    type Keyed,
     passedThrough,
     pendingArm,
+    producedBoundary,
     Raw,
     type SlotKind,
     Streamed,
     settledArms,
-    producedBoundary,
     settledBoundary,
     type TemplateResult,
 } from '#shared/html.ts'
@@ -473,7 +473,9 @@ export class ChildPart {
                 // framework bug when the boundary did exactly its job; without a `{:catch}` the server
                 // cannot have rendered one, and then that original message is the true one.
                 if (!(error instanceof Mismatch) || value.branches.catch === undefined) throw error
-                mismatch('a {#try} body did not fit the markup — its {:catch} arm is what the server rendered')
+                mismatch(
+                    'a {#try} body did not fit the markup — its {:catch} arm is what the server rendered',
+                )
             }
             if (waiting.length === 0) return
             // The body was adopted on the bet that it settles — which is the same bet the server

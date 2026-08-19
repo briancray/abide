@@ -61,6 +61,23 @@ export const ENDS_EXPRESSION = new Set<SyntaxKind>([
     SyntaxKind.TrueKeyword,
     SyntaxKind.FalseKeyword,
     SyntaxKind.NullKeyword,
+    // `undefined` is a KEYWORD to this scanner, not an identifier, and its absence here was not a
+    // regex question at all: `count = undefined` followed by the next statement never ended, so the
+    // write swallowed it and `count.set(undefined` closed its paren a statement late. `null` was
+    // listed and `undefined` was not, which is the whole of the difference.
+    SyntaxKind.UndefinedKeyword,
+    // The primitive type keywords, which end a TYPE — `count = value as string | undefined` reaches
+    // the end of its line on one of these. `void` is deliberately absent: it can only ever be a
+    // PREFIX in value position, so listing it would read `void /re/.test(s)` as a division.
+    SyntaxKind.StringKeyword,
+    SyntaxKind.NumberKeyword,
+    SyntaxKind.BooleanKeyword,
+    SyntaxKind.BigIntKeyword,
+    SyntaxKind.SymbolKeyword,
+    SyntaxKind.ObjectKeyword,
+    SyntaxKind.AnyKeyword,
+    SyntaxKind.UnknownKeyword,
+    SyntaxKind.NeverKeyword,
 ])
 
 export class SyntaxError_ extends Error {

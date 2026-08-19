@@ -1,16 +1,17 @@
 # abide for Zed
 
-`.abide` support for [Zed](https://zed.dev): diagnostics, completion and hover from `abide lsp`, over
-a tree-sitter grammar built from the same syntax the compiler parses.
+`.abide` support for [Zed](https://zed.dev): diagnostics, completion, hover and go-to-definition from
+`abide lsp`, over a tree-sitter grammar built from the same syntax the compiler parses.
 
 ## What it does
 
 | | Where it comes from |
 | --- | --- |
-| Diagnostics | `abide lsp`. Parse errors instantly; type errors inside template expressions once the buffer settles. |
+| Diagnostics | `abide lsp`. Parse errors instantly; real type errors — in a template expression or a `<script>` body — once the buffer settles. |
 | Completion | `{#…}`, `{:…}` and `{/…}` from `BRANCHES`, and `bind:` targets from `BINDABLE` — the compiler's own tables, so an editor cannot offer a block that does not exist. |
-| Hover | The same two tables: what a block takes, and which tag writes a bind target back through which event. |
+| Hover | The two tables — what a block takes, which tag writes a bind target back through which event — and the TYPE under the cursor, from the real checker, in a `{…}` or anywhere in a `<script>`. |
 | Highlighting | `editors/tree-sitter-abide`, with TypeScript injected into every `{…}` hole and every script body, and CSS into `<style>`. |
+| Go to definition | An `import` to the file it names, resolved the way the runtime resolves it. A component tag to the `import` that brought it, or the `{#component}` that defines it here. Any other name through the checker, including into the `<script>` that declared it. |
 | Outline, indent, bracket matching | The grammar's blocks — not its `<div>`s. |
 
 ## What it does NOT do
@@ -18,17 +19,25 @@ a tree-sitter grammar built from the same syntax the compiler parses.
 The extension exposes what `abide lsp` answers and nothing more, so its limits are the SERVER's and
 are not settings you are missing:
 
-* **Go to definition does not exist.** `CAPABILITIES` advertises `textDocumentSync`,
-  `completionProvider` and `hoverProvider`, and `receive()` answers every other request with
-  `-32601`. Cmd-click on a name in a `.abide` file has nothing to ask, so nothing happens.
-* **Hover is narrow.** It answers over a `{#…}` / `{:…}` / `{/…}` marker and over a `bind:` target —
-  the two closed tables the compiler owns. Over an ordinary identifier it returns `null`, so most of
-  a template is silent. A TYPE under the cursor would need the checker at a position rather than over
-  a whole file, which is a different question from the one the type lane answers today.
+* **A type error ON an import still names a generated line.** Imports are hoisted to the top of the
+  generated module and merged with the emitter's own, so there is nothing in the output that is only
+  one of them to map back from. Cmd-click works anyway — an import is RESOLVED rather than
+  mapped, by the same resolver the runtime uses — but a hover over one says nothing.
+* **Hover over markup, a blank line or a comment answers nothing**, on purpose. The bound stops a
+  cursor after a `{…}` being answered with that expression's type; the comment case is sharper, since
+  a comment is not an expression and the checker asked about one falls back to the FILE — which is
+  the generated mirror, so the answer was a `.abide/types/…` path the author never wrote.
+* **A column inside a script line drifts** by whatever the desugar inserted before it — a body is
+  mapped per LINE, since that is what its transforms preserve. The line is exact. A hover whose
+  position drifts onto a DIFFERENT name is refused rather than answered, so the failure is silence.
+* **The `props<T>()` line is the exception**, because the emitter rewrites it wholesale — the call IS
+  the parameter. A hover over a shorthand binding there can still say `any`. It is marked anyway: a
+  type ERROR on that line is worth more than a hover, and unmarking it put the error back on a
+  generated line.
 * **Rename, references, formatting, signature help** — none are implemented.
 
-Diagnostics are the exception and do cover the whole file: parse errors instantly, and real type
-errors inside template expressions once the buffer settles.
+Diagnostics go furthest — a parse error is reported anywhere in the file, instantly, because that
+half needs no map at all.
 
 ## Installing
 

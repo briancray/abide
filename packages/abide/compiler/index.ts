@@ -11,10 +11,12 @@
 // `.abide` source. `ParseError` is exported so a caller can tell a compile failure from any other
 // throw — `SyntaxError_` deliberately is not, because a lexer error is one the shells only format.
 //
-// `BRANCHES` and `BINDABLE` are neither. They are the two CLOSED SETS of the template language, and
-// they are here so that the pages claiming to document all of them can be checked against the tables
-// that DECIDE them rather than against a second list kept by hand beside them. One reader —
-// `dogfood/test/docs.test.ts` — because this door pulls TypeScript's scanner and a page may not.
+// `BRANCHES`, `BINDABLE` and `VOID_ELEMENTS` are neither. They are the three CLOSED SETS of the
+// template language, and they are here so that anything claiming to document or re-read all of them
+// can be checked against the tables that DECIDE them rather than against a second list kept by hand
+// beside them. Two readers: `dogfood/test/docs.test.ts` for the pages, and `lsp.test.ts` for the
+// tree-sitter grammar, which is the one reader of this syntax that is not built from these tables —
+// it is a separate parser in a separate language, so the only thing keeping it honest is a compare.
 
 import type { Shapes } from '#shared/internal/shapes.ts'
 import type { Kind } from '#shared/transport.ts'
@@ -34,8 +36,19 @@ import type { TypeSource } from './internal/shape.ts'
 export type { Kind } from '#shared/transport.ts'
 export { ElisionError, type Endpoint, endpointId, kindOf } from './internal/elide.ts'
 export { BINDABLE } from './internal/emit.ts'
-export { original as originalPosition, type Segment } from './internal/map.ts'
-export { BRANCHES, ParseError } from './internal/parse.ts'
+// The line index, both halves. Exported for the reason `originalPosition` beside it is: a shell may
+// not reach into `internal/`, and the language server counts lines in the same buffers this does —
+// two implementations would have to agree for ever about what a line start is, with nothing asserting
+// it. `placeAt` is `positionAt` under the name a caller outside reads it by.
+export {
+    generated as generatedPosition,
+    original as originalPosition,
+    positionAt as placeAt,
+    type Segment,
+    startsOf,
+} from './internal/map.ts'
+export { BRANCHES, type BranchTail, ParseError } from './internal/parse.ts'
+export { VOID_ELEMENTS } from './internal/VOID_ELEMENTS.ts'
 export type { ImportedModule, TypeSource } from './internal/shape.ts'
 export { SHAPES_FILE } from './SHAPES_FILE.ts'
 export { TRANSPORT_MODULE } from './TRANSPORT.ts'

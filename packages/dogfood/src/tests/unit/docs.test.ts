@@ -17,9 +17,10 @@ import * as frontDoor from 'abide'
 import { BINDABLE, BRANCHES } from 'abide/compiler'
 import type { Example } from 'harness'
 import * as serverDoor from 'abide/server'
-import { CALLABLE_ORDER, CALLABLES, SPECIFIERS } from '#shared/demos/CALLABLES.ts'
+import { CALLABLES, SPECIFIERS } from '#shared/demos/CALLABLES.ts'
 import { LADDERS, type LadderName } from '#shared/demos/LADDERS.ts'
-import { SPELLING_ORDER, SPELLINGS, type SpellingName } from '#shared/demos/SPELLINGS.ts'
+import { SPELLINGS, type SpellingName } from '#shared/demos/SPELLINGS.ts'
+import { CALLABLE_ORDER, SPELLING_ORDER, TOPIC_ORDER, TOPICS } from '#shared/demos/TOPICS.ts'
 
 /** Every rung in the repo, with the ladder it is in and its place in it. Loaded once. */
 const LADDER_NAMES = Object.keys(LADDERS) as LadderName[]
@@ -94,8 +95,9 @@ test('every callable says the specifier it is really on', () => {
 })
 
 test('the index is the whole list, once each', () => {
-    // `CALLABLE_ORDER` is hand-written so the index reads as an introduction rather than a glossary,
-    // which means it can disagree with `CALLABLES` in two ways. Both are caught.
+    // `CALLABLE_ORDER` is the flatten of `TOPICS`, so this is the partition read from one side: a name
+    // in no topic makes the order short, and a name in two makes it long. The topic-side reading — WHICH
+    // name is missing, and which is doubled — is the test below, which is the one that prints the names.
     expect(CALLABLE_ORDER.length, 'the order and the record are different sizes').toBe(Object.keys(CALLABLES).length)
     expect(new Set(CALLABLE_ORDER).size, 'a name is in the order twice').toBe(CALLABLE_ORDER.length)
     const stray = CALLABLE_ORDER.filter((name) => !Object.hasOwn(CALLABLES, name))
@@ -235,6 +237,78 @@ test('every rung spells something the language has', () => {
         }
     }
     expect(bogus.sort(), 'a rung says it demonstrates a spelling with no page').toEqual([])
+})
+
+// ─── THE GROUPING ───────────────────────────────────────────────────────────────────────────────────
+//
+// `TOPICS.ts` is not a third VOCABULARY — it is a grouping over the two above, and the checks reflect
+// that: it owns no rungs, so it is never asked whether one exists. What it owes is that it covers the
+// two lists EXACTLY, which is what lets the sidebar and the index be drawn from it instead of from a
+// hand-written array of sections beside a file-based route tree.
+//
+// The both-directions habit matters more here than anywhere else in this file, because the failure it
+// catches is the invisible one: a new export lands, its page exists and works, and it appears in no
+// section — a page reachable only by typing its address. Nothing about the app looks broken.
+
+test('every callable and every spelling is in exactly ONE topic', () => {
+    const callableIn = new Map<string, string[]>()
+    const spellingIn = new Map<string, string[]>()
+    for (const name of TOPIC_ORDER) {
+        for (const callable of TOPICS[name].callables) {
+            const held = callableIn.get(callable) ?? []
+            held.push(name)
+            callableIn.set(callable, held)
+        }
+        for (const slug of TOPICS[name].spells) {
+            const held = spellingIn.get(slug) ?? []
+            held.push(name)
+            spellingIn.set(slug, held)
+        }
+    }
+
+    // Missing: the failure that leaves a page reachable only by typing its address.
+    const unshelved = Object.keys(CALLABLES).filter((name) => !callableIn.has(name))
+    expect(unshelved.sort(), 'a callable is in no topic — its page is in no section of the index').toEqual([])
+    const unspelt = Object.keys(SPELLINGS).filter((slug) => !spellingIn.has(slug))
+    expect(unspelt.sort(), 'a spelling is in no topic').toEqual([])
+
+    // Doubled: the failure that puts one name in two sections and makes every count disagree.
+    const twice: string[] = []
+    for (const [name, topics] of callableIn) if (topics.length > 1) twice.push(`${name}: ${topics.join(', ')}`)
+    for (const [slug, topics] of spellingIn) if (topics.length > 1) twice.push(`${slug}: ${topics.join(', ')}`)
+    expect(twice.sort(), 'a name is on two shelves, so the sidebar lists it twice').toEqual([])
+
+    // Invented: what a rename leaves behind.
+    const strayCallables = [...callableIn.keys()].filter((name) => !Object.hasOwn(CALLABLES, name))
+    expect(strayCallables.sort(), 'a topic names a callable the list does not have').toEqual([])
+    const straySpellings = [...spellingIn.keys()].filter((slug) => !Object.hasOwn(SPELLINGS, slug))
+    expect(straySpellings.sort(), 'a topic names a spelling the list does not have').toEqual([])
+})
+
+test('a topic has at least two members, because one is a name wearing a heading', () => {
+    // The same rule a ladder is held to further down, for the same reason: a section of one is a
+    // heading a reader has to read to find out it was not worth having. Two is where a grouping starts
+    // saying something — that these belong TOGETHER.
+    const thin: string[] = []
+    for (const name of TOPIC_ORDER) {
+        const members = TOPICS[name].callables.length + TOPICS[name].spells.length
+        if (members < 2) thin.push(`${name}: ${members}`)
+    }
+    expect(thin, 'a topic with fewer than two members').toEqual([])
+})
+
+test('every page says what is easy to get wrong, and every topic says what its names are to each other', () => {
+    // The prose gate, and it is a REQUIRED-FIELD check rather than a quality one — which is the most a
+    // test can do here. What it stops is the shape the docs app this was taken from is in: its
+    // equivalent is an optional per-route map, so a page with no tip and a page nobody has written a
+    // tip for are the same page, and no reading of it says which.
+    const silent: string[] = []
+    for (const name of CALLABLE_ORDER) if (CALLABLES[name].pitfall.trim() === '') silent.push(name)
+    for (const slug of SPELLING_ORDER) if (SPELLINGS[slug].pitfall.trim() === '') silent.push(slug)
+    expect(silent.sort(), 'a public name with nothing said about getting it wrong').toEqual([])
+
+    const unled = TOPIC_ORDER.filter((name) => TOPICS[name].lead.trim() === '')
+    expect(unled, 'a topic with no lead — its section is a heading over a grid').toEqual([])
 })
 
 /**

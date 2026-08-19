@@ -29,7 +29,7 @@ import { CLIENT_ROUTE, type ClientAsset, type ClientManifest, GENERATED_ENTRY } 
  */
 export { APP_HTML }
 
-/** The document, the lane, and whether the app wrote it. `own` is only for what the command REPORTS. */
+/** The document and the lane the app's pages render into. */
 export interface AppShell {
     /** The app's own document, cut, with the build's stylesheets already in the head. */
     parts: Shell
@@ -41,7 +41,6 @@ export interface AppShell {
      * carrying the lane on a path no page owns renders that table's answer over what was served.
      */
     lane: string
-    own: boolean
 }
 
 /**
@@ -64,10 +63,8 @@ export async function appShell(
     // Read rather than probed-then-read, the rule `lane.ts` states for the same shape: `exists()` is a
     // second syscall in front of the one that already answers the question, and whether the app wrote
     // its own shell falls out of whether the read threw.
-    let own = true
     let text: string
     if (written !== undefined) {
-        own = written !== null
         text = written ?? ownDocument(name)
     } else {
         try {
@@ -77,7 +74,6 @@ export async function appShell(
             // is a shell somebody meant to serve, so it throws rather than being quietly replaced by
             // abide's.
             if ((failure as { code?: string }).code !== 'ENOENT') throw failure
-            own = false
             text = ownDocument(name)
         }
     }
@@ -86,7 +82,7 @@ export async function appShell(
     // exactly where a second scan for `</head>` would have — found once, by the function that owns
     // where a head ends. An app's own `<link>` is already in there and still comes first.
     parts.head += stylesheets(manifest)
-    return { parts, lane: mountMeta() + clientScript(manifest), own }
+    return { parts, lane: mountMeta() + clientScript(manifest) }
 }
 
 /**

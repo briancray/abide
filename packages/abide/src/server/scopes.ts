@@ -11,8 +11,9 @@
 
 // `AsyncLocalStorage` has no `Bun.*` spelling — Bun implements the node module and nothing else.
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { ENCODER } from '#shared/internal/ENCODER.ts'
 import type { Identity } from '#shared/identity.ts'
+import { ENCODER } from '#shared/internal/ENCODER.ts'
+import { isThenable } from '#shared/internal/probes.ts'
 import {
     dropScope,
     newScope,
@@ -21,7 +22,6 @@ import {
     settling,
     useScopeSource,
 } from '#shared/internal/scopes.ts'
-import { isThenable } from '#shared/internal/probes.ts'
 import { useTraceSources } from '#shared/internal/trace.ts'
 import { framedBody, framedSteps } from '#shared/internal/wire.ts'
 import { useHrefSource } from '#shared/router.ts'
@@ -194,9 +194,7 @@ function settleChunk(
     try {
         if (step.done !== true) {
             const chunk = step.value as string | Uint8Array
-            return void controller.enqueue(
-                typeof chunk === 'string' ? ENCODER.encode(chunk) : chunk,
-            )
+            return void controller.enqueue(typeof chunk === 'string' ? ENCODER.encode(chunk) : chunk)
         }
     } catch (failure) {
         release?.()
@@ -229,43 +227,45 @@ export function heldPump(
     highWaterMark?: number,
 ): ReadableStream<Uint8Array> {
     return markHeld(
-        new ReadableStream<Uint8Array>({
-            pull: bound((controller: ReadableStreamDefaultController<Uint8Array>) => {
-                let stepped: Step | Promise<Step>
-                try {
-                    stepped = read()
-                } catch (failure) {
-                    release?.()
-                    throw failure
-                }
-                // Guarded, not awaited, and `pull` is not `async` for the same reason: `framedSteps`
-                // settles a sync source IN the call and returns `Step | Promise<Step>` to say so, so
-                // an unconditional await would cost a microtask tick per chunk to learn what the
-                // value already is. `framedBody` guards the same read — this is its held twin, and
-                // `heldFrames` picks between them on whether a request is open, so awaiting here is
-                // the guard holding on the path nothing serves and dropped on the path every served
-                // `jsonl` and `sse` takes.
-                if (!isThenable(stepped)) return settleChunk(controller, stepped as Step, release)
-                return (stepped as Promise<Step>).then(
-                    (step) => settleChunk(controller, step, release),
-                    (failure: unknown) => {
+        new ReadableStream<Uint8Array>(
+            {
+                pull: bound((controller: ReadableStreamDefaultController<Uint8Array>) => {
+                    let stepped: Step | Promise<Step>
+                    try {
+                        stepped = read()
+                    } catch (failure) {
                         release?.()
                         throw failure
-                    },
-                )
-            }),
-            // Bound too: a source's own cleanup is the app's, and it should see the caller it was opened
-            // for rather than whoever cancelled.
-            cancel: bound((reason: unknown) => {
-                release?.()
-                end(reason)
-            }),
-        },
-        // A stream with no strategy pulls ONCE at construction to fill its queue, which is a chunk
-        // taken out of the source before anybody asked for one. That is read-ahead worth having on a
-        // body somebody is about to read, and theft on one that may never be read at all — see
-        // `framedOver`, which is where the two part company.
-        highWaterMark === undefined ? undefined : { highWaterMark }),
+                    }
+                    // Guarded, not awaited, and `pull` is not `async` for the same reason: `framedSteps`
+                    // settles a sync source IN the call and returns `Step | Promise<Step>` to say so, so
+                    // an unconditional await would cost a microtask tick per chunk to learn what the
+                    // value already is. `framedBody` guards the same read — this is its held twin, and
+                    // `heldFrames` picks between them on whether a request is open, so awaiting here is
+                    // the guard holding on the path nothing serves and dropped on the path every served
+                    // `jsonl` and `sse` takes.
+                    if (!isThenable(stepped)) return settleChunk(controller, stepped as Step, release)
+                    return (stepped as Promise<Step>).then(
+                        (step) => settleChunk(controller, step, release),
+                        (failure: unknown) => {
+                            release?.()
+                            throw failure
+                        },
+                    )
+                }),
+                // Bound too: a source's own cleanup is the app's, and it should see the caller it was opened
+                // for rather than whoever cancelled.
+                cancel: bound((reason: unknown) => {
+                    release?.()
+                    end(reason)
+                }),
+            },
+            // A stream with no strategy pulls ONCE at construction to fill its queue, which is a chunk
+            // taken out of the source before anybody asked for one. That is read-ahead worth having on a
+            // body somebody is about to read, and theft on one that may never be read at all — see
+            // `framedOver`, which is where the two part company.
+            highWaterMark === undefined ? undefined : { highWaterMark },
+        ),
     )
 }
 

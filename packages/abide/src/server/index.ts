@@ -15,16 +15,6 @@
 // The SSR walk itself is `render.ts`. This file held it until the split, which is why `abide/server`
 // used to mean "1,200 lines with a re-export block at the bottom" rather than a list of decisions.
 
-// The eight-faced renderer, of which exactly one is public: an async generator, which a caller
-// wanting a string drains. The document and fragment faces are `abide start`'s and are on
-// `abide/server/internal` — an app reaches a document through `render`'s own `shell` option instead,
-// so there is one name to learn and one place the two decisions about a render are written down.
-//
-// `RenderOptions` is beside it rather than in the walk's own module for that reason: `shell` is a
-// decision about the DOCUMENT and the walk knows nothing about one. `RenderContext` stays internal —
-// it is the walk's state, and its `document` field is typed by a `DocumentContext` no caller can name.
-export { render, type Renderable, type RenderOptions } from './render.ts'
-
 // The principal, and the half only the server can supply. `identity` itself is on the isomorphic
 // surface — asking is the same call anywhere — and it is re-exported here, straight from the module
 // that defines it, because the handler writing a login is already importing `request()` and
@@ -74,6 +64,15 @@ export {
     type StartHook,
     type StopHook,
 } from './lifecycle.ts'
+// The eight-faced renderer, of which exactly one is public: an async generator, which a caller
+// wanting a string drains. The document and fragment faces are `abide start`'s and are on
+// `abide/server/internal` — an app reaches a document through `render`'s own `shell` option instead,
+// so there is one name to learn and one place the two decisions about a render are written down.
+//
+// `RenderOptions` is beside it rather than in the walk's own module for that reason: `shell` is a
+// decision about the DOCUMENT and the walk knows nothing about one. `RenderContext` stays internal —
+// it is the walk's state, and its `document` field is typed by a `DocumentContext` no caller can name.
+export { type Renderable, type RenderOptions, render } from './render.ts'
 // What an app's own route answers with. Server-side because a `Response` is: the browser lane reads
 // one, it never builds one.
 export {

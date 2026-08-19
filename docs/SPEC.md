@@ -812,7 +812,8 @@ the room form, and an import cannot say which one it is.
 | Feature | Notes |
 | --- | --- |
 | `<Name/>` | Capitalised tag = component invocation, CARRIED to the position that shows it rather than called where it stands — see below |
-| `<slot/>` | Renders default children |
+| `<slot/>` | Renders the children the caller wrote between the tags |
+| `<slot>…</slot>` | The same, with a FALLBACK: the contents stand where the children would have when the caller passed none. Nothing is `undefined`, `null` or `false` — the triple an absent attribute means — so an empty string is something a caller passed and not a reason to fall back. The fallback is evaluated only when it is shown, and a bare `<slot/>` is unaffected: it emits the member access with no thunk and no effect, because children are built by the CALLER and a subscription there could never wake |
 | `<Tag>…</Tag>` | Children passed to the component's `<slot/>` |
 | nested `{#component X()}` | Named component prop (render-prop) |
 | `const C = memo(…)` → `<C/>` | A state- or memo-named tag is a **reactive** component (re-mounts on change) |
@@ -869,15 +870,26 @@ against `number`.
 | not imported | A compile error. The call is erased, so an unimported one would otherwise work silently |
 | no `props()` call | The component accepts no props of its own, and a caller passing one is an error |
 | `props()` with no type | `Record<string, unknown>` — the opt-out, and what `const { ...rest } = props()` is for |
-| `children` | Always accepted, never a name: `<slot/>` renders what is between the tags, and nothing has to declare it |
-| every prop | A cell. `Props<T>` is the mapping, and the pattern is what names them — see above |
+| `children` | Always accepted and never REQUIRED to be declared — `<slot/>` renders what is between the tags whether or not the props type mentions it. Declaring `children?: unknown` and destructuring it is what makes the name readable, which is how a component asks whether it was given any: `{#if children}` conditions the WRAPPER, where a `<slot>…</slot>` fallback stands inside it |
+| every prop | A cell. `Props<T, Cells>` is the mapping — `Cells` is the emitter's own list of the members it wrapped, and is `never` for a hand-written `.ts` component — and the pattern is what names them |
 | a `State<…>` prop | Passed through rather than wrapped twice, so the child holds the very cell the parent does. That is what `bind:` needs, and the only thing the declared type still decides |
-| a function prop | Handed over as written: a callback is called, not read. Recognised from the member's own text — `onpick: (t: string) => void`. One reached through a NAME cannot be, and stays the one hole this spelling has, alongside an imported props type |
+| a function prop | Handed over as written: a callback is called, not read. Recognised from the member's own text — `onpick: (t: string) => void`. One reached through a NAME — `onpick: Picker` — cannot be, so it is a CELL like any other prop: `onpick(t)` reads it and then calls what it holds, and `@click={onpick}` would attach the cell rather than the handler. The emit's answer is the one that stands, and it is carried into the type as `Props<T, Cells>`'s second argument rather than derived twice — the checker sees through the name and the emit cannot, and a disagreement there was a local the type said was callable and the emit had wrapped |
 | a derived prop | `doubled={n * 2}` reads a cell, so the enclosing slot wakes on change — and what that costs now is a write into the child's `doubled` cell, not a rebuilt child |
 | a `...spread` | The key set is fixed at setup: the child bound its locals then, so a key the spread ADDS later has no cell to be written into and is reported rather than dropped silently |
 
 A type declared in a `<script>` is lifted to module scope, because the signature that names it is
-written outside the body it was declared in.
+written outside the body it was declared in — so it cannot name a value that STAYED. `type Props = {
+size?: keyof typeof sizes }` beside a `<script>` `const sizes` is refused, and the table belongs in a
+`<script module>` or a module beside the file; lifting the const with the type would change when it
+runs and is impossible the moment it reads a prop.
+
+A component is **not** in scope in its own file, and nothing about the filename is reserved. The
+emitted function carries the house mark — `Search.abide` declares `Search$` — so `Search.abide` may
+import a `Search` icon and mean it, and a RECURSIVE component imports itself like any other:
+`import Branch from './Tree.abide'`, under whatever name the author wants. That keeps the property
+every other line of a `<script>` has: every name it uses was imported or bound by the person who wrote
+it. A tag naming this file's own component with nothing binding it is a compile error saying so —
+tsc's own answer is `Did you mean 'Tree$'?`, which is the emitter's spelling offered as advice.
 
 ## Script / style blocks
 
@@ -1719,7 +1731,7 @@ method, a body ceiling and the declared argument shape are enforced, so a consol
 would answer a different question from the one being asked. Without a target a call binds an
 EPHEMERAL port for the life of the process, which is what makes `./app getUser --id=1` work with
 nothing running; `serve` is the same bind on a port somebody named, and `disconnect` lets go of
-whichever of the two it was holding. The last state is remembered in `<appDataDir>/console.json`, so a
+whichever of the two it was holding. The last state is remembered in `<appDataDir>/session.json`, so a
 bare `./app` resumes — attaching to a remembered `serve` if that app is still up rather than trying to
 bind the port it is holding.
 
@@ -1761,10 +1773,13 @@ does not parse, which is not a bonus but the case: an editor asks what may follo
 moment there is an unclosed block, so the block a marker sits in is read out of the TEXT rather than
 off a parse tree. The type speed is the real checker: the buffer is emitted into the same
 `.abide/types` mirror `abide check` writes, and a `tsgo` program is held OPEN across the session — a
-project costs ~240 ms once and every ask after it ~3 ms, against seconds for a fresh `tsc`. Both
+project costs ~170 ms once and every ask after it ~4 ms, against seconds for a fresh `tsc`. Both
 publish separately, syntax first, and a type answer that arrives after the buffer moved on is
-dropped. A server whose checker will not start (no `node`) keeps every syntax answer and simply
-never contradicts the author about a type.
+dropped. A buffer that does not PARSE is never sent to the checker at all — there is no module to
+emit, so the answer is empty and the round trip is a second compile of text already known to fail,
+which while somebody is typing is the common state rather than the odd one. A server whose checker
+will not start (no `node`) keeps every syntax answer and simply never contradicts the author about a
+type; one whose checker cannot open the project says so on stderr rather than going quiet for ever.
 
 The BUFFER and not the file: an editor's text is one save ahead of the disk, and a checker reading
 the disk reports the previous version's errors with total confidence. The mirror is generated and
@@ -1773,11 +1788,61 @@ What it does not read is anybody ELSE's unsaved buffer — a `.ts` file is read 
 `.ts` is the TypeScript extension's business and the seam is the file extension an editor already
 draws. The completion and hover answers are derived from `BRANCHES` and `BINDABLE` rather than from
 prose beside them, so an editor cannot offer a block the compiler does not have or miss one it does.
+`BRANCHES` now records what each branch CARRIES as well as which branches exist — `{ tail, optional }`,
+spelled the way an author writes it — because a table of names could only ever say `{#if}` takes
+`{:else}`, and `{:else if <condition>}` is that same keyword with a condition read out of its tail. So
+it was legal, undiscoverable from an editor, and absent from the page claiming to document every
+block. The table is what refuses a branch too: `{:case}` with no value used to compile, to `m ===  ?
+…`, which is not JavaScript.
 Sync is FULL — the whole buffer per edit — and a type error's COLUMN carries the same drift
 `abide check` has: exact at the start of an expression, and within one off by however much the
 desugar inserted before that point. stdin and stdout ARE the protocol, so nothing this process has to
-say goes anywhere but stderr. An editor is pointed at it by running `abide lsp` for `.abide` files;
+say goes anywhere but stderr.
+
+Hover and GO TO DEFINITION are the same two speeds again, and which one answers is decided by what is
+under the cursor rather than by what is available. A block marker and a `bind:` target are the two
+tables. A COMPONENT is its own import — `<Card>` is read syntactically and resolved through the
+`import` in the file's own script, which is not a shortcut past the checker but the only lane that can
+answer at all, because a tag name carries no source mapping. Everything else is the checker, asked at
+a position mapped through the source map — and asked only where a mapping EXISTS, which is inside a
+`{…}` or inside a `<script>` body. Markup has none, and a mapping is anchored where a segment BEGINS
+and carries no extent, so a cursor in the markup after `{book.title}` maps confidently into the middle
+of that expression rather than to nothing. `askable` is that bound, and it is the shape of thing that
+outlives its reason: written when only expressions were marked, it went on refusing `<script>`
+positions after a body had segments of its own, and a hover that never asks is indistinguishable from
+a checker with nothing to say.
+
+A `<script>` body is mapped per LINE, and that is what its transforms allow rather than a compromise
+chosen for convenience: the text is desugared, its cell makers are wrapped and its types are lifted to
+module scope, so there is no single copy to mark the way a template expression is marked where it is
+copied. What every one of those transforms does preserve is the line — each splices within one, or
+appends after the body — once lifting leaves its newlines behind and `indent` stops dropping blank
+ones. So the line is exact and the column drifts by whatever the desugar inserted before it, which is
+the accuracy the rest of the map already promises. A drift that lands on a DIFFERENT identifier is
+refused rather than answered — the checker asked about the wrong name reports a type with total
+confidence, and `props<T>()` is where that showed: the call IS the parameter, so a cursor on `props`
+mapped into the `args` that replaced it and came back `any`. That line is marked all the same, because
+a type ERROR on it is worth more than a hover over it.
+
+That closed three things at once, all of which were the same missing segment: a type error written in
+a `<script>` used to be DROPPED by the editor lane rather than shown (`abide check` kept it and marked
+it `[generated]`, so the file lane reported what an editor did not), a hover there answered nothing,
+and a definition whose declaration was in a body could be found and not placed. What is left is an
+IMPORT, which really does move: it is hoisted to the top of the emitted module and MERGED with the
+emitter's own — an author's `import { state } from 'abide'` joins the `html` the header already
+imports — so nothing in the output is only that statement. `moved.abide` is the fixture that says so,
+and go-to-definition sidesteps it entirely by RESOLVING the specifier rather than mapping it:
+`Bun.resolveSync` from the importing file's directory, which is what answers a bare specifier, a
+`#`-prefixed subpath and a relative `.abide` alike — an extension needs a loader to be IMPORTED, not
+to be found. A specifier that resolves to nothing answers nothing, rather than a path that is not
+there. An editor is pointed at it by running `abide lsp` for `.abide` files;
 there is no configuration, because there is nothing to configure.
+
+Zed's end of that is `editors/zed`, and it installs NOTHING: the server it runs is the `abide` the
+worktree already depends on, so the compiler an editor reports against and the one `bun test` runs
+cannot be two different builds. What an extension still has to bring is the part a language server
+does not — a GRAMMAR — so `editors/tree-sitter-abide` is a second reader of the same syntax, taking
+the component rule, the void elements and `BRANCHES` from the compiler rather than restating them.
 
 ## The client bundle
 

@@ -1,4 +1,4 @@
-<!-- The whole public surface, on one page, grouped by the specifier you import it from.
+<!-- The whole public surface, on one page, grouped by what each name is ABOUT.
 
      This page is prose only — `CALLABLES.ts` carries no ladder, just names, lines and `import()` thunks
      — so listing every name costs nothing that listing one would not. The rungs arrive on the page
@@ -6,40 +6,53 @@
 
      THE LIST IS THE DEFINITION. A name with no entry here is not public, and a name here that no rung
      demonstrates fails `#tests/unit/docs.test.ts`, so this page cannot describe a surface the app does not
-     actually have. -->
+     actually have.
+
+     It was grouped by SPECIFIER, which is a fact about the seam rather than about what a name is for:
+     it put `state` beside `csp` under one heading and said nothing about either. The specifier is still
+     on every card — it is half of what a reader came for — but as a line rather than as the shelf. What
+     the shelf is now is `TOPICS.ts`, and its `lead` is the one thing a per-name page structurally cannot
+     say: what these names are to EACH OTHER. -->
 <script module>
-import { CALLABLE_ORDER, CALLABLES, type CallableName, SPECIFIERS } from '#shared/demos/CALLABLES.ts'
+import { CALLABLES } from '#shared/demos/CALLABLES.ts'
+import { SPELLINGS } from '#shared/demos/SPELLINGS.ts'
+import { TOPIC_ORDER, TOPICS } from '#shared/demos/TOPICS.ts'
 
 const CARD = 'card'
-
-/** The names on one entry point, in index order. `CALLABLE_ORDER` is the sort; this only partitions it. */
-const on = (specifier: string): CallableName[] => CALLABLE_ORDER.filter((name) => CALLABLES[name].from === specifier)
 </script>
 
 <div class="page-head">
     <h1 class="page-title">docs</h1>
-    <p class="page-blurb">Every name abide exports, one page each. A page is that name’s ladder: each rung is the one before it plus exactly one new thing, and every rung is a real file this app compiles and tests.</p>
+    <p class="page-blurb">Every name abide exports and every spelling its template answers to, one page each. A page is that entry’s ladder: each rung is the one before it plus exactly one new thing, and every rung is a real file this app compiles and tests.</p>
 </div>
 
-<!-- The same names the sidebar lists, grouped by the specifier you import them from — which is the one
-     thing the flat list beside it cannot say, and the reason this index still earns a page. -->
-{#for specifier of SPECIFIERS}
-    <section data-specifier={specifier}>
-        <h2 class="head">{specifier} · {on(specifier).length}</h2>
+<!-- One section per topic, holding BOTH vocabularies — a name you import and a spelling you type sit
+     on the same shelf when they are the same lesson, which is the whole reason the topic exists. -->
+{#for name of TOPIC_ORDER}
+    <section data-topic={name}>
+        <h2 class="head">{TOPICS[name].title}</h2>
+        <p class="topic-lead">{TOPICS[name].lead}</p>
         <div class="name-grid">
-            {#for name of on(specifier)}
-                <a href="/docs/{name}" class={CARD} data-callable={name}>
-                    <code class="name">{name}</code>
-                    <p class="card-blurb">{CALLABLES[name].blurb}</p>
+            {#for callable of TOPICS[name].callables}
+                <a href="/docs/{callable}" class={CARD} data-callable={callable}>
+                    <code class="name">{callable}</code>
+                    <p class="card-tag">{CALLABLES[callable].from}</p>
+                    <p class="card-blurb">{CALLABLES[callable].blurb}</p>
+                </a>
+            {/for}
+            <!-- Named by how it is TYPED, which is what a reader recognises and what the page it links
+                 to is titled. There is no specifier line: a spelling is not imported from anywhere. -->
+            {#for slug of TOPICS[name].spells}
+                <a href="/docs/syntax/{slug}" class={CARD} data-spelling={slug}>
+                    <code class="name">{SPELLINGS[slug].name}</code>
+                    <p class="card-tag">typed</p>
+                    <p class="card-blurb">{SPELLINGS[slug].blurb}</p>
                 </a>
             {/for}
         </div>
     </section>
 {/for}
 
-<!-- The other axis. Last rather than first because a name is what most readers arrive with, but it is a
-     LINK on this page and not only a group in the sidebar: everything a `.abide` file says that you did
-     not import is over there, and a reader holding `{#for}` has nothing to look up in the grid above. -->
-<p class="note"><a href="/docs/syntax" class="link">The template’s own spellings →</a> — <code>{'{#for}'}</code>, <code>bind:value</code>, <code>&lt;slot/&gt;</code> and the rest, which are typed rather than imported and so are keyed by how they are WRITTEN.</p>
+<p class="note">Both vocabularies also have an index of their own — <a href="/docs/syntax" class="link">every spelling in one list →</a> — which is the same entries keyed by how they are WRITTEN rather than by what they are about.</p>
 
 <p class="note">What each of these is asserted to DO runs on <a href="/tests" class="link">/tests</a>, and what it costs is measured against a hand-written arm on <a href="/bench" class="link">/bench</a>.</p>
