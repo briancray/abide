@@ -1,0 +1,126 @@
+================================================================================
+if, with an else-if chain
+================================================================================
+
+{#if a}<p>1</p>{:else if b}<p>2</p>{:else}<p>3</p>{/if}
+
+--------------------------------------------------------------------------------
+
+(document
+  (if_block
+    (if_start (expression_text))
+    (element (start_tag (tag_name)) (text) (end_tag (tag_name)))
+    (else_branch
+      (else_marker (expression_text))
+      (element (start_tag (tag_name)) (text) (end_tag (tag_name))))
+    (else_branch
+      (else_marker)
+      (element (start_tag (tag_name)) (text) (end_tag (tag_name))))
+    (if_end)))
+
+================================================================================
+for, with an index, a key and a catch branch
+================================================================================
+
+{#for item, i of rows by item.id}<li>{item.name}</li>{:catch error}<p>x</p>{/for}
+
+--------------------------------------------------------------------------------
+
+(document
+  (for_block
+    (for_start (binding_text) (list_text) (expression_text))
+    (element
+      (start_tag (tag_name))
+      (expression (expression_text))
+      (end_tag (tag_name)))
+    (catch_branch
+      (catch_marker (identifier))
+      (element (start_tag (tag_name)) (text) (end_tag (tag_name))))
+    (for_end)))
+
+================================================================================
+for await, over a stream
+================================================================================
+
+{#for await chunk of stream()}{chunk}{/for}
+
+--------------------------------------------------------------------------------
+
+(document
+  (for_block
+    (for_start (binding_text) (list_text))
+    (expression (expression_text))
+    (for_end)))
+
+================================================================================
+for, over a destructuring pattern
+================================================================================
+
+{#for { id, name } of people}<b>{name}</b>{/for}
+
+--------------------------------------------------------------------------------
+
+(document
+  (for_block
+    (for_start (binding_text) (list_text))
+    (element
+      (start_tag (tag_name))
+      (expression (expression_text))
+      (end_tag (tag_name)))
+    (for_end)))
+
+================================================================================
+switch, with a case and a default
+================================================================================
+
+{#switch kind}{:case 'a'}<p>A</p>{:default}<p>?</p>{/switch}
+
+--------------------------------------------------------------------------------
+
+(document
+  (switch_block
+    (switch_start (expression_text))
+    (case_branch
+      (case_marker (expression_text))
+      (element (start_tag (tag_name)) (text) (end_tag (tag_name))))
+    (default_branch
+      (default_marker)
+      (element (start_tag (tag_name)) (text) (end_tag (tag_name))))
+    (switch_end)))
+
+================================================================================
+try, with catch and finally
+================================================================================
+
+{#try}<p>a</p>{:catch e}{e}{:finally}<hr>{/try}
+
+--------------------------------------------------------------------------------
+
+(document
+  (try_block
+    (try_start)
+    (element (start_tag (tag_name)) (text) (end_tag (tag_name)))
+    (catch_branch
+      (catch_marker (identifier))
+      (expression (expression_text)))
+    (finally_branch
+      (finally_marker)
+      (void_element (tag_name)))
+    (try_end)))
+
+================================================================================
+component, defined inline
+================================================================================
+
+{#component Card(title: string)}<h2>{title}</h2>{/component}
+
+--------------------------------------------------------------------------------
+
+(document
+  (component_block
+    (component_define (component_name) (parameters))
+    (element
+      (start_tag (tag_name))
+      (expression (expression_text))
+      (end_tag (tag_name)))
+    (component_block_end)))

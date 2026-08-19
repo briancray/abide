@@ -1,0 +1,1735 @@
+[
+  {
+    "type": "attribute",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "attribute_name",
+          "named": true
+        },
+        {
+          "type": "attribute_value",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "quoted_attribute_value",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "case_branch",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "case_marker",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component",
+          "named": true
+        },
+        {
+          "type": "component_block",
+          "named": true
+        },
+        {
+          "type": "element",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "for_block",
+          "named": true
+        },
+        {
+          "type": "if_block",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_component",
+          "named": true
+        },
+        {
+          "type": "self_closing_element",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "switch_block",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "try_block",
+          "named": true
+        },
+        {
+          "type": "void_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "case_marker",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "expression_text",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "catch_branch",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "catch_marker",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component",
+          "named": true
+        },
+        {
+          "type": "component_block",
+          "named": true
+        },
+        {
+          "type": "element",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "for_block",
+          "named": true
+        },
+        {
+          "type": "if_block",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_component",
+          "named": true
+        },
+        {
+          "type": "self_closing_element",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "switch_block",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "try_block",
+          "named": true
+        },
+        {
+          "type": "void_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "catch_marker",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "component",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component",
+          "named": true
+        },
+        {
+          "type": "component_block",
+          "named": true
+        },
+        {
+          "type": "component_end_tag",
+          "named": true
+        },
+        {
+          "type": "component_start_tag",
+          "named": true
+        },
+        {
+          "type": "element",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "for_block",
+          "named": true
+        },
+        {
+          "type": "if_block",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_component",
+          "named": true
+        },
+        {
+          "type": "self_closing_element",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "switch_block",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "try_block",
+          "named": true
+        },
+        {
+          "type": "void_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "component_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component",
+          "named": true
+        },
+        {
+          "type": "component_block",
+          "named": true
+        },
+        {
+          "type": "component_block_end",
+          "named": true
+        },
+        {
+          "type": "component_define",
+          "named": true
+        },
+        {
+          "type": "element",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "for_block",
+          "named": true
+        },
+        {
+          "type": "if_block",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_component",
+          "named": true
+        },
+        {
+          "type": "self_closing_element",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "switch_block",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "try_block",
+          "named": true
+        },
+        {
+          "type": "void_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "component_block_end",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "component_define",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "component_name",
+          "named": true
+        },
+        {
+          "type": "parameters",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "component_end_tag",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "component_name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "component_start_tag",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "attribute",
+          "named": true
+        },
+        {
+          "type": "component_name",
+          "named": true
+        },
+        {
+          "type": "spread_attribute",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "default_branch",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component",
+          "named": true
+        },
+        {
+          "type": "component_block",
+          "named": true
+        },
+        {
+          "type": "default_marker",
+          "named": true
+        },
+        {
+          "type": "element",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "for_block",
+          "named": true
+        },
+        {
+          "type": "if_block",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_component",
+          "named": true
+        },
+        {
+          "type": "self_closing_element",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "switch_block",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "try_block",
+          "named": true
+        },
+        {
+          "type": "void_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "default_marker",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "document",
+    "named": true,
+    "root": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component",
+          "named": true
+        },
+        {
+          "type": "component_block",
+          "named": true
+        },
+        {
+          "type": "element",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "for_block",
+          "named": true
+        },
+        {
+          "type": "if_block",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_component",
+          "named": true
+        },
+        {
+          "type": "self_closing_element",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "switch_block",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "try_block",
+          "named": true
+        },
+        {
+          "type": "void_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "element",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component",
+          "named": true
+        },
+        {
+          "type": "component_block",
+          "named": true
+        },
+        {
+          "type": "element",
+          "named": true
+        },
+        {
+          "type": "end_tag",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "for_block",
+          "named": true
+        },
+        {
+          "type": "if_block",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_component",
+          "named": true
+        },
+        {
+          "type": "self_closing_element",
+          "named": true
+        },
+        {
+          "type": "start_tag",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "switch_block",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "try_block",
+          "named": true
+        },
+        {
+          "type": "void_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "else_branch",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component",
+          "named": true
+        },
+        {
+          "type": "component_block",
+          "named": true
+        },
+        {
+          "type": "element",
+          "named": true
+        },
+        {
+          "type": "else_marker",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "for_block",
+          "named": true
+        },
+        {
+          "type": "if_block",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_component",
+          "named": true
+        },
+        {
+          "type": "self_closing_element",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "switch_block",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "try_block",
+          "named": true
+        },
+        {
+          "type": "void_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "else_marker",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "expression_text",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "end_tag",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "tag_name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "expression",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "expression_text",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "finally_branch",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component",
+          "named": true
+        },
+        {
+          "type": "component_block",
+          "named": true
+        },
+        {
+          "type": "element",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "finally_marker",
+          "named": true
+        },
+        {
+          "type": "for_block",
+          "named": true
+        },
+        {
+          "type": "if_block",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_component",
+          "named": true
+        },
+        {
+          "type": "self_closing_element",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "switch_block",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "try_block",
+          "named": true
+        },
+        {
+          "type": "void_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "finally_marker",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "for_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "catch_branch",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component",
+          "named": true
+        },
+        {
+          "type": "component_block",
+          "named": true
+        },
+        {
+          "type": "element",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "for_block",
+          "named": true
+        },
+        {
+          "type": "for_end",
+          "named": true
+        },
+        {
+          "type": "for_start",
+          "named": true
+        },
+        {
+          "type": "if_block",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_component",
+          "named": true
+        },
+        {
+          "type": "self_closing_element",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "switch_block",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "try_block",
+          "named": true
+        },
+        {
+          "type": "void_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "for_end",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "for_start",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "binding_text",
+          "named": true
+        },
+        {
+          "type": "expression_text",
+          "named": true
+        },
+        {
+          "type": "list_text",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "if_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component",
+          "named": true
+        },
+        {
+          "type": "component_block",
+          "named": true
+        },
+        {
+          "type": "element",
+          "named": true
+        },
+        {
+          "type": "else_branch",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "for_block",
+          "named": true
+        },
+        {
+          "type": "if_block",
+          "named": true
+        },
+        {
+          "type": "if_end",
+          "named": true
+        },
+        {
+          "type": "if_start",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_component",
+          "named": true
+        },
+        {
+          "type": "self_closing_element",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "switch_block",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "try_block",
+          "named": true
+        },
+        {
+          "type": "void_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "if_end",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "if_start",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "expression_text",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "quoted_attribute_value",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "attribute_value",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "script_element",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "raw_text",
+          "named": true
+        },
+        {
+          "type": "script_end_tag",
+          "named": true
+        },
+        {
+          "type": "script_start_tag",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "script_end_tag",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "tag_name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "script_start_tag",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "attribute",
+          "named": true
+        },
+        {
+          "type": "spread_attribute",
+          "named": true
+        },
+        {
+          "type": "tag_name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "self_closing_component",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "attribute",
+          "named": true
+        },
+        {
+          "type": "component_name",
+          "named": true
+        },
+        {
+          "type": "spread_attribute",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "self_closing_element",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "attribute",
+          "named": true
+        },
+        {
+          "type": "spread_attribute",
+          "named": true
+        },
+        {
+          "type": "tag_name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "spread_attribute",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "start_tag",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "attribute",
+          "named": true
+        },
+        {
+          "type": "spread_attribute",
+          "named": true
+        },
+        {
+          "type": "tag_name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "style_element",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "raw_text",
+          "named": true
+        },
+        {
+          "type": "style_end_tag",
+          "named": true
+        },
+        {
+          "type": "style_start_tag",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "style_end_tag",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "tag_name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "style_start_tag",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "attribute",
+          "named": true
+        },
+        {
+          "type": "spread_attribute",
+          "named": true
+        },
+        {
+          "type": "tag_name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "switch_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "case_branch",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component",
+          "named": true
+        },
+        {
+          "type": "component_block",
+          "named": true
+        },
+        {
+          "type": "default_branch",
+          "named": true
+        },
+        {
+          "type": "element",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "for_block",
+          "named": true
+        },
+        {
+          "type": "if_block",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_component",
+          "named": true
+        },
+        {
+          "type": "self_closing_element",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "switch_block",
+          "named": true
+        },
+        {
+          "type": "switch_end",
+          "named": true
+        },
+        {
+          "type": "switch_start",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "try_block",
+          "named": true
+        },
+        {
+          "type": "void_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "switch_end",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "switch_start",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "expression_text",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "tag_name",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "try_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "catch_branch",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component",
+          "named": true
+        },
+        {
+          "type": "component_block",
+          "named": true
+        },
+        {
+          "type": "element",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "finally_branch",
+          "named": true
+        },
+        {
+          "type": "for_block",
+          "named": true
+        },
+        {
+          "type": "if_block",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_component",
+          "named": true
+        },
+        {
+          "type": "self_closing_element",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "switch_block",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "try_block",
+          "named": true
+        },
+        {
+          "type": "try_end",
+          "named": true
+        },
+        {
+          "type": "try_start",
+          "named": true
+        },
+        {
+          "type": "void_element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "try_end",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "try_start",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "void_element",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "attribute",
+          "named": true
+        },
+        {
+          "type": "spread_attribute",
+          "named": true
+        },
+        {
+          "type": "tag_name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "\"",
+    "named": false
+  },
+  {
+    "type": "'",
+    "named": false
+  },
+  {
+    "type": "/",
+    "named": false
+  },
+  {
+    "type": "/>",
+    "named": false
+  },
+  {
+    "type": "<",
+    "named": false
+  },
+  {
+    "type": "</",
+    "named": false
+  },
+  {
+    "type": "=",
+    "named": false
+  },
+  {
+    "type": ">",
+    "named": false
+  },
+  {
+    "type": "area",
+    "named": false
+  },
+  {
+    "type": "attribute_name",
+    "named": true
+  },
+  {
+    "type": "attribute_value",
+    "named": true
+  },
+  {
+    "type": "await",
+    "named": false
+  },
+  {
+    "type": "base",
+    "named": false
+  },
+  {
+    "type": "binding_text",
+    "named": true
+  },
+  {
+    "type": "br",
+    "named": false
+  },
+  {
+    "type": "by",
+    "named": false
+  },
+  {
+    "type": "case",
+    "named": false
+  },
+  {
+    "type": "catch",
+    "named": false
+  },
+  {
+    "type": "col",
+    "named": false
+  },
+  {
+    "type": "comment",
+    "named": true
+  },
+  {
+    "type": "component",
+    "named": false
+  },
+  {
+    "type": "component_name",
+    "named": true
+  },
+  {
+    "type": "default",
+    "named": false
+  },
+  {
+    "type": "else",
+    "named": false
+  },
+  {
+    "type": "embed",
+    "named": false
+  },
+  {
+    "type": "expression_text",
+    "named": true
+  },
+  {
+    "type": "finally",
+    "named": false
+  },
+  {
+    "type": "for",
+    "named": false
+  },
+  {
+    "type": "hr",
+    "named": false
+  },
+  {
+    "type": "identifier",
+    "named": true
+  },
+  {
+    "type": "if",
+    "named": false
+  },
+  {
+    "type": "img",
+    "named": false
+  },
+  {
+    "type": "input",
+    "named": false
+  },
+  {
+    "type": "link",
+    "named": false
+  },
+  {
+    "type": "list_text",
+    "named": true
+  },
+  {
+    "type": "meta",
+    "named": false
+  },
+  {
+    "type": "of",
+    "named": false
+  },
+  {
+    "type": "param",
+    "named": false
+  },
+  {
+    "type": "parameters",
+    "named": true
+  },
+  {
+    "type": "raw_text",
+    "named": true
+  },
+  {
+    "type": "source",
+    "named": false
+  },
+  {
+    "type": "switch",
+    "named": false
+  },
+  {
+    "type": "text",
+    "named": true
+  },
+  {
+    "type": "track",
+    "named": false
+  },
+  {
+    "type": "try",
+    "named": false
+  },
+  {
+    "type": "wbr",
+    "named": false
+  },
+  {
+    "type": "{",
+    "named": false
+  },
+  {
+    "type": "{#",
+    "named": false
+  },
+  {
+    "type": "{/",
+    "named": false
+  },
+  {
+    "type": "{:",
+    "named": false
+  },
+  {
+    "type": "}",
+    "named": false
+  }
+]

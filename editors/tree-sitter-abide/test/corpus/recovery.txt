@@ -1,0 +1,45 @@
+; What an editor actually holds: a file somebody is halfway through typing.
+;
+; These are not about the ERROR node — a broken file has one either way, and the compiler is what says
+; so properly. They are about what survives AROUND it. The `_error_sentinel` in `externals` is the only
+; thing holding these two shapes, and reverting it is what shows the difference: without it the scanner
+; is asked for a `<script>` body during recovery, answers with everything up to the next closing tag,
+; and the whole rest of the document becomes one `raw_text` inside one document-wide ERROR. The markup
+; below then has no tree, so it has no highlighting either — which is the state a file is in for as
+; long as it takes to finish typing a block.
+
+================================================================================
+an unclosed block header leaves the markup after it alone
+================================================================================
+
+<div>
+{#if a
+<p>x</p>
+</div>
+
+--------------------------------------------------------------------------------
+
+(document
+  (element
+    (start_tag (tag_name))
+    (ERROR (UNEXPECTED '\n'))
+    (element
+      (start_tag (tag_name))
+      (text)
+      (end_tag (tag_name)))
+    (end_tag (tag_name))))
+
+================================================================================
+a half-typed expression leaves its own element alone
+================================================================================
+
+<p>{ obj.
+</p>
+
+--------------------------------------------------------------------------------
+
+(document
+  (element
+    (start_tag (tag_name))
+    (ERROR (UNEXPECTED 'b'))
+    (end_tag (tag_name))))

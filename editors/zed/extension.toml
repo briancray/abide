@@ -1,0 +1,29 @@
+id = "abide"
+name = "abide"
+description = "`.abide` support for Zed: the language server, and the grammar it highlights through."
+version = "0.1.0"
+schema_version = 1
+authors = ["Brian Cray"]
+repository = "https://github.com/briancray/abide"
+
+# The server IS `abide lsp` — see `packages/abide/cli/internal/lsp.ts`. There is nothing to download
+# and nothing to install: the binary an app already depends on is the one that answers, so an editor
+# and a `bun test` run can never be looking at two different compilers.
+[language_servers.abide]
+name = "abide"
+languages = ["abide"]
+
+# Built from this same repository, at `editors/tree-sitter-abide`.
+#
+# `repository` is a LOCAL PATH rather than the GitHub URL, and that is a deliberate local-development
+# setting: Zed builds a grammar by `git fetch`ing a revision into `grammars/` and checking it out, so
+# it reads git OBJECTS and never the working tree. Against the URL the revision would have to be
+# pushed before an edit to the grammar could be tried at all; against the path a commit is enough.
+# Git treats a filesystem path as a remote like any other, so nothing here is special-cased.
+#
+# Swap it back to `https://github.com/briancray/abide` with a PUSHED `commit` before this is installed
+# anywhere but this machine — the path is the one line in this extension that is not portable.
+[grammars.abide]
+repository = "/Users/briancray/Code/abideminimal"
+path = "editors/tree-sitter-abide"
+commit = "0f3c624c07589382cd658005cf95a9a82039013a"

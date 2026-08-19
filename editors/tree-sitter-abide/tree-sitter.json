@@ -1,0 +1,19 @@
+{
+    "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+    "grammars": [
+        {
+            "name": "abide",
+            "camelcase": "Abide",
+            "scope": "source.abide",
+            "path": ".",
+            "file-types": ["abide"],
+            "injection-regex": "^abide$"
+        }
+    ],
+    "metadata": {
+        "version": "0.1.0",
+        "license": "MIT",
+        "description": "abide grammar for tree-sitter",
+        "authors": [{ "name": "abide" }]
+    }
+}

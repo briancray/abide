@@ -46,7 +46,11 @@
         // `brand/` is design scratch — the mockups and the contact sheet the system was worked out on.
         // The gallery holds a PASTE of `packages/dogfood/app.css`, so linting it reports every finding
         // in the sheet a second time, against a copy nobody edits.
-        "includes": ["**", "!brand"]
+        // `editors/tree-sitter-abide/src` is what `tree-sitter generate` WROTE — the parser tables and
+        // the two JSON descriptions of the grammar. Formatting them is churn a regeneration undoes,
+        // and the hand-written half of that package (`grammar.js`, and a `scanner.c` biome has nothing
+        // to say about) is outside it.
+        "includes": ["**", "!brand", "!editors/tree-sitter-abide/src"]
     },
     "linter": {
         "enabled": true,

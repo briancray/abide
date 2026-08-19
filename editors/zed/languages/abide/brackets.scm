@@ -1,0 +1,16 @@
+("<" @open ">" @close)
+("</" @open ">" @close)
+("{" @open "}" @close)
+("\"" @open "\"" @close)
+("'" @open "'" @close)
+
+; The pairs worth jumping between: a tag and its closer, and a block and the `{/…}` that ends it.
+((element (start_tag) @open (end_tag) @close) (#set! newline.only))
+((component (component_start_tag) @open (component_end_tag) @close) (#set! newline.only))
+((script_element (script_start_tag) @open (script_end_tag) @close) (#set! newline.only))
+((style_element (style_start_tag) @open (style_end_tag) @close) (#set! newline.only))
+((if_block (if_start) @open (if_end) @close) (#set! newline.only))
+((for_block (for_start) @open (for_end) @close) (#set! newline.only))
+((switch_block (switch_start) @open (switch_end) @close) (#set! newline.only))
+((try_block (try_start) @open (try_end) @close) (#set! newline.only))
+((component_block (component_define) @open (component_block_end) @close) (#set! newline.only))

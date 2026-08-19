@@ -1,0 +1,4 @@
+target/
+*.wasm
+# Where Zed CLONES the grammar named in `extension.toml` — its build directory, inside this one.
+grammars/

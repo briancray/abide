@@ -1,0 +1,23 @@
+{
+    "name": "tree-sitter-abide",
+    "version": "0.1.0",
+    "description": "abide grammar for tree-sitter",
+    "private": true,
+    "main": "bindings/node",
+    "tree-sitter": [
+        {
+            "scope": "source.abide",
+            "file-types": [
+                "abide"
+            ],
+            "injection-regex": "^abide$"
+        }
+    ],
+    "scripts": {
+        "generate": "tree-sitter generate --abi 14",
+        "test": "tree-sitter test"
+    },
+    "devDependencies": {
+        "tree-sitter-cli": "^0.26.12"
+    }
+}

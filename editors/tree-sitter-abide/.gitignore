@@ -1,0 +1,6 @@
+node_modules/
+# `src/parser.c`, `src/grammar.json`, `src/node-types.json` and `src/tree_sitter/` are GENERATED and
+# are committed anyway: Zed builds the grammar by cloning this repository and compiling the C, and it
+# never runs `tree-sitter generate`. An uncommitted parser is a grammar that resolves to nothing.
+build/
+*.wasm
