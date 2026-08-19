@@ -13,10 +13,19 @@
 //      is a setting that does not work.
 //   2. `node_modules/.bin/abide` — an app that depends on abide, which is the shape every app copying
 //      `packages/dogfood` has.
-//   3. `abide` on `$PATH` — a global install.
+//   3. The worktree's OWN `packages/abide/cli/index.ts` — abide's repo, which has no `abide` in its
+//      root `node_modules/.bin` because the workspace link lands in each package's.
+//   4. `abide` on `$PATH` — a global install.
 //
-// There is no fourth, and in particular there is no "download one": an abide the editor fetched for
+// There is no fifth, and in particular there is no "download one": an abide the editor fetched for
 // itself would type-check against a compiler the app never runs.
+//
+// Rule 3 is not a convenience, it is the rule that stops the silent version of exactly that failure.
+// Without it, opening abide's own repo fell through to `$PATH` — and on the machine this was written
+// on that resolves to a global install of a DIFFERENT checkout, whose server advertises semantic
+// tokens and no completion at all. Nothing about that is visible in the editor: the highlighting is
+// the grammar's either way, so the only symptom is a hover that disagrees with the compiler the tests
+// run. A worktree that BUILDS abide must be served by the abide it builds.
 
 use zed_extension_api::{self as zed, settings::LspSettings, Result};
 
@@ -28,6 +37,9 @@ const LSP: &str = "lsp";
 
 /// Where an app that DEPENDS on abide keeps the binary, via the `bin` entry in its `package.json`.
 const LOCAL_BINARY: &str = "node_modules/.bin/abide";
+
+/// The CLI's entry point inside abide's own repo — what `bun run cli` names, run the same way.
+const SOURCE_ENTRY: &str = "packages/abide/cli/index.ts";
 
 impl AbideExtension {
     /// What the user configured, or `None` to go on looking.
@@ -74,6 +86,19 @@ impl zed::Extension for AbideExtension {
                 // `bun` to run it at all.
                 env: worktree.shell_env(),
             });
+        }
+
+        // Before `$PATH`, so abide's own repo is served by its own source rather than by whatever a
+        // global install happens to point at. `bun` runs the `.ts` directly, which is what the
+        // `abide` script in that repo's `package.json` already does.
+        if worktree.read_text_file(SOURCE_ENTRY).is_ok() {
+            if let Some(bun) = worktree.which("bun") {
+                return Ok(zed::Command {
+                    command: bun,
+                    args: vec![SOURCE_ENTRY.to_string(), LSP.to_string()],
+                    env: worktree.shell_env(),
+                });
+            }
         }
 
         if let Some(path) = worktree.which("abide") {

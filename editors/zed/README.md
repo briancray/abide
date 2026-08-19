@@ -13,6 +13,23 @@ a tree-sitter grammar built from the same syntax the compiler parses.
 | Highlighting | `editors/tree-sitter-abide`, with TypeScript injected into every `{…}` hole and every script body, and CSS into `<style>`. |
 | Outline, indent, bracket matching | The grammar's blocks — not its `<div>`s. |
 
+## What it does NOT do
+
+The extension exposes what `abide lsp` answers and nothing more, so its limits are the SERVER's and
+are not settings you are missing:
+
+* **Go to definition does not exist.** `CAPABILITIES` advertises `textDocumentSync`,
+  `completionProvider` and `hoverProvider`, and `receive()` answers every other request with
+  `-32601`. Cmd-click on a name in a `.abide` file has nothing to ask, so nothing happens.
+* **Hover is narrow.** It answers over a `{#…}` / `{:…}` / `{/…}` marker and over a `bind:` target —
+  the two closed tables the compiler owns. Over an ordinary identifier it returns `null`, so most of
+  a template is silent. A TYPE under the cursor would need the checker at a position rather than over
+  a whole file, which is a different question from the one the type lane answers today.
+* **Rename, references, formatting, signature help** — none are implemented.
+
+Diagnostics are the exception and do cover the whole file: parse errors instantly, and real type
+errors inside template expressions once the buffer settles.
+
 ## Installing
 
 The extension is not in Zed's registry. Install it as a dev extension:
@@ -38,19 +55,24 @@ anywhere but the machine it was written on.
 
 The extension installs no server. `abide lsp` is a subcommand of the binary the app already depends
 on, which is the whole point: the compiler that reports a type error in your editor is the one
-`bun test` runs, so there is no version to keep in step. It looks in three places, in order:
+`bun test` runs, so there is no version to keep in step. It looks in four places, in order:
 
 1. `lsp.abide.binary.path` in your Zed settings.
 2. `node_modules/.bin/abide` at the worktree root — an app that depends on abide.
-3. `abide` on `$PATH` — a global install.
+3. `bun packages/abide/cli/index.ts` — abide's OWN repo, whose root `node_modules/.bin` has no
+   `abide` because the workspace link lands in each package's.
+4. `abide` on `$PATH` — a global install.
 
-If none of the three resolves, the server fails to start and says so with all three named.
+If none of the four resolves, the server fails to start and says so with all of them named.
 
-### This repository is the case that needs the setting
+Rule 3 is there because rule 4 is dangerous in exactly one place. Opening abide's own repo used to
+fall through to `$PATH`, and a global `abide` may be a DIFFERENT checkout — the machine this was
+written on has one whose server advertises semantic tokens and no completion. Nothing shows that in
+the editor, because the highlighting is the grammar's either way; the only symptom is a hover that
+quietly disagrees with the compiler `bun test` runs. A worktree that BUILDS abide is served by the
+abide it builds.
 
-abide's own repo has no `abide` at the ROOT `node_modules/.bin` — the workspace link lands in
-`packages/dogfood/node_modules/.bin/abide`. Open `packages/dogfood` as the worktree and it is found
-by rule 2; open the repo root and it is not, so point it at the source:
+To pin it explicitly anyway:
 
 ```json
 {
