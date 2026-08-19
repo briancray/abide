@@ -22,11 +22,17 @@ The extension is not in Zed's registry. Install it as a dev extension:
 
 Zed compiles the Rust to wasm and builds the grammar itself; nothing needs to be built by hand.
 
-**The grammar comes from a PUSHED commit.** `extension.toml` names this repository, the
-`editors/tree-sitter-abide` subdirectory and a revision — and Zed clones that revision rather than
-reading the working tree. So after changing the grammar, the `commit` in `extension.toml` has to be
-updated to a SHA that exists on the remote. A commit that is only local resolves to nothing, and the
-language then loads with the server working and no highlighting at all.
+**The grammar comes from a COMMIT, never from the working tree.** Zed builds it by `git fetch`ing the
+revision `extension.toml` names into `grammars/` and checking that out, so editing `grammar.js` and
+reinstalling does nothing on its own: the change has to be COMMITTED and the `commit` line moved to
+the new SHA. That is the whole loop, and skipping its second half is the failure that reads as the
+extension ignoring you.
+
+`repository` is a LOCAL PATH, which is what keeps that loop to one step — git treats a filesystem path
+as a remote like any other, so a local commit is enough and nothing has to be pushed before it can be
+tried. It is also the one line here that is not portable: swap it back to
+`https://github.com/briancray/abide`, with a commit that has been pushed, before installing this
+anywhere but the machine it was written on.
 
 ## Which `abide` it runs
 
