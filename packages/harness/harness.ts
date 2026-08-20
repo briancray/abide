@@ -33,6 +33,9 @@
 
 // `watch` because a recording reader IS an effect.
 import { type TemplateResult, watch } from 'abide'
+// `SourceFile` is a TYPE and is erased, so naming the compiler here costs the graph nothing: it is
+// what `?source` hands back, and `Example` below is the thing that holds two of them.
+import type { SourceFile } from 'abide/compiler'
 // `swallowed` for that reader: it ACTS on each observation rather than returning one, so the run
 // boundary that discards a swallowed signal's value comes too late — the push already happened.
 import { swallowed } from 'abide/runtime'
@@ -236,19 +239,27 @@ export interface Example {
      * make both (`props` and `<Name/>`), either, or — on `client` and `hydrate` — neither.
      */
     spells?: readonly string[]
-    source: string
+    /** The file the rung is ABOUT, text and name — what a `?source` import hands back. */
+    source: SourceFile
     /**
-     * The BROWSER half, when `source` is a server module — the file `view` below was compiled from.
+     * The SECOND file, when one file cannot show the thing on its own — the file `view` was compiled
+     * from.
      *
      * A rung that spans the seam is TWO files and always was; what changed is that the page now shows
      * both. An endpoint under `server/rpc/**` is the declaration a reader came for, and it is also the
      * half a browser never receives, so a page showing it alone documents a call nobody can make: the
      * reader is left to guess the spelling of the call site, which is the part they were about to write.
      *
+     * The seam is the usual reason and not the only one: a component whose prop is the PARENT's state
+     * has nothing to mount it with either, and the parent is the second file for the same reason the
+     * browser half is. Which is why the two panes are labelled with the FILENAMES the loader reported
+     * rather than with the two lanes — `server` / `client` was a true pair for every rung that had one
+     * right up until a rung had two files in the same lane.
+     *
      * ABSENT on the rungs whose demonstration IS `source` — a `.abide` file is one file in both lanes,
      * and repeating its text under a second label would claim a seam it does not cross.
      */
-    client?: string
+    client?: SourceFile
     /**
      * A compiled `.abide` default export, which is exactly this signature.
      *
@@ -438,7 +449,7 @@ export async function smokeBench(bench: Bench): Promise<void> {
 /**
  * A recording reader — what a template slot is, reduced to its essentials. It keeps what it SAW,
  * including a throw, and `seen.length` is how many times it WOKE. The wake count is the half of the
- * contract values alone cannot show: a cell that reports the right thing while waking readers
+ * contract values alone cannot show: a state that reports the right thing while waking readers
  * nothing moved for is the wrong implementation.
  */
 export interface Reader {
@@ -523,7 +534,7 @@ export function container(): HTMLElement {
  *
  * A host and the root that writes into it are two things with ONE lifetime, and only the host was
  * ever cleaned up. Sweeping drops the nodes, which is what a page looks like; the root goes on
- * subscribing to every cell the view read, so the next write to one of those still reaches a
+ * subscribing to every state the view read, so the next write to one of those still reaches a
  * component nobody can see — and a bench counting that write counts it once per copy left behind.
  * The parity arms on `/bench/compiler` read 2 DOM calls on their first run and 4 on their second for
  * exactly that reason, with the markup correct throughout and no test able to see it.
@@ -534,7 +545,7 @@ export function container(): HTMLElement {
  * what a teardown costs, or asserting that one happened.
  *
  * The `Mounted` list is per MOUNT, not per iteration, which is what makes it affordable where the
- * holder alone could not be: an arm mounts in `prepare` and writes cells in `run`.
+ * holder alone could not be: an arm mounts in `prepare` and writes states in `run`.
  */
 export function scratch(view: () => TemplateResult): HTMLElement {
     const host = container()

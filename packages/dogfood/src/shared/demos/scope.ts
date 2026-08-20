@@ -92,7 +92,7 @@ export default suite({
 
         {
             title: 'the argless form is per-caller too',
-            note: 'It has no args to key a cache by, so the CELL is what varies — a `GET(() => …)` with no arguments is exactly the leaky case.',
+            note: 'It has no args to key a cache by, so the STATE is what varies — a `GET(() => …)` with no arguments is exactly the leaky case.',
             run({ is }) {
                 const who = state('nobody')
                 let bodyRuns = 0
@@ -201,16 +201,16 @@ export default suite({
 
         {
             title: 'a caller going away WAKES whoever read its instance',
-            note: 'A memo is a facade over one instance per caller, so which instance a read gets is decided by the scope installed AT THE READ — and an async `isolate` holds its scope across an await, which is a window somebody else’s flush can land in. A reader that binds to a caller’s instance and is then handed nothing when that caller drops it is stuck on a dead node forever: `mark` cannot wake what is already DEAD, so the reader goes on serving the last value it saw while the cell under it moves. That is not a stale cache, it is a page that stops. So disposal wakes the readers, and the re-read binds to the instance the reader’s own scope answers with. Found on `/tests`, where every page-level memo froze the moment this suite’s case above held a scope open across one flush — 370 rows going on changing under a table that had stopped listening.',
+            note: 'A memo is a facade over one instance per caller, so which instance a read gets is decided by the scope installed AT THE READ — and an async `isolate` holds its scope across an await, which is a window somebody else’s flush can land in. A reader that binds to a caller’s instance and is then handed nothing when that caller drops it is stuck on a dead node forever: `mark` cannot wake what is already DEAD, so the reader goes on serving the last value it saw while the state under it moves. That is not a stale cache, it is a page that stops. So disposal wakes the readers, and the re-read binds to the instance the reader’s own scope answers with. Found on `/tests`, where every page-level memo froze the moment this suite’s case above held a scope open across one flush — 370 rows going on changing under a table that had stopped listening.',
             async run({ is }) {
-                const cell = state(0)
-                const doubled = memo(() => cell() * 2)
+                const held = state(0)
+                const doubled = memo(() => held() * 2)
                 let seen = -1
                 const stop = watch(() => {
                     seen = doubled()
                 })
                 await tick()
-                is('the reader starts where the cell is', seen, 0)
+                is('the reader starts where the state is', seen, 0)
 
                 let release = (): void => {}
                 const gate = new Promise<void>((resolve) => {
@@ -223,7 +223,7 @@ export default suite({
 
                 // The read that binds. Nothing inside the isolate touches this memo — the reader is
                 // simply flushed while that caller's scope is the one installed.
-                cell.set(1)
+                held.set(1)
                 await tick()
                 is('the reader saw the write made inside the window', seen, 2)
 
@@ -232,7 +232,7 @@ export default suite({
                 await tick()
 
                 // And the caller is gone. Without the wake this is still 2, forever.
-                cell.set(2)
+                held.set(2)
                 await tick()
                 is('the reader is still live after the caller dropped', seen, 4)
                 stop()
@@ -241,7 +241,7 @@ export default suite({
 
         {
             title: 'online() is an ambient that WAKES',
-            note: 'Connectivity changes without a new caller arriving, which is the same reason `route()` is reactive: a probe that only answered on the next ask would leave an offline banner up after the network came back, and take one down nobody had noticed go up. So it is a cell behind a call, fed by the two events the platform already fires — the browser’s own answer, which is a lower bound and says so. A server is always online in the only sense the question has: it is not asking whether the process can reach the internet, it is asking whether the caller can reach the thing it is talking to, and a server IS that thing.',
+            note: 'Connectivity changes without a new caller arriving, which is the same reason `route()` is reactive: a probe that only answered on the next ask would leave an offline banner up after the network came back, and take one down nobody had noticed go up. So it is a state behind a call, fed by the two events the platform already fires — the browser’s own answer, which is a lower bound and says so. A server is always online in the only sense the question has: it is not asking whether the process can reach the internet, it is asking whether the caller can reach the thing it is talking to, and a server IS that thing.',
             async run({ is }) {
                 let runs = 0
                 let seen = false
@@ -276,7 +276,7 @@ export default suite({
 
         {
             title: 'the two rungs, pressed — a handler AWAITS a memo rather than reading it',
-            note: 'The rungs on `/docs/memo` are the only place this capability is stated over a real request, and both answered 500 for as long as the page existed: `await basket()` reads the cell, and a handler is not a position anything re-runs, so a first load still in flight hands back `undefined` and the member access under it throws. `bun test` could not see it — nothing here drove the endpoints — and neither could the rung proofs, which mount a view rather than press its button. So the claim is made where the failure was: two presses through `respond`, which is what the wire does.',
+            note: 'The rungs on `/docs/memo` are the only place this capability is stated over a real request, and both answered 500 for as long as the page existed: `await basket()` reads the state, and a handler is not a position anything re-runs, so a first load still in flight hands back `undefined` and the member access under it throws. `bun test` could not see it — nothing here drove the endpoints — and neither could the rung proofs, which mount a view rather than press its button. So the claim is made where the failure was: two presses through `respond`, which is what the wire does.',
             async server({ is }) {
                 const first = await press(onePerCaller)
                 const second = await press(onePerCaller)
@@ -334,8 +334,8 @@ export default suite({
         {
             title: 'what the facade costs when there is no caller scope',
             note:
-                'The argless form has no args key, so scoping it means handing back a facade over “whichever cell belongs to the caller”. ' +
-                'The `{ global }` arm is the raw cell with no facade at all, so the gap between the first two arms IS the added cost, ' +
+                'The argless form has no args key, so scoping it means handing back a facade over “whichever state belongs to the caller”. ' +
+                'The `{ global }` arm is the raw state with no facade at all, so the gap between the first two arms IS the added cost, ' +
                 'and on a client the branch always goes the same way. The third arm is the floor both sit on: a memoised read by hand ' +
                 'is a closure handing back a captured value, so two arms of abide alone could move together and still read as free.',
             bench: {
@@ -346,7 +346,7 @@ export default suite({
                         run: (): unknown => SCOPED_READ(),
                     },
                     {
-                        label: 'memo({ global }) — the raw cell',
+                        label: 'memo({ global }) — the raw state',
                         run: (): unknown => GLOBAL_READ(),
                     },
                     {
@@ -400,5 +400,5 @@ export default suite({
 const SOURCE_CELL = state(1)
 const SCOPED_READ = memo(() => SOURCE_CELL() * 2)
 const GLOBAL_READ = memo(() => SOURCE_CELL() * 2, { global: true })
-const PLAIN_SOURCE = vanilla.cell(1)
+const PLAIN_SOURCE = vanilla.state(1)
 const PLAIN_READ = vanilla.derivedMemoised([PLAIN_SOURCE], () => PLAIN_SOURCE.get() * 2)

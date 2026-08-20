@@ -1,7 +1,7 @@
 // Sources are read and written by NAME.
 //
 // SPEC's word is `source` — `state`, `memo` or `channel`, anything whose call is a reactive read —
-// and `cell` is the narrower one: a source you can also `set` and `await`. This file deals in
+// and `state` is the narrower one: a source you can also `set` and `await`. This file deals in
 // sources, because what it rewrites is READS, and every source has those.
 //
 //   {source}          the identifier IS the expression — left alone, because `unwrap` in
@@ -64,7 +64,7 @@ const SOURCE_SURFACE = new Set([
  * Whether the token in front of a source is `await`, which HANDS THE SOURCE OVER rather than reading it.
  *
  * `then` is already on the surface above, so `x.then(…)` reaches the handle — and `await x` is the same
- * call written the way anybody writes it. Read as a value instead, the await resolves whatever the cell
+ * call written the way anybody writes it. Read as a value instead, the await resolves whatever the state
  * held at that instant, which for a load still in flight is `undefined`: `await rename({ id })` emitted
  * `await rename({ id })()` and a documented rung threw on `undefined.name` in a browser while every gate
  * in the repo stayed green.
@@ -95,19 +95,19 @@ function forHeadAt(tokens: Token[], at: number): 'plain' | 'await' | null {
 /**
  * Is this identifier the WHOLE iterable of a `for await` head?
  *
- * `for await` iterates the cell itself — a slot's async iterator is its transcript cursor, which is
+ * `for await` iterates the state itself — a slot's async iterator is its transcript cursor, which is
  * what makes a streamed read spell the same on both sides. Reading it first hands the loop the latest
  * CHUNK, a value and not iterable at all.
  *
- * The whole of it, because only then is the cell what the loop wants: `for await (const r of
- * rows.map(load))` iterates an array the cell HOLDS, so that one is an ordinary read and suppressing
+ * The whole of it, because only then is the state what the loop wants: `for await (const r of
+ * rows.map(load))` iterates an array the state HOLDS, so that one is an ordinary read and suppressing
  * it hands `.map` to the handle. A synchronous `for … of` is untouched for the same reason.
  *
  * Walked back to the head's own `(` because `of` is the only token the two loops share.
  */
 function asyncIterated(tokens: Token[], at: number, end: number): boolean {
     if (tokens[at - 1]?.kind !== SyntaxKind.OfKeyword) return false
-    // Nothing between the name and the head's `)`, or it is an expression the cell is only part of.
+    // Nothing between the name and the head's `)`, or it is an expression the state is only part of.
     if (tokens[end + 1]?.kind !== SyntaxKind.CloseParenToken) return false
     for (let i = at - 2; i >= 0; i--) {
         if ((tokens[i] as Token).kind !== SyntaxKind.OpenParenToken) continue
@@ -121,15 +121,20 @@ export const REACTIVE_CONSTRUCTORS = new Set(['state', 'memo', 'channel'])
 
 /**
  * Prop types that mean "this prop IS a source", read off the declared `Args` member — and which of
- * the two kinds each one is, so the emit reads one table rather than a special case beside it. A
+ * the three kinds each one is, so the emit reads one table rather than a special case beside it. A
  * `keyed` type's CALL is the source: a keyed memo selects a slot, a room channel selects a room.
+ *
+ * `refused` is the third because EVERY prop is a state already: `stateProps` decides off the value at
+ * runtime, so `note: State<string>` and `note: string` emit the same file, and naming the wrapper
+ * reads as a declaration that buys something. The three that name a VALUE are refused here rather
+ * than in a set beside this table, which is where the two drifted — a name added to one and not the
+ * other is a prop kind decided twice.
  */
-export const REACTIVE_TYPES = new Map<string, 'cell' | 'keyed'>([
-    ['State', 'cell'],
-    ['Memo', 'cell'],
-    ['MemoHandle', 'cell'],
-    ['Cell', 'cell'],
-    ['Channel', 'cell'],
+export const REACTIVE_TYPES = new Map<string, 'state' | 'keyed' | 'refused'>([
+    ['State', 'refused'],
+    ['Memo', 'refused'],
+    ['MemoHandle', 'refused'],
+    ['Channel', 'state'],
     ['KeyedMemo', 'keyed'],
     ['KeyedChannel', 'keyed'],
 ])
@@ -206,7 +211,7 @@ interface Frame {
 }
 
 const NO_END = Number.MAX_SAFE_INTEGER
-/** No hoisted locals — the default here, and what `emit` hands a `cell` position. Shared, never written. */
+/** No hoisted locals — the default here, and what `emit` hands a `state` position. Shared, never written. */
 export const NO_HOIST: ReadonlyMap<string, string> = new Map()
 
 interface Cursor {
@@ -240,9 +245,9 @@ function tokenize(source: string, from: number, to: number): Cursor {
  * the difference is a whole class of silent miscompiles. Every caller here — a declarator, a
  * parameter list, a `catch` — is a place a TYPE ANNOTATION is legal, and an annotated binding wears
  * the same colon a key does: `const showing: number[] = []` and `(showing: number[]) => …` both name
- * `showing` and both were skipped, so neither ever shadowed an outer cell of that name. What the
+ * `showing` and both were skipped, so neither ever shadowed an outer state of that name. What the
  * emitter then produced was `showing()` over a plain array — a call on the LOCAL, in a file where
- * nothing near it mentions a cell. It cost a page: a memo named for a local one function away
+ * nothing near it mentions a state. It cost a page: a memo named for a local one function away
  * compiled to `showing().push(row)` and took every control on `/bench` down with it.
  *
  * A key only exists inside a `{ }` or `[ ]`, so depth is what tells the two apart: deeper than the
@@ -255,7 +260,7 @@ function boundNames(cursor: Cursor, from: number, to: number, inType: Uint8Array
     const base = cursor.nesting[from] as number
     for (let i = from; i < to; i++) {
         // `const a: typeof n = n` names `a` and mentions `n`. Without this the annotation's `n` was
-        // collected as a binding, which shadowed the cell for the rest of the block. Required rather
+        // collected as a binding, which shadowed the state for the rest of the block. Required rather
         // than optional so a new call site cannot skip the mask and reintroduce that.
         if (inType[i] === 1) continue
         const token = cursor.tokens[i] as Token
@@ -277,7 +282,7 @@ function boundNames(cursor: Cursor, from: number, to: number, inType: Uint8Array
  * The same walk pass one makes over a `(…) =>`, so the two cannot disagree about a list. `emit`
  * answered it with `/([A-Za-z_$][\w$]*)/g`, which cannot see a type: every identifier in an
  * ANNOTATION came back as a binding, so `Row(props: { count: number })` shadowed an outer `count`
- * cell and the body's `{count + 1}` emitted an unthunked read — right value on the first render, and
+ * state and the body's `{count + 1}` emitted an unthunked read — right value on the first render, and
  * no wake after it.
  *
  * Parenthesised before tokenizing because `boundNames` reads DEPTH to tell a destructuring key from
@@ -323,36 +328,36 @@ function forStatementEnd(cursor: Cursor, declarerIndex: number, level: number): 
 }
 
 /**
- * Rewrite cell reads and writes across `[from, to)`. `reactive` is the set of names known to hold a
- * cell at entry; bindings introduced inside the region shadow them.
+ * Rewrite state reads and writes across `[from, to)`. `reactive` is the set of names known to hold a
+ * state at entry; bindings introduced inside the region shadow them.
  */
 export interface DesugarOptions {
     /** True for a template expression, false for a `<script>` body — see `inObjectLiteral`. */
     expression?: boolean
     /**
-     * Names whose CALL is the cell rather than the name — a keyed `memo`. `m(args)` selects the slot
+     * Names whose CALL is the state rather than the name — a keyed `memo`. `m(args)` selects the slot
      * and hands back its handle, so `m(args).pages` is a read of the handle exactly the way `x.pages`
      * is a read of `x`.
      */
     keyed: ReadonlySet<string>
     /**
-     * Leave the outermost read alone when it is the WHOLE region, so the cell itself is handed over.
+     * Leave the outermost read alone when it is the WHOLE region, so the state itself is handed over.
      * The caller decides: a child slot and a prop hold, a class toggle reads.
      *
      * WHICH held position it is decides exactly one case — a name that is the whole region AND has a
      * hoisted local under it:
      *
-     *   `slot`  the local wins. `unwrap` reads a slot's cell one step further, so the two spellings
+     *   `slot`  the local wins. `unwrap` reads a slot's state one step further, so the two spellings
      *           render the same thing and the local is one subscription rather than two.
-     *   `cell`  holding wins. A prop, a `bind:` and an `&ref` need the CELL, and a local is a value —
+     *   `state`  holding wins. A prop, a `bind:` and an `&ref` need the STATE, and a local is a value —
      *           a child handed one has nothing left to subscribe to, which is dead on the first write
      *           rather than merely coarser.
      *
      * Everything that is NOT the whole region — a member path, a call, an expression — takes the
-     * local in both, because reaching the member has already read the cell and the enclosing
+     * local in both, because reaching the member has already read the state and the enclosing
      * condition is already subscribed to it.
      */
-    hold?: 'slot' | 'cell' | undefined
+    hold?: 'slot' | 'state' | undefined
     /**
      * Reads already performed into a local, by `key`. A read found here becomes that local instead of
      * calling again — which is what makes narrowing work: TypeScript narrows a `const`, and never a
@@ -378,7 +383,7 @@ export interface DesugarOptions {
 /**
  * Where `names` are CALLED as statements in `source` — not inside any function body.
  *
- * `watch` is what needs this and a cell does not: a cell is recognised by its BINDING, and an effect
+ * `watch` is what needs this and a state does not: a state is recognised by its BINDING, and an effect
  * has none to recognise. What separates `watch(…)` at module scope from `const make = () => watch(…)`
  * beside it is only whose body the call sits in, which is the question `functionBodies` already
  * answers for the `once` region — so this is that answer handed out rather than a second rule that
@@ -423,7 +428,7 @@ export function desugar(
     const { tokens, nesting } = cursor
     // A type carries no expressions, so nothing in one is a read, a write, or a binding. Computed
     // ONCE for the region and consulted by both passes: pass one would otherwise collect the `n` in
-    // `const a: typeof n = n` as a bound name and shadow the cell for the rest of the block, and
+    // `const a: typeof n = n` as a bound name and shadow the state for the rest of the block, and
     // pass two would rewrite `type A = typeof n` into a call.
     const regions = typeRegions(tokens, nesting, expression)
     const inType = regions.marks
@@ -461,7 +466,7 @@ export function desugar(
             // Back over a RETURN TYPE first. `(x: T): R => …` puts the annotation between the
             // parameters and the arrow, so the token before `=>` is the type's last one — read
             // directly it bound the TYPE's name and the parameters bound nothing, which left every
-            // annotated arrow parameter shadowing an outer cell of that name.
+            // annotated arrow parameter shadowing an outer state of that name.
             let at = i - 1
             while (at >= 0 && (inType[at] === 1 || (tokens[at] as Token).kind === SyntaxKind.ColonToken)) {
                 at--
@@ -482,7 +487,7 @@ export function desugar(
         // `catch (e)` binds its PARAMETER and nothing else. Read as a declarer it bound every
         // identifier in the block after it — a declarer's scan stops at the `=` that starts its
         // initialiser, and a catch has none, so the scan ran to the end of the block and every name
-        // inside became a binding. A cell written in a `catch` was then left alone as though it had
+        // inside became a binding. A state written in a `catch` was then left alone as though it had
         // been shadowed, which compiles to an assignment to a `const`.
         if (token.kind === SyntaxKind.CatchKeyword) {
             // A bare `catch { }` binds nothing, and so does anything that is not the shape below.
@@ -519,7 +524,7 @@ export function desugar(
             }
             const names = boundNames(cursor, i + 1, end, inType)
 
-            // `const count = state(0)` DECLARES the cell rather than hiding one, so it must not
+            // `const count = state(0)` DECLARES the state rather than hiding one, so it must not
             // shadow: treating it like any other binding makes the name reactive everywhere except
             // the body it was introduced in, which is every use of it. `state.shared(key, …)` is
             // the same declaration with an address in front of the value.
@@ -531,14 +536,14 @@ export function desugar(
             //
             // The type arguments are STEPPED OVER rather than required to be absent: `state<Kind>('a')`
             // is the same declaration as `state('a')`, and reading it as a binding made every use of
-            // the name compile to the cell itself — so `kind !== 'all'` compared a function to a
+            // the name compile to the state itself — so `kind !== 'all'` compared a function to a
             // string and was true forever, with nothing anywhere saying why.
             const maker = tokens[end + 1]?.text ?? ''
             // The same question over the text the EMIT writes rather than the text an author does.
             //
             // A `<script>` body does not reach this file as it was written: `bindProps` has already
             // spliced its own two lines into the front of it — `const { note: $note, pick } = args`,
-            // and `const note = propCell($note)` under it. Both BIND names this file has been told
+            // and `const note = propState($note)` under it. Both BIND names this file has been told
             // are reactive, so read as ordinary bindings they shadow the very props they create, for
             // the whole body. Every prop read in a setup was then left as the bare source:
             // `rows.length` was the arity of a function, `for (const r of rows)` iterated one, and a
@@ -548,7 +553,7 @@ export function desugar(
             // correctly there and this went unnoticed — the two halves of one file disagreed about
             // what a prop is.
             const declares =
-                ((REACTIVE_CONSTRUCTORS.has(maker) || maker === 'propCell') && opensCall(cursor, end + 2)) ||
+                ((REACTIVE_CONSTRUCTORS.has(maker) || maker === 'propState') && opensCall(cursor, end + 2)) ||
                 (maker === 'state' &&
                     tokens[end + 2]?.kind === SyntaxKind.DotToken &&
                     tokens[end + 3]?.text === 'shared' &&
@@ -586,7 +591,7 @@ export function desugar(
             // Collected separately for a second reason as well: `boundNames` reads DEPTH to tell a
             // type annotation from a destructuring key, and the parameters sit a level deeper than
             // the name. Spanning both, every ANNOTATED parameter read as a key and bound nothing —
-            // `function f(count: number)` left `count` naming the outer cell and the body compiled
+            // `function f(count: number)` left `count` naming the outer state and the body compiled
             // to `count()` over a plain number.
             bind(boundNames(cursor, i + 1, open, inType), i, level, false)
             if (close < 0) continue
@@ -595,7 +600,7 @@ export function desugar(
             // between the parens and the block, so a depth rule kills the frame before the body the
             // parameters name. Sharing the name's frame instead left every parameter shadowing for
             // the rest of the FILE — that frame opens at the enclosing level and so never retires —
-            // and a cell read anywhere after the function came out as a bare identifier.
+            // and a state read anywhere after the function came out as a bare identifier.
             let brace = close + 1
             // The first `{` that is not part of a RETURN TYPE: `function f(): { a: number } { … }`
             // has two, and the body is the second.
@@ -644,9 +649,9 @@ export function desugar(
         const previous = tokens[i - 1]
         const next = tokens[i + 1]
 
-        // A keyed memo: the CALL is the cell, so `m(args)` is read wherever `x` would be. The `()`
+        // A keyed memo: the CALL is the state, so `m(args)` is read wherever `x` would be. The `()`
         // goes after the call's own closing paren, and everything the identifier rule says applies
-        // unchanged — callee position is an explicit read, the cell surface is reserved, and the
+        // unchanged — callee position is an explicit read, the state surface is reserved, and the
         // whole region held alone hands the handle over.
         if (
             keyedNames.has(name) &&
@@ -670,12 +675,12 @@ export function desugar(
                 reads.push({ key, start: token.start, end, keyed: true })
                 const local = hoisted.get(key)
                 // Held alone as the whole region, the handle itself is what the caller wants — and in
-                // a `cell` position that beats a hoisted local, which is a VALUE. See `hold`.
+                // a `state` position that beats a hoisted local, which is a VALUE. See `hold`.
                 const wholeRegion = token.start === (tokens[0] as Token).start && after === undefined
                 const handedOver =
                     options.hold !== undefined &&
                     wholeRegion &&
-                    (local === undefined || options.hold === 'cell')
+                    (local === undefined || options.hold === 'state')
                 if (handedOver) {
                     // Nothing to write: the call already spells the handle.
                 } else if (local !== undefined) {
@@ -703,19 +708,19 @@ export function desugar(
         // `await source` — the await IS the read. See `awaited`.
         if (awaited(previous)) continue
         // `{ source: … }` — an object literal key. NOT every `:`: a ternary's consequent is followed
-        // by one too, and skipping `b` in `a ? b : c` left the cell unread — rendered as its own
+        // by one too, and skipping `b` in `a ? b : c` left the state unread — rendered as its own
         // function in a slot, and unconditionally truthy in a condition, so the true arm always won.
         if (next?.kind === SyntaxKind.ColonToken && !closingColons.has(i + 1)) continue
         // A non-null assertion is punctuation on the NAME, not part of the access after it, so step
         // over it before asking what that access is. Reading `tokens[i + 1]` alone, `source!()` and
         // `source!.set(v)` both fell through to the read branch and emitted `source()!()` and
-        // `source()!.set(v)` — the CELL called, and then its VALUE called or written to.
+        // `source()!.set(v)` — the STATE called, and then its VALUE called or written to.
         let accessAt = i + 1
         if (tokens[accessAt]?.kind === SyntaxKind.ExclamationToken) accessAt++
         const access = tokens[accessAt]
 
         // `source()` and `source?.()` — the author wrote the read. WITH ARGUMENTS it is not one: a
-        // cell read takes none, so the arguments belong to whatever the cell HOLDS, and the read has
+        // state read takes none, so the arguments belong to whatever the state HOLDS, and the read has
         // to be emitted for them to reach it. That is what carries a CALLBACK prop through a lane
         // where no type said it was a callback — `onpick(row.id)` becomes `onpick()(row.id)`.
         // Keyed names never reach here: `m(args)` selects a slot and is answered above.
@@ -772,7 +777,12 @@ export function desugar(
             edits.push({
                 start,
                 end,
-                replacement: `${name}.set(${name}.peek() ${operator} 1)`,
+                // `!` because `count++` IS the author saying a value is there — see the note on
+                // `peek` in `#shared/internal/graph.ts`. The assertion changes no behaviour: a state
+                // with nothing retained arithmetics to `NaN` with it or without it. What it buys is
+                // that a HAND-WRITTEN `peek()` keeps the honest `T | undefined` while the sugar the
+                // compiler writes does not have to be narrowed at every site that uses it.
+                replacement: `${name}.set(${name}.peek()! ${operator} 1)`,
             })
             if (update === next) i++
             continue
@@ -791,15 +801,20 @@ export function desugar(
             const rhs = assignmentEnd(cursor, i + 2, level, to)
             const opener =
                 compound !== undefined
-                    ? `${name}.set(${name}.peek() ${compound} `
+                    ? // `!` for the same reason `count++` takes one, just above.
+                      `${name}.set(${name}.peek()! ${compound} `
                     : logical !== undefined
                       ? // Short-circuiting: the write must not happen at all when the test fails, so
                         // the operator survives into the emitted code instead of being flattened.
+                        //
+                        // NO `!` here, unlike the arithmetic forms: `x ??= v` is ABOUT the absence, so
+                        // asserting it away is asserting away the question. `&&=` and `||=` are the
+                        // same operator family and read the same value, so they keep it too.
                         `void (${name}.peek() ${logical} ${name}.set(`
                       : `${name}.set(`
             // The TARGET named on its own right-hand side is the same claim the opener above makes by
             // peeking, and plain `=` was the one spelling of the three that missed it: `count = count
-            // + 1` inside a `watch` subscribed the effect to the cell it writes, so every OTHER
+            // + 1` inside a `watch` subscribed the effect to the state it writes, so every OTHER
             // writer's write woke it — the same value, one extra run, and nothing about the output
             // moves. `++` and `+=` were right because their read is synthesised rather than walked.
             //
@@ -824,29 +839,40 @@ export function desugar(
             inObjectLiteral(cursor.tokens, cursor.nesting, i, expression)
         reads.push({ key: name, start: token.start, end: token.end, keyed: false })
         const local = hoisted.get(name)
-        // Held alone as the whole region, the cell itself is what the caller wants — `bind:`, `&ref`
-        // and a component prop need the cell and not its value, which is why a `cell` position holds
+        // Held alone as the whole region, the state itself is what the caller wants — `bind:`, `&ref`
+        // and a component prop need the state and not its value, which is why a `state` position holds
         // even over a hoisted local. A `slot` takes the local: the enclosing condition already
-        // subscribed to it and `unwrap` reads a slot's cell one step further either way.
+        // subscribed to it and `unwrap` reads a slot's state one step further either way.
         //
         // This is what `hold` says it does, and the keyed branch has asked it since it was written.
         // The plain branch never did: `code`'s `IDENTIFIER.test` fast path in `emit.ts` was standing
         // in, and that tests the raw SOURCE, so a region that is one identifier plus ANYTHING —
         // a comment, a paren, a `!` — fell through to a read. `<Child value={count /* note */}/>`
-        // handed the child a number, `cellProps` made a fresh `state()` out of it, and no write on
+        // handed the child a number, `stateProps` made a fresh `state()` out of it, and no write on
         // either side ever reached the other. Correct on the first paint, dead after it.
         if (
             options.hold !== undefined &&
-            (local === undefined || options.hold === 'cell') &&
+            (local === undefined || options.hold === 'state') &&
             namesWholeRegion(tokens, i, inType)
         ) {
             continue
         }
-        // The same hold the keyed branch takes, for the same reason: a cell is an async iterable and
-        // `for await` wants the cell.
+        // The same hold the keyed branch takes, for the same reason: a state is an async iterable and
+        // `for await` wants the state.
         if (asyncIterated(tokens, i, i)) continue
-        const peeking = selfReads.has(i) || (insideFunction !== null && insideFunction[i] === 0)
-        const read = local ?? (peeking ? `${name}.peek()` : `${name}()`)
+        // TWO reasons to peek, and they want OPPOSITE answers about the absence, so they cannot share
+        // a flag. They did, and the setup read's honesty is what leaked onto the write.
+        //
+        // A SELF-READ is the read half of a WRITE — `count = count + 1`, which `+=` is sugar for — so
+        // it asserts for the same reason `++` does, just above: naming the target on its own
+        // right-hand side is the author saying a value is there.
+        //
+        // A SETUP read is the other one and stays honest. A `<script>` runs ONCE, so a state with
+        // nothing retained has genuinely nothing to hand back and there is no second run to recover
+        // on — which is the whole of what `once` is for. See the note on that option.
+        const selfRead = selfReads.has(i)
+        const setupRead = insideFunction !== null && insideFunction[i] === 0
+        const read = local ?? (selfRead ? `${name}.peek()!` : setupRead ? `${name}.peek()` : `${name}()`)
         edits.push({
             start: token.start,
             end: token.end,
@@ -882,7 +908,7 @@ function opensCall(cursor: Cursor, at: number): boolean {
 /**
  * Is the name at `at` the whole VALUE of this region — the question `hold` actually asks?
  *
- * Not "the only token": a wrapper that cannot change WHICH cell this is has to come off first.
+ * Not "the only token": a wrapper that cannot change WHICH state this is has to come off first.
  * Balanced parens around it, a trailing `!`, and an `as T` / `satisfies T` tail are all punctuation
  * on the name, and each of them used to turn a hand-over into a read. `{count!}` is the one that
  * bites — someone silences a strict-null complaint on a prop and the binding dies, because

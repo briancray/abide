@@ -64,7 +64,7 @@ test('every use case has its source, and nothing has source without being one', 
         for (const file of files) {
             // Non-empty as its own claim: the text arrives through `?source`, which the loader inlines,
             // so a loader change turns every pane into an empty `<pre>` while the page still renders.
-            expect(file.source.length, `${name}/${file.label} is empty`).toBeGreaterThan(50)
+            expect(file.text.length, `${name}/${file.label} is empty`).toBeGreaterThan(50)
         }
         // The VIEW first, because it is what the reader just watched run.
         expect(files[0]?.label, `${name} does not show its view first`).toBe(

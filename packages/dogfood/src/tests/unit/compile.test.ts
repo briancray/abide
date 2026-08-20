@@ -19,7 +19,7 @@
 // change, and the property holds anyway.
 //
 // What it CANNOT see, stated so the next reader does not trust it further than it goes: a break that
-// emits valid JavaScript meaning the wrong thing. `() => { a: cell }` is an arrow with a block body
+// emits valid JavaScript meaning the wrong thing. `() => { a: state }` is an arrow with a block body
 // and a labelled statement — it parses, and renders nothing; `a ?? b === 'x' ? … : …` parses, and
 // takes the wrong branch. Both have happened here. Both are pinned by exact-emit assertions in
 // `#shared/demos/compiler.ts`, which is where a claim about MEANING belongs; the entries below for those
@@ -34,7 +34,7 @@ function parses(code: string): void {
     new Bun.Transpiler({ loader: 'ts' }).transformSync(code)
 }
 
-const CELLS = '<script>const n = state(0)\nconst m = state("a")\nconst on = state(true)</script>'
+const STATES = '<script>const n = state(0)\nconst m = state("a")\nconst on = state(true)</script>'
 
 /**
  * Two statements on two lines, with no semicolon between them — which is the only thing that decides
@@ -75,45 +75,45 @@ const SOURCES: [string, string][] = [
     // semicolon — which is how this codebase is written — the token that says which statement the
     // operator is in is the line break, so every row here is a pair of statements on two lines.
     //
-    // `n++` above a cell write emitted `nc.set(c.peek() + 1) = 2`: the postfix was re-read as a prefix
+    // `n++` above a state write emitted `nc.set(c.peek() + 1) = 2`: the postfix was re-read as a prefix
     // on the name below it. The mirror shape emitted `++n()`, reading a prefix as the line above's
     // postfix and then adding a READ to the name it had just refused to increment. Both parse as
     // nothing, out of files that type-check.
-    ['a plain postfix above a cell write', updating('k++', 'n = 2')],
-    ['a cell postfix above a cell write', updating('n++', 'n = 2')],
-    ['a cell prefix below a plain write', updating('k = 1', '++n')],
-    ['a plain postfix above a cell prefix', updating('k++', '++n')],
-    ['a member postfix above a cell write', updating('o.k++', 'n = 2')],
-    ['a cell postfix above a plain write', updating('n++', 'k = 2')],
-    ['a cell postfix above a cell prefix', updating('n++', '++n')],
-    ['two cell prefixes', updating('++n', '++n')],
+    ['a plain postfix above a state write', updating('k++', 'n = 2')],
+    ['a state postfix above a state write', updating('n++', 'n = 2')],
+    ['a state prefix below a plain write', updating('k = 1', '++n')],
+    ['a plain postfix above a state prefix', updating('k++', '++n')],
+    ['a member postfix above a state write', updating('o.k++', 'n = 2')],
+    ['a state postfix above a plain write', updating('n++', 'k = 2')],
+    ['a state postfix above a state prefix', updating('n++', '++n')],
+    ['two state prefixes', updating('++n', '++n')],
 
     // Ternaries, which share the `:` token with an object key and with an annotation.
-    ['a ternary in a slot', `${CELLS}<p>{on ? n : m}</p>`],
-    ['a ternary in an attribute', `${CELLS}<p title={on ? n : m}>x</p>`],
-    ['an object literal in a ternary arm', `${CELLS}<p>{on ? { k: n } : { k: m }}</p>`],
-    ['a ternary inside an object literal', `${CELLS}<p>{ { k: on ? n : m } }</p>`],
-    ['a nested ternary', `${CELLS}<p>{on ? n : on ? m : n}</p>`],
+    ['a ternary in a slot', `${STATES}<p>{on ? n : m}</p>`],
+    ['a ternary in an attribute', `${STATES}<p title={on ? n : m}>x</p>`],
+    ['an object literal in a ternary arm', `${STATES}<p>{on ? { k: n } : { k: m }}</p>`],
+    ['a ternary inside an object literal', `${STATES}<p>{ { k: on ? n : m } }</p>`],
+    ['a nested ternary', `${STATES}<p>{on ? n : on ? m : n}</p>`],
 
     // An object literal reaching an arrow BODY, where `{` opens a block unless it is parenthesised.
-    ['an object literal in a slot', `${CELLS}<p>{ {a: n} }</p>`],
-    ['an object literal in an attribute', `${CELLS}<p title={{ a: n }}>x</p>`],
-    ['an object literal in a spread', `${CELLS}<div {...{ a: n }}>s</div>`],
+    ['an object literal in a slot', `${STATES}<p>{ {a: n} }</p>`],
+    ['an object literal in an attribute', `${STATES}<p title={{ a: n }}>x</p>`],
+    ['an object literal in a spread', `${STATES}<div {...{ a: n }}>s</div>`],
 
     // Operands pasted into a comparison or a ternary the emit writes for itself.
-    ['a loose {#if} condition', `${CELLS}{#if n ?? 0}<b>y</b>{:else}<i>z</i>{/if}`],
-    ['a loose {#switch} subject', `${CELLS}{#switch n ?? 0}{:case 0}a{:default}b{/switch}`],
-    ['a loose {:case} value', `${CELLS}{#switch n}{:case on ? 1 : 2}a{:default}b{/switch}`],
-    ['an {:else if} chain over one cell', `${CELLS}{#if n > 1}a{:else if n > 2}b{:else}c{/if}`],
+    ['a loose {#if} condition', `${STATES}{#if n ?? 0}<b>y</b>{:else}<i>z</i>{/if}`],
+    ['a loose {#switch} subject', `${STATES}{#switch n ?? 0}{:case 0}a{:default}b{/switch}`],
+    ['a loose {:case} value', `${STATES}{#switch n}{:case on ? 1 : 2}a{:default}b{/switch}`],
+    ['an {:else if} chain over one state', `${STATES}{#if n > 1}a{:else if n > 2}b{:else}c{/if}`],
 
     // Whitespace, which shifts an expression's recorded position without shifting its text.
-    ['a doubled space in a hole', `${CELLS}<p>{ n * 100 }</p>`],
-    ['a doubled space in a block header', `${CELLS}{#if  n > 10}<b>y</b>{/if}`],
+    ['a doubled space in a hole', `${STATES}<p>{ n * 100 }</p>`],
+    ['a doubled space in a block header', `${STATES}{#if  n > 10}<b>y</b>{/if}`],
     ['a doubled space in a {#for} header', '{#for  x of xs by  x.id}<li>{x}</li>{/for}'],
 
     // Blocks and components, which emit closures around bodies that emit closures.
     ['a block inside a row', '{#for row of rows}<li>{#if row.on}<b>y</b>{/if}</li>{/for}'],
-    ['a stream with a failure arm', `${CELLS}{#for await x of n}<li>{x}</li>{:catch e}<i>{e}</i>{/for}`],
+    ['a stream with a failure arm', `${STATES}{#for await x of n}<li>{x}</li>{:catch e}<i>{e}</i>{/for}`],
     ['a boundary around a block', '{#try}{#if risky()}<b>y</b>{/if}{:catch e}<i>bad</i>{/try}'],
     [
         'an inline component with a slot',
@@ -121,7 +121,7 @@ const SOURCES: [string, string][] = [
     ],
     [
         'a deferring chain over the probes',
-        `${CELLS}{#if p.pending()}w{:else if p.error()}<b>{p.error()}</b>{:else}<i>{p}</i>{/if}`,
+        `${STATES}{#if p.pending()}w{:else if p.error()}<b>{p.error()}</b>{:else}<i>{p}</i>{/if}`,
     ],
 
     // Attribute vocabulary, each of which emits its own closure shape.
@@ -130,8 +130,8 @@ const SOURCES: [string, string][] = [
         'a bind group',
         `<script>const many = state<string[]>([])</script><input type="checkbox" value="x" bind:group={many}/>`,
     ],
-    ['class and style toggles', `${CELLS}<b class="c" class:big={on} style:width={n}>x</b>`],
-    ['an interpolated attribute', `${CELLS}<b class="row {n} end">x</b>`],
+    ['class and style toggles', `${STATES}<b class="c" class:big={on} style:width={n}>x</b>`],
+    ['an interpolated attribute', `${STATES}<b class="row {n} end">x</b>`],
 ]
 
 test('every emitted module parses', () => {

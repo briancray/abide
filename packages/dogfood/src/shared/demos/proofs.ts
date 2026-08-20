@@ -85,7 +85,11 @@ const SETTLES_WITHIN_MS = 5_000
 async function settles(host: HTMLElement, target: string): Promise<string> {
     let held = strip(host.innerHTML)
     let still = 0
-    for (let waited = 0; held !== target && waited < SETTLES_WITHIN_MS && still < HOLDS_STILL_MS; waited += SAMPLE_EVERY_MS) {
+    for (
+        let waited = 0;
+        held !== target && waited < SETTLES_WITHIN_MS && still < HOLDS_STILL_MS;
+        waited += SAMPLE_EVERY_MS
+    ) {
         await sleep(SAMPLE_EVERY_MS)
         const now = strip(host.innerHTML)
         still = now === held ? still + SAMPLE_EVERY_MS : 0
@@ -119,7 +123,7 @@ const DRAINS_A_STREAM = /\{#for\s+await\b/
  * One case per rung, built once.
  *
  * A slot calls `proofsOf` on every pass, and a `Case` rebuilt per pass is a fresh identity handed to a
- * prop cell — which wakes the component's watch on every render for a value that never changed. Keyed
+ * prop state — which wakes the component's watch on every render for a value that never changed. Keyed
  * on the rung itself so nothing has to name it, and weak so a ladder that is navigated away from is
  * collectable.
  */
@@ -130,7 +134,7 @@ const BUILT = new WeakMap<Example, Case | null>()
  *
  * `null` is nearly unreachable now and is kept for the one rung it is still about: `Example.view` is
  * optional, and `dogfood/test/docs.test.ts` requires one on every rung a reader can reach except
- * `template`'s prop-written-back, whose cell belongs to a parent it has none of. A case that passed by
+ * `template`'s prop-written-back, whose state belongs to a parent it has none of. A case that passed by
  * doing nothing would be the wrong answer there.
  *
  * WHAT THE THREE CLAIMS MEAN FOR A RUNG THAT FETCHES. The seam-crossing rungs mount a browser half
@@ -195,7 +199,7 @@ function build(rung: Example): Case | null {
             // The removal is the one with an exception, and `DRAINS_A_STREAM` is it. Asserted rather
             // than skipped in both directions: the day a seed makes a drained stream adopt, this goes
             // red and the spec gets read again.
-            if (DRAINS_A_STREAM.test(rung.source)) {
+            if (DRAINS_A_STREAM.test(rung.source.text)) {
                 is('the drained rows are dropped, which is the known limit', work.remove > 0, true)
             } else is('nothing removed', work.remove, 0)
             served.remove()

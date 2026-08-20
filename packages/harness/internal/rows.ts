@@ -1,4 +1,4 @@
-// A bench, as rows: every benched case with a cell per number, and nothing about how it looks.
+// A bench, as rows: every benched case with a state per number, and nothing about how it looks.
 //
 // This is the MEASURING half. What comes out of `arm.run()` is a number; what a page does with it is a
 // row in a grid, and the two are kept apart here rather than in whichever app is drawing — which is
@@ -217,7 +217,7 @@ function armRow(label: string, subject: boolean, floor: boolean): ArmRow {
  * on the page would be measuring a different program.
  *
  * The whole surface is two calls, `list` and `run`, and both are `structuredClone`-able across the
- * protocol boundary: a `BenchRow` holds cells and closures and none of that survives the trip, so
+ * protocol boundary: a `BenchRow` holds states and closures and none of that survives the trip, so
  * what crosses is the names.
  */
 export function exposeBench(rows: BenchRow[]): void {
@@ -247,7 +247,7 @@ export function exposeBench(rows: BenchRow[]): void {
  * the spec is the only thing that makes the contract one declaration instead of three.
  */
 export interface BenchHandle {
-    /** Names only — a `BenchRow`'s cells and closures do not survive the trip. */
+    /** Names only — a `BenchRow`'s states and closures do not survive the trip. */
     list: () => { suite: string; title: string; kind: string; arms: string[] }[]
     /** One arm, `ops` times, untimed. See `BenchRow.profile`. */
     run: (title: string, label: string, ops: number) => Promise<void>
@@ -377,9 +377,7 @@ async function runTime(
         )
         // Only a RIVAL has a verdict. A slice is part of the subject, so there is no side for it to
         // have landed on and a colour would be inventing one — see `ArmRow.slice`.
-        row.tailVerdict.set(
-            row.floor || row.subject || row.slice ? '' : verdict(abide.p50, timing.p50),
-        )
+        row.tailVerdict.set(row.floor || row.subject || row.slice ? '' : verdict(abide.p50, timing.p50))
         // Median ÷ best: 1 is a perfectly quiet run, and above the band the passes disagreed. Taken
         // here rather than carried on `Timing`, where it was a third field to hold consistent with
         // the two it is made of.

@@ -1,7 +1,7 @@
 // Routing — which page a URL names, and what that page may ask about the caller that asked for it.
 //
 // `route()` is an ambient like `request()`, but it is the one that has to be REACTIVE: a client
-// moves without a new caller arriving. So it is a facade over four small cells rather than one
+// moves without a new caller arriving. So it is a facade over four small states rather than one
 // record, and the difference is the whole of the last two cases here — a navigation from `/users/1`
 // to `/users/2` wakes a reader of `params` and leaves a reader of `name` asleep, which is what makes
 // it a republish rather than a remount. A record rebuilt per navigation cannot do that, and the
@@ -309,7 +309,7 @@ export default suite({
 
         {
             title: 'a query-only navigation moves the URL and nothing else',
-            note: 'Four cells, not one record: `?tab=b` writes `url`, and the params object handed back is the one already held — so a reader comparing identities is right to stay asleep.',
+            note: 'Four states, not one record: `?tab=b` writes `url`, and the params object handed back is the one already held — so a reader comparing identities is right to stay asleep.',
             async run({ is }) {
                 await withTable(TABLE, async () => {
                     await navigate('/users/1?tab=a')
@@ -608,11 +608,7 @@ export default suite({
                     control('nav-keepscroll', 'keepScroll', 'keep', { keepScroll: true }),
                     control('nav-totop', 'plain (scrolls to top)', 'top'),
                 )
-                host.append(
-                    links,
-                    options,
-                    el('p', 'text-xs text-pencil', 'The address bar is the state.'),
-                )
+                host.append(links, options, el('p', 'text-xs text-pencil', 'The address bar is the state.'))
 
                 // An ordinary effect over the ambient: the log wakes exactly when the page does.
                 watch(() => {
@@ -625,7 +621,7 @@ export default suite({
         },
 
         {
-            title: 'what a navigation WAKES — one route record against four cells',
+            title: 'what a navigation WAKES — one route record against four states',
             note: 'The vanilla arm is the shape everyone reaches for: one `{ name, params, url }` rebuilt per navigation and one notify. It is correct, and every reader wakes for every navigation. The claim here is a count, because the values on screen are identical either way.',
             bench: {
                 kind: 'wake',

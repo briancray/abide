@@ -8,7 +8,7 @@
 // `#shared/internal/slots.ts`.
 //
 import { isSource } from './internal/BRANDS.ts'
-import { type Cell, derive, isPending, state } from './internal/graph.ts'
+import { type State, derive, isPending, state } from './internal/graph.ts'
 import { isThenable } from './internal/probes.ts'
 
 const TEMPLATE_BRAND = Symbol.for('abide.template')
@@ -43,10 +43,10 @@ export function isTemplate(value: unknown): value is TemplateResult {
  * keeps the property every other line of it has — every name in scope was imported or declared by
  * the author — and so the same text type-checks as ordinary TypeScript.
  *
- * The destructuring pattern is also what NAMES the prop cells, which is why the spelling is a
- * binding rather than an `args` object: `{ note: text }` renames the cell, and a rule that read the
+ * The destructuring pattern is also what NAMES the prop states, which is why the spelling is a
+ * binding rather than an `args` object: `{ note: text }` renames the state, and a rule that read the
  * declared type alone would keep calling it `note` and leave `text` a plain value. Every prop is a
- * cell — see `Props` — so the declared type decides only whether `bind:` may write it.
+ * state — see `Props` — so the declared type decides only whether `bind:` may write it.
  */
 export function props<T = Record<string, unknown>>(): T {
     throw new Error(
@@ -162,7 +162,7 @@ export class Awaited {
 
 /**
  * Generic in the operand so the settled arm gets a REAL type: the value is what the promise resolves to, and a
- * cell resolves to what it loaded. The cast is the price of storing every block in one field — a
+ * state resolves to what it loaded. The cast is the price of storing every block in one field — a
  * `Branches<T>` is not assignable to `Branches<unknown>` under contravariance, and the alternative is
  * making the marker generic all the way through two substrates for no gain at the use site.
  */
@@ -174,12 +174,12 @@ export function awaited<T>(value: PromiseLike<T> | T, branches: Branches<T>): Aw
 //
 // A component call, CARRIED rather than made. `<Card n={r.n}/>` used to emit `Card({ n: r.n })`, so
 // the call happened wherever the enclosing slot thunk ran — and a thunk re-runs for anything the
-// parent reads, so every re-render built a new `Card` and every `state()` inside it made a new cell.
+// parent reads, so every re-render built a new `Card` and every `state()` inside it made a new state.
 // A keyed list gaining one row rebuilt every instance in it, produced output identical to what was
 // already on screen, and discarded whatever the user had typed into any of them.
 //
 // So the call is a marker, exactly as a deferring block and `{#try}` are: the CLIENT holds the instance at
-// the part that shows it and writes the props into cells, and the SERVER — a snapshot, with no later
+// the part that shows it and writes the props into states, and the SERVER — a snapshot, with no later
 // pass to carry — simply calls it. One more arm on a switch that already has five. See
 // docs/COMPONENTS.md.
 
@@ -192,59 +192,62 @@ export class Component {
 
 /**
  * What a component's `<script>` receives: the authored prop type, with every prop that is DATA
- * behind a cell.
+ * behind a state.
  *
  * The author writes `props<{ n: number }>()` and means "this component is given a number". What the
- * position holding the instance hands over is a cell it writes on every pass, so `{n}` re-renders on
+ * position holding the instance hands over is a state it writes on every pass, so `{n}` re-renders on
  * a new `n` for the same reason `{own}` re-renders on a write — and `{n + 1}` compiles to `n() + 1`,
- * because a prop name is a cell like every other name in scope.
+ * because a prop name is a state like every other name in scope.
  *
  * Two things pass through untouched — see `passedThrough`, which is the value-level spelling of the
  * same rule and the one both substrates test.
  *
- * `Cells` is the compiler's OWN answer to the same question, and it is here because the two ways of
+ * `States` is the compiler's OWN answer to the same question, and it is here because the two ways of
  * asking it disagree at exactly one place. The emit decides what a prop is SYNTACTICALLY, off the
- * member's declaration text, and wraps every prop it calls data in a `propCell`. This type decides it
+ * member's declaration text, and wraps every prop it calls data in a `propState`. This type decides it
  * with the checker, which sees through a name the emit cannot — so `identity?: Identity<unknown>`,
  * where `Identity` is an imported alias for a function type, was wrapped by one and passed through by
- * the other, and the local was a cell the type said was callable. Neither rule can be made to see what
+ * the other, and the local was a state the type said was callable. Neither rule can be made to see what
  * the other does, so the emit's answer is carried across rather than re-derived: it names the members
  * it wrapped, and this stops asking about those.
  *
  * A hand-written `.ts` component names none, which is the default and the rule as it always was.
+ *
+ * THREE arms, where there were four. The first asked whether the member was ALREADY a source, and it
+ * existed to beat the `States` override — a member declared `State<string>` that the emit had also
+ * called data would otherwise map to a state OF a state. `.abide` refuses that declaration now (see
+ * the `refused` rows of `REACTIVE_TYPES` in `#compiler/internal/desugar.ts`), so nothing reaches the
+ * arm from that lane; a hand-written `.ts` component names no `States` at all, and its source-typed
+ * members are callable, so the CALLBACK arm below already passes them through. One rule, not a rule
+ * and an exception to it.
  */
 // `NonNullable` because an OPTIONAL member carries `undefined` into `T[K]`, and `fn | undefined`
-// extends neither arm — so `onpick?: (t: string) => void` mapped to a cell of a callback, and the
-// only thing that said so was the `@click` that attached the cell.
-export type Props<T, Cells extends keyof T = never> = {
-    // Already a source is the first question and not part of the override: a `State<T>` passes
-    // through the wrapping either way, and the emit calls it data too — so an override that led with
-    // `Cells` would hand `note: State<string>` over as a cell OF a cell.
-    [K in keyof T]: NonNullable<T[K]> extends Cell<unknown>
-        ? T[K]
-        : K extends Cells
-          ? Cell<T[K]>
-          : NonNullable<T[K]> extends (...args: never[]) => unknown
-            ? T[K]
-            : Cell<T[K]>
+// extends neither arm — so `onpick?: (t: string) => void` mapped to a state of a callback, and the
+// only thing that said so was the `@click` that attached the state.
+export type Props<T, States extends keyof T = never> = {
+    [K in keyof T]: K extends States
+        ? State<T[K]>
+        : NonNullable<T[K]> extends (...args: never[]) => unknown
+          ? T[K]
+          : State<T[K]>
 }
 
 /**
- * `<Card n={r.n}/>`. The props are PLAIN VALUES, not thunks: what makes them live is the cell the
+ * `<Card n={r.n}/>`. The props are PLAIN VALUES, not thunks: what makes them live is the state the
  * instance holds for each of them, which the position writes into on every pass. A thunk per prop
  * would have had to be rebuilt per pass anyway — `rows().map((r) => …)` closes over THAT pass's `r`,
  * so an instance caching the first one would read a row object since replaced.
  *
- * `Given` is the inverse of `Props`: what the CALL SITE may write, which is the value or the cell. It
+ * `Given` is the inverse of `Props`: what the CALL SITE may write, which is the value or the state. It
  * is what keeps a mistyped prop an error where the mistake is, now that the call goes through a
  * helper rather than being written out.
  */
 // `NonNullable` for the reason `Props` above needs it, one step later: an OPTIONAL prop arrives here
-// as `Cell<T | undefined> | undefined`, which extends neither arm — so the plain-value arm was
+// as `State<T | undefined> | undefined`, which extends neither arm — so the plain-value arm was
 // dropped and `<Child optional="b"/>` was an error at every call site that filled an optional prop
 // in. The union is put back by the mapped type, which keeps the `?` it is homomorphic over.
 export type Given<P> = {
-    [K in keyof P]: NonNullable<P[K]> extends Cell<infer V> ? Cell<V> | V : P[K]
+    [K in keyof P]: NonNullable<P[K]> extends State<infer V> ? State<V> | V : P[K]
 }
 
 export function component<P extends Record<string, unknown>>(
@@ -258,16 +261,16 @@ export function component<P extends Record<string, unknown>>(
 }
 
 /**
- * One cell per prop, made once, at the instance's first pass — by whichever substrate is showing it.
+ * One state per prop, made once, at the instance's first pass — by whichever substrate is showing it.
  *
- * A component's props are CELLS, on both sides. The client needs that so a later pass is a write
+ * A component's props are STATES, on both sides. The client needs that so a later pass is a write
  * rather than a rebuilt child; the server has no later pass and makes them anyway, because the other
  * rule is that a component is written once and runs in both places. A server that handed the plain
- * values over would work for every compiled `.abide` file — those bind through `propCell`, which
- * would make the cells — and break every hand-written `.ts` component, which reads `who()` on a
+ * values over would work for every compiled `.abide` file — those bind through `propState`, which
+ * would make the states — and break every hand-written `.ts` component, which reads `who()` on a
  * string. One rule is cheaper than that exception.
  *
- * What does NOT get a cell is `passedThrough`'s question.
+ * What does NOT get a state is `passedThrough`'s question.
  *
  * Grown key-by-key on purpose, and `{ ...props }` first was tried and reverted: seeding the record
  * with a spread costs one map transition instead of one per prop, but it READS every prop twice —
@@ -275,7 +278,7 @@ export function component<P extends Record<string, unknown>>(
  * `/docs/syntax/for` rung 7 into a substrate disagreement. Anything faster here has to keep the read
  * count at one per prop.
  */
-export function cellProps(props: Record<string, unknown>): Record<string, unknown> {
+export function stateProps(props: Record<string, unknown>): Record<string, unknown> {
     const made: Record<string, unknown> = {}
     for (const name in props) {
         const value = props[name]
@@ -285,14 +288,14 @@ export function cellProps(props: Record<string, unknown>): Record<string, unknow
 }
 
 /**
- * Whether a prop reaches the child UNTOUCHED rather than behind a cell.
+ * Whether a prop reaches the child UNTOUCHED rather than behind a state.
  *
  * Two things do: something ALREADY a source — `bind:note={note}` needs the child to hold the very
- * cell the parent does, not a copy — and a FUNCTION, which is a callback rather than data and is
+ * state the parent does, not a copy — and a FUNCTION, which is a callback rather than data and is
  * called, not read. The two collapse to one test, because a source IS a function — see `isSource`,
  * whose brand check is what the second arm would otherwise have had to repeat.
  *
- * Named rather than spelled at each site: `cellProps` here, `writeProps` in `#ui/internal/parts.ts`
+ * Named rather than spelled at each site: `stateProps` here, `writeProps` in `#ui/internal/parts.ts`
  * and `Props<T>` above all make exactly these exceptions, and a third one added to one of them
  * would be silently absent from the others.
  */
@@ -304,24 +307,24 @@ export function passedThrough(value: unknown): boolean {
  * One prop, as the child's `<script>` binds it — emitted by the compiler for every name the
  * `props<T>()` destructure brought into scope.
  *
- * Nearly always a pass-through, because `cellProps` above already made the cell. What it is FOR is
+ * Nearly always a pass-through, because `stateProps` above already made the state. What it is FOR is
  * the prop that never arrived: a call site that omits an optional prop emits no key for it, so the
  * local would be `undefined` where the template is about to call it, and a destructure default would
- * satisfy it with a plain string — leaving the local `'' | Cell<string>`, only one of which is
+ * satisfy it with a plain string — leaving the local `'' | State<string>`, only one of which is
  * callable. So the default is lifted out of the pattern to here, and derived rather than folded in
- * once, so an `undefined` arriving LATER on a live cell still reads as the default.
+ * once, so an `undefined` arriving LATER on a live state still reads as the default.
  */
-// A CELL in both overloads, never `Cell<T> | T`: the union would leave `T` inferrable from either
-// arm, and `propCell($class, '')` then read `T` as the cell itself and handed back a cell of a cell.
+// A STATE in both overloads, never `State<T> | T`: the union would leave `T` inferrable from either
+// arm, and `propState($class, '')` then read `T` as the state itself and handed back a state of a state.
 // The server's plain value is a fact about the runtime — `emit`'s `Component` arm calls the view with
 // what the caller wrote — and the parameter type describes the CLIENT, which is what an author's
 // `assertType` is checking.
-export function propCell<T>(given: Cell<T> | undefined): Cell<T>
-export function propCell<T, D>(given: Cell<T> | undefined, fallback: D): Cell<NonNullable<T> | D>
-export function propCell(given: unknown, fallback?: unknown): Cell<unknown> {
+export function propState<T>(given: State<T> | undefined): State<T>
+export function propState<T, D>(given: State<T> | undefined, fallback: D): State<NonNullable<T> | D>
+export function propState(given: unknown, fallback?: unknown): State<unknown> {
     if (isSource(given)) {
-        const cell = given as Cell<unknown>
-        return fallback === undefined ? cell : derive(() => cell() ?? fallback)
+        const held = given as State<unknown>
+        return fallback === undefined ? held : derive(() => held() ?? fallback)
     }
     return state(given === undefined ? fallback : given)
 }
@@ -360,7 +363,7 @@ export class Boundary {
  * an invoked async IIFE, so the body still runs SYNCHRONOUSLY and a source read inside it still
  * signals — see `settledBoundary`, which is where the promises it left behind are collected. Making
  * the body itself `async` would have been the shorter route and it is the wrong one: an async function
- * converts every throw into a rejection, pending SIGNALS included, so a cell read inside a `{#try}`
+ * converts every throw into a rejection, pending SIGNALS included, so a state read inside a `{#try}`
  * would stop deferring and serve nothing at all, silently.
  */
 export function boundary(body: () => unknown, branches: Branches, awaiting = false): Boundary {

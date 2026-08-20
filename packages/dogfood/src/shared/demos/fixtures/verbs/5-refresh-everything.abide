@@ -1,0 +1,31 @@
+<script module>
+import { memo, refresh } from 'abide'
+
+// Module scope for the reason rung 1's is — one cache per caller. See `#shared/demos/proofs.ts`.
+let served = 0
+
+// No tag on either of these, and neither needs one.
+const quote = memo(async ({ symbol }: { symbol: string }) => {
+    await new Promise((settle) => setTimeout(settle, 400))
+    return `${symbol} @ ${++served}`
+})
+
+const total = memo(async () => {
+    await new Promise((settle) => setTimeout(settle, 400))
+    return `${served} served`
+})
+
+// No selector: everything THIS CALLER holds. A tag reaches specific data and reaches nothing it was
+// not named on, so a memo added later stops participating in a sweep and nothing says so.
+const refreshEverything = (): void => refresh()
+</script>
+
+{#if quote({ symbol: 'ABC' }).pending()}
+    <p>loading…</p>
+{:else}
+    <p>{quote({ symbol: 'ABC' })()}</p>
+{/if}
+
+<p>{total()}</p>
+
+<button onclick={refreshEverything}>refresh everything</button>

@@ -133,4 +133,3 @@ function stylesheets(manifest: ClientManifest | null): string {
     }
     return tags
 }
-

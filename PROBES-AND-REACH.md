@@ -172,11 +172,40 @@ Three axes are tangled in the one `kicking` flag:
   That is the isomorphism rule refusing it, not a missing feature. This is also the retroactive
   argument for `m.pending(pattern?)`: the keyed cache is per-caller (`memo.ts:204`), so it is
   request-correct on a server by construction, with no rule for anyone to remember.
-- **Both global verbs stay global, at full strength.** `invalidate({ tags })` is correct as it is —
-  dropping is about the data, and needs no scope. `refresh({ tags })` keeps its reach; the fix is
-  about whose scope a body runs in, not about narrowing what the verb touches.
+- **Both global verbs stay global, at full strength.** The reach is not what is wrong; whose scope a
+  body runs in is.
+- **A caller scope owns its cache, and nothing outside reaches in.** Neither verb touches another
+  caller's copies. This is simpler than the split first proposed here (run for mine, invalidate for
+  theirs) and it is the same rule for both verbs, which the split was not. It holds because another
+  request's cache dies with that request: dropping its copy buys nothing it will live to read, and
+  the per-caller default already says a request's cache is its own snapshot — reaching in from
+  outside violates the same principle the default exists to state. A `global` memo has one copy that
+  everyone shares, so everyone reaches it; that is what the flag means.
+- **A socket always SELECTS**, and `channel` is unchanged. `s()` and `s(args)` both hand back the
+  connection and the read is `s()()`, which is the grammar `rpc` already has over `memo`. See change D.
 
 ---
+
+## Status
+
+All four are BUILT. Gate: `bun run typecheck` clean, `bun run test:serial` 743 pass / 0 fail,
+`bun run e2e` 138 passed. Under `--parallel` the only red is `dev.test.ts`'s restart case, which
+passes alone and is the documented 28-file contention failure.
+
+Each gate below was verified by REVERTING the mechanism and watching it fail — the number in
+brackets is what the revert reported. `bun run lint` is red on a pre-existing Biome config migration
+error, untouched by any of this.
+
+Two things the plan below did not predict, both found by running rather than reading:
+
+- **`roomFor` did not collapse to one expression.** A socket selects by ARITY, so `stream(undefined)`
+  selects a room keyed by nothing rather than the bare stream. The branch stays; what the change
+  removed is the cast.
+- **A bare `refresh()` in a browser reaches the page it is running in.** One caller forever means
+  every declaration in the process, the live page's included, so the verbs demo blanked `/tests/verbs`
+  while `bun test` stayed green — a headless run has no page to blank. The case runs inside an
+  `isolate` now, and that is the claim rather than scaffolding: what stops the walk touching the page
+  is that each declaration answers for the ASKING CALLER. Only `bun run e2e` could see it.
 
 ## Changes, in order
 
@@ -191,7 +220,7 @@ to declare a tag. Per-caller by construction, which is the same property that ma
 | server | `currentScope().stores` is already a `Map<owner, cache>` of every memo cache this request touched. Walking it is the request's own data and nobody else's — the cross-scope hazard cannot arise |
 | browser | no scope, so it needs one module-level list of the keyed-memo caches, appended once per **declaration** — not per slot, not per call |
 | cost | one module-level array, one push per keyed memo declared; nothing in any per-row path |
-| gate | count body runs across several memos, only one of them tagged. Revert check: with the change out, the untagged memo's body does not re-run |
+| gate | `demos/verbs.ts`, body runs across three memos, only one tagged. Revert check: the walk out, counts stay `[1, 2, 1]` instead of `[2, 4, 2]` |
 
 This makes the tag lane what it should be — for naming *specific* data across an app, rather than the
 only way to reach breadth.
@@ -206,37 +235,99 @@ Forwarded onto `Rpc` beside `invalidate` / `refresh` in `asRpc`.
 | non-kicking read | `internals.quietly` already produces exactly this: `kick()` returns false while `trackerFor(node).pending.read()` still subscribes. No third reading mode |
 | waking on slots that do not exist yet | required — `EditSource`'s gate has to wake when the click creates the slot. Needs a version node per keyed memo, bumped on slot create/delete. One node per memo, one bump per slot creation; nothing per row |
 | surface | two names on `KeyedMemo`, forwarded onto `Rpc` |
-| gate | a probe over a pattern with no matching slot must not create one and must not run a body — assert body runs, not values. Revert check: with the change out, the count moves |
+| gate | `demos/memo.ts`, two cases. Revert check on the `quietly` wrapper: a `ttl: 0` slot — which is what a mutation is — is re-sent by the set probe, 1 -> 2. Revert check on the slot-set node: the gate never wakes, `[false]` instead of `[false, true]` |
 
-### C. `refresh({ tags })` stops running other callers' bodies
+### C. The tag verbs stop reaching another caller's copies
 
-Run the body for slots that are **global or the caller's own**; for another caller's non-global slot,
-`invalidate` it instead. `invalidate({ tags })` unchanged and unfiltered.
+Both `refresh({ tags })` and `invalidate({ tags })` act on slots that are **global or the caller's
+own**, and on nothing else. One filter, in `taggedTargets`, for both verbs — not a per-verb branch,
+because the rule is the same rule.
 
 | | |
 | --- | --- |
 | cost | one `Scope \| null` field per tag entry, captured at `joinTags`; one compare per entry in a walk that is already per slot |
-| browser | every scope is null, so everything still runs eagerly. Unchanged from today |
-| gate | two overlapping `serve()` scopes — cannot be a demo face, wants `#tests/unit`. Revert check: Bob's request serves `alice's profile` |
+| browser | every scope is null, so everything still matches. Unchanged from today |
+| gate | `#tests/unit/serve.test.ts`, two overlapping `serve()` scopes. Revert check on the filter: an extra `tagged:alice` — Bob's body re-run under Alice's cookies. Revert check on the null-caller guard: `shared:alice` vanishes, the process-wide copy reachable only by whoever created it |
+
+**Name the field `caller`, not `scope`.** The public verbs already take a `scope?` argument meaning
+"narrow to one memo's slots", compared against `entry.owner` — two different things called scope in
+one walk is how the wrong one gets compared.
 
 **Implementation trap, worth writing down because it inverts the fix silently:** a global memo's slots
-must join the registry with a **null** scope, not with `currentScope()`. `joinTags` runs inside
+must join the registry with a **null** caller, not with `currentScope()`. `joinTags` runs inside
 whichever request first created the slot, so capturing the ambient scope would bind a process-wide slot
-to Bob's request and then only Bob could ever refresh it. `isGlobal` is in hand right there
+to Bob's request and then only Bob could ever reach it. `isGlobal` is in hand right there
 (`memo.ts:269`). It is a one-line guard that reads correct and tests green in a browser, where every
 scope is null anyway.
+
+### D. A socket always selects
+
+`channel`, `socket` and `remoteSocket` all carry the same dual shape today — `Channel<T> &
+KeyedChannel<Args, T>`, where the bare `()` READS and the keyed `(args)` SELECTS
+(`channel.ts:139`, `rpc.ts:850`, `transport.ts:455`). Making the call always select, with `s()` as the
+`{}` room exactly as `f()` is `f({})` on a keyed memo (`memo.ts` `Selecting`), gives a socket the same
+grammar as an rpc: select, then ask.
+
+What it buys:
+
+| | |
+| --- | --- |
+| carve-out 3 goes | a probe on `s()` kicks like a slot's does, so a socket stops being an exception to the kick rule. It also still satisfies the concern that carve-out was protecting — *"a socket an app imported and never read must not open a connection"* (`transport.ts:483`) — because naming `s` opens nothing and `s()` selects without opening, exactly as `m(args)` does |
+| machinery goes | two forward tables exist only to paper over the dual shape — `remoteSocket`'s (`transport.ts:490`) and `channel.scoped`'s (`channel.ts:520`) — plus the `args === undefined` branch in each callable |
+| the `bare?` cold answers go | `pending: () => bare?.pending() ?? false` and its five neighbours are the carve-out written out |
+
+The cost is `s()()` for a read, and it lands hardest on whichever primitives take the change.
+
+**`socket` only — `channel` stays as it is**, and the reason is that this asymmetry already exists on
+the other pair:
+
+| | local primitive | + transport |
+| --- | --- | --- |
+| | `memo` — argless reads, keyed selects | `rpc` — always selects |
+| | `channel` — bare reads, keyed selects | `socket` — always selects |
+
+There is no argless rpc. `Rpc<Args, T, F> extends KeyedMemo<Args, T>` (`transport.ts:76`) and `GET`
+has one signature (`rpc.ts:691`); a no-args endpoint is still `fn()`, which `Selecting<Args>` makes
+`fn({})` — the same slot, the same query, the same address. Adding transport is already what collapses
+the two forms into one, and `socket` is the one that did not.
+
+So this does not restate "`socket` = `channel` + transport" — it makes it hold the way
+"`rpc` = `memo` + transport" already does, with the transport half always addressed in both. Taking
+`channel` along would break the parallel rather than complete it: a local channel is the counterpart
+of an argless `memo`, and `m()()` is not wanted either.
+
+**Parity is on SELECTION, and it is complete.** A socket has no bare stream: `s()` is the `{}` room,
+the same one `s({})` selects, exactly as `asRpc` resolves an omitted rpc argument to `{}`. The first
+cut of D left `s()` as a third thing — neither a room nor a read — which also made a socket with
+REQUIRED room args unable to name its bare stream at all (`rooms()` was `Expected 1 arguments, but
+got 0`, while `invalidate()` still documented reaching it). Coercing to `{}` removes both: one map,
+one code path, and `bare`/`held()` deleted from `remoteSocket`.
+
+The one place the two laws differ is the WIRE, and it is gated rather than assumed: a socket's `{}`
+room addresses the bare path, where an rpc's `f()` travels as `?__abide_args={}`. An rpc's args ARE
+its address and have to reach the handler as `{}` rather than as nothing; a room is re-resolved by
+the same coercion on the server, so an empty query and an explicit `{}` already land in the same room
+from both directions. Delivery is correct either way — which is exactly why the URL needed its own
+assertion, since nothing about behaviour could have caught the difference.
+
+What does NOT match, and is pre-existing: a plain `memo()` passes `undefined` to its body and selects
+a different slot from `m({})`. The `{}` coercion lives only in `asRpc`, whose own comment calls itself
+*"the ONE place the three faces agree about an omitted argument."* So the transport pair agrees with
+itself; the local pair does not, and that was true before any of this.
+
+Blast radius: 44 sites name `remoteSocket` or `= socket` across `packages/abide/src` and
+`packages/dogfood/src`, plus their uses. The compiler's socket stub gets simpler rather than harder —
+one shape to emit instead of two.
 
 ---
 
 ## Open
 
-- **On a tag refresh, does another caller's non-global slot get dropped or left?** Recommendation:
-  dropped. Alice refreshing `user:42` means the data changed, so Bob's private copy is stale whatever
-  we do about running it, and dropping is scope-free — Bob's next read re-runs under Bob's own scope.
-  Leaving it means Bob knowingly serves data we just established is wrong.
-- **Does `remoteSocket` keep its probe exemption?** Today a page whose only mention of a socket is a
-  probe never connects — that is the `Sources` symptom in the media report. It is the one carve-out
-  where making things consistent changes hydration behaviour rather than just closing a hole.
+- **Change D changes hydration.** Today a page whose only mention of a socket is a probe never
+  connects — the `Sources` symptom in the media report. After D it connects, which is the point, but
+  it is the one item here that moves behaviour a rendered page can see rather than only closing a
+  hole. `demos/transport.ts:3005` is the case that states the current reading and will need to
+  change with it.
 - **Do the two corrections go back to `~/code/media`?** Findings 1 and 2 are theirs. Their items 2 and
   3 (`state(false)` around a click handler) were right, and for the same reason as finding 1 — a
   mutation is not a cell you probe. Their `Sources` conclusion (name the loads rather than probe

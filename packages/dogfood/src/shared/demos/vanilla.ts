@@ -7,16 +7,16 @@
 
 import { marked } from 'marked'
 
-// --- a reactive cell, by hand -----------------------------------------------
+// --- a reactive state, by hand -----------------------------------------------
 
-export interface VanillaCell<T> {
+export interface VanillaState<T> {
     get(): T
     set(next: T): void
     subscribe(listener: () => void): () => void
 }
 
 /** The careful version: an identity check, so a write of the value already held notifies nobody. */
-export function cell<T>(initial: T): VanillaCell<T> {
+export function state<T>(initial: T): VanillaState<T> {
     let value = initial
     const listeners = new Set<() => void>()
     return {
@@ -34,7 +34,7 @@ export function cell<T>(initial: T): VanillaCell<T> {
 }
 
 /** The careless version: notify on every write. This is what most hand-rolled stores do. */
-export function naiveCell<T>(initial: T): VanillaCell<T> {
+export function naiveState<T>(initial: T): VanillaState<T> {
     let value = initial
     const listeners = new Set<() => void>()
     return {
@@ -54,7 +54,7 @@ export function naiveCell<T>(initial: T): VanillaCell<T> {
  * A hand-written derivation. The sources have to be DECLARED — that is the cost vanilla pays for not
  * having tracking, and it is also where the bugs come from when the list drifts from the body.
  */
-export function derived<T>(sources: VanillaCell<unknown>[], compute: () => T): VanillaCell<T> {
+export function derived<T>(sources: VanillaState<unknown>[], compute: () => T): VanillaState<T> {
     let dirty = true
     let value: T = undefined as T
     const listeners = new Set<() => void>()
@@ -83,7 +83,7 @@ export function derived<T>(sources: VanillaCell<unknown>[], compute: () => T): V
 }
 
 /** …and the careful one, which also refuses to notify when the recomputed value did not move. */
-export function derivedMemoised<T>(sources: VanillaCell<unknown>[], compute: () => T): VanillaCell<T> {
+export function derivedMemoised<T>(sources: VanillaState<unknown>[], compute: () => T): VanillaState<T> {
     let value: T = compute()
     const listeners = new Set<() => void>()
     for (const source of sources) {
@@ -132,8 +132,8 @@ export function feed<T>(tail = 0): VanillaFeed<T> {
             for (const listener of listeners) listener(message)
         },
         latest: () => latest,
-        // The live array, not a copy — and a CELL's `chunks()` now answers the same way, because a
-        // version cell is what wakes a reader and the array's identity is not. What a CHANNEL still
+        // The live array, not a copy — and a STATE's `chunks()` now answers the same way, because a
+        // version state is what wakes a reader and the array's identity is not. What a CHANNEL still
         // pays over this arm is `windowOf`'s copy, which `tail` is what bounds.
         chunks: () => transcript,
         subscribe(listener: (message: T) => void) {
@@ -154,7 +154,7 @@ export interface VanillaStream<T> {
 }
 
 /**
- * What a cell that consumes an async iterable replaces: a loop, four fields, and a notify.
+ * What a state that consumes an async iterable replaces: a loop, four fields, and a notify.
  *
  * The careless part is the notify — one per chunk is right, and the shape everyone reaches for is a
  * single "state changed" record rebuilt per chunk, which cannot dedupe anything and wakes every
@@ -298,7 +298,7 @@ export interface VanillaRoute {
  * careless half is the record, and it is careless in a way that is invisible: the values it reports
  * are right every time. What it cannot do is tell a reader of the route's NAME that nothing it reads
  * moved, because the record it hands back is a different object on every navigation and the notify
- * goes to everyone. That is the count on the bench, and it is the reason `route()` is four cells.
+ * goes to everyone. That is the count on the bench, and it is the reason `route()` is four states.
  */
 export function routerRecord(patterns: string[]): {
     go(pathname: string): void

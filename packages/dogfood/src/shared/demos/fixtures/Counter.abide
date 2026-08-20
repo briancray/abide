@@ -3,7 +3,7 @@ import { memo, state } from 'abide'
 
 // The same component as `counter.ts`, written in the `.abide` spelling — and the two are asserted to
 // render identically in the `compiler` demo suite. Everything lives in `<script module>` for the
-// same reason it lives at module scope there: these cells outlive any one render.
+// same reason it lives at module scope there: these states outlive any one render.
 //
 // Reads and writes go by NAME. `count` is the value, `count = n` is the write; the explicit
 // `count()` / `count.set(n)` spelling still compiles, because this is sugar over it rather than a

@@ -1,6 +1,6 @@
 // Type-level assertions, so a passing typecheck means what it looks like it means.
 //
-// A green `tsc` proves nothing on its own. If the desugar started emitting `any` — a cell read that
+// A green `tsc` proves nothing on its own. If the desugar started emitting `any` — a state read that
 // lost its type, a prop that stopped being checked, a narrowing that collapsed — every file in this
 // repo would still compile, every test would still pass, and the whole typing contract would be gone
 // with nothing to report it. `any` is assignable to everything, which is exactly why an assignability

@@ -62,10 +62,10 @@ function rand(): string {
 //
 // What the two instance cases below are about, and the reason both of them COUNT: an instance that
 // survived a re-render and one rebuilt with the same props paint the same characters. `bodies` is
-// how many times the view was called, and `edit` reaches a live instance's own cell from outside —
+// how many times the view was called, and `edit` reaches a live instance's own state from outside —
 // which is a user typing into it, and the only thing a rebuild destroys.
 //
-// A prop arrives as a CELL, because the position holding the instance writes each one on every pass.
+// A prop arrives as a STATE, because the position holding the instance writes each one on every pass.
 // That is the whole shape a compiled `<Editor n={…}/>` has, written out.
 const editors = {
     bodies: 0,
@@ -79,7 +79,7 @@ function Editor({ id, n }: { id: State<number>; n: State<number> }): TemplateRes
     editors.bodies++
     const own = state('initial')
     // `peek`, not a read: a key never moves under its own row, and setup is not a subscription.
-    editors.own.set(id.peek(), own)
+    editors.own.set(id.peek()!, own)
     return html`<b>${() => `${n()}/${own()}`}</b>`
 }
 
@@ -128,7 +128,7 @@ interface OwnedMessage {
 /**
  * The tail message OWNS its text.
  *
- * `${message.text}` hands the slot the CELL rather than a string — `unwrap` calls it inside that
+ * `${message.text}` hands the slot the STATE rather than a string — `unwrap` calls it inside that
  * slot's own effect, so the subscription belongs to one message and the list slot never re-runs.
  */
 function chatOwningTail(host: HTMLElement, depth: number): ChatArm {
@@ -172,7 +172,7 @@ function chatRebuildingArray(host: HTMLElement, depth: number): ChatArm {
     )
     return {
         setTail(text) {
-            const next = log.peek().slice()
+            const next = log.peek()!.slice()
             next[depth - 1] = { id: (next[depth - 1] as Item).id, label: text }
             log.set(next)
         },
@@ -219,7 +219,7 @@ const SWAP_DISTANT = swapped(ROWS_200, 1, 198)
 // with and the DOM returns to the order it started in on every second iteration.
 const LIFT_UP = lifted(ROWS_200, 198, 1)
 
-// The cells the persistent lists track. Reactive state, not DOM — they belong out here with the rows.
+// The states the persistent lists track. Reactive state, not DOM — they belong out here with the rows.
 const liveRows = state(ROWS_1000)
 // The same thousand rows KEYED, for the same one-row edit: a keyed list whose order did not change
 // is the case the reorder arms cannot show, and the one that says whether the key index is built
@@ -267,7 +267,7 @@ const fixtures = lazy((): Fixtures => {
     const listHost = ul()
     const bigListHost = ul()
 
-    // One persistent abide list, kept in sync with a cell — the "update one row of a thousand" arm.
+    // One persistent abide list, kept in sync with a state — the "update one row of a thousand" arm.
     const liveHost = ul()
     mount(liveHost, () => list(liveRows))
 
@@ -402,7 +402,7 @@ export default suite({
                 host.append(
                     row(
                         button('count.set(count + 1)', async () => {
-                            const work = await measureFlush(() => count.set(count.peek() + 1))
+                            const work = await measureFlush(() => count.set(count.peek()! + 1))
                             log.live('work for one count write', nonZero(work))
                         }),
                         button('name.set(random)', async () => {
@@ -473,7 +473,9 @@ export default suite({
             async run({ is }) {
                 const cls = state('a')
                 const other = state(0)
-                const host = scratch(() => html`<i class=${() => cls()} data-n=${() => String(other())}>x</i>`)
+                const host = scratch(
+                    () => html`<i class=${() => cls()} data-n=${() => String(other())}>x</i>`,
+                )
 
                 // Spied on the ELEMENT, not `Element.prototype`. The prototype is shared with the page
                 // this case is running inside: on `/tests` the row's own status badge writes its class
@@ -502,7 +504,7 @@ export default suite({
                 const nodes = Array.from(host.querySelectorAll('li'))
 
                 const work = await measureFlush(() => {
-                    const next = rows.peek().slice()
+                    const next = rows.peek()!.slice()
                     next[500] = { id: 500, label: 'row 500 · edited' }
                     rows.set(next)
                 })
@@ -526,7 +528,7 @@ export default suite({
                     row(
                         button('edit row 500', async () => {
                             const work = await measureFlush(() => {
-                                const next = rows.peek().slice()
+                                const next = rows.peek()!.slice()
                                 next[500] = { id: 500, label: `row 500 · edited ${rand()}` }
                                 rows.set(next)
                             })
@@ -534,7 +536,7 @@ export default suite({
                         }),
                         button('append 10 rows', async () => {
                             const work = await measureFlush(() => {
-                                const next = rows.peek().slice()
+                                const next = rows.peek()!.slice()
                                 for (let i = 0; i < 10; i++)
                                     next.push({ id: next.length, label: `row ${next.length}` })
                                 rows.set(next)
@@ -765,23 +767,23 @@ export default suite({
                 host.append(
                     row(
                         button('swap rows 1 and 2 (adjacent)', async () => {
-                            const work = await measureFlush(() => rows.set(swapped(rows.peek(), 1, 2)))
+                            const work = await measureFlush(() => rows.set(swapped(rows.peek()!, 1, 2)))
                             log.live('adjacent swap', nonZero(work))
                         }),
                         button('swap rows 1 and 198 (distant)', async () => {
-                            const work = await measureFlush(() => rows.set(swapped(rows.peek(), 1, 198)))
+                            const work = await measureFlush(() => rows.set(swapped(rows.peek()!, 1, 198)))
                             log.live('distant swap — two ranges, not the distance', nonZero(work))
                         }),
                         button('pull row 198 up to 1', async () => {
-                            const work = await measureFlush(() => rows.set(lifted(rows.peek(), 198, 1)))
+                            const work = await measureFlush(() => rows.set(lifted(rows.peek()!, 198, 1)))
                             log.live('one row up 197 places — not a swap, so the distance', nonZero(work))
                         }),
                         button('reverse all 200', async () => {
-                            const work = await measureFlush(() => rows.set(rows.peek().slice().reverse()))
+                            const work = await measureFlush(() => rows.set(rows.peek()!.slice().reverse()))
                             log.live('full reverse of 200', nonZero(work))
                         }),
                         button('remove row 0', async () => {
-                            const work = await measureFlush(() => rows.set(rows.peek().slice(1)))
+                            const work = await measureFlush(() => rows.set(rows.peek()!.slice(1)))
                             log.live('one removal', nonZero(work))
                         }),
                     ),
@@ -852,7 +854,7 @@ export default suite({
 
         {
             title: 'the key index is not built for a shift, and one row does not decide it for the rest',
-            note: 'A keyed row that is not at its own index is looked for at its NEIGHBOURS before a `Map` of every previous row is built, because a row that moved usually moved one place. What that probe was missing is that it used to stop once the index existed: the FIRST row to miss all three tests built the map, and every row after it went through a hash lookup even when the answer was sitting at `previous[i - 1]`. A relocation is exactly that shape — its first row is the one that came from far away, and the 197 behind it have each shifted by one — so it paid 198 lookups where 1 will do. So did an insert at the FRONT, which is what a feed does on every poll. Counted rather than timed on purpose: this is a "does less work" contract, the output is identical either way, and the count is the same number on any machine while the wall clock here moved 4x between two runs of the same build. The count is FILTERED to this list\'s own row ids, and that is what makes it the same number on both substrates rather than a style point: `Map.prototype` is every map in the process, happy-dom\'s DOM is JavaScript, and its internal map reads landed in an unfiltered count while a real browser\'s native DOM contributed none — so four of these six rows read one number under `bun test` and another in chromium, and the page was red for it. An identical-order row reading 0 does not catch that, because the pass it measures mutates no DOM at all.',
+            note: "A keyed row that is not at its own index is looked for at its NEIGHBOURS before a `Map` of every previous row is built, because a row that moved usually moved one place. What that probe was missing is that it used to stop once the index existed: the FIRST row to miss all three tests built the map, and every row after it went through a hash lookup even when the answer was sitting at `previous[i - 1]`. A relocation is exactly that shape — its first row is the one that came from far away, and the 197 behind it have each shifted by one — so it paid 198 lookups where 1 will do. So did an insert at the FRONT, which is what a feed does on every poll. Counted rather than timed on purpose: this is a \"does less work\" contract, the output is identical either way, and the count is the same number on any machine while the wall clock here moved 4x between two runs of the same build. The count is FILTERED to this list's own row ids, and that is what makes it the same number on both substrates rather than a style point: `Map.prototype` is every map in the process, happy-dom's DOM is JavaScript, and its internal map reads landed in an unfiltered count while a real browser's native DOM contributed none — so four of these six rows read one number under `bun test` and another in chromium, and the page was red for it. An identical-order row reading 0 does not catch that, because the pass it measures mutates no DOM at all.",
             async run({ is, log }) {
                 const base = build(200)
                 const shapes: [string, Item[], number][] = [
@@ -881,10 +883,17 @@ export default suite({
                     host.remove()
                     // The order as well as the count: a lookup skipped by taking the WRONG row is
                     // cheaper still, and nothing about the count would say so.
-                    is(`${label} — the order`, shown, target.map((item) => item.label))
+                    is(
+                        `${label} — the order`,
+                        shown,
+                        target.map((item) => item.label),
+                    )
                     is(`${label} — key-index lookups`, gets.calls, expected)
                 }
-                log('', 'with the neighbour probe behind the index instead of in front of it, the relocation reads 198')
+                log(
+                    '',
+                    'with the neighbour probe behind the index instead of in front of it, the relocation reads 198',
+                )
             },
         },
 
@@ -897,11 +906,13 @@ export default suite({
                     perRow: number,
                 ): Promise<{ moved: number; labels: (string | null)[] }> => {
                     const rows = state(build(200))
-                    const host = scratch(() => html`<ul>${() => rows().map((item) => keyed(item.id, view(item)))}</ul>`)
+                    const host = scratch(
+                        () => html`<ul>${() => rows().map((item) => keyed(item.id, view(item)))}</ul>`,
+                    )
                     await tick()
                     // Every row below the drop shifts INDEX, so nothing here is outside the walk's
                     // changed range: the rows are reconsidered and then left where they are.
-                    const work = await measureFlush(() => rows.set(rows.peek().slice(1)))
+                    const work = await measureFlush(() => rows.set(rows.peek()!.slice(1)))
                     // Read after the measurement, not inside it — a query is a walk, and the window
                     // is a few microtasks wide. Every shape carries the label in its FIRST node, so
                     // one stride reads the order out of both. That is what stops a zero from being
@@ -1018,7 +1029,7 @@ export default suite({
                 const nodes = Array.from(host.querySelectorAll('li'))
 
                 const work = await measureFlush(() => {
-                    const next = rows.peek().slice()
+                    const next = rows.peek()!.slice()
                     for (let i = 0; i < 10; i++) next.push({ id: 1000 + i, label: `row ${1000 + i}` })
                     rows.set(next)
                 })
@@ -1128,13 +1139,17 @@ export default suite({
             title: 'the reconcile is right under ARBITRARY mutation, not just the ones with cases',
             note: 'The placement walk starts at the last row that changed and stops once it is below the first, and a two-row swap or a one-row relocation skips the walk entirely — which is exactly the kind of reasoning that is right for every mutation somebody thought of. So the mutations are generated: insert, remove, swap, reverse a run, rotate one row, and edit, at random positions, four hundred times, with the whole list checked after every one. FOUR hundred and not two, and that number is load-bearing rather than round: the relocation path was landed against this fuzz at 200 steps and it stayed GREEN with the path deliberately broken to read only the ends of its range — the fixed seed over thirty rows never happened to produce the shape. It goes red at 250. A step count is part of what a fuzz gates, and the only way to know it is enough is to break the thing and watch. Several PER STEP, which is the half that matters: with one mutation per step the first and last changed index are always the two changed rows, so a fast path that confuses "the brackets around the changes" with "the only changes" agrees with the truth by construction and the fuzz can never disagree with it. That confusion shipped once. Run over TWO row shapes as well, because a row that is one element and a row that is a fragment are two different pieces of code — one moves a node and the other moves a range it has to walk out first. The seed is fixed, so a failure is a failure anybody can reproduce.',
             async run({ is }) {
-                const fuzz = async (view: (item: Item) => TemplateResult, perRow: number): Promise<number> => {
+                const fuzz = async (
+                    view: (item: Item) => TemplateResult,
+                    perRow: number,
+                ): Promise<number> => {
                     // Every shape carries the label in its FIRST node, so one stride reads the order
                     // out of all of them.
                     const read = (host: HTMLElement): (string | null)[] => {
                         const found = host.querySelectorAll('li')
                         const labels: (string | null)[] = []
-                        for (let i = 0; i < found.length; i += perRow) labels.push(found[i]?.textContent ?? null)
+                        for (let i = 0; i < found.length; i += perRow)
+                            labels.push(found[i]?.textContent ?? null)
                         return labels
                     }
                     const rows = state(build(30))
@@ -1191,7 +1206,7 @@ export default suite({
 
                     let mismatches = 0
                     for (let step = 0; step < 400; step++) {
-                        const next = rows.peek().slice()
+                        const next = rows.peek()!.slice()
                         // One to four, so a step is sometimes the single mutation the brackets
                         // describe exactly and sometimes several they only bound.
                         const count = 1 + Math.floor(rand() * 4)
@@ -1206,7 +1221,7 @@ export default suite({
                     }
                     // Length as well as order: a walk that dropped a row leaves a shorter list that
                     // still reads right for every index it has.
-                    if (read(host).length !== rows.peek().length) mismatches++
+                    if (read(host).length !== rows.peek()!.length) mismatches++
                     host.remove()
                     return mismatches
                 }
@@ -1316,7 +1331,7 @@ export default suite({
                 arms: (() => {
                     // A RECORD, not the string: `set` dedupes on identity, so `level.set('high')`
                     // over `state('high')` never notified and the five slots were never re-evaluated
-                    // — the arm priced a cell's `===` and the 0 it reported was the effect not
+                    // — the arm priced a state's `===` and the 0 it reported was the effect not
                     // running, which no counter can tell from five compares that all skipped. A
                     // fresh record per op is `template.ts`'s shape, for the same reason.
                     const level = state({ level: 'high' })
@@ -1372,7 +1387,7 @@ export default suite({
                 const host = scratch(() => list(rows))
                 const nodes = Array.from(host.querySelectorAll('li'))
 
-                const work = await measureFlush(() => rows.set(swapped(rows.peek(), 1, 3)))
+                const work = await measureFlush(() => rows.set(swapped(rows.peek()!, 1, 3)))
                 is(
                     'the screen is right',
                     Array.from(host.querySelectorAll('li')).map((li) => li.textContent),
@@ -1424,7 +1439,7 @@ export default suite({
                 host.append(
                     row(
                         button('bump the value (same call site)', async () => {
-                            const work = await measureFlush(() => value.set(value.peek() + 1))
+                            const work = await measureFlush(() => value.set(value.peek()! + 1))
                             log.live('same call site', nonZero(work))
                         }),
                         button('switch pane (different call site)', async () => {
@@ -1531,7 +1546,7 @@ export default suite({
                 is('50 rows, 50 paints on mount', painted, 50)
 
                 painted = 0
-                const next = items.peek().slice()
+                const next = items.peek()!.slice()
                 next[10] = { id: 'k10', label: label('row 10 — edited') }
                 items.set(next)
                 await tick()
@@ -1552,7 +1567,7 @@ export default suite({
                 )
                 await tick()
                 painted = 0
-                const moved = thunked.peek().slice()
+                const moved = thunked.peek()!.slice()
                 moved[10] = { id: 'k10', label: label('row 10 — edited') }
                 thunked.set(moved)
                 await tick()
@@ -1578,7 +1593,7 @@ export default suite({
                 )
                 await tick()
                 painted = 0
-                const edited = handled.peek().slice()
+                const edited = handled.peek()!.slice()
                 edited[10] = { id: 'k10', label: label('row 10 — edited') }
                 handled.set(edited)
                 await tick()
@@ -1624,7 +1639,7 @@ export default suite({
                         )
                         await tick()
                         painted = 0
-                        const next = items.peek().slice()
+                        const next = items.peek()!.slice()
                         next[100] = { id: 'k100', label: label('edited') }
                         items.set(next)
                         await tick()
@@ -1641,7 +1656,7 @@ export default suite({
 
         {
             title: 'a REACTIVE slot on every row wakes on every row, whatever moved',
-            note: 'The case above skips a row whose values did not move, and per SLOT the row that carries a handler. Neither cutoff can hold for a slot whose value is a THUNK, because a thunk is a fresh closure on every describe and the only thing an identity test can say about it is that it is new. So a list of 1000 rows with one reactive attribute apiece re-runs all 1000 of them for any list update at all — 100 changed labels, or a two-row swap. The DOM is protected: every binding compares before it writes, so the attribute writes stay at 0. The WAKE is not, and it is the thing no output and no DOM counter can show. Two costs are being separated here and only one of them is a defect: waking 1000 rows because 1000 rows read the cell that changed is what every fine-grained framework does and is the shape of the app, not the framework. Waking 1000 rows because the LIST was re-described is the one worth removing — nothing those thunks read had moved.',
+            note: 'The case above skips a row whose values did not move, and per SLOT the row that carries a handler. Neither cutoff can hold for a slot whose value is a THUNK, because a thunk is a fresh closure on every describe and the only thing an identity test can say about it is that it is new. So a list of 1000 rows with one reactive attribute apiece re-runs all 1000 of them for any list update at all — 100 changed labels, or a two-row swap. The DOM is protected: every binding compares before it writes, so the attribute writes stay at 0. The WAKE is not, and it is the thing no output and no DOM counter can show. Two costs are being separated here and only one of them is a defect: waking 1000 rows because 1000 rows read the state that changed is what every fine-grained framework does and is the shape of the app, not the framework. Waking 1000 rows because the LIST was re-described is the one worth removing — nothing those thunks read had moved.',
             async run({ is, log }) {
                 const SIZE = 200
                 const rows = state(build(SIZE))
@@ -1670,11 +1685,11 @@ export default suite({
                 const selecting = await measureFlush(() => selected.set(SIZE / 2))
                 const onSelect = ran - before
                 is('selecting one row writes ONE attribute', selecting.setAttribute, 1)
-                is('…and wakes every row that reads the cell', onSelect, SIZE)
+                is('…and wakes every row that reads the state', onSelect, SIZE)
 
                 before = ran
                 const editing = await measureFlush(() => {
-                    const next = rows.peek().slice()
+                    const next = rows.peek()!.slice()
                     for (let i = 0; i < next.length; i += 10) {
                         next[i] = { id: (next[i] as Item).id, label: `${(next[i] as Item).label} !!!` }
                     }
@@ -1687,7 +1702,7 @@ export default suite({
                 is('but every row woke anyway', onEdit, SIZE)
 
                 before = ran
-                const swapping = await measureFlush(() => rows.set(swapped(rows.peek(), 1, SIZE - 2)))
+                const swapping = await measureFlush(() => rows.set(swapped(rows.peek()!, 1, SIZE - 2)))
                 const onSwap = ran - before
                 is('a swap moves two rows', swapping.insert, 2)
                 is('…and wakes all of them', onSwap, SIZE)
@@ -1702,7 +1717,7 @@ export default suite({
 
         {
             title: 'a token into the tail message describes one message, or every message',
-            note: 'The case above edits many rows at once; this one edits ONE row, sixty times a second, with two hundred still rows above it — the shape a token stream has and the one every other list case here amortises away. The two arms differ only in how the app spells "the tail got longer", and the DOM cannot tell them apart: both write exactly one text node, insert nothing and create nothing, so no counter above this line and no assertion about what is on screen can separate them. What separates them is that setting a fresh ARRAY asks for the whole list to be described again before any reconciling starts — two hundred `html` tags and two hundred keyed wrappers allocated per token, for one text write — while a tail message that owns its own text cell is a subscription of its own and the list slot never re-runs. At sixty tokens a second the first spelling describes twelve thousand messages a second to change one of them.',
+            note: 'The case above edits many rows at once; this one edits ONE row, sixty times a second, with two hundred still rows above it — the shape a token stream has and the one every other list case here amortises away. The two arms differ only in how the app spells "the tail got longer", and the DOM cannot tell them apart: both write exactly one text node, insert nothing and create nothing, so no counter above this line and no assertion about what is on screen can separate them. What separates them is that setting a fresh ARRAY asks for the whole list to be described again before any reconciling starts — two hundred `html` tags and two hundred keyed wrappers allocated per token, for one text write — while a tail message that owns its own text state is a subscription of its own and the list slot never re-runs. At sixty tokens a second the first spelling describes twelve thousand messages a second to change one of them.',
             async run({ is, log }) {
                 const ownHost = container()
                 const rebuiltHost = container()
@@ -1830,7 +1845,7 @@ export default suite({
 
         {
             title: 'a pass that threw is not a pass that was APPLIED',
-            note: 'Skipping a slot whose value did not move is only sound against a pass that finished. A binder can throw out of the middle of the loop — a slot reading a cell whose load rejected throws by design, and so do a `{#try}` body with no `{:catch}` and an author’s `&ref` handler — and every slot after it was never applied. Comparing against what was HANDED OVER rather than what LANDED would skip those for as long as their values stay put: a value stuck on screen forever, with no error left to show for it. The instance keeps both, and only the finished pass is what a skip is judged against.',
+            note: 'Skipping a slot whose value did not move is only sound against a pass that finished. A binder can throw out of the middle of the loop — a slot reading a state whose load rejected throws by design, and so do a `{#try}` body with no `{:catch}` and an author’s `&ref` handler — and every slot after it was never applied. Comparing against what was HANDED OVER rather than what LANDED would skip those for as long as their values stay put: a value stuck on screen forever, with no error left to show for it. The instance keeps both, and only the finished pass is what a skip is judged against.',
             async run({ is }) {
                 // Throwing on the way to text is a binder throwing — here at slot 0 of three, on the
                 // second pass only. `flush` rethrows it from a fresh microtask, so the error printed
@@ -1889,8 +1904,8 @@ export default suite({
         },
 
         {
-            title: 'an async cell paints when it lands, with the ordinary read',
-            note: 'No `<Suspense>` and no second spelling: the slot reads the cell, and the cell wakes it once the load settles.',
+            title: 'an async state paints when it lands, with the ordinary read',
+            note: 'No `<Suspense>` and no second spelling: the slot reads the state, and the state wakes it once the load settles.',
             async run({ is }) {
                 const session = state(Promise.resolve('ada'))
                 const host = scratch(() => html`<p>${() => (session.pending() ? '…' : session())}</p>`)
@@ -2007,7 +2022,7 @@ export default suite({
         },
 
         {
-            title: 'a cell handed back by a thunk is READ, not rendered as a function',
+            title: 'a state handed back by a thunk is READ, not rendered as a function',
             note: 'No trailing `()`. A handle in a slot means its value, on both substrates — which is what lets a keyed slot be dropped straight into a template.',
             async run({ is }) {
                 const search = memo(async ({ q }: { q: string }) => `results for ${q}`)
@@ -2062,10 +2077,12 @@ export default suite({
             async run({ is, log }) {
                 const drop = async (row: (item: Item) => TemplateResult): Promise<number> => {
                     const rows = state(build(20))
-                    const host = scratch(() => html`<ul>${() => rows().map((item) => keyed(item.id, row(item)))}</ul>`)
+                    const host = scratch(
+                        () => html`<ul>${() => rows().map((item) => keyed(item.id, row(item)))}</ul>`,
+                    )
                     await tick()
                     // Ten of twenty, from the middle, so the drop is not also a truncation.
-                    const work = await measureFlush(() => rows.set(rows.peek().slice(0, 10)))
+                    const work = await measureFlush(() => rows.set(rows.peek()!.slice(0, 10)))
                     host.remove()
                     return work.remove
                 }
@@ -2152,7 +2169,7 @@ export default suite({
 
         {
             title: 'a component keeps its own state when a PROP changes',
-            note: 'A component call is carried to the position that shows it rather than made in the slot thunk, so the instance outlives a re-render: the view runs once, the props are cells the position writes, and the child’s own `state` is never rebuilt. Before this, a computed prop made the enclosing thunk reactive, so a new `n` called the view again and `state(\'initial\')` made a fresh cell — the prop really did update, so the output looked right and the edit was simply gone. The counter is the claim: the value alone cannot tell an instance that survived from one rebuilt with the same props.',
+            note: "A component call is carried to the position that shows it rather than made in the slot thunk, so the instance outlives a re-render: the view runs once, the props are states the position writes, and the child’s own `state` is never rebuilt. Before this, a computed prop made the enclosing thunk reactive, so a new `n` called the view again and `state('initial')` made a fresh state — the prop really did update, so the output looked right and the edit was simply gone. The counter is the claim: the value alone cannot tell an instance that survived from one rebuilt with the same props.",
             async run({ is }) {
                 const outer = state(0)
                 const host = container()
@@ -2175,8 +2192,8 @@ export default suite({
                 view.dispose()
                 host.remove()
 
-                // A prop that is ALREADY a cell is handed over rather than copied into one, which is
-                // what `bind:` on a component prop compiles to: the child holds the very cell the
+                // A prop that is ALREADY a state is handed over rather than copied into one, which is
+                // what `bind:` on a component prop compiles to: the child holds the very state the
                 // parent does, so a write inside it is a write the parent sees. Wrapping it would
                 // give the child something it cannot write back to, and nothing about a read says so.
                 const note = state('from the parent')
@@ -2187,8 +2204,8 @@ export default suite({
                 }
                 const bound = mount(shell, () => html`<div>${() => component(Bound, { note })}</div>`)
                 await tick()
-                is('the child wrote the parent’s own cell', note(), 'from the child')
-                is('…and it is the same cell the child reads', shell.textContent, 'from the child')
+                is('the child wrote the parent’s own state', note(), 'from the child')
+                is('…and it is the same state the child reads', shell.textContent, 'from the child')
                 bound.dispose()
                 shell.remove()
             },
@@ -2255,7 +2272,7 @@ export default suite({
                     )
                     await tick()
                     const from = editors.bodies
-                    many.set([...many.peek(), 9_000 + n])
+                    many.set([...many.peek()!, 9_000 + n])
                     await tick()
                     tree.dispose()
                     held.remove()
@@ -2272,7 +2289,7 @@ export default suite({
 
         {
             title: 'an instance that LEAVES the position is dropped, not kept for its return',
-            note: 'The instance is held by the part that shows it, so the other half of holding one is letting it go: a slot that paints something else is a component that left the tree. Missing that, the record survived showing `gone` and the component’s return was a write into cells nobody was reading — the part reused the instance, so it never repainted at all and the slot stayed on the text it had swapped to. The count is the same claim at the other end of a list: a page that scrolls would otherwise hold a props record and a cell per prop for every row it has ever shown, and nothing about the output says so.',
+            note: 'The instance is held by the part that shows it, so the other half of holding one is letting it go: a slot that paints something else is a component that left the tree. Missing that, the record survived showing `gone` and the component’s return was a write into states nobody was reading — the part reused the instance, so it never repainted at all and the slot stayed on the text it had swapped to. The count is the same claim at the other end of a list: a page that scrolls would otherwise hold a props record and a state per prop for every row it has ever shown, and nothing about the output says so.',
             async run({ is }) {
                 const shownNow = state(true)
                 const host = container()
@@ -2280,8 +2297,7 @@ export default suite({
                 const view = mount(
                     host,
                     () =>
-                        html`<div>${() =>
-                            shownNow() ? component(Editor, { id: 9, n: 9 }) : 'gone'}</div>`,
+                        html`<div>${() => (shownNow() ? component(Editor, { id: 9, n: 9 }) : 'gone')}</div>`,
                 )
                 await tick()
                 editors.edit(9, 'EDITED')
@@ -2303,7 +2319,7 @@ export default suite({
 
         {
             title: 'a DIFFERENT view at the position is a different component, not a new pass',
-            note: 'What a compiled `<Shown/>` is when `Shown` is a cell: naming one in a tag position READS it, so the slot is handed a different view whenever it changes. The instance is therefore keyed by the VIEW and not by the position alone — reusing it because something is already there would write the new component’s props into the old one’s cells and repaint nothing, which is the keyed-list failure one concept over. The counts are the claim, because an instance that was rebuilt and one that was resumed paint the same characters: the view that left does not run again, the one that arrived runs once, and coming back is a THIRD call over an instance whose edit is gone.',
+            note: 'What a compiled `<Shown/>` is when `Shown` is a state: naming one in a tag position READS it, so the slot is handed a different view whenever it changes. The instance is therefore keyed by the VIEW and not by the position alone — reusing it because something is already there would write the new component’s props into the old one’sstatess and repaint nothing, which is the keyed-list failure one concept over. The counts are the claim, because an instance that was rebuilt and one that was resumed paint the same characters: the view that left does not run again, the one that arrived runs once, and coming back is a THIRD call over an instance whose edit is gone.',
             async run({ is }) {
                 let plains = 0
                 const Plain = (props: { id: State<number>; n: State<number> }): TemplateResult => {
@@ -2318,7 +2334,7 @@ export default suite({
                 await tick()
                 editors.edit(4, 'EDITED')
                 await tick()
-                is('the cell chose the first view', host.textContent, '4/EDITED')
+                is('the state chose the first view', host.textContent, '4/EDITED')
 
                 editing.set(false)
                 await tick()
@@ -2367,7 +2383,7 @@ export default suite({
                 host.append(
                     row(
                         button('n.set(n + 1)', async () => {
-                            const work = await measureFlush(() => n.set(n.peek() + 1))
+                            const work = await measureFlush(() => n.set(n.peek()! + 1))
                             log.live('work per write', `${nonZero(work)}${disposed ? ' — disposed' : ''}`)
                         }),
                         button('dispose()', () => {
@@ -2420,7 +2436,7 @@ export default suite({
         },
         {
             title: 'a settled block is not re-entered when a SIBLING slot wakes',
-            note: 'The claim every other case here makes about DOM work, made about WAKES instead — and the one this suite could not previously see. Each slot gets its own effect, so writing a cell one slot reads must not re-run the thunk of the slot beside it. When it does the output is still right, which is why only a counter catches it: a block whose thunk re-runs evaluates its operand again, hands the part a value it has not seen, and the `holding` cutoff correctly treats a new operand as a new load — so a settled panel flashes back to its pending arm and fetches a second time. That is the failure a bare block head reintroduced, and this is what would have failed instead of 417 green tests.',
+            note: 'The claim every other case here makes about DOM work, made about WAKES instead — and the one this suite could not previously see. Each slot gets its own effect, so writing a state one slot reads must not re-run the thunk of the slot beside it. When it does the output is still right, which is why only a counter catches it: a block whose thunk re-runs evaluates its operand again, hands the part a value it has not seen, and the `holding` cutoff correctly treats a new operand as a new load — so a settled panel flashes back to its pending arm and fetches a second time. That is the failure a bare block head reintroduced, and this is what would have failed instead of 417 green tests.',
             async run({ is }) {
                 let loads = 0
                 const load = (): Promise<string> => {
@@ -2481,7 +2497,7 @@ export default suite({
 
         {
             title: 'a second invalidate MID-LOAD still leaves the pending arm on screen',
-            note: 'The two arms of `{#if x.pending()}` are two effects: the gate reads `pending`, and the else arm’s slot is what reads the cell and kicks the load. Invalidating a slot that is ALREADY loading drops the load, so the gate wakes to `pending` false, re-enters the else arm, and the slot inside it starts a fresh load — flipping `pending` back to true while the gate is still inside its own run. Absorbed as "the mark this run is already answering", that flip never reached the gate: the region sat on the else arm with a slot that could not read yet, so the text vanished until the load landed. A second click is the whole of the reproduction, because the first one invalidates a SETTLED slot and starts its load from the other effect.',
+            note: 'The two arms of `{#if x.pending()}` are two effects: the gate reads `pending`, and the else arm’s slot is what reads the state and kicks the load. Invalidating a slot that is ALREADY loading drops the load, so the gate wakes to `pending` false, re-enters the else arm, and the slot inside it starts a fresh load — flipping `pending` back to true while the gate is still inside its own run. Absorbed as "the mark this run is already answering", that flip never reached the gate: the region sat on the else arm with a slot that could not read yet, so the text vanished until the load landed. A second click is the whole of the reproduction, because the first one invalidates a SETTLED slot and starts its load from the other effect.',
             async run({ is }) {
                 let loads = 0
                 const quote = memo(async ({ symbol }: { symbol: string }) => {
@@ -2518,8 +2534,8 @@ export default suite({
             note: 'The one prop the compiler guarantees is FRESH. `children` is emitted as a template literal inside the CALLER’s thunk, so a component in a `{#for}` is handed a newly built `TemplateResult` per row on every pass — and `writeProps` promises in its own comment that "a prop that did not move wakes nobody", which for this prop could never once be true. The output is identical either way, so only a wake counter can tell: the child re-runs the slot that reads `children`, rebuilds it, and paints what was already there. Both halves are owed here. The reorder says the wake is gone; the edit says it did not go by never waking at all, which is what a cutoff comparing the wrong thing would also produce.',
             async run({ is }) {
                 let slotRuns = 0
-                // The prop type is what a CALLER passes; what the view holds is the cell
-                // `cellProps` wrapped it in. A `.abide` component gets that reconciled by the
+                // The prop type is what a CALLER passes; what the view holds is the state
+                // `stateProps` wrapped it in. A `.abide` component gets that reconciled by the
                 // compiler, and a hand-written view says it here.
                 const Panel = (props: { children: unknown }): unknown =>
                     html`<section>${() => {
@@ -2607,7 +2623,7 @@ export default suite({
             title: 'the documented example runs',
             note: 'What `/docs/client` shows and mounts. The claim is a COUNT, not a rendering: after a two-row swap the two rows have MOVED and nothing was built — a rebuild produces exactly the same correct list, which is why the assertion is `nodesMade` rather than the list itself. The list is asserted too, because a minimal reconcile that corrupts the order would also make nothing.',
             async run({ is }) {
-                // The rung's cell is its own — a setup block is per INSTANCE — so the list starts at the
+                // The rung's state is its own — a setup block is per INSTANCE — so the list starts at the
                 // three rows it declares, and the swap is made the way a reader makes it: the button.
                 const host = scratch(() => Example({}))
                 const shown = (): string[] => {

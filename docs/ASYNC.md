@@ -10,13 +10,13 @@ ways: the type of an async read is `T | undefined` so every use needs narrowing,
 pending read throws, and choosing between a blocking render and a streamed one means choosing a
 different block form.
 
-The graph already resolves async — a slot reads a cell, subscribes, and re-renders when it lands.
+The graph already resolves async — a slot reads a state, subscribes, and re-renders when it lands.
 The ceremony is not the graph failing. It is that a read returns `undefined` instead of saying "not
 yet", so every caller has to handle a state the framework could have handled.
 
 ## the model
 
-**A pending read SIGNALS.** `m()` on an unsettled cell throws a sentinel rather than returning
+**A pending read SIGNALS.** `m()` on an unsettled state throws a sentinel rather than returning
 `undefined`. Whatever is rendering catches it, produces no output for that region, and re-runs when
 the graph wakes it.
 
@@ -60,7 +60,7 @@ Signalling is only meaningful where RE-RUNNING is the recovery, so that is exact
 | `<script>` setup · event handler · module scope | returns what is there | `T \| undefined` |
 
 The types are not a promise the runtime has to keep: the compiler already desugars a read differently
-per position (`Position` in `$compiler/internal/emit.ts` is `'read' | 'cell' | 'slot'`), so a
+per position (`Position` in `$compiler/internal/emit.ts` is `'read' | 'state' | 'slot'`), so a
 non-signalling position emits a different call — `peek()` — and gets the honest type from it.
 
 This deletes narrowing from the common case. `{rpc().foo.bar}` type-checks and runs, because in a
@@ -86,7 +86,7 @@ optional chaining is needed inside a guarded branch, because there is no read le
 
 **Streaming is expressed the same way.** An `{#if}` chain whose first test is `<handle>.pending()`
 compiles to the deferring form: the pending branch is the placeholder sent now, the rest is patched in
-when the cell settles. Having something to show is what says defer, and asking about `.pending()` IS
+when the state settles. Having something to show is what says defer, and asking about `.pending()` IS
 having something to show.
 
 So:
@@ -102,7 +102,7 @@ deferring `{#if}` writes, and the placeholder-and-patch machinery under it is un
 
 ## the order to build it, and the gate for each
 
-1. **The signal.** DONE. `readCell` throws a `Pending` carrying the cell, in re-runnable positions
+1. **The signal.** DONE. `readState` throws a `Pending` carrying the state, in re-runnable positions
    only — `current !== null`, or a `retryable` walk that says it will call again. The subscription is
    to the pending FLIP rather than to the value, because a load that settles to `undefined` moves no
    value and a reader holding only the value subscription would signal forever.
@@ -168,8 +168,8 @@ deferring `{#if}` writes, and the placeholder-and-patch machinery under it is un
    since a derivation emitted with `peek` subscribes to nothing and is right on the only pass a
    correctness test looks at. A body is a `{…}` after `=>` or after a PARAMETER LIST, which is what
    makes `if (…) {` and `for (…) {` fall out for free: their `(` follows a keyword, not a name.
-   The types moved with it — `state(promise)` is `Cell<T>` and not `State<T | undefined>`, and the
-   `| undefined` lives on `peek` alone. `State<T>` is now the narrower one, a cell that was never
+   The types moved with it — `state(promise)` is `State<T>` and not `State<T | undefined>`, and the
+   `| undefined` lives on `peek` alone. `State<T>` is now the narrower one, a state that was never
    cold, and that is what keeps `x += 1` — which desugars through `peek` so a write cannot subscribe
    — from needing a narrowing that can never fail.
    Gate held, verified both ways: `unnarrowed.abide` moved from a TEMPLATE member access to a setup
@@ -188,15 +188,15 @@ deferring `{#if}` writes, and the placeholder-and-patch machinery under it is un
    Gate held: `start.test.ts`'s wire-ordering assertions, moved from `{#await}` to the `{#if}` form —
    five of them fail with the deferring emit reverted, four named plus the compressed-head and nonce
    pages that read the same route. The client half needs its own gate and a DIFFERENT one than the
-   obvious: a cell inside an arm has its own slot effect and repaints whichever way the arm was handed
-   over, so what the case writes is a cell in a CONDITION — only a change of arm can say the settled
+   obvious: a state inside an arm has its own slot effect and repaints whichever way the arm was handed
+   over, so what the case writes is a state in a CONDITION — only a change of arm can say the settled
    chain is still live. Reverted, that reads `ada` where it should read `moved`.
 6. **Delete `{#await}`.** DONE, with `{await x}`, `{(await x).b.c}`, `short`, `suffix`, `compact`,
    `parenthesisedAwait`, `shortArm` and `collectBranches`'s block parameter. `awaited`, `Awaited`,
    `Branches` and both substrates' deferral paths STAY — they are what a deferring `{#if}` compiles
    to. An `await` in a slot is now refused by name, and the message points at the two spellings that
    work: a promise in a slot renders what it resolves to, and a load to say something ABOUT goes in a
-   cell.
+   state.
 
 ## what is unresolved
 
@@ -226,7 +226,7 @@ Settled by building steps 1–6, and by `docs/COMPONENTS.md`:
 
 
 - **Setup IS non-reactive, and runs once.** A component call is carried to the position that shows
-  it, which calls the view once, untracked, and writes every later pass's props into cells. So a read
+  it, which calls the view once, untracked, and writes every later pass's props into states. So a read
   in a `<script>` is not tracked by the parent's thunk and is not re-run by it — which is the premise
   step 4 rests on. It was a live hazard, independent of async, and the fix is measured there.
 

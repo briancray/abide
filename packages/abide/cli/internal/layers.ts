@@ -536,14 +536,20 @@ function errorPage(
     const navigating = request.headers.get(NAVIGATION_HEADER) !== null
     const answer = (): Response =>
         navigating
-            ? page(fragmentToStream(() => errorOutlet(held, said), HYDRATABLE), {
-                  status,
-                  headers: {
-                      ...NAVIGATION_HEADERS,
-                      [NAVIGATION_FAILURE_HEADER]: failureHeader(said),
+            ? page(
+                  fragmentToStream(() => errorOutlet(held, said), HYDRATABLE),
+                  {
+                      status,
+                      headers: {
+                          ...NAVIGATION_HEADERS,
+                          [NAVIGATION_FAILURE_HEADER]: failureHeader(said),
+                      },
                   },
-              })
-            : page(documentToStream(shell, () => errorOutlet(held, said), HYDRATABLE), { status })
+              )
+            : page(
+                  documentToStream(shell, () => errorOutlet(held, said), HYDRATABLE),
+                  { status },
+              )
     return loading === null ? Promise.resolve(answer()) : loading.then(answer)
 }
 
@@ -1063,7 +1069,8 @@ export function report(said: Reported): void {
     let width = 0
     for (const [label] of rows) if (label.length > width) width = label.length
     console.log('')
-    for (const [label, value] of rows) console.log(`  ${marker}${paint(label.padEnd(width), DIM, on)}   ${value}`)
+    for (const [label, value] of rows)
+        console.log(`  ${marker}${paint(label.padEnd(width), DIM, on)}   ${value}`)
     console.log('')
     console.log(paint(`  ${parts.join(' · ')}`, DIM, on))
 

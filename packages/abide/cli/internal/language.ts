@@ -97,26 +97,26 @@ export interface Declared {
 }
 
 /**
- * `Cell<T>`, and the two names that extend it. Anchored, so a type that merely MENTIONS one — a
- * function returning a cell, an object holding one — is not described as being one.
+ * `State<T>`, and the two names that extend it. Anchored, so a type that merely MENTIONS one — a
+ * function returning a state, an object holding one — is not described as being one.
  */
-const CELL_TYPE = /^(?:Cell|State|Memo)<([\s\S]+)>$/
+const STATE_TYPE = /^(?:State|MemoHandle|Memo)<([\s\S]+)>$/
 
 /**
- * What a cell IS, said where an author meets it.
+ * What a state IS, said where an author meets it.
  *
- * `Cell` is the one public name in abide an author reads and never writes: the sugar is the whole
+ * `State` is the one public name in abide an author reads and never writes: the sugar is the whole
  * point, so a prop or a `state()` is used by name and the type behind it never had to be said out
  * loud — until a hover started saying it. The line below is that name connected back to the spelling
  * the author already knows, which is the same rule the compiler decides SYNTACTICALLY.
  */
-function describeCell(type: string, name: string | null): string {
-    const match = CELL_TYPE.exec(type)
+function describeState(type: string, name: string | null): string {
+    const match = STATE_TYPE.exec(type)
     if (match === null) return ''
     const subject = name ?? 'it'
     const held = match[1] as string
     return (
-        `A **cell** — a \`${held}\` that can CHANGE, and that tells whoever read it when it does. ` +
+        `A **state** — a \`${held}\` that can CHANGE, and that tells whoever read it when it does. ` +
         `That is why it is not just a \`${held}\`: a plain value cannot say it moved.\n\n` +
         `In markup, write the name: \`{${subject}}\` — reading it is what subscribes, ` +
         `so it re-renders itself. In a \`<script>\`, \`${subject}\` reads and ` +
@@ -417,7 +417,7 @@ function describeBound(target: string): string {
     for (const tag in accepted) {
         pairs.push(`\`<${tag}>\` on \`${(accepted[tag] as { event: string }).event}\``)
     }
-    return `\`bind:${target}\` — hands over the cell, and writes it back from ${pairs.join(', ')}`
+    return `\`bind:${target}\` — hands over the state, and writes it back from ${pairs.join(', ')}`
 }
 
 /** A document, plus the line index both position directions need. */
@@ -811,8 +811,8 @@ export class LanguageServer {
         // doc comment goes BELOW the fence, where markdown is what it already was.
         const fenced = `\`\`\`ts\n${found.type}\n\`\`\``
         const said: string[] = [fenced]
-        const cell = describeCell(found.type, nameAt(held.text, offset))
-        if (cell !== '') said.push(cell)
+        const described = describeState(found.type, nameAt(held.text, offset))
+        if (described !== '') said.push(described)
         if (found.docs !== null) said.push(found.docs)
         const value = said.join('\n\n')
         return { contents: { kind: 'markdown', value } }

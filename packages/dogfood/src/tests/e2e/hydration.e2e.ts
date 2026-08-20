@@ -56,7 +56,9 @@ const SWEEPS: { section: string; paths: string[] }[] = [
         // next. Nine warnings on that page are nine cases working. What is lost with it is that page's
         // OWN hydration, which nothing else here covers; separating the two would mean recording
         // warnings in-page against a hydration marker rather than reading the console from outside.
-        paths: CAPABILITIES.filter((entry) => entry.name !== 'hydrate').map((entry) => `/tests/${entry.name}`),
+        paths: CAPABILITIES.filter((entry) => entry.name !== 'hydrate').map(
+            (entry) => `/tests/${entry.name}`,
+        ),
     },
     { section: 'every capability, priced', paths: CAPABILITIES.map((entry) => `/bench/${entry.name}`) },
 ]
@@ -131,7 +133,7 @@ for (const sweep of SWEEPS) {
 /**
  * A rung holding a live STREAM, sampled while it is still arriving.
  *
- * The two slots read the same cell and take different paths: `{ticks ?? 0}` is a plain read and
+ * The two slots read the same state and take different paths: `{ticks ?? 0}` is a plain read and
  * paints, `{#for tick of ticks.chunks()}` is a probe and does not. The server DRAINED this stream
  * before it wrote the markup, so what is on screen at hydration is its last chunk — five rows beside
  * a `latest 5` — while this side restarts from one.

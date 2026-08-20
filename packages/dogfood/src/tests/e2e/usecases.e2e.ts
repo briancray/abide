@@ -62,7 +62,7 @@ test('the data demo answers over an rpc, and filtering it re-runs the work', asy
     await expect(page.locator('#rows')).toBeVisible()
 
     await page.locator('#query').fill('a')
-    // The counters are BODY RUNS — the work, which is what moving one cell is supposed to change and what
+    // The counters are BODY RUNS — the work, which is what moving one state is supposed to change and what
     // nothing about the rendered numbers can tell you.
     await page.locator('#sample').click()
     await expect(page.locator('#runs')).not.toHaveText('press sample')

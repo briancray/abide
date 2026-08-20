@@ -56,10 +56,21 @@ export default suite({
             async server({ is }) {
                 serve(ASKED, () => {
                     const first = cookies()
-                    is('the header, parsed', [...first], [['theme', 'dark'], ['seen', '2']])
+                    is(
+                        'the header, parsed',
+                        [...first],
+                        [
+                            ['theme', 'dark'],
+                            ['seen', '2'],
+                        ],
+                    )
                     is('and the second ask is the SAME map, not an equal one', cookies() === first, true)
                     first.set('theme', 'light')
-                    is('so a write inside the request is seen by the next reader', cookies().get('theme'), 'light')
+                    is(
+                        'so a write inside the request is seen by the next reader',
+                        cookies().get('theme'),
+                        'light',
+                    )
                 })
                 // A second request is a second scope: the mutation above must not have escaped.
                 serve(ASKED, () => {
@@ -111,11 +122,19 @@ export default suite({
             note: 'The rest of the baseline is opt-in because a directive naming where a resource may be LOADED from can blank an app abide cannot see, and a header that does that once is one nobody turns on again. These two name no source: `object-src` refuses plugin content, and `base-uri` refuses a `<base>` that would repoint every relative URL on the page. Neither can break a working app, so neither waits to be asked for — and `csp()` replaces the header wholesale, with a baseline that is a superset of this.',
             async run({ is }) {
                 const policy = page('<p>a</p>').headers.get('content-security-policy')
-                is('a page carries it with no middleware installed', policy, "object-src 'none'; base-uri 'self'")
+                is(
+                    'a page carries it with no middleware installed',
+                    policy,
+                    "object-src 'none'; base-uri 'self'",
+                )
                 // The counterexample that says it is a DEFAULT and not a rule: a route with its own
                 // policy keeps it, the same way `cache-control` works one field up.
                 const own = page('<p>a</p>', { headers: { 'content-security-policy': "default-src 'none'" } })
-                is('…and a route that states its own keeps it', own.headers.get('content-security-policy'), "default-src 'none'")
+                is(
+                    '…and a route that states its own keeps it',
+                    own.headers.get('content-security-policy'),
+                    "default-src 'none'",
+                )
             },
         },
     ],

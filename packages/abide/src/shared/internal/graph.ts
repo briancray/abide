@@ -5,9 +5,9 @@
 // marks direct dependents DIRTY and everything deeper CHECK, and a CHECK node only recomputes if a
 // source really moved. A diamond therefore wakes its sink once, not twice.
 //
-// A cell holds a SETTLED value whether the data arrived synchronously or not — see "async cells".
+// A state holds a SETTLED value whether the data arrived synchronously or not — see "async states".
 //
-// This is deliberately ONE file rather than graph / async / cell. `Node.run` decides between "this
+// This is deliberately ONE file rather than graph / async / state. `Node.run` decides between "this
 // is a value" and "this is a load" inline, and the load path writes back through `Node.write` — so
 // any split along those lines is an import cycle, not a seam. `#shared/reactive.ts` is the public
 // face of what is here; nothing outside abide imports this module.
@@ -71,9 +71,9 @@ let outstanding: Pending | null = null
  * fresh list once one of them has not.
  *
  * A re-run almost always reads the same sources in the same order — `${() => row.id === selected()}`
- * reads one cell, in one order, forever — and the subscription it wants is already the one it has.
+ * reads one state, in one order, forever — and the subscription it wants is already the one it has.
  * Detaching from every source and re-collecting them was therefore a remove and an add per source
- * per wake, all of it to arrive back where it started: on a thousand rows reading one cell it was
+ * per wake, all of it to arrive back where it started: on a thousand rows reading one state it was
  * the single largest item in the wake, and `abideclean` — the separate checkout the cross-repo
  * comparison runs against, not anything in this tree — skips it and runs `select row` at 0.40 ms
  * against 1.50.
@@ -111,7 +111,7 @@ export class Node {
      *
      * A shared empty for the same reason `sources` has one: a `state` nothing derives from is the
      * common shape, and it used to allocate a `Set` eagerly — 104 bytes per observing effect and 32
-     * per bare cell, measured over 100k of each.
+     * per bare state, measured over 100k of each.
      */
     observers: Node[] = NO_OBSERVERS
     cleanup: (() => void) | null = null
@@ -192,7 +192,7 @@ export class Node {
             // SIGNAL has produced no value and told its observers nothing, and absorbing the mark
             // here is what made it serve a stale one for good. `relayed` subscribes the READER to the
             // flip that ends the load, which covers the load it was armed for and no other: when the
-            // body goes on to read a DIFFERENT cell — a keyed slot whose args moved is the ordinary
+            // body goes on to read a DIFFERENT state — a keyed slot whose args moved is the ordinary
             // way — that first flip never fires again and the change stops here.
             //
             // So the status stays DIRTY, which is what keeps the next read running the body, and the
@@ -229,7 +229,7 @@ export class Node {
             // keyed memo gives it (`memo.ts`'s `start` catches and calls `internals.fail`) — not a
             // node left DIRTY. Left DIRTY, `mark` early-returns on `status >= next` forever, so
             // nothing downstream ever wakes again even after the data recovers, and the memoisation
-            // is gone with it: every read re-runs the body and re-collects its sources. `readCell`
+            // is gone with it: every read re-runs the body and re-collects its sources. `readState`
             // still throws, now from the retained error rather than from the body.
             //
             // An EFFECT keeps throwing out of here: `flush` resets it to CLEAN and rethrows from a
@@ -250,7 +250,7 @@ export class Node {
                     this.signalled = true
                     // Nobody to signal: whoever read this derivation is at a position that will
                     // not run again, so it serves what it has — nothing yet — exactly as the cold
-                    // cell under it would have. Returning here leaves the node DIRTY, so the next
+                    // state under it would have. Returning here leaves the node DIRTY, so the next
                     // read runs the body rather than trusting a value it never produced.
                     if (current === null && !willRetry) return
                     // Re-armed for whoever is reading: the derivation's own run restored this on
@@ -370,7 +370,7 @@ export class Node {
             return
         }
         // An async iterable is a STREAM: the value is the latest chunk. Asked FIRST — see
-        // `isAsyncIterable` — because a cell answers both and only this arm keeps its transcript.
+        // `isAsyncIterable` — because a state answers both and only this arm keeps its transcript.
         if (isAsyncIterable(next)) {
             consume(this, next)
             return
@@ -407,7 +407,7 @@ export class Node {
         if (this.status === DEAD) return
         // A settle after disposal is dropped, so an in-flight load has to be ENDED here rather than
         // left looking in-flight: anyone already awaiting it is told, and a later `await` on the dead
-        // cell resolves with whatever was retained instead of parking a waiter nothing will ever wake.
+        // state resolves with whatever was retained instead of parking a waiter nothing will ever wake.
         const track = this.asyncTrack
         if (track !== null) {
             track.generation++
@@ -429,7 +429,7 @@ export class Node {
         // the caller then takes it away. Dropping the observers silently left the reader holding a
         // DEAD node, which `mark` can never wake: on `/tests` a page-level memo stopped propagating
         // for good the moment the `scope` suite held an async `isolate` open across one flush, and
-        // every derived thing on the page froze while the cells under it went on moving.
+        // every derived thing on the page froze while the states under it went on moving.
         //
         // Marked BEFORE the list is dropped, and free for the node nobody read — the common case is
         // an empty `observers`. A reader being torn down in the same teardown absorbs this in `mark`,
@@ -465,15 +465,15 @@ function flush(): void {
     }
 }
 
-// The transcript a cell that has never streamed hands back. One shared array, so a reader of
-// `chunks()` on an ordinary cell sees the same identity every time and never wakes for it.
+// The transcript a state that has never streamed hands back. One shared array, so a reader of
+// `chunks()` on an ordinary state sees the same identity every time and never wakes for it.
 const NO_CHUNKS: unknown[] = []
 
 /**
  * Forget the transcript: a new run is a new one, not a continuation of the last.
  *
  * Silent when there was nothing to forget — the version only moves when a reader would see a
- * different array, so re-streaming a cell whose transcript was already empty wakes nobody.
+ * different array, so re-streaming a state whose transcript was already empty wakes nobody.
  */
 function resetChunks(track: Async): void {
     if (track.buffer.length === 0) return
@@ -499,7 +499,7 @@ function freshBuffer(track: Async): void {
  *
  * Applied at exactly the six places a value becomes the node's own, split by whether the result is
  * the node's VALUE or one CHUNK of a stream. The four value sites — `state`'s initial, a sync write
- * on a cell with no tracker, a settle, and a derivation's sync result — go through `transformValue`
+ * on a state with no tracker, a settle, and a derivation's sync result — go through `transformValue`
  * below, which adds the one law they share and the chunks do not. The other two call this directly:
  * each chunk a live stream keeps, and each chunk `adoptTranscript` replays from a SEEDED one — a
  * chunk lands through `hold` rather than through a settle, so it is its own site, and a replay is its
@@ -509,8 +509,8 @@ function freshBuffer(track: Async): void {
  */
 function transformed(node: Node, value: unknown): unknown {
     // A non-null `transform` is the caller's precondition. Each of the six tests it before calling,
-    // which is what keeps a cell WITHOUT one from paying a call at all — so re-testing here would be
-    // a second guard on every settle, every chunk and every sync write of the cells that do have one.
+    // which is what keeps a state WITHOUT one from paying a call at all — so re-testing here would be
+    // a second guard on every settle, every chunk and every sync write of the states that do have one.
     return untrackCall(node.transform as (value: unknown) => unknown, value)
 }
 
@@ -522,7 +522,7 @@ const ADOPTED = Symbol('abide.adopted')
  * promise it hands back is a LOAD rather than a value — the same rule the body follows, one stage
  * along. Written once here rather than at each of the three, which is also where it went missing:
  * `memo(deps, async fn)` stored the `Promise` itself, so the read handed one back with `pending()`
- * false and `await` on the cell resolved to a promise. A cell holding a promise as a value is the one
+ * false and `await` on the state resolved to a promise. A state holding a promise as a value is the one
  * shape "a promise is a load" has nowhere else.
  *
  * The adoption does NOT re-apply the transform — it has already run — which is the same trap
@@ -540,15 +540,15 @@ function transformValue(node: Node, value: unknown): unknown {
     return ADOPTED
 }
 
-// --- async cells ----------------------------------------------------------
+// --- async states ----------------------------------------------------------
 //
-// Handing a cell a promise — `state(fetchUser())`, `x.set(p)`, or an argless `memo` body that
+// Handing a state a promise — `state(fetchUser())`, `x.set(p)`, or an argless `memo` body that
 // returns one — starts a LOAD instead of storing the promise. The read stays the same call it always
 // was and serves the retained value (`undefined` if nothing is retained yet); the node is written
 // once the promise lands. That is the whole of "sync or async, same read".
 //
 // The bookkeeping below is allocated on first contact with a promise or a probe, never before, so a
-// cell that only ever holds sync values still costs exactly one Node.
+// state that only ever holds sync values still costs exactly one Node.
 
 // Four one-bit nodes rather than one status record, for the same reason `memo`'s slot keeps
 // `refreshing` separate: each probe must wake only on ITS OWN transition. A status record makes
@@ -578,7 +578,7 @@ class Async {
      */
     readonly error = new Node(undefined, null)
     // A later write must win even when an earlier promise settles after it. Without the stamp a slow
-    // first load lands on top of the fast second one and the cell reports the value nobody asked for.
+    // first load lands on top of the fast second one and the state reports the value nobody asked for.
     generation = 0
     /**
      * Who is waiting, and WHICH moment each of them asked for.
@@ -623,7 +623,7 @@ function trackerFor(node: Node): Async {
  * asleep until the load actually changes it.
  *
  * A retained `undefined` counts as COLD: `state(undefined)` has settled, but it has nothing to keep
- * showing, and a spinner that reads `refreshing` over a blank cell is the wrong spinner.
+ * showing, and a spinner that reads `refreshing` over a blank state is the wrong spinner.
  */
 function markStarted(node: Node, track: Async): void {
     if (node.hasValue && node.value !== undefined) track.refreshing.write(true)
@@ -652,7 +652,7 @@ function adopt(node: Node, promise: PromiseLike<unknown>, applyTransform = true)
 // Everyone reading this node has to ASK AGAIN, without the node's own value having moved. A FAILURE
 // is the case that needs it most: it changes the OUTCOME of a plain read while the value stays put,
 // and subscribing those readers to the error node instead does not work — a reader that ran before
-// the cell ever met a promise subscribed when there was no error node to subscribe TO, and would
+// the state ever met a promise subscribed when there was no error node to subscribe TO, and would
 // then sit on the last good value as though the load had succeeded. Disposal wants the same wake for
 // a different reason; `Node.write` keeps its own copy, being the per-write path.
 function wakeReaders(node: Node): void {
@@ -665,7 +665,7 @@ function settleValue(node: Node, value: unknown, applyTransform = true): void {
     const track = trackerFor(node)
     if (applyTransform && node.transform !== null) {
         // A transform that throws is a failed settle, not a throw out of a promise callback nobody
-        // is standing under — the cell reports it exactly as a rejected load.
+        // is standing under — the state reports it exactly as a rejected load.
         try {
             value = transformValue(node, value)
         } catch (error) {
@@ -684,7 +684,7 @@ function settleValue(node: Node, value: unknown, applyTransform = true): void {
  * Drop a held failure, and the note saying it was already reported.
  *
  * One function because the two have to move together: `reported` is the identity `reportFailure`
- * dedupes against, so a clear that forgets it both retains a discarded `Error` for the cell's lifetime
+ * dedupes against, so a clear that forgets it both retains a discarded `Error` for the state's lifetime
  * and goes silent if the same object is thrown again after a recovery.
  */
 function clearError(track: Async): void {
@@ -707,7 +707,7 @@ function hold(node: Node, track: Async, value: unknown): void {
  * A stream that ALREADY HAPPENED — the whole transcript at once, settled in the call.
  *
  * `consume` is a `for await` and costs a tick per chunk however the chunks arrive, so replaying a
- * seeded transcript through it would leave the cell `streaming` for as many microtasks as there are
+ * seeded transcript through it would leave the state `streaming` for as many microtasks as there are
  * chunks. A hydrating region reading it in that window sees a partial transcript and rebuilds its
  * rows against markup already holding all of them — which is the whole thing seeding a stream is for.
  *
@@ -733,7 +733,7 @@ function adoptTranscript(node: Node, chunks: readonly unknown[]): void {
  *
  * One writer for the three probes, because they stand down TOGETHER: `markSettled` used to leave
  * `streaming` alone, so each of its stream callers wrote that line itself and a settle reached any
- * other way left a cell claiming to stream. Every write here is identity-deduped, so a probe already
+ * other way left a state claiming to stream. Every write here is identity-deduped, so a probe already
  * false costs one compare.
  */
 function standDown(track: Async): void {
@@ -751,8 +751,8 @@ function markSettled(track: Async): void {
 
 // --- streams --------------------------------------------------------------
 //
-// An async iterable handed to a cell is a STREAM, the same way a promise handed to one is a load:
-// the cell holds the LATEST chunk, `chunks()` holds the transcript, and the read is the ordinary
+// An async iterable handed to a state is a STREAM, the same way a promise handed to one is a load:
+// the state holds the LATEST chunk, `chunks()` holds the transcript, and the read is the ordinary
 // call throughout. The probes compose rather than needing a vocabulary of their own — cold until the
 // first chunk (`pending`), then a load in flight over a value that is already being served
 // (`refreshing`), `streaming` all the way through, and `settled` + `done` when it ends cleanly.
@@ -804,7 +804,7 @@ function consume(node: Node, source: AsyncIterable<unknown>): void {
                     }
                     track.chunks.write((track.chunks.value as number) + 1)
                 }
-                // Outside the guard: the cap is on what is REMEMBERED. The cell still holds the
+                // Outside the guard: the cap is on what is REMEMBERED. The state still holds the
                 // latest chunk and its readers still wake — an overflow disables replay, not the
                 // stream.
                 hold(node, track, chunk)
@@ -846,7 +846,7 @@ const loadLog = abideLog.channel('load')
 /**
  * Say it once per distinct reason, however many times the read is made.
  *
- * A template arm is re-evaluated on every wake, and a failed cell goes on being failed — so the read
+ * A template arm is re-evaluated on every wake, and a failed state goes on being failed — so the read
  * is the right place to NOTICE and the wrong place to be unconditional. The reason itself is passed to
  * the console beside the line: `String(err)` is `name: message`, and a stack survives only as the object.
  *
@@ -860,7 +860,7 @@ const loadLog = abideLog.channel('load')
  * constructed with rather than this line's own call site.
  *
  * An AWAIT is not a read, so nothing here has to check for one. A waiter is rejected through
- * `settledPromise`, which never calls `readCell` — so the guard falls out of where the report is made
+ * `settledPromise`, which never calls `readState` — so the guard falls out of where the report is made
  * rather than being a condition on it. That is what keeps a modelled failure quiet: an
  * `error.typed('NoUser', 404)` answered over rpc is an ANSWER, reported on `abide:rpc` with its
  * outcome, and whoever awaited it either catches it or raises an unhandled rejection already carrying
@@ -869,7 +869,7 @@ const loadLog = abideLog.channel('load')
  * Reported from the READ, not from the settle, and that is the load-bearing part. Two earlier
  * placements were built and reverted by the gate. Reporting at the SETTLE cannot tell a broken load
  * from an answer an app DECLARED — an rpc handler returning `error.typed('NoUser', 404)` settles a
- * cell exactly as a dead socket does, so it dumped a stack for every modelled failure a server
+ * state exactly as a dead socket does, so it dumped a stack for every modelled failure a server
  * answered, already reported with its outcome on `abide:rpc`. Moving it behind an `abide/ui` install
  * fixed that and broke the case it was for: a rung whose `<script module>` runs on the SERVER renders
  * its failure arm there and never ships to the browser at all, so the browser lane had nothing to see.
@@ -879,7 +879,7 @@ const loadLog = abideLog.channel('load')
  * declared answer stays the rpc channel's business. It lands in BOTH lanes, which is what the
  * server-rendered rung needs.
  *
- * The two entries are `readCell` and `read.error` — the value and the probe — and abide's own machinery
+ * The two entries are `readState` and `read.error` — the value and the probe — and abide's own machinery
  * uses BOTH of them, which is why suppression is a scope (`withoutReporting`, `quietly`) rather than a
  * property of the entry. The exceptions are listed on `reporting`; keep them enumerated from the call
  * sites, because a missed one is a stack nobody asked for and nothing goes red.
@@ -888,7 +888,7 @@ function reportFailure(track: Async, reason: unknown): void {
     // `!kicking` is `internals.quietly`, and it counts as abide reading on its own behalf for the reason
     // that function's own doc gives: a non-kicking probe is machinery "routing or inspecting rather than
     // displaying". `repl`'s `show()` is the one that proves it — it asks three probes quietly to choose
-    // how to PRINT a cell, and a stack dumped into the prompt it is drawing is not a report anybody asked
+    // how to PRINT a state, and a stack dumped into the prompt it is drawing is not a report anybody asked
     // for. Covering it here rather than at that call site is what keeps the next such caller right too.
     if (!reporting || !kicking || track.reported === reason) return
     track.reported = reason
@@ -957,7 +957,7 @@ function showFirstChunk(track: Async, value: unknown): void {
 // (`willRetry`). Anywhere else — `<script>` setup, an event handler, module scope — the read hands
 // back what is there, because nobody would run it a second time.
 
-/** The signal itself, carrying the CELL that was not ready — the one thing a catcher can wait for. */
+/** The signal itself, carrying the STATE that was not ready — the one thing a catcher can wait for. */
 export class Pending {
     constructor(readonly node: Node) {}
 }
@@ -1042,7 +1042,7 @@ export function swallowed(): boolean {
  * Staying DIRTY costs the wake, though: `mark` stops at a node that is already DIRTY, so the flip
  * that ends the load would reach this derivation and go no further. So whoever is READING it —
  * `current` again by here, the derivation's own run having restored it — is subscribed to that flip
- * directly. The signal keeps carrying the cell it started at, which is the one that can be awaited;
+ * directly. The signal keeps carrying the state it started at, which is the one that can be awaited;
  * a derivation cannot be, since nothing would pull it.
  */
 function relayed(pending: Pending): Pending {
@@ -1053,8 +1053,8 @@ function relayed(pending: Pending): Pending {
 // THE read. A failed load throws here rather than reporting `undefined` and letting a caller who
 // never checked `error()` render as though nothing went wrong. The failure is read untracked — the
 // subscription is to the value, and `settleError`/`settleValue` wake those readers on a flip.
-// A cell that has never met a promise has no tracker and pays one null check for all of this.
-function readCell(node: Node): unknown {
+// A state that has never met a promise has no tracker and pays one null check for all of this.
+function readState(node: Node): unknown {
     const value = node.read()
     const track = node.asyncTrack
     if (track === null) return value
@@ -1077,7 +1077,7 @@ function readCell(node: Node): unknown {
     return value
 }
 
-// Backing for `then`: the promise of the SETTLED value. Reads untracked — awaiting a cell inside an
+// Backing for `then`: the promise of the SETTLED value. Reads untracked — awaiting a state inside an
 // effect must not subscribe the effect to it, since nothing can be tracked through an await anyway.
 //
 // `atFirstChunk` asks for the moment `pending` stands down instead, which is the same moment for
@@ -1086,13 +1086,13 @@ function settledPromise(node: Node, atFirstChunk = false): Promise<unknown> {
     if (node.fn !== null) {
         // Awaiting an async memo starts its load — and `await` is a CATCHER, in the same shape the
         // server walk is: a body that could not read yet is waited out and run again. Without this
-        // an `await` on a derivation over a cold cell resolves the `undefined` the body never
+        // an `await` on a derivation over a cold state resolves the `undefined` the body never
         // returned, which is the one place the signal could still hand back an unsettled value.
         try {
             retryableCall(pullNode, node)
         } catch (error) {
             if (!(error instanceof Pending)) throw error
-            // The retry re-reads the cell, so a FAILED load is thrown by the read rather than here.
+            // The retry re-reads the state, so a FAILED load is thrown by the read rather than here.
             return settledPromise(error.node, atFirstChunk).then(
                 () => settledPromise(node, atFirstChunk),
                 () => settledPromise(node, atFirstChunk),
@@ -1116,12 +1116,12 @@ function settledPromise(node: Node, atFirstChunk = false): Promise<unknown> {
 // Cleared only by `internals.quietly` — see there for why abide's own callers need it.
 let kicking = true
 
-// Cleared by `withoutReporting`, and for the same reason `kicking` exists: abide reads cells on its own
+// Cleared by `withoutReporting`, and for the same reason `kicking` exists: abide reads states on its own
 // behalf, and those reads are not somebody looking at a failure.
 //
-// ONE reader needs it and it is in this file — `iterate`, which reads a cell to subscribe to it and
+// ONE reader needs it and it is in this file — `iterate`, which reads a state to subscribe to it and
 // again to throw at its own consumer. Everything else that used to is covered without asking: `!kicking`
-// below is `quietly`, which is how `repl` prints a cell, and `respond` no longer reads a value at all.
+// below is `quietly`, which is how `repl` prints a state, and `respond` no longer reads a value at all.
 // OPT-OUT is the shape to be careful with, because a caller that forgets writes a stack nobody asked for
 // and nothing goes red — so keep the exceptions enumerated from the call sites, which is the thing this
 // flag got wrong twice before the set was closed.
@@ -1163,7 +1163,7 @@ export function forgetProbedLoad(): void {
 /**
  * A whole transcript, handed to `set` as one — what a server render already drained.
  *
- * A class rather than a plain array, because an array IS a legitimate value for a cell to hold and
+ * A class rather than a plain array, because an array IS a legitimate value for a state to hold and
  * the two must not be the same write. `set([1, 2])` holds an array; `set(transcript([1, 2]))` is a
  * stream of two chunks that is already over.
  */
@@ -1184,7 +1184,7 @@ export function hasProbedStream(): boolean {
 /**
  * The settle of a load the producer just PROBED and found unlanded, or null if it probed none.
  *
- * A promise rather than the cell, because that is all a caller does with it, and it keeps `Node` off
+ * A promise rather than the state, because that is all a caller does with it, and it keeps `Node` off
  * an exported signature. Separate from `hasProbedLoad` because asking BUILDS that promise, and on a
  * rejecting load a promise nobody awaits is an unhandled rejection — so a caller that only wants the
  * FACT must have a way to ask that costs nothing. Both callers want one or the other, never both.
@@ -1221,7 +1221,7 @@ export function probedLoad(atFirstChunk: boolean): Promise<unknown> | null {
  * The note is what a server walk reads back, and it is taken AFTER the start, so a slot that was
  * cold a line ago is reported as the in-flight load it now is. No early return for "nothing to
  * kick", either: a `state(promise)` has nothing to start and is pending the whole time, so one would
- * hide exactly the load a deferring region is built around. A cell that never met a promise has no
+ * hide exactly the load a deferring region is built around. A state that never met a promise has no
  * tracker and pays one null check for all of it.
  */
 function kicker(node: Node, beforeRead: (() => void) | null): () => boolean {
@@ -1247,9 +1247,9 @@ function kicker(node: Node, beforeRead: (() => void) | null): () => boolean {
                 kickedBy = previous
             }
         }
-        // The load is a CELL ONE LEVEL DOWN, and the signal is what carries it. Nothing settles this
+        // The load is a STATE ONE LEVEL DOWN, and the signal is what carries it. Nothing settles this
         // derivation, so writing `pending` on its own tracker would be a flag with no writer to stand
-        // it down; the cell that signalled has both — the flip that ends the load, and the promise a
+        // it down; the state that signalled has both — the flip that ends the load, and the promise a
         // server walk defers on. So the asker subscribes to THAT one and the walk notes THAT one,
         // which is what a direct probe of it would have done.
         if (signalled !== null) {
@@ -1265,7 +1265,7 @@ function kicker(node: Node, beforeRead: (() => void) | null): () => boolean {
         // STREAMING is "the server DRAINED this and we restart from the top", so the markup is a
         // different point in the same stream and no later chunk makes it match — the rows are
         // rebuilt, which is what the `Streamed` branch in `#ui` has always done. Keeping them instead
-        // freezes the list on the server's last chunk while a plain READ of the same cell beside it
+        // freezes the list on the server's last chunk while a plain READ of the same state beside it
         // counts up from one: `latest 1` over a list showing 1..5, reconciling only when the stream
         // ends. Correct output at both ends, incoherent for the whole middle.
         //
@@ -1280,18 +1280,18 @@ function kicker(node: Node, beforeRead: (() => void) | null): () => boolean {
     }
 }
 
-function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) | null): void {
+function attachAsync(read: State<unknown>, node: Node, beforeRead: (() => void) | null): void {
     // A PROBE KICKS THE LOAD, exactly as `()` and `await` do. Asking a cold slot `pending()` used to
     // report `false` — not "no load is running" but "none has begun", which is a different fact
     // wearing the same answer. Kicking makes the answer true and makes every probe-first spelling
     // work on its own: `{#if a.pending() || b.pending()}` and a `memo` over probes start their loads
     // for the same reason the recognised `{#if x.pending()}` did, without a compiler recognising it.
     //
-    // Resolved once per cell rather than branched per call: a probe is read per region, and in a list
+    // Resolved once per state rather than branched per call: a probe is read per region, and in a list
     // per row.
     const kick = kicker(node, beforeRead)
-    // Written on every cell, so the shape stays monomorphic and `nodeOf` never misses.
-    ;(read as unknown as Record<symbol, Node>)[CELL] = node
+    // Written on every state, so the shape stays monomorphic and `nodeOf` never misses.
+    ;(read as unknown as Record<symbol, Node>)[STATE] = node
     // A body that SIGNALLED is answered from the kick rather than from this node's tracker, and the
     // three answers are the cold ones: there is nothing to serve, so `pending` is true and `settled`
     // is false. `refreshing` stays what the tracker says — a derivation that cannot finish its body
@@ -1327,7 +1327,7 @@ function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) |
         // copy is O(k) at chunk k and the stream is quadratic again: 4x the chunks measured 8.0x the
         // time with a live reader against 0.64x with none. What made the copy defensible was never
         // true here: a channel's `windowOf` copies too, and its copy is bounded by `tail`, while a
-        // cell's transcript has no cap at all.
+        // state's transcript has no cap at all.
         //
         // Nothing in the render path identity-checks it — `ChildPart.set` clears `holding` before an
         // array and `ListPart.set` reconciles unconditionally — so what a slot renders is unchanged.
@@ -1339,8 +1339,8 @@ function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) |
         kick()
         return trackerFor(node).streaming.read() as boolean
     }
-    // Written here with the rest of the async surface, so every cell has the same shape whether or
-    // not it ever meets a stream — the generator is built per loop, not per cell.
+    // Written here with the rest of the async surface, so every state has the same shape whether or
+    // not it ever meets a stream — the generator is built per loop, not per state.
     read[Symbol.asyncIterator] = () => iterate(read)
     // No node of its own: "landed, did not fail, nothing still arriving" is exactly three nodes that
     // already exist, and reading all three is what subscribes a reader to any of them moving. A
@@ -1358,7 +1358,7 @@ function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) |
             track.streaming.read() !== true
         )
     }
-    // The shared function, not a closure forwarding to it: this runs per cell, therefore per keyed row.
+    // The shared function, not a closure forwarding to it: this runs per state, therefore per keyed row.
     read.isError = isNamedError
     read.watch = (handler: (value: unknown) => unknown) =>
         watch(read as () => unknown, handler as (value: unknown) => void)
@@ -1367,8 +1367,8 @@ function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) |
     const target = read as unknown as {
         then: (onFulfilled?: unknown, onRejected?: unknown) => Promise<unknown>
     }
-    // Branched ONCE per cell, where `beforeRead` is already in hand: awaiting a cold slot must start
-    // it, or it resolves `undefined` forever. `makeCell` used to re-wrap this write with a `bind` and
+    // Branched ONCE per state, where `beforeRead` is already in hand: awaiting a cold slot must start
+    // it, or it resolves `undefined` forever. `makeState` used to re-wrap this write with a `bind` and
     // a second closure, so a keyed slot paid three function objects per row for the one call.
     target.then =
         beforeRead === null
@@ -1378,8 +1378,8 @@ function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) |
                   beforeRead()
                   return settledPromise(node).then(onFulfilled as never, onRejected as never)
               }
-    // The SAME two function objects on every cell — see `Cell.catch`. Assigned here rather than left
-    // to a prototype because a cell is a function and mutating a function's prototype deoptimises it.
+    // The SAME two function objects on every state — see `State.catch`. Assigned here rather than left
+    // to a prototype because a state is a function and mutating a function's prototype deoptimises it.
     const verbs = read as unknown as { catch: unknown; finally: unknown }
     verbs.catch = caught
     verbs.finally = lastly
@@ -1388,7 +1388,7 @@ function attachAsync(read: Cell<unknown>, node: Node, beforeRead: (() => void) |
 /**
  * `catch` and `finally`, in terms of `then` and through `this`.
  *
- * Module scope, so the two are allocated once for the process rather than per cell. `then()` with no
+ * Module scope, so the two are allocated once for the process rather than per state. `then()` with no
  * arguments already hands back a real promise, which is what makes `finally` one line and what makes
  * both agree with the native semantics they are named after.
  */
@@ -1405,39 +1405,39 @@ function lastly(this: PromiseLike<unknown>, onFinally?: (() => void) | null): Pr
 
 // --- the seam a keyed `memo` slot sits on -----------------------------------
 //
-// A keyed slot IS a cell, so "a promise is a load" has ONE implementation rather than two that have
+// A keyed slot IS a state, so "a promise is a load" has ONE implementation rather than two that have
 // to be kept in agreement. These are the operations a slot needs beyond the public surface, and
 // every one is UNTRACKED on purpose: a slot's own bookkeeping — is a load in flight, subscribe me to
 // the value — must not subscribe whoever triggered it, or a reader of the slot would wake on
 // transitions it never asked about. Deliberately on neither front door — not `abide.ts`, which is
 // the `.` export, and not `src/shared/runtime.ts`, which is `./runtime`.
 
-// Where a cell keeps its node. Graph-internal and deliberately NOT the brand a renderer checks: the
+// Where a state keeps its node. Graph-internal and deliberately NOT the brand a renderer checks: the
 // brand answers "should a slot read this?", which is a wider question than "does this have a node"
 // — a channel has no node and is still a source. `#shared/internal/BRANDS.ts` owns that one.
-const CELL = Symbol.for('abide.cell')
+const STATE = Symbol.for('abide.state')
 
-function nodeOf(cell: Cell<unknown>): Node {
-    return (cell as unknown as Record<symbol, Node>)[CELL] as Node
+function nodeOf(held: State<unknown>): Node {
+    return (held as unknown as Record<symbol, Node>)[STATE] as Node
 }
 
 export const internals = {
     /**
-     * A cell that has NOT settled: `undefined` is what it holds, not what it loaded. `beforeRead`
+     * A state that has NOT settled: `undefined` is what it holds, not what it loaded. `beforeRead`
      * fires on `()`, on `await` and on every probe — so a slot kicks its own load from any question
      * asked of it, while `peek` alone still starts nothing.
      */
     cold<T>(beforeRead: () => void, transform?: (value: unknown) => unknown): State<T | undefined> {
         const node = new Node(undefined, null)
         if (transform !== undefined) node.transform = transform
-        return makeCell(node, beforeRead) as State<T | undefined>
+        return makeState(node, beforeRead) as State<T | undefined>
     },
     /** A derivation whose read runs `beforeRead` first — how an argless memo applies its ttl. */
     derived<T>(fn: () => unknown, beforeRead: () => void, transform?: (value: unknown) => unknown): Memo<T> {
         return makeDerived(fn, beforeRead, transform) as Memo<T>
     },
-    loading<T>(cell: Cell<T>): boolean {
-        const track = nodeOf(cell as Cell<unknown>).asyncTrack
+    loading<T>(held: State<T>): boolean {
+        const track = nodeOf(held as State<unknown>).asyncTrack
         return track !== null && (track.pending.value === true || track.refreshing.value === true)
     },
     /**
@@ -1463,15 +1463,15 @@ export const internals = {
         }
     },
     /** Settle a failure IN THE CALL, for a body that threw synchronously. */
-    fail<T>(cell: Cell<T>, error: unknown): void {
-        const node = nodeOf(cell as Cell<unknown>)
+    fail<T>(held: State<T>, error: unknown): void {
+        const node = nodeOf(held as State<unknown>)
         trackerFor(node).generation++
         settleError(node, error)
     },
 }
 
 // Un-settle: drop the value and the error, cancel what is in flight, back to cold. This is
-// `invalidate` on every cell — the verb that says the data is WRONG, as opposed to `refresh`, which
+// `invalidate` on every state — the verb that says the data is WRONG, as opposed to `refresh`, which
 // says it may be stale and needs a body to re-run.
 function resetNode(node: Node): void {
     const track = node.asyncTrack
@@ -1491,16 +1491,16 @@ function resetNode(node: Node): void {
     node.write(undefined)
 }
 
-// --- iterating a cell -------------------------------------------------------
+// --- iterating a state -------------------------------------------------------
 
 /** The cursor's "no transcript yet" start. A sentinel, so the first look adopts the live buffer. */
 const NOTHING_YET: readonly never[] = []
 
 /**
- * `for await (const chunk of cell)` — everything the cell has already produced, then everything that
+ * `for await (const chunk of state)` — everything the state has already produced, then everything that
  * comes next.
  *
- * The replay is what makes it a CELL rather than a subscription: a second consumer of a stream that
+ * The replay is what makes it a STATE rather than a subscription: a second consumer of a stream that
  * has already run gets the whole of it, because the transcript is retained. A failure is ASKED about
  * rather than caught around the read, so the throw comes from the loop consuming it and not from
  * whichever reader happened to kick the load.
@@ -1509,7 +1509,7 @@ const NOTHING_YET: readonly never[] = []
  * can hand back the live buffer: the reader that must not see it move is the one that re-reads the
  * whole thing, and this one never re-reads anything.
  */
-async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
+async function* iterate<T>(source: State<T>): AsyncGenerator<T> {
     let wake: (() => void) | null = null
     // LEVEL-triggered, not edge-triggered. A generator spends most of its life suspended at a
     // `yield` waiting for its consumer, and every chunk that lands in that window would otherwise
@@ -1519,13 +1519,13 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
     const watcher = watchNode(() => {
         // This body only wants to be WOKEN — what it reads is the version behind `chunks()`, and the
         // buffer it hands back is walked by the cursor below rather than here.
-        cell.chunks()
-        cell.streaming()
-        cell.settled()
+        source.chunks()
+        source.streaming()
+        source.settled()
         // UNREPORTED, and so are the two below: waking on a failure is not looking at one. The loop
         // throws it at its own consumer, which either catches it or raises an unhandled rejection
         // already carrying the stack — the same reason an `await` is not a read.
-        withoutReporting(cell.error)
+        withoutReporting(source.error)
         moved = true
         const resume = wake
         wake = null
@@ -1536,7 +1536,7 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
         // it may well be running inside someone else's effect.
         untrack(() => {
             try {
-                withoutReporting(cell)
+                withoutReporting(source)
             } catch {
                 // Asked about below, where the loop can throw it at its own consumer.
             }
@@ -1552,8 +1552,8 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
             // ASKED BEFORE the transcript is read, and that order is the whole of it: a stream that
             // ended between the two reads has already written its last chunk, so reading the
             // transcript second cannot miss one. The other order drops the final chunk every time.
-            finished = cell.settled() && !cell.streaming()
-            const held = cell.chunks() as readonly T[]
+            finished = source.settled() && !source.streaming()
+            const held = source.chunks() as readonly T[]
             // A new array means the transcript was REPLACED — dropped on overflow, or reset by a
             // reload — rather than appended to, and a cursor into the old one indexes nothing.
             if (held !== produced) {
@@ -1563,7 +1563,7 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
         }
         // Asked AFTER the transcript is handed over, so a failure that arrived while this was
         // suspended at a `yield` is thrown by the loop that was waiting on it.
-        const asked = (): unknown => withoutReporting(cell.error)
+        const asked = (): unknown => withoutReporting(source.error)
         // Hoisted for the same reason as the two above, which this used to sit seventeen lines under
         // while allocating a fresh executor per turn.
         const park = (resolve: () => void): void => {
@@ -1576,10 +1576,10 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
             const failure = untrack(asked)
             if (failure !== undefined) throw failure
             if (finished) {
-                // A cell that never streamed has no transcript, so the loop hands over the value
+                // A state that never streamed has no transcript, so the loop hands over the value
                 // itself and ends. One shape reads both.
                 if (at === 0) {
-                    const value = untrack(() => cell.peek())
+                    const value = untrack(() => source.peek())
                     if (value !== undefined) yield value as T
                 }
                 return
@@ -1595,40 +1595,51 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
 // --- the surface ----------------------------------------------------------
 
 /**
- * A CELL: a value that can change, and that tells whoever read it when it does.
+ * A STATE: a value that can change, and that tells whoever read it when it does.
  *
  * That is the whole reason it exists. A plain `string` cannot announce that it moved, so anything
- * showing it would have to be told to look again. Reading a cell IS the subscription — no dependency
+ * showing it would have to be told to look again. Reading a state IS the subscription — no dependency
  * list, no re-render call — which is why a template that names one updates itself.
  *
  * It is also the one public name an author reads without ever writing: `state()` returns one, every
- * prop is one, and a `memo` is one with a body. So a hover says `Cell<string>` about a local that was
+ * prop is one, and a `memo` is one with a body. So a hover says `State<string>` about a local that was
  * declared as a `string` and never spelled a type. In markup the name alone is the read — `{title}` —
  * and the explicit `title()` / `title.set(v)` spelling is what the sugar sits over, never instead of.
  *
  * The vocabulary is abide's, not the textbook one: `state` (own) / `memo` (derive) / `watch`
  * (react). `signal` is deliberately not a name here — abide retired it to avoid colliding with the
- * TC39 Signals proposal, and a cell is CALLABLE (`x()` read, `x.set(v)` write, `x.peek()` untracked)
+ * TC39 Signals proposal, and a state is CALLABLE (`x()` read, `x.set(v)` write, `x.peek()` untracked)
  * rather than an object with `.value`.
  *
- * Every cell carries the same async surface, and a purely sync cell answers it honestly: `settled()`
+ * Every state carries the same async surface, and a purely sync state answers it honestly: `settled()`
  * true, `pending()` false, `error()` undefined, `await x` already resolved.
  *
  * One surface, uniformly: reads (`()`, `peek`), probes (`pending`/`refreshing`/`error`/`settled`),
  * and the two verbs that need no body — `set` (this IS the value) and `invalidate` (this is WRONG).
  * `refresh` is the one verb that is NOT here, because re-running requires a body to re-run; it lives
- * on `Memo` and on a keyed handle. `dispose` likewise: only a derivation owns subscriptions.
+ * on `MemoHandle`, and `dispose` one step further on `Memo`, because only a derivation the CALLER
+ * owns has subscriptions to drop — a keyed slot's are the cache's.
+ *
+ * ONE type, where there were two. `State` used to be a narrowing of a `Cell` — the same surface with
+ * `peek(): T`, on the claim that a state built from a value has no moment with nothing retained. The
+ * claim was false and a public method is what falsifies it: `state(1).invalidate()` leaves `peek()`
+ * answering `undefined` through a type that said `number`. What the split cost was two names for one
+ * thing and a props type that could change what its caller meant; what it bought was an assertion at
+ * two call sites in the whole repo. The merge is not free either, and the number belongs beside the
+ * decision: 86 `peek()!` in this tree, each one a reader that knows its state was built from a value
+ * and has no way to say so. That is the trade — one type and 86 assertions, against two types and a
+ * `peek(): T` a single public method falsifies. See `peek` below.
  */
-export interface Cell<T> extends PromiseLike<T> {
+export interface State<T> extends PromiseLike<T> {
     /**
      * The other two thenable verbs, so `x.catch(…)` is not a `TypeError` on a value `await` accepts.
      *
-     * A cell is a PromiseLike and not a Promise — there is no `[[PromiseState]]` under it — so these
+     * A state is a PromiseLike and not a Promise — there is no `[[PromiseState]]` under it — so these
      * are the two `Promise.prototype` gives a real one, and nothing else. `instanceof Promise` stays
      * FALSE on purpose: an object claiming to be one and then failing a native fast path is worse
      * than a thenable that says what it is.
      *
-     * Both are ONE shared function each, not a closure per cell. They reach the cell through `this`,
+     * Both are ONE shared function each, not a closure per state. They reach the state through `this`,
      * which is what keeps them free on an object allocated per keyed slot — per row, in a list.
      */
     catch<Rejected = never>(
@@ -1643,24 +1654,34 @@ export interface Cell<T> extends PromiseLike<T> {
      */
     (): T
     /**
-     * The retained value, subscribing to nothing, never throwing and never signalling — so
-     * `undefined` here means NOTHING HAS LANDED YET. The escape hatch, and the read a `<script>`
-     * gets, where nobody would run the body a second time.
+     * The retained value, subscribing to nothing, never throwing, never signalling and never starting
+     * work — so `undefined` here means NOTHING IS RETAINED. The escape hatch, and the read a
+     * `<script>` gets, where nobody would run the body a second time.
+     *
+     * `| undefined` ON EVERY STATE, which is the one thing about this type worth arguing over. It is
+     * not a startup window you can reason past: a cold load has nothing, a `memo` before its body runs
+     * has nothing, a keyed slot nobody has read has nothing — and `invalidate()` puts ANY state back
+     * there at any time, including one built from a plain value. Not reactive is a different fact from
+     * not moving: this reads whatever is retained at the instant of the call, so the same call answers
+     * a value and then `undefined` as the state goes round.
+     *
+     * The compiler asserts it where the author's own syntax does — `count += 1` desugars through here
+     * and emits `peek()!` — and does NOT for `??=`, which is asking about the absence. See `desugar.ts`.
      */
     peek(): T | undefined
     /**
      * Write it directly. A promise here is a LOAD and an async iterable is a STREAM; anything else
-     * settles the cell in the call.
+     * settles the state in the call.
      */
     set(value: T | Promise<T> | AsyncIterable<T>): void
     /** Drop the value and any error, cancel what is in flight, and go back to cold. */
     invalidate(): void
     /**
-     * Everything a stream has produced so far, in order. Empty on a cell that never streamed.
+     * Everything a stream has produced so far, in order. Empty on a state that never streamed.
      *
      * The LIVE transcript, not a copy of it: a slot that renders one re-reads it per chunk, and a
      * copy per read is a full array per chunk — quadratic over the stream. Read it, render it, and
-     * let the next version wake you; to consume it in order, iterate the cell instead.
+     * let the next version wake you; to consume it in order, iterate the state instead.
      */
     chunks(): T[]
     /** A cold load is in flight — nothing retained to show. */
@@ -1693,10 +1714,10 @@ export interface Cell<T> extends PromiseLike<T> {
     // biome-ignore lint/suspicious/noConfusingVoidType: the union IS the contract — a handler either returns nothing or returns its teardown.
     watch(handler: (value: T) => void | (() => void)): () => void
     /**
-     * `for await (const chunk of cell)` — everything it has produced, then everything that comes
+     * `for await (const chunk of state)` — everything it has produced, then everything that comes
      * next. The cursor face of `chunks()`, for a consumer that reads in order and never re-reads.
      *
-     * A cell that never streamed yields its value once and ends, so one loop reads both shapes.
+     * A state that never streamed yields its value once and ends, so one loop reads both shapes.
      */
     [Symbol.asyncIterator](): AsyncIterator<T>
     /** Narrowed from `PromiseLike` to a real promise — `await x`, and `.catch` on the result. */
@@ -1707,37 +1728,42 @@ export interface Cell<T> extends PromiseLike<T> {
 }
 
 /**
- * A cell you own outright that had its value before anything could read it — `state(v)`, a prop cell,
- * a `state.shared` slot.
+ * The handle a KEYED call hands back — `load({ id })` — which is the slot's own state plus the verb
+ * that needs a body to re-run. The args select the slot ONCE, at the call; everything after that is
+ * the ordinary state surface.
  *
- * The one thing it adds is that `peek` cannot miss: nothing was ever in flight, so there is no moment
- * where the retained value is absent. That is what keeps `count += 1` — which desugars to
- * `count.set(count.peek() + 1)`, because a write must not subscribe — from needing a narrowing that
- * could never fail. A cell handed a promise is a `Cell` instead, and there the same write is an error
- * worth having.
+ * Here rather than beside `keyedMemo` so the whole family reads in one place, and because `Memo`
+ * below is this plus one verb: an argless memo is a keyed one with no key to select.
  */
-export interface State<T> extends Cell<T> {
-    peek(): T
+export interface MemoHandle<T> extends State<T> {
+    /** This data may be STALE: re-run the body now, keeping the old value on screen meanwhile. */
+    refresh(): void
 }
 
-export interface Memo<T> extends Cell<T> {
-    /** Re-run the body NOW, keeping the current value served until the new one lands. */
-    refresh(): void
+/**
+ * An ARGLESS memo — `memo(() => …)`. A keyed handle plus `dispose`, and the extra verb is the whole
+ * difference: this one owns its subscriptions, where a slot is owned by the cache that keyed it.
+ *
+ * Not a merge with `MemoHandle`, and the runtime says why rather than the taste: a slot handle has no
+ * `dispose` ON IT — `typeof load({ id: 1 }).dispose` is `undefined` — so a merged type would offer a
+ * method that is not there, and one that would strand the cache's own entry if it were.
+ */
+export interface Memo<T> extends MemoHandle<T> {
     dispose(): void
 }
 
 // `beforeRead` runs on every operation that ASKS ABOUT THE VALUE — `x()`, `await x`, and the probes.
 // That is the seam a keyed slot kicks its load through: SELECTING a slot starts nothing, and asking
 // it anything does. `peek` is the one member left that does not, which is what keeps it a question.
-function makeCell(node: Node, beforeRead: (() => void) | null): State<unknown> {
-    // Every cell is a source, which is what a slot recognises. Branded before anything else is
+function makeState(node: Node, beforeRead: (() => void) | null): State<unknown> {
+    // Every state is a source, which is what a slot recognises. Branded before anything else is
     // assigned so the shape stays monomorphic.
     const read = markSource(
         (beforeRead === null
-            ? () => readCell(node)
+            ? () => readState(node)
             : () => {
                   beforeRead()
-                  return readCell(node)
+                  return readState(node)
               }) as State<unknown>,
     )
     read.set = (value: unknown) => {
@@ -1792,24 +1818,27 @@ function makeCell(node: Node, beforeRead: (() => void) | null): State<unknown> {
     return read
 }
 
-// A promise or a stream is a LOAD, so the cell starts COLD — which is the whole of the difference
+// A promise or a stream is a LOAD, so the state starts COLD — which is the whole of the difference
 // between the two return types. The read is `T` either way, because a read that cannot answer yet
 // signals rather than reporting `undefined`; what a load costs is `peek`, which is the one place the
 // absence is still visible.
 /**
- * A cell holding a value you write yourself — `state(0)`, then `count()` to read and `count.set(1)`
+ * A state holding a value you write yourself — `state(0)`, then `count()` to read and `count.set(1)`
  * to write. Inside a `.abide` file the sugar does both by name.
  *
- * A promise or async iterable starts the same cell COLD: it is `pending()` until the first value
+ * A promise or async iterable starts the same state COLD: it is `pending()` until the first value
  * lands, and the read signals rather than answering `undefined`.
  */
-export function state<T>(initial: Promise<T>, transform?: (value: T) => T): Cell<T>
-export function state<T>(initial: AsyncIterable<T>, transform?: (value: T) => T): Cell<T>
-export function state<T>(initial: T, transform?: (value: T) => T): State<T>
-// biome-ignore lint/suspicious/noExplicitAny: the overloads above ARE the public type; unifying them in the implementation signature would widen the two return types the overloads exist to keep apart.
-export function state(initial: unknown, transform?: (value: unknown) => unknown): any {
+// ONE signature, where there were three overloads over an `any` implementation. The overloads existed
+// to keep `Cell<T>` and `State<T>` apart by which argument was passed; with one type there is nothing
+// to keep apart, and `T` is still unwrapped out of a promise or an iterable by inference alone —
+// `types/valid/narrowing.abide` asserts exactly that. What the collapse costs is the two casts below,
+// which is a better trade than an `any` return and a lint suppression over it.
+export function state<T>(initial: T | Promise<T> | AsyncIterable<T>, transform?: (value: T) => T): State<T> {
     const node = new Node(undefined, null)
-    if (transform !== undefined) node.transform = transform
+    // The node's fields are untyped by construction — one graph holds every state — so the boundary
+    // where `T` is known is this signature, and these two are where it is handed over.
+    if (transform !== undefined) node.transform = transform as (value: unknown) => unknown
     // Same order as `set` below, for the same reason — see `isAsyncIterable`.
     if (isAsyncIterable(initial)) {
         consume(node, initial)
@@ -1827,7 +1856,7 @@ export function state(initial: unknown, transform?: (value: unknown) => unknown)
         // in a project whose first rule is that the javascript lane compiles too — and the hole was
         // exactly the shape `transformValue` exists to close, one call earlier. `state(5, async …)`
         // held the promise as its value, `pending()` was false and the read handed a promise back
-        // forever, while the SAME transform through `set` adopted correctly: one cell, two laws.
+        // forever, while the SAME transform through `set` adopted correctly: one state, two laws.
         const shaped = transformValue(node, initial)
         // ADOPTED: the initial is in flight, so `hasValue` stays false — which is what `markStarted`
         // reads as cold — and the settle writes the node.
@@ -1836,10 +1865,10 @@ export function state(initial: unknown, transform?: (value: unknown) => unknown)
             node.hasValue = true
         }
     }
-    return makeCell(node, null)
+    return makeState(node, null) as State<T>
 }
 
-// Cells shared BY KEY rather than by reference, and the map they live in.
+// States shared BY KEY rather than by reference, and the map they live in.
 //
 // Per-caller, for the same reason a memo's cache is: a module-level map is filled once and outlives
 // the request that filled it, so on a server "shared across every component instance" would quietly
@@ -1849,8 +1878,8 @@ const SHARED = new Map<string, State<unknown>>()
 const makeShared = (): Map<string, State<unknown>> => new Map()
 
 /**
- * One cell per `key`, handed to every caller that asks for that key. The first call decides the
- * value; later ones get the cell that already exists and their `initial` is not consulted.
+ * One state per `key`, handed to every caller that asks for that key. The first call decides the
+ * value; later ones get the state that already exists and their `initial` is not consulted.
  */
 state.shared = <T>(key: string, initial: T, transform?: (value: T) => T): State<T> => {
     const held = storeFor(SHARED, makeShared, SHARED)
@@ -1862,11 +1891,11 @@ state.shared = <T>(key: string, initial: T, transform?: (value: T) => T): State<
 }
 
 /**
- * A cell declared at MODULE scope, resolved per caller on every member — what a `<script module>`
+ * A state declared at MODULE scope, resolved per caller on every member — what a `<script module>`
  * binding compiles to.
  *
  * `state.shared` cannot serve this and that is the whole reason this exists: it scopes the LOOKUP,
- * so a declaration that runs once still closes over the one cell the first evaluation built, and
+ * so a declaration that runs once still closes over the one state the first evaluation built, and
  * every request afterwards reads that. Here the BINDING is the facade and the node behind it varies,
  * which is the same answer `scopedArgless` gives an argless `memo` — this is that mechanism reaching
  * the one reactive spelling it never covered.
@@ -1879,36 +1908,35 @@ state.shared = <T>(key: string, initial: T, transform?: (value: T) => T): State<
  * a client, a script, a test — there is one caller forever, and a lazy one would put a null check on
  * the hot path to save an allocation that a client makes exactly once per module.
  */
-// Generic over the CELL rather than its value: `state(0)` is a `State<T>` whose `peek` cannot miss
-// and `state(promise)` is a `Cell<T>` whose can, and collapsing the two here would put a
-// `T | undefined` under every `count += 1` the desugar writes.
-state.scoped = <C extends Cell<unknown>>(make: () => C): C => {
+// Generic over the STATE rather than its value, so whatever the thunk built comes back unchanged —
+// the facade stands in for that exact type rather than widening every wrap to `State<unknown>`.
+state.scoped = <C extends State<unknown>>(make: () => C): C => {
     // LAZY where `scopedArgless` is eager, and the difference is what the two BUILD: constructing a
-    // memo runs nothing, and constructing a cell runs its initial. An eager fallback here starts a
+    // memo runs nothing, and constructing a state runs its initial. An eager fallback here starts a
     // promise or a stream at module load, on a server, once for the PROCESS and before any request
     // exists — which is the thing being scoped in the first place.
     let fallback: C | undefined
     const ofNobody = (): C => (fallback ??= make())
     const pick = (): C => storeForLazy(pick, make, ofNobody)
-    // The facade is a SOURCE like the cell it stands for, so a slot reads it rather than rendering a
-    // function. Deliberately no `abide.cell`: that symbol names one node and the node varies here,
+    // The facade is a SOURCE like the state it stands for, so a slot reads it rather than rendering a
+    // function. Deliberately no `abide.state`: that symbol names one node and the node varies here,
     // which is the same reason `scopedArgless` withholds it.
     const facade = markSource((() => pick()()) as unknown as C)
-    Object.assign(facade, cellForward(pick as () => Cell<unknown>))
+    Object.assign(facade, stateForward(pick as () => State<unknown>))
     return facade
 }
 
 /**
- * The whole cell surface, forwarded to whatever `pick` resolves to at the moment of the call.
+ * The whole state surface, forwarded to whatever `pick` resolves to at the moment of the call.
  *
- * A TABLE typed by `keyof Cell`, so a member added to the cell surface is a type error HERE rather
+ * A TABLE typed by `keyof State`, so a member added to the state surface is a type error HERE rather
  * than an `undefined` that only shows up on a server — and ONE table, because that check is the only
  * reason it is written this way. `state.scoped` above and `memo`'s `scopedArgless` had a copy each,
  * sixteen members apart from the memo's own two verbs, so the guarantee each of them claimed singly
  * had to be repaired in two files. A scoped memo `Omit`s its extra verbs on at its own call site,
  * which keeps that surface exhaustively checked too.
  */
-export function cellForward(pick: () => Cell<unknown>): { [K in keyof Cell<unknown>]: Cell<unknown>[K] } {
+export function stateForward(pick: () => State<unknown>): { [K in keyof State<unknown>]: State<unknown>[K] } {
     return {
         peek: () => pick().peek(),
         set: (value) => pick().set(value),
@@ -1929,13 +1957,13 @@ export function cellForward(pick: () => Cell<unknown>): { [K in keyof Cell<unkno
             (pick() as unknown as { then: (a?: unknown, b?: unknown) => Promise<unknown> }).then(
                 onFulfilled,
                 onRejected,
-            )) as Cell<unknown>['then'],
-        // The SAME shared pair every cell carries rather than forwarders of their own: both reach the
-        // facade through `this`, and its `then` above is what puts the caller's cell behind them. A
+            )) as State<unknown>['then'],
+        // The SAME shared pair every state carries rather than forwarders of their own: both reach the
+        // facade through `this`, and its `then` above is what puts the caller's state behind them. A
         // closure here would be two more allocations per caller AND a different function object,
         // which is the thing the identity assertion in `demos/memo.ts` is watching for.
-        catch: caught as Cell<unknown>['catch'],
-        finally: lastly as Cell<unknown>['finally'],
+        catch: caught as State<unknown>['catch'],
+        finally: lastly as State<unknown>['finally'],
     }
 }
 
@@ -1957,7 +1985,7 @@ function makeDerived(
 ): Memo<unknown> {
     const node = new Node(undefined, fn)
     if (transform !== undefined) node.transform = transform
-    const read = makeCell(node, beforeRead) as Memo<unknown>
+    const read = makeState(node, beforeRead) as Memo<unknown>
     // Re-run NOW. A load started by the body reports `refreshing` over the retained value, so the
     // old one keeps being served — the same shape a keyed slot's refresh has.
     // Both verbs check DEAD first because both WRITE the status: assigning DIRTY over DEAD undoes
@@ -2041,7 +2069,7 @@ export function watchNode(fn: () => void | (() => void)): Node {
  * An effect declared at MODULE scope, run once per CALLER — what a `<script module>` `watch` compiles
  * to, and the last of the three spellings that meant "once for the server process".
  *
- * A cell can be lazy because something eventually READS it; an effect has no read to wait for, so
+ * A state can be lazy because something eventually READS it; an effect has no read to wait for, so
  * something has to ask. The component whose module block declared it is what asks: its setup calls
  * this, and the first instance in a caller runs the body while every instance after it gets the
  * disposer already made. A component nobody renders in this request runs no effect in it, which is

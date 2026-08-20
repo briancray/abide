@@ -8,7 +8,7 @@ async function* ticking(): AsyncGenerator<number> {
     }
 }
 
-// The cell holds the LATEST chunk; `chunks()` holds the transcript.
+// The state holds the LATEST chunk; `chunks()` holds the transcript.
 //
 // MODULE scope for the reason rung 3 is: nothing addresses this stream, so nothing seeds it, and two
 // cold ones disagree about how far along they are. The thunk is what the wrap keeps per caller — the

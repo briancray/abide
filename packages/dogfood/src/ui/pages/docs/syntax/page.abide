@@ -36,4 +36,4 @@ const CARD = 'card'
     {/for}
 </div>
 
-<p class="note">What a cell READ inside one of these means is the other vocabulary’s — see <a href="/docs/state" class="link">state</a>. What the language costs to compile is measured on <a href="/bench/template" class="link">/bench/template</a>.</p>
+<p class="note">What a state READ inside one of these means is the other vocabulary’s — see <a href="/docs/state" class="link">state</a>. What the language costs to compile is measured on <a href="/bench/template" class="link">/bench/template</a>.</p>

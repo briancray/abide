@@ -46,7 +46,7 @@ export interface EmitOptions {
      * Injected rather than reached for, exactly as `ElideOptions.resolve` is and for the same two
      * reasons: this pass does no I/O, and a demo hands over a map in memory so a case still runs in
      * a browser. It reads TEXT and runs the same member regex over it — no checker enters the emit
-     * path, and what a cell is stays a syntactic question.
+     * path, and what a state is stays a syntactic question.
      *
      * `| undefined` explicitly, because `exactOptionalPropertyTypes` otherwise refuses `compile`'s
      * own optional straight through.
@@ -109,7 +109,7 @@ interface Context {
      *
      * An inline component is a body with a parameter list and no `<script>`, so it has no setup to
      * run once and nothing to keep between passes — the whole reason a tag is carried rather than
-     * called. Carrying one would also cell its props, and its parameter type is written by hand:
+     * called. Carrying one would also state its props, and its parameter type is written by hand:
      * `{#component Row({ n }: { n: number })}` says `n` is a number, and it is.
      */
     inline: Set<string>
@@ -125,9 +125,9 @@ interface Context {
 }
 
 // Every name here must be an export of `abide`, because that is the import the header writes.
-// `component` and `propCell` are the two halves of one rule: `<Thing/>` CARRIES the call rather than
+// `component` and `propState` are the two halves of one rule: `<Thing/>` CARRIES the call rather than
 // making it, so the position that shows it can hold the instance across a re-render, and the props
-// arrive as cells the child binds through `propCell`. See docs/COMPONENTS.md.
+// arrive as states the child binds through `propState`. See docs/COMPONENTS.md.
 type Runtime =
     | 'html'
     | 'raw'
@@ -136,7 +136,7 @@ type Runtime =
     | 'styles'
     | 'boundary'
     | 'component'
-    | 'propCell'
+    | 'propState'
     | 'streamed'
     | 'adopt'
     | 'scopedEffect'
@@ -163,7 +163,7 @@ const NO_TOKENS: Token[] = []
 /** A file with no `props()` at all, which is most of them. Shared, never written. */
 const NO_KINDS: Map<string, PropKind> = new Map()
 /** An inline `{#component}` declares no props type, so it names no wrapped members either. */
-const NO_CELLS: string[] = []
+const NO_STATES: string[] = []
 
 /** A keyword that is a deliberate error in a region, reported at the token that spelled it. */
 function forbidKeyword(tokens: Token[], kind: SyntaxKind, message: string): void {
@@ -184,12 +184,12 @@ function checkNoExport(tokens: Token[], filename: string): void {
 }
 
 /**
- * What a `<script>` makes reactive, split by WHICH THING is the cell.
+ * What a `<script>` makes reactive, split by WHICH THING is the state.
  *
  * `memo` is one name with two forms, and the difference decides how the binding is read:
  *
- *   const doubled = memo(() => …)          argless -> the NAME is the cell:  doubled + 1
- *   const details = memo(({ id }) => …)    keyed   -> the CALL is the cell:  details({ id }) + 1
+ *   const doubled = memo(() => …)          argless -> the NAME is the state:  doubled + 1
+ *   const details = memo(({ id }) => …)    keyed   -> the CALL is the state:  details({ id }) + 1
  *
  * Which one it is comes from whether the body declares a parameter — abide's own rule, and visible
  * right there at the declaration, so no checker is needed to see it. Getting this wrong is not a
@@ -198,8 +198,8 @@ function checkNoExport(tokens: Token[], filename: string): void {
  */
 interface Reactive {
     /** Read by name. */
-    cells: Set<string>
-    /** Read by call — `m(args)` selects the slot and hands back its cell. */
+    states: Set<string>
+    /** Read by call — `m(args)` selects the slot and hands back its state. */
     keyed: Set<string>
 }
 
@@ -209,8 +209,8 @@ interface Reactive {
  * `const n = state(0)` puts the name next to the `=` and `const n: State<number> = state(0)` puts a
  * type there instead — the same declaration, and both are what an author writes, since `State` and
  * `Memo` are exported for exactly this. Read as "the token before the `=`", the annotated spelling
- * found a `>` and registered no cell at all, so every use of the name stayed bare: `{n + 1}` emitted
- * the CELL added to a number, which type-checks nowhere and renders a function's source.
+ * found a `>` and registered no state at all, so every use of the name stayed bare: `{n + 1}` emitted
+ * the STATE added to a number, which type-checks nowhere and renders a function's source.
  *
  * The annotation is found by its `:` at the DECLARATION's own depth, so a `{ a: 1 }` initializer or
  * a ternary's colon inside one cannot be mistaken for it.
@@ -252,7 +252,7 @@ function reactiveBindings(tokens: Token[], into: Reactive): void {
         let at = callee
         let maker = (tokens[callee] as Token).text
         // `state.shared(key, …)` is `state` with an address in front of the value, so the binding is
-        // a cell exactly as `state(…)` is. Stepping back over the member access is what lets the one
+        // a state exactly as `state(…)` is. Stepping back over the member access is what lets the one
         // rule below see it — without this the callee reads as `shared`, which constructs nothing.
         if (
             maker === 'shared' &&
@@ -273,11 +273,11 @@ function reactiveBindings(tokens: Token[], into: Reactive): void {
             // in the one way a syntactic rule can see. The call selects a room, so it is read by
             // CALL — the same split `memo` has between its two forms.
             if (multipleTypeArguments(tokens, at + 1, i)) into.keyed.add(name.text)
-            else into.cells.add(name.text)
+            else into.states.add(name.text)
             continue
         }
         if (maker !== 'memo') {
-            into.cells.add(name.text)
+            into.states.add(name.text)
             continue
         }
         // Past an `async`, the body's own parameter list decides the form.
@@ -285,11 +285,11 @@ function reactiveBindings(tokens: Token[], into: Reactive): void {
         if (tokens[body]?.kind === SyntaxKind.AsyncKeyword) body++
         if (tokens[body]?.kind !== SyntaxKind.OpenParenToken) {
             // `memo(fn)` — a reference, whose shape is not visible here. Read by name, as before.
-            into.cells.add(name.text)
+            into.states.add(name.text)
             continue
         }
         if (tokens[body + 1]?.kind === SyntaxKind.CloseParenToken) {
-            into.cells.add(name.text)
+            into.states.add(name.text)
         } else into.keyed.add(name.text)
     }
 }
@@ -298,7 +298,7 @@ function reactiveBindings(tokens: Token[], into: Reactive): void {
  * `NAME = { get: …, set: … }` — the names bound to an accessor pair.
  *
  * The pair is the escape hatch a `bind:` takes when the thing on screen is not the thing you keep,
- * and it reads as an object rather than as a cell: the value slot has to CALL `get`, where a cell is
+ * and it reads as an object rather than as a state: the value slot has to CALL `get`, where a state is
  * handed over whole. `bind` used to decide that from the source text starting with a `{`, so only the
  * pair written INLINE in the tag was recognised — and the hoisted spelling, which is the one anybody
  * writes once the two bodies are more than a line, compiled to `.value=${pair}` and put
@@ -386,7 +386,7 @@ function calleeBefore(tokens: Token[], open: number): number {
     if (previous === undefined) return -1
     // `=>` is asked about by KIND, because its text ends in a `>` that closes nothing:
     // `state<() => void>(…)` counted the arrow as a second close, walked off the front of the region
-    // and registered NO cell — so the write beside it stayed an assignment to a `const`, every read
+    // and registered NO state — so the write beside it stayed an assignment to a `const`, every read
     // of it stayed bare, and a `<script module>` declaration lost its `state.scoped` wrap as well.
     // `multipleTypeArguments` above skips it for the same reason, and did so first.
     if (previous.kind === SyntaxKind.EqualsGreaterThanToken) return at
@@ -429,9 +429,9 @@ interface Props {
  * One entry of that pattern: what the prop is called, what this file calls it, and where both sit.
  *
  * The positions are what lets the emit REWRITE the pattern rather than read it. A prop arrives as a
- * cell, and a destructure default cannot survive that — `class: className = ''` leaves the local
- * `'' | Cell<string>` when the caller omits it, and only one of those is callable. So the local moves
- * out of the pattern and the default moves into `propCell` beside it.
+ * state, and a destructure default cannot survive that — `class: className = ''` leaves the local
+ * `'' | State<string>` when the caller omits it, and only one of those is callable. So the local moves
+ * out of the pattern and the default moves into `propState` beside it.
  */
 interface Binding {
     /** The prop's name on the props object — `class` in `{ class: className }`. */
@@ -488,10 +488,10 @@ function propsCall(body: string, tokens: Token[], types: TypeReader): Props | nu
 /**
  * The pattern to the LEFT of the call, one `Binding` per identifier entry.
  *
- * Only identifier-to-identifier entries are collected, because this decides which locals are cells and
+ * Only identifier-to-identifier entries are collected, because this decides which locals are states and
  * a prop destructured any FURTHER is not one. A rest element and a nested pattern are left to the
  * emitted TypeScript, which handles them the way it handles any other destructure — and neither
- * becomes a cell, so both keep whatever the caller passed.
+ * becomes a state, so both keep whatever the caller passed.
  */
 function destructured(body: string, tokens: Token[], call: number): Binding[] {
     const bound: Binding[] = []
@@ -572,7 +572,7 @@ function tokensOfBody(rest: string): Token[] {
  *
  * An inline `props<{ id: string }>()` is already the members. A name is resolved against the setup
  * body's own declarations and no further: a type imported from another file cannot be read from here,
- * and the consequence is only that its cell props stay plain values — the same degradation an imported
+ * and the consequence is only that its state props stay plain values — the same degradation an imported
  * type has always had, and the reason the explicit `x()` spelling never stops compiling.
  */
 function membersOf(type: string, rest: string, tokens: Token[], types: TypeReader): string {
@@ -630,9 +630,9 @@ function importBinding(
  * The gap this closes was not a missing type-checker — `classifyMember` is a regex over the member's
  * declaration text — it was the other file's bytes. So the same `declaredTypes` walk runs over the
  * resolved module and the same slice comes back, and an imported `RowProps` classifies exactly as
- * the inline spelling does. Without it the two disagreed: a FUNCTION member fell to the `cell`
- * fallback, `propCell` wrapped the handler, and `onpick(row.id)` called the CELL and threw the
- * handler away — a dead click in a file where nothing near the call mentions a cell.
+ * the inline spelling does. Without it the two disagreed: a FUNCTION member fell to the `state`
+ * fallback, `propState` wrapped the handler, and `onpick(row.id)` called the STATE and threw the
+ * handler away — a dead click in a file where nothing near the call mentions a state.
  *
  * Answers `''` for anything it cannot follow — no resolver, an unreadable module, a name declared
  * somewhere the walk does not reach — which is the fallback the caller already had.
@@ -663,7 +663,7 @@ function importedMembers(
  * The emitted parameter's type, which is the AUTHORED one through `Props<…>`.
  *
  * The author writes what a prop IS — `n: number` — and the position holding this component writes
- * every prop into a cell, so what arrives is `Cell<number>` and `{n + 1}` emits `n() + 1`. `Props` is
+ * every prop into a state, so what arrives is `State<number>` and `{n + 1}` emits `n() + 1`. `Props` is
  * that mapping, and it is a TYPE rather than a rewrite here so the author's own type is what appears
  * in the error when a prop is passed wrongly; `component()` inverts it back at the call site.
  *
@@ -675,13 +675,13 @@ function importedMembers(
  * `ViewModule`, so the router has one type for the two of them, and a page that accepted strictly
  * nothing would not be assignable to it.
  */
-function signature(declared: Props | null, cells: string[]): string {
+function signature(declared: Props | null, states: string[]): string {
     if (declared === null) return CHILDREN
     const authored = declared.type === null ? 'Record<string, unknown>' : declared.type
     // The members this emit WRAPPED, handed to the type so it stops asking its own version of the
     // question — see `Props` in `#shared/html.ts`. Quoted whatever they are: `class` is a prop name
     // and not an identifier, and a key union takes the string either way.
-    const named = cells.length === 0 ? '' : `, ${cells.map((name) => JSON.stringify(name)).join(' | ')}`
+    const named = states.length === 0 ? '' : `, ${states.map((name) => JSON.stringify(name)).join(' | ')}`
     return `${PROPS_TYPE}<${authored}${named}> & ${CHILDREN}`
 }
 
@@ -696,27 +696,27 @@ const CHILDREN = '{ children?: unknown }'
 const PROPS_TYPE = 'Props$'
 
 /** What a declared prop MEANS to the emit — see `memberKinds`. */
-type PropKind = 'cell' | 'keyed' | 'plain'
+type PropKind = 'state' | 'keyed' | 'plain'
 
 /**
  * What each member of the declared props type IS, read off its own TEXT.
  *
- * Syntactic, like every other decision about what counts as a cell: nothing in the emit path may need
- * a type-checker. Three answers, and the DEFAULT is `cell` — a prop is data the position writes into a
- * cell, so a member this cannot read at all still gets the common rule.
+ * Syntactic, like every other decision about what counts as a state: nothing in the emit path may need
+ * a type-checker. Three answers, and the DEFAULT is `state` — a prop is data the position writes into a
+ * state, so a member this cannot read at all still gets the common rule.
  *
  *   plain  a FUNCTION — `onclick: (e: Event) => void`, or the method shorthand. A callback is called,
- *          not read, and `@click={onclick}` would attach the cell rather than the handler
- *   keyed  a `KeyedMemo`/`KeyedChannel` handle, which a prop cell cannot stand in for: it is selected
+ *          not read, and `@click={onclick}` would attach the state rather than the handler
+ *   keyed  a `KeyedMemo`/`KeyedChannel` handle, which a prop state cannot stand in for: it is selected
  *          by args and its SLOT is the source
- *   cell   everything else, `State<T>` included — an existing source passes through the wrapping
+ *   state   everything else, `State<T>` included — an existing source passes through the wrapping
  *          rather than being wrapped twice
  *
- * A function type reached through a NAME — `onclick: Handler` — reads as `cell` and is the one hole,
+ * A function type reached through a NAME — `onclick: Handler` — reads as `state` and is the one hole,
  * for the reason an imported props type has always had one: this file cannot resolve a name it cannot
  * see. Writing the arrow out is what says it is a callback.
  */
-function memberKinds(declared: string): Map<string, PropKind> {
+function memberKinds(declared: string, at: number): Map<string, PropKind> {
     const kinds = new Map<string, PropKind>()
     const from = declared.indexOf('{')
     if (from === -1) return kinds
@@ -766,13 +766,13 @@ function memberKinds(declared: string): Map<string, PropKind> {
             continue
         }
         if (depth === 1 && (char === ';' || char === ',' || char === '\n')) {
-            classifyMember(member, kinds)
+            classifyMember(member, kinds, at)
             member = ''
             continue
         }
         member += char
     }
-    classifyMember(member, kinds)
+    classifyMember(member, kinds, at)
     return kinds
 }
 
@@ -780,7 +780,7 @@ function memberKinds(declared: string): Map<string, PropKind> {
 // at all, so neither matches. The captured tail is what the member's type STARTS with.
 const MEMBER = /^\s*(?:readonly\s+)?([A-Za-z_$][\w$]*)\s*\??\s*([:(<])\s*([\s\S]*)$/
 
-function classifyMember(member: string, into: Map<string, PropKind>): void {
+function classifyMember(member: string, into: Map<string, PropKind>, at: number): void {
     const match = MEMBER.exec(member)
     if (match === null) return
     const name = match[1] as string
@@ -796,8 +796,25 @@ function classifyMember(member: string, into: Map<string, PropKind>): void {
         return
     }
     const constructed = /^([A-Za-z_$][\w$]*)\s*</.exec(type)
-    const reactive = constructed === null ? undefined : REACTIVE_TYPES.get(constructed[1] as string)
-    into.set(name, reactive === 'keyed' ? 'keyed' : 'cell')
+    const head = constructed === null ? '' : (constructed[1] as string)
+    const reactive = REACTIVE_TYPES.get(head)
+    // A `refused` head names the VALUE's wrapper, which a prop already is — see `REACTIVE_TYPES`.
+    // `Channel` / `KeyedMemo` / `KeyedChannel` are not refused: those are HANDLES with no value type
+    // to name, so a prop that is one has to say so.
+    if (reactive === 'refused') {
+        const inner = type
+            .slice(head.length)
+            .replace(/^<|>[\s\S]*$/g, '')
+            .trim()
+        throw new ParseError(
+            `abide: a props member cannot be declared \`${head}<…>\` — every prop is a state already, ` +
+                `so the type names the VALUE: write \`${name}: ${inner === '' ? 'T' : inner}\`. What decides ` +
+                'whether the child can write back is the PARENT: `x={source}` hands the state over, ' +
+                '`x={source()}` hands a value that stays live, and `x={source.peek()}` hands one that does not',
+            at,
+        )
+    }
+    into.set(name, reactive === 'keyed' ? 'keyed' : 'state')
 }
 
 /**
@@ -807,10 +824,10 @@ function classifyMember(member: string, into: Map<string, PropKind>): void {
  * here. Reading the type alone was wrong under a rename — `{ note: text }` left `text` a plain value
  * and made `text.length` the arity of a function, which type-checks and renders `0`.
  */
-function propKinds(bound: Binding[], declared: string): Map<string, PropKind> {
-    const members = memberKinds(declared)
+function propKinds(bound: Binding[], declared: string, at: number): Map<string, PropKind> {
+    const members = memberKinds(declared, at)
     const kinds = new Map<string, PropKind>()
-    for (const binding of bound) kinds.set(binding.local, members.get(binding.name) ?? 'cell')
+    for (const binding of bound) kinds.set(binding.local, members.get(binding.name) ?? 'state')
     return kinds
 }
 
@@ -851,7 +868,7 @@ function closingParen(tokens: readonly Token[], open: number): number {
  * A `watch` written as a STATEMENT in a `<script module>`, made per caller.
  *
  * The last of the three module-scope spellings that meant "once for the server process", and the one
- * that could not be done the way the other two were. A cell is wrapped in place and stays lazy
+ * that could not be done the way the other two were. A state is wrapped in place and stays lazy
  * because something eventually reads it; an effect has no read to wait for, so the wrap has to be
  * ASKED — which is what the returned kicks are, spliced into the component setup so the first
  * instance in a caller runs the body and the rest find it already running.
@@ -891,10 +908,10 @@ function scopeEffects(rest: string): { text: string; kicks: string[] } {
 }
 
 /**
- * A cell bound in a `<script module>`, rewritten to the per-caller form: `state.scoped(() => …)`.
+ * A state bound in a `<script module>`, rewritten to the per-caller form: `state.scoped(() => …)`.
  *
  * The block's scope and the value's scope disagreed, and this is where they are put back together.
- * Module scope on a server is one instance per PROCESS, so `const count = state(0)` there is one cell
+ * Module scope on a server is one instance per PROCESS, so `const count = state(0)` there is one state
  * for every visitor — while everything beside it in the same block already resolves per caller, an
  * argless `memo` through `scopedArgless` and a keyed one through its own cache. Wrapping the binding
  * is that mechanism reaching the two spellings it never covered.
@@ -903,9 +920,9 @@ function scopeEffects(rest: string): { text: string; kicks: string[] } {
  * `state(0)` is harmless and sharing the generator in `state(ticking())` is the same bug one level in.
  *
  * The BINDING is what is recognised, the same shape `reactiveBindings` reads — so a factory
- * (`const make = () => state(0)`) is left alone, since what it builds is already one cell per call.
+ * (`const make = () => state(0)`) is left alone, since what it builds is already one state per call.
  */
-function scopeCells(rest: string): string {
+function scopeStates(rest: string): string {
     const tokens = tokensOfBody(rest)
     // Collected then applied BACK TO FRONT, so an earlier splice cannot move a later one's offsets.
     const spans: { from: number; to: number; wrap: string }[] = []
@@ -917,7 +934,7 @@ function scopeCells(rest: string): string {
         let at = callee
         let maker = (tokens[callee] as Token).text
         // `state.shared(key, …)` scopes its LOOKUP and not its binding, so at module scope it holds
-        // the one cell the first evaluation built — the same leak, and the same wrap closes it.
+        // the one state the first evaluation built — the same leak, and the same wrap closes it.
         if (
             maker === 'shared' &&
             tokens[at - 1]?.kind === SyntaxKind.DotToken &&
@@ -926,8 +943,8 @@ function scopeCells(rest: string): string {
             at -= 2
             maker = 'state'
         }
-        // A channel gets its OWN wrapper rather than the cell one: its surface is not a cell's —
-        // `publish`, `subscribe`, and a room form read by CALL — so the cell's forward table would
+        // A channel gets its OWN wrapper rather than the state one: its surface is not a state's —
+        // `publish`, `subscribe`, and a room form read by CALL — so the state's forward table would
         // drop half of it silently.
         if (maker !== 'state' && maker !== 'channel') continue
         if (tokens[at - 1]?.kind === SyntaxKind.DotToken) continue
@@ -984,24 +1001,24 @@ function checkPropsImported(imports: string[], at: number, filename: string): vo
 }
 
 /**
- * The setup body with `props<T>()` replaced by the parameter, and every prop local bound to a cell.
+ * The setup body with `props<T>()` replaced by the parameter, and every prop local bound to a state.
  *
  * Two edits, and the second is the one the design turns on. The call becomes `args`, as it always
  * did. And each prop that is DATA moves out of the pattern — `{ class: className = '' }` becomes
- * `{ class: $className }`, with `const className = propCell($className, '')` after it — because a
- * prop arrives as a cell and a destructure default cannot survive that: a caller who omits the prop
- * satisfies the default with a plain string, leaving the local `'' | Cell<string>` where only one of
- * the two is callable. A default belongs beside the value it stands in for, so it goes to `propCell`.
+ * `{ class: $className }`, with `const className = propState($className, '')` after it — because a
+ * prop arrives as a state and a destructure default cannot survive that: a caller who omits the prop
+ * satisfies the default with a plain string, leaving the local `'' | State<string>` where only one of
+ * the two is callable. A default belongs beside the value it stands in for, so it goes to `propState`.
  *
  * A FUNCTION prop and a KEYED handle are left in the pattern untouched, which is what `propKinds`
- * decided: neither is a cell, and neither may become one.
+ * decided: neither is a state, and neither may become one.
  */
 function bindProps(rest: string, declared: Props, kinds: Map<string, PropKind>): string {
     let text = ''
     let cursor = 0
     let declarations = ''
     for (const binding of declared.bound) {
-        if (kinds.get(binding.local) !== 'cell') continue
+        if (kinds.get(binding.local) !== 'state') continue
         text += rest.slice(cursor, binding.start)
         text += binding.renamed ? `$${binding.local}` : `${binding.name}: $${binding.local}`
         cursor = binding.end
@@ -1012,7 +1029,7 @@ function bindProps(rest: string, declared: Props, kinds: Map<string, PropKind>):
         const fallback = binding.fallback === null ? '' : `, ${binding.fallback}`
         // On the props statement's OWN line, not below it: these are the emitter's statements, and a
         // newline each pushed the author's remaining setup down by one per bound prop.
-        declarations += `; const ${binding.local} = propCell($${binding.local}${fallback})`
+        declarations += `; const ${binding.local} = propState($${binding.local}${fallback})`
     }
     // After the statement's own `;` when it has one, so the emitted file does not carry an empty
     // statement between two declarations.
@@ -1261,31 +1278,31 @@ function unboundSelf(
  * what they are for.
  */
 function shadowing(context: Context, bound: Iterable<string>): Context {
-    const cells = new Set(context.reactive.cells)
+    const states = new Set(context.reactive.states)
     const keyed = new Set(context.reactive.keyed)
     const accessors = new Set(context.accessors)
     for (const name of bound) {
-        cells.delete(name)
+        states.delete(name)
         keyed.delete(name)
         accessors.delete(name)
     }
-    return { ...context, reactive: { cells, keyed }, accessors }
+    return { ...context, reactive: { states, keyed }, accessors }
 }
 
 /**
  * Where an expression is going, which decides what it may become.
  *
- * Naming a cell alone HANDS OVER the cell rather than reading it — that is what `bind:value={x}`,
+ * Naming a state alone HANDS OVER the state rather than reading it — that is what `bind:value={x}`,
  * `&ref` and a component prop need, and a child slot renders it as its value anyway because `unwrap`
- * reads a slot's cell one step further.
+ * reads a slot's state one step further.
  *
  *   read  composed into something BIGGER — a condition, a class toggle, an interpolated attribute —
- *         where the cell itself is never the useful thing
- *   slot  a child slot, which renders whatever it is given. The cell is fine, but an enclosing
- *         condition's hoisted local is BETTER: the outer thunk already subscribes to that cell, so a
+ *         where the state itself is never the useful thing
+ *   slot  a child slot, which renders whatever it is given. The state is fine, but an enclosing
+ *         condition's hoisted local is BETTER: the outer thunk already subscribes to that state, so a
  *         second subscription inside the branch only wakes twice for one change
- *   prop  a component prop, which needs the cell ITSELF when the expression NAMES one alone — a child
- *         handed a value has nothing left to subscribe to. Anything bigger has already read the cell
+ *   prop  a component prop, which needs the state ITSELF when the expression NAMES one alone — a child
+ *         handed a value has nothing left to subscribe to. Anything bigger has already read the state
  *         to reach the member, so there the hoisted local is the same value and one subscription
  *         instead of two — and it is also what the branch narrows off, which a second call is not
  *   bind  `bind:` and `&ref`, which never take a local at all: a bind WRITES back through the path it
@@ -1293,20 +1310,20 @@ function shadowing(context: Context, bound: Iterable<string>): Context {
  */
 type Position = 'read' | 'slot' | 'prop' | 'bind'
 
-const HELD: Record<Position, 'slot' | 'cell' | undefined> = {
+const HELD: Record<Position, 'slot' | 'state' | undefined> = {
     read: undefined,
     slot: 'slot',
-    prop: 'cell',
-    bind: 'cell',
+    prop: 'state',
+    bind: 'state',
 }
 
 function code(expr: Expr, context: Context, position: Position = 'read'): string {
     const hoisted = position === 'bind' ? NO_HOIST : context.hoisted
-    // The bare-cell case — `{count}`, the common slot — answers off two `has` calls and never
+    // The bare-state case — `{count}`, the common slot — answers off two `has` calls and never
     // reaches `desugar`, so the sets it would have taken are not built for it. Its source IS the
-    // name, so it is the whole region by construction and a held position hands the cell over —
+    // name, so it is the whole region by construction and a held position hands the state over —
     // the same answer `desugar` reaches for every spelling this does not catch.
-    if (IDENTIFIER.test(expr.source) && context.reactive.cells.has(expr.source)) {
+    if (IDENTIFIER.test(expr.source) && context.reactive.states.has(expr.source)) {
         if (position === 'read' || position === 'slot') {
             const local = hoisted.get(expr.source)
             if (local !== undefined) return local
@@ -1314,7 +1331,7 @@ function code(expr: Expr, context: Context, position: Position = 'read'): string
         return position === 'read' ? `${expr.source}()` : expr.source
     }
     const names = context.reactive
-    return desugar(context.source, expr.start, expr.start + expr.source.length, names.cells, {
+    return desugar(context.source, expr.start, expr.start + expr.source.length, names.states, {
         keyed: names.keyed,
         hold: HELD[position],
         hoisted,
@@ -1327,7 +1344,7 @@ function code(expr: Expr, context: Context, position: Position = 'read'): string
  * TypeScript narrows a `const` and never a call — and every abide read IS a call, so
  * `{#if session}{session.name}{/if}` had no way to typecheck: the test and the use were two separate
  * `session()` calls with nothing tying them together. Reading once and sharing the local is the whole
- * fix, and it also costs LESS: separate reads subscribe to the same cell twice and both wake on a
+ * fix, and it also costs LESS: separate reads subscribe to the same state twice and both wake on a
  * change, where one hoisted read wakes the branch once.
  *
  * Only the condition's OWN reads are hoisted. A body that reads something else keeps its own thunk,
@@ -1343,7 +1360,7 @@ function hoistReads(
     // second `typeRegions` with its own `TypeReader`, and both walks — to recover text this pass had
     // already produced. Reusable only where the hoisted scope did NOT change under it, which is what
     // `declarations.length === 0` says; the callers check that rather than this function guessing.
-    const pass = desugar(context.source, expr.start, expr.start + expr.source.length, names.cells, {
+    const pass = desugar(context.source, expr.start, expr.start + expr.source.length, names.states, {
         keyed: names.keyed,
         hoisted: context.hoisted,
     })
@@ -1360,7 +1377,7 @@ function hoistReads(
         if (scope.has(read.key)) continue
         const local = `$${context.counter.n++}`
         const code = read.keyed
-            ? `${desugar(context.source, read.start, read.end, names.cells, { keyed: names.keyed, hold: 'cell', hoisted: context.hoisted }).text}()`
+            ? `${desugar(context.source, read.start, read.end, names.states, { keyed: names.keyed, hold: 'state', hoisted: context.hoisted }).text}()`
             : `${read.key}()`
         declarations.push(`const ${local} = ${code}`)
         scope.set(read.key, local)
@@ -1372,12 +1389,12 @@ function withHoists(context: Context, scope: Map<string, string>): Context {
     return { ...context, hoisted: scope }
 }
 
-/** A component prop — the cell itself when the expression names one alone, its value otherwise. */
+/** A component prop — the state itself when the expression names one alone, its value otherwise. */
 function held(expr: Expr, context: Context): string {
     return code(expr, context, 'prop')
 }
 
-/** `bind:` and `&ref` — the cell itself, and never a hoisted local. See `Position`. */
+/** `bind:` and `&ref` — the state itself, and never a hoisted local. See `Position`. */
 function bound(expr: Expr, context: Context): string {
     return code(expr, context, 'bind')
 }
@@ -1441,22 +1458,22 @@ const EVALUATES = /[(`]|=>|\bfunction\b/
  * Whether an emitted slot expression can go in WITHOUT its thunk.
  *
  * The test is on what `code` PRODUCED, not on what the author wrote, and that is what makes it both
- * safe and complete. `code` has already resolved the position: a cell in a child slot comes back as
- * `count` — a value the slot reads for itself — while the same cell in an attribute comes back as
+ * safe and complete. `code` has already resolved the position: a state in a child slot comes back as
+ * `count` — a value the slot reads for itself — while the same state in an attribute comes back as
  * `count()`, which has a call and stays deferred. A `{#if}`'s hoisted read comes back as `$0`, a
  * plain const, wherever it appears. One rule answers all three, so no position argument is needed.
  *
- * CALL-FREE is the load-bearing half: `{helper()}` where `helper` reads a cell IS reactive, and
+ * CALL-FREE is the load-bearing half: `{helper()}` where `helper` reads a state IS reactive, and
  * nothing about the expression says so. `{session.name}` is a read too, and comes back as
  * `session().name` — a call, so it is excluded by the same test rather than by a second one. The
  * converse is why the test is not "is a plain path": every read this compiler EMITS is a call, so
- * call-free text mentions no cell this compiler knows about — `{TONE[row.kind]}` and `{a ? b : c}`
+ * call-free text mentions no state this compiler knows about — `{TONE[row.kind]}` and `{a ? b : c}`
  * over a `{#for}` binding are as unreactive as `{$0}` is, and thunking them bought one effect per
  * row that can never wake plus the array holding it.
  *
- * Where that converse STOPS, because it was tried one step further and does not hold: "reads no cell
+ * Where that converse STOPS, because it was tried one step further and does not hold: "reads no state
  * this compiler emitted" is not "runs no code". A member access can reach a getter — `view.big` over
- * `get big() { return n() > 3 }` is call-free text that reads a cell — so an unthunked expression is
+ * `get big() { return n() > 3 }` is call-free text that reads a state — so an unthunked expression is
  * only as safe as the effect it is evaluated inside. Everywhere a template literal is built that is
  * some enclosing effect, so the wake is wider than it should be and the screen stays right; the
  * exception is a `{:catch}`/`{:finally}` arm or a `{#for await}` row, which a promise continuation
@@ -1644,7 +1661,7 @@ function awaits(source: string): boolean {
  * An expression as the BODY of an arrow.
  *
  * `() => { a: count() }` is an arrow with a block body holding a labelled statement, not an arrow
- * returning an object — so `{a: cell}` in a slot, an attribute or a spread rendered nothing, applied
+ * returning an object — so `{a: state}` in a slot, an attribute or a spread rendered nothing, applied
  * nothing and set nothing, silently. Only a leading `{` can do this, so only a leading `{` is
  * parenthesised.
  *
@@ -1721,7 +1738,7 @@ function child(node: Node, context: Context): string {
             // component with a `<slot/>` paid an effect — plus the slot-effect array holding it —
             // for a subscription that can never wake, and a component inside a `{#for}` paid it per
             // row. A function handed in from JS is still deferred: the part treats a function child
-            // value as a thunk, which is the same mechanism `unthunked` relies on for a bare cell.
+            // value as a thunk, which is the same mechanism `unthunked` relies on for a bare state.
             // A fallback is a DECISION, so it takes the thunk the bare form is careful not to: the
             // children have to be read to know whether any arrived, and a read outside an effect is
             // one that never hears the answer change. Only a slot that has one pays it.
@@ -1818,25 +1835,25 @@ function scoped(nodes: Node[], context: Context): { statements: string; context:
         'abide: a branch-local <script> carries no `import` — it reuses the component’s',
     )
 
-    // A nested level gets its OWN view of what is reactive: a cell declared here exists only inside
-    // the branch, and a plain binding that reuses an outer cell's name has to shadow it — otherwise
-    // `{count}` in the body would still compile to a read of the outer cell.
+    // A nested level gets its OWN view of what is reactive: a state declared here exists only inside
+    // the branch, and a plain binding that reuses an outer state's name has to shadow it — otherwise
+    // `{count}` in the body would still compile to a read of the outer state.
     // What THIS script declares, kept separate from what it inherits. Asking whether the inherited
     // set already holds a name answers the wrong question: `const rate = …` shadowing an outer
     // `rate` source would look like a name that is already reactive, and the shadow would be dropped.
-    const own: Reactive = { cells: new Set(), keyed: new Set() }
+    const own: Reactive = { states: new Set(), keyed: new Set() }
     reactiveBindings(tokens, own)
     const ownAccessors = new Set<string>()
     accessorBindings(tokens, ownAccessors)
 
     const reactive: Reactive = {
-        cells: new Set(context.reactive.cells),
+        states: new Set(context.reactive.states),
         keyed: new Set(context.reactive.keyed),
     }
     const accessors = new Set(context.accessors)
     for (const name of declaredNames(tokens)) {
-        if (own.cells.has(name)) {
-            reactive.cells.add(name)
+        if (own.states.has(name)) {
+            reactive.states.add(name)
         } else if (own.keyed.has(name)) {
             reactive.keyed.add(name)
         } else if (ownAccessors.has(name)) {
@@ -1845,15 +1862,15 @@ function scoped(nodes: Node[], context: Context): { statements: string; context:
             // A plain binding. It hides whatever the name meant outside, source or not — an accessor
             // pair included, which is why all three are subtracted and not just the two `Reactive`
             // carries. The three arms above are the same rule the other way: a name declared here as
-            // a cell, a keyed memo or a pair IS that thing inside the branch, whatever it was outside.
-            reactive.cells.delete(name)
+            // a state, a keyed memo or a pair IS that thing inside the branch, whatever it was outside.
+            reactive.states.delete(name)
             reactive.keyed.delete(name)
             accessors.delete(name)
         }
     }
 
     const inner: Context = { ...context, reactive, accessors }
-    const statements = desugar(context.source, from, to, reactive.cells, {
+    const statements = desugar(context.source, from, to, reactive.states, {
         expression: false,
         keyed: reactive.keyed,
     }).text
@@ -2030,7 +2047,7 @@ function toggled(
  *
  * `mirror` is HOW the pair is written, on the row rather than in a second table keyed by the same
  * key. That second table is the shape this docblock already describes failing once: a refusal beside
- * the map instead of a column in it. Absent is the ordinary pair — a `.prop` handed the cell and a
+ * the map instead of a column in it. Absent is the ordinary pair — a `.prop` handed the state and a
  * listener writing it back — which is where `value` on all three of its tags lands.
  *
  * Exported for the reason `BRANCHES` is: it is the closed set of bind TARGETS, and `/docs/syntax/bind`
@@ -2099,19 +2116,19 @@ function bind(
 ): string {
     const key_ = attribute.target
     // REFUSED rather than made async, which is the whole of what separates this from an attribute. A
-    // bind hands over the CELL — the emit is `.prop=${source}` and `&ref=${source}`, with no thunk in
+    // bind hands over the STATE — the emit is `.prop=${source}` and `&ref=${source}`, with no thunk in
     // either — so there is nothing here to make async, and a promise arriving would be written onto a
     // DOM property or handed over as a node ref as the promise it is. Every other position that awaits
     // resolves it somewhere; these two have nowhere to resolve it to.
     if (attribute.value !== null && awaits(attribute.value.source)) {
         throw new ParseError(
-            `abide: \`bind:${key_}\` cannot \`await\` — a bind hands over the CELL it reads and ` +
-                `writes back to, and a promise is neither. Await into a cell and bind that`,
+            `abide: \`bind:${key_}\` cannot \`await\` — a bind hands over the STATE it reads and ` +
+                `writes back to, and a promise is neither. Await into a state and bind that`,
             attribute.value.start,
         )
     }
 
-    // `bind:value` with no value binds the cell of the same name — `bind:value={value}` written once.
+    // `bind:value` with no value binds the state of the same name — `bind:value={value}` written once.
     const source =
         attribute.value === null
             ? key_
@@ -2152,7 +2169,7 @@ function bind(
     // the element actually has — an untyped `event` here is an implicit `any` in the author's build.
     const target = (property: string): string => `(event.currentTarget as ${legal.dom}).${property}`
 
-    // `{get, set}` — an explicit accessor pair rather than a cell, written inline in the tag or
+    // `{get, set}` — an explicit accessor pair rather than a state, written inline in the tag or
     // hoisted out of it into a name. See `accessorBindings` for why the second spelling is asked
     // about rather than inferred from the text.
     const accessor = source.startsWith('{') || context.accessors.has(source)
@@ -2186,21 +2203,21 @@ function bind(
         }
         const mine = JSON.stringify(own)
         // Read ONCE into a local in each half. `sources` has no dedupe, so a thunk reading the same
-        // cell twice pushes two entries onto the slot's effect and every later re-run walks both,
-        // doing an `observers.delete` that misses — and a group is N inputs on ONE cell, so it was
+        // state twice pushes two entries onto the slot's effect and every later re-run walks both,
+        // doing an `observers.delete` that misses — and a group is N inputs on ONE state, so it was
         // 2N. The same collapse `{#if}` and `{#switch}` conditions already make.
         const next =
             `Array.isArray(held)` +
             ` ? (${target('checked')} ? [...held, ${mine}] : held.filter((v: unknown) => v !== ${mine}))` +
             ` : ${mine}`
-        // One runtime hedge over the two legal shapes of a group cell — an ARRAY for checkboxes, a
-        // SCALAR for radios — and for any one cell only one arm can be reached. TypeScript proves that
+        // One runtime hedge over the two legal shapes of a group state — an ARRAY for checkboxes, a
+        // SCALAR for radios — and for any one state only one arm can be reached. TypeScript proves that
         // by narrowing the other to `never`, and then refuses the write, because `Array.isArray` is
         // what it narrowed on and the emit has no type-checker to have written just one arm. So the
         // cast is on the whole expression rather than on either half: it says "the runtime already
         // chose", and the wrong arm cannot be reached to be wrong.
         // Marked on the READ, which is the only text in either half that came from the file — the
-        // rest is the hedge over an array cell and a scalar one, and belongs to no line an author
+        // rest is the hedge over an array state and a scalar one, and belongs to no line an author
         // wrote.
         const held = mark(attribute.value?.start ?? 0, read)
         return (
@@ -2209,11 +2226,11 @@ function bind(
         )
     }
 
-    // The CELL itself where the source is one, not a thunk that reads it: a property slot's function
+    // The STATE itself where the source is one, not a thunk that reads it: a property slot's function
     // value goes through `unwrap`, which reads a source one step further, so the two are the same
     // write on both substrates — and the thunk was a fresh closure per bound input per row. The
     // exceptions are the two `mirror` arms above and are exactly why they are arms: an accessor pair
-    // is not a cell, and a boolean needs the `!!` coercion for the attribute half. A `<select>` lands
+    // is not a state, and a boolean needs the `!!` coercion for the attribute half. A `<select>` lands
     // HERE — `.value` plus the `change` its row names — which is why it has no arm of its own.
     // MARKED at the splice and not where `source` is built: `source` is string-TESTED above —
     // `startsWith('{')` for an accessor pair, and a lookup in `context.accessors` — and a marker in
@@ -2253,13 +2270,24 @@ function invoke(node: { name: string; attributes: Attribute[]; children: Node[] 
                 props.push(`...${mark(attribute.value.start, held(attribute.value, context))}`)
                 spread = true
                 break
+            // REFUSED, and it emitted nothing of its own: `bind:note={x}` and `note={x}` produced the
+            // byte-identical `component(Note, { note: x, … })`, because naming a state alone hands it
+            // over in a prop position exactly as anywhere else. So the keyword claimed a two-way
+            // contract it did not create and could not check — `bind:note={x()}` compiled a promise of
+            // write-back over an emitted READ, and nothing said so in either lane.
+            //
+            // On an ELEMENT `bind:` is real and is checked against a table of tags and events; there
+            // is no such table here, because a prop name is whatever the child called it.
             case 'bind': {
-                const source =
-                    attribute.value === null
-                        ? attribute.target
-                        : mark(attribute.value.start, bound(attribute.value, context))
-                props.push(`${key(attribute.target)}: ${source}`)
-                break
+                const written = attribute.value === null ? attribute.target : attribute.value.source
+                throw new ParseError(
+                    `abide: \`bind:${attribute.target}\` on <${node.name}> is a prop — a component has no ` +
+                        `property to bind and no event to write back from. Write ` +
+                        `\`${attribute.target}={${written}}\`, which is what this compiled to anyway. What the ` +
+                        'child gets is decided by WHAT you name: `x={source}` hands the state over, ' +
+                        '`x={source()}` hands a value that stays live, `x={source.peek()}` one that does not',
+                    attribute.value?.start ?? 0,
+                )
             }
             case 'class':
             case 'style':
@@ -2294,13 +2322,13 @@ function invoke(node: { name: string; attributes: Attribute[]; children: Node[] 
     if (rendered) props.push(`children: ${fragment(content, context)}`)
     else if (!spread) props.push('children: undefined')
 
-    // A state- or memo-named tag is a REACTIVE component: the cell is read, so a change re-mounts it.
-    const callee = context.reactive.cells.has(node.name) ? `${node.name}()` : node.name
+    // A state- or memo-named tag is a REACTIVE component: the state is read, so a change re-mounts it.
+    const callee = context.reactive.states.has(node.name) ? `${node.name}()` : node.name
     // CARRIED, not called — except for an inline component, which has no setup to protect. The call
     // used to happen wherever the enclosing thunk ran, and that thunk re-runs for anything the parent
     // reads: a keyed list gaining one row rebuilt every instance in it and discarded whatever the
     // user had typed into any of them. `component()` hands the view and its props to the position
-    // instead, which holds the instance and writes the props into cells. See docs/COMPONENTS.md.
+    // instead, which holds the instance and writes the props into states. See docs/COMPONENTS.md.
     if (context.inline.has(node.name)) return `${callee}({ ${props.join(', ')} })`
     return `${need(context, 'component')}(${callee}, { ${props.join(', ')} })`
 }
@@ -2326,7 +2354,7 @@ function define(node: { name: string; parameters: string; body: Node[] }, contex
     // A parameter written by hand types itself. One written as `()` still BINDS `args` — that is what
     // `childrenOf` answers with — and an untyped binding is an implicit `any`, which the app's own
     // typecheck refuses: `{#component Loud()}` was a documented spelling that could not compile.
-    return `(${node.parameters || `args: ${signature(null, NO_CELLS)}`}) => ${fragment(node.body, inner)}`
+    return `(${node.parameters || `args: ${signature(null, NO_STATES)}`}) => ${fragment(node.body, inner)}`
 }
 
 /** Split on a character at the TOP level — outside every bracket, brace and string. */
@@ -2404,7 +2432,7 @@ function chained(branches: Branch[], context: Context): string {
     // reads `mode` once for the chain rather than once per arm. `hoistReads` skips a name already in
     // the scope it was handed, so a later arm reading something ELSE still declares it in its own
     // position — only the repeat collapses. Without this the arms each took their own local, and the
-    // duplicate reads subscribed the slot's effect to the same cell N times: `sources` has no dedupe,
+    // duplicate reads subscribed the slot's effect to the same state N times: `sources` has no dedupe,
     // so every later re-run walked N entries and did N-1 `observers.delete` calls that miss.
     let carried = context
     for (const branch of branches) {
@@ -2458,7 +2486,7 @@ function switched(node: { value: Expr; branches: Branch[] }, context: Context): 
     const emitted = declarations.length === 0 ? text : code(node.value, inner)
     // Bound ONCE unless it is already atomic. The sugared `{#switch mode}` came back from
     // `hoistReads` as a local already, but the explicit `{#switch mode()}` — which SPEC guarantees
-    // keeps working — came back as a call, and interpolating it per case read the cell once per arm
+    // keeps working — came back as a call, and interpolating it per case read the state once per arm
     // and subscribed the slot's effect that many times to it. A switch subject is evaluated once in
     // JS anyway, so this is also the more faithful emit. `ATOMIC` rather than `unthunked`: the
     // question here is whether the text can be pasted into N comparisons, not whether it can read.
@@ -2621,7 +2649,7 @@ export function emit(
         checkPropsImported(setup.imports, blocks.setup?.start ?? 0, options.filename)
     }
     // `props<T>()` IS the parameter — the call is erased and the type argument becomes its annotation —
-    // and every prop local is bound to the cell the position holds for it.
+    // and every prop local is bound to the state the position holds for it.
     const kinds =
         declared === null
             ? NO_KINDS
@@ -2631,6 +2659,7 @@ export function emit(
                       ? ''
                       : membersOf(declared.type, setup.rest, setupTokens, setupTypes) ||
                             importedMembers(declared.type, setup.imports, options.filename, options.resolve),
+                  blocks.setup?.start ?? 0,
               )
     const replaced = declared === null ? setup.rest : bindProps(setup.rest, declared, kinds)
     // No `props()` is the common shape — most `.abide` files are a page, and a page takes none. The
@@ -2639,14 +2668,14 @@ export function emit(
     const replacedTokens = declared === null ? setupTokens : tokensOfBody(replaced)
     const replacedTypes = declared === null ? setupTypes : new TypeReader(replacedTokens)
 
-    const reactive: Reactive = { cells: new Set(), keyed: new Set() }
+    const reactive: Reactive = { states: new Set(), keyed: new Set() }
     reactiveBindings(moduleTokens, reactive)
     reactiveBindings(setupRegion, reactive)
     // The imports were lifted out of both regions above, so the bindings walk never sees them.
     rpcImports(moduleImports.imports, reactive)
     rpcImports(setup.imports, reactive)
     for (const [local, kind] of kinds) {
-        if (kind === 'cell') reactive.cells.add(local)
+        if (kind === 'state') reactive.states.add(local)
         else if (kind === 'keyed') reactive.keyed.add(local)
     }
     const accessors = new Set<string>()
@@ -2678,8 +2707,8 @@ export function emit(
     }
     // `bindProps` already wrote the calls into the setup body; the header only has to import them.
     for (const kind of kinds.values()) {
-        if (kind === 'cell') {
-            need(context, 'propCell')
+        if (kind === 'state') {
+            need(context, 'propState')
             break
         }
     }
@@ -2715,22 +2744,22 @@ export function emit(
     // about that type, which nothing in this lane can answer.
     // The member NAMES, not the locals: the type is over the authored props type, and `{ note: text }`
     // renames only this file's binding.
-    const cellMembers: string[] = []
+    const stateMembers: string[] = []
     if (declared !== null) {
         for (const binding of declared.bound) {
-            if (kinds.get(binding.local) === 'cell') cellMembers.push(binding.name)
+            if (kinds.get(binding.local) === 'state') stateMembers.push(binding.name)
         }
     }
-    const args = `args: ${signature(declared, cellMembers)}${declared === null ? ' = {}' : ''}`
+    const args = `args: ${signature(declared, stateMembers)}${declared === null ? ' = {}' : ''}`
 
     // `html` and the return type are always needed; everything else is imported only if the file
     // turned out to use it, so a component that never toggles a class does not import `classes`.
-    // The module block, per caller: cell bindings wrapped where they stand, and an effect wrapped
+    // The module block, per caller: state bindings wrapped where they stand, and an effect wrapped
     // with a KICK for the setup below — an effect has no read to be lazy behind, so the component
     // that declared it is what asks for this caller's one. Before the import header is split, since
     // an effect here is what puts `scopedEffect` on it.
-    const scoped = scopeEffects(scopeCells(desugarBody(moduleImports.rest, reactive)))
-    // Marked HERE and not inside `desugarBody`, because `scopeCells` and `scopeEffects` tokenise what
+    const scoped = scopeEffects(scopeStates(desugarBody(moduleImports.rest, reactive)))
+    // Marked HERE and not inside `desugarBody`, because `scopeStates` and `scopeEffects` tokenise what
     // it returns and a marker in the middle of that reads as part of an identifier — see `markLines`.
     const lineStarts = startsOf(source)
     const moduleBlock = {
@@ -2945,7 +2974,7 @@ const COMMENT_LINE = /^(\/\/|\/\*|\*)/
  * expression does.
  *
  * A template expression is marked where it is COPIED, which is exact. A script body cannot be: its
- * text is desugared, its cell makers are wrapped and its imports are hoisted out, so there is no
+ * text is desugared, its state makers are wrapped and its imports are hoisted out, so there is no
  * single copy to mark. What survives all of that is the LINE — every transform splices within a line
  * or appends after the body, and lifting an import removes its text while leaving the newline behind.
  * Measured across the dogfood app: excluding the hoisted imports, every one of 54 files with a module
@@ -2996,7 +3025,7 @@ function markLines(body: string, source: string, starts: number[], firstLine: nu
 function desugarBody(rest: string, reactive: Reactive): string {
     if (rest.trim() === '') return rest
     // The import-lifted text no longer lines up with the file, so it is desugared as its own region.
-    return desugar(rest, 0, rest.length, reactive.cells, {
+    return desugar(rest, 0, rest.length, reactive.states, {
         expression: false,
         keyed: reactive.keyed,
         once: true,

@@ -1,0 +1,22 @@
+<script>
+import { state } from 'abide'
+import Note from './36-a-prop-the-child-writes-back.abide'
+
+// The two spellings side by side, because the difference between them IS the rung. The child is one
+// file, used twice, and it cannot tell which of these it got.
+//
+// Naming the state hands the STATE over, so the child's input edits what this file is holding.
+// Reading it hands a VALUE, so the child is given a state of its own — still live downward, since
+// this thunk re-runs on every write to `copied`, and isolated upward.
+//
+// `bind:note={shared}` would emit the same call as `note={shared}` — naming a state alone hands it
+// over in a prop position as anywhere else — which is why there is no `bind:` on a component here.
+const shared = state('ada')
+const copied = state('ada')
+</script>
+
+<Note note={shared}/>
+<p>hands the STATE — parent holds “{shared}”</p>
+
+<Note note={copied()}/>
+<p>hands a VALUE — parent still holds “{copied}”</p>

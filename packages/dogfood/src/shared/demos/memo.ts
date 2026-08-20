@@ -4,6 +4,7 @@
 //   memo(({ id }) => fetch(id))  args    -> the args ARE the cache key
 
 import { memo, state, watch } from 'abide'
+import { isolate } from 'abide/internal'
 import { reader, scratch, show, sleep, suite, until } from 'harness'
 import { countCalls, keep, tick } from 'harness/measure'
 import { button, field, row, stage } from './dom.ts'
@@ -77,7 +78,7 @@ export default suite({
                             report()
                         }),
                         button('first.set(same)', () => {
-                            first.set(first.peek())
+                            first.set(first.peek()!)
                             writes++
                             report()
                         }),
@@ -118,7 +119,7 @@ export default suite({
                     const source = state(2)
                     const derivation = memo(() => source() * 2)
                     derivation()
-                    const plainSource = vanilla.cell(2)
+                    const plainSource = vanilla.state(2)
                     const plainDerived = vanilla.derived([plainSource], () => plainSource.get() * 2)
                     plainDerived.get()
                     const memoised = vanilla.derivedMemoised([plainSource], () => plainSource.get() * 2)
@@ -154,7 +155,7 @@ export default suite({
                 arms: (() => {
                     const source = state(2)
                     const derivation = memo(() => source() * 2)
-                    const plainSource = vanilla.cell(2)
+                    const plainSource = vanilla.state(2)
                     const plainDerived = vanilla.derived([plainSource], () => plainSource.get() * 2)
                     return [
                         {
@@ -218,7 +219,7 @@ export default suite({
                     {
                         label: 'vanilla — naive push (the classic glitch)',
                         run: async () => {
-                            const source = vanilla.cell(1)
+                            const source = vanilla.state(1)
                             const left = vanilla.derived([source], () => source.get() + 1)
                             const right = vanilla.derived([source], () => source.get() * 2)
                             let runs = 0
@@ -276,7 +277,7 @@ export default suite({
                     {
                         label: 'vanilla — memoised derivation',
                         run: async () => {
-                            const n = vanilla.cell(1)
+                            const n = vanilla.state(1)
                             const positive = vanilla.derivedMemoised([n], () => n.get() > 0)
                             let runs = 0
                             positive.subscribe(() => runs++)
@@ -287,7 +288,7 @@ export default suite({
                     {
                         label: 'vanilla — naive forward',
                         run: async () => {
-                            const n = vanilla.cell(1)
+                            const n = vanilla.state(1)
                             const positive = vanilla.derived([n], () => n.get() > 0)
                             let runs = 0
                             positive.subscribe(() => runs++)
@@ -300,8 +301,8 @@ export default suite({
         },
 
         {
-            title: 'a cell is a THENABLE — then, catch, finally, and not a Promise',
-            note: 'Awaiting a cell already worked; the other two verbs did not, so `x.then(…).catch(…)` was fine and `x.catch(…)` was a TypeError — an asymmetry nothing in the surface tells you about. Both are now there, and both are ONE shared function reached through `this` rather than a closure per cell: a handle already carries fourteen own properties and is allocated per keyed slot, which in a list is per row, so two more closures each would be a cost paid everywhere to fix an ergonomic gap. What is deliberately NOT here is `instanceof Promise`. There is no `[[PromiseState]]` under a cell, so a native fast path reaching for one would throw on an object that had just claimed to be one — a thenable that says what it is fails in ways a reader can act on.',
+            title: 'a state is a THENABLE — then, catch, finally, and not a Promise',
+            note: 'Awaiting a state already worked; the other two verbs did not, so `x.then(…).catch(…)` was fine and `x.catch(…)` was a TypeError — an asymmetry nothing in the surface tells you about. Both are now there, and both are ONE shared function reached through `this` rather than a closure per state: a handle already carries fourteen own properties and is allocated per keyed slot, which in a list is per row, so two more closures each would be a cost paid everywhere to fix an ergonomic gap. What is deliberately NOT here is `instanceof Promise`. There is no `[[PromiseState]]` under a state, so a native fast path reaching for one would throw on an object that had just claimed to be one — a thenable that says what it is fails in ways a reader can act on.',
             async run({ is }) {
                 const loaded = memo(async () => {
                     await sleep(1)
@@ -313,20 +314,30 @@ export default suite({
                 })
 
                 is('await works, as it always did', await loaded, 'landed')
-                is('and now catch does too, with no then in front of it', await refused.catch((e) => `caught ${(e as Error).message}`), 'caught nope')
+                is(
+                    'and now catch does too, with no then in front of it',
+                    await refused.catch((e) => `caught ${(e as Error).message}`),
+                    'caught nope',
+                )
 
                 let ran = false
-                is('finally runs and passes the value through', await loaded.finally(() => { ran = true }), 'landed')
+                is(
+                    'finally runs and passes the value through',
+                    await loaded.finally(() => {
+                        ran = true
+                    }),
+                    'landed',
+                )
                 is('…and it ran', ran, true)
 
                 // The SHAPE claim, which is the whole reason these are not closures: two different
-                // cells carry the same function object. A per-cell closure passes every assertion
+                // states carry the same function object. A per-state closure passes every assertion
                 // above and allocates two more objects per keyed slot, so the identity is the only
                 // thing that can tell the two implementations apart.
-                is('every cell shares one catch', loaded.catch === refused.catch, true)
+                is('every state shares one catch', loaded.catch === refused.catch, true)
                 is('…and one finally', loaded.finally === refused.finally, true)
 
-                // A sync cell is thenable for the same reason: awaiting differs from reading in HOW
+                // A sync state is thenable for the same reason: awaiting differs from reading in HOW
                 // it waits, not in what it can hand back.
                 is('a sync memo answers the same way', await memo(() => 42), 42)
 
@@ -340,7 +351,11 @@ export default suite({
                     return { id }
                 })
                 is('a keyed slot catches too', await rows({ id: -1 }).catch(() => 'refused'), 'refused')
-                is('…and a state built from a promise', await state(Promise.resolve('held')).finally(() => {}), 'held')
+                is(
+                    '…and a state built from a promise',
+                    await state(Promise.resolve('held')).finally(() => {}),
+                    'held',
+                )
                 is(
                     'and the graph hands out the same pair it hands the facade',
                     rows({ id: 1 }).catch === memo(async () => 1).catch,
@@ -442,7 +457,7 @@ export default suite({
         },
 
         {
-            title: 'derive off an async cell with the ORDINARY sync spelling',
+            title: 'derive off an async state with the ORDINARY sync spelling',
             note: 'No `.then`, no await, no second kind of memo — and nothing to narrow, in the types either: `session()` reads as the `{ name: string }` the load resolves to, so the `?.` and the `?? stranger` this used to need cannot be written any more. A read with nothing to serve yet SIGNALS, so the body does not run at all until `session()` can be served, and a reader that cannot be run again — an event handler — gets what is there.',
             async run({ is }) {
                 const session = state(fetchSession('ada'))
@@ -462,7 +477,7 @@ export default suite({
 
         {
             title: 'a derivation is TRANSPARENT to a pending read',
-            note: 'The signal names the CELL it started at, not the derivation it unwound through, because a cell is the only thing that can be waited for. The derivation stays dirty so the next read runs its body again — which costs the wake, since a dirty node swallows the mark that would have travelled through it, so the reader is subscribed to the load itself instead.',
+            note: 'The signal names the STATE it started at, not the derivation it unwound through, because a state is the only thing that can be waited for. The derivation stays dirty so the next read runs its body again — which costs the wake, since a dirty node swallows the mark that would have travelled through it, so the reader is subscribed to the load itself instead.',
             async run({ is }) {
                 const account = state(fetchSession('lin'))
                 const shout = memo(() => `HELLO ${account()?.name.toUpperCase() ?? ''}`)
@@ -477,7 +492,7 @@ export default suite({
 
         {
             title: '…and it keeps carrying marks after the load it signalled on',
-            note: 'The dirty derivation above swallows the mark, and the reader is subscribed to the LOAD instead — which covers that load and no other. Move the key and the body reads a different cell entirely: the first flip never fires again, so without the mark still travelling from a signalled node the whole fan downstream sits on the previous key’s data forever, rendering perfectly. Only the body-run counts can see it, which is why they are the assertion.',
+            note: 'The dirty derivation above swallows the mark, and the reader is subscribed to the LOAD instead — which covers that load and no other. Move the key and the body reads a different state entirely: the first flip never fires again, so without the mark still travelling from a signalled node the whole fan downstream sits on the previous key’s data forever, rendering perfectly. Only the body-run counts can see it, which is why they are the assertion.',
             async run({ is }) {
                 let loads = 0
                 const source = memo(async ({ key }: { key: number }) => {
@@ -515,7 +530,7 @@ export default suite({
 
         {
             title: '…and it answers the PROBES for the load it could not read',
-            note: 'Transparency has to reach the PROBES or a derivation is only half a cell: `memo(() => rows({ q })())` settles nothing of its own, so its own tracker is never written and `pending()` reported false while there was nothing to show — an `{#if}` gate over a derived load rendered its else arm at once, on both substrates. The probe’s kick could not see it either, because it pulled untracked: a signal with nobody standing under it unwinds the body and is dropped where the pull catches it, which is right for a caller that will not ask again and is the opposite of what a probe is. So the kick pulls RETRYABLY, and the signal it catches IS the answer — with the asker subscribed to the cell that signalled, since that cell owns the only flip that can stand the probe down.',
+            note: 'Transparency has to reach the PROBES or a derivation is only half a state: `memo(() => rows({ q })())` settles nothing of its own, so its own tracker is never written and `pending()` reported false while there was nothing to show — an `{#if}` gate over a derived load rendered its else arm at once, on both substrates. The probe’s kick could not see it either, because it pulled untracked: a signal with nobody standing under it unwinds the body and is dropped where the pull catches it, which is right for a caller that will not ask again and is the opposite of what a probe is. So the kick pulls RETRYABLY, and the signal it catches IS the answer — with the asker subscribed to the state that signalled, since that state owns the only flip that can stand the probe down.',
             async run({ is }) {
                 const rows = memo(async ({ q }: { q: string }) => {
                     // A REAL delay for the reason the case above states: a resolved promise is read
@@ -531,7 +546,7 @@ export default suite({
                 is('done()', found.done(), false)
 
                 // The probe ALONE, with nothing reading the value: what stands it down is the flip
-                // on the cell one level down, which is the subscription the probe has to have made.
+                // on the state one level down, which is the subscription the probe has to have made.
                 const asked = reader(() => found.pending())
                 await sleep(60)
                 is('the probe-only reader saw it stand down', asked.seen, ['true', 'false'])
@@ -542,7 +557,7 @@ export default suite({
 
         {
             title: 'a probe ASKS, and asking KICKS',
-            note: 'Every member that asks ABOUT the value starts the load: `()`, `await`, and the probes. `pending()` on a cell nobody had kicked used to report `false` — which reads as "no load is running" and meant "none has begun", a different fact wearing the same answer. Kicking makes it true, and makes a probe-first template work on its own: `{#if a.pending() || b.pending()}` starts both, with no compiler recognising the spelling. `peek` is the one member left that only observes, and SELECTING a keyed slot still starts nothing — the two places a caller can ask about a key without paying for it.',
+            note: 'Every member that asks ABOUT the value starts the load: `()`, `await`, and the probes. `pending()` on a state nobody had kicked used to report `false` — which reads as "no load is running" and meant "none has begun", a different fact wearing the same answer. Kicking makes it true, and makes a probe-first template work on its own: `{#if a.pending() || b.pending()}` starts both, with no compiler recognising the spelling. `peek` is the one member left that only observes, and SELECTING a keyed slot still starts nothing — the two places a caller can ask about a key without paying for it.',
             async run({ is }) {
                 let bodyRuns = 0
                 const report = memo(async () => {
@@ -573,8 +588,107 @@ export default suite({
         },
 
         {
-            title: 'a probe starts what it ASKS — and `||` asks about one cell',
-            note: 'The reason the kick moved onto the probe, and the limit of what moving it buys. Deferring used to be decided by the COMPILER matching `{#if <cell>.pending()}` as the whole of a chain’s first test, so a gate spelled any other way started nothing and reported `false` forever; the runtime is the recogniser now, and whatever asks, starts — including a `memo` over a probe, which no regex could have seen. But it can only start what is EVALUATED, and `||` short-circuits: `{#if a.pending() || b.pending()}` starts `a` and leaves `b` cold until something reads it, which is the two-load waterfall in a new place rather than a fixed one. A gate over several loads has to ask about all of them — `[a.pending(), b.pending()].includes(true)`, which reads worse and is the honest spelling. Asserted in BODY RUNS: every one of these renders correctly either way, just a round trip apart.',
+            title: 'a probe of the SET starts nothing — `m.pending(pattern?)`',
+            note: 'The other half of "asking kicks", and the reason that rule can stay as it is. `m(args).pending()` NAMES a key, and naming one is what materialises the cold slot the probe then starts — which on a mutation is how the mutation gets made. `m.pending(pattern?)` describes a set instead, so there is no slot to materialise and nothing to start; it can only report work somebody else began. The pattern is the one `m.invalidate`/`m.refresh` already take, so the three verbs read alike. Reactive in BOTH directions: every matching slot is read, so the asker wakes on any of their transitions, and the slot SET is read too, so a slot that does not exist when the question is asked still wakes the asker when it appears — which is the ordinary case, since a gate asking "is a delete of this row going" is written before the click that starts one.',
+            async run({ is }) {
+                let bodyRuns = 0
+                const remove = memo(async ({ id }: { id: number }) => {
+                    bodyRuns++
+                    await sleep(20)
+                    return `removed ${id}`
+                })
+
+                is('nothing in flight, and nothing matched', remove.pending(), false)
+                is('…and asking started no body', bodyRuns, 0)
+                is('a pattern for a key that does not exist', remove.pending({ id: 1 }), false)
+                is('…still no body', bodyRuns, 0)
+                // The handle form, for contrast: it names the key, so it makes the call.
+                is('naming the key IS the cause', remove({ id: 1 }).pending(), true)
+                is('one body run, from the handle probe', bodyRuns, 1)
+
+                is('now the set probe reports it', remove.pending(), true)
+                is('and by pattern', remove.pending({ id: 1 }), true)
+                is('a pattern that misses it', remove.pending({ id: 2 }), false)
+                is('none of those started anything', bodyRuns, 1)
+
+                await sleep(40)
+                is('it stood down', remove.pending(), false)
+                is('and still one run', bodyRuns, 1)
+
+                // `ttl: 0` is what a MUTATION is — stale the moment it settles, so that every ask
+                // runs it again. On that slot the difference between asking and acting is the whole
+                // question, and it is the one shape where a set probe walking existing slots would
+                // still cause: the walk asks each handle, and an ask of a stale slot kicks.
+                let sent = 0
+                const post = memo(
+                    async ({ id }: { id: number }) => {
+                        sent++
+                        await sleep(10)
+                        return `sent ${id}`
+                    },
+                    { ttl: 0 },
+                )
+                await post({ id: 1 })
+                is('the call itself sent one', sent, 1)
+                is('the set probe reports nothing in flight', post.pending(), false)
+                is('…and did not send a second', sent, 1)
+                is('nor by pattern', post.pending({ id: 1 }), false)
+                is('still one', sent, 1)
+            },
+        },
+
+        {
+            title: 'a set probe wakes for ITS caller only',
+            note: 'The slot-set node is per caller because the cache it describes is. Process-global it woke every other caller on a slot creation in a map that reader cannot see — the reader then re-walks its own unchanged cache and answers exactly what it answered before. Counted in WAKE-UPS, because the value is right either way: this is the class of failure "reactive invariants" says a correctness test cannot catch, and on a server it is one spurious effect re-run per concurrent reader per slot created anywhere.',
+            async run({ is }) {
+                const remove = memo(async ({ id }: { id: number }) => {
+                    await sleep(20)
+                    return `removed ${id}`
+                })
+
+                const probe = await isolate(async () => {
+                    const asking = reader(() => remove.pending())
+                    await tick()
+                    return asking
+                })
+                const settled = probe.seen.length
+
+                // A DIFFERENT caller fills a slot in its own cache. Nothing the reader above can see.
+                await isolate(async () => {
+                    remove({ id: 99 })()
+                })
+                await tick()
+                is('another caller creating a slot woke nobody', probe.seen.length, settled)
+                probe.dispose()
+            },
+        },
+
+        {
+            title: 'a set probe wakes when a matching slot APPEARS',
+            note: 'The claim the slot-set node exists for, and the one a probe over existing slots cannot make on its own: subscribing to every matching slot subscribes to nothing when none match yet. Counted in WAKE-UPS rather than values — the gate reads the right answer either way, just a beat late, which is exactly the failure a correctness test cannot see.',
+            async run({ is }) {
+                const remove = memo(async ({ id }: { id: number }) => {
+                    await sleep(20)
+                    return `removed ${id}`
+                })
+
+                const gate = reader(() => remove.pending())
+                is('the gate starts false, subscribed to no slot', gate.seen, ['false'])
+
+                // The click. This is the first thing to name the key, so the slot is born here.
+                remove({ id: 7 })()
+                await tick()
+                is('it woke on a slot that did not exist when it asked', gate.seen, ['false', 'true'])
+
+                await sleep(40)
+                is('and again when that slot stood down', gate.seen, ['false', 'true', 'false'])
+                gate.dispose()
+            },
+        },
+
+        {
+            title: 'a probe starts what it ASKS — and `||` asks about one state',
+            note: 'The reason the kick moved onto the probe, and the limit of what moving it buys. Deferring used to be decided by the COMPILER matching `{#if <state>.pending()}` as the whole of a chain’s first test, so a gate spelled any other way started nothing and reported `false` forever; the runtime is the recogniser now, and whatever asks, starts — including a `memo` over a probe, which no regex could have seen. But it can only start what is EVALUATED, and `||` short-circuits: `{#if a.pending() || b.pending()}` starts `a` and leaves `b` cold until something reads it, which is the two-load waterfall in a new place rather than a fixed one. A gate over several loads has to ask about all of them — `[a.pending(), b.pending()].includes(true)`, which reads worse and is the honest spelling. Asserted in BODY RUNS: every one of these renders correctly either way, just a round trip apart.',
             async run({ is }) {
                 let leftRuns = 0
                 let rightRuns = 0
@@ -589,7 +703,7 @@ export default suite({
                     return 'R'
                 })
 
-                // The spelling `deferrable` could never see: two cells, one placeholder. It answers
+                // The spelling `deferrable` could never see: two states, one placeholder. It answers
                 // correctly and starts ONE load, because `||` never evaluated the second probe.
                 is('the OR gate answers', left.pending() || right.pending(), true)
                 is('…but short-circuit left the second cold', [leftRuns, rightRuns], [1, 0])
@@ -610,7 +724,7 @@ export default suite({
                 is('…which its own read started', gateRuns, 1)
 
                 // A NEGATED probe in a ternary — no `{#if}`, so nothing ever recognised it. It read
-                // `done()` false on a cold cell, rendered the placeholder and started nothing, on
+                // `done()` false on a cold state, rendered the placeholder and started nothing, on
                 // both substrates: a page stuck on 'Not done' for good, with the right markup.
                 let stuckRuns = 0
                 const report = memo(async () => {
@@ -618,7 +732,7 @@ export default suite({
                     await sleep(10)
                     return 'ready'
                 })
-                is('the arm a cold cell takes', !report.done() ? 'Not done' : report(), 'Not done')
+                is('the arm a cold state takes', !report.done() ? 'Not done' : report(), 'Not done')
                 is('…and taking it started the load', stuckRuns, 1)
 
                 await sleep(40)
@@ -792,7 +906,9 @@ export default suite({
             title: 'a NULL-valued arg addresses its slot WITHOUT the JSON path',
             note: '`typeof null` is `object`, so a nullable optional argument used to fall out of the length-prefixed key and onto `Object.entries` + `JSON.stringify` — the same cliff the key format exists to avoid, one type over. It cost 26 ns on a select costing 124. COUNTED rather than timed, because the wrong implementation returns exactly the right key at full price: what is asserted is that the expensive path was not walked.',
             async run({ is }) {
-                const get = memo(async (args: { id: number; parent: number | null }) => `${args.id}/${args.parent}`)
+                const get = memo(
+                    async (args: { id: number; parent: number | null }) => `${args.id}/${args.parent}`,
+                )
 
                 // Warmed first: a MISS builds the slot, and the SELECT is what is being counted.
                 is('the null slot loads', await get({ id: 1, parent: null }), '1/null')
@@ -927,7 +1043,7 @@ export default suite({
                     {
                         label: 'vanilla — the same body behind a promise',
                         run: async () => {
-                            const held = vanilla.cell<number | undefined>(undefined)
+                            const held = vanilla.state<number | undefined>(undefined)
                             const seen: unknown[] = []
                             const paint = (): number => seen.push(held.get())
                             held.subscribe(paint)
@@ -967,8 +1083,8 @@ export default suite({
         },
 
         {
-            title: 'the handle is a CELL — no vocabulary of its own',
-            note: 'There is no `live` / `peek(args)` / `publish(args, v)`: those were one cell’s surface with an `args` parameter bolted onto each member. The args select the slot once, at the call.',
+            title: 'the handle is a STATE — no vocabulary of its own',
+            note: 'There is no `live` / `peek(args)` / `publish(args, v)`: those were one state’s surface with an `args` parameter bolted onto each member. The args select the slot once, at the call.',
             async run({ is }) {
                 let bodyRuns = 0
                 const get = memo(async ({ id }: { id: number }) => {
@@ -1013,11 +1129,11 @@ export default suite({
                         button('id = 1', () => id.set(1)),
                         button('id = 2', () => id.set(2)),
                         button('id = 0 (fails)', () => id.set(0)),
-                        button('refresh this slot', () => profile({ id: id.peek() }).refresh()),
+                        button('refresh this slot', () => profile({ id: id.peek()! }).refresh()),
                         button('set() a local value', () =>
-                            profile({ id: id.peek() }).set({ id: -1, name: 'local', load: 0 }),
+                            profile({ id: id.peek()! }).set({ id: -1, name: 'local', load: 0 }),
                         ),
-                        button('invalidate this slot', () => profile({ id: id.peek() }).invalidate()),
+                        button('invalidate this slot', () => profile({ id: id.peek()! }).invalidate()),
                     ),
                 )
                 reader(() => {
@@ -1085,7 +1201,7 @@ export default suite({
         },
 
         {
-            title: 'a slot that resolved UNDEFINED reloads cold, exactly as a cell does',
+            title: 'a slot that resolved UNDEFINED reloads cold, exactly as a state does',
             note: 'A retained `undefined` has settled but has nothing to keep showing — so the next load is `pending`, not `refreshing`. A spinner reading `refreshing` over a blank slot is the wrong spinner.',
             async run({ is }) {
                 let runs = 0
@@ -1187,18 +1303,18 @@ export default suite({
                         closed++
                     }
                 }
-                const cell = state<number | undefined>(undefined)
-                cell.set(forever())
-                await until(() => cell.chunks().length >= 3)
+                const held = state<number | undefined>(undefined)
+                held.set(forever())
+                await until(() => held.chunks().length >= 3)
 
-                cell.invalidate()
+                held.invalidate()
                 const atCancel = produced
                 await sleep(40)
                 is('the generator was closed', closed, 1)
                 is('and stopped producing', produced <= atCancel + 1, true)
-                is('nothing landed after the cancel', cell.chunks(), [])
-                is('streaming()', cell.streaming(), false)
-                is('and the cell is cold', cell.settled(), false)
+                is('nothing landed after the cancel', held.chunks(), [])
+                is('streaming()', held.streaming(), false)
+                is('and the state is cold', held.settled(), false)
             },
         },
 
@@ -1231,7 +1347,7 @@ export default suite({
 
         {
             title: 'a transform that hands back a PROMISE is a load like any other',
-            note: 'The same law the body follows, one stage along — so the declared-dependency form has an async arm: the first argument says what wakes it, the second is an untracked body that may load. What the cell holds is what the transform RESOLVED to, never the promise itself.',
+            note: 'The same law the body follows, one stage along — so the declared-dependency form has an async arm: the first argument says what wakes it, the second is an untracked body that may load. What the state holds is what the transform RESOLVED to, never the promise itself.',
             async run({ is }) {
                 const id = state(1)
                 let transforms = 0
@@ -1366,7 +1482,7 @@ export default suite({
             title: 'the documented example runs',
             note: 'What `/docs/memo` shows and mounts, mounted here and asserted — including the half a reader would not think to check: the load form’s `pending()` region resolves to the list, on its own, with nothing in the markup awaiting anything.',
             async run({ is }) {
-                // The rungs own their cells — a setup block is per INSTANCE — so this reaches them the
+                // The rungs own their states — a setup block is per INSTANCE — so this reaches them the
                 // way a reader does, through the `bind:value` input each one renders. That is also what
                 // makes the defaults assertable: a fresh mount cannot have been typed into.
 
@@ -1377,7 +1493,11 @@ export default suite({
                 typed.value = 'cd'
                 typed.dispatchEvent(new Event('input'))
                 await tick()
-                is('…and again when the cell behind it is written', derive.querySelector('p')?.textContent, 'CD')
+                is(
+                    '…and again when the state behind it is written',
+                    derive.querySelector('p')?.textContent,
+                    'CD',
+                )
                 derive.remove()
 
                 // Rung 3 — the load form, whose whole claim is the region: a placeholder now, the list

@@ -71,7 +71,7 @@ const groups = memo((): { suite: string; rows: BenchRow[] }[] => {
  * How many rows the filter is showing, out of how many there are.
  *
  * A function rather than a memo because one slot reads it and nothing else does — there is no second
- * reader for a cell to serve, and the slot it is called from already tracks everything it touches.
+ * reader for a state to serve, and the slot it is called from already tracks everything it touches.
  */
 function shownCount(): string {
     let showing = 0

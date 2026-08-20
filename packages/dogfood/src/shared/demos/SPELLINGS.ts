@@ -116,7 +116,7 @@ export const SPELLINGS = {
             'at setup, so a key the spread ADDS later is reported rather than dropped.',
         pitfall:
             'On a component the key set is fixed at SETUP: the child bound its locals then, so a key the ' +
-            'spread gains later has no cell to be written into. It is reported rather than dropped, but ' +
+            'spread gains later has no state to be written into. It is reported rather than dropped, but ' +
             'the shape that works is declaring the key up front.',
         ladders: ['template'],
     },
@@ -132,12 +132,12 @@ export const SPELLINGS = {
         name: 'bind:value',
         gate: 'bind',
         blurb:
-            'Two-way on the value of an input, textarea or select: the property is set from the cell, ' +
-            'and the cell from the event that says the user changed it. A `{get, set}` pair stands in ' +
-            'for the cell where the two directions are not one value.',
+            'Two-way on the value of an input, textarea or select: the property is set from the state, ' +
+            'and the state from the event that says the user changed it. A `{get, set}` pair stands in ' +
+            'for the state where the two directions are not one value.',
         pitfall:
             'Where the two directions are not one value — a number typed as text, a date, a trimmed ' +
-            'string — the cell position takes a `{get, set}` pair instead. Reaching for a `watch` to ' +
+            'string — the state position takes a `{get, set}` pair instead. Reaching for a `watch` to ' +
             'write the other way is the shape that pair replaces.',
         ladders: ['template'],
     },
@@ -161,10 +161,10 @@ export const SPELLINGS = {
         blurb:
             'Membership rather than a value: each input is compared against its OWN `value`, which is ' +
             'why the element needs one and is a compile error without it. Checkboxes hold the checked ' +
-            'ones in a list; radios are exclusive, so the cell holds the single value that matched.',
+            'ones in a list; radios are exclusive, so the state holds the single value that matched.',
         pitfall:
             'Each input is compared against its OWN `value`, so an element without one is a compile ' +
-            'error. And the cell’s type follows the input: checkboxes hold a LIST of the checked ones, ' +
+            'error. And the state’s type follows the input: checkboxes hold a LIST of the checked ones, ' +
             'radios hold the single value that matched, so the two are not interchangeable.',
         ladders: ['template'],
     },
@@ -188,7 +188,7 @@ export const SPELLINGS = {
         blurb:
             'The NODE itself, and therefore the one target with no row in the table and no event: there ' +
             'is no property to read and nothing to write back from, so it is legal on any element — and ' +
-            'client-only, since a server render has no node to hand over. Two shapes take it: a CELL, ' +
+            'client-only, since a server render has no node to hand over. Two shapes take it: a STATE, ' +
             'which is handed the node through `set`, and a FUNCTION, called with the node once per ' +
             'instance and whose return is the teardown.',
         pitfall:
@@ -271,11 +271,11 @@ export const SPELLINGS = {
         blurb:
             'A capitalised tag is a component, CARRIED to the position that shows it rather than called ' +
             'where it stands — which is what makes setup run once and a prop that did not move wake nobody. ' +
-            'What it names is a VALUE, so a cell can hold one and the tag re-mounts when it changes.',
+            'What it names is a VALUE, so a state can hold one and the tag re-mounts when it changes.',
         pitfall:
             'It is CARRIED to the position that shows it rather than called where it stands, so setup ' +
             'runs once per instance and a prop that did not move wakes nobody. What the tag names is a ' +
-            'value, so a cell holding a component re-mounts the whole subtree when it changes.',
+            'value, so a state holding a component re-mounts the whole subtree when it changes.',
         ladders: ['template'],
     },
     slot: {
@@ -297,7 +297,7 @@ export const SPELLINGS = {
             'Setup, per instance. `<script module>` is module scope and the only one that may `export`; ' +
             'a NESTED one is branch-local, and in a `{#for}` that means per row.',
         pitfall:
-            'Three positions are three SCOPES, and picking the wrong one fails quietly: a cell in a ' +
+            'Three positions are three SCOPES, and picking the wrong one fails quietly: a state in a ' +
             '`<script module>` is one per CALLER — one per request on a server, one per page in a browser ' +
             '— shared by every instance inside it, which is a bug the moment two instances were meant to ' +
             'differ.',

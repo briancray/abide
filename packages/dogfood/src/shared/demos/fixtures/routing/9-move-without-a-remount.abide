@@ -5,7 +5,7 @@ import { navigate, route, state, url } from 'abide'
 // middleware rather than a check a client could skip.
 //
 // TYPE SOMETHING HERE FIRST. The two buttons move to the same route with a different query, and this
-// cell still holds what you typed afterwards: `route()` is four small cells rather than one record, so
+// state still holds what you typed afterwards: `route()` is four small states rather than one record, so
 // a move that changes only the query wakes a reader of `params` and leaves this component standing. A
 // remount would have cleared it.
 const note = state('')

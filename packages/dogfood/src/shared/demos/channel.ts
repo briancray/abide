@@ -36,7 +36,7 @@ export default suite({
 
         {
             title: 'publish → the call is the read, and it is reactive',
-            note: 'The call IS the read, as it is for every other source — there is no second name for it. Publishing the SAME text still wakes: a channel is a stream of MESSAGES, and receiving one twice is two events. That is the one place its semantics part company with a cell.',
+            note: 'The call IS the read, as it is for every other source — there is no second name for it. Publishing the SAME text still wakes: a channel is a stream of MESSAGES, and receiving one twice is two events. That is the one place its semantics part company with a state.',
             async run({ is }) {
                 const feed = channel<string>()
                 const view = reader(() => feed())
@@ -58,8 +58,8 @@ export default suite({
             bench: {
                 kind: 'time',
                 arms: (() => {
-                    // A channel's reactive read goes through a `state` cell, so a publish is one wake
-                    // and not two — and that cell is what the extra nanoseconds buy.
+                    // A channel's reactive read goes through a `state`, so a publish is one wake
+                    // and not two — and that state is what the extra nanoseconds buy.
                     const feed = channel<number>()
                     let seen = 0
                     feed.subscribe(() => seen++)
@@ -226,7 +226,7 @@ export default suite({
 
         {
             title: 'a reader wakes for what it READS, not for every publish',
-            note: "The three questions a channel answers move at three different rates: a message arrives constantly, the transcript moves only when there is retention to move, and `settled()` flips once in a channel's life. One envelope rebuilt per publish made all three move together — the identity check downstream never held, so every reader woke for every message and read back exactly what it had before. Three cells is what makes the cutoffs real, and only counting the wake-ups can see it.",
+            note: "The three questions a channel answers move at three different rates: a message arrives constantly, the transcript moves only when there is retention to move, and `settled()` flips once in a channel's life. One envelope rebuilt per publish made all three move together — the identity check downstream never held, so every reader woke for every message and read back exactly what it had before. Three states is what makes the cutoffs real, and only counting the wake-ups can see it.",
             async run({ is }) {
                 // A correctness test cannot reach this: the wrong implementation hands every reader
                 // the right value, just after waking it for a change it cannot see.
@@ -260,7 +260,7 @@ export default suite({
 
         {
             title: 'a room is forgotten when its last subscriber leaves',
-            note: "Rooms are named by whoever selects one — a socket's comes off the query string of the request that upgraded it — so a table that only ever grows is one an arriving connection can grow without a bound, and each room holds a retention and three cells. The last subscriber leaving is the moment nothing can reach it any more: what a room retains is only ever handed to a subscriber, so dropping it then drops exactly what nothing was going to read. A room nobody ever subscribed to is nobody's to forget, and stays.",
+            note: "Rooms are named by whoever selects one — a socket's comes off the query string of the request that upgraded it — so a table that only ever grows is one an arriving connection can grow without a bound, and each room holds a retention and three states. The last subscriber leaving is the moment nothing can reach it any more: what a room retains is only ever handed to a subscriber, so dropping it then drops exactly what nothing was going to read. A room nobody ever subscribed to is nobody's to forget, and stays.",
             async run({ is }) {
                 const chat = channel<string, { room: string }>({ tail: 3 })
                 const general = chat({ room: 'general' })
@@ -533,7 +533,7 @@ export default suite({
 
         {
             title: 'a memo derived off a channel, with the ordinary call',
-            note: 'The pub/sub side and the graph are not two systems: a derivation reads a channel the same way it reads a cell, and wakes on publish with no bridging code.',
+            note: 'The pub/sub side and the graph are not two systems: a derivation reads a channel the same way it reads a state, and wakes on publish with no bridging code.',
             async run({ is }) {
                 const temperature = channel<number>({ tail: 8 })
                 let derivations = 0
@@ -556,7 +556,7 @@ export default suite({
                 is('average()', average(), '21.0')
                 is('the reader woke on publish', view.seen, ['—', '21.0'])
                 // Two publishes in one turn, one recompute: the channel's reads go through a `state`
-                // cell, so the derivation is batched exactly as it would be off any other source.
+                // state, so the derivation is batched exactly as it would be off any other source.
                 is('and the body re-ran once, not twice', derivations, 2)
                 view.dispose()
             },
@@ -613,7 +613,11 @@ export default suite({
 
                 for (let i = 0; i < 7; i++) send.click()
                 await tick()
-                is('the latest message is on the page', host.querySelector('p')?.textContent, 'latest: message 7')
+                is(
+                    'the latest message is on the page',
+                    host.querySelector('p')?.textContent,
+                    'latest: message 7',
+                )
 
                 const kept: string[] = []
                 for (const item of host.querySelectorAll('li')) kept.push(item.textContent ?? '')

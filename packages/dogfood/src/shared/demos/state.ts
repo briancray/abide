@@ -1,5 +1,5 @@
 // `state` — own a value. Every capability the primitive has, one case each, and every case asserts
-// what it demonstrates: the values AND the wake-ups, because a cell that reports the right thing
+// what it demonstrates: the values AND the wake-ups, because a state that reports the right thing
 // while waking readers nothing moved for is the wrong implementation.
 
 import { state, watch } from 'abide'
@@ -36,12 +36,12 @@ export default suite({
                 const tracked = reader(() => count())
 
                 is('count()', count(), 0)
-                count.set(count.peek() + 1)
+                count.set(count.peek()! + 1)
                 await tick()
                 is('after set(1) — count()', count(), 1)
                 is('reader woke', tracked.seen.length, 2)
 
-                count.set(count.peek()) // the identity check
+                count.set(count.peek()!) // the identity check
                 await tick()
                 is('a write of the SAME value wakes nobody', tracked.seen.length, 2)
                 log('the reader saw', tracked.seen.join(' → '))
@@ -64,12 +64,12 @@ export default suite({
                 host.append(
                     row(
                         button('count.set(count.peek() + 1)', () => {
-                            count.set(count.peek() + 1)
+                            count.set(count.peek()! + 1)
                             writes++
                             report()
                         }),
                         button('count.set(same value)', () => {
-                            count.set(count.peek())
+                            count.set(count.peek()!)
                             writes++
                             report()
                         }),
@@ -80,12 +80,12 @@ export default suite({
             bench: {
                 kind: 'time',
                 arms: (() => {
-                    const cell = state(1)
-                    const plain = vanilla.cell(1)
+                    const held = state(1)
+                    const plain = vanilla.state(1)
                     const bare = { value: 1 }
                     return [
-                        { label: 'abide — count()', run: () => keep(cell()) },
-                        { label: 'vanilla — cell.get()', run: () => keep(plain.get()) },
+                        { label: 'abide — count()', run: () => keep(held()) },
+                        { label: 'vanilla — state.get()', run: () => keep(plain.get()) },
                         { label: 'vanilla — object field', run: () => keep(bare.value) },
                     ]
                 })(),
@@ -94,7 +94,7 @@ export default suite({
 
         {
             title: 'a write with no observers is an identity check and a store',
-            note: 'The floor. A cell that has never met a promise carries no async bookkeeping at all — it is one node, and the write is the same two operations a hand-written store does.',
+            note: 'The floor. A state that has never met a promise carries no async bookkeeping at all — it is one node, and the write is the same two operations a hand-written store does.',
             async run({ is }) {
                 const count = state(0)
                 is('settled', count.settled(), true)
@@ -107,12 +107,12 @@ export default suite({
             bench: {
                 kind: 'time',
                 arms: (() => {
-                    const cell = state(0)
-                    const plain = vanilla.cell(0)
+                    const held = state(0)
+                    const plain = vanilla.state(0)
                     const bare = { value: 0 }
                     return [
-                        { label: 'abide — count.set(i)', run: (i: number) => cell.set(i) },
-                        { label: 'vanilla — cell.set(i)', run: (i: number) => plain.set(i) },
+                        { label: 'abide — count.set(i)', run: (i: number) => held.set(i) },
+                        { label: 'vanilla — state.set(i)', run: (i: number) => plain.set(i) },
                         {
                             label: 'vanilla — object field',
                             run: (i: number): void => {
@@ -133,13 +133,13 @@ export default suite({
             title: 'one write, delivered to one reader',
             note: 'abide batches onto a microtask, so its op has to include the flush; a hand-written store notifies synchronously. This is the price of batching, paid on the one write where batching cannot help — and the next case is what it buys.',
             async run({ is }) {
-                const cell = state(0)
+                const held = state(0)
                 let seen = 0
                 watch(() => {
-                    void cell()
+                    void held()
                     seen++
                 })
-                cell.set(1)
+                held.set(1)
                 is('the write itself delivers nothing yet', seen, 1)
                 await tick()
                 is('the flush is what delivers it', seen, 2)
@@ -151,19 +151,19 @@ export default suite({
                 // it. Unstated, the harness was roughly half the reported gap.
                 floor: 'flush',
                 arms: (() => {
-                    const cell = state(0)
+                    const held = state(0)
                     let seen = 0
                     watch(() => {
-                        void cell()
+                        void held()
                         seen++
                     })
-                    const plain = vanilla.cell(0)
+                    const plain = vanilla.state(0)
                     plain.subscribe(() => seen++)
                     return [
                         {
                             label: 'abide — set + microtask flush',
                             run: async (i: number) => {
-                                cell.set(i)
+                                held.set(i)
                                 await settled()
                             },
                         },
@@ -177,17 +177,17 @@ export default suite({
             title: '50 writes in one turn, delivered once',
             note: 'The case batching exists for. A hand-written store runs its reader fifty times and paints forty-nine frames nobody asked for.',
             async run({ is }) {
-                const cell = state(0)
+                const held = state(0)
                 let runs = 0
                 watch(() => {
-                    void cell()
+                    void held()
                     runs++
                 })
-                for (let n = 1; n <= 50; n++) cell.set(n)
+                for (let n = 1; n <= 50; n++) held.set(n)
                 is('immediately after fifty writes', runs, 1)
                 await tick()
                 is('one flush for the batch', runs, 2)
-                is('and it sees the LAST value, not fifty of them', cell(), 50)
+                is('and it sees the LAST value, not fifty of them', held(), 50)
             },
             bench: {
                 kind: 'time',
@@ -196,19 +196,19 @@ export default suite({
                 // one — which is the whole reason batching looks better here than in the case above.
                 floor: 'flush',
                 arms: (() => {
-                    const cell = state(0)
+                    const held = state(0)
                     let seen = 0
                     watch(() => {
-                        void cell()
+                        void held()
                         seen++
                     })
-                    const plain = vanilla.cell(0)
+                    const plain = vanilla.state(0)
                     plain.subscribe(() => seen++)
                     return [
                         {
                             label: 'abide — 50 writes, one flush',
                             run: async (i: number) => {
-                                for (let n = 0; n < 50; n++) cell.set(i * 50 + n)
+                                for (let n = 0; n < 50; n++) held.set(i * 50 + n)
                                 await settled()
                             },
                         },
@@ -248,7 +248,7 @@ export default suite({
 
         {
             title: 'an async iterable is a STREAM, the way a promise is a load',
-            note: 'The cell holds the LATEST chunk and `chunks()` holds the transcript. The probes compose rather than needing a vocabulary of their own — cold until the first chunk, then a load in flight over a value already being served, and `done` only once it ends cleanly.',
+            note: 'The state holds the LATEST chunk and `chunks()` holds the transcript. The probes compose rather than needing a vocabulary of their own — cold until the first chunk, then a load in flight over a value already being served, and `done` only once it ends cleanly.',
             async run({ is, log }) {
                 async function* words(): AsyncGenerator<string> {
                     for (const word of ['the', 'quick', 'brown']) {
@@ -268,7 +268,7 @@ export default suite({
                 is('the value IS the latest chunk', line(), 'the')
                 is('pending() — there is something to show now', line.pending(), false)
                 is('refreshing() — and more is coming', line.refreshing(), true)
-                // The cell settled long ago holding `undefined`, so `settled` is the wrong question
+                // The state settled long ago holding `undefined`, so `settled` is the wrong question
                 // mid-stream — `done` is the one that asks whether there is an OUTCOME yet.
                 is('done() — chunks have landed, but not an outcome', line.done(), false)
 
@@ -348,8 +348,8 @@ export default suite({
         },
 
         {
-            title: 'a CELL handed to a cell is a stream, not a load',
-            note: 'A cell answers BOTH shapes — `PromiseLike`, so `await` works, and async-iterable, because it retains a transcript — and a classifier asking `isThenable` first reads only its LAST chunk. That is what `state(someRpcHandle)` did: the outer cell settled to the final row with `chunks()` empty, which is a wrong answer nothing reports, because the value it does hold is right. The stream arm is asked FIRST now at all three places a value is classified — `state()`, `set()`, and the value a derivation produced. What the wrapper does NOT gain is a body to re-run: this is the latest chunk and the transcript, and `refresh` still belongs to whoever owns the load.',
+            title: 'a STATE handed to a state is a stream, not a load',
+            note: 'A state answers BOTH shapes — `PromiseLike`, so `await` works, and async-iterable, because it retains a transcript — and a classifier asking `isThenable` first reads only its LAST chunk. That is what `state(someRpcHandle)` did: the outer state settled to the final row with `chunks()` empty, which is a wrong answer nothing reports, because the value it does hold is right. The stream arm is asked FIRST now at all three places a value is classified — `state()`, `set()`, and the value a derivation produced. What the wrapper does NOT gain is a body to re-run: this is the latest chunk and the transcript, and `refresh` still belongs to whoever owns the load.',
             async run({ is }) {
                 async function* words(): AsyncGenerator<string> {
                     for (const word of ['the', 'quick', 'brown']) {
@@ -377,7 +377,7 @@ export default suite({
 
         {
             title: 'a stream SUPERSEDED mid-flight stands the probes down, like one that ended',
-            note: 'Setting a plain value over a live stream bumps the generation, and the consume loop drops out at its next guard rather than running to either of its own two ends. Those ends used to be the only places `streaming` was cleared, so the cell settled holding the new value while still reporting that it was streaming — for good, because nothing else was ever going to ask. Nothing about the VALUE is wrong on that path, which is why only a probe can catch it.',
+            note: 'Setting a plain value over a live stream bumps the generation, and the consume loop drops out at its next guard rather than running to either of its own two ends. Those ends used to be the only places `streaming` was cleared, so the state settled holding the new value while still reporting that it was streaming — for good, because nothing else was ever going to ask. Nothing about the VALUE is wrong on that path, which is why only a probe can catch it.',
             async run({ is }) {
                 async function* words(): AsyncGenerator<string> {
                     for (const word of ['the', 'quick', 'brown']) {
@@ -405,7 +405,7 @@ export default suite({
 
         {
             title: 'for await — the cursor face of the same transcript',
-            note: '`chunks()` is for a reader that re-reads the whole list; this is for one that reads each chunk once and never looks back. Same cell, same transcript, no second vocabulary — and the two are why `chunks()` can hand back the live buffer: the reader that must not see it move is the one that re-reads it, and this one re-reads nothing. The replay is what makes it a CELL rather than a subscription: a consumer that arrives after the stream ended still gets the whole of it.',
+            note: '`chunks()` is for a reader that re-reads the whole list; this is for one that reads each chunk once and never looks back. Same state, same transcript, no second vocabulary — and the two are why `chunks()` can hand back the live buffer: the reader that must not see it move is the one that re-reads it, and this one re-reads nothing. The replay is what makes it a STATE rather than a subscription: a consumer that arrives after the stream ended still gets the whole of it.',
             async run({ is }) {
                 async function* words(): AsyncGenerator<string> {
                     for (const word of ['one', 'two', 'three']) {
@@ -424,12 +424,12 @@ export default suite({
                 for await (const word of line) again.push(word)
                 is('a second consumer replays the whole of it', again, ['one', 'two', 'three'])
 
-                // Nothing here is special-cased for a stream: a cell that never met one has no
+                // Nothing here is special-cased for a stream: a state that never met one has no
                 // transcript, so the loop hands over what it holds and ends.
                 const plain = state('just this')
                 const once: string[] = []
                 for await (const value of plain) once.push(value)
-                is('a cell that never streamed yields its value and ends', once, ['just this'])
+                is('a state that never streamed yields its value and ends', once, ['just this'])
             },
         },
 
@@ -441,16 +441,16 @@ export default suite({
                     for (let i = 0; i < n; i++) yield i
                 }
                 const drain = async (n: number, live: boolean): Promise<number> => {
-                    const cell = state<number | undefined>(undefined)
+                    const held = state<number | undefined>(undefined)
                     const at = performance.now()
-                    cell.set(counted(n))
+                    held.set(counted(n))
                     // Subscribed to the transcript, which is what a slot rendering one is: it wakes
                     // per chunk and reads the whole list back every time.
-                    const stop = live ? watch(() => void cell.chunks().length) : null
-                    await until(() => cell.done(), 'the stream to finish', 30_000)
+                    const stop = live ? watch(() => void held.chunks().length) : null
+                    await until(() => held.done(), 'the stream to finish', 30_000)
                     const took = performance.now() - at
                     stop?.()
-                    is(`${n} chunks all arrived`, cell.chunks().length, n)
+                    is(`${n} chunks all arrived`, held.chunks().length, n)
                     return took
                 }
 
@@ -509,11 +509,13 @@ export default suite({
                 // transform is typed `(value: T) => T`, so an async one is only reachable from the
                 // javascript lane — and a checker fact is not a mechanism. Held as a VALUE, this read
                 // `pending()` false and handed a promise back forever, while the identical transform
-                // through `set` adopted: one cell, two laws.
+                // through `set` adopted: one state, two laws.
                 //
                 // A REAL delay, not a resolved promise: `pending()` true is the claim, and a settled
                 // fixture is true for free on the first microtask.
-                const slowly = ((n: number) => sleep(10).then(() => n * 2)) as unknown as (n: number) => number
+                const slowly = ((n: number) => sleep(10).then(() => n * 2)) as unknown as (
+                    n: number,
+                ) => number
                 const doubled = state(5, slowly)
                 is('an async transform on the initial is a LOAD', doubled.pending(), true)
                 is('…so nothing is held yet', doubled.peek(), undefined)
@@ -526,8 +528,8 @@ export default suite({
                 is('a write that normalises to what is held wakes nobody', heard.seen.length, 1)
                 heard.dispose()
 
-                // "It runs untracked" — the clamp above reads no cell, so tracking it would be
-                // invisible. This one reads its ceiling from a cell, and `set` is called from inside
+                // "It runs untracked" — the clamp above reads no state, so tracking it would be
+                // invisible. This one reads its ceiling from a state, and `set` is called from inside
                 // an effect, which is the routine case. A tracked transform hands the CALLING effect
                 // a dependency on whatever the transform touched, and that effect then re-runs on a
                 // write it never reads: the right value, at a wake nobody asked for.
@@ -545,7 +547,7 @@ export default suite({
                 is('the writing effect ran once', writerRuns, 1)
                 ceiling.set(5)
                 await tick()
-                is('and the cell its TRANSFORM read wakes it not at all', writerRuns, 1)
+                is('and the state its TRANSFORM read wakes it not at all', writerRuns, 1)
                 writing()
             },
             interact({ host, log }) {
@@ -554,7 +556,7 @@ export default suite({
                 host.append(
                     row(
                         button('volume.set(volume.peek() + 3)', () => {
-                            volume.set(volume.peek() + 3)
+                            volume.set(volume.peek()! + 3)
                             report()
                         }),
                         button('volume.set(-100)', () => {
@@ -573,14 +575,14 @@ export default suite({
 
         {
             title: 'a transform that throws is a failed write',
-            note: 'In the call it throws where the caller is standing. On a load it settles the cell as a failure exactly as a rejection would — there is nobody under a promise callback to catch it.',
+            note: 'In the call it throws where the caller is standing. On a load it settles the state as a failure exactly as a rejection would — there is nobody under a promise callback to catch it.',
             async run({ is, throws }) {
                 const port = state(3000, (n: number) => {
                     if (!Number.isInteger(n)) throw new Error(`not a port: ${n}`)
                     return n
                 })
                 throws('a sync write throws at the call', () => port.set(1.5), 'not a port')
-                is('and the cell still holds what it had', port(), 3000)
+                is('and the state still holds what it had', port(), 3000)
 
                 port.set(Promise.resolve(2.5))
                 await tick()
@@ -591,17 +593,17 @@ export default suite({
         },
 
         {
-            title: 'state.shared — one cell per KEY, not per call site',
-            note: 'Two components asking for the same key get the same cell, so a write in one is a read in the other with nothing wired between them. Per-caller, for the reason a memo’s cache is: on a server, "shared across every component instance" must not quietly mean "shared across every visitor".',
+            title: 'state.shared — one state per KEY, not per call site',
+            note: 'Two components asking for the same key get the same state, so a write in one is a read in the other with nothing wired between them. Per-caller, for the reason a memo’s cache is: on a server, "shared across every component instance" must not quietly mean "shared across every visitor".',
             async run({ is }) {
                 const one = state.shared('demo:theme', 'dark')
                 const two = state.shared('demo:theme', 'light') // a different initial, not consulted
-                is('the same cell', one === two, true)
+                is('the same state', one === two, true)
                 is('so both read the same thing', two(), one())
 
                 one.set('solarized')
                 is('a write in one is a read in the other', two(), 'solarized')
-                is('a different key is a different cell', state.shared('demo:locale', 'en') === one, false)
+                is('a different key is a different state', state.shared('demo:locale', 'en') === one, false)
 
                 isolate(() => {
                     const mine = state.shared('demo:theme', 'zenburn')
@@ -611,8 +613,8 @@ export default suite({
                 is('and the first caller is untouched', one(), 'solarized')
 
                 // The third argument, which nothing had ever passed. It belongs to the FIRST call
-                // for the same reason `initial` does — there is one cell, so there is one transform,
-                // and a second caller naming a different one is asking a question the cell has
+                // for the same reason `initial` does — there is one state, so there is one transform,
+                // and a second caller naming a different one is asking a question the state has
                 // already answered. Asserted through a WRITE, because a transform that only ran on
                 // `initial` would look identical at the read above it.
                 const clamped = state.shared('demo:volume', 11, (n: number) => Math.min(n, 10))
@@ -621,15 +623,15 @@ export default suite({
                 is('and on every write after it', clamped(), 10)
 
                 const again = state.shared('demo:volume', 0, (n: number) => n * -1)
-                is('a later caller gets the same cell', again === clamped, true)
+                is('a later caller gets the same state', again === clamped, true)
                 again.set(7)
                 is('…so the FIRST transform is still the one applied', again(), 7)
             },
         },
 
         {
-            title: 'a sync cell answers the async surface honestly',
-            note: 'There is no second vocabulary for a cell that never met a promise. It answers the same seven members, truthfully.',
+            title: 'a sync state answers the async surface honestly',
+            note: 'There is no second vocabulary for a state that never met a promise. It answers the same seven members, truthfully.',
             async run({ is }) {
                 const count = state(1)
                 is('count()', count(), 1)
@@ -693,19 +695,19 @@ export default suite({
                     {
                         label: 'abide — refreshing is its own signal',
                         run: async () => {
-                            const cell = state('a')
+                            const held = state('a')
                             let valueRuns = 0
                             let coldRuns = 0
                             watch(() => {
-                                void cell()
+                                void held()
                                 valueRuns++
                             })
                             watch(() => {
-                                void cell.pending()
+                                void held.pending()
                                 coldRuns++
                             })
                             await tick()
-                            cell.set(Promise.resolve('a')) // a reload landing the same value
+                            held.set(Promise.resolve('a')) // a reload landing the same value
                             await tick()
                             await tick()
                             return {
@@ -718,8 +720,8 @@ export default suite({
                         label: 'vanilla — one status record',
                         run: async () => {
                             // The shape everyone reaches for: { value, pending, refreshing } in one
-                            // cell. Rebuilt per settle, so the identity check never holds.
-                            const store = vanilla.cell({ value: 'a', pending: false, refreshing: false })
+                            // state. Rebuilt per settle, so the identity check never holds.
+                            const store = vanilla.state({ value: 'a', pending: false, refreshing: false })
                             // TWO readers, mirroring the two watchers the abide arm installs. With
                             // one, the arm had no reader-whose-answer-did-not-move to wake — which is
                             // the entire claim — and the card reported a tie on the case that exists
@@ -771,14 +773,14 @@ export default suite({
                     {
                         label: 'abide — state',
                         run: async () => {
-                            const cell = state(1)
+                            const held = state(1)
                             let runs = 0
                             watch(() => {
-                                void cell()
+                                void held()
                                 runs++
                             })
                             await tick()
-                            for (let i = 0; i < 100; i++) cell.set(1)
+                            for (let i = 0; i < 100; i++) held.set(1)
                             await tick()
                             return { count: runs - 1, of: 're-runs from 100 identical writes' }
                         },
@@ -786,20 +788,20 @@ export default suite({
                     {
                         label: 'vanilla — careful (identity check)',
                         run: async () => {
-                            const cell = vanilla.cell(1)
+                            const held = vanilla.state(1)
                             let runs = 0
-                            cell.subscribe(() => runs++)
-                            for (let i = 0; i < 100; i++) cell.set(1)
+                            held.subscribe(() => runs++)
+                            for (let i = 0; i < 100; i++) held.set(1)
                             return { count: runs, of: 're-runs from 100 identical writes' }
                         },
                     },
                     {
                         label: 'vanilla — careless (notify always)',
                         run: async () => {
-                            const cell = vanilla.naiveCell(1)
+                            const held = vanilla.naiveState(1)
                             let runs = 0
-                            cell.subscribe(() => runs++)
-                            for (let i = 0; i < 100; i++) cell.set(1)
+                            held.subscribe(() => runs++)
+                            for (let i = 0; i < 100; i++) held.set(1)
                             return { count: runs, of: 're-runs from 100 identical writes' }
                         },
                     },
@@ -899,7 +901,7 @@ export default suite({
 
                 token.set('sk-live-43')
                 is('and a write settles it again', token(), 'sk-live-43')
-                // `refresh` is the one verb a bodyless cell does not carry.
+                // `refresh` is the one verb a bodyless state does not carry.
                 is('"refresh" in a state', 'refresh' in token, false)
             },
             interact({ host, log }) {
@@ -936,7 +938,7 @@ export default suite({
                 is('the effect painted on creation', view.textContent, 'TYPE HERE')
                 text.set('hello')
                 await tick()
-                is('and again when the cell moved', view.textContent, 'HELLO')
+                is('and again when the state moved', view.textContent, 'HELLO')
                 is('one run per write, no more', painted.seen.length, 2)
                 painted.dispose()
             },
@@ -953,8 +955,8 @@ export default suite({
         },
 
         {
-            title: 'a cell at MODULE scope is one per caller, never one per process',
-            note: 'What `<script module>` means: one cell per REQUEST on a server, one per page in a browser, shared by every instance inside that one. It used to mean one per server process — so a cell in a module block was shared by every visitor, rendered perfectly, and no test could see it because the output is right either way. The compiler wraps a module-scope binding and the facade below resolves it per caller on every member. Asserted as WORK across two isolated scopes rather than as a value, because the value is what stays right while the sharing goes wrong.',
+            title: 'a state at MODULE scope is one per caller, never one per process',
+            note: 'What `<script module>` means: one state per REQUEST on a server, one per page in a browser, shared by every instance inside that one. It used to mean one per server process — so a state in a module block was shared by every visitor, rendered perfectly, and no test could see it because the output is right either way. The compiler wraps a module-scope binding and the facade below resolves it per caller on every member. Asserted as WORK across two isolated scopes rather than as a value, because the value is what stays right while the sharing goes wrong.',
             async run({ is }) {
                 let built = 0
                 const perCaller = state.scoped(() => {
@@ -969,18 +971,18 @@ export default suite({
                 const seen: number[] = []
                 for (let request = 0; request < 2; request++) {
                     await isolate(async () => {
-                        perCaller.set(perCaller.peek() + 7)
-                        seen.push(perCaller.peek())
+                        perCaller.set(perCaller.peek()! + 7)
+                        seen.push(perCaller.peek()!)
                     })
                 }
                 is('each caller writes its own', seen, [7, 7])
                 is('…and each built exactly one', built, 2)
 
                 // The no-scope answer — a client, a script, this test — where there IS one caller
-                // forever and the module-level cell is the right one. Built once more, then kept.
-                perCaller.set(perCaller.peek() + 1)
-                perCaller.set(perCaller.peek() + 1)
-                is('with no caller scope there is one cell', perCaller.peek(), 2)
+                // forever and the module-level state is the right one. Built once more, then kept.
+                perCaller.set(perCaller.peek()! + 1)
+                perCaller.set(perCaller.peek()! + 1)
+                is('with no caller scope there is one state', perCaller.peek(), 2)
                 is('…built once, not once per read', built, 3)
             },
         },
@@ -989,13 +991,13 @@ export default suite({
             title: 'the documented example runs',
             note: 'The file `/docs/state` shows and mounts, mounted here and asserted. A reference example nothing runs is one that rots quietly: it stays plausible, and nobody finds out it stopped compiling until somebody copies it. This is the whole of why the example is a real `.abide` file rather than a fenced block in a markdown document.',
             async run({ is }) {
-                // The rung's cell is its own — a setup block is per INSTANCE — so this mount starts at
+                // The rung's state is its own — a setup block is per INSTANCE — so this mount starts at
                 // the declared value however many times the docs page has been clicked, and the write is
                 // made the way a reader makes it, through the button the rung renders.
                 const host = scratch(() => Example({}))
                 const line = (): string | undefined => host.querySelector('p')?.textContent ?? undefined
 
-                is('the cell is on the page', line(), 'count 0 · doubled 0')
+                is('the state is on the page', line(), 'count 0 · doubled 0')
                 const add = host.querySelector('button') as HTMLButtonElement
                 add.click()
                 add.click()

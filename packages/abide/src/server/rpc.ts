@@ -8,7 +8,8 @@
 // A handler lives under `server/rpc/**` or `server/sockets/**` and the compiler elides the module in
 // the browser lane, so nothing about this file — or anything it imports — reaches a browser.
 
-import { type Channel, type ChannelOptions, channel, type KeyedChannel } from '#shared/channel.ts'
+import { type Channel, type ChannelOptions, channel, holdRoom, type KeyedChannel } from '#shared/channel.ts'
+import { markSource } from '#shared/internal/BRANDS.ts'
 import { internals } from '#shared/internal/graph.ts'
 import { seedKey } from '#shared/internal/keys.ts'
 import { isAsyncIterable, isThenable } from '#shared/internal/probes.ts'
@@ -34,7 +35,7 @@ import {
     TTL_HEADER,
 } from '#shared/internal/wire.ts'
 import { abideLog } from '#shared/log.ts'
-import { type KeyedMemo, type MemoOptions, memo } from '#shared/memo.ts'
+import { type KeyedMemo, type MemoOptions, memo, type Selecting, selectedRoom } from '#shared/memo.ts'
 import { addressWithArgs, asRpc, type Method, type Rpc } from '#shared/transport.ts'
 import { knobOf } from './config.ts'
 import { PRIVATE_NO_STORE } from './internal/CACHE.ts'
@@ -147,7 +148,7 @@ interface RpcPolicy {
     checkInput: Gate<unknown> | null
     checkOutput: Gate<unknown> | null
     /**
-     * The framing the handler answered with, once one has. `respond` writes it AGAIN over the cell:
+     * The framing the handler answered with, once one has. `respond` writes it AGAIN over the state:
      * the lane took the values, so the response the helper built is empty and the transcript is where
      * the chunks are. Without this a framed endpoint came back out as abide's own ndjson, and `sse`
      * stopped being something an `EventSource` could read.
@@ -239,7 +240,7 @@ function isGenerator(body: unknown): boolean {
  * `T` inferred as `Response` and every caller of such an endpoint was untyped at exactly the point
  * the stub had started decoding chunks for them.
  *
- * `Promise<Framed<T>>` is NOT here, and the reason is the one written above `streamed`: the cell
+ * `Promise<Framed<T>>` is NOT here, and the reason is the one written above `streamed`: the state
  * decides between a load and a stream by what it is HANDED IN THE CALL, so a framing that arrives a
  * microtask later is a load holding a `Response`. It never worked — this only says so. An `async`
  * handler that has to await first frames an async generator instead, which is the shorter spelling
@@ -283,7 +284,7 @@ function chained<Args, T>(
  * The declaration's type, split in two: what the call ANSWERS with, and what it REFUSES with.
  *
  * A handler that `return`s an `error.typed` failure has it in its own return type, and both halves
- * have a reader. The value half is what a caller's cell holds and what the compiler publishes as the
+ * have a reader. The value half is what a caller's state holds and what the compiler publishes as the
  * output shape — a refusal left in it would be a schema saying the answer might be an error object.
  * The refusal half is what `fn(args).isError(e, name)` narrows against, and it is a third type
  * parameter rather than a second reading of the first so that neither reader has to strip the other.
@@ -345,7 +346,7 @@ function declare<Args, T>(
     policy.checkOutput = gate(declared?.output, 'output', 500, policy) as Gate<unknown> | null
 
     // A stream is re-wrapped as a generator RETURNED SYNCHRONOUSLY, so a middleware that awaits
-    // cannot turn the whole transcript into one value: the cell decides between a load and a stream
+    // cannot turn the whole transcript into one value: the state decides between a load and a stream
     // by what it is handed in the call, and a promise of a generator is a load. The input gate is
     // therefore INSIDE the generator rather than in `load` below, for the same reason.
     async function* streamed(args: Args): AsyncGenerator<T> {
@@ -415,9 +416,9 @@ function declare<Args, T>(
         const produced = run(args)
         const output = policy.checkOutput
         // A framing is a STREAM, and this is the one place both lanes can be right about it. The
-        // values go to the cell — so `await fn()` and `for await (const c of fn())` mean in process
+        // values go to the state — so `await fn()` and `for await (const c of fn())` mean in process
         // exactly what they mean in a browser, and the seed is a transcript rather than an envelope —
-        // and `respond` writes the framing again over that cell. The response the helper built is
+        // and `respond` writes the framing again over that state. The response the helper built is
         // therefore never read, so its scope hold is given back here; cancelling it instead would
         // call `return()` on the generator `pumped` is about to iterate.
         const framing = framingOf(produced)
@@ -573,10 +574,10 @@ export function respond<Args, T>(
     const watching = rpcLog.enabled()
     const started = watching ? performance.now() : 0
     const handle = rpc(args)
-    // The PROBE is what starts the work — a probe kicks, and a handler that yields hands the cell its
+    // The PROBE is what starts the work — a probe kicks, and a handler that yields hands the state its
     // async iterable in that same call, so `streaming` is true by the time this read returns. Reading
     // the VALUE first was the older shape and it cost two things: the read throws a retained failure,
-    // so it needed a `try`/`catch` that discarded it; and it is a read of a cell on abide's behalf, so
+    // so it needed a `try`/`catch` that discarded it; and it is a read of a state on abide's behalf, so
     // it needed `abide:load` suppressed around it or a declared `error.typed` answered here wrote a
     // stack for an outcome already reported below with its name and status.
     //
@@ -588,7 +589,7 @@ export function respond<Args, T>(
         // means nothing. What the line reports is that the call became a stream and how fast.
         if (watching) told(policy, 'streaming', started)
         // A handler that FRAMED its answer said what the bytes look like, and it said it for a reader
-        // that is not a stub — an `EventSource`, a `curl`. Written again over the cell, through
+        // that is not a stub — an `EventSource`, a `curl`. Written again over the state, through
         // `carried` so the wire's headers land UNDER the framing's own exactly as they did when the
         // helper's response went out whole: `sse`'s `no-cache` still wins.
         const framing = policy?.framing ?? null
@@ -778,7 +779,7 @@ export interface SocketOptions<T = unknown, Args = unknown> {
      * The declared shape of a message a CLIENT sends.
      *
      * The wire is the only door a message arrives through from outside the process, and it is the
-     * only place this is checked: the server half of a socket is `channel()` unchanged, so an app
+     * only place this is checked: the stream a socket selects is `channel()` unchanged, so an app
      * publishing into its own stream is publishing a value it already holds, not sending one.
      */
     schema?: Schema<T>
@@ -841,16 +842,22 @@ export function describeSocket(stream: object, address: string, shapes: Shapes |
 }
 
 /**
- * The server half of a socket is `channel()` UNCHANGED.
+ * A socket ALWAYS SELECTS, whether or not it declares a room: `s()` is the stream and `s(args)` is a
+ * room, and the read is `s()()`. The stream it selects is `channel()` unchanged — there is nothing
+ * to add, because the transport is not in the channel: an upgrade subscribes the connection to the
+ * channel and a close unsubscribes it, which is the whole of it. What this adds is the policy the
+ * wire needs and a local publisher does not.
  *
- * There is nothing to add, because the transport is not in the channel: an upgrade subscribes the
- * connection to the channel and a close unsubscribes it, which is the whole of it. What this adds is
- * the policy the wire needs and a local publisher does not.
+ * Selecting is the grammar `rpc` already has over `memo`. There is no argless rpc — `Rpc` extends
+ * `KeyedMemo` and a no-args endpoint is still `fn()`, which `Selecting` makes `fn({})` — so adding
+ * transport is what collapses the two forms into one, and `socket` was the one that had not. What it
+ * buys beyond symmetry is the probes: a bare socket whose call READ it had to answer `pending()`
+ * from a connection it must not open, so its probes were the one carve-out in "asking kicks". Now
+ * naming `s` opens nothing, `s()` selects and opens nothing, and asking the connection anything
+ * kicks it exactly as a slot's does.
  */
-export function socket<T>(options?: SocketOptions<T, void>): Channel<T>
-export function socket<T, Args>(options?: SocketOptions<T, Args>): KeyedChannel<Args, T>
-export function socket<T, Args>(options: SocketOptions<T, Args> = {}): Channel<T> & KeyedChannel<Args, T> {
-    const stream = channel<T, Args>(options.channel) as Channel<T> & KeyedChannel<Args, T>
+export function socket<T, Args = void>(options: SocketOptions<T, Args> = {}): KeyedChannel<Args, T> {
+    const stream = channel<T, Args>(options.channel)
     const policy: SocketPolicy = {
         address: 'socket',
         clientPublish: (options.clientPublish ?? false) as SocketPolicy['clientPublish'],
@@ -864,8 +871,23 @@ export function socket<T, Args>(options: SocketOptions<T, Args> = {}): Channel<T
     // After the policy exists, because the gate reads the address off it at the throw — it is the
     // same object `describeSocket` writes to when the module registers.
     policy.checkMessage = gate(options.schema as Schema<unknown> | undefined, 'message', 422, policy)
-    SOCKET_POLICY.set(stream, policy)
-    return stream
+
+    // The DECLARATION's own room, held so the last client to disconnect does not sweep it. This is
+    // what `s()` hands every caller, and `tail` promises its transcript survives a gap with no
+    // connections — which is what the bare stream it replaced did for free.
+    holdRoom(stream({} as Args))
+
+    // The SELECTING face over the channel, and the omitted call is `{}` — the SAME room `s({})`
+    // selects, through the `selectedRoom` both socket halves share. So a socket has no bare stream at
+    // all: every call is keyed, which is what "there is no argless rpc" means one law over. The
+    // channel underneath still has one — `channel()` is unchanged and its own bare read is untouched
+    // — a socket simply never hands it out.
+    const select = markSource(((...given: Selecting<Args>) =>
+        stream(selectedRoom<Args>(given))) as KeyedChannel<Args, T>)
+    select.invalidate = stream.invalidate
+    // Keyed by the FACADE: it is what a module exports and what the registry looks an address up by.
+    SOCKET_POLICY.set(select, policy)
+    return select
 }
 
 /**

@@ -214,8 +214,13 @@ test('does the stylesheet scan force style or layout', async ({ page }) => {
     console.log(`\n[scan x1000]     recalc +${scanned.recalcStyle}   layout +${scanned.layout}`)
     console.log(`[style control]  recalc +${styleControl.recalcStyle}   layout +${styleControl.layout}`)
     console.log(`[layout control] recalc +${layoutControl.recalcStyle}   layout +${layoutControl.layout}`)
-    expect(styleControl.recalcStyle, 'the style control forced nothing — that counter is blind').toBeGreaterThan(0)
-    expect(layoutControl.layout, 'the layout control forced nothing — that counter is blind').toBeGreaterThan(0)
+    expect(
+        styleControl.recalcStyle,
+        'the style control forced nothing — that counter is blind',
+    ).toBeGreaterThan(0)
+    expect(layoutControl.layout, 'the layout control forced nothing — that counter is blind').toBeGreaterThan(
+        0,
+    )
     expect(scanned.recalcStyle, 'the scan forced a style recalculation').toBe(0)
     expect(scanned.layout, 'the scan forced a layout').toBe(0)
 

@@ -1,7 +1,7 @@
 # props, and what a component instance IS
 
 A component call is CARRIED to the position that shows it rather than made where it stands, so the
-instance outlives a re-render: the view runs once, its props are cells the position writes, and the
+instance outlives a re-render: the view runs once, its props are states the position writes, and the
 child's own `state` is never rebuilt. This is the record of why, what it cost, and what it settled.
 The spec of the surface is `docs/SPEC.md` under "Components"; this file is the reasoning behind it.
 
@@ -41,7 +41,7 @@ rows.set([1,2,3,4])   1/initial  2/initial  3/initial  4/initial   ← every row
 **No prop changed.** `n` was the same number for rows 1–3 across the append. What changed was the
 LIST, which re-ran the thunk that renders the rows, which built a fresh `() => Card(…)` closure per
 row, which is a new value in the slot — so every row's effect re-ran, every `Card` was called again,
-and every `state('initial')` inside made a new cell. The keyed reconcile did its job and moved the
+and every `state('initial')` inside made a new state. The keyed reconcile did its job and moved the
 right DOM; the state was never in the DOM.
 
 So the rule was not "a computed prop resets the child". It was **a component loses its state whenever
@@ -75,7 +75,7 @@ before column is what that case reports with the instance reuse in `component_` 
 
 Kept because each is the obvious next idea, and each fails for a reason worth not rediscovering.
 
-**A — the status quo.** Cell props were live and never re-called; value props stayed fresh by
+**A — the status quo.** State props were live and never re-called; value props stayed fresh by
 re-calling. Cheap, and it carried the bug with no warning available: the compiler cannot tell a child
 that has state worth keeping from one that does not.
 
@@ -85,9 +85,16 @@ reactive, and that thunk still re-runs for every other reason: the list above re
 exactly as it does under A, because the reset comes from the list moving. It also costs a closure per
 reactive prop per instance, held for the child's lifetime.
 
-**C — values unless bound.** `n={n}` passes a `number`; `bind:note={note}` passes the cell. The
+**C — values unless bound.** `n={n}` passes a `number`; `bind:note={note}` passes the state. The
 simplest rule to say, and it makes the reset UNIVERSAL rather than occasional — under A only computed
 props re-called, under C every prop reads, so every prop re-calls.
+
+**D — `bind:` marks the two-way props.** The survivor of C, and it is now a `ParseError`: `bind:note={x}`
+and `note={x}` emitted the byte-identical `component(Note, { note: x, … })`, because naming a state
+alone already hands it over in a prop position. So the keyword claimed a contract it did not create
+and could not check — `bind:note={x()}` promised write-back over an emitted READ, with nothing saying
+so in either lane. On an ELEMENT `bind:` stays real, checked against a table of tags and events; a
+component has no such table, because a prop name is whatever the child called it.
 
 ## the design: the position holds the instance
 
@@ -113,9 +120,9 @@ the `ChildPart` that shows it is what interprets it:
 ```
 component_(block):
     if this position already holds an instance of the SAME view:
-        write each prop into the cell it was called with, and stop
+        write each prop into the state it was called with, and stop
     otherwise:
-        make a cell per prop, call the view ONCE (untracked), paint what it returned, hold it
+        make a state per prop, call the view ONCE (untracked), paint what it returned, hold it
 ```
 
 Four things fall out, and three are deletions:
@@ -127,34 +134,36 @@ Four things fall out, and three are deletions:
 - **The declared-type rule GOES.** "declared `State<T>` → live, declared `T` → snapshot" no longer
   decides anything about liveness, because every prop is live. It decides only whether `bind:` may
   write, which is what it was always really about.
-- **A prop that did not move wakes nobody** — from the cell's own identity check for every prop but
+- **A prop that did not move wakes nobody** — from the state's own identity check for every prop but
   a `TemplateResult`, which the caller's own thunk rebuilds per pass so identity alone could never
   dedup it. That one is compared structurally and KEEPS the old identity. `children` is the prop
   this is about.
 - **`state()` inside the body needs no change**, because the body is not re-run. This is where the
-  design diverges from React's: nothing has to match cells by call order.
+  design diverges from React's: nothing has to match states by call order.
 
 ### what a prop is, on each side of the seam
 
-Both substrates wrap. `cellProps` lives in `$shared/html.ts` and is called by the client's
-`ChildPart` and by the server's `Component` arm, so **what a component receives is cells, always**. A
+Both substrates wrap. `stateProps` lives in `$shared/html.ts` and is called by the client's
+`ChildPart` and by the server's `Component` arm, so **what a component receives is states, always**. A
 server that handed the plain values over would work for every compiled `.abide` file — those bind
-through `propCell`, which would make the cells — and break every hand-written `.ts` component, which
-would then be reading `who()` on a string. One rule is cheaper than that exception, at one cell per
+through `propState`, which would make the states — and break every hand-written `.ts` component, which
+would then be reading `who()` on a string. One rule is cheaper than that exception, at one state per
 prop per component per snapshot render.
 
 Two things pass through unwrapped, and `Props<T>` makes the same two exceptions at the type level:
 
-- **an existing source.** `bind:note={note}` needs the child to hold the very cell the parent does.
-- **a function.** `@click={onclick}` attaches the value, and a cell holding a function would attach
-  the cell.
+- **an existing source.** `note={note}` — naming a state alone hands it over, so the child holds the
+  very state the parent does. There is no `bind:` here: on a component it is a `ParseError`, because
+  it compiled to this same call and claimed a contract it never created. See "what is left" below.
+- **a function.** `@click={onclick}` attaches the value, and a state holding a function would attach
+  the state.
 
 ### the destructure, and why it is rewritten
 
 This is the part the first attempt stopped on. `Props<T>` maps `footnote?: string` to an OPTIONAL
-`Cell<string | undefined>`, so a caller who omits it leaves the local `undefined` and `{#if footnote}`
+`State<string | undefined>`, so a caller who omits it leaves the local `undefined` and `{#if footnote}`
 compiles to `footnote()` on nothing. `class: className = ''` is worse — the local is
-`'' | Cell<string>`, and only one of those is callable.
+`'' | State<string>`, and only one of those is callable.
 
 So the pattern is REWRITTEN rather than passed through. Each prop that is data moves out of it, and
 its default moves to where the value it stands in for is:
@@ -163,21 +172,21 @@ its default moves to where the value it stands in for is:
 const { class: className = '', footnote } = props<Card>()
 
     →   const { class: $className, footnote: $footnote } = args
-        const className = propCell($className, '')
-        const footnote = propCell($footnote)
+        const className = propState($className, '')
+        const footnote = propState($footnote)
 ```
 
-`propCell` is nearly always a pass-through, because `cellProps` already made the cell. What it is FOR
+`propState` is nearly always a pass-through, because `stateProps` already made the state. What it is FOR
 is the prop that never arrived: a call site that omits an optional prop emits no key for it. The
-default is derived rather than folded in once, so an `undefined` arriving LATER on a live cell still
-reads as the default. A rest element and a nested pattern are left alone — neither was ever a cell, so
+default is derived rather than folded in once, so an `undefined` arriving LATER on a live state still
+reads as the default. A rest element and a nested pattern are left alone — neither was ever a state, so
 both keep whatever the caller passed.
 
 Which props get this is decided SYNTACTICALLY, from the declared type's own text, because nothing in
-the emit path may need a type-checker. Three answers, and the DEFAULT is "cell": a FUNCTION member is
-a callback, a `KeyedMemo`/`KeyedChannel` is a handle a prop cell cannot stand in for, and everything
+the emit path may need a type-checker. Three answers, and the DEFAULT is "state": a FUNCTION member is
+a callback, a `KeyedMemo`/`KeyedChannel` is a handle a prop state cannot stand in for, and everything
 else — a member this cannot read at all included — takes the common rule. A function type reached
-through a NAME (`onclick: Handler`) reads as a cell and is the one hole, for the reason an imported
+through a NAME (`onclick: Handler`) reads as a state and is the one hole, for the reason an imported
 props type has always had one.
 
 ### an inline `{#component}` is still called
@@ -199,7 +208,7 @@ anything.
 | a keyed row MOVES | `3/A 1/B 2/C`, with the key dropped | `3/C 1/A 2/B` | `demos/client.ts` |
 | an instance LEAVES the position | stuck on `gone` | a NEW instance on return | `demos/client.ts` |
 | a component is HYDRATED | `[object Object]`, mismatch, 2 nodes built | adopted, 0 built | `demos/hydrate.ts` |
-| a `State` prop is passed THROUGH | the parent's cell never moves | the child writes the parent's own cell | `demos/client.ts` |
+| a `State` prop is passed THROUGH | the parent's state never moves | the child writes the parent's own state | `demos/client.ts` |
 
 Two of those were found by writing the gate rather than by reasoning:
 
@@ -219,14 +228,11 @@ a positional reuse and a travelling identity agree on every row whose state is i
 
 ## what is left
 
-- **`bind:` on a component prop** in a `.abide` file. The MECHANISM is gated — `cellProps` passing an
-  existing source through, so the child writes the parent's own cell — but through a hand-written
-  caller. The compiled spelling reaches the same call and has no case of its own.
-- **a `...spread` whose key set grows** after setup has no cell to write the new key into, because the
+- **a `...spread` whose key set grows** after setup has no state to write the new key into, because the
   child bound its locals once. It is reported on the `component` log channel rather than dropped
   silently; nothing yet decides whether that is the right answer or whether the shape should be
   refused at compile time.
-- **the SSR cost of `cellProps` — MEASURED, and it is about half the render.** 200 components of four
+- **the SSR cost of `stateProps` — MEASURED, and it is about half the render.** 200 components of four
   props each, to a string, against a hand-written concat producing byte-identical markup. Bun/JSC is
   the real server substrate, so these are the runtime rather than an emulator; run twice, and the arms
   do not overlap.
@@ -236,15 +242,15 @@ a positional reuse and a travelling identity agree on every row whose state is i
   | `state()` per prop — as shipped | 82.6–88.6 µs | 413–443 ns | 5.5–5.8x |
   | a bare `() => value` per prop | 38.6–47.5 µs | 193–237 ns | 3.1–3.6x |
 
-  A cell is a `Node`, a callable, `set`/`peek`/`invalidate`, and the eleven properties `attachAsync`
+  A state is a `Node`, a callable, `set`/`peek`/`invalidate`, and the eleven properties `attachAsync`
   writes — about 50 ns each here, 800 of them, and roughly half the op. The comparison arm is not a
-  proposal: it is what says the cost is the CELL rather than the wrapping, because the child reads
+  proposal: it is what says the cost is the STATE rather than the wrapping, because the child reads
   `tone()` identically under both and the bytes out are the same.
 
   What a cheaper server wrapper would give up is the rest of the surface. A `bind:` prop is passed
   through untouched either way, and a `set` on a prop cannot mean anything in a snapshot — but a
   PROBE can be written (`{#if note.pending()}` on a prop reads `false`, correctly, only because the
-  prop is a real cell), and a hand-written `.ts` component may call `peek`. So the trade is a
+  prop is a real state), and a hand-written `.ts` component may call `peek`. So the trade is a
   substrate-shaped exception against the rule the build chose deliberately: a component is written
   once and runs in both places. Worth taking only with the fraction of a REAL page's render in hand —
   this page is components and nothing else, which is the most favourable possible shape for the

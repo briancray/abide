@@ -12,7 +12,7 @@ const last = state('lovelace')
 // `watch(source, handler)` with a value on the end, and an array is how it declares more than one.
 //
 // The one new thing: that body may LOAD. A transform handing back a promise is a load like any
-// other, so the cell holds what it RESOLVED to — never the promise — and says `pending()` meanwhile.
+// other, so the state holds what it RESOLVED to — never the promise — and says `pending()` meanwhile.
 const badge = memo(
     () => [first, last],
     async ([given, family]: string[]) => {

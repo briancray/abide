@@ -7,11 +7,11 @@ export const details = memo(async ({ title }: { title: string }) => ({ pages: ti
 </script>
 
 <div>
-    <!-- A cell read is a CALL, and TypeScript narrows a const, never a call. So a condition takes
+    <!-- A state read is a CALL, and TypeScript narrows a const, never a call. So a condition takes
          its reads into locals and the branch narrows off those — `.name` here needs no `?.`. -->
     {#if session}<p>{session.name}</p>{:else}<p>anonymous</p>{/if}
 
-    <!-- The same for a keyed memo, where the CALL is the cell. -->
+    <!-- The same for a keyed memo, where the CALL is the state. -->
     {#if details({ title })}<p>{details({ title }).pages} pages</p>{/if}
 
     {#switch session}{:case undefined}<em>loading</em>{:default}<b>{session.name}</b>{/switch}

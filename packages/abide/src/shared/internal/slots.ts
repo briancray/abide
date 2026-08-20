@@ -66,7 +66,7 @@ export function unwrap(value: unknown): unknown {
 /**
  * `<slot>fallback</slot>` — the children, or what to show when there are none.
  *
- * Here beside `unwrap` because it is the same read: children reach a component as a cell the position
+ * Here beside `unwrap` because it is the same read: children reach a component as a state the position
  * writes on every pass, so deciding whether any arrived means reading through one — and a second
  * implementation of that step is the drift this file exists to stop.
  *
@@ -75,7 +75,7 @@ export function unwrap(value: unknown): unknown {
  * something, and the fallback is for a caller who passed nothing.
  *
  * The fallback is a THUNK so that what it reads is read only when it is shown — evaluated eagerly, a
- * cell inside it would subscribe this slot to a value the caller's children have made invisible.
+ * state inside it would subscribe this slot to a value the caller's children have made invisible.
  */
 export function slotted(children: unknown, fallback: () => unknown): unknown {
     const value = unwrap(children)

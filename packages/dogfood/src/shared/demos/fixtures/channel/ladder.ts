@@ -20,9 +20,19 @@ import Seven from './7-forget-what-arrived.abide'
 import SEVEN from './7-forget-what-arrived.abide?source'
 
 export const LADDER: Example[] = [
-    { adds: 'publish, and read the latest — the read IS the subscription', of: ['channel'], source: ONE, view: One },
+    {
+        adds: 'publish, and read the latest — the read IS the subscription',
+        of: ['channel'],
+        source: ONE,
+        view: One,
+    },
     { adds: 'remember the last few, with `tail`', of: ['channel'], source: TWO, view: Two },
-    { adds: 'a second type parameter splits it into KEYED rooms', of: ['channel'], source: THREE, view: Three },
+    {
+        adds: 'a second type parameter splits it into KEYED rooms',
+        of: ['channel'],
+        source: THREE,
+        view: Three,
+    },
     {
         adds: 'a plain listener outside the graph, which hands back its own unsubscribe',
         of: ['channel'],

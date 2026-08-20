@@ -2,7 +2,7 @@
 import { props } from 'abide'
 
 // A FUNCTION member is a callback, and it is handed over as written rather than read: `onpick(…)`
-// calls it. That is one of exactly two exceptions to "every prop is a cell", and it is recognised from
+// calls it. That is one of exactly two exceptions to "every prop is a state", and it is recognised from
 // the member's own TEXT — `onpick: (t: string) => void` — because the emit has no type-checker.
 //
 // A function reached through a NAME cannot be recognised, and that is the one hole this has: a props

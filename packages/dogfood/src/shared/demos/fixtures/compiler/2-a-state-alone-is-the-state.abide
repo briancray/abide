@@ -4,10 +4,10 @@ import { state } from 'abide'
 const text = state('type here')
 </script>
 
-<!-- Naming a cell ALONE hands over the CELL; using it in an expression reads it. One rule, two
+<!-- Naming a state ALONE hands over the STATE; using it in an expression reads it. One rule, two
      outcomes, decided by the position — which is exactly what `bind:` and a component prop need.
 
-     `bind:value={text}` is the cell, so the input can write back through it. `{text.toUpperCase()}` is
+     `bind:value={text}` is the state, so the input can write back through it. `{text.toUpperCase()}` is
      part of an expression, so it is a read — the same name, one character apart. -->
 <input bind:value={text} />
 <p>{text.toUpperCase()}</p>

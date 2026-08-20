@@ -5,7 +5,9 @@
 // the text goes through the loader rather than being read at runtime.
 
 declare module '*.abide?source' {
-    const source: string
+    // `import(...)` inline rather than a top-level import: a `.d.ts` with one of those stops being
+    // GLOBAL, and every `declare module` in it stops being an augmentation anything resolves through.
+    const source: import('./index.ts').SourceFile
     export default source
 }
 
@@ -14,7 +16,7 @@ declare module '*.abide?source' {
 // are two different modules out of one file — see the note in `plugin.ts` about keeping the query on
 // the resolved path, which is what stops the bundler handing the second import the first one's module.
 declare module '*.ts?source' {
-    const source: string
+    const source: import('./index.ts').SourceFile
     export default source
 }
 

@@ -11,6 +11,7 @@
 import { heapStats } from 'bun:jsc'
 import { expect, test } from 'bun:test'
 import { channel, memo, state } from 'abide'
+import { sleep } from 'harness'
 
 /** How many of `kind` the heap holds right now. NOT collected first — see `per`. */
 function counted(kind: string): number {
@@ -43,12 +44,12 @@ function per(kind: string, run: (i: number) => void, n: number): number {
 const N = 50_000
 
 test('an UNOBSERVED write allocates no iterator', () => {
-    // The common shape, not an edge case: the `Async` probe nodes behind every cell are written on
+    // The common shape, not an edge case: the `Async` probe nodes behind every state are written on
     // each settle and read by nobody, a channel's transcript has no observer until something calls
     // `chunks()`, and a `state` nothing derived from never has one. Walking an empty observer set
     // still allocated its iterator, once per write.
-    const cell = state(0)
-    expect(per('Set Iterator', (i) => cell.set(i), N)).toBeLessThan(0.5)
+    const held = state(0)
+    expect(per('Set Iterator', (i) => held.set(i), N)).toBeLessThan(0.5)
 })
 
 test('…and a channel publish nobody follows allocates none either', () => {
@@ -59,15 +60,15 @@ test('…and a channel publish nobody follows allocates none either', () => {
 test('an OBSERVED write still wakes its reader', () => {
     // The guard above returns early on an empty set, so this is what says it returns early on ONLY
     // an empty one — a graph that stopped propagating would pass both tests above.
-    const cell = state(0)
+    const held = state(0)
     let runs = 0
     const doubled = memo(() => {
         runs++
-        return cell() * 2
+        return held() * 2
     })
     expect(doubled()).toBe(0)
     const before = runs
-    cell.set(21)
+    held.set(21)
     expect(doubled()).toBe(42)
     expect(runs).toBeGreaterThan(before)
 })
@@ -138,12 +139,12 @@ test('an adjacent swap builds no key index, and a scattered pass still does', as
      * arms are measured through it, so what it counts is what the reconcile did.
      */
     const mapsPerPass = async (other: Item[]): Promise<number> => {
-        const cell = state(base)
+        const held = state(base)
         const host = container()
-        mount(host, () => html`<ul>${() => cell().map((r) => keyed(r.id, html`<li>${r.label}</li>`))}</ul>`)
+        mount(host, () => html`<ul>${() => held().map((r) => keyed(r.id, html`<li>${r.label}</li>`))}</ul>`)
         await tick()
         for (let i = 0; i < 50; i++) {
-            cell.set(i % 2 ? other : base)
+            held.set(i % 2 ? other : base)
             await tick()
         }
 
@@ -162,7 +163,7 @@ test('an adjacent swap builds no key index, and a scattered pass still does', as
         globalThis.Map = Counted as unknown as MapConstructor
         try {
             for (let i = 0; i < passes; i++) {
-                cell.set(i % 2 ? other : base)
+                held.set(i % 2 ? other : base)
                 await tick()
             }
         } finally {
@@ -209,4 +210,53 @@ test('a literal href allocates nothing, and a pattern still parses', async () =>
     const walked = arraysPerCall(() => url('/docs/guide/'), 20_000)
     expect(walked).toBeGreaterThan(0.5)
     expect(literal).toBeLessThan(walked / 2)
+})
+
+// `memo()` compiles INSIDE the setup a render runs, so a declaration is per component instance and
+// per REQUEST — a server makes one per request for the life of the process. Each one adds a `WeakRef`
+// to a module-global set, and that husk was dropped only by an argless `invalidate()`/`refresh()`:
+// user-invoked verbs most apps never call at all. Over 20k renders of a two-memo page that retained
+// one husk per declaration and never gave any of it back.
+//
+// Counted as `WeakRef` rather than as bytes because the husk is exactly one per declaration, so the
+// count is exact where a heap delta is noise: the same claim measured in bytes read 65, 221 and 238
+// per render across three trials with one 5,588 outlier, and 450 for the implementation that
+// actually FIXED it. None of that ambiguity is in this counter — baseline is n, fixed is ~0.
+//
+// AWAITS AND A TIMER, not a tight loop, and that is the substrate rather than dressing: a
+// `FinalizationRegistry` callback runs on a turn of the event loop, so a synchronous loop with a
+// forced collection at the end reclaims NOTHING and reads identically to the leak. It has to be given
+// the turn a server gets between requests.
+test('a declaration drops its husk when collected, so a per-request memo is bounded', async () => {
+    // NOT named `declare`: at statement position TypeScript reads that as an ambient declaration and
+    // the transpiler ERASES the call with the statements after it — the loop ran as nothing, the
+    // counts read 0, and the gate passed against the leak it was written to catch.
+    const declareMemo = (await import('abide')).memo
+    const husks = (): number => counted('WeakRef')
+    const settle = async (): Promise<void> => {
+        Bun.gc(true)
+        await sleep(50)
+        Bun.gc(true)
+    }
+
+    const retainedOver = async (n: number): Promise<number> => {
+        await settle()
+        const before = husks()
+        for (let i = 0; i < n; i++) {
+            declareMemo(() => i)
+            // The yield a request boundary is; nothing holds the memo past it.
+            if ((i & 0xff) === 0xff) await Promise.resolve()
+        }
+        await settle()
+        return husks() - before
+    }
+
+    // Two sizes of the same structure, each against the declarations that made it: what the registry
+    // buys is that retention does NOT scale with n. A ratio between the arms is the wrong shape —
+    // the fixed count is 0, and 0 tells nothing apart from 0.
+    //
+    // An eighth of one husk per declaration separates "bounded" from the one-each of the revert with
+    // room to spare, and leaves slack for the handful in flight when the last collection ran.
+    expect(await retainedOver(2_000)).toBeLessThan(2_000 / 8)
+    expect(await retainedOver(16_000)).toBeLessThan(16_000 / 8)
 })

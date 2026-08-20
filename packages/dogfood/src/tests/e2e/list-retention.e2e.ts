@@ -40,7 +40,9 @@ test('the data grid releases the rows a filter drops', async ({ page }) => {
     await page.goto(`/demos/data?size=${ENTRIES}`)
     await interactive(page)
     await expect(page.locator('#summary')).toBeVisible({ timeout: 120_000 })
-    expect(await page.locator('.entry').count(), 'the grid did not render what it was asked for').toBe(ENTRIES)
+    expect(await page.locator('.entry').count(), 'the grid did not render what it was asked for').toBe(
+        ENTRIES,
+    )
 
     const reading = await engine(page, { collect: true })
     const work = await reading.around(async () => {
@@ -55,7 +57,9 @@ test('the data grid releases the rows a filter drops', async ({ page }) => {
         await page.waitForTimeout(600)
     })
 
-    console.log(`\n  filtering ${ENTRIES.toLocaleString()} rows away released ${(-work.nodes).toLocaleString()} retained nodes\n`)
+    console.log(
+        `\n  filtering ${ENTRIES.toLocaleString()} rows away released ${(-work.nodes).toLocaleString()} retained nodes\n`,
+    )
 
     // NEGATIVE is the whole claim: the nodes are gone, not merely off screen.
     expect(

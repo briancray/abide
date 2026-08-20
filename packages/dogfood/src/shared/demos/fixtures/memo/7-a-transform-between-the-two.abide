@@ -6,7 +6,7 @@ import { memo, state } from 'abide'
 const query = state('ab')
 
 // A function BETWEEN the body and the options is a transform, and the memo becomes its return: the
-// body says what to fetch and this says what the readers get. Untracked, so reading a cell in here
+// body says what to fetch and this says what the readers get. Untracked, so reading a state in here
 // subscribes nobody — which is what keeps it a projection rather than a second dependency set.
 //
 // Options still follow third, so the shape reads body → transform → options wherever all three appear.

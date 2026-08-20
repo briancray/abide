@@ -189,14 +189,14 @@ function slotRung(host: HTMLElement): Rung {
     const holder = document.createElement('div')
     holder.dataset.arm = 'slot'
     host.append(holder)
-    const cell = state(rows)
+    const held = state(rows)
     const selected = state(-1)
     // The compiler's own emit for `<li class={row.id === selected ? 'on' : ''}>` inside a `{#for}`.
     mount(
         holder,
         () =>
             html`<ul>${() =>
-                cell().map((row) =>
+                held().map((row) =>
                     keyed(
                         row.id,
                         html`<li class=${() => (row.id === selected() ? 'on' : '')}>${row.label}</li>`,
@@ -236,12 +236,7 @@ export async function profileWakePath(attached: boolean): Promise<{ arms: Arm[];
     // hand-written emitter measured 38.6 ns alone and 8.84 µs after abide's arm had run, which reads as
     // "abide 121x faster" instead of "2.21x slower". `timeArms` interleaves one batch per arm per pass,
     // so the drift is spread across all of them rather than loaded onto whichever ran second.
-    const rungs: Rung[] = [
-        vanillaRung(host),
-        graphOnlyRung(),
-        graphWithDomRung(host),
-        slotRung(host),
-    ]
+    const rungs: Rung[] = [vanillaRung(host), graphOnlyRung(), graphWithDomRung(host), slotRung(host)]
     await tick()
 
     const timings = await timeArms(rungs, quiesce)

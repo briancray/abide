@@ -14,7 +14,7 @@ import {
     type Branches,
     Component,
     caughtArm,
-    cellProps,
+    stateProps,
     html,
     isAttributeName,
     isKeyed,
@@ -59,7 +59,7 @@ const hydrateLog = abideLog.channel('hydrate')
 const componentLog = abideLog.channel('component')
 
 // A sentinel distinct from every value an operand could be, `undefined` included — a block over a
-// cell that has not loaded yet awaits `undefined`, and that is a real operand, not the absence of one.
+// state that has not loaded yet awaits `undefined`, and that is a real operand, not the absence of one.
 const NOTHING = Symbol('abide.nothing')
 
 // --- adoption -----------------------------------------------------------------
@@ -190,7 +190,7 @@ export class ChildPart {
     /** Server nodes waiting to be interpreted, until the first value says what they are. */
     private claimed: ChildNode[] | null = null
 
-    /** The component instance this position is showing, and the cells its props are written into. */
+    /** The component instance this position is showing, and the states its props are written into. */
     private instance: { view: unknown; props: Record<string, unknown> } | null = null
 
     /** The server's opening marker. Outlives the adoption, but not a rebuild. */
@@ -296,7 +296,7 @@ export class ChildPart {
             // the top, so what is under this claim is a different point in the same stream and no
             // chunk to come makes it match. Dropped and rebuilt — the `Streamed` arm below does the
             // same, for the same reason — rather than kept, which would freeze these rows at the
-            // server's last chunk while a plain read of the same cell beside them counts up.
+            // server's last chunk while a plain read of the same state beside them counts up.
             if (hasProbedStream()) {
                 this.claimed = null
                 this.clearExcept(null)
@@ -498,7 +498,7 @@ export class ChildPart {
             // FIRST pass with the markup already in place — the same call, claiming instead of
             // building. Held only once the range checks out: a mismatch falls back to the ordinary
             // build in `set`, which makes the instance there.
-            const props = cellProps(value.props)
+            const props = stateProps(value.props)
             const made = untrack(() => value.view(props))
             this.take(claimed, made)
             this.instance = { view: value.view, props }
@@ -668,13 +668,13 @@ export class ChildPart {
             return
         }
         // The operand IS the settle — nothing has to be asked of it first. It used to be handed to
-        // `started`, whose whole job was reaching a lazy cell's `then` synchronously before the arm
+        // `started`, whose whole job was reaching a lazy state's `then` synchronously before the arm
         // ran, because the arm is arbitrary code that probes this very operand and a probe on a load
         // nobody had begun answered `false`. A probe starts what it reports now, so the arm kicks it.
         const settling = operand
         this.show(pendingArm(branches), operand)
         // A stamp of its OWN, bumped after the pending arm is on screen rather than read off it.
-        // That arm may itself be thenable — a cell is, and a cell is ordinary to put in a slot — in
+        // That arm may itself be thenable — a state is, and a state is ordinary to put in a slot — in
         // which case `show` above started a settle and stamped it with the generation this settle
         // would otherwise share. Sharing means they are mutually exclusive: whichever lands first
         // retires the other, and the pending one is usually already settled, so the body would never
@@ -688,8 +688,8 @@ export class ChildPart {
      * A component instance, held HERE — at the position that shows it — for as long as this part is.
      *
      * The first pass calls the view once and keeps what it returned; every later pass writes the
-     * props into the cells that view was called with and stops. So the view's `state()` runs once,
-     * the child's own thunks repaint themselves off the prop cells, and re-rendering the parent costs
+     * props into the states that view was called with and stops. So the view's `state()` runs once,
+     * the child's own thunks repaint themselves off the prop states, and re-rendering the parent costs
      * a write per prop rather than a rebuilt instance.
      *
      * A DIFFERENT view at the same position is a different component, not a new pass of this one: the
@@ -701,7 +701,7 @@ export class ChildPart {
             writeProps(held.props, block.props)
             return
         }
-        const props = cellProps(block.props)
+        const props = stateProps(block.props)
         // Untracked: the view's SETUP is not a reactive read. Whatever it reads there it reads once,
         // and it is the thunks it returns that subscribe — which is the whole of "setup runs once".
         const made = untrack(() => block.view(props))
@@ -948,7 +948,7 @@ export class ChildPart {
         }
         // The instance leaves with the position. A part is not always garbage when it is disposed —
         // `take` disposes one and then goes on using it, and a `{#if}` arm's part is disposed and
-        // re-set — so the record and its cell per prop would otherwise outlive the component that
+        // re-set — so the record and its state per prop would otherwise outlive the component that
         // read them, and nothing about the output says so.
         this.instance = null
         // Through `clearExcept`, because a nested instance still owns live slot effects and `take`
@@ -1426,7 +1426,7 @@ class Instance {
      * binder loop reached the end.
      *
      * Two fields rather than one because a binder can throw out of the middle of that loop: a slot
-     * reading a cell whose load rejected throws by design, and so does a `{#try}` body with no
+     * reading a state whose load rejected throws by design, and so does a `{#try}` body with no
      * `{:catch}` and an author's `&ref` handler. `lastValues` has to be assigned BEFORE the loop
      * (the effect bodies read it), so on its own it claims a pass that only half happened, and every
      * slot past the throw is then skipped for as long as its value stays put — stale, forever, with
@@ -1750,7 +1750,7 @@ class Instance {
             }
         }
         if (kind.kind === 'ref') {
-            // The NODE itself, handed over once. A cell takes it through `set`; a function is a
+            // The NODE itself, handed over once. A state takes it through `set`; a function is a
             // per-instance handler whose return is its teardown — the contract `watch` already has,
             // rather than a second lifecycle spelling.
             let teardown: (() => void) | null = null
@@ -1765,8 +1765,8 @@ class Instance {
                     teardown = null
                 }
                 if (value === null || value === undefined) return
-                const cell = value as { set?: unknown }
-                if (typeof cell.set === 'function') (cell.set as (node: unknown) => void).call(value, element)
+                const held = value as { set?: unknown }
+                if (typeof held.set === 'function') (held.set as (node: unknown) => void).call(value, element)
                 else teardown = (value as (node: Element) => (() => void) | undefined)(element) ?? null
             }
         }
@@ -1993,16 +1993,16 @@ function sameValues(before: readonly unknown[], after: readonly unknown[]): bool
 }
 
 /**
- * The next pass's props, written into the cells the instance already has.
+ * The next pass's props, written into the states the instance already has.
  *
  * Deduped so a prop that did not move wakes nobody — which is what makes a parent re-render cost a
- * comparison per prop instead of a rebuilt child. The cell's own identity check answers it for every
+ * comparison per prop instead of a rebuilt child. The state's own identity check answers it for every
  * prop but a `TemplateResult`, which the caller's thunk rebuilds per pass; that one is compared
  * structurally below. A prop that arrived as a SOURCE was never wrapped, so there is nothing here to
  * write: the child already reads it.
  *
- * A name with no cell can only come from a `...spread` whose key set grew, and the child bound its
- * locals at setup — so the cell it would be written into does not exist and never will. Reported
+ * A name with no state can only come from a `...spread` whose key set grew, and the child bound its
+ * locals at setup — so the state it would be written into does not exist and never will. Reported
  * rather than skipped, because the output is simply one prop behind and nothing else says so.
  */
 function writeProps(held: Record<string, unknown>, next: Record<string, unknown>): void {
@@ -2011,20 +2011,20 @@ function writeProps(held: Record<string, unknown>, next: Record<string, unknown>
         const name = names[i] as string
         const value = next[name]
         if (passedThrough(value)) continue
-        const cell = held[name] as State<unknown> | undefined
-        if (cell === undefined) {
+        const into = held[name] as State<unknown> | undefined
+        if (into === undefined) {
             componentLog.warning(`a spread added the prop \`${name}\` after setup — it is not read`)
             continue
         }
         // `children` is the one prop the compiler guarantees is FRESH: the emit builds the literal
         // inside the caller's own thunk, so a component in a `{#for}` is handed a new
-        // `TemplateResult` per row per pass whether or not anything in it moved — and the cell's
+        // `TemplateResult` per row per pass whether or not anything in it moved — and the state's
         // identity dedup, which the docblock above promises, can never once fire for it. Comparing
         // structurally and KEEPING the old identity is what makes that promise true. It is
         // `router.ts`'s params shape, chosen for the same reason: reads dominate, so the compare is
         // cheaper than the wake it saves. A prop that is not a template pays one `typeof`.
-        if (isTemplate(value) && sameTemplate(cell.peek(), value)) continue
-        cell.set(value)
+        if (isTemplate(value) && sameTemplate(into.peek(), value)) continue
+        into.set(value)
     }
 }
 

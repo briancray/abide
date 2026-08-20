@@ -37,7 +37,11 @@ test('a mirror entry does not outlive the .abide it was emitted from', async () 
     await Bun.write(SOURCE, '<script module>\nexport const n = 1\n</script>\n<b>{n}</b>\n')
 
     await emitAll([ROOT])
-    expect(await present(), 'the emit did not write the three files a source owns').toEqual([true, true, true])
+    expect(await present(), 'the emit did not write the three files a source owns').toEqual([
+        true,
+        true,
+        true,
+    ])
 
     // The source goes the way a rename goes: the file is no longer there, and nothing tells the
     // mirror. This is the whole of the input — an author moving a fixture into a directory.
@@ -66,8 +70,13 @@ test('the sweep leaves a source that is still there alone', async () => {
 
     // Emit a SUBDIRECTORY only. `pages/kept.abide` is not scanned this time and must survive anyway.
     await emitAll([`${ROOT}/pages`])
-    expect(await exists(`${MIRROR}/pages/kept.abide.ts`), 'a partial check swept a mirror it did not emit').toBe(true)
-    expect(await exists(`${MIRROR}/widget.abide.ts`), 'a partial check swept a sibling it did not emit').toBe(true)
+    expect(
+        await exists(`${MIRROR}/pages/kept.abide.ts`),
+        'a partial check swept a mirror it did not emit',
+    ).toBe(true)
+    expect(await exists(`${MIRROR}/widget.abide.ts`), 'a partial check swept a sibling it did not emit').toBe(
+        true,
+    )
 
     await Bun.$`rm -rf ${ROOT}`.quiet()
 })

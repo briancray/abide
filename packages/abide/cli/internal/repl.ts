@@ -206,9 +206,9 @@ class Session {
         }
 
         try {
-            // A SOURCE is asked first, because a cell is THENABLE — `await x` is how you wait for one
-            // to settle — so awaiting the result of a line would hand back the value inside the cell
-            // and print that instead. `c` at a prompt means the cell.
+            // A SOURCE is asked first, because a state is THENABLE — `await x` is how you wait for one
+            // to settle — so awaiting the result of a line would hand back the value inside the state
+            // and print that instead. `c` at a prompt means the state.
             //
             // Otherwise: guarded, not awaited. A value that is already settled should not cost a tick
             // to learn that.
@@ -366,7 +366,7 @@ interface Source {
  * A SOURCE gets its own line rather than `[Function: state]`, which is what `Bun.inspect` has to say
  * about a callable and is the least useful true thing in this framework. It is read through `peek`
  * for the reason `peek` exists: printing a result must not subscribe anything or start a load, so a
- * prompt showing a cell cannot be what made it fetch.
+ * prompt showing a state cannot be what made it fetch.
  */
 function show(value: unknown, colors: boolean): string {
     if (!isSource(value)) return Bun.inspect(value, { colors })

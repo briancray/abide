@@ -89,7 +89,8 @@ test('every callable says the specifier it is really on', () => {
     const wrong: string[] = []
     for (const name of CALLABLE_ORDER) {
         const actual = EXPORTED.get(name)
-        if (CALLABLES[name].from !== actual) wrong.push(`${name}: says ${CALLABLES[name].from}, is on ${actual}`)
+        if (CALLABLES[name].from !== actual)
+            wrong.push(`${name}: says ${CALLABLES[name].from}, is on ${actual}`)
     }
     expect(wrong, 'a page would tell a reader to import from the wrong place').toEqual([])
 })
@@ -98,7 +99,9 @@ test('the index is the whole list, once each', () => {
     // `CALLABLE_ORDER` is the flatten of `TOPICS`, so this is the partition read from one side: a name
     // in no topic makes the order short, and a name in two makes it long. The topic-side reading — WHICH
     // name is missing, and which is doubled — is the test below, which is the one that prints the names.
-    expect(CALLABLE_ORDER.length, 'the order and the record are different sizes').toBe(Object.keys(CALLABLES).length)
+    expect(CALLABLE_ORDER.length, 'the order and the record are different sizes').toBe(
+        Object.keys(CALLABLES).length,
+    )
     expect(new Set(CALLABLE_ORDER).size, 'a name is in the order twice').toBe(CALLABLE_ORDER.length)
     const stray = CALLABLE_ORDER.filter((name) => !Object.hasOwn(CALLABLES, name))
     expect(stray, 'the order names something the record does not have').toEqual([])
@@ -130,7 +133,8 @@ test('`ladders` names where the rungs ARE — in both directions', () => {
         for (const { ladder, rung } of RUNGS) if (rung.of.includes(name)) actual.add(ladder)
 
         for (const ladder of actual) if (!declared.has(ladder)) missing.push(`${name}: rungs in ${ladder}`)
-        for (const ladder of declared) if (!actual.has(ladder)) spurious.push(`${name}: no rungs in ${ladder}`)
+        for (const ladder of declared)
+            if (!actual.has(ladder)) spurious.push(`${name}: no rungs in ${ladder}`)
     }
     expect(missing.sort(), 'a rung is in a ladder the callable does not list').toEqual([])
     expect(spurious.sort(), 'a callable lists a ladder with nothing of its own in it').toEqual([])
@@ -182,9 +186,10 @@ test('the syntax list IS the compiler’s closed sets — in both directions', (
     // do not write — the same mistake as keying `/docs` by capability. Compared as a set for the same
     // reason the blocks are: a sixth target is red until it has a page.
     const binds = SPELLING_ORDER.filter((slug) => SPELLINGS[slug].gate === 'bind')
-    expect(binds.map((slug) => targetOf(SPELLINGS[slug].name)).sort(), 'the bind pages are not the table').toEqual(
-        [...BIND_TARGETS].sort(),
-    )
+    expect(
+        binds.map((slug) => targetOf(SPELLINGS[slug].name)).sort(),
+        'the bind pages are not the table',
+    ).toEqual([...BIND_TARGETS].sort())
 
     // And each page's rungs WRITE the target it is named after. Having a rung is not enough here: the
     // pages are one edit away from all pointing at the same one, and every one of them would still be
@@ -192,14 +197,18 @@ test('the syntax list IS the compiler’s closed sets — in both directions', (
     const missing: string[] = []
     for (const slug of binds) {
         const target = targetOf(SPELLINGS[slug].name)
-        const shown = RUNGS.some(({ rung }) => rung.spells?.includes(slug) && rung.source.includes(`bind:${target}`))
+        const shown = RUNGS.some(
+            ({ rung }) => rung.spells?.includes(slug) && rung.source.text.includes(`bind:${target}`),
+        )
         if (!shown) missing.push(slug)
     }
     expect(missing.sort(), 'a bind page whose rungs never write its own target').toEqual([])
 })
 
 test('the syntax index is the whole list, once each', () => {
-    expect(SPELLING_ORDER.length, 'the order and the record are different sizes').toBe(Object.keys(SPELLINGS).length)
+    expect(SPELLING_ORDER.length, 'the order and the record are different sizes').toBe(
+        Object.keys(SPELLINGS).length,
+    )
     expect(new Set(SPELLING_ORDER).size, 'a spelling is in the order twice').toBe(SPELLING_ORDER.length)
     const stray = SPELLING_ORDER.filter((slug) => !Object.hasOwn(SPELLINGS, slug))
     expect(stray, 'the order names something the record does not have').toEqual([])
@@ -220,7 +229,8 @@ test('every spelling has at least one rung, and it is where the list says', () =
         }
         if (found === 0) empty.push(slug)
         for (const ladder of actual) if (!declared.has(ladder)) missing.push(`${slug}: rungs in ${ladder}`)
-        for (const ladder of declared) if (!actual.has(ladder)) spurious.push(`${slug}: no rungs in ${ladder}`)
+        for (const ladder of declared)
+            if (!actual.has(ladder)) spurious.push(`${slug}: no rungs in ${ladder}`)
     }
     expect(empty, 'a spelling with no rung — its page would be blank').toEqual([])
     expect(missing.sort(), 'a rung is in a ladder the spelling does not list').toEqual([])
@@ -233,7 +243,8 @@ test('every rung spells something the language has', () => {
     const bogus: string[] = []
     for (const { ladder, at, rung } of RUNGS) {
         for (const slug of rung.spells ?? []) {
-            if (!Object.hasOwn(SPELLINGS, slug as SpellingName)) bogus.push(`${ladder} rung ${at + 1}: "${slug}"`)
+            if (!Object.hasOwn(SPELLINGS, slug as SpellingName))
+                bogus.push(`${ladder} rung ${at + 1}: "${slug}"`)
         }
     }
     expect(bogus.sort(), 'a rung says it demonstrates a spelling with no page').toEqual([])
@@ -274,8 +285,10 @@ test('every callable and every spelling is in exactly ONE topic', () => {
 
     // Doubled: the failure that puts one name in two sections and makes every count disagree.
     const twice: string[] = []
-    for (const [name, topics] of callableIn) if (topics.length > 1) twice.push(`${name}: ${topics.join(', ')}`)
-    for (const [slug, topics] of spellingIn) if (topics.length > 1) twice.push(`${slug}: ${topics.join(', ')}`)
+    for (const [name, topics] of callableIn)
+        if (topics.length > 1) twice.push(`${name}: ${topics.join(', ')}`)
+    for (const [slug, topics] of spellingIn)
+        if (topics.length > 1) twice.push(`${slug}: ${topics.join(', ')}`)
     expect(twice.sort(), 'a name is on two shelves, so the sidebar lists it twice').toEqual([])
 
     // Invented: what a rename leaves behind.
@@ -336,10 +349,16 @@ test('claiming nothing is a decision, not a way to disappear', () => {
     }
 
     const unexpected = [...silent].filter((ladder) => !UNCLAIMED.includes(ladder as LadderName))
-    expect(unexpected.sort(), 'a rung claims neither a name nor a spelling, and its ladder is not excused').toEqual([])
+    expect(
+        unexpected.sort(),
+        'a rung claims neither a name nor a spelling, and its ladder is not excused',
+    ).toEqual([])
 
     const stale = UNCLAIMED.filter((ladder) => !silent.has(ladder))
-    expect(stale.sort(), 'a ladder is listed as claiming nothing but every rung on it claims something').toEqual([])
+    expect(
+        stale.sort(),
+        'a ladder is listed as claiming nothing but every rung on it claims something',
+    ).toEqual([])
 })
 
 test('a ladder has at least two rungs, because one rung is an example wearing an array', () => {
@@ -367,8 +386,11 @@ test('every ladder is reachable, and every rung carries the text of a real file'
         // example sitting beside the first, which is the thing this replaced.
         expect(rung.adds.length, `${where}: says nothing about what it adds`).toBeGreaterThan(8)
         // The text comes through `?source`, which the loader inlines — so an empty string means the
-        // import resolved to nothing rather than that somebody wrote an empty example.
-        expect(rung.source.length, `${where}: the source is empty`).toBeGreaterThan(40)
+        // import resolved to nothing rather than that somebody wrote an empty example. There is no
+        // assertion on the LABEL beside it: it is `basename` of a path that resolved, so it can only
+        // be empty if the path was, which the line above already catches — and an assert that cannot
+        // fail reads as coverage the pane's title does not have.
+        expect(rung.source.text.length, `${where}: the source is empty`).toBeGreaterThan(40)
         // A compiled `.abide` default export, or absent. Anything else renders as `[object Object]`
         // on the reference page rather than failing.
         if (rung.view !== undefined) {
@@ -377,20 +399,6 @@ test('every ladder is reachable, and every rung carries the text of a real file'
     }
 })
 
-/**
- * The one rung on a page that renders NOTHING, and why it is the only one.
- *
- * `36-a-prop-the-child-writes-back.abide` declares its prop `State<string>` and REQUIRED: the cell is
- * the parent's, so there is nothing to mount this component with on its own. Giving it a default would
- * make the cell this component's own and quietly demonstrate the opposite of what it is about, which is
- * a worse answer than a page saying the source is the example.
- *
- * Keyed by `adds` rather than by an index, so reordering the ladder does not silently move the excuse
- * to another rung. Asserted in BOTH directions below, which is what makes this a record of a decision
- * rather than a place to put failures.
- */
-const UNRENDERABLE = new Set(['a prop declared `State<…>` is the parent’s own cell, so the child writes back'])
-
 test('every rung a reader can reach RENDERS — the source is not the example', () => {
     // What `/docs` and `/docs/syntax` put on a page is every rung claiming a name or a spelling, and
     // `#ui/lib/Reference.abide` mounts each one beside its source. Half the ladder used to have no view at
@@ -398,35 +406,27 @@ test('every rung a reader can reach RENDERS — the source is not the example', 
     // a page telling a reader to imagine the result. A rung that crosses the seam is two files now, so
     // "nothing to render" is not one of the shapes a documented rung comes in.
     const blank: string[] = []
-    const excused: string[] = []
     for (const { ladder, at, rung } of RUNGS) {
         const onAPage = rung.of.length > 0 || (rung.spells?.length ?? 0) > 0
         if (!onAPage) continue
-        if (UNRENDERABLE.has(rung.adds)) {
-            excused.push(rung.adds)
-            // An excused rung that grew a view is an excuse to delete, not a test to leave green.
-            expect(rung.view, `${ladder} rung ${at + 1} renders now and is still excused`).toBeUndefined()
-            continue
-        }
         if (rung.view === undefined) blank.push(`${ladder} rung ${at + 1}: ${rung.adds}`)
     }
     expect(blank.sort(), 'a rung is on a page with nothing to show').toEqual([])
-    expect(excused.sort(), 'a rung is excused from rendering and is no longer in the repo').toEqual(
-        [...UNRENDERABLE].sort(),
-    )
 })
 
 test('a rung that crosses the seam shows BOTH files', () => {
-    // `client` is the browser half of a rung whose `source` is a server module, and the page labels the
-    // two panes with the lanes. Two ways it can go wrong that nothing else here would catch: a half that
-    // resolved to nothing, and a half that is the same text as the other — which would be one file shown
-    // twice under two labels, saying the seam is crossed where it is not.
+    // `client` is the SECOND file — usually the browser half of a rung whose `source` is a server
+    // module, and on `template` rung 36 the parent that owns the child's state. The page labels the two
+    // panes with the FILENAMES the loader reported, so the labels cannot drift; what can still go wrong
+    // is the pair itself. Two ways, neither caught anywhere else: a half that resolved to nothing, and a
+    // half that is the same text as the other — one file shown twice, claiming a second file exists.
     const wrong: string[] = []
     for (const { ladder, at, rung } of RUNGS) {
         if (rung.client === undefined) continue
         const where = `${ladder} rung ${at + 1}`
-        if (rung.client.length < 40) wrong.push(`${where}: the browser half is empty`)
-        if (rung.client === rung.source) wrong.push(`${where}: both panes are the same file`)
+        if (rung.client.text.length < 40) wrong.push(`${where}: the second file is empty`)
+        if (rung.client.text === rung.source.text) wrong.push(`${where}: both panes are the same file`)
+        if (rung.client.label === rung.source.label) wrong.push(`${where}: both panes carry one name`)
         // A second file is what the preview was compiled from, so a rung carrying one and rendering
         // nothing is a pane with no reason to be there.
         if (rung.view === undefined) wrong.push(`${where}: two files and nothing to show`)
@@ -441,9 +441,9 @@ test('a rung introduces ONE thing — no two rungs are the same file, or the sam
     const files = new Map<string, string>()
     const labels = new Map<string, string>()
     for (const { ladder, rung } of RUNGS) {
-        const owner = files.get(rung.source)
+        const owner = files.get(rung.source.text)
         expect(owner, `${ladder} shows the same file as ${owner}`).toBeUndefined()
-        files.set(rung.source, ladder)
+        files.set(rung.source.text, ladder)
 
         const said = labels.get(rung.adds)
         expect(said, `${ladder} and ${said} both add "${rung.adds}"`).toBeUndefined()
@@ -486,7 +486,7 @@ test('a ladder GROWS: every rung after the first is about the same thing as the 
     // above it in the same ladder", so the previous entry is that rung and neither index needs a cast.
     let before = new Set<string>()
     for (const { ladder, at, rung } of RUNGS) {
-        const now = words(rung.source)
+        const now = words(rung.source.text)
         if (at > 0) {
             let shared = 0
             for (const word of now) if (before.has(word)) shared++

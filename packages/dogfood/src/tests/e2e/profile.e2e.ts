@@ -69,7 +69,10 @@ test('what each arm RETAINS, and what it made the engine do', async ({ page }) =
         const listed = await page.evaluate(
             () => (globalThis as { abideBench?: BenchHandle }).abideBench?.list() ?? [],
         )
-        expect(listed.length, `/bench/${suite} exposed no arms — is \`exposeBench\` still called?`).toBeGreaterThan(0)
+        expect(
+            listed.length,
+            `/bench/${suite} exposed no arms — is \`exposeBench\` still called?`,
+        ).toBeGreaterThan(0)
 
         console.log(`\n  ${suite} · two windows of ${OPS} ops · retained after a forced collection`)
         console.log(
@@ -117,9 +120,7 @@ test('what each arm RETAINS, and what it made the engine do', async ({ page }) =
     await reading.close()
 
     if (layouts === 0) {
-        console.log(
-            '\n  recalc and layout are zero throughout: every arm above builds into a DETACHED host,',
-        )
+        console.log('\n  recalc and layout are zero throughout: every arm above builds into a DETACHED host,')
         console.log('  which is never styled and never laid out. The counters are live, the work is not.')
     }
 })

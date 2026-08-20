@@ -1,9 +1,9 @@
 // Which tokens are a TYPE, so the desugar leaves them exactly as the author wrote them.
 //
-// A `.abide` `<script>` is TypeScript, and a type carries no expressions: a cell named inside one is
+// A `.abide` `<script>` is TypeScript, and a type carries no expressions: a state named inside one is
 // neither a read nor a binding, and every rewrite must pass over it. Without that, `type A = typeof n`
 // became `typeof n()` — which is not valid TypeScript in any dialect — and, worse, `const a: typeof n`
-// registered `n` as a BINDING, shadowing the cell for the rest of the block so every later read
+// registered `n` as a BINDING, shadowing the state for the rest of the block so every later read
 // silently stopped desugaring and `tsc` had nothing to report.
 //
 // The grammar is the one `shape.ts` already has. Two parsers that could disagree about where a type
@@ -38,7 +38,7 @@ export const TYPE_CAST_KEYWORDS = new Set(['as', 'satisfies', 'implements'])
  * What may sit BEFORE one of those and still leave it a type operator. All three are contextual
  * keywords, so the text alone says nothing: `{ as: 1 }`, `row.as` and `const as = 1` are ordinary
  * JavaScript, and reading them as casts made the whole rest of the expression a type region —
- * which both desugar passes skip, so a cell inside it was never read and nothing reported it.
+ * which both desugar passes skip, so a state inside it was never read and nothing reported it.
  *
  * `ENDS_EXPRESSION` is the operand test the lexer already uses to tell division from a regex.
  * `>` is not in it and is added here for the one shape that needs it, `class C<T> implements I`.
@@ -183,7 +183,7 @@ function annotates(tokens: Token[], nesting: number[], i: number, expression: bo
  *
  * The desugar asks this to scope a binding and this file asks it to tell an annotation from a member
  * value, and the two have to agree — a `:` read as a type here while the desugar reads the enclosing
- * `{` as a literal is a cell that silently stops desugaring, with valid output and no diagnostic.
+ * `{` as a literal is a state that silently stops desugaring, with valid output and no diagnostic.
  */
 export function inObjectLiteral(tokens: Token[], nesting: number[], i: number, expression: boolean): boolean {
     const level = nesting[i] as number
@@ -192,9 +192,9 @@ export function inObjectLiteral(tokens: Token[], nesting: number[], i: number, e
         // A token SHALLOWER than the search level is the end of the search, not a token to skip.
         // Everything between a token and the brace enclosing it sits at or below that brace's own
         // depth, so meeting a shallower one means there is no enclosing brace at this level — and
-        // scanning past it reached a brace in some earlier sibling group. `f(rows, cell)` inside
-        // `function f(rows: { id: number }[])` found the ANNOTATION's brace, read `cell` as being
-        // inside an object literal, and emitted the read as the shorthand `cell: cell()`.
+        // scanning past it reached a brace in some earlier sibling group. `f(rows, state)` inside
+        // `function f(rows: { id: number }[])` found the ANNOTATION's brace, read `state` as being
+        // inside an object literal, and emitted the read as the shorthand `state: state()`.
         if (at < level) return false
         if (at !== level) continue
         const token = tokens[back] as Token
@@ -208,14 +208,14 @@ export function inObjectLiteral(tokens: Token[], nesting: number[], i: number, e
             before.kind === SyntaxKind.ColonToken ||
             before.kind === SyntaxKind.OpenBracketToken ||
             // A ternary's arms are EXPRESSIONS, so a `{` in either of them can only open a literal —
-            // read as a block, `a ? { k: cell } : b` made `k:` a label and the cell inside it a type
-            // annotation, so the cell was never read and the object rendered its own function.
+            // read as a block, `a ? { k: state } : b` made `k:` a label and the state inside it a type
+            // annotation, so the state was never read and the object rendered its own function.
             before.kind === SyntaxKind.QuestionToken ||
             before.kind === SyntaxKind.ReturnKeyword ||
             // `const { a: b } = obj` opens a destructuring PATTERN, and its colon is a key exactly
             // as a literal's is. Read as a block the colon annotated, so `b` landed inside a type
             // region, bound nothing, and every later mention of `b` desugared as though it named an
-            // outer cell — the same silent miscompile a literal's would be, one step earlier.
+            // outer state — the same silent miscompile a literal's would be, one step earlier.
             before.kind === SyntaxKind.ConstKeyword ||
             before.kind === SyntaxKind.LetKeyword ||
             before.kind === SyntaxKind.VarKeyword

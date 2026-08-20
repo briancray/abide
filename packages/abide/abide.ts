@@ -98,9 +98,10 @@ export {
 // without a new caller arriving, so a probe answering only on the next ask would leave an offline
 // banner up after the network came back.
 export { online } from './src/shared/online.ts'
-// `Cell` is the shape `State` and `Memo` both extend — the read, the write and the probes every
-// source carries — so it is the output type behind both of the values below.
-export { type Cell, type Memo, type State, state, watch } from './src/shared/reactive.ts'
+// `State` is THE source type — the read, the write and the probes every one of them carries. `Memo`
+// and `MemoHandle` extend it with the verbs that need a body to re-run, so this is the output type
+// behind everything below and behind `memo` above.
+export { type Memo, type State, state, watch } from './src/shared/reactive.ts'
 // Routing, as an author asks it: where am I, take me there, build me a link. `routes`, `outlet` and
 // `ready` INSTALL and RENDER the table and are on `abide/runtime`, because `abide build` writes the
 // client entry that calls all three — and `RouteEntry` went with them, since the table is the thing

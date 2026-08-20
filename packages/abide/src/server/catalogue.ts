@@ -9,13 +9,15 @@
 // to every transport module it loads, so a handler is reachable exactly when its module was imported
 // — the same rule the runtime already follows for scoped `<style>` blocks.
 
-import type { Channel, KeyedChannel } from '#shared/channel.ts'
+import type { KeyedChannel } from '#shared/channel.ts'
 import { type Declaration, type EndpointShape, EVERY_CLIENT } from '#shared/internal/shapes.ts'
 import type { Kind, Rpc } from '#shared/transport.ts'
 import { describeRpc, describeSocket, policyOf, socketPolicyOf } from './rpc.ts'
 
 type AnyRpc = Rpc<unknown, unknown>
-export type AnySocket = Channel<unknown> & KeyedChannel<unknown, unknown>
+// A socket always SELECTS, so this is the keyed shape alone — `s()` is the stream and `s(args)` is a
+// room. Nothing here reads a declaration as a bare channel.
+export type AnySocket = KeyedChannel<unknown, unknown>
 
 export const RPCS = new Map<string, AnyRpc>()
 export const SOCKETS = new Map<string, AnySocket>()

@@ -9,7 +9,7 @@
 * isomorphism by default — same callable, same name, same *intent* on both sides
 * uses typescript 7 for compiler
 * valid typescript or javascript should always compile — in a `.abide`
-* a cell is read and written BY NAME inside a `.abide` file, and the explicit `x()` / `x.set(v)` spelling must keep compiling — the sugar is over it, never instead of it. Naming a cell alone hands over the CELL; using it in an expression reads it. What counts as a cell is decided SYNTACTICALLY, so nothing in the emit path needs a type-checker and the javascript lane still compiles
+* a state is read and written BY NAME inside a `.abide` file, and the explicit `x()` / `x.set(v)` spelling must keep compiling — the sugar is over it, never instead of it. Naming a state alone hands over the STATE; using it in an expression reads it. What counts as a state is decided SYNTACTICALLY, so nothing in the emit path needs a type-checker and the javascript lane still compiles
 * small and low level client bundle built from compiled .abide
 * value performance when all other conditions are met
 
@@ -37,7 +37,7 @@ the standing bias: reduce machinery rather than layer on it. the rules below are
 
 * use bun apis - not node apis unless necessary. a `node:` import in `packages/abide` names the bun api it stands in for, in the comment
 * favor imperative/procedural over heavy functional abstractions: prefer `for` / `for of` to an iterator chain in any path walked per row, per frame or per node. three or more chained `.map` / `.filter` / `.reduce` over one collection is a loop written the long way, and each link allocates an intermediate — outside hot paths a short chain is fine when it reads better
-* use descriptive variable and function names instead of abbrevations — a name is long enough when a reader who has not opened the callee can say what it returns. the exceptions are `i` / `j` as loop indices and the project's own established terms (cell, seam, arm, face)
+* use descriptive variable and function names instead of abbrevations — a name is long enough when a reader who has not opened the callee can say what it returns. the exceptions are `i` / `j` as loop indices and the project's own established terms (state, seam, arm, face)
 * a named type earns its name with a second reference or an invariant worth stating; a type used at exactly one site belongs inline. narrow or widen an existing type rather than declaring a parallel one-use shape beside it
 * write terse comments only when why is unclear. do not write comments where code is self explanatory — and when something was tried and reverted, record the MECHANISM, not just the outcome; an outcome-only note freezes the decision permanently. dont make comments a log of the past
 * use tailwindcss classes for styling. a `style=` property is for a value computed at runtime — a measured width, a transform from state — and the comment names the value

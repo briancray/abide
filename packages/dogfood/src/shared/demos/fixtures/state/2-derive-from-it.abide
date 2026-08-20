@@ -4,6 +4,6 @@ import { state } from 'abide'
 const count = state(0)
 </script>
 
-<!-- Using a cell in an EXPRESSION reads it, so nothing here has to be declared as a dependency. -->
+<!-- Using a state in an EXPRESSION reads it, so nothing here has to be declared as a dependency. -->
 <p>count {count} · doubled {count * 2}</p>
 <button onclick={() => count++}>add one</button>

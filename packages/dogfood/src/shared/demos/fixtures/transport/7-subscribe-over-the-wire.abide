@@ -3,7 +3,7 @@ import { rooms } from '#server/sockets/feed.ts'
 import { state } from 'abide'
 
 const said = state('hello')
-// The connection opens on the READ, so nothing is subscribed until this is set — a socket opened
+// The connection opens on the first ASK, so nothing is subscribed until this is set — a socket opened
 // while the preview mounted would be one `#shared/demos/proofs.ts` had to wait on. See rung 1.
 const joined = state(false)
 </script>

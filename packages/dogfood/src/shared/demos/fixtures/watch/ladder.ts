@@ -17,7 +17,7 @@ import Five from './5-the-return-is-the-teardown.abide'
 import FIVE from './5-the-return-is-the-teardown.abide?source'
 
 export const LADDER: Example[] = [
-    { adds: 'reading a cell inside a `watch` IS the subscription', of: ['watch'], source: ONE, view: One },
+    { adds: 'reading a state inside a `watch` IS the subscription', of: ['watch'], source: ONE, view: One },
     { adds: 'the dependency set is whatever the LAST RUN read', of: ['watch'], source: TWO, view: Two },
     {
         adds: 'declare the dependency instead, so the handler reads without subscribing',
@@ -25,6 +25,11 @@ export const LADDER: Example[] = [
         source: THREE,
         view: Three,
     },
-    { adds: 'the same declaration spelled off the source it is about', of: ['watch'], source: FOUR, view: Four },
+    {
+        adds: 'the same declaration spelled off the source it is about',
+        of: ['watch'],
+        source: FOUR,
+        view: Four,
+    },
     { adds: 'what the handler RETURNS is the teardown', of: ['watch'], source: FIVE, view: Five },
 ]

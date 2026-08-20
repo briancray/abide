@@ -26,8 +26,6 @@ import { compile } from 'abide/compiler'
 import * as frontDoor from 'abide'
 import { APP_ROOT as DOGFOOD_ROOT, REPO_ROOT } from '#tests/PATHS.ts'
 
-
-
 /**
  * The dogfood app's own APP, which is the standard SPEC names — its pages, what answers them, and what
  * they are made of. Not the demos, the tests or their fixtures: those exercise the framework rather
@@ -150,7 +148,8 @@ const UNUSED_BY_THE_APP: Record<string, string> = {
         'only `/docs/socket`’s preview does, which is a demonstration rather than a use.',
     health: 'no page of the app’s own shows its account of whether it is working; `/docs/health` asks for it.',
     invalidate: 'nothing the app serves is ever dropped as WRONG — no page mutates what another page read.',
-    navigate: 'every link in `#ui/pages/layout.abide` is an `<a href>`; only `/docs/navigate`’s preview moves from code.',
+    navigate:
+        'every link in `#ui/pages/layout.abide` is an `<a href>`; only `/docs/navigate`’s preview moves from code.',
     online: 'no page reacts to connectivity — there is no offline banner to put behind it.',
     raw:
         'nothing this app serves is markup it did not build — the painted `<pre>` and the source panes ' +
@@ -166,7 +165,8 @@ test('every value on the front door is typed by the app, or is a KNOWN gap', asy
     let scanned = 0
     for await (const file of new Bun.Glob(AUTHORING_LANES).scan(DOGFOOD_ROOT)) {
         scanned++
-        for (const name of importedFromAbide(await Bun.file(`${DOGFOOD_ROOT}/${file}`).text())) typed.add(name)
+        for (const name of importedFromAbide(await Bun.file(`${DOGFOOD_ROOT}/${file}`).text()))
+            typed.add(name)
     }
     expect(scanned, 'the app scan matched no files — the glob is wrong, not the app').toBeGreaterThan(20)
 
@@ -184,7 +184,9 @@ test('every value on the front door is typed by the app, or is a KNOWN gap', asy
     // Both directions in one comparison. A new name on the left is surface the app does not exercise;
     // a name left on the right is an excuse that has outlived its reason and leaves in the same change
     // as the page that made it false.
-    expect(untyped.sort(), 'the app’s unused front-door values').toEqual(Object.keys(UNUSED_BY_THE_APP).sort())
+    expect(untyped.sort(), 'the app’s unused front-door values').toEqual(
+        Object.keys(UNUSED_BY_THE_APP).sort(),
+    )
 })
 
 test('every acknowledged gap says why', () => {

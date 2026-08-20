@@ -2,10 +2,10 @@
 // RECEIVES them. It is the push face of the same atom, which is why it carries the same read
 // vocabulary: iterate it, or call it.
 //
-// It is CALLABLE for the same reason a cell is — `feed()` is the latest message, subscribing the
+// It is CALLABLE for the same reason a state is — `feed()` is the latest message, subscribing the
 // caller. A read has no second name here: every source spells it by being called.
 //
-// The reactive reads go through a `state` cell, so a component reading `feed()` re-renders on
+// The reactive reads go through a `state`, so a component reading `feed()` re-renders on
 // publish with no bridging code — the pub/sub side and the graph are not two systems.
 //
 // `channel<T, Args>()` splits the same stream into ROOMS. The call is what tells them apart: with no
@@ -18,6 +18,7 @@ import { keyOf, matcher } from './internal/keys.ts'
 import { isNamedError } from './internal/probes.ts'
 import { storeForLazy } from './internal/scopes.ts'
 import { arm, NO_LIMIT } from './internal/timers.ts'
+import type { Selecting } from './memo.ts'
 import { state, watch } from './reactive.ts'
 
 // One shared empty array, so a `chunks()` reader on a channel with no retention sees the same
@@ -45,7 +46,7 @@ const FORGET_ROOM = new WeakMap<object, () => void>()
 // The constant probes, one per process rather than one per channel. A channel is built per ROOM —
 // `remoteSocket`'s `connect` builds one per address — and these five answers are fixed at
 // construction, so a closure apiece is five allocations buying nothing. See the note at their
-// assignment for WHY they are constants rather than cells.
+// assignment for WHY they are constants rather than states.
 const NEVER_TRUE = (): boolean => false
 const ALWAYS_TRUE = (): boolean => true
 const NO_ERROR = (): undefined => undefined
@@ -89,12 +90,20 @@ export interface Channel<T> {
     [Symbol.asyncIterator](): AsyncIterator<T>
 }
 
-/** The `Args`-addressed form: the CALL selects a room, and everything else is read off the room. */
+/**
+ * The `Args`-addressed form: the CALL selects a room, and everything else is read off the room.
+ *
+ * `Selecting` rather than `(args: Args)`, so the omitted call means `{}` exactly as it does on a
+ * keyed memo — which is what lets `socket` be this shape whether or not it declares a room. A
+ * required field stays required, so a `channel` keyed by one is unchanged.
+ */
 export interface KeyedChannel<Args, T> {
-    (args: Args): Channel<T>
+    (...select: Selecting<Args>): Channel<T>
     /**
      * Every room MATCHING the pattern — a subset of the args, compared the way rooms are keyed. No
-     * pattern means every room, and the stream the bare `ch()` reads along with them.
+     * pattern means every room, and on a `channel` the bare stream along with them. A `socket` is this same
+     * shape with no bare stream at all — its omitted call is the `{}` ROOM, the way an rpc's is the
+     * `{}` slot — so there is nothing extra for a bare `invalidate()` to reach there.
      */
     invalidate(pattern?: Partial<Args>): void
 }
@@ -131,10 +140,27 @@ export interface ChannelOptions {
 }
 
 /**
+ * The room a DECLARATION holds, exempt from the last-subscriber sweep.
+ *
+ * `FORGET_ROOM` bounds a table an arriving connection can grow without limit — a room is named by
+ * whoever selects one, so what goes is exactly what nothing can reach. A room the declaration itself
+ * holds is reachable by definition, and it is what `socket()`'s `s()` hands every caller: it carries
+ * the retention `tail` promises across a gap with no connections, exactly as the bare stream it
+ * replaced did. Sweeping it dropped the transcript every time the last client disconnected, and left
+ * a server holding the room publishing into an orphan.
+ *
+ * Off the `abide` barrel deliberately — the two laws' declarations are the only things that hold a
+ * room, and a caller that could pin one could grow the table this bounds.
+ */
+export function holdRoom<T>(room: Channel<T>): void {
+    FORGET_ROOM.delete(room)
+}
+
+/**
  * One stream of messages anyone may publish to and anyone may subscribe to.
  *
- * A `Channel` is not a cell: it has no value to read, only messages that arrive. `state(channel())`
- * is what turns one into a cell holding the latest.
+ * A `Channel` is not a state: it has no value to read, only messages that arrive. `state(channel())`
+ * is what turns one into a state holding the latest.
  */
 export function channel<T>(options?: ChannelOptions): Channel<T>
 export function channel<T, Args>(options?: ChannelOptions): KeyedChannel<Args, T>
@@ -149,7 +175,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
 
     // --- what is held, and what WAKES for it -------------------------------
     //
-    // Three cells rather than one envelope, for the reason `graph.ts` keeps four one-bit nodes
+    // Three states rather than one envelope, for the reason `graph.ts` keeps four one-bit nodes
     // instead of a status record: a record rebuilt per publish is never identity-equal to the one
     // before it, so every cutoff downstream stops cutting off and every reader wakes for every
     // message. `settled()` moves once in a channel's life and `chunks()` on a channel with no
@@ -164,7 +190,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
     /** Flips once and then holds, so a `settled()` reader wakes once rather than per publish. */
     const got = state(false)
 
-    // The payload the cells above are the signal FOR. Plain fields: nothing subscribes to them, and
+    // The payload the states above are the signal FOR. Plain fields: nothing subscribes to them, and
     // a reader that woke on a version reads them on the way past.
     let latest: T | undefined
     /** When `latest` arrived. Written and consulted only under `maxAge`. */
@@ -263,13 +289,13 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
         if (dropped > 0) {
             compact()
             view = null
-            transcript.set(transcript.peek() + 1)
+            transcript.set(transcript.peek()! + 1)
         }
         if (staleLatest) {
             latest = undefined
             at = 0
             got.set(false)
-            messages.set(messages.peek() + 1)
+            messages.set(messages.peek()! + 1)
         }
         schedule()
     }
@@ -306,13 +332,13 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
             if (buffer.length - head > tail) head++
             compact()
             view = null
-            transcript.set(transcript.peek() + 1)
+            transcript.set(transcript.peek()! + 1)
         }
         // No retention means the transcript never moved, so `transcript` was not bumped and a
         // `chunks()` reader on this channel does not wake — it would only be handed the same shared
         // empty array it already has.
         got.set(true)
-        messages.set(messages.peek() + 1)
+        messages.set(messages.peek()! + 1)
         if (ages) schedule()
         // Delivery is against a SNAPSHOT: a listener that subscribes while this message is going out
         // must not receive it, and one that unsubscribes must still finish this round. The copy is
@@ -345,7 +371,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
      * `tail` messages. What is O(tail) is this read, at ~0.35 ns per retained item, which is a read of
      * n items costing n. A second `chunks()` with no publish between costs nothing; `view` is why.
      *
-     * A cell hands back its buffer uncopied (`graph.ts`'s `read.chunks`) and this cannot: a cell's
+     * A state hands back its buffer uncopied (`graph.ts`'s `read.chunks`) and this cannot: a state's
      * transcript never evicts, so its buffer IS its window, while this one carries a dead head. The
      * only way to drop the copy is to keep `head` at 0, which means compacting per eviction — O(tail)
      * per publish, the exact trade the cursor exists to avoid. Measured, not argued; do not re-open it
@@ -368,7 +394,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
             clearTimeout(expiry)
             expiry = null
         }
-        // Asked BEFORE the reset, and separately, for the reason the three cells exist at all: a
+        // Asked BEFORE the reset, and separately, for the reason the three states exist at all: a
         // room with nothing in it has no transcript to forget and no message to un-say, so an
         // unguarded bump woke every reader of every idle room on a bulk `invalidate(pattern)` and
         // handed each one back exactly what it already had. `expire` guards the same two writes.
@@ -381,11 +407,11 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
         head = 0
         view = NO_MESSAGES
         got.set(false)
-        if (hadWindow) transcript.set(transcript.peek() + 1)
-        if (hadMessage) messages.set(messages.peek() + 1)
+        if (hadWindow) transcript.set(transcript.peek()! + 1)
+        if (hadMessage) messages.set(messages.peek()! + 1)
     }
     // All five cold answers spelled as the constants they are. `messages` is only ever handed a
-    // number, so routing the first three through it asked a cell that can never load: the first
+    // number, so routing the first three through it asked a state that can never load: the first
     // probe built it an `Async` tracker — six nodes, each with its own observer Set — and every read
     // then SUBSCRIBED the calling effect to a node that provably never moves, so a template slot
     // holding `feed.pending()` accumulated a dead subscription per re-run for an answer fixed at
@@ -406,7 +432,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
             // The LAST subscriber leaving is what forgets a ROOM. Rooms are named by whoever selects
             // one — a socket's comes off the query string of the request that upgraded — so a table
             // that only ever grows is one an arriving connection can grow without a bound, and a
-            // room holds a retention and three cells. What goes is exactly what nothing can reach:
+            // room holds a retention and three states. What goes is exactly what nothing can reach:
             // a room nobody is subscribed to is a transcript nobody will be handed. The bare channel
             // has no owner to be forgotten by and carries no entry here.
             if (listeners.size === 0) FORGET_ROOM.get(self)?.()
@@ -492,9 +518,9 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
 
 /**
  * A channel declared at MODULE scope, resolved per caller — what a `<script module>` binding compiles
- * to, and the same answer `state.scoped` gives a cell.
+ * to, and the same answer `state.scoped` gives a state.
  *
- * A channel is a BUS, so the leak is louder than a cell's: at module scope on a server one process
+ * A channel is a BUS, so the leak is louder than a state's: at module scope on a server one process
  * holds every visitor's subscribers, and a publish for one of them wakes all the rest. Per caller it
  * is one bus per request and one per client page, which is what "module scope" already means to
  * whoever wrote it.

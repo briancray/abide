@@ -266,7 +266,7 @@ export function onConfig<Extra extends object = Record<never, never>>(
 
 /**
  * What the process was TOLD: the flags, the environment, whatever `serve()` was handed. A process
- * fact, resolved once and read synchronously — so it is a call rather than a cell, and it never
+ * fact, resolved once and read synchronously — so it is a call rather than a state, and it never
  * changes under a request.
  */
 export const config: Configured = (<Extra extends object>(): Config & Extra => {

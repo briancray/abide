@@ -20,7 +20,7 @@ export class AssertionError extends Error {
 /**
  * Structural, one level of container at a time: primitives by `Object.is`, arrays and plain objects
  * field by field, `Error` by name and message. Deliberately shallow on anything else — a comparison
- * that silently walks a DOM node or a cell is a comparison nobody can predict.
+ * that silently walks a DOM node or a state is a comparison nobody can predict.
  */
 export function equals(actual: unknown, expected: unknown): boolean {
     if (Object.is(actual, expected)) return true
@@ -45,7 +45,7 @@ export function equals(actual: unknown, expected: unknown): boolean {
         )
     }
 
-    // Anything with a prototype of its own — a cell, a DOM node, a Map — compares by identity, which
+    // Anything with a prototype of its own — a state, a DOM node, a Map — compares by identity, which
     // `Object.is` already answered `false` for.
     if (Object.getPrototypeOf(actual) !== Object.prototype) return false
     if (Object.getPrototypeOf(expected) !== Object.prototype) return false

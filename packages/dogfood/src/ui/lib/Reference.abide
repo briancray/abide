@@ -19,13 +19,18 @@
      interpolating what it returns is ordinary content in a slot — which means the preview
      server-renders with the page instead of waiting for a client to mount it.
 
-     EVERY rung, including the ones whose subject is a server module. Half of them had no preview at
-     all while a rung was one file: a lifecycle hook and an endpoint have nothing to render BY
-     THEMSELVES, and the answer read as "the source is the example" — which is a page telling a reader
-     to imagine the result. A rung that crosses the seam is two files instead, the second being the
-     browser half that calls the first, and the preview is that half mounted. It is driven by a button
-     rather than loaded on sight, because `#shared/demos/proofs.ts` renders every view on both substrates and
-     compares them: a preview that fetched while it mounted would be asserting a round trip.
+     EVERY rung, with no exceptions. Half of them had no preview at all while a rung was one file: a
+     lifecycle hook and an endpoint have nothing to render BY THEMSELVES, and the answer read as "the
+     source is the example" — which is a page telling a reader to imagine the result. A rung like that
+     is TWO files instead, and the second one is the preview. Crossing the seam is the usual reason and
+     was for a while the only one, the second file being the browser half that calls the first; a
+     component whose prop is the PARENT's held has nothing to mount it with either, and there the
+     second file is the parent. Which is why the panes are labelled with FILENAMES: `server` / `client`
+     was a true pair right up until two files were in the same lane.
+
+     A server-backed preview is driven by a button rather than loaded on sight, because
+     `#shared/demos/proofs.ts` renders every view on both substrates and compares them: a preview that
+     fetched while it mounted would be asserting a round trip.
 
      What the repo ASSERTS about the name is not listed here at all. The cases run on `/tests/<suite>`
      and are priced on `/bench/<suite>`, so a title-and-note copy of them on this page was a third view
@@ -34,21 +39,22 @@
 import type { Example } from 'harness'
 import { proofsOf } from '#shared/demos/proofs.ts'
 import { type SpellingName, SPELLINGS } from '#shared/demos/SPELLINGS.ts'
-import type { SourceFile } from '#shared/demos/usecases/SOURCES.ts'
+import type { SourceFile } from 'abide/compiler'
 import Code from './Code.abide'
 import Files from './Files.abide'
 import Proofs from './Proofs.abide'
 import type { NavItem } from './sidebar.ts'
 
 /**
- * A rung's files, named for the LANES — because which lane a file is in is the whole of what
- * `server/rpc/**` decides, and a rung that crosses the seam is the declaration plus the browser half
- * that calls it. `server` first: it is what the rung is about, and the client half is how you reach it.
+ * A rung's files, the one it is ABOUT first — the second is how you reach it.
+ *
+ * The labels are the FILENAMES the loader reported and are not written here at all. They used to be
+ * the two LANES, `server` and `client`, which was true of every two-file rung while the only reason to
+ * have two was crossing the seam. A component whose prop is the parent's state is two files in ONE
+ * lane, and `client` over a parent is a tab that lies.
  */
 function filesOf(rung: Example): SourceFile[] {
-    const files: SourceFile[] = [{ label: 'server', source: rung.source }]
-    if (rung.client !== undefined) files.push({ label: 'client', source: rung.client })
-    return files
+    return rung.client === undefined ? [rung.source] : [rung.source, rung.client]
 }
 
 /**

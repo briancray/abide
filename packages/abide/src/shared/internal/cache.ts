@@ -57,7 +57,7 @@ export class Bounded {
 
     /**
      * The CACHE forgets this row; the value is not destroyed. Whoever already holds the handle keeps
-     * a working cell, and the next select builds a fresh one — which is the whole of what an
+     * a working state, and the next select builds a fresh one — which is the whole of what an
      * eviction means. The tag goes with it, or the registry keeps naming a row nothing can reach.
      */
     evict(): void {

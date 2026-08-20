@@ -9,8 +9,8 @@ const seen = state(0)
  * way, and one line holding two function bodies is not a shape anybody can read.
  *
  * Both halves are the sugar: inside a function body `name` is a read and `name = …` is the write, so
- * an accessor pair needs no different spelling from anywhere else. Only the `{cell}` handed to a
- * `bind:` or a prop is the cell itself, and that is exactly what this pair is standing in for.
+ * an accessor pair needs no different spelling from anywhere else. Only the `{state}` handed to a
+ * `bind:` or a prop is the state itself, and that is exactly what this pair is standing in for.
  */
 const trimmed = {
     get: () => name,
@@ -21,8 +21,8 @@ const trimmed = {
 }
 </script>
 
-<!-- The escape hatch for a bind: an explicit `{get, set}` pair instead of a cell, for when the thing on
+<!-- The escape hatch for a bind: an explicit `{get, set}` pair instead of a state, for when the thing on
      screen is not the thing you keep. Here the field is trimmed on the way in and counted, so the two
-     directions are not the same value in both — which a cell alone cannot express. -->
+     directions are not the same value in both — which a state alone cannot express. -->
 <input bind:value={trimmed} />
 <p>hello {name} · {seen} edits</p>

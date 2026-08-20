@@ -3,7 +3,7 @@ import { arriving } from '#server/rpc/docs/responses/answer-as-they-arrive.ts'
 import { state } from 'abide'
 
 // The same framing as the two rungs above, with the loop moved into the MARKUP. `{#for await}`
-// iterates the cell itself rather than its value, so each row is appended as it LANDS and there is
+// iterates the state itself rather than its value, so each row is appended as it LANDS and there is
 // nothing to collect it into — where rung 5 holds the transcript and renders it, this holds nothing
 // at all. Either framing reaches this block; the head names the call, not the content type.
 //

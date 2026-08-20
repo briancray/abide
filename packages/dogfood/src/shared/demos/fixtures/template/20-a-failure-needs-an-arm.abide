@@ -8,9 +8,9 @@ const name = state('ada')
  *
  * MODULE scope, which for a refusing load is the difference between a demonstration and a page that
  * throws. `state.shared` takes its initial EAGERLY and does not consult it once the key is filled, so
- * every evaluation after the first builds a promise the cell never adopts — and a rejecting promise
+ * every evaluation after the first builds a promise the state never adopts — and a rejecting promise
  * nobody adopted is an unhandled rejection, once per instance beyond the first. Here the binding is
- * the wrap's thunk: the promise is built once per caller and the cell holds it.
+ * the wrap's thunk: the promise is built once per caller and the state holds it.
  */
 const record = state<string>(
     new Promise((_, refuse) => setTimeout(() => refuse(new Error('no such row')), 100)),

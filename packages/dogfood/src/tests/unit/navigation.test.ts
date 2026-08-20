@@ -284,7 +284,7 @@ afterEach(async () => {
     panel = deferred()
     // Back to a route none of the targets below is, because a navigation is only SERVED when the
     // client cannot already paint it — and every test in this file is about the served path. The
-    // route cells belong to the document's one caller and outlive a mount, so without this the second
+    // route states belong to the document's one caller and outlive a mount, so without this the second
     // `/users/N` in the file is a same-route move that `navigate` answers locally and none of the
     // streaming assertions below have a stream to make.
     //
@@ -893,7 +893,9 @@ test('a depth header that is not a count is handed to the BROWSER, not read as z
         // And the load-bearing half — the chrome is still there, because the fragment was NOT painted
         // into the outlet's range on top of it.
         expect(into.querySelector('#chrome'), 'the layout was replaced by a body missing it').not.toBeNull()
-        expect(into.textContent, 'a fragment was placed against a depth nothing could read').not.toContain('cart')
+        expect(into.textContent, 'a fragment was placed against a depth nothing could read').not.toContain(
+            'cart',
+        )
     } finally {
         view.dispose()
     }

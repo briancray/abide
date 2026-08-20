@@ -2,7 +2,7 @@
 import { props } from 'abide'
 
 // Rung 19's row, lifted out into a component of its own. `props<T>()` is the parameter a compiled
-// component is written in, and naming a prop READS it — exactly as naming a cell does — so the
+// component is written in, and naming a prop READS it — exactly as naming a state does — so the
 // template below says `{row}` and never `{props().row}`.
 const { row = 'alpha' } = props<{ row?: string }>()
 </script>

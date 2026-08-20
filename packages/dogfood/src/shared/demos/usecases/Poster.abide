@@ -1,12 +1,13 @@
 <script>
-import { props, type State } from 'abide'
+import { props } from 'abide'
 import type { Media } from './media.ts'
 import Progress from './Progress.abide'
 
-// `details` is declared as a CELL, not a boolean: a prop is recognised as reactive at the binding
-// from its type in `T`, so `details?: boolean` would have taken a value read once at construction
-// and every later toggle would have changed nothing — silently, with the right output on screen.
-const { media, details } = props<{ media: Media; details: State<boolean> }>()
+// `details` is the boolean it is. It was declared `State<boolean>` on the claim that a plain
+// `details?: boolean` would be read once at construction and never move again — which was never true:
+// EVERY prop is a state whatever the type says, so both spellings emit the same `propState` and the
+// parent's toggle reaches this component either way. `.abide` refuses the source spelling now.
+const { media, details } = props<{ media: Media; details: boolean }>()
 </script>
 
 <!-- Modelled on ~/code/media's `MediaPoster`: a nested component, a slot, and the branch chain its

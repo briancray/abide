@@ -21,13 +21,13 @@
         "dev": "bun run --filter dogfood dev",
         "build": "bun run --filter dogfood build",
         "dogfood": "bun run build && bun run --filter dogfood start",
-        "check": "biome check .",
-        "check:fix": "biome check --write .",
-        "lint": "biome lint .",
-        "format": "biome format --write ."
+        "check": "biome check packages editors/tree-sitter-abide playwright.config.ts package.json tsconfig.json biome.jsonc",
+        "check:fix": "biome check --write packages editors/tree-sitter-abide playwright.config.ts package.json tsconfig.json biome.jsonc",
+        "lint": "biome lint packages editors/tree-sitter-abide playwright.config.ts package.json tsconfig.json biome.jsonc",
+        "format": "biome format --write packages editors/tree-sitter-abide playwright.config.ts package.json tsconfig.json biome.jsonc"
     },
     "devDependencies": {
-        "@biomejs/biome": "^2.5.7",
+        "@biomejs/biome": "^2.5.9",
         "@playwright/test": "^1.62.1",
         "@types/bun": "latest",
         "typescript": "^7.0.2"

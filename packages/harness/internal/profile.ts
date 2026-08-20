@@ -89,7 +89,15 @@ export function facesOf(spec: {
  * answer there rather than a zero.
  */
 export function profileOf(
-    spec: { title: string; note?: string; run?: unknown; server?: unknown; visit?: unknown; interact?: unknown; bench?: unknown },
+    spec: {
+        title: string
+        note?: string
+        run?: unknown
+        server?: unknown
+        visit?: unknown
+        interact?: unknown
+        bench?: unknown
+    },
     held: { status: () => Status; lines: () => LogLine[] },
     suite: string,
     row?: BenchRow,

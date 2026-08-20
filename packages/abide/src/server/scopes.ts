@@ -6,7 +6,7 @@
 // script and knows nothing about this file — installing the source from here is what keeps the
 // browser bundle free of a shim it would never use.
 //
-// The ambients are plain reads, not cells. A server render is a snapshot: there is nothing to wake
+// The ambients are plain reads, not states. A server render is a snapshot: there is nothing to wake
 // later, so a `request()` that could change would be answering a question nobody can re-ask.
 
 // `AsyncLocalStorage` has no `Bun.*` spelling — Bun implements the node module and nothing else.

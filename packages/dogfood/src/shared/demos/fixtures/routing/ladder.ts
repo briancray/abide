@@ -38,7 +38,7 @@ import TEN from './10-replace-and-keep-the-scroll.abide?source'
 export const LADDER: Example[] = [
     { adds: 'read where you are — the PATTERN, and the segments', of: ['route'], source: ONE, view: One },
     {
-        adds: 'the other two reads, and why they are separate cells rather than one record',
+        adds: 'the other two reads, and why they are separate states rather than one record',
         of: ['route'],
         source: TWO,
         view: Two,

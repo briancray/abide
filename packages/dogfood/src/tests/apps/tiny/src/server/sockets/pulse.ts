@@ -7,4 +7,4 @@ import { socket } from 'abide/server'
 
 export const pulse = socket<{ n: number }>({ channel: { tail: 4 } })
 
-for (let n = 1; n <= 3; n++) pulse.publish({ n })
+for (let n = 1; n <= 3; n++) pulse().publish({ n })

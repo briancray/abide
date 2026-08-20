@@ -91,7 +91,7 @@ const PASSES = 9
  * How far off `BATCH_TARGET_MS` a pass may land before its batch is resized.
  *
  * A batch is sized once, against the world as it stood before any arm had run — and that world moves.
- * One bench took TWO MINUTES for want of this: its first arm writes a cell that a later arm's lazy
+ * One bench took TWO MINUTES for want of this: its first arm writes a state that a later arm's lazy
  * fixture mounts a thousand-row list onto, so the arm calibrated at 125 ns an op, was 21 µs an op by
  * the time it was measured, and spent nine passes of 320,000 iterations discovering it. The sample
  * stays honest either way — it is elapsed ÷ ops whatever the batch — so what the resize buys back is

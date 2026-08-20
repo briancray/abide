@@ -102,16 +102,18 @@ test('the composite takes each field at its least-contaminated end', async () =>
 
     // And bytes that DISAGREE between trials are a bug in the render, not something to average.
     let widening = 0
-    await expect(
-        serverWorkOver(() => 'x'.repeat(++widening), 2),
-    ).rejects.toThrow(/produced \d+ bytes and then \d+/)
+    await expect(serverWorkOver(() => 'x'.repeat(++widening), 2)).rejects.toThrow(
+        /produced \d+ bytes and then \d+/,
+    )
 })
 
 test('a real abide render reports all four numbers', async () => {
     // The end-to-end shape: `render` is an async generator, so this is the drain path, and the case
     // exists to prove the API takes what `abide/server` actually hands back rather than a string.
     const rows = state(['alpha', 'beta', 'gamma'])
-    const work = await serverWork(() => render(html`<ul>${() => rows().map((r) => html`<li>${r}</li>`)}</ul>`))
+    const work = await serverWork(() =>
+        render(html`<ul>${() => rows().map((r) => html`<li>${r}</li>`)}</ul>`),
+    )
 
     expect(work.bytes, 'the render produced no bytes').toBeGreaterThan(20)
     expect(work.ms, 'the render took no time').toBeGreaterThanOrEqual(0)

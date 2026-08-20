@@ -6,19 +6,24 @@
      the data builder behind it, the components it composes, and for `data` the endpoint as well. Four
      files is not a pair, and the alternative to widening was a second tab strip beside this one.
 
+     The LABELS come from the loader — `?source` hands back the file's name with its text — so a tab
+     names the file in the pane by construction. They were hand-written on both sides of this and one
+     of the two vocabularies was already wrong: `server` / `client` names LANES, and the rung that
+     needed a parent rather than a browser half had two files in one lane.
+
      Stacked panes were what it replaced, one under the other with a label over each. That reads as
      several examples rather than as the halves of one: everything after the first is below the fold, so
      the page's answer to "what do I write" is the part a reader scrolls past.
 
      A COMPONENT rather than a branch inside a caller, because which file is showing is per POSITION —
-     six rungs on a page hold six of these, and `{#for}` gives each its own. The alternative is one cell
+     six rungs on a page hold six of these, and `{#for}` gives each its own. The alternative is one state
      in the page keyed by rung, which is the same state with an index to keep in step.
 
      One file is still one pane and NO tab strip: a lone tab is chrome that says nothing, and most of
      the ladder is one file. -->
 <script>
 import { props, state } from 'abide'
-import type { SourceFile } from '#shared/demos/usecases/SOURCES.ts'
+import type { SourceFile } from 'abide/compiler'
 import Code from './Code.abide'
 
 const { files } = props<{ files: SourceFile[] }>()
@@ -31,7 +36,7 @@ const { files } = props<{ files: SourceFile[] }>()
  *
  * The same value on both substrates, which is what keeps a rung's own proof honest:
  * `#shared/demos/proofs.ts` renders every view on a server, mounts it on a client and compares, and a
- * tab remembered anywhere outside this cell would be a third thing that has to agree.
+ * tab remembered anywhere outside this state would be a third thing that has to agree.
  */
 const showing = state(0)
 </script>
@@ -62,6 +67,6 @@ const showing = state(0)
          so it indexes a file that exists — but an index signature says otherwise and a slot is its own
          thunk that no narrowing crosses into. -->
     <div class="code-block">
-        <Code source={files[showing]?.source ?? ''}/>
+        <Code source={files[showing]?.text ?? ''}/>
     </div>
 </div>

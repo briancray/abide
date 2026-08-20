@@ -2,7 +2,7 @@
 //
 // Two facts shape this file. The first is that a case's log is APPENDED to and read whole: pushing a
 // line must not cost a copy of every line before it, so the lines live in one array with a version
-// cell beside them and the snapshot is taken on the read that follows. The second is that the cases
+// state beside them and the snapshot is taken on the read that follows. The second is that the cases
 // on a page must run ONE AT A TIME — the DOM counters `harness/measure` installs are global and a
 // `measureFlush` window is a few microtasks wide, so a case started beside another has its work
 // billed to whichever one is measuring. `a write costs one text write` read 25 that way, and drifted
@@ -23,7 +23,7 @@ export type Status = 'waiting' | 'running' | 'passing' | 'failed' | 'interactive
 
 export interface Running {
     status: State<Status>
-    /** Every line so far. A snapshot per FLUSH, not per line — see the version cell below. */
+    /** Every line so far. A snapshot per FLUSH, not per line — see the version state below. */
     lines: () => LogLine[]
     /** Where a line that is not the case's own goes — the throw that ended it. */
     sink: Sink
@@ -46,13 +46,13 @@ export interface Running {
  * No host: a live area is a browser's, and this is built during a render that may be happening on a
  * server. `collector()` from the harness is what actually holds the lines, so "a live line REPLACES
  * the last one with its label" is implemented once and is the same rule headless and on screen. The
- * only thing added here is the version cell — the array is mutated in place, and a cell handing back
+ * only thing added here is the version state — the array is mutated in place, and a state handing back
  * the same array identity would wake nobody.
  */
 export function running(): Running {
     const collected = collector()
     const written = state(0)
-    const bump = (): void => written.set(written.peek() + 1)
+    const bump = (): void => written.set(written.peek()! + 1)
 
     return {
         status: state<Status>('waiting'),
@@ -172,7 +172,11 @@ async function start(spec: Case, held: Running): Promise<void> {
         if (spec.visit !== undefined) {
             const frame = await framed(host)
             if (frame === null) {
-                held.sink.line({ label: 'no frame', value: 'this lane cannot give a case a document', kind: 'note' })
+                held.sink.line({
+                    label: 'no frame',
+                    value: 'this lane cannot give a case a document',
+                    kind: 'note',
+                })
             } else {
                 await spec.visit(ctx, frame)
             }

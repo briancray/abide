@@ -68,10 +68,10 @@ export function storeFor<T>(owner: object, make: () => T, fallback: T): T {
  * The same store, for an owner whose fallback COSTS something to build.
  *
  * Two functions rather than one taking `T | (() => T)`, because the difference is real and is paid
- * per call: every caller of `storeFor` above already holds its fallback — a map, a cell, a router —
+ * per call: every caller of `storeFor` above already holds its fallback — a map, a state, a router —
  * and a `typeof` on that hot path would be a check for a case none of them have.
  *
- * A cell is the case that needs this. Constructing one RUNS its initial, so an eager fallback starts
+ * A state is the case that needs this. Constructing one RUNS its initial, so an eager fallback starts
  * a promise or a stream at module load — on a server, once for the process, before any request
  * exists — which is the exact thing scoping it was for. Constructing a memo runs nothing, which is
  * why `scopedArgless` can build its own eagerly and this cannot.

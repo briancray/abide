@@ -142,7 +142,7 @@ rows), array, template, and the `String(node)` fallback. Four can:
 | arm | what it does | verdict |
 | --- | --- | --- |
 | `function` | `emitProduced(thunk)` — see 7 | may block |
-| `Component` | `emitProduced(() => view(cellProps(props)))` | may block, and starts nothing until called |
+| `Component` | `emitProduced(() => view(stateProps(props)))` | may block, and starts nothing until called |
 | `Boundary` | `emitProduced(() => settledBoundary(node))` | body runs synchronously; its holes are already in flight |
 | `Awaited` | pending arm + document → defer; else block | the decision in 1 |
 | `Streamed` / promise / async iterable | 8, 9, 10 | may block |
@@ -185,7 +185,7 @@ bodies. `forgetProbedLoad()`, then `retryable(produce)`, then three answers:
 three loads signals once per load. **Justified as a mechanism** — one recovery, three callers that
 differ only in what they do with the value. **Not justified as a sum**: 188ms for one thunk reading
 three loads is three passes, each starting the next load only after the previous settled. The retry
-learns the reads one at a time because a throw carries one cell; nothing about the body says it could
+learns the reads one at a time because a throw carries one state; nothing about the body says it could
 not have been told about all three.
 
 `emitProbed` is where the property is actually won: the region's placeholder goes out, the walk
@@ -197,7 +197,7 @@ continues, and the re-run lands in `document.deferred`. Row 4 of the table.
 document order" means — then `await`, then the arms through `emitProduced`. **Justified**: a promise
 in a slot is already in flight by definition, so N of them in N sibling slots cost their max (row 1 of
 the table, 61ms). This arm cannot produce a sum on its own. It produces one only when the promise did
-not exist until the walk built it, which is a load behind a cell rather than a promise in a slot.
+not exist until the walk built it, which is a load behind a state rather than a promise in a slot.
 
 ### 9 · `emitStreamed` — `{#for await}`
 
@@ -286,7 +286,7 @@ What it cost, honestly:
 Five mechanisms. Three are gone; two are justified, and both for the same reason.
 
 **A · a body reading N loads** — 188ms, still 184ms. GONE for the rest of the page, not for the body:
-`awaitedProduce` learns one cell per signal and waits it out before calling the producer again, and a
+`awaitedProduce` learns one state per signal and waits it out before calling the producer again, and a
 hole cannot split a region that is a single producer. **Justified**: the body reaches its second read
 only by running past the first, so the second load is not discoverable until the first has landed. A
 region that wants its loads in flight together has to SAY so — split the region, or ask about each
@@ -323,7 +323,7 @@ Everything above resolves into two independent mechanisms, and keeping them apar
 
 **Starting is not ordering.** Putting a load in flight earlier changes no byte of the output and is
 available in every lane, streaming included. A probe kicking the load it reports is what is left of it
-— `started()`, which reached a lazy cell's `then` as the walk passed, and `start([…])`, which the
+— `started()`, which reached a lazy state's `then` as the walk passed, and `start([…])`, which the
 compiler emitted above a template, were the other two and are both gone. Its ceiling is knowing WHICH loads to start, which is why the compiler-side
 form cannot reach B, C or D: a syntactic predicate over one component's unconditional slots is the
 most that can be known without running anything.

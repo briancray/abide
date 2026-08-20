@@ -408,8 +408,8 @@ export default suite({
                 })
 
                 // FOUR, counting every line the console got rather than this channel's. `missing`
-                // answers a declared `error.typed`, which settles a cell as a refused load does — and
-                // the silence here is the claim: nothing abide runs for an rpc READS that cell, so
+                // answers a declared `error.typed`, which settles a state as a refused load does — and
+                // the silence here is the claim: nothing abide runs for an rpc READS that state, so
                 // `abide:load` has nothing to say and the outcome is reported once, below, with its
                 // name and status. Reporting a failed load from the SETTLE instead put a second
                 // ungated stack against this line, which is how that placement was caught.
@@ -443,9 +443,9 @@ export default suite({
                 '`{:else if x.error()}`, and the one that does not and reads the value instead, which gets the failure ' +
                 'thrown at it. Reporting from the settle cannot tell either of them from an rpc handler answering a ' +
                 'declared `error.typed` — the same event down there — so it wrote a stack for every modelled failure a ' +
-                'server answered, already on `abide:rpc` with its outcome. Nothing an app renders reads that cell, and ' +
+                'server answered, already on `abide:rpc` with its outcome. Nothing an app renders reads that state, and ' +
                 'that is the whole line: an `await` is not a read either, so a caller that catches its own rejection is ' +
-                'not told about it twice. Nor is a `for await`, which reads the same cell through the same two probes ' +
+                'not told about it twice. Nor is a `for await`, which reads the same state through the same two probes ' +
                 'as MACHINERY — it subscribes in order to wake and asks in order to throw at its own consumer, and it ' +
                 'was reporting a stack alongside that throw until the reads were scoped. Said ONCE per reason however ' +
                 'many times the arm re-runs, and the reason goes to the console as the object — `String(err)` is ' +
@@ -476,7 +476,7 @@ export default suite({
 
                     // A `for await` goes through BOTH app-facing probes — `error()` to wake on and
                     // `error()` again to throw with — so it is the one internal reader that looks
-                    // exactly like a template arm from inside `readCell`. Its silence is counted by
+                    // exactly like a template arm from inside `readState`. Its silence is counted by
                     // the line total below rather than asserted on its own: unscope either read in
                     // `iterate` and this case goes to three lines.
                     const streamed = state<string>(refusing(new Error('only iterated')))
@@ -493,7 +493,11 @@ export default suite({
                 const written = captured.filter((line) => channelOf(line) === 'abide:load')
 
                 is('one line each for the two the template touched', written.length, 2)
-                is('a failure is never gated, so no DEBUG was set', textOf(written[0]).includes('the arm asked'), true)
+                is(
+                    'a failure is never gated, so no DEBUG was set',
+                    textOf(written[0]).includes('the arm asked'),
+                    true,
+                )
                 is('and it is an error', written[0]?.level, 'error')
                 is('the reason itself rides beside the line', written[0]?.args[1], askedFor)
                 is('the arm that read instead is reported too', written[1]?.args[1], readInstead)

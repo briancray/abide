@@ -1,8 +1,8 @@
 <script>
 import { state } from 'abide'
 
-// Keyed by a STRING rather than by reference, which is what a module-scope cell cannot do: every
-// instance of this component asking for `draft` is handed the SAME cell, so two of them side by side
+// Keyed by a STRING rather than by reference, which is what a module-scope state cannot do: every
+// instance of this component asking for `draft` is handed the SAME state, so two of them side by side
 // share what is typed into either. The first call decides the value; a later one gets what is there.
 //
 // PER CALLER, not per process — and on a server that is the whole point, because "shared across every

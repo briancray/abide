@@ -39,7 +39,9 @@ function fileFor(suite: string): URL | null {
     // specifier the imports above use. Counted by hand, the path survived the move into `src/` while
     // reading `src/demos/`, and the only symptom was an empty source pane on a page that still
     // rendered: a browser gate caught it and neither the typecheck nor `bun test` could.
-    return Bun.pathToFileURL(Bun.resolveSync(`#shared/demos/${META[suite as SuiteName].name}.ts`, import.meta.dir))
+    return Bun.pathToFileURL(
+        Bun.resolveSync(`#shared/demos/${META[suite as SuiteName].name}.ts`, import.meta.dir),
+    )
 }
 
 /**

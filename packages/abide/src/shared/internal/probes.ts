@@ -54,7 +54,7 @@ export function settled<T>(value: T | PromiseLike<T>): Promise<T> {
 /**
  * ASKED BEFORE `isThenable` everywhere a value is classified as a load, a stream or a plain value.
  *
- * A cell is both — `PromiseLike` so `await x` works, and async-iterable because it retains a
+ * A state is both — `PromiseLike` so `await x` works, and async-iterable because it retains a
  * transcript — and the thenable arm reads only its LAST chunk. Classified promise-first,
  * `state(catalogue({}))` settled to `{id:3}` with `chunks()` empty and nothing said so. Nothing that
  * is only one of the two is affected: a `Promise` has no async iterator and a generator has no `then`.

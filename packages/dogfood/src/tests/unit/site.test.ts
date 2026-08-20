@@ -236,7 +236,9 @@ test('a use case card carries the demo, its files and somewhere to price it', as
         } else {
             // `wake` reports its own numbers, and the card says why rather than showing an empty panel
             // — which is what a demo that is broken also looks like.
-            expect(markup, `${usecase.name} offers to drive a demo that measures itself`).not.toContain('id="price"')
+            expect(markup, `${usecase.name} offers to drive a demo that measures itself`).not.toContain(
+                'id="price"',
+            )
             expect(markup, `${usecase.name} does not say why it has no ops`).toContain('IS the instrument')
         }
     }

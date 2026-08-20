@@ -44,7 +44,7 @@ for (const suite of SUITES) {
  * the same thing, asserted where an arm is actually written.
  *
  * `prepare` puts a live counter in the scratch holder, and a root nobody disposes stays subscribed to
- * the cell `run` writes: the second run wrote to two components, the third to three, and the row's
+ * the state `run` writes: the second run wrote to two components, the third to three, and the row's
  * number grew with every click of `run` on `/bench`. Nothing about the markup is wrong while that
  * happens, and the arm's own smoke run above cannot see it, because it runs each arm once.
  *
@@ -61,12 +61,12 @@ describe('a bench arm that mounts, run twice', () => {
 
         const row = benchRow('compiler', spec, spec.bench as Bench)
         // From the same state both times, because the counter's `class:high` crosses at 2 — an
-        // unreset cell would move the count for a reason that has nothing to do with the mounts.
+        // unreset state would move the count for a reason that has nothing to do with the mounts.
         const runFromZero = async (): Promise<string[]> => {
             count.set(0)
             compiledCount.set(0)
             await row.run()
-            return [row.abide.value.peek(), row.handWritten?.value.peek() ?? '']
+            return [row.abide.value.peek()!, row.handWritten?.value.peek() ?? '']
         }
 
         const first = await runFromZero()

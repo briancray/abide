@@ -2,7 +2,7 @@ import { GET } from 'abide/server'
 
 /**
  * `rpc` = `memo` + transport, and this is the `memo` half spelled out: the same `MemoOptions` a local
- * keyed memo takes, on the call rather than on a cell somebody wrote beside it.
+ * keyed memo takes, on the call rather than on a state somebody wrote beside it.
  *
  * That is what makes "three concurrent readers of one key cost ONE request" a property of the
  * declaration instead of a caching layer the caller assembles — `ttl`, `tags` and `global` mean here

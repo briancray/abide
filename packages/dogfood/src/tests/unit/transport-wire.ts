@@ -28,7 +28,7 @@ const [, , loaded] = await Promise.all([
     import(`${HERE}rpc/admin/audit.ts`),
     import(`${HERE}sockets/feed.ts`),
 ])
-const feed = loaded as { ticks: { publish(message: { n: number }): void } }
+const feed = loaded as { ticks: () => { publish(message: { n: number }): void } }
 
 let requests = 0
 const server = Bun.serve({
@@ -114,13 +114,13 @@ const appRoute = await fetch(new URL('/users/getUser', base))
 // here asserts the timer.
 const openBeforeTicks = server.pendingWebSockets
 const ticks = remoteSocket<{ n: number }>('feed/ticks', { base, channel: { tail: 8 } })
-ticks.chunks() // the read is what opens the connection
+ticks().chunks() // selecting hands back the connection; asking it anything is what opens one
 await until(() => server.pendingWebSockets > openBeforeTicks)
 // Published on the SERVER, into a plain channel. Nothing about the publish knows a socket exists.
-feed.ticks.publish({ n: 1 })
-feed.ticks.publish({ n: 2 })
-feed.ticks.publish({ n: 3 })
-await until(() => ticks.chunks().length === 3)
+feed.ticks().publish({ n: 1 })
+feed.ticks().publish({ n: 2 })
+feed.ticks().publish({ n: 3 })
+await until(() => ticks().chunks().length === 3)
 
 const rooms = remoteSocket<string, { room: string }>('feed/rooms', { base, channel: { tail: 8 } })
 const general = rooms({ room: 'general' })
@@ -157,8 +157,8 @@ const result = {
     missingError,
     appRouteStatus: appRoute.status,
     appRouteBody: await appRoute.text(),
-    socketLatest: ticks.peek() ?? null,
-    socketTranscript: ticks.chunks(),
+    socketLatest: ticks().peek() ?? null,
+    socketTranscript: ticks().chunks(),
     roomTranscript: general.chunks(),
 }
 

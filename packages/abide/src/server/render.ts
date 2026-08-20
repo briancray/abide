@@ -27,7 +27,7 @@ import {
     Boundary,
     Component,
     caughtArm,
-    cellProps,
+    stateProps,
     escape,
     isAttributeName,
     isKeyed,
@@ -520,9 +520,9 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
     if (node instanceof Component) {
         // A snapshot has no instance to KEEP, so the call is the whole of the render — and it is a
         // producer like any other, since a `<script>` may read a load. The props are still wrapped:
-        // what a component receives is cells on both sides, and a lane that handed the plain values
+        // what a component receives is states on both sides, and a lane that handed the plain values
         // over would work for every compiled `.abide` file and break every hand-written one.
-        return emitProduced(() => node.view(cellProps(node.props)) as Renderable, context, out)
+        return emitProduced(() => node.view(stateProps(node.props)) as Renderable, context, out)
     }
     if (node instanceof Boundary) return boundaryRegion(node, context, out)
     if (node instanceof Streamed) return streams(out, (into) => emitStreamed(node, context, into))
@@ -653,7 +653,7 @@ function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, 
             case 'attr': {
                 // `unwrap`, not a bare call: a thunk handing back a SOURCE is read one step further,
                 // and the client's binder does exactly that. Calling once left `class=${() => cls}`
-                // rendering the cell's own source text where the client renders its value.
+                // rendering the state's own source text where the client renders its value.
                 //
                 // A catcher here as much as in a child slot, and the asymmetry it fixes is invisible:
                 // the client BINDS `class=${() => tone()}` once the load lands, so a server that let
@@ -936,7 +936,7 @@ function emitProbed(
  *
  * Re-calling is the server's whole half of "a pending read signals" — there is no effect to wake in a
  * snapshot render, so the walk itself is what runs the body a second time. Everything written so far
- * goes out first, exactly as every other suspension does, and a thunk that signals on a SECOND cell
+ * goes out first, exactly as every other suspension does, and a thunk that signals on a SECOND state
  * simply waits again: a page reading three loads resolves them one pass each, with no block form
  * naming any of them. Termination is the wall budget the whole walk is already raced against.
  */
@@ -1145,7 +1145,7 @@ function defer(
  */
 function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
     // The operand itself, awaited below. It used to go through `started`, which reached a lazy
-    // cell's `then` synchronously so the load was running before the pending arm asked about it —
+    // state's `then` synchronously so the load was running before the pending arm asked about it —
     // `await` alone would not have, and the arm would have been told there was no load. The arm
     // starts it now, because a probe starts what it reports.
     const settling = node.value as PromiseLike<unknown>
@@ -1177,12 +1177,12 @@ function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
         // The failure arm THREW, and for the compiled shape that is the ordinary outcome rather than
         // an exotic one: the compiler hands the same `{#if}` chain to all three branches, so on a
         // rejected load the chain falls past its own `pending()` test — false now — to an arm that
-        // READS the cell, and the read throws the very failure the arm was called to report.
+        // READS the state, and the read throws the very failure the arm was called to report.
         // `{:else if x.error()}` is what asks instead.
         'threw while rendering its arms',
     )
     // Through `emitProduced` because the arm is a BODY like every other — a `{#if x.pending()}` chain
-    // reads the very cell this block is waiting for.
+    // reads the very state this block is waiting for.
     return placeholderAround(out, id, () =>
         emitProduced(node.branches.pending as () => Renderable, IN_PLACEHOLDER, out),
     )

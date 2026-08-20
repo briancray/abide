@@ -4,13 +4,13 @@ import { memo, state } from 'abide'
 // A component is a VALUE — an inline one, an imported one and a hand-written `.ts` one alike — so a
 // name can hold it. A plain `const Row = Loud` is one more name in scope and the tag reads it once.
 //
-// A CELL is the one worth showing: `<Shown/>` names a memo, and naming a cell in a template READS it,
+// A STATE is the one worth showing: `<Shown/>` names a memo, and naming a state in a template READS it,
 // exactly as `{loud}` does. So the tag is a read, and a change re-mounts — the position drops the old
 // instance and calls the new view once, the same way a keyed row whose key changed is a different row
 // rather than a new pass of the old one.
 //
-// Nothing here is a special "dynamic component" mechanism. It is the tag rule and the cell rule
-// meeting: what the tag names decides which view, and what a cell is decides when that is re-read.
+// Nothing here is a special "dynamic component" mechanism. It is the tag rule and the state rule
+// meeting: what the tag names decides which view, and what a state is decides when that is re-read.
 const loud = state(true)
 const Shown = memo(() => (loud ? Loud : Quiet))
 </script>

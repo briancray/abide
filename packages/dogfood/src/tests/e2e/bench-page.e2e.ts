@@ -20,7 +20,7 @@ import { expect, interactive, test } from 'harness/e2e'
  * `memo(async () => benchRows())`, so the table the server rendered sits there looking live inside a
  * region the client has not resolved yet. Nothing is listening to it. Typing into the filter in that
  * window is not merely early: when the memo lands the region re-renders, the `.value` binding writes
- * its cell back over the field, and the text is GONE. Measured — the wipe and `exposeBench` land on the
+ * its state back over the field, and the text is GONE. Measured — the wipe and `exposeBench` land on the
  * same tick, 136 ms after commit, ~100 ms after `interactive` is satisfied.
  *
  * So the second barrier is the page's own content, and `abideBench` is exactly that signal: it is set

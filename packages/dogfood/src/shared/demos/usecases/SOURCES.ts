@@ -30,44 +30,28 @@ import MEDIA from './Media.abide?source'
 import DATA from './Data.abide?source'
 import WAKE from './Wake.abide?source'
 import ENDPOINT from '#server/rpc/catalogue.ts?source'
+import type { SourceFile } from 'abide/compiler'
 
-/** One file, as a tab and a pane. Shared with `#ui/lib/Files.abide`, which is what paints it. */
-export interface SourceFile {
-    /** The file's own name, pathed only where the path is the point — see `server/rpc/catalogue.ts`. */
-    label: string
-    source: string
-}
-
+/**
+ * The files, per use case, VIEW FIRST — see the note above.
+ *
+ * Each entry is what `?source` handed back, label and all: the tab is the file's own basename, from
+ * the loader, so a file that moves or is renamed relabels itself. These were sixteen hand-written
+ * strings, which is sixteen ways for a tab to name a file the pane is not showing.
+ */
 export const SOURCES: Record<string, SourceFile[]> = {
-    simple: [
-        { label: 'Simple.abide', source: SIMPLE },
-        { label: 'rows.ts', source: ROWS },
-    ],
-    dashboard: [
-        { label: 'Dashboard.abide', source: DASHBOARD },
-        { label: 'Card.abide', source: CARD },
-        { label: 'rows.ts', source: ROWS },
-    ],
-    complex: [
-        { label: 'Complex.abide', source: COMPLEX },
-        { label: 'rows.ts', source: ROWS },
-    ],
-    media: [
-        { label: 'Media.abide', source: MEDIA },
-        { label: 'Poster.abide', source: POSTER },
-        { label: 'Progress.abide', source: PROGRESS },
-        { label: 'media.ts', source: MEDIA_DATA },
-    ],
+    simple: [SIMPLE, ROWS],
+    dashboard: [DASHBOARD, CARD, ROWS],
+    complex: [COMPLEX, ROWS],
+    media: [MEDIA, POSTER, PROGRESS, MEDIA_DATA],
     data: [
-        { label: 'Data.abide', source: DATA },
-        // PATHED, because the path is the whole fact: a module under `server/rpc/**` elides to its
-        // address in the client lane, which is what makes the call above a keyed memo rather than a
-        // fetch somebody wrote. A reader who cannot see where this file sits cannot see that.
-        { label: 'server/rpc/catalogue.ts', source: ENDPOINT },
-        { label: 'catalogue.ts', source: CATALOGUE },
+        DATA,
+        // The one label written by hand, because the path is the whole fact: a module under
+        // `server/rpc/**` elides to its address in the client lane, which is what makes the call in
+        // `Data.abide` a keyed memo rather than a fetch somebody wrote. A reader who cannot see where
+        // this file sits cannot see that, and a basename is exactly what hides it.
+        { ...ENDPOINT, label: 'server/rpc/catalogue.ts' },
+        CATALOGUE,
     ],
-    wake: [
-        { label: 'Wake.abide', source: WAKE },
-        { label: 'wake.ts', source: WAKE_ARMS },
-    ],
+    wake: [WAKE, WAKE_ARMS],
 }

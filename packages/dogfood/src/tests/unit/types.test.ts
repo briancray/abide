@@ -16,7 +16,7 @@
 // contract about HOW something is done, so the contract is asserted directly.
 //
 // Three of these fixtures exist because they FOUND something. `shadowing` compiled clean before the
-// desugar learned what a type position is — an annotation naming a cell registered it as a binding,
+// desugar learned what a type position is — an annotation naming a state registered it as a binding,
 // and every read after it silently stopped desugaring with nothing for `tsc` to say. `props` could
 // not compile at all: the props type was inlined into the function body and named from its signature.
 // `narrowing` is the pair that proves a branch type is real rather than `any`.
@@ -90,7 +90,7 @@ const EXPECTED: {
         message: /Expected 1-2 arguments, but got 0/,
         where: 'source',
     },
-    // A write desugars to `set`, and keeps the cell's type doing it.
+    // A write desugars to `set`, and keeps the state's type doing it.
     {
         fixture: 'write.abide',
         line: 7,
@@ -107,7 +107,7 @@ const EXPECTED: {
         message: /'nmae' does not exist/,
         where: 'source',
     },
-    // A generic keeps its argument through a cell.
+    // A generic keeps its argument through a state.
     {
         fixture: 'generics.abide',
         line: 7,
@@ -134,7 +134,7 @@ const EXPECTED: {
         where: 'source',
     },
     // A prop CALL SITE, which is the only place a `Given` regression can show: the component's own
-    // file compiles either way. The optional prop is the one that broke — `Cell<T | undefined> |
+    // file compiles either way. The optional prop is the one that broke — `State<T | undefined> |
     // undefined` extends neither arm of `Given`'s conditional, so the plain-value arm was dropped and
     // a literal stopped being passable at all — and the positive half of that is `valid/calls.abide`.
     // This is the half that says the arm came back as the DECLARED type rather than as anything.
@@ -155,13 +155,16 @@ const EXPECTED: {
         message: /'number' is not assignable/,
         where: 'source',
     },
-    // The regression that has no other guard: an annotation naming a cell must not bind it, so the
+    // The regression that has no other guard: an annotation naming a state must not bind it, so the
     // initialiser beside it is still a READ. Before the fix this file compiled clean.
     {
         fixture: 'shadowing.abide',
         line: 5,
         code: 'TS2322',
-        message: /'number' is not assignable/,
+        // `number | undefined`, not `number`: the read a `<script module>` gets is `peek()`, and that
+        // is the honest type on EVERY state now — `types/valid/narrowing.abide` is the gate on it.
+        // What this fixture catches is unchanged: a VALUE where the annotation says a state.
+        message: /'number \| undefined' is not assignable/,
         where: 'source',
     },
     // A name that MOVED to `abide/runtime` says so. `keyed` reads like authoring vocabulary and is

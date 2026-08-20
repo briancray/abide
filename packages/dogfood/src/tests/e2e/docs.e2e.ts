@@ -60,6 +60,22 @@ async function sourcesAreOnThePage(page: Page, name: string, rungs: number): Pro
         })
         expect(fits, `${where}: the source pane runs past the column that holds it`).toBe(true)
 
+        // The preview RENDERED SOMETHING. `docs.test.ts` proves every rung on a page carries a `view`,
+        // which is a claim about the ladder and not about the page: a rung whose view is there and
+        // draws nothing is an empty grey box, and it read as a styling bug rather than a missing
+        // example. `/docs/props` rung 2 was one for as long as the page existed — its prop is the
+        // parent's state and it had no parent — and every check in this file passed over it, because a
+        // box with nothing in it neither overflows nor scrolls.
+        //
+        // An element OR text, not text alone: a preview whose whole output is an `<input>` has no text
+        // at all, and a preview whose whole output is a slot has no element.
+        const drew = await rung.evaluate((el) => {
+            const preview = el.querySelector('.rung-preview')
+            if (preview === null) return false
+            return preview.children.length > 0 || (preview.textContent ?? '').trim().length > 0
+        })
+        expect(drew, `${where}: the preview is an empty box`).toBe(true)
+
         // The PREVIEW's half of the same claim, and it is not the pane's mirror image: a rung is two
         // grid columns, so what the preview overflows is not the page but the SOURCE PANE next to it,
         // and the sideways-scroll check above sees none of it. A `<form>` whose file input has a
@@ -98,7 +114,7 @@ async function sourcesAreOnThePage(page: Page, name: string, rungs: number): Pro
  * Every rung's proofs, run in this browser and TERMINAL — see `#shared/demos/proofs.ts`.
  *
  * Here rather than under `bun test`: a page loads only the ladders its own name is in, so each rung is
- * mounted once and nothing else in the process holds an opinion about the module-level cells inside it.
+ * mounted once and nothing else in the process holds an opinion about the module-level states inside it.
  *
  * `passing` and not merely "settled", which is what makes this the check on `sweepStatuses`' own
  * assumption that the last badge settling is all of them settling — a rung left `running` is not
@@ -110,7 +126,8 @@ async function proofsHold(page: Page, name: string): Promise<void> {
     for (let at = 0; at < swept.length; at++) {
         const { label, status } = swept[at] as Swept
         // A rung with no `view` renders no proofs, which is a rung with nothing to disagree about.
-        if (status !== null && status !== 'passing') red.push(`${name} rung ${at + 1} (${label}) is ${status}`)
+        if (status !== null && status !== 'passing')
+            red.push(`${name} rung ${at + 1} (${label}) is ${status}`)
     }
     expect(red, 'a documented example the two substrates disagree about').toEqual([])
 }
@@ -148,7 +165,9 @@ for (const name of CALLABLE_ORDER) {
         // The import line is the first thing on the page and the thing most likely to be copied, so it
         // is asserted as an EXACT string. `hasText` matches case-insensitively and as a substring, which
         // would pass against `GET` on the `get` page.
-        await expect(page.locator('pre').first()).toHaveText(`import { ${name} } from '${CALLABLES[name].from}'`)
+        await expect(page.locator('pre').first()).toHaveText(
+            `import { ${name} } from '${CALLABLES[name].from}'`,
+        )
 
         // The pitfall, level with the import. Asserted as the EXACT string for the same reason the
         // import line is: `hasText` would pass against a box that rendered the first clause and stopped.
@@ -244,6 +263,31 @@ test('a mounted rung is live, not a picture of itself', async ({ page }) => {
     await expect(line).toHaveText(/count 1/)
 })
 
+test('the no-selector refresh rung sweeps without taking the page with it', async ({ page, complaints }) => {
+    // `refresh()` with no selector reaches every DECLARATION in the process, and in a browser there is
+    // one caller forever — so the rung's own button reaches this page's memos as well as its own. That
+    // is the verb working, not a bug, but it is only safe because `refresh` KEEPS serving while it
+    // re-runs; the claim worth a click is that the page it is documented on survives being swept by
+    // the example on it. Headless cannot make it: there is no page to lose.
+    await page.goto('/docs/refresh')
+    await interactive(page)
+    // `data-rung` counts the FILTERED ladder: `/docs/refresh` shows only the rungs `of: ['refresh']`,
+    // which are the ladder's 2nd, 4th and 5th — so the no-selector one is the third box on this page.
+    const rung = page.locator('[data-rung="3"]')
+    const quote = rung.locator('.rung-preview p').first()
+    await expect(quote).toHaveText(/ABC @ 1/)
+
+    await rung.getByRole('button', { name: 'refresh everything' }).click()
+    // The COUNTER is what says the sweep ran a body rather than that the markup survived: the rung's
+    // memo closes over `served` and stamps it, so an untagged memo reached by a no-selector refresh
+    // shows a number one higher. Asserting the text merely stayed put passes with the button inert.
+    await expect(quote).toHaveText(/ABC @ 2/)
+    // And the page around it is still the page: its heading and its other rungs are still rendered.
+    await expect(page.locator('[data-rung="1"]')).toBeVisible()
+    await expect(page.locator('[data-rung="2"]')).toBeVisible()
+    expect(complaints.unexpected(), '/docs/refresh logged errors after the sweep').toEqual([])
+})
+
 test('a form rung posts both spellings at one endpoint', async ({ page, complaints }) => {
     // The claim `/docs/POST`'s form rung makes is that a body no stub encoded arrives as ARGUMENTS,
     // and neither half of it is reachable headless: a `<form>` only serialises the way a browser
@@ -282,7 +326,7 @@ test('a form rung posts both spellings at one endpoint', async ({ page, complain
     expect(complaints.unexpected(), 'the form rung logged errors').toEqual([])
 })
 
-test('a framed rung fills from the handle\'s own transcript', async ({ page, complaints }) => {
+test("a framed rung fills from the handle's own transcript", async ({ page, complaints }) => {
     // The rung that reads a `jsonl()` body through the STUB, which is the half `/docs/sse`'s test
     // below does not cover — it presses the `EventSource` rung. Both rungs are one line apart on
     // purpose, so this is also what says the pair still differ only in their import.
@@ -465,7 +509,10 @@ test('a preview that answers in prose is not painted as code', async ({ page, co
     expect(complaints.unexpected(), 'identity logged errors').toEqual([])
 })
 
-test('the exporting rung shapes a real span out of this app’s own middleware', async ({ page, complaints }) => {
+test('the exporting rung shapes a real span out of this app’s own middleware', async ({
+    page,
+    complaints,
+}) => {
     // `/docs/trace`'s last rung, and the only claim on that page that a headless lane cannot make: the
     // rung is really in `packages/dogfood/app.ts`'s middleware array, so what comes back was shaped by
     // THIS process answering a request rather than by a fixture building a record.

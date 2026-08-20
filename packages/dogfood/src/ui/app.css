@@ -44,182 +44,227 @@
    it and parks it on top of row one. A radius is the change that invites it. */
 
 @theme {
-
     /* ── value ladder ── */
-    --color-ground:    #d2d7cb;  /* the page, and a control at rest */
-    --color-paper:     #dce0d6;  /* a panel, and a row at rest */
-    --color-lifted:    #e3e6dd;  /* ACTIVE, OR SOURCE — an open row, a focused field, code */
-    --color-sunk:   #c8cdc1;  /* below the page: a group heading, a bar track */
+    --color-ground: #d2d7cb; /* the page, and a control at rest */
+    --color-paper: #dce0d6; /* a panel, and a row at rest */
+    --color-lifted: #e3e6dd; /* ACTIVE, OR SOURCE — an open row, a focused field, code */
+    --color-sunk: #c8cdc1; /* below the page: a group heading, a bar track */
 
-    --color-ink:       #141a16;
-    --color-ink-soft:  #2c3830;
-    --color-rule:      #9da79a;
-    --color-pencil:    #5a655c;
+    --color-ink: #141a16;
+    --color-ink-soft: #2c3830;
+    --color-rule: #9da79a;
+    --color-pencil: #5a655c;
     --color-verdigris: #2e7a63;
-    --color-oxide:     #9e3b21;
-    --color-brass:     #8f6d1c;
-    --color-plum:      #6b3f5e;
+    --color-oxide: #9e3b21;
+    --color-brass: #8f6d1c;
+    --color-plum: #6b3f5e;
 
     /* ── type ── */
     --font-display: "Martian Mono", ui-monospace, monospace;
-    --font-body:    "Spectral", Georgia, serif;
-    --font-data:    "Martian Mono", ui-monospace, monospace;
+    --font-body: "Spectral", Georgia, serif;
+    --font-data: "Martian Mono", ui-monospace, monospace;
 
-    --text-micro: .58rem;
-    --text-mini:  .68rem;
-    --text-small: .82rem;
-    --text-ui:  .95rem;
-    --text-body:  1.05rem;
-    --text-lead:  1.2rem;
+    --text-micro: 0.58rem;
+    --text-mini: 0.68rem;
+    --text-small: 0.82rem;
+    --text-ui: 0.95rem;
+    --text-body: 1.05rem;
+    --text-lead: 1.2rem;
     --text-title: clamp(1.8rem, 4.5vw, 2.6rem);
 
-    --tracking-label: .16em;   /* uppercase labels */
-    --tracking-display: -.05em; /* the display face, which is loose by default */
+    --tracking-label: 0.16em; /* uppercase labels */
+    --tracking-display: -0.05em; /* the display face, which is loose by default */
 
-
-    --gutter:     var(--s-6);
-    --panel-pad:  var(--s-5);
-    --pad-x:      var(--panel-pad);
-    --gap-x:      var(--s-4);
-    --header-h:    3.5rem;               /* the chrome, and the header is HELD to it */
-    --sticky-top:  var(--header-h);      /* what pins flush under the chrome */
-    --below-chrome: var(--s-4);          /* what sits CLEAR of it — one value, so the sidebar and an
+    --gutter: var(--s-6);
+    --panel-pad: var(--s-5);
+    --pad-x: var(--panel-pad);
+    --gap-x: var(--s-4);
+    --header-h: 3.5rem; /* the chrome, and the header is HELD to it */
+    --sticky-top: var(--header-h); /* what pins flush under the chrome */
+    --below-chrome: var(--s-4); /* what sits CLEAR of it — one value, so the sidebar and an
                                             anchored rung land on the same line */
-    --card-top:   calc(var(--sticky-top) + var(--below-chrome));  /* that line, named: where a pinned
+    --card-top: calc(var(--sticky-top) + var(--below-chrome)); /* that line, named: where a pinned
                                             card head lands, and where the sidebar starts */
-    --head-h:     2.1rem;
-    --sidebar-w:  15rem;
+    --head-h: 2.1rem;
+    --sidebar-w: 15rem;
     --sidebar-gap: var(--s-6);
-    --measure:      68ch;
-    --code-measure: 42rem;   /* the ladder's longest line, so every rung splits at the same x */
+    --measure: 68ch;
+    --code-measure: 42rem; /* the ladder's longest line, so every rung splits at the same x */
 
     /* ── chrome ── */
-    --radius-card:    5px;
+    --radius-card: 5px;
     --radius-chip: 3px;
-    --shadow-edge: inset 0 1px 0 rgba(255, 255, 255, .55);
-    --shadow-thick:    0 1px 0 rgba(20, 26, 22, .13);
-    --shadow-cast:     0 4px 8px -6px rgba(20, 26, 22, .5);
-    --ease:     120ms cubic-bezier(.4, 0, .2, 1);
+    --shadow-edge: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    --shadow-thick: 0 1px 0 rgba(20, 26, 22, 0.13);
+    --shadow-cast: 0 4px 8px -6px rgba(20, 26, 22, 0.5);
+    --ease: 120ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @layer base {
-  /* Tailwind's --spacing is .25rem, and the scale worked out by hand turned out to be that times
+    /* Tailwind's --spacing is .25rem, and the scale worked out by hand turned out to be that times
      1/2/3/4/6/8/12. Derived, not declared beside it — so `gap-3` in the markup and `var(--s-3)` in a
      component rule cannot drift apart. */
-  :root {
-    --s-1: calc(var(--spacing) * 1);
-    --s-2: calc(var(--spacing) * 2);
-    --s-3: calc(var(--spacing) * 3);
-    --s-4: calc(var(--spacing) * 4);
-    --s-5: calc(var(--spacing) * 6);
-    --s-6: calc(var(--spacing) * 8);
-    --s-7: calc(var(--spacing) * 12);
-  }
+    :root {
+        --s-1: calc(var(--spacing) * 1);
+        --s-2: calc(var(--spacing) * 2);
+        --s-3: calc(var(--spacing) * 3);
+        --s-4: calc(var(--spacing) * 4);
+        --s-5: calc(var(--spacing) * 6);
+        --s-6: calc(var(--spacing) * 8);
+        --s-7: calc(var(--spacing) * 12);
+    }
 
-  *, *::before, *::after { box-sizing: border-box; }
+    *,
+    *::before,
+    *::after {
+        box-sizing: border-box;
+    }
 
-  body { margin: 0; }
+    body {
+        margin: 0;
+    }
 
-  img, svg { display: block; max-width: 100%; }
+    img,
+    svg {
+        display: block;
+        max-width: 100%;
+    }
 
-  button, input { font: inherit; color: inherit; }
-  button { cursor: pointer; background: none; border: 0; }
+    button,
+    input {
+        font: inherit;
+        color: inherit;
+    }
+    button {
+        cursor: pointer;
+        background: none;
+        border: 0;
+    }
 
+    /* ── the wordmark's two spellings. plain wins unless a theme says otherwise. ────────────────── */
+    .wordmark-mirror {
+        display: none;
+    }
+    .wordmark-flip {
+        display: inline-block;
+        transform: scaleX(-1);
+        font-style: normal;
+        font-weight: inherit;
+    }
+    .wordmark-axis {
+        font-style: normal;
+    }
 
+    /* ── the three column templates ─────────────────────────────────────────────────────────────── */
+    .case-row {
+        display: grid;
+        grid-template-columns: 0.75rem minmax(0, 1fr) 7rem;
+        align-items: baseline;
+        column-gap: var(--gap-x, 0.75rem);
+        padding-inline: var(--pad-x, 0.75rem);
+    }
 
-  /* ── the wordmark's two spellings. plain wins unless a theme says otherwise. ────────────────── */
-  .wordmark-mirror { display: none; }
-  .wordmark-flip { display: inline-block; transform: scaleX(-1); font-style: normal; font-weight: inherit; }
-  .wordmark-axis { font-style: normal; }
+    .bench-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 7rem 7rem 5rem 7.5rem 3rem;
+        align-items: baseline;
+        column-gap: var(--gap-x, 1rem);
+        padding-inline: var(--pad-x, 0.75rem);
+    }
 
-  /* ── the three column templates ─────────────────────────────────────────────────────────────── */
-  .case-row {
-    display: grid;
-    grid-template-columns: 0.75rem minmax(0, 1fr) 7rem;
-    align-items: baseline;
-    column-gap: var(--gap-x, .75rem);
-    padding-inline: var(--pad-x, .75rem);
-  }
-
-  .bench-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 7rem 7rem 5rem 7.5rem 3rem;
-    align-items: baseline;
-    column-gap: var(--gap-x, 1rem);
-    padding-inline: var(--pad-x, .75rem);
-  }
-
-  .arm-row {
-    display: grid;
-    /* 5rem for the ratio: the widest thing in the column is now `not run` at 63px and a ratio is 45,
+    .arm-row {
+        display: grid;
+        /* 5rem for the ratio: the widest thing in the column is now `not run` at 63px and a ratio is 45,
        so 8rem was sized for the words that are gone — but `abide ÷ by hand` needs 114 and `abide ÷
        arm` needs 84, so 7.5rem is the HEADER's width, not the data's. Same in both grids. */
-    grid-template-columns: minmax(0, 1fr) 5.5rem 5.5rem 5.5rem 5.5rem 5rem 7.5rem;
-    align-items: baseline;
-    column-gap: var(--gap-x, .75rem);
-    padding-inline: var(--pad-x, .75rem);
-  }
+        grid-template-columns: minmax(0, 1fr) 5.5rem 5.5rem 5.5rem 5.5rem 5rem 7.5rem;
+        align-items: baseline;
+        column-gap: var(--gap-x, 0.75rem);
+        padding-inline: var(--pad-x, 0.75rem);
+    }
 
-  .head-right, .cell-right, .number, .tail { text-align: right; }
-  /* A control is not text and has no business on the text baseline. */
-  .bench-row > button, .arm-row > button { align-self: center; }
+    .head-right,
+    .cell-right,
+    .number,
+    .tail {
+        text-align: right;
+    }
+    /* A control is not text and has no business on the text baseline. */
+    .bench-row > button,
+    .arm-row > button {
+        align-self: center;
+    }
 
-  /* A title long enough to push the numbers off their columns is a title that truncates. */
-  .case-title,
-  .bench-title,
-  .arm-label,
-  .console-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* A title long enough to push the numbers off their columns is a title that truncates. */
+    .case-title,
+    .bench-title,
+    .arm-label,
+    .console-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 
-  .bench-what,
-  .arm-what { min-width: 0; }
+    .bench-what,
+    .arm-what {
+        min-width: 0;
+    }
 
-  .bench-what {
-    display: flex;
-    align-items: baseline;
-    gap: .5rem;
-    min-width: 0;
-  }
-  .bench-what .kind,
-  .bench-what .bench-per,
-  .bench-what .warn-chip { flex-shrink: 0; }
+    .bench-what {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+    .bench-what .kind,
+    .bench-what .bench-per,
+    .bench-what .warn-chip {
+        flex-shrink: 0;
+    }
 
-  .arm-label { display: block; }
+    .arm-label {
+        display: block;
+    }
 
-  /* ── the card head, pinned ──────────────────────────────────────────────────────────────────── */
-  /* The filter and the column names pin TOGETHER, as one block, on `--card-top` — the line the
+    /* ── the card head, pinned ──────────────────────────────────────────────────────────────────── */
+    /* The filter and the column names pin TOGETHER, as one block, on `--card-top` — the line the
      sidebar beside them starts at. One element rather than two sticky siblings, and that is forced
      rather than tidy: a second offset would have to read `--card-top` plus the toolbar's own height,
      and the toolbar WRAPS — measured 66px at 1440 and 109px at 1024, on both tables — so that number
      is not one CSS can be given. Nothing may be stacked under this block for the same reason, which
      is why the suite heading below scrolls away instead of pinning under it as it used to. */
-  .table-top {
-    position: sticky;
-    top: var(--card-top, 0);
-    z-index: 6;
-  }
+    .table-top {
+        position: sticky;
+        top: var(--card-top, 0);
+        z-index: 6;
+    }
 
-  /* ── disclosure ─────────────────────────────────────────────────────────────────────────────── */
-  /* A `<summary>` is a `list-item`: a block-level only child pushes the marker onto its own line above
+    /* ── disclosure ─────────────────────────────────────────────────────────────────────────────── */
+    /* A `<summary>` is a `list-item`: a block-level only child pushes the marker onto its own line above
      the title. `list-style: none` does not reach WebKit's pseudo-element, so both go. */
-  .row > summary,
-  .source > summary {
-    list-style: none;
-    cursor: pointer;
-    user-select: none;
-  }
-  .row > summary::-webkit-details-marker,
-  .source > summary::-webkit-details-marker { display: none; }
+    .row > summary,
+    .source > summary {
+        list-style: none;
+        cursor: pointer;
+        user-select: none;
+    }
+    .row > summary::-webkit-details-marker,
+    .source > summary::-webkit-details-marker {
+        display: none;
+    }
 
-  .chevron {
-    align-self: center;
-    width: .5rem;
-    height: .5rem;
-    transition: transform 100ms;
-  }
-  .row[open] > summary .chevron { transform: rotate(90deg); }
+    .chevron {
+        align-self: center;
+        width: 0.5rem;
+        height: 0.5rem;
+        transition: transform 100ms;
+    }
+    .row[open] > summary .chevron {
+        transform: rotate(90deg);
+    }
 
-  /* ── a table flush to its card ──────────────────────────────────────────────────────────────── */
-  /* When nothing sits between a table and the side of its card, the RULES should run the full width of
+    /* ── a table flush to its card ──────────────────────────────────────────────────────────────── */
+    /* When nothing sits between a table and the side of its card, the RULES should run the full width of
      the card — but the CELL TEXT has to stay on the same left edge as every other line in it. Those are
      two separate moves and the second is the one that is easy to forget: pull the table out by the
      panel's padding, then put that padding back on the outer columns. Do only the first and you have
@@ -230,55 +275,73 @@
 
      The outer-column rules out-specify a theme's own `.reference td { padding: … }` shorthand (0,3,1
      against 0,1,1), so they hold whichever order the sheets load in. */
-  .panel > .reference {
-    width: calc(100% + 2 * var(--panel-pad, 0px));
-    margin-inline: calc(-1 * var(--panel-pad, 0px));
-  }
-  /* `.is-table` already took the padding off, so there is nothing to break out of. */
-  .panel.is-table > .reference { width: 100%; margin-inline: 0; }
+    .panel > .reference {
+        width: calc(100% + 2 * var(--panel-pad, 0px));
+        margin-inline: calc(-1 * var(--panel-pad, 0px));
+    }
+    /* `.is-table` already took the padding off, so there is nothing to break out of. */
+    .panel.is-table > .reference {
+        width: 100%;
+        margin-inline: 0;
+    }
 
-  /* ── the sidebar ────────────────────────────────────────────────────────────────────────────── */
-  /* Two columns, and the nav is the one that stays put. `--sidebar-w` and the look are the theme's;
+    /* ── the sidebar ────────────────────────────────────────────────────────────────────────────── */
+    /* Two columns, and the nav is the one that stays put. `--sidebar-w` and the look are the theme's;
      what is structural is that the aside scrolls independently and the body may not be squeezed by a
      long callable name — hence `minmax(0, 1fr)` on the body and a fixed track on the nav. */
-  .with-sidebar {
-    display: grid;
-    grid-template-columns: var(--sidebar-w, 14rem) minmax(0, 1fr);
-    gap: var(--sidebar-gap, 2.5rem);
-    align-items: start;
-  }
+    .with-sidebar {
+        display: grid;
+        grid-template-columns: var(--sidebar-w, 14rem) minmax(0, 1fr);
+        gap: var(--sidebar-gap, 2.5rem);
+        align-items: start;
+    }
 
-  .sidebar {
-    position: sticky;
-    top: var(--card-top, 0);
-    max-height: calc(100vh - var(--card-top, 0px) - var(--below-chrome, 1rem));
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
+    .sidebar {
+        position: sticky;
+        top: var(--card-top, 0);
+        max-height: calc(100vh - var(--card-top, 0px) - var(--below-chrome, 1rem));
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
 
-  .sidebar-nav { display: flex; flex-direction: column; }
-  .sidebar-item { display: block; text-decoration: none; }
-  /* No `.sidebar-sections` here, and `site/sidebar.ts` is where the reason is written down: a second
+    .sidebar-nav {
+        display: flex;
+        flex-direction: column;
+    }
+    .sidebar-item {
+        display: block;
+        text-decoration: none;
+    }
+    /* No `.sidebar-sections` here, and `site/sidebar.ts` is where the reason is written down: a second
      level listing the current page's contents cannot be built without a load, and a load the LAYOUT
      asks about settles on a server and has not on a client. `brand/gallery.html` still draws one and
      carries the rules for it in its own block, because a static page has no hydration to break. */
 
-  /* An anchor jump lands the rung below the sticky chrome rather than under it. */
-  .rung { scroll-margin-top: var(--card-top, 0); }
+    /* An anchor jump lands the rung below the sticky chrome rather than under it. */
+    .rung {
+        scroll-margin-top: var(--card-top, 0);
+    }
 
-  /* NO `scroll-behavior: smooth` here, and the sidebar above is exactly what wants it: an anchor jump
+    /* NO `scroll-behavior: smooth` here, and the sidebar above is exactly what wants it: an anchor jump
      to a rung would read better eased. It broke the app's navigation contract — `navigate()` scrolls
      to the top, and a smooth scroll is still animating when the next line reads `scrollY`, so a plain
      cross-route navigation measured 10335 instead of 0. An app-wide easing that makes a router look
      broken is not a nicety, and the scroller both share is the document's. The gallery, which has no
      router, asks for it in its own block. */
 
-  /* ── overflow ───────────────────────────────────────────────────────────────────────────────── */
-  .code { overflow-x: auto; }
-  .console { overflow-y: auto; }
-  .reference { width: 100%; border-collapse: collapse; }
+    /* ── overflow ───────────────────────────────────────────────────────────────────────────────── */
+    .code {
+        overflow-x: auto;
+    }
+    .console {
+        overflow-y: auto;
+    }
+    .reference {
+        width: 100%;
+        border-collapse: collapse;
+    }
 
-  /* The `<pre>` an EXAMPLE wrote — `.rung-preview` on a docs rung, `.stage` on a case row. Both frames
+    /* The `<pre>` an EXAMPLE wrote — `.rung-preview` on a docs rung, `.stage` on a case row. Both frames
      are `justify-items: start`, which is right for the buttons and labels that fill them and wrong for
      this: a start-aligned item is FIT-CONTENT sized, and `white-space: pre` makes a pre's max-content
      its longest line. A `JSON.stringify` of a user-agent measured 1453px inside a 490px box, painted
@@ -294,10 +357,13 @@
 
      Reached from here rather than from the examples, for the reason `.rung-preview button` is: the
      source of a rung is the artifact a reader copies, so it stays class-free and the frame styles it. */
-  .rung-preview pre,
-  .stage pre { justify-self: stretch; overflow-x: auto; }
+    .rung-preview pre,
+    .stage pre {
+        justify-self: stretch;
+        overflow-x: auto;
+    }
 
-  /* The same frame, for the content a `<pre>` is not. An unbreakable token IS an item's min-content,
+    /* The same frame, for the content a `<pre>` is not. An unbreakable token IS an item's min-content,
      and a start-aligned item is fit-content sized, so one `mailto:` in a `<ul>` measured 226px inside
      a 224px column on `/docs/url` and painted over the source pane beside it. The same URL, hash or
      JSON blob can land in any of these, so the treatment is the FRAME's rather than a class each
@@ -307,12 +373,16 @@
      artifact a reader copies, so a break inserted into it would falsify what it says; everything else
      is prose, where a line lost off the right edge is one nobody notices is missing. `pre` is put back
      to `normal` rather than left out of the selector, because it inherits this otherwise. */
-  .rung-preview,
-  .stage { overflow-wrap: anywhere; }
-  .rung-preview pre,
-  .stage pre { overflow-wrap: normal; }
+    .rung-preview,
+    .stage {
+        overflow-wrap: anywhere;
+    }
+    .rung-preview pre,
+    .stage pre {
+        overflow-wrap: normal;
+    }
 
-  /* Named `.datatable`, not `.table`: `table` is one of Tailwind's DISPLAY utilities, and a utility
+    /* Named `.datatable`, not `.table`: `table` is one of Tailwind's DISPLAY utilities, and a utility
      beats a component whatever the specificity, because layer order decides first. The element
      silently became `display: table`, shrink-wrapped to its content and stopped filling its panel.
      Any component class that is also a utility name loses the same way — `block`, `grid`, `flex`,
@@ -322,99 +392,152 @@
      scrolling sideways. The panel above it is under the standing prohibition for the harder reason —
      the pinned card head is its child, and a scrollport there is what parks it on row one. */
 
-  .bar { overflow: hidden; }
-  .bar-fill { height: 100%; }
-
-  /* ── quality floor. a theme sets the colour; it does not get to remove these. ───────────────── */
-  :focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
-
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-      animation-duration: 1ms !important;
-      transition-duration: 1ms !important;
+    .bar {
+        overflow: hidden;
     }
-  }
+    .bar-fill {
+        height: 100%;
+    }
 
-  /* ── narrow ─────────────────────────────────────────────────────────────────────────────────── */
-  @media (max-width: 64rem) {
-    /* The numbers stop being columns and become a labelled block, because seven 5.5rem columns cannot
+    /* ── quality floor. a theme sets the colour; it does not get to remove these. ───────────────── */
+    :focus-visible {
+        outline: 2px solid currentColor;
+        outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 1ms !important;
+            transition-duration: 1ms !important;
+        }
+    }
+
+    /* ── narrow ─────────────────────────────────────────────────────────────────────────────────── */
+    @media (max-width: 64rem) {
+        /* The numbers stop being columns and become a labelled block, because seven 5.5rem columns cannot
        fit and a horizontally scrolling table hides the one number somebody came for. */
-    .arm-row {
-      grid-template-columns: minmax(0, 1fr) 6rem;
-      row-gap: .25rem;
-    }
-    .arm-row .number:nth-of-type(n + 2) { display: none; }
-    .arm-head span:nth-child(n + 3) { display: none; }
-    /* `nodes/op` goes, and the template is left with a track for EVERY CELL THAT REMAINS: title,
+        .arm-row {
+            grid-template-columns: minmax(0, 1fr) 6rem;
+            row-gap: 0.25rem;
+        }
+        .arm-row .number:nth-of-type(n + 2) {
+            display: none;
+        }
+        .arm-head span:nth-child(n + 3) {
+            display: none;
+        }
+        /* `nodes/op` goes, and the template is left with a track for EVERY CELL THAT REMAINS: title,
        abide, by hand, the ratio, the run button. Written one track short, the fifth cell landed in an
        implicit auto column outside the grid and pushed the table 38px past its card — which reads as a
        page that scrolls sideways by five pixels rather than as a column count being wrong. */
-    .bench-row { grid-template-columns: minmax(0, 1fr) 6rem 6rem 5rem 3rem; }
-    .bench-row > :nth-child(4) { display: none; }
-  }
+        .bench-row {
+            grid-template-columns: minmax(0, 1fr) 6rem 6rem 5rem 3rem;
+        }
+        .bench-row > :nth-child(4) {
+            display: none;
+        }
+    }
 
-  @media (max-width: 56rem) {
-    /* The sidebar stops being a column and becomes a band above the body — a 15rem track and a table
+    @media (max-width: 56rem) {
+        /* The sidebar stops being a column and becomes a band above the body — a 15rem track and a table
        cannot both have the width. */
-    .with-sidebar { grid-template-columns: minmax(0, 1fr); }
-    .sidebar { position: static; max-height: none; overflow: visible; }
-    .sidebar-nav { flex-direction: row; flex-wrap: wrap; }
-  }
+        .with-sidebar {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .sidebar {
+            position: static;
+            max-height: none;
+            overflow: visible;
+        }
+        .sidebar-nav {
+            flex-direction: row;
+            flex-wrap: wrap;
+        }
+    }
 
-  @media (max-width: 44rem) {
-    /* `by hand` goes too, and the same count rule holds: title, abide, the ratio, the run button. */
-    .bench-row { grid-template-columns: minmax(0, 1fr) 6rem 5rem 3rem; }
-    .bench-row > :nth-child(3) { display: none; }
-    .case-row { grid-template-columns: 0.75rem minmax(0, 1fr) 5rem; }
-  }
+    @media (max-width: 44rem) {
+        /* `by hand` goes too, and the same count rule holds: title, abide, the ratio, the run button. */
+        .bench-row {
+            grid-template-columns: minmax(0, 1fr) 6rem 5rem 3rem;
+        }
+        .bench-row > :nth-child(3) {
+            display: none;
+        }
+        .case-row {
+            grid-template-columns: 0.75rem minmax(0, 1fr) 5rem;
+        }
+    }
 }
 
 @layer components {
+    body {
+        background: var(--color-ground);
+        color: var(--color-ink);
+        font-family: var(--font-body);
+        font-size: 17px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+    }
 
+    a {
+        color: inherit;
+    }
+    code {
+        font-family: var(--font-data);
+        font-size: 0.82em;
+        background: rgba(20, 26, 22, 0.075);
+        padding: 0.1em 0.3em;
+    }
+    :focus-visible {
+        outline-color: var(--color-verdigris);
+    }
 
-  body {
-    background: var(--color-ground);
-    color: var(--color-ink);
-    font-family: var(--font-body);
-    font-size: 17px;
-    line-height: 1.6;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  a { color: inherit; }
-  code { font-family: var(--font-data); font-size: .82em; background: rgba(20, 26, 22, .075); padding: .1em .3em; }
-  :focus-visible { outline-color: var(--color-verdigris); }
-
-  /* Full width. The only number the layout is told is the gutter; the MEASURE is what gets bounded. */
-  main { display: grid; gap: var(--s-7); padding: var(--s-7) var(--gutter); }
-  /* A page's own stack, beside the nav. Tighter than `main`'s: the head and the table it heads are one
+    /* Full width. The only number the layout is told is the gutter; the MEASURE is what gets bounded. */
+    main {
+        display: grid;
+        gap: var(--s-7);
+        padding: var(--s-7) var(--gutter);
+    }
+    /* A page's own stack, beside the nav. Tighter than `main`'s: the head and the table it heads are one
      thing, where two specimens on `main` are not. */
-  .with-sidebar-body { display: grid; gap: var(--s-5); align-content: start; }
+    .with-sidebar-body {
+        display: grid;
+        gap: var(--s-5);
+        align-content: start;
+    }
 
-  /* ── the panel ──────────────────────────────────────────────────────────────────────────────── */
-  .panel {
-    background: var(--color-paper);
-    border: 1px solid var(--color-rule);
-    border-radius: var(--radius-card);
-    box-shadow: var(--shadow-edge), var(--shadow-thick);
-    padding: var(--panel-pad);
-  }
-  .panel.is-table { padding: 0; }
-  .panel.is-table .toolbar { padding: var(--s-4) var(--panel-pad); }
-  /* THE EDGES BELONG TO THE PARTS, not to the panel, and only because one of the parts pins. A border
+    /* ── the panel ──────────────────────────────────────────────────────────────────────────────── */
+    .panel {
+        background: var(--color-paper);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-edge), var(--shadow-thick);
+        padding: var(--panel-pad);
+    }
+    .panel.is-table {
+        padding: 0;
+    }
+    .panel.is-table .toolbar {
+        padding: var(--s-4) var(--panel-pad);
+    }
+    /* THE EDGES BELONG TO THE PARTS, not to the panel, and only because one of the parts pins. A border
      drawn on the panel is drawn on the PANEL'S box, which reaches up past the pinned head to wherever
      the card started: its top scrolled away, leaving the head as paper with no edge on it, and its
      sides ran straight on past the head's rounded corners, which is a tick beside each arc. So the
      head carries the top and the two corners it is under, the table carries the rest, and the pair is
      the same outline at rest. Nothing is left behind the strip above the head to show through it:
      what is not under the head is under the chrome's own band. */
-  .panel.is-table { border: 0; }
-  .panel.is-table > .table-top {
-    background: var(--color-paper);
-    border: 1px solid var(--color-rule);
-    border-bottom: 0;
-    border-radius: var(--radius-card) var(--radius-card) 0 0;
-    /* The two corners are where those edges cannot meet on their own. A sticky element keeps its flow
+    .panel.is-table {
+        border: 0;
+    }
+    .panel.is-table > .table-top {
+        background: var(--color-paper);
+        border: 1px solid var(--color-rule);
+        border-bottom: 0;
+        border-radius: var(--radius-card) var(--radius-card) 0 0;
+        /* The two corners are where those edges cannot meet on their own. A sticky element keeps its flow
        box, so the table's side rule runs up BEHIND the pinned head to wherever the card started — and
        a rounded corner leaves the square outside its arc transparent, so that straight rule showed
        through as a tick beside each one. The second shadow fills the square with the page's colour:
@@ -422,181 +545,256 @@
        bottom edge stops at the head's and no ring lands on the row below. An outer shadow rather than
        a pseudo-element because it is painted OUTSIDE the border box and can never touch the head —
        a negative-z child paints over its parent's own background, which put ground on the border. */
-    box-shadow: var(--shadow-edge), 0 calc(-1 * var(--radius-card)) 0 var(--radius-card) var(--color-ground);
-  }
-  .panel.is-table .datatable {
-    border: 1px solid var(--color-rule);
-    border-top: 0;
-    border-radius: 0 0 var(--radius-card) var(--radius-card);
-  }
-  /* Rounded but NOT clipped — `overflow: hidden` here would unpin the sticky rows inside. */
-  .panel.is-table .row:last-child,
-  .panel.is-table .row:last-child > summary { border-radius: 0 0 var(--radius-card) var(--radius-card); }
+        box-shadow:
+            var(--shadow-edge),
+            0 calc(-1 * var(--radius-card)) 0 var(--radius-card) var(--color-ground);
+    }
+    .panel.is-table .datatable {
+        border: 1px solid var(--color-rule);
+        border-top: 0;
+        border-radius: 0 0 var(--radius-card) var(--radius-card);
+    }
+    /* Rounded but NOT clipped — `overflow: hidden` here would unpin the sticky rows inside. */
+    .panel.is-table .row:last-child,
+    .panel.is-table .row:last-child > summary {
+        border-radius: 0 0 var(--radius-card) var(--radius-card);
+    }
 
-  /* ── chrome ─────────────────────────────────────────────────────────────────────────────────── */
-  .site-header {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    height: var(--header-h);
-    background: var(--color-ground);
-    border-bottom: 2px solid var(--color-ink);
-    /* A SOLID shadow, no blur: what pins below lands on `--card-top`, not flush under the rule, and
+    /* ── chrome ─────────────────────────────────────────────────────────────────────────────────── */
+    .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        height: var(--header-h);
+        background: var(--color-ground);
+        border-bottom: 2px solid var(--color-ink);
+        /* A SOLID shadow, no blur: what pins below lands on `--card-top`, not flush under the rule, and
        the strip between the two is a window the rows behind scroll through. This carries the page
        colour that far down so the strip stays empty. The rule keeps its own place at the top of it. */
-    box-shadow: 0 var(--below-chrome) 0 var(--color-ground);
-  }
-  .site-header-inner {
-    display: flex;
-    align-items: center;
-    height: 100%;
-    gap: var(--s-5);
-    padding-inline: var(--gutter);
-  }
-  .wordmark {
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: var(--text-lead);
-    letter-spacing: -.06em;
-    text-decoration: none;
-  }
-  .nav { display: flex; gap: var(--s-5); }
-  .nav-siblings { margin-left: auto; display: flex; gap: var(--s-5); }
-  .nav-link {
-    font-family: var(--font-display);
-    font-size: var(--text-body);
-    font-weight: 500;
-    letter-spacing: .04em;
-    text-decoration: none;
-    color: var(--color-pencil);
-  }
-  .nav-link:hover { color: var(--color-ink); }
-  .nav-link.is-here { color: var(--color-verdigris); text-decoration: underline; text-underline-offset: 5px; }
+        box-shadow: 0 var(--below-chrome) 0 var(--color-ground);
+    }
+    .site-header-inner {
+        display: flex;
+        align-items: center;
+        height: 100%;
+        gap: var(--s-5);
+        padding-inline: var(--gutter);
+    }
+    .wordmark {
+        font-family: var(--font-display);
+        font-weight: 800;
+        font-size: var(--text-lead);
+        letter-spacing: -0.06em;
+        text-decoration: none;
+    }
+    .nav {
+        display: flex;
+        gap: var(--s-5);
+    }
+    .nav-siblings {
+        margin-left: auto;
+        display: flex;
+        gap: var(--s-5);
+    }
+    .nav-link {
+        font-family: var(--font-display);
+        font-size: var(--text-body);
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-decoration: none;
+        color: var(--color-pencil);
+    }
+    .nav-link:hover {
+        color: var(--color-ink);
+    }
+    .nav-link.is-here {
+        color: var(--color-verdigris);
+        text-decoration: underline;
+        text-underline-offset: 5px;
+    }
 
-  .site-footer {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s-5);
-    padding: var(--s-4) var(--gutter) var(--s-7);
-    border-top: 2px solid var(--color-ink);
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--color-pencil);
-  }
+    .site-footer {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--s-5);
+        padding: var(--s-4) var(--gutter) var(--s-7);
+        border-top: 2px solid var(--color-ink);
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--color-pencil);
+    }
 
-  /* ── sidebar ────────────────────────────────────────────────────────────────────────────────── */
-  .sidebar { display: grid; gap: var(--s-4); align-content: start; }
-  /* No inline padding of its own: an item's own padding is what runs its hover and its current mark
+    /* ── sidebar ────────────────────────────────────────────────────────────────────────────────── */
+    .sidebar {
+        display: grid;
+        gap: var(--s-4);
+        align-content: start;
+    }
+    /* No inline padding of its own: an item's own padding is what runs its hover and its current mark
      to both edges of the panel. */
-  .sidebar.panel { padding-inline: 0; }
-  .sidebar-title {
-    margin: 0;
-    padding-inline: var(--panel-pad);
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    font-weight: 700;
-    letter-spacing: .18em;
-    text-transform: uppercase;
-    color: var(--color-brass);
-  }
-  /* The aside's own gap is what separates two vocabularies; this is what holds a title to its nav. */
-  .sidebar-group { display: grid; gap: var(--s-2); }
-  .sidebar-nav { gap: var(--s-1); }
-  .sidebar-item {
-    font-family: var(--font-display);
-    font-size: var(--text-body);
-    font-weight: 700;
-    letter-spacing: -.04em;
-    color: var(--color-ink-soft);
-    padding: var(--s-1) var(--panel-pad);
-  }
-  .sidebar-item:hover { color: var(--color-ink); background: var(--color-ground); }
-  .sidebar-item.is-here { color: var(--color-ink); background: var(--color-ground); box-shadow: inset 2px 0 0 var(--color-verdigris); }
+    .sidebar.panel {
+        padding-inline: 0;
+    }
+    .sidebar-title {
+        margin: 0;
+        padding-inline: var(--panel-pad);
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--color-brass);
+    }
+    /* The aside's own gap is what separates two vocabularies; this is what holds a title to its nav. */
+    .sidebar-group {
+        display: grid;
+        gap: var(--s-2);
+    }
+    .sidebar-nav {
+        gap: var(--s-1);
+    }
+    .sidebar-item {
+        font-family: var(--font-display);
+        font-size: var(--text-body);
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        color: var(--color-ink-soft);
+        padding: var(--s-1) var(--panel-pad);
+    }
+    .sidebar-item:hover {
+        color: var(--color-ink);
+        background: var(--color-ground);
+    }
+    .sidebar-item.is-here {
+        color: var(--color-ink);
+        background: var(--color-ground);
+        box-shadow: inset 2px 0 0 var(--color-verdigris);
+    }
 
-  /* ── page head ──────────────────────────────────────────────────────────────────────────────── */
-  .page-head {
-    display: grid;
-    gap: var(--s-3);
-    padding-bottom: var(--s-5);
-    border-bottom: 1px solid var(--color-rule);
-  }
-  .crumb {
-    margin: 0;
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    letter-spacing: .18em;
-    text-transform: uppercase;
-    color: var(--color-pencil);
-  }
-  .crumb a { text-decoration: none; }
-  .crumb a:hover { color: var(--color-ink); }
-  .page-title {
-    margin: 0;
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: var(--text-title);
-    letter-spacing: -.06em;
-    line-height: 1;
-  }
-  .page-blurb { margin: 0; max-width: var(--measure); font-size: var(--text-body); color: var(--color-ink-soft); }
-  .import-line {
-    justify-self: start;
-    background: var(--color-lifted);
-    border-left: 3px solid var(--color-verdigris);
-    border-radius: 0 var(--radius-card) var(--radius-card) 0;
-    padding: var(--s-3) var(--s-4);
-  }
-  /* The one thing easy to get wrong, level with the import rather than under the last rung. The same
+    /* ── page head ──────────────────────────────────────────────────────────────────────────────── */
+    .page-head {
+        display: grid;
+        gap: var(--s-3);
+        padding-bottom: var(--s-5);
+        border-bottom: 1px solid var(--color-rule);
+    }
+    .crumb {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--color-pencil);
+    }
+    .crumb a {
+        text-decoration: none;
+    }
+    .crumb a:hover {
+        color: var(--color-ink);
+    }
+    .page-title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: var(--text-title);
+        letter-spacing: -0.06em;
+        line-height: 1;
+    }
+    .page-blurb {
+        margin: 0;
+        max-width: var(--measure);
+        font-size: var(--text-body);
+        color: var(--color-ink-soft);
+    }
+    .import-line {
+        justify-self: start;
+        background: var(--color-lifted);
+        border-left: 3px solid var(--color-verdigris);
+        border-radius: 0 var(--radius-card) var(--radius-card) 0;
+        padding: var(--s-3) var(--s-4);
+    }
+    /* The one thing easy to get wrong, level with the import rather than under the last rung. The same
      left-marked shape, in the OTHER of the two accent colours: verdigris is what abide offers you and
      brass is what it is warning you about, which is the distinction `.rung-number` already draws. */
-  .pitfall {
-    display: grid;
-    gap: var(--s-1);
-    max-width: var(--measure);
-    background: var(--color-lifted);
-    border-left: 3px solid var(--color-brass);
-    border-radius: 0 var(--radius-card) var(--radius-card) 0;
-    padding: var(--s-3) var(--s-4);
-  }
-  .pitfall-label {
-    margin: 0;
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-    color: var(--color-brass);
-  }
-  .pitfall-body { margin: 0; font-size: var(--text-ui); color: var(--color-ink-soft); }
-  /* A section's lead on `/docs`: what these names are to EACH OTHER, above the grid of them. */
-  .topic-lead { margin: 0; max-width: var(--measure); font-size: var(--text-ui); color: var(--color-ink-soft); }
+    .pitfall {
+        display: grid;
+        gap: var(--s-1);
+        max-width: var(--measure);
+        background: var(--color-lifted);
+        border-left: 3px solid var(--color-brass);
+        border-radius: 0 var(--radius-card) var(--radius-card) 0;
+        padding: var(--s-3) var(--s-4);
+    }
+    .pitfall-label {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        letter-spacing: var(--tracking-label);
+        text-transform: uppercase;
+        color: var(--color-brass);
+    }
+    .pitfall-body {
+        margin: 0;
+        font-size: var(--text-ui);
+        color: var(--color-ink-soft);
+    }
+    /* A section's lead on `/docs`: what these names are to EACH OTHER, above the grid of them. */
+    .topic-lead {
+        margin: 0;
+        max-width: var(--measure);
+        font-size: var(--text-ui);
+        color: var(--color-ink-soft);
+    }
 
-  /* ── prose ──────────────────────────────────────────────────────────────────────────────────── */
-  .prose { display: grid; gap: var(--s-4); max-width: var(--measure); font-size: var(--text-body); }
-  .prose h2 {
-    margin: 0;
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: var(--text-lead);
-    letter-spacing: var(--tracking-display);
-  }
-  .prose p { margin: 0; }
-  .prose em { font-style: italic; color: var(--color-oxide); }
-  .prose strong { font-weight: 600; }
-  .prose ul { display: grid; gap: var(--s-1); margin: 0; padding-left: var(--s-4); }
-  .prose li::marker { color: var(--color-brass); }
-  .prose blockquote {
-    margin: 0;
-    padding-left: var(--s-4);
-    border-left: 3px solid var(--color-brass);
-    font-style: italic;
-    color: var(--color-ink-soft);
-  }
+    /* ── prose ──────────────────────────────────────────────────────────────────────────────────── */
+    .prose {
+        display: grid;
+        gap: var(--s-4);
+        max-width: var(--measure);
+        font-size: var(--text-body);
+    }
+    .prose h2 {
+        margin: 0;
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: var(--text-lead);
+        letter-spacing: var(--tracking-display);
+    }
+    .prose p {
+        margin: 0;
+    }
+    .prose em {
+        font-style: italic;
+        color: var(--color-oxide);
+    }
+    .prose strong {
+        font-weight: 600;
+    }
+    .prose ul {
+        display: grid;
+        gap: var(--s-1);
+        margin: 0;
+        padding-left: var(--s-4);
+    }
+    .prose li::marker {
+        color: var(--color-brass);
+    }
+    .prose blockquote {
+        margin: 0;
+        padding-left: var(--s-4);
+        border-left: 3px solid var(--color-brass);
+        font-style: italic;
+        color: var(--color-ink-soft);
+    }
 
-  /* ── ladder ─────────────────────────────────────────────────────────────────────────────────── */
-  .ladder { display: grid; gap: var(--s-5); }
-  /* Result and code side by side, now that the page is full width.
+    /* ── ladder ─────────────────────────────────────────────────────────────────────────────────── */
+    .ladder {
+        display: grid;
+        gap: var(--s-5);
+    }
+    /* Result and code side by side, now that the page is full width.
      The code column takes what its longest line needs rather than half: the widest line in this
      ladder is 660px against 1040 available, so an even split would have put the code into horizontal
      scroll while the result sat in 520px of empty box.
@@ -615,12 +813,20 @@
      makes a pre's min-content its longest LINE — `overflow-x` on the pre does not lower that. So a
      viewless rung pushed the body column to 862px inside a 688px track, and only those rungs were
      affected, which read as two of six rungs being wrong rather than as a track being unstated. */
-  .rung { display: grid; gap: var(--s-4); grid-template-columns: minmax(14rem, 1fr) minmax(0, var(--code-measure)); }
-  /* The heading names both columns, so it spans them. */
-  .rung-title { grid-column: 1 / -1; }
-  /* The box is stretched to its neighbour's height; its contents stay at the top of it. */
-  .rung-preview { align-content: start; }
-  /* The code column is a tab strip and ONE pane — see `site/files.abide` — so it is a grid of its own
+    .rung {
+        display: grid;
+        gap: var(--s-4);
+        grid-template-columns: minmax(14rem, 1fr) minmax(0, var(--code-measure));
+    }
+    /* The heading names both columns, so it spans them. */
+    .rung-title {
+        grid-column: 1 / -1;
+    }
+    /* The box is stretched to its neighbour's height; its contents stay at the top of it. */
+    .rung-preview {
+        align-content: start;
+    }
+    /* The code column is a tab strip and ONE pane — see `site/files.abide` — so it is a grid of its own
      rather than the bare `.code-block` that used to be the grid item here.
      `minmax(0, 1fr)` and not the implicit `auto` this reached for first, which is the same horizontal
      scrollbar the track above was declared to stop and is worth writing down twice: an `auto` track
@@ -628,263 +834,382 @@
      longest line. `minmax(0, …)` states the minimum instead, which is what removes it. Measured at
      812px of pane inside a 672px column, running off the card and taking the body to 1523 in a 1440
      window — and only on the rungs with two files, because they are the ones that grew this level. */
-  .files { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; }
+    .files {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-content: start;
+    }
 
-  /* The tabs sit ON the pane's top edge: same background, same border, and the bottom border painted
+    /* The tabs sit ON the pane's top edge: same background, same border, and the bottom border painted
      out in the pane's own colour, which is what joins the selected one to the box below it. The strip
      is pulled down a pixel so the two borders are one line rather than two. */
-  .tabs { display: flex; gap: var(--s-1); margin-bottom: -1px; }
-  .tab {
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-    padding: var(--s-1) var(--s-3);
-    color: var(--color-pencil);
-    background: none;
-    border: 1px solid transparent;
-    border-radius: var(--radius-card) var(--radius-card) 0 0;
-  }
-  .tab:hover { color: var(--color-ink); }
-  .tab[aria-selected="true"] {
-    color: var(--color-ink);
-    background: var(--color-lifted);
-    border-color: var(--color-rule);
-    border-bottom-color: var(--color-lifted);
-  }
-  /* A tabbed pane is square where the strip meets it, for the same reason: two radii there would show
+    .tabs {
+        display: flex;
+        gap: var(--s-1);
+        margin-bottom: -1px;
+    }
+    .tab {
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        letter-spacing: var(--tracking-label);
+        text-transform: uppercase;
+        padding: var(--s-1) var(--s-3);
+        color: var(--color-pencil);
+        background: none;
+        border: 1px solid transparent;
+        border-radius: var(--radius-card) var(--radius-card) 0 0;
+    }
+    .tab:hover {
+        color: var(--color-ink);
+    }
+    .tab[aria-selected="true"] {
+        color: var(--color-ink);
+        background: var(--color-lifted);
+        border-color: var(--color-rule);
+        border-bottom-color: var(--color-lifted);
+    }
+    /* A tabbed pane is square where the strip meets it, for the same reason: two radii there would show
      the seam the negative margin exists to close. */
-  .tabs + .code-block { border-top-left-radius: 0; border-top-right-radius: 0; }
+    .tabs + .code-block {
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+    }
 
-  @media (max-width: 64rem) {
-    .rung { grid-template-columns: minmax(0, 1fr); }
-  }
-  .rung-head { display: flex; align-items: baseline; gap: var(--s-3); margin: 0; }
-  .rung-number {
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: var(--text-lead);
-    letter-spacing: -.06em;
-    color: var(--color-brass);
-    line-height: 1;
-  }
-  .rung-adds { font-family: var(--font-display); font-weight: 500; font-size: var(--text-small); letter-spacing: -.03em; }
-  /* `.rung-title` exists so this pair can have its own gap. Closing the distance with a negative
+    @media (max-width: 64rem) {
+        .rung {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+    .rung-head {
+        display: flex;
+        align-items: baseline;
+        gap: var(--s-3);
+        margin: 0;
+    }
+    .rung-number {
+        font-family: var(--font-display);
+        font-weight: 800;
+        font-size: var(--text-lead);
+        letter-spacing: -0.06em;
+        color: var(--color-brass);
+        line-height: 1;
+    }
+    .rung-adds {
+        font-family: var(--font-display);
+        font-weight: 500;
+        font-size: var(--text-small);
+        letter-spacing: -0.03em;
+    }
+    /* `.rung-title` exists so this pair can have its own gap. Closing the distance with a negative
      margin on the child was tried first, and the container is the thing that knows the two belong
      together — so make the container. */
-  .rung-title { display: grid; gap: var(--s-1); }
-  .rung-of {
-    margin: 0;
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-    color: var(--color-pencil);
-  }
-  .rung-of code { background: none; padding: 0; color: var(--color-verdigris); }
-  /* A rung's own aside, where the diff between two steps is not self-evident from the two files.
+    .rung-title {
+        display: grid;
+        gap: var(--s-1);
+    }
+    .rung-of {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        letter-spacing: var(--tracking-label);
+        text-transform: uppercase;
+        color: var(--color-pencil);
+    }
+    .rung-of code {
+        background: none;
+        padding: 0;
+        color: var(--color-verdigris);
+    }
+    /* A rung's own aside, where the diff between two steps is not self-evident from the two files.
      Under the claim line rather than beside the preview: it is about the STEP, not about the result. */
-  .rung-note { margin: 0; max-width: var(--measure); font-size: var(--text-small); color: var(--color-ink-soft); }
-  .rung-preview {
-    display: grid;
-    gap: var(--s-2);
-    justify-items: start;
-    background: var(--color-ground);
-    border: 1px solid var(--color-rule);
-    border-radius: var(--radius-card);
-    padding: var(--s-4);
-  }
-  .rung-preview p { margin: 0; font-size: var(--text-ui); }
-  .rung-preview button,
-  .stage button,
-  .button-small {
-    font-family: var(--font-display);
-    font-size: var(--text-small);
-    letter-spacing: -.02em;
-    padding: var(--s-1) var(--s-2);
-    border: 1px solid var(--color-ink);
-    border-radius: var(--radius-chip);
-    background: var(--color-paper);
-    color: var(--color-ink);
-  }
-  .rung-preview button:hover,
-  .stage button:hover,
-  .button-small:hover { background: var(--color-ink); color: var(--color-paper); }
+    .rung-note {
+        margin: 0;
+        max-width: var(--measure);
+        font-size: var(--text-small);
+        color: var(--color-ink-soft);
+    }
+    .rung-preview {
+        display: grid;
+        gap: var(--s-2);
+        justify-items: start;
+        background: var(--color-ground);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-card);
+        padding: var(--s-4);
+    }
+    .rung-preview p {
+        margin: 0;
+        font-size: var(--text-ui);
+    }
+    .rung-preview button,
+    .stage button,
+    .button-small {
+        font-family: var(--font-display);
+        font-size: var(--text-small);
+        letter-spacing: -0.02em;
+        padding: var(--s-1) var(--s-2);
+        border: 1px solid var(--color-ink);
+        border-radius: var(--radius-chip);
+        background: var(--color-paper);
+        color: var(--color-ink);
+    }
+    .rung-preview button:hover,
+    .stage button:hover,
+    .button-small:hover {
+        background: var(--color-ink);
+        color: var(--color-paper);
+    }
 
-  /* The base layer strips a control's chrome, so a rung's `<input bind:value={…}/>` read as a line of
+    /* The base layer strips a control's chrome, so a rung's `<input bind:value={…}/>` read as a line of
      prose next to the text it drives — the reader could not tell the thing they were meant to TYPE in.
      Reached by descendant selector for the reason the buttons above are: the rung's source is what
      gets copied, so it stays class-free. */
-  .rung-preview input:not([type='checkbox'], [type='radio']),
-  .rung-preview select,
-  .rung-preview textarea {
-    font-family: var(--font-body);
-    font-size: var(--text-ui);
-    min-width: 12rem;
-    padding: var(--s-1) var(--s-2);
-    background: var(--color-ground);
-    border: 1px solid var(--color-rule);
-    border-radius: var(--radius-card);
-    color: var(--color-ink);
-  }
-  /* A control at rest sits at ground level and LIFTS on focus — the move `.field` makes, so a rung and
+    .rung-preview input:not([type="checkbox"], [type="radio"]),
+    .rung-preview select,
+    .rung-preview textarea {
+        font-family: var(--font-body);
+        font-size: var(--text-ui);
+        min-width: 12rem;
+        padding: var(--s-1) var(--s-2);
+        background: var(--color-ground);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-card);
+        color: var(--color-ink);
+    }
+    /* A control at rest sits at ground level and LIFTS on focus — the move `.field` makes, so a rung and
      the app's own forms read as the same control. */
-  .rung-preview input:not([type='checkbox'], [type='radio']):focus,
-  .rung-preview select:focus,
-  .rung-preview textarea:focus {
-    outline: none;
-    background: var(--color-lifted);
-    border-color: var(--color-verdigris);
-    box-shadow: inset 0 -2px 0 var(--color-verdigris);
-  }
-  /* A toggle is not a field to type in, and the field rules above pushed its label 12rem away from it:
+    .rung-preview input:not([type="checkbox"], [type="radio"]):focus,
+    .rung-preview select:focus,
+    .rung-preview textarea:focus {
+        outline: none;
+        background: var(--color-lifted);
+        border-color: var(--color-verdigris);
+        box-shadow: inset 0 -2px 0 var(--color-verdigris);
+    }
+    /* A toggle is not a field to type in, and the field rules above pushed its label 12rem away from it:
      `min-width` on a checkbox leaves the native box at its own size and pads the ELEMENT out to the
      measure, so `bind:group`'s two rows read as a column of boxes and a column of unattached words.
      So the toggle keeps its native chrome, and the `<label>` around it becomes the row that pairs the
      two — reached with `:has()` because the rung's source is what gets copied and stays class-free. */
-  .rung-preview input[type='checkbox'],
-  .rung-preview input[type='radio'] { margin: 0; accent-color: var(--color-verdigris); }
-  .rung-preview label:has(input[type='checkbox'], input[type='radio']) {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--s-2);
-    font-size: var(--text-ui);
-  }
+    .rung-preview input[type="checkbox"],
+    .rung-preview input[type="radio"] {
+        margin: 0;
+        accent-color: var(--color-verdigris);
+    }
+    .rung-preview label:has(input[type="checkbox"], input[type="radio"]) {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s-2);
+        font-size: var(--text-ui);
+    }
 
-  /* ── code ───────────────────────────────────────────────────────────────────────────────────── */
-  /* The `<pre>` an EXAMPLE wrote is on this selector rather than on a set of its own: what a rung
+    /* ── code ───────────────────────────────────────────────────────────────────────────────────── */
+    /* The `<pre>` an EXAMPLE wrote is on this selector rather than on a set of its own: what a rung
      prints into one is a JSON answer or a log line, which is the same thing the pane beside it is
      showing and reads at browser-default 16px body serif as though it were prose. Widened here rather
      than restated next to `.rung-preview p`, so the two cannot drift a size apart. */
-  .code,
-  .rung-preview pre,
-  .stage pre {
-    font-family: var(--font-data);
-    font-size: var(--text-small);
-    line-height: 1.85;
-    letter-spacing: -.03em;
-    margin: 0;
-  }
-  .code-block {
-    background: var(--color-lifted);
-    border: 1px solid var(--color-rule);
-    border-radius: var(--radius-card);
-    padding: var(--s-4);
-  }
-  .tok-comment { color: #58665c; font-style: italic; }
-  .tok-string  { color: #06703f; }
-  .tok-regex   { color: #b4400f; }
-  .tok-number  { color: #8a5a00; }
-  .tok-keyword { color: #a3123f; font-weight: 700; }
-  .tok-literal { color: #8a5a00; }
-  .tok-call    { color: #4534a8; }
-  .tok-punct   { color: #56605a; }
+    .code,
+    .rung-preview pre,
+    .stage pre {
+        font-family: var(--font-data);
+        font-size: var(--text-small);
+        line-height: 1.85;
+        letter-spacing: -0.03em;
+        margin: 0;
+    }
+    .code-block {
+        background: var(--color-lifted);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-card);
+        padding: var(--s-4);
+    }
+    .tok-comment {
+        color: #58665c;
+        font-style: italic;
+    }
+    .tok-string {
+        color: #06703f;
+    }
+    .tok-regex {
+        color: #b4400f;
+    }
+    .tok-number {
+        color: #8a5a00;
+    }
+    .tok-keyword {
+        color: #a3123f;
+        font-weight: 700;
+    }
+    .tok-literal {
+        color: #8a5a00;
+    }
+    .tok-call {
+        color: #4534a8;
+    }
+    .tok-punct {
+        color: #56605a;
+    }
 
-  /* ── toolbar ────────────────────────────────────────────────────────────────────────────────── */
-  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); margin: 0; }
-  .button {
-    font-family: var(--font-display);
-    font-size: var(--text-small);
-    letter-spacing: -.02em;
-    padding: var(--s-1) var(--s-3);
-    background: var(--color-ink);
-    color: var(--color-paper);
-    border: 1px solid var(--color-ink);
-    border-radius: var(--radius-chip);
-  }
-  .button:hover { background: var(--color-verdigris); border-color: var(--color-verdigris); box-shadow: var(--shadow-edge); }
-  .field {
-    width: 18rem;
-    font-family: var(--font-body);
-    font-size: var(--text-ui);
-    padding: var(--s-1) var(--s-2);
-    background: var(--color-ground);
-    border: 1px solid var(--color-rule);
-    border-radius: var(--radius-card);
-    color: var(--color-ink);
-  }
-  .field::placeholder { color: var(--color-pencil); }
-  /* A control at rest sits at ground level and LIFTS on focus — the same move a row makes when opened. */
-  .field:focus {
-    outline: none;
-    background: var(--color-lifted);
-    border-color: var(--color-verdigris);
-    box-shadow: inset 0 -2px 0 var(--color-verdigris);
-  }
-  .toolbar-count,
-  .toolbar-progress { font-family: var(--font-display); font-size: var(--text-micro); letter-spacing: .04em; color: var(--color-pencil); }
-  .chips { display: flex; flex-wrap: wrap; gap: var(--s-1); margin-left: auto; }
-  /* A second group sits beside the first rather than at the other end of the toolbar: two `auto`
+    /* ── toolbar ────────────────────────────────────────────────────────────────────────────────── */
+    .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--s-3);
+        margin: 0;
+    }
+    .button {
+        font-family: var(--font-display);
+        font-size: var(--text-small);
+        letter-spacing: -0.02em;
+        padding: var(--s-1) var(--s-3);
+        background: var(--color-ink);
+        color: var(--color-paper);
+        border: 1px solid var(--color-ink);
+        border-radius: var(--radius-chip);
+    }
+    .button:hover {
+        background: var(--color-verdigris);
+        border-color: var(--color-verdigris);
+        box-shadow: var(--shadow-edge);
+    }
+    .field {
+        width: 18rem;
+        font-family: var(--font-body);
+        font-size: var(--text-ui);
+        padding: var(--s-1) var(--s-2);
+        background: var(--color-ground);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-card);
+        color: var(--color-ink);
+    }
+    .field::placeholder {
+        color: var(--color-pencil);
+    }
+    /* A control at rest sits at ground level and LIFTS on focus — the same move a row makes when opened. */
+    .field:focus {
+        outline: none;
+        background: var(--color-lifted);
+        border-color: var(--color-verdigris);
+        box-shadow: inset 0 -2px 0 var(--color-verdigris);
+    }
+    .toolbar-count,
+    .toolbar-progress {
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        letter-spacing: 0.04em;
+        color: var(--color-pencil);
+    }
+    .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--s-1);
+        margin-left: auto;
+    }
+    /* A second group sits beside the first rather than at the other end of the toolbar: two `auto`
      margins split the free space between them, which reads as two unrelated controls. The toolbar's
      own gap is what separates the groups, against the tighter gap inside one. */
-  .chips + .chips { margin-left: 0; }
-  .chip {
-    font-family: var(--font-display);
-    font-size: var(--text-small);
-    letter-spacing: -.02em;
-    padding: var(--s-1) var(--s-2);
-    border: 1px solid var(--color-rule);
-    border-radius: var(--radius-chip);
-    color: var(--color-pencil);
-    background: none;
-  }
-  .chip:hover { color: var(--color-ink); border-color: var(--color-ink); }
-  .chip.is-on { background: var(--color-verdigris); border-color: var(--color-verdigris); color: var(--color-paper); }
+    .chips + .chips {
+        margin-left: 0;
+    }
+    .chip {
+        font-family: var(--font-display);
+        font-size: var(--text-small);
+        letter-spacing: -0.02em;
+        padding: var(--s-1) var(--s-2);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-chip);
+        color: var(--color-pencil);
+        background: none;
+    }
+    .chip:hover {
+        color: var(--color-ink);
+        border-color: var(--color-ink);
+    }
+    .chip.is-on {
+        background: var(--color-verdigris);
+        border-color: var(--color-verdigris);
+        color: var(--color-paper);
+    }
 
-  /* ── tables ─────────────────────────────────────────────────────────────────────────────────── */
-  .datatable { border-bottom: 1px solid var(--color-rule); }
-  .table-head {
-    background: var(--color-paper);
-    height: var(--head-h);
-    align-content: center;
-    border-bottom: 1px solid var(--color-ink);
-    box-shadow: var(--shadow-cast);
-  }
-  /* Set like the callable names on the index, because it is the same face doing the same job — naming
+    /* ── tables ─────────────────────────────────────────────────────────────────────────────────── */
+    .datatable {
+        border-bottom: 1px solid var(--color-rule);
+    }
+    .table-head {
+        background: var(--color-paper);
+        height: var(--head-h);
+        align-content: center;
+        border-bottom: 1px solid var(--color-ink);
+        box-shadow: var(--shadow-cast);
+    }
+    /* Set like the callable names on the index, because it is the same face doing the same job — naming
      a thing rather than being one. It always WAS Martian Mono 700; what made it read as a different
      typeface was UPPERCASE at +.16em against lowercase at -.04em, which changes a mono's texture more
      than a family swap would. Size stops at --text-small: a column header that reaches the size of the
      row titles beneath it stops being a header. Brass stays — that is what says label rather than data. */
-  .head {
-    font-family: var(--font-display);
-    font-size: var(--text-small);
-    font-weight: 700;
-    letter-spacing: -.04em;
-    color: var(--color-brass);
-    white-space: nowrap;
-  }
-  .group-head {
-    padding: var(--s-4) var(--pad-x) var(--s-1);
-    background: var(--color-paper);
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-    color: var(--color-pencil);
-  }
-  .group-head a { color: var(--color-ink); text-decoration: none; }
-  .group-head a:hover { color: var(--color-verdigris); }
+    .head {
+        font-family: var(--font-display);
+        font-size: var(--text-small);
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        color: var(--color-brass);
+        white-space: nowrap;
+    }
+    .group-head {
+        padding: var(--s-4) var(--pad-x) var(--s-1);
+        background: var(--color-paper);
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        letter-spacing: var(--tracking-label);
+        text-transform: uppercase;
+        color: var(--color-pencil);
+    }
+    .group-head a {
+        color: var(--color-ink);
+        text-decoration: none;
+    }
+    .group-head a:hover {
+        color: var(--color-verdigris);
+    }
 
-  /* Where the rows would have been. Set like a row rather than like a note, because the reader is
+    /* Where the rows would have been. Set like a row rather than like a note, because the reader is
      looking at a table and an unstyled line under the header reads as a broken one. */
-  .table-empty {
-    margin: 0;
-    padding: var(--s-4) var(--pad-x);
-    background: var(--color-paper);
-    font-size: var(--text-ui);
-    color: var(--color-pencil);
-  }
+    .table-empty {
+        margin: 0;
+        padding: var(--s-4) var(--pad-x);
+        background: var(--color-paper);
+        font-size: var(--text-ui);
+        color: var(--color-pencil);
+    }
 
-  .row { border-bottom: 1px solid var(--color-rule); background: var(--color-paper); }
-  .row:last-child { border-bottom: 0; }
-  .row > summary { padding-block: var(--s-2); }
-  .row > summary:hover { background: var(--color-lifted); }
-  .row[open] > summary { background: var(--color-lifted); box-shadow: inset 3px 0 0 var(--color-verdigris); }
-  .chevron { fill: var(--color-pencil); }
+    .row {
+        border-bottom: 1px solid var(--color-rule);
+        background: var(--color-paper);
+    }
+    .row:last-child {
+        border-bottom: 0;
+    }
+    .row > summary {
+        padding-block: var(--s-2);
+    }
+    .row > summary:hover {
+        background: var(--color-lifted);
+    }
+    .row[open] > summary {
+        background: var(--color-lifted);
+        box-shadow: inset 3px 0 0 var(--color-verdigris);
+    }
+    .chevron {
+        fill: var(--color-pencil);
+    }
 
-  .case-title { font-size: var(--text-body); font-weight: 600; }
+    .case-title {
+        font-size: var(--text-body);
+        font-weight: 600;
+    }
 
-  /* What the filter matched. A WASH and not a colour or a weight: the title is already the heaviest
+    /* What the filter matched. A WASH and not a colour or a weight: the title is already the heaviest
      text in its row, so a second weight on part of it reads as two titles, and brass is the one hue in
      the ladder that means "look here" without meaning passed or failed.
 
@@ -892,56 +1217,80 @@
      `--color-lifted` on the one that is open — and an opaque swatch tuned to either is a block of the
      wrong colour on the other. No padding: `.case-title` truncates at a fixed column, and an inline box
      that grows by .2em per hit moves the ellipsis a query is the reason for. */
-  mark.hit {
-    background: color-mix(in oklab, var(--color-brass) 28%, transparent);
-    color: inherit;
-    border-radius: 2px;
-  }
-  .badge {
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    font-weight: 700;
-    letter-spacing: .14em;
-    text-transform: uppercase;
-    text-align: right;
-  }
-  .badge.is-waiting,
-  .badge.is-running     { color: var(--color-rule); }
-  .badge.is-passing,
-  .badge.is-benched     { color: var(--color-verdigris); }
-  .badge.is-failed      { color: var(--color-oxide); }
-  /* Both mean "not asserted HERE" — brass rather than green, so a reader counting green rows on this
+    mark.hit {
+        background: color-mix(in oklab, var(--color-brass) 28%, transparent);
+        color: inherit;
+        border-radius: 2px;
+    }
+    .badge {
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        text-align: right;
+    }
+    .badge.is-waiting,
+    .badge.is-running {
+        color: var(--color-rule);
+    }
+    .badge.is-passing,
+    .badge.is-benched {
+        color: var(--color-verdigris);
+    }
+    .badge.is-failed {
+        color: var(--color-oxide);
+    }
+    /* Both mean "not asserted HERE" — brass rather than green, so a reader counting green rows on this
      page is counting claims this page actually made. */
-  .badge.is-interactive,
-  .badge.is-server      { color: var(--color-brass); }
+    .badge.is-interactive,
+    .badge.is-server {
+        color: var(--color-brass);
+    }
 
-  .row-body {
-    display: grid;
-    gap: var(--s-3);
-    padding: var(--s-3) var(--pad-x) var(--s-4);
-    background: var(--color-lifted);
-    box-shadow: inset 3px 0 0 var(--color-verdigris);
-    cursor: pointer;
-  }
-  .row-body .row-note,
-  .row-body .console,
-  .row-body .code,
-  .row-body .stage,
-  .row-body .source { cursor: auto; }
-  .row-note { margin: 0; max-width: var(--measure); font-size: var(--text-ui); color: var(--color-ink-soft); }
-  .row-warn { margin: 0; font-family: var(--font-display); font-size: var(--text-micro); color: var(--color-oxide); max-width: var(--measure); }
-  .stage {
-    display: grid;
-    gap: var(--s-2);
-    justify-items: start;
-    background: var(--color-paper);
-    border: 1px solid var(--color-rule);
-    border-radius: var(--radius-card);
-    padding: var(--s-4);
-  }
-  .stage p { margin: 0; font-size: var(--text-ui); }
+    .row-body {
+        display: grid;
+        gap: var(--s-3);
+        padding: var(--s-3) var(--pad-x) var(--s-4);
+        background: var(--color-lifted);
+        box-shadow: inset 3px 0 0 var(--color-verdigris);
+        cursor: pointer;
+    }
+    .row-body .row-note,
+    .row-body .console,
+    .row-body .code,
+    .row-body .stage,
+    .row-body .source {
+        cursor: auto;
+    }
+    .row-note {
+        margin: 0;
+        max-width: var(--measure);
+        font-size: var(--text-ui);
+        color: var(--color-ink-soft);
+    }
+    .row-warn {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        color: var(--color-oxide);
+        max-width: var(--measure);
+    }
+    .stage {
+        display: grid;
+        gap: var(--s-2);
+        justify-items: start;
+        background: var(--color-paper);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-card);
+        padding: var(--s-4);
+    }
+    .stage p {
+        margin: 0;
+        font-size: var(--text-ui);
+    }
 
-  /* A case with no live area put nothing here, and a bordered empty box reads as one that FAILED to
+    /* A case with no live area put nothing here, and a bordered empty box reads as one that FAILED to
      render — which is the opposite of what most of these rows report. Most cases are assertions over a
      graph and mount nothing at all, so the box was on nearly every row it means nothing on.
 
@@ -949,306 +1298,518 @@
      what `enqueue` hands the case and `bind:element` is what puts the case in the queue. So the box is
      a thing the DOM already knows the answer to — a comment does not count against `:empty`, and this
      element is authored with nothing inside it, so no whitespace text node does either. */
-  .stage:empty { display: none; }
+    .stage:empty {
+        display: none;
+    }
 
-  /* Dark on purpose. The console is OUTPUT and the block above it is SOURCE. */
-  .console {
-    max-height: 16rem;
-    padding-block: var(--s-2);
-    background: var(--color-ink);
-    border-radius: var(--radius-card);
-    font-family: var(--font-data);
-    font-size: var(--text-micro);
-    line-height: 1.7;
-  }
-  .console-line { display: flex; gap: var(--s-3); padding-inline: var(--s-3); }
-  .console-label { width: 12rem; flex-shrink: 0; color: #6f7a70; }
-  .console-value { white-space: pre-wrap; word-break: break-all; }
-  .console-value.is-note { color: #9fd9bf; }
-  .console-value.is-pass { color: #7fc8a9; }
-  .console-value.is-fail { color: #e08a6c; }
+    /* Dark on purpose. The console is OUTPUT and the block above it is SOURCE. */
+    .console {
+        max-height: 16rem;
+        padding-block: var(--s-2);
+        background: var(--color-ink);
+        border-radius: var(--radius-card);
+        font-family: var(--font-data);
+        font-size: var(--text-micro);
+        line-height: 1.7;
+    }
+    .console-line {
+        display: flex;
+        gap: var(--s-3);
+        padding-inline: var(--s-3);
+    }
+    .console-label {
+        width: 12rem;
+        flex-shrink: 0;
+        color: #6f7a70;
+    }
+    .console-value {
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+    .console-value.is-note {
+        color: #9fd9bf;
+    }
+    .console-value.is-pass {
+        color: #7fc8a9;
+    }
+    .console-value.is-fail {
+        color: #e08a6c;
+    }
 
-  .source { background: var(--color-paper); border: 1px solid var(--color-rule); border-radius: var(--radius-card); }
-  /* A rung's proofs are about the RUNG, not about the preview beside them, so the pane spans both of
+    .source {
+        background: var(--color-paper);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-card);
+    }
+    /* A rung's proofs are about the RUNG, not about the preview beside them, so the pane spans both of
      its columns. Left to the implicit flow it landed under the preview and read as part of it. */
-  .rung > .proofs { grid-column: 1 / -1; }
+    .rung > .proofs {
+        grid-column: 1 / -1;
+    }
 
-  /* ── a profile, shown ───────────────────────────────────────────────────────────────────────── */
-  /* One `Profile` from the harness. The three rows are the three questions a status alone cannot
+    /* ── a profile, shown ───────────────────────────────────────────────────────────────────────── */
+    /* One `Profile` from the harness. The three rows are the three questions a status alone cannot
      answer: where it ran, what it could be asked, and what it cost. */
-  .profile { display: grid; gap: var(--s-2); }
-  /* Inside a disclosure that already carries the status on its summary, the record's own badge is the
+    .profile {
+        display: grid;
+        gap: var(--s-2);
+    }
+    /* Inside a disclosure that already carries the status on its summary, the record's own badge is the
      same word twice. The component keeps it — `UseCase.abide` mounts a profile in a bare panel with no
      summary above it — and the duplicate is suppressed at the one place there is one. */
-  .proofs .profile-head .badge { display: none; }
-  .profile-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-3); margin: 0; padding: var(--s-2) var(--s-3) 0; }
-  .profile-where { font-family: var(--font-display); font-size: var(--text-micro); letter-spacing: .12em; text-transform: uppercase; color: var(--color-pencil); }
-  .profile-faces { display: flex; gap: var(--s-1); margin-left: auto; }
-  /* A face this lane could not run is SHOWN and dimmed rather than dropped: absent reads as "this
+    .proofs .profile-head .badge {
+        display: none;
+    }
+    .profile-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: var(--s-3);
+        margin: 0;
+        padding: var(--s-2) var(--s-3) 0;
+    }
+    .profile-where {
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--color-pencil);
+    }
+    .profile-faces {
+        display: flex;
+        gap: var(--s-1);
+        margin-left: auto;
+    }
+    /* A face this lane could not run is SHOWN and dimmed rather than dropped: absent reads as "this
      case has no such claim", which is the one thing it never means. */
-  .face {
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-    padding: 0 var(--s-1);
-    border: 1px solid currentColor;
-    border-radius: var(--radius-chip);
-  }
-  .face.is-run { color: var(--color-verdigris); }
-  .face.is-elsewhere { color: var(--color-rule); }
-  .profile-metrics { display: grid; gap: var(--s-1); padding-inline: var(--s-3); }
-  /* Stacked rather than a row: the panel beside a demo is 22rem, and a label, a kind, a number and a
+    .face {
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        letter-spacing: var(--tracking-label);
+        text-transform: uppercase;
+        padding: 0 var(--s-1);
+        border: 1px solid currentColor;
+        border-radius: var(--radius-chip);
+    }
+    .face.is-run {
+        color: var(--color-verdigris);
+    }
+    .face.is-elsewhere {
+        color: var(--color-rule);
+    }
+    .profile-metrics {
+        display: grid;
+        gap: var(--s-1);
+        padding-inline: var(--s-3);
+    }
+    /* Stacked rather than a row: the panel beside a demo is 22rem, and a label, a kind, a number and a
      breakdown do not fit on one line at that width without truncating the one that names the rest. */
-  .profile-metric { display: grid; gap: 1px; padding-block: var(--s-1); border-top: 1px solid var(--color-rule); }
-  .profile-metric:first-child { border-top: 0; }
-  .metric-label { margin: 0; font-size: var(--text-small); color: var(--color-ink-soft); }
-  .metric-value { display: flex; align-items: baseline; gap: var(--s-2); margin: 0; }
-  .metric-per { margin: 0; font-family: var(--font-data); font-size: var(--text-micro); color: var(--color-pencil); }
-  .proofs > summary { display: flex; align-items: baseline; gap: var(--s-3); }
-  /* The status goes to the right edge, which is the column a reader already scans it in on `/tests`. */
-  .proofs > summary .badge { margin-left: auto; }
-  .source > summary {
-    padding: var(--s-1) var(--s-3);
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--color-pencil);
-  }
-  .source > summary:hover { color: var(--color-ink); }
-  .source .code-block { border: 0; border-top: 1px solid var(--color-rule); border-radius: 0 0 var(--radius-card) var(--radius-card); max-height: 24rem; overflow: auto; }
+    .profile-metric {
+        display: grid;
+        gap: 1px;
+        padding-block: var(--s-1);
+        border-top: 1px solid var(--color-rule);
+    }
+    .profile-metric:first-child {
+        border-top: 0;
+    }
+    .metric-label {
+        margin: 0;
+        font-size: var(--text-small);
+        color: var(--color-ink-soft);
+    }
+    .metric-value {
+        display: flex;
+        align-items: baseline;
+        gap: var(--s-2);
+        margin: 0;
+    }
+    .metric-per {
+        margin: 0;
+        font-family: var(--font-data);
+        font-size: var(--text-micro);
+        color: var(--color-pencil);
+    }
+    .proofs > summary {
+        display: flex;
+        align-items: baseline;
+        gap: var(--s-3);
+    }
+    /* The status goes to the right edge, which is the column a reader already scans it in on `/tests`. */
+    .proofs > summary .badge {
+        margin-left: auto;
+    }
+    .source > summary {
+        padding: var(--s-1) var(--s-3);
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--color-pencil);
+    }
+    .source > summary:hover {
+        color: var(--color-ink);
+    }
+    .source .code-block {
+        border: 0;
+        border-top: 1px solid var(--color-rule);
+        border-radius: 0 0 var(--radius-card) var(--radius-card);
+        max-height: 24rem;
+        overflow: auto;
+    }
 
-  /* ── bench ──────────────────────────────────────────────────────────────────────────────────── */
-  /* The NAME of the row, playing the part `.ref-name` plays in the reference table — the thing you
+    /* ── bench ──────────────────────────────────────────────────────────────────────────────────── */
+    /* The NAME of the row, playing the part `.ref-name` plays in the reference table — the thing you
      scan a column of. Bold, but still the serif: `.ref-name` is an identifier and can be set in the
      display face, while this is a sentence, and a sentence in Martian Mono at reading size is a
      paragraph nobody finishes. Weight is what the two have in common; the face is not. */
-  .bench-title { font-size: var(--text-body); font-weight: 600; }
-  .bench-per { font-family: var(--font-display); font-size: var(--text-micro); letter-spacing: .12em; text-transform: uppercase; }
-  .kind {
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    font-weight: 700;
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-    padding: 0 var(--s-1);
-    border: 1px solid currentColor;
-    border-radius: var(--radius-chip);
-  }
-  .kind.is-time   { color: var(--color-pencil); }
-  .kind.is-work   { color: var(--color-verdigris); }
-  .kind.is-wake   { color: var(--color-plum); }
-  .kind.is-budget { color: var(--color-brass); }
-  .warn-chip { font-family: var(--font-display); font-size: var(--text-micro); letter-spacing: .1em; text-transform: uppercase; color: var(--color-oxide); }
+    .bench-title {
+        font-size: var(--text-body);
+        font-weight: 600;
+    }
+    .bench-per {
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+    .kind {
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        font-weight: 700;
+        letter-spacing: var(--tracking-label);
+        text-transform: uppercase;
+        padding: 0 var(--s-1);
+        border: 1px solid currentColor;
+        border-radius: var(--radius-chip);
+    }
+    .kind.is-time {
+        color: var(--color-pencil);
+    }
+    .kind.is-work {
+        color: var(--color-verdigris);
+    }
+    .kind.is-wake {
+        color: var(--color-plum);
+    }
+    .kind.is-budget {
+        color: var(--color-brass);
+    }
+    .warn-chip {
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--color-oxide);
+    }
 
-  .number {
-    font-family: var(--font-data);
-    font-size: var(--text-ui);
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -.04em;
-  }
-  .number.is-sub  { font-weight: 300; font-size: var(--text-mini); color: var(--color-pencil); }
-  /* The ratio is the conclusion the row exists to state, so it is set with the measurement rather
+    .number {
+        font-family: var(--font-data);
+        font-size: var(--text-ui);
+        font-weight: 500;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.04em;
+    }
+    .number.is-sub {
+        font-weight: 300;
+        font-size: var(--text-mini);
+        color: var(--color-pencil);
+    }
+    /* The ratio is the conclusion the row exists to state, so it is set with the measurement rather
      than under it. It fits: the longest string is a slice's `100.0% of abide` at 114px against the
      120px track, which is what sized the suffix — see `shareText`. */
-  .tail { font-family: var(--font-display); font-size: var(--text-ui); font-weight: 700; letter-spacing: -.03em; color: var(--color-pencil); }
-  .tail.is-good { color: var(--color-verdigris); }
-  .tail.is-bad  { color: var(--color-oxide); }
+    .tail {
+        font-family: var(--font-display);
+        font-size: var(--text-ui);
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        color: var(--color-pencil);
+    }
+    .tail.is-good {
+        color: var(--color-verdigris);
+    }
+    .tail.is-bad {
+        color: var(--color-oxide);
+    }
 
-  .arm-head { padding-block: var(--s-1); border-bottom: 1px solid var(--color-rule); }
-  .arm-row { padding-block: var(--s-1); }
-  .arm-what { display: grid; gap: var(--s-1); }
-  .arm-label { font-size: var(--text-small); color: var(--color-ink-soft); }
-  .arm-label.is-abide { color: var(--color-verdigris); font-weight: 600; }
-  /* What a count is a count OF, where a time arm draws its bar. Sub-line weight: it qualifies the
+    .arm-head {
+        padding-block: var(--s-1);
+        border-bottom: 1px solid var(--color-rule);
+    }
+    .arm-row {
+        padding-block: var(--s-1);
+    }
+    .arm-what {
+        display: grid;
+        gap: var(--s-1);
+    }
+    .arm-label {
+        font-size: var(--text-small);
+        color: var(--color-ink-soft);
+    }
+    .arm-label.is-abide {
+        color: var(--color-verdigris);
+        font-weight: 600;
+    }
+    /* What a count is a count OF, where a time arm draws its bar. Sub-line weight: it qualifies the
      number beside it rather than being one. */
-  .arm-of { font-family: var(--font-data); font-size: var(--text-micro); color: var(--color-pencil); }
-  .bar {
-    height: 5px;
-    background: var(--color-sunk);
-    border-radius: 999px;
-    box-shadow: inset 0 0 0 1px var(--color-rule), inset 0 1px 2px rgba(20, 26, 22, .18);
-  }
-  .bar-fill { background: var(--color-oxide); border-radius: 999px; }
-  .bar-fill.is-abide { background: var(--color-verdigris); }
+    .arm-of {
+        font-family: var(--font-data);
+        font-size: var(--text-micro);
+        color: var(--color-pencil);
+    }
+    .bar {
+        height: 5px;
+        background: var(--color-sunk);
+        border-radius: 999px;
+        box-shadow:
+            inset 0 0 0 1px var(--color-rule),
+            inset 0 1px 2px rgba(20, 26, 22, 0.18);
+    }
+    .bar-fill {
+        background: var(--color-oxide);
+        border-radius: 999px;
+    }
+    .bar-fill.is-abide {
+        background: var(--color-verdigris);
+    }
 
-  /* ── reference — a table, so padding rather than gap ────────────────────────────────────────── */
-  .reference th {
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    font-weight: 700;
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-    color: var(--color-brass);
-    text-align: left;
-    padding: var(--s-3) var(--s-4) var(--s-2) 0;
-    border-bottom: 1px solid var(--color-ink);
-  }
-  .reference tbody tr:last-child td { border-bottom: 0; }
-  /* The outer columns carry the card's padding, so the RULES run edge to edge and the TEXT does not
+    /* ── reference — a table, so padding rather than gap ────────────────────────────────────────── */
+    .reference th {
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        font-weight: 700;
+        letter-spacing: var(--tracking-label);
+        text-transform: uppercase;
+        color: var(--color-brass);
+        text-align: left;
+        padding: var(--s-3) var(--s-4) var(--s-2) 0;
+        border-bottom: 1px solid var(--color-ink);
+    }
+    .reference tbody tr:last-child td {
+        border-bottom: 0;
+    }
+    /* The outer columns carry the card's padding, so the RULES run edge to edge and the TEXT does not
      move. In `@layer components` rather than `@layer base` because a layer beats specificity: stated
      in base, `.reference td`'s own padding shorthand wins and the inset silently goes to zero. */
-  .reference th:first-child,
-  .reference td:first-child { padding-left: var(--panel-pad); }
-  .reference th:last-child,
-  .reference td:last-child { padding-right: var(--panel-pad); }
-  .reference td {
-    padding: var(--s-3) var(--s-4) var(--s-3) 0;
-    border-bottom: 1px solid var(--color-rule);
-    vertical-align: baseline;
-    font-size: var(--text-body);
-  }
-  .reference .ref-name { font-family: var(--font-display); font-size: var(--text-body); font-weight: 700; letter-spacing: -.04em; white-space: nowrap; }
-  .reference .ref-sig {
-    font-family: var(--font-data);
-    font-size: var(--text-small);
-    letter-spacing: -.03em;
-    color: var(--color-ink-soft);
-  }
+    .reference th:first-child,
+    .reference td:first-child {
+        padding-left: var(--panel-pad);
+    }
+    .reference th:last-child,
+    .reference td:last-child {
+        padding-right: var(--panel-pad);
+    }
+    .reference td {
+        padding: var(--s-3) var(--s-4) var(--s-3) 0;
+        border-bottom: 1px solid var(--color-rule);
+        vertical-align: baseline;
+        font-size: var(--text-body);
+    }
+    .reference .ref-name {
+        font-family: var(--font-display);
+        font-size: var(--text-body);
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        white-space: nowrap;
+    }
+    .reference .ref-sig {
+        font-family: var(--font-data);
+        font-size: var(--text-small);
+        letter-spacing: -0.03em;
+        color: var(--color-ink-soft);
+    }
 
-  /* ── the inside of a CASE ───────────────────────────────────────────────────────────────────── */
-  /* `demos/dom.ts` builds these by hand and stays hand-written for a reason that has not changed: a
+    /* ── the inside of a CASE ───────────────────────────────────────────────────────────────────── */
+    /* `demos/dom.ts` builds these by hand and stays hand-written for a reason that has not changed: a
      case is a comparison, and furniture that was itself abide would put the subject on both sides of
      the measurement. What DID change is that it no longer carries its own palette — it names classes
      here, so a stage inside a case and the page around it cannot end up two different greys. */
-  .demo-button {
-    font-family: var(--font-display);
-    font-size: var(--text-small);
-    letter-spacing: -.02em;
-    padding: var(--s-1) var(--s-3);
-    border: 1px solid var(--color-ink);
-    border-radius: var(--radius-chip);
-    background: var(--color-paper);
-    color: var(--color-ink);
-  }
-  .demo-button:hover { background: var(--color-ink); color: var(--color-paper); }
-  .demo-button.is-small { font-size: var(--text-micro); padding: var(--s-1) var(--s-2); }
+    .demo-button {
+        font-family: var(--font-display);
+        font-size: var(--text-small);
+        letter-spacing: -0.02em;
+        padding: var(--s-1) var(--s-3);
+        border: 1px solid var(--color-ink);
+        border-radius: var(--radius-chip);
+        background: var(--color-paper);
+        color: var(--color-ink);
+    }
+    .demo-button:hover {
+        background: var(--color-ink);
+        color: var(--color-paper);
+    }
+    .demo-button.is-small {
+        font-size: var(--text-micro);
+        padding: var(--s-1) var(--s-2);
+    }
 
-  .demo-field {
-    display: flex;
-    align-items: center;
-    gap: var(--s-2);
-    font-size: var(--text-small);
-    color: var(--color-ink-soft);
-  }
-  .demo-field input {
-    font-family: var(--font-body);
-    font-size: var(--text-ui);
-    padding: var(--s-1) var(--s-2);
-    background: var(--color-ground);
-    border: 1px solid var(--color-rule);
-    border-radius: var(--radius-card);
-    color: var(--color-ink);
-  }
+    .demo-field {
+        display: flex;
+        align-items: center;
+        gap: var(--s-2);
+        font-size: var(--text-small);
+        color: var(--color-ink-soft);
+    }
+    .demo-field input {
+        font-family: var(--font-body);
+        font-size: var(--text-ui);
+        padding: var(--s-1) var(--s-2);
+        background: var(--color-ground);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-card);
+        color: var(--color-ink);
+    }
 
-  .demo-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+    .demo-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--s-2);
+    }
 
-  /* Dashed, because it is a HOST — the thing a case mounts into, empty until it runs. */
-  .demo-host {
-    border: 1px dashed var(--color-rule);
-    border-radius: var(--radius-card);
-    background: var(--color-ground);
-  }
+    /* Dashed, because it is a HOST — the thing a case mounts into, empty until it runs. */
+    .demo-host {
+        border: 1px dashed var(--color-rule);
+        border-radius: var(--radius-card);
+        background: var(--color-ground);
+    }
 
-  .demo-host-label { padding: var(--s-2) var(--s-3) 0; color: var(--color-pencil); }
-  .demo-host-body { padding: var(--s-1) var(--s-3) var(--s-3); }
+    .demo-host-label {
+        padding: var(--s-2) var(--s-3) 0;
+        color: var(--color-pencil);
+    }
+    .demo-host-body {
+        padding: var(--s-1) var(--s-3) var(--s-3);
+    }
 
-  /* The one label the system needs that is not a column head: a caption inside a case. */
-  .label {
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    font-weight: 700;
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-  }
+    /* The one label the system needs that is not a column head: a caption inside a case. */
+    .label {
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        font-weight: 700;
+        letter-spacing: var(--tracking-label);
+        text-transform: uppercase;
+    }
 
-  .demo-out {
-    padding: var(--s-3);
-    max-height: 16rem;
-    overflow: auto;
-    border: 1px dashed var(--color-rule);
-    border-radius: var(--radius-card);
-    background: var(--color-lifted);
-    font-family: var(--font-data);
-    font-size: var(--text-small);
-    color: var(--color-ink-soft);
-    white-space: pre-wrap;
-    word-break: break-all;
-  }
+    .demo-out {
+        padding: var(--s-3);
+        max-height: 16rem;
+        overflow: auto;
+        border: 1px dashed var(--color-rule);
+        border-radius: var(--radius-card);
+        background: var(--color-lifted);
+        font-family: var(--font-data);
+        font-size: var(--text-small);
+        color: var(--color-ink-soft);
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
 
-  /* ── the shapes only a PAGE has ─────────────────────────────────────────────────────────────── */
-  /* Everything above is furniture a page is assembled from. These four are the page's own voice: a
+    /* ── the shapes only a PAGE has ─────────────────────────────────────────────────────────────── */
+    /* Everything above is furniture a page is assembled from. These four are the page's own voice: a
      link in running prose, a footnote under a table, an error where a table would have been, and the
      grid of names `/docs` indexes itself with. They are here rather than as utilities in a template
      because each of them appears on three or more pages and would otherwise be three near-copies. */
-  .link { color: var(--color-verdigris); text-decoration: underline; text-underline-offset: 3px; }
-  .link:hover { color: var(--color-ink); }
+    .link {
+        color: var(--color-verdigris);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+    }
+    .link:hover {
+        color: var(--color-ink);
+    }
 
-  .note {
-    margin: 0;
-    max-width: var(--measure);
-    font-size: var(--text-small);
-    color: var(--color-pencil);
-  }
+    .note {
+        margin: 0;
+        max-width: var(--measure);
+        font-size: var(--text-small);
+        color: var(--color-pencil);
+    }
 
-  .error {
-    margin: 0;
-    max-width: var(--measure);
-    font-size: var(--text-body);
-    color: var(--color-oxide);
-  }
+    .error {
+        margin: 0;
+        max-width: var(--measure);
+        font-size: var(--text-body);
+        color: var(--color-oxide);
+    }
 
-  /* `/docs` is keyed by CALLABLE, so its index is a grid of names rather than a list of sentences. */
-  .name-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: var(--s-3); }
-  /* A `<code>`, and the two things that has to give back: the tint every other inline `code` carries,
+    /* `/docs` is keyed by CALLABLE, so its index is a grid of names rather than a list of sentences. */
+    .name-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+        gap: var(--s-3);
+    }
+    /* A `<code>`, and the two things that has to give back: the tint every other inline `code` carries,
      which here is a slab behind the one word the card is named after, and the stretch a grid item gets
      for free. It is a TITLE that happens to be set in the data face, not a snippet. */
-  .name {
-    justify-self: start;
-    background: none;
-    padding: 0;
-    font-family: var(--font-display);
-    font-size: var(--text-body);
-    font-weight: 700;
-    letter-spacing: -.04em;
-    color: var(--color-ink);
-  }
+    .name {
+        justify-self: start;
+        background: none;
+        padding: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-body);
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        color: var(--color-ink);
+    }
 
-  /* A verdict inside running prose — `under 1.00× is ahead`. The same two states the table uses. */
-  .is-ahead { color: var(--color-verdigris); font-weight: 600; }
-  .is-behind { color: var(--color-oxide); font-weight: 600; }
+    /* A verdict inside running prose — `under 1.00× is ahead`. The same two states the table uses. */
+    .is-ahead {
+        color: var(--color-verdigris);
+        font-weight: 600;
+    }
+    .is-behind {
+        color: var(--color-oxide);
+        font-weight: 600;
+    }
 
-  /* ── cards ──────────────────────────────────────────────────────────────────────────────────── */
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: var(--s-3); }
-  .card {
-    display: grid;
-    gap: var(--s-2);
-    align-content: start;
-    padding: var(--s-5);
-    background: var(--color-paper);
-    border: 1px solid var(--color-rule);
-    border-radius: var(--radius-card);
-    box-shadow: var(--shadow-edge);
-    text-decoration: none;
-  }
-  .card:hover { background: var(--color-lifted); box-shadow: var(--shadow-edge), var(--shadow-thick); }
-  /* --text-lead is the scale's "a heading inside a card", and this is the only card on the page.
+    /* ── cards ──────────────────────────────────────────────────────────────────────────────────── */
+    .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+        gap: var(--s-3);
+    }
+    .card {
+        display: grid;
+        gap: var(--s-2);
+        align-content: start;
+        padding: var(--s-5);
+        background: var(--color-paper);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-edge);
+        text-decoration: none;
+    }
+    .card:hover {
+        background: var(--color-lifted);
+        box-shadow: var(--shadow-edge), var(--shadow-thick);
+    }
+    /* --text-lead is the scale's "a heading inside a card", and this is the only card on the page.
      It had been set at --text-small, below the blurb it heads — a heading smaller than the prose
      under it reads as a caption, which is the inversion this corrects. */
-  .card-title { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: var(--text-lead); letter-spacing: var(--tracking-display); }
-  .card-tag {
-    margin: 0;
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-    color: var(--color-brass);
-  }
-  .card-blurb { margin: 0; font-size: var(--text-ui); color: var(--color-ink-soft); }
+    .card-title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: var(--text-lead);
+        letter-spacing: var(--tracking-display);
+    }
+    .card-tag {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        letter-spacing: var(--tracking-label);
+        text-transform: uppercase;
+        color: var(--color-brass);
+    }
+    .card-blurb {
+        margin: 0;
+        font-size: var(--text-ui);
+        color: var(--color-ink-soft);
+    }
 
-  /* ── use cases ──────────────────────────────────────────────────────────────────────────────────
+    /* ── use cases ──────────────────────────────────────────────────────────────────────────────────
      A demo, its files and its cost. The demo goes FULL WIDTH above the other two: `complex` is a
      thousand-row table and `media` is a poster grid, and either in a column is a demo you cannot
      read. Source and cost sit under it side by side, because the question "what does this cost" is
@@ -1266,62 +1827,144 @@
      `display: grid` and only re-tracks it. So a new site rule for `.card` / `.badge` / `.grid` does
      reach these demos, silently, and no check in this repo can see it. Component-scoped `<style>` in
      each view is the real fix and is a larger change than this block. */
-  .usecase { display: grid; gap: var(--s-4); }
-  /* CAPPED and scrolled, because these are use cases at SCALE: `complex` is a thousand rows and
+    .usecase {
+        display: grid;
+        gap: var(--s-4);
+    }
+    /* CAPPED and scrolled, because these are use cases at SCALE: `complex` is a thousand rows and
      `dashboard` is two hundred, and uncapped the demo is several screens of table with the source and
      the cost panels somewhere below all of it. The whole point of the page is having the three
      together, so the demo gets a viewport rather than the page. */
-  .usecase-live { padding: var(--s-4); max-height: 32rem; overflow: auto; }
-  .usecase-under { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--s-4); align-items: start; }
-  /* `min-width: 0` on both, and not belt-and-braces: a `<pre>` of source is wider than its track, and
+    .usecase-live {
+        padding: var(--s-4);
+        max-height: 32rem;
+        overflow: auto;
+    }
+    .usecase-under {
+        display: grid;
+        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        gap: var(--s-4);
+        align-items: start;
+    }
+    /* `min-width: 0` on both, and not belt-and-braces: a `<pre>` of source is wider than its track, and
      a grid item's default `min-width: auto` sizes to the content rather than to the column — so the
      code pane pushes the cost panel off the page instead of scrolling inside its own. */
-  .usecase-source, .usecase-cost { display: grid; gap: var(--s-2); min-width: 0; }
-  /* The same 24rem a `/tests` source pane gets, and for the same reason: a whole file is longer than
+    .usecase-source,
+    .usecase-cost {
+        display: grid;
+        gap: var(--s-2);
+        min-width: 0;
+    }
+    /* The same 24rem a `/tests` source pane gets, and for the same reason: a whole file is longer than
      anything a reader wants between them and the next thing on the page. */
-  .usecase-source .code-block { max-height: 24rem; overflow: auto; }
-  /* `.label` carries the recipe — display face, micro size, tracked, uppercase. This is the two things
+    .usecase-source .code-block {
+        max-height: 24rem;
+        overflow: auto;
+    }
+    /* `.label` carries the recipe — display face, micro size, tracked, uppercase. This is the two things
      an `<h2>` in this position needs on top of it. */
-  .usecase-head { margin: 0; color: var(--color-pencil); }
+    .usecase-head {
+        margin: 0;
+        color: var(--color-pencil);
+    }
 
-  /* The demo's own markup. Enough to read it by — these are use cases, not a second design. */
-  .usecase-live h2, .usecase-live h3 { margin: 0; font-family: var(--font-display); font-size: var(--text-ui); font-weight: 700; }
-  .usecase-live p { margin: 0 0 var(--s-2); font-size: var(--text-ui); }
-  .usecase-live table { width: 100%; border-collapse: collapse; font-size: var(--text-small); }
-  .usecase-live td { padding: 2px var(--s-2); border-bottom: 1px solid var(--color-rule); }
-  .usecase-live .col-id { font-family: var(--font-data); color: var(--color-pencil); width: 6rem; }
-  .usecase-live tr.danger td { background: var(--color-sunk); }
-  .usecase-live ul { margin: 0; padding: 0; list-style: none; font-size: var(--text-small); }
+    /* The demo's own markup. Enough to read it by — these are use cases, not a second design. */
+    .usecase-live h2,
+    .usecase-live h3 {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-ui);
+        font-weight: 700;
+    }
+    .usecase-live p {
+        margin: 0 0 var(--s-2);
+        font-size: var(--text-ui);
+    }
+    .usecase-live table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: var(--text-small);
+    }
+    .usecase-live td {
+        padding: 2px var(--s-2);
+        border-bottom: 1px solid var(--color-rule);
+    }
+    .usecase-live .col-id {
+        font-family: var(--font-data);
+        color: var(--color-pencil);
+        width: 6rem;
+    }
+    .usecase-live tr.danger td {
+        background: var(--color-sunk);
+    }
+    .usecase-live ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        font-size: var(--text-small);
+    }
 
-  .usecase-live .controls { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; margin-bottom: var(--s-3); }
-  .usecase-live button, .usecase-live input[type="text"], .usecase-live input:not([type]), .usecase-live select {
-    padding: 2px var(--s-2);
-    font: inherit;
-    font-size: var(--text-small);
-    background: var(--color-ground);
-    border: 1px solid var(--color-rule);
-    border-radius: var(--radius-chip);
-  }
-  .usecase-live button:hover { background: var(--color-lifted); }
-  .usecase-live a { color: var(--color-verdigris); cursor: pointer; }
+    .usecase-live .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--s-2);
+        align-items: center;
+        margin-bottom: var(--s-3);
+    }
+    .usecase-live button,
+    .usecase-live input[type="text"],
+    .usecase-live input:not([type]),
+    .usecase-live select {
+        padding: 2px var(--s-2);
+        font: inherit;
+        font-size: var(--text-small);
+        background: var(--color-ground);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-chip);
+    }
+    .usecase-live button:hover {
+        background: var(--color-lifted);
+    }
+    .usecase-live a {
+        color: var(--color-verdigris);
+        cursor: pointer;
+    }
 
-  .usecase-live .cards { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--s-2); margin-bottom: var(--s-3); }
-  .usecase-live .card { padding: var(--s-3); box-shadow: none; }
-  .usecase-live .card:hover { background: var(--color-paper); box-shadow: none; }
-  .usecase-live .value { font-family: var(--font-data); font-size: var(--text-lead); }
+    .usecase-live .cards {
+        grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+        gap: var(--s-2);
+        margin-bottom: var(--s-3);
+    }
+    .usecase-live .card {
+        padding: var(--s-3);
+        box-shadow: none;
+    }
+    .usecase-live .card:hover {
+        background: var(--color-paper);
+        box-shadow: none;
+    }
+    .usecase-live .value {
+        font-family: var(--font-data);
+        font-size: var(--text-lead);
+    }
 
-  .usecase-live .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--s-2); }
-  .usecase-live .poster, .usecase-live .entry {
-    display: grid;
-    gap: 2px;
-    align-content: start;
-    padding: var(--s-2);
-    font-size: var(--text-small);
-    background: var(--color-paper);
-    border: 1px solid var(--color-rule);
-    border-radius: var(--radius-chip);
-  }
-  /* The `data` demo is 10,000 entries in a 32rem box — a 355,003px grid of which 512px can be seen —
+    .usecase-live .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+        gap: var(--s-2);
+    }
+    .usecase-live .poster,
+    .usecase-live .entry {
+        display: grid;
+        gap: 2px;
+        align-content: start;
+        padding: var(--s-2);
+        font-size: var(--text-small);
+        background: var(--color-paper);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-chip);
+    }
+    /* The `data` demo is 10,000 entries in a 32rem box — a 355,003px grid of which 512px can be seen —
      so laying every one of them out is 26x the work of laying out the ones on screen. Gated by
      `#tests/e2e/data-at-scale.e2e.ts` on the COUNT, which is the half that holds: 14,316 layout boxes
      with this rule against 382,894 without it, verified by revert, while the node count is 750,887
@@ -1337,56 +1980,92 @@
      `auto 189px` is measured, not guessed — the six-column grid's true height is 355,003px and this
      estimate puts the scrollbar at 358,710px, +1.0%. Dropping the size entirely collapses it to
      43,643px, so the declaration is load-bearing rather than decorative. */
-  .usecase-live .entry { content-visibility: auto; contain-intrinsic-size: auto 189px; }
-  .usecase-live .unmatched { opacity: .55; }
-  .usecase-live .swatch { height: var(--s-4); border-radius: 2px; }
-  .usecase-live .details, .usecase-live .meta, .usecase-live .cast { color: var(--color-ink-soft); font-size: var(--text-micro); }
-  .usecase-live .done { color: var(--color-verdigris); }
-  .usecase-live .part { color: var(--color-brass); }
-  .usecase-live .none { color: var(--color-pencil); }
-  .usecase-live .tag, .usecase-live .facet, .usecase-live .decade, .usecase-live .person, .usecase-live .hours, .usecase-live .badge {
-    display: inline-block;
-    margin-right: 4px;
-    padding: 0 4px;
-    font-family: var(--font-display);
-    font-size: var(--text-micro);
-    color: var(--color-pencil);
-    background: var(--color-sunk);
-    border-radius: 2px;
-  }
+    .usecase-live .entry {
+        content-visibility: auto;
+        contain-intrinsic-size: auto 189px;
+    }
+    .usecase-live .unmatched {
+        opacity: 0.55;
+    }
+    .usecase-live .swatch {
+        height: var(--s-4);
+        border-radius: 2px;
+    }
+    .usecase-live .details,
+    .usecase-live .meta,
+    .usecase-live .cast {
+        color: var(--color-ink-soft);
+        font-size: var(--text-micro);
+    }
+    .usecase-live .done {
+        color: var(--color-verdigris);
+    }
+    .usecase-live .part {
+        color: var(--color-brass);
+    }
+    .usecase-live .none {
+        color: var(--color-pencil);
+    }
+    .usecase-live .tag,
+    .usecase-live .facet,
+    .usecase-live .decade,
+    .usecase-live .person,
+    .usecase-live .hours,
+    .usecase-live .badge {
+        display: inline-block;
+        margin-right: 4px;
+        padding: 0 4px;
+        font-family: var(--font-display);
+        font-size: var(--text-micro);
+        color: var(--color-pencil);
+        background: var(--color-sunk);
+        border-radius: 2px;
+    }
 
-  @media (max-width: 60rem) {
-    .usecase-under { grid-template-columns: minmax(0, 1fr); }
-  }
+    @media (max-width: 60rem) {
+        .usecase-under {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
 
+    /* ── state moves; nothing else does ─────────────────────────────────────────────────────────── */
+    .button,
+    .button-small,
+    .chip,
+    .card,
+    .field,
+    .nav-link,
+    .sidebar-item,
+    .row > summary,
+    .rung-preview button,
+    .stage button {
+        transition:
+            background-color var(--ease),
+            border-color var(--ease),
+            color var(--ease),
+            box-shadow var(--ease);
+    }
 
-  /* ── state moves; nothing else does ─────────────────────────────────────────────────────────── */
-  .button,
-  .button-small,
-  .chip,
-  .card,
-  .field,
-  .nav-link,
-  .sidebar-item,
-  .row > summary,
-  .rung-preview button,
-  .stage button {
-    transition: background-color var(--ease), border-color var(--ease), color var(--ease), box-shadow var(--ease);
-  }
+    @media (max-width: 44rem) {
+        .console-label {
+            width: 7rem;
+        }
+        .field {
+            width: 100%;
+        }
+        .chips {
+            margin-left: 0;
+        }
 
-  @media (max-width: 44rem) {
-    .console-label { width: 7rem; }
-    .field { width: 100%; }
-    .chips { margin-left: 0; }
-
-    /* The chrome stops fitting on one line, and the SHORTCUT is what gives way — `bench →` on a tests
+        /* The chrome stops fitting on one line, and the SHORTCUT is what gives way — `bench →` on a tests
        page is the other view of a capability, already one tap away in the section's own nav. The three
        sections themselves never go. In THIS layer rather than with the other narrow rules in base: the
        `display: flex` it has to beat is a component rule, and layer order decides before specificity. */
-    .nav-siblings { display: none; }
-  }
+        .nav-siblings {
+            display: none;
+        }
+    }
 }
-
 
 /* Page transitions, and the whole of how they are asked for: abide reads the document's own rules,
    so writing this IS the opt-in — there is no call to make. The chrome is NAMED so it sits out the

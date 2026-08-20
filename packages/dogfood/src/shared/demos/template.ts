@@ -251,7 +251,7 @@ export default suite({
 
         {
             title: 'ref slots — the NODE itself, client only',
-            note: '`&ref=${x}` hands over the element. A cell takes it through `set`; a function is a handler whose RETURN is its teardown — the contract `watch` already has, rather than a second lifecycle spelling. Like an event, the value IS the function: a slot kind that answered "is a function a thunk?" with an exception list per call site left this one calling the handler with no arguments.',
+            note: '`&ref=${x}` hands over the element. A state takes it through `set`; a function is a handler whose RETURN is its teardown — the contract `watch` already has, rather than a second lifecycle spelling. Like an event, the value IS the function: a slot kind that answered "is a function a thunk?" with an exception list per call site left this one calling the handler with no arguments.',
             async run({ is }) {
                 const node = state<Element | null>(null)
                 is(
@@ -261,7 +261,7 @@ export default suite({
                 )
 
                 const host = scratch(() => html`<p &ref=${node}>x</p>`)
-                is('a cell is handed the element', node()?.tagName, 'P')
+                is('a state is handed the element', node()?.tagName, 'P')
                 host.remove()
 
                 // A handler's teardown belongs to the INSTANCE, not to one update: a patch that
@@ -291,7 +291,7 @@ export default suite({
             },
             interact({ host, log }) {
                 const node = state<Element | null>(null)
-                both(host, () => html`<p class="text-ink" &ref=${node}>the element this cell holds</p>`)
+                both(host, () => html`<p class="text-ink" &ref=${node}>the element this state holds</p>`)
                 host.append(
                     row(
                         button('read the ref', () =>
@@ -309,7 +309,7 @@ export default suite({
             title: 'property slots — a DOM property, never an attribute',
             note: 'Deliberately emits nothing on the server: a DOM property has no serialisation. Use an attribute slot when the value must survive SSR.',
             async run({ is }) {
-                const text = state('typed by the cell')
+                const text = state('typed by the state')
                 is(
                     'server emits nothing for it',
                     await renderToString(html`<input .value=${'x'} />`),
@@ -318,7 +318,7 @@ export default suite({
 
                 const host = scratch(() => html`<input .value=${() => text()} />`)
                 const node = host.querySelector('input') as HTMLInputElement
-                is('client sets the PROPERTY', node.value, 'typed by the cell')
+                is('client sets the PROPERTY', node.value, 'typed by the state')
                 is('…and not the attribute', node.hasAttribute('value'), false)
                 text.set('hello')
                 await tick()
@@ -326,11 +326,8 @@ export default suite({
                 host.remove()
             },
             interact({ host, log }) {
-                const text = state('typed by the cell')
-                both(
-                    host,
-                    () => html`<input class="rounded bg-paper px-2 py-1" .value=${() => text()} />`,
-                )
+                const text = state('typed by the state')
+                both(host, () => html`<input class="rounded bg-paper px-2 py-1" .value=${() => text()} />`)
                 // The property moves and the attribute never does — and neither half of that is
                 // visible on an input, whose displayed text is the property and whose markup pane
                 // shows the tag it was never written into.
@@ -368,7 +365,7 @@ export default suite({
                 let thunkReads = 0
                 const readStatic = (): number => {
                     staticReads++
-                    return n.peek()
+                    return n.peek()!
                 }
                 const readThunk = (): number => {
                     thunkReads++
@@ -405,7 +402,7 @@ export default suite({
                 // A plain call, evaluated once when the template is BUILT…
                 const readStatic = (lane: Lane): number => {
                     evaluations[lane].static++
-                    return n.peek()
+                    return n.peek()!
                 }
                 // …and a thunk, which the client wraps in an effect and re-runs per write.
                 const readThunk = (lane: Lane): (() => number) => {
@@ -428,7 +425,7 @@ export default suite({
                 host.append(
                     row(
                         button('n.set(n + 1)', async () => {
-                            n.set(n.peek() + 1)
+                            n.set(n.peek()! + 1)
                             await sleep(0)
                             report()
                         }),
@@ -450,7 +447,9 @@ export default suite({
                 )
 
                 const items = state(['alpha', 'beta'])
-                const host = scratch(() => html`<ul>${() => items().map((item) => html`<li>${item}</li>`)}</ul>`)
+                const host = scratch(
+                    () => html`<ul>${() => items().map((item) => html`<li>${item}</li>`)}</ul>`,
+                )
                 is(
                     'client',
                     Array.from(host.querySelectorAll('li')).map((li) => li.textContent),
@@ -471,8 +470,8 @@ export default suite({
                 )
                 host.append(
                     row(
-                        button('push', () => items.set([...items.peek(), `item${items.peek().length}`])),
-                        button('pop', () => items.set(items.peek().slice(0, -1))),
+                        button('push', () => items.set([...items.peek()!, `item${items.peek()!.length}`])),
+                        button('pop', () => items.set(items.peek()!.slice(0, -1))),
                     ),
                 )
             },
@@ -494,10 +493,7 @@ export default suite({
                 host.remove()
             },
             interact({ host }) {
-                both(
-                    host,
-                    () => html`<div>${raw('<em class="text-brass">emphasis, on purpose</em>')}</div>`,
-                )
+                both(host, () => html`<div>${raw('<em class="text-brass">emphasis, on purpose</em>')}</div>`)
             },
         },
 
@@ -569,15 +565,13 @@ export default suite({
                 // The discard, which no assertion above can reach: without the counter the slow load
                 // lands last and wins, and the attribute ends on a value already superseded.
                 //
-                // The promise is held OUTSIDE the cell on purpose. `state(promise)` is a load — the
-                // cell absorbs it and the binder is handed the settled value, never the promise — so
+                // The promise is held OUTSIDE the state on purpose. `state(promise)` is a load — the
+                // state absorbs it and the binder is handed the settled value, never the promise — so
                 // a first attempt at this raced the mount instead of the write and passed with the
                 // counter taken out. What the binder has to see is a promise, then a newer value.
                 const slow = sleep(40).then(() => 'STALE')
                 const which = state(0)
-                const racing = scratch(
-                    () => html`<p title=${() => (which() === 0 ? slow : 'fresh')}>x</p>`,
-                )
+                const racing = scratch(() => html`<p title=${() => (which() === 0 ? slow : 'fresh')}>x</p>`)
                 await sleep(5)
                 which.set(1)
                 await sleep(80)
@@ -592,12 +586,14 @@ export default suite({
 
         {
             title: 'a `{#try}` catches a throw from anywhere UNDER it, not just from running its body',
-            note: 'The body returns a `TemplateResult` whose slots are thunks, so a nested component\'s setup and a markup expression both run AFTER the body returned — past the guard that used to be the whole boundary. A `{#try}` around a layout\'s `<slot/>` therefore caught nothing at all, silently, which is the worst shape a guard can have. The region now owns a buffer and the walk runs inside it, so a failure anywhere under it discards what was written and emits the arm — the only thing catching can mean for markup, since an arm can only replace a region nobody has been given yet. The cost is that the region lands whole rather than chunking, which is already true of every slow region and is capped by `spill`. The last two assertions are the ones that say the catch was not bought by swallowing everything: a Pending signal still passes through, so a suspending region still suspends.',
+            note: "The body returns a `TemplateResult` whose slots are thunks, so a nested component's setup and a markup expression both run AFTER the body returned — past the guard that used to be the whole boundary. A `{#try}` around a layout's `<slot/>` therefore caught nothing at all, silently, which is the worst shape a guard can have. The region now owns a buffer and the walk runs inside it, so a failure anywhere under it discards what was written and emits the arm — the only thing catching can mean for markup, since an arm can only replace a region nobody has been given yet. The cost is that the region lands whole rather than chunking, which is already true of every slow region and is capped by `spill`. The last two assertions are the ones that say the catch was not bought by swallowing everything: a Pending signal still passes through, so a suspending region still suspends.",
             async run({ is }) {
                 const arms = {
                     pending: undefined,
                     then: undefined,
-                    catch: ((error: Error) => html`<b>caught: ${error.message}</b>`) as (e: unknown) => unknown,
+                    catch: ((error: Error) => html`<b>caught: ${error.message}</b>`) as (
+                        e: unknown,
+                    ) => unknown,
                     finally: undefined,
                 }
                 const blows = (): string => {
@@ -627,7 +623,9 @@ export default suite({
                 // before the throw is discarded, or the arm would render after half a page.
                 is(
                     'what the body wrote before the throw is discarded',
-                    await renderToString(html`${boundary(() => html`<p>before</p><p>${() => blows()}</p>`, arms)}`),
+                    await renderToString(
+                        html`${boundary(() => html`<p>before</p><p>${() => blows()}</p>`, arms)}`,
+                    ),
                     '<b>caught: deep</b>',
                 )
 
@@ -685,7 +683,7 @@ export default suite({
                     return 'LOADED'
                 })
                 is(
-                    'a cell read inside the block still defers',
+                    'a state read inside the block still defers',
                     await renderToString(
                         html`${boundary(() => html`<p>${loaded()}</p>`, arms(caught), false)}`,
                     ),
@@ -746,16 +744,10 @@ export default suite({
                     '<p title="later">y</p>',
                 )
 
-                const host = scratch(
-                    () => html`<p ...=${() => Promise.resolve({ title: 'later' })}>y</p>`,
-                )
+                const host = scratch(() => html`<p ...=${() => Promise.resolve({ title: 'later' })}>y</p>`)
                 is('client — absent until it lands', host.querySelector('p')?.getAttribute('title'), null)
                 await tick()
-                is(
-                    '…and then every name it carries',
-                    host.querySelector('p')?.getAttribute('title'),
-                    'later',
-                )
+                is('…and then every name it carries', host.querySelector('p')?.getAttribute('title'), 'later')
                 host.remove()
 
                 // The discard, and it is the half a spread owns that an attribute does not: the
@@ -802,7 +794,7 @@ export default suite({
                     () =>
                         html`<p>
                             ${() => {
-                                // Read the cell SYNCHRONOUSLY, before handing back the promise.
+                                // Read the state SYNCHRONOUSLY, before handing back the promise.
                                 // Reading it inside the `.then` would run 500ms later, outside the
                                 // tracking context — the slot would subscribe to nothing at all.
                                 const current = seed()
@@ -844,17 +836,17 @@ export default suite({
         },
 
         {
-            title: 'a thunk handing back a CELL is read one step further',
-            note: "`${() => search({ q: filter() })}` needs no trailing `()`. Cells are recognised by a registry-symbol brand, not by being callable — so neither substrate imports the reactive graph to spot one, and a plain function passed to a `.prop` slot is still a plain function. EVERY slot kind reads that step, not just child slots: an attribute that read one step short rendered the cell's own source text where the client rendered its value.",
+            title: 'a thunk handing back a STATE is read one step further',
+            note: "`${() => search({ q: filter() })}` needs no trailing `()`. States are recognised by a registry-symbol brand, not by being callable — so neither substrate imports the reactive graph to spot one, and a plain function passed to a `.prop` slot is still a plain function. EVERY slot kind reads that step, not just child slots: an attribute that read one step short rendered the state's own source text where the client rendered its value.",
             async run({ is }) {
-                const cell = state('a cell, not a function')
-                const host = scratch(() => html`<p>${() => cell}</p>`)
+                const held = state('a state, not a function')
+                const host = scratch(() => html`<p>${() => held}</p>`)
                 is(
                     'the handle in the slot means its VALUE',
                     host.querySelector('p')?.textContent,
-                    'a cell, not a function',
+                    'a state, not a function',
                 )
-                cell.set('updated')
+                held.set('updated')
                 await tick()
                 is('and it stays subscribed', host.querySelector('p')?.textContent, 'updated')
                 host.remove()
@@ -886,9 +878,11 @@ export default suite({
                 spreadHost.remove()
             },
             interact({ host }) {
-                const cell = state('a cell, not a function')
-                both(host, () => html`<p>${() => cell}</p>`)
-                host.append(row(button('cell.set(now)', () => cell.set(`updated at ${Date.now() % 100000}`))))
+                const held = state('a state, not a function')
+                both(host, () => html`<p>${() => held}</p>`)
+                host.append(
+                    row(button('state.set(now)', () => held.set(`updated at ${Date.now() % 100000}`))),
+                )
             },
         },
 
@@ -903,7 +897,11 @@ export default suite({
                     '<div id="kept">a</div>',
                 )
                 const hostileHost = scratch(() => html`<div ...=${() => hostile}>a</div>`)
-                is('and the client wrote the same thing', hostileHost.querySelector('div')?.outerHTML, '<div id="kept">a</div>')
+                is(
+                    'and the client wrote the same thing',
+                    hostileHost.querySelector('div')?.outerHTML,
+                    '<div id="kept">a</div>',
+                )
                 hostileHost.remove()
 
                 // The second half of the same walk: `for...in` reaches a prototype the caller never
@@ -1163,7 +1161,7 @@ export default suite({
                 // Rung 11 — a toggle, which is the claim a rendering cannot make on its own: what matters
                 // is that the REST of the attribute is untouched.
                 //
-                // Driven by CLICKING it rather than by writing a cell this file imported. The cells are
+                // Driven by CLICKING it rather than by writing a state this file imported. The states are
                 // the rung's own now — a `.abide` file may not bind one at module scope, since module
                 // scope on a server is one instance for every visitor — so the button is the handle,
                 // which is the one a reader has too.
@@ -1177,7 +1175,7 @@ export default suite({
 
                 // Rung 12 — a bind over a `{get, set}` pair. Both directions are asserted because the
                 // failure this catches moved only ONE of them: the pair is hoisted into a name, the
-                // emit read that name as a cell and handed the OBJECT to the property slot, and the
+                // emit read that name as a state and handed the OBJECT to the property slot, and the
                 // input said `[object Object]` while every edit still went through `set` correctly.
                 const pair = scratch(() => Accessors({}))
                 const field = pair.querySelector('input') as HTMLInputElement
@@ -1185,14 +1183,18 @@ export default suite({
                 field.value = '  grace  '
                 field.dispatchEvent(new Event('input'))
                 await tick()
-                is('…and the edit is written through set', pair.querySelector('p')?.textContent, 'hello grace · 1 edits')
+                is(
+                    '…and the edit is written through set',
+                    pair.querySelector('p')?.textContent,
+                    'hello grace · 1 edits',
+                )
                 pair.remove()
 
                 // Rung 19 — a list.
                 const list = scratch(() => List({}))
                 const rows: string[] = []
                 for (const item of list.querySelectorAll('li')) rows.push(item.textContent ?? '')
-                is('a {#for} over a cell', rows, ['alpha', 'beta'])
+                is('a {#for} over a state', rows, ['alpha', 'beta'])
                 list.remove()
 
                 // Rungs 25 and 28 — the same row, compiled and hand-written. Asserted as a PAIR and
@@ -1200,7 +1202,7 @@ export default suite({
                 // make together is that the compiled component and the `html` one are the same kind
                 // of value. Two assertions against the same string would both pass with one of them
                 // rendering nothing at all.
-                // The prop arrives as a CELL — `Props<T>` maps each field to one — which is what lets a
+                // The prop arrives as a STATE — `Props<T>` maps each field to one — which is what lets a
                 // parent re-point a child without re-running its setup.
                 const which = state('gamma')
                 const compiled = scratch(() => RowComponent({ row: which }))
@@ -1215,7 +1217,7 @@ export default suite({
                 written.remove()
 
                 // Rung 15 — the escape, and the one spelling that skips it. Asserted as a PAIR from one
-                // cell, because either half alone passes for the wrong reason: `textContent` on the
+                // state, because either half alone passes for the wrong reason: `textContent` on the
                 // escaped line is the same string whether the markup was escaped or parsed, and the
                 // trusted line renders SOMETHING either way. What distinguishes them is whether a `<b>`
                 // is an element or four characters, so the claim is about the node.
@@ -1223,7 +1225,11 @@ export default suite({
                 const [escapedLine, trustedLine] = trusted.querySelectorAll('li')
                 is('a slot ESCAPES — the markup arrived as text', escapedLine?.querySelector('b'), null)
                 is('…so the tags are visible', escapedLine?.textContent, 'escaped: <b>ada</b> lovelace')
-                is('html() does not — the markup arrived as a node', trustedLine?.querySelector('b')?.textContent, 'ada')
+                is(
+                    'html() does not — the markup arrived as a node',
+                    trustedLine?.querySelector('b')?.textContent,
+                    'ada',
+                )
                 is('…so the tags are gone from the text', trustedLine?.textContent, 'trusted: ada lovelace')
                 trusted.remove()
             },

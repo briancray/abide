@@ -47,7 +47,7 @@ export default suite({
                 const feed = state(lines(200, 100))
                 await feed
                 is('every chunk is still replayable', feed.chunks().length, 200)
-                is('and the cell holds the latest', feed(), sized(199, 100))
+                is('and the state holds the latest', feed(), sized(199, 100))
 
                 let runs = 0
                 const rows = memo(
@@ -278,7 +278,7 @@ export default suite({
 
         {
             title: 'a transcript that overflows drops the REPLAY, not the stream',
-            note: 'What a cap on a transcript protects is a REPLAY, and half a replay is worse than none: a transcript missing its middle is a hole no reader can see, where an empty one says plainly there is nothing to replay. So the whole thing is dropped on the chunk that passed the cap, the version moves once so a reader wakes for the drop and then sleeps, and the stream itself carries on — the cell still holds every chunk that arrives and still finishes. It is also said once on `abide:stream`, as a warning: the `DEBUG` gate controls volume, not breakage, and a transcript that silently went empty reads as a stream that produced nothing.',
+            note: 'What a cap on a transcript protects is a REPLAY, and half a replay is worse than none: a transcript missing its middle is a hole no reader can see, where an empty one says plainly there is nothing to replay. So the whole thing is dropped on the chunk that passed the cap, the version moves once so a reader wakes for the drop and then sleeps, and the stream itself carries on — the state still holds every chunk that arrives and still finishes. It is also said once on `abide:stream`, as a warning: the `DEBUG` gate controls volume, not breakage, and a transcript that silently went empty reads as a stream that produced nothing.',
             async run({ is }) {
                 await withEnv({ [TRANSCRIPT]: '250', DEBUG: undefined }, async () => {
                     const feed = state('')
@@ -312,7 +312,7 @@ export default suite({
                     replay.dispose()
                     // Both lanes say these two, which is the claim: an overflow disables replay,
                     // never the stream.
-                    is('the cell still holds the latest', feed(), sized(4, 100))
+                    is('the state still holds the latest', feed(), sized(4, 100))
                     is('and the stream still finished', feed.done(), true)
                 })
             },
@@ -364,10 +364,10 @@ export default suite({
                     writeEnv(TRANSCRIPT, ceiling)
                     let best = Infinity
                     for (let round = 0; round < 3; round++) {
-                        const cell = state('')
+                        const held = state('')
                         const at = performance.now()
-                        cell.set(lines(CHUNKS, 64))
-                        await cell
+                        held.set(lines(CHUNKS, 64))
+                        await held
                         best = Math.min(best, performance.now() - at)
                     }
                     return best
@@ -434,7 +434,8 @@ export default suite({
                         // is the DRAIN afterwards that waits on something that never lands.
                         const document = renderDocument(
                             '',
-                            () => html`<p>shell</p>${awaited(new Promise(() => {}), { pending: () => null, then: () => html`late`, catch: undefined, finally: undefined })}`,
+                            () =>
+                                html`<p>shell</p>${awaited(new Promise(() => {}), { pending: () => null, then: () => html`late`, catch: undefined, finally: undefined })}`,
                         )
                         for await (const chunk of document) written.push(chunk)
                     } catch (error) {

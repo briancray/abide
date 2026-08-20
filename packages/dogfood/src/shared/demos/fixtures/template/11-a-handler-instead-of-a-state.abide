@@ -5,7 +5,7 @@ const shown = state(true)
 const fate = state('still here')
 </script>
 
-<!-- The same bind handed a FUNCTION rather than a cell: it is called with the node once per instance,
+<!-- The same bind handed a FUNCTION rather than a state: it is called with the node once per instance,
      and what it RETURNS is the teardown — `watch`'s contract rather than a second lifecycle spelling.
      So the `{#if}` is the point of the rung: the teardown runs when the arm goes.
 

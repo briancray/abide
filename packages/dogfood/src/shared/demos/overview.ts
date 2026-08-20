@@ -81,8 +81,7 @@ export default suite({
                             count ${() => count()} · doubled ${() => doubled()}
                         </p>
                         <ul class="text-sm text-ink-soft">
-                            ${() =>
-                                search({ q: filter() })().map((word) => html`<li>${word}</li>`)}
+                            ${() => search({ q: filter() })().map((word) => html`<li>${word}</li>`)}
                         </ul>
                         <p class="text-xs text-verdigris">${() => notices.chunks().join(' · ')}</p>
                     </div>
@@ -92,7 +91,7 @@ export default suite({
                 host.append(
                     row(
                         button('count + 1', () => {
-                            count.set(count.peek() + 1)
+                            count.set(count.peek()! + 1)
                             notices.publish(`count → ${count.peek()}`)
                         }),
                         field('filter', (value) => filter.set(value)),

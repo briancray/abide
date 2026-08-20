@@ -2,12 +2,12 @@
 //
 // `route()` is an AMBIENT, like `request()` — it answers about the caller's own context — but unlike
 // the others it has to be reactive, because a client changes it without a new caller arriving. So it
-// is a facade over four small cells rather than one record: a query-only navigation writes `url` and
+// is a facade over four small states rather than one record: a query-only navigation writes `url` and
 // nothing else, and a reader of `params` stays asleep for it. A record rebuilt per navigation makes
 // that impossible, for the same reason `refreshing` is its own node rather than a field of a status
 // object — a freshly built wrapper defeats every identity check downstream of it.
 //
-// The cells are PER-CALLER, through the same storage a memo's cache uses. On a client that is one
+// The states are PER-CALLER, through the same storage a memo's cache uses. On a client that is one
 // caller forever and the module-level pair is used directly; inside a `serve` each request answers
 // about its own URL; inside an `isolate` a test drives a route without touching the document.
 //
@@ -218,15 +218,15 @@ export function routes(table?: RouteEntry[]): RouteEntry[] | undefined {
     // routes late — has to re-answer that question, or the caller keeps the answer it was given by a
     // table that no longer exists.
     const here = hereFor()
-    if (here.cells !== null) {
-        const url = here.cells.url.peek()
-        commit(here.cells, url, lookup(url.pathname))
+    if (here.states !== null) {
+        const url = here.states.url.peek()!
+        commit(here.states, url, lookup(url.pathname))
         // And the new record needs its VIEW kicked, which the commit above cannot do for it: every
         // `Installed` built here starts at `view: null`, and `outlet()` re-runs on the route's NAME —
         // which an install that lands on the same route does not move. So nothing ever asks, the view
         // stays null for the life of the page, and a route with no view is one the client cannot
         // paint: every same-route move went back to the server and rebuilt what it was already
-        // holding. Guarded by `here.cells` above, so this asks about a caller that exists rather than
+        // holding. Guarded by `here.states` above, so this asks about a caller that exists rather than
         // constructing one — which is what a `ready()` out here would do, and under a headless runner
         // that means reading an address bar that is `about:blank` on purpose.
         void readying()
@@ -324,7 +324,7 @@ function loadFor(held: Installed): Promise<void> | null {
  * microtask tick charged to every page a process serves for nothing.
  */
 export function readying(): Promise<void> | null {
-    const name = cellsFor().name.peek()
+    const name = statesFor().name.peek()!
     const held = name === '' ? undefined : BY_NAME.get(name)
     if (held === undefined) return null
     return loadFor(held)
@@ -357,19 +357,19 @@ export function outlet(): TemplateResult {
  * inside layout 1's `<slot/>`, and `chain` below is how the client finds the part sitting there.
  */
 export function outletFrom(from: number): TemplateResult {
-    const cells = cellsFor()
+    const states = statesFor()
     // Both, and in this order, because they are two different facts: the route changed, or a range
     // arrived for the route already showing. They are written in one commit, so a navigation that
     // moved both still costs this ONE run.
-    cells.adopted()
-    const name = cells.name()
+    states.adopted()
+    const name = states.name()
     // Nothing matched. That is a 404 when the server said so, and this is where its page is drawn —
     // the same `errorOutlet` the server rendered, so the view CLAIMS the range that arrived rather
     // than replacing it. Without this the empty name answers `NOTHING` and wipes it.
     if (name === '') {
-        const failure = cells.failure
+        const failure = states.failure
         if (failure === null) return NOTHING
-        const failing = errorFor(cells.url.peek().pathname)
+        const failing = errorFor(states.url.peek()!.pathname)
         return failing === null ? NOTHING : errorOutlet(failing, failure)
     }
     const held = BY_NAME.get(name)
@@ -392,7 +392,7 @@ export function outletFrom(from: number): TemplateResult {
     // identifies exactly one slot in exactly one instance — which is what makes the descent in
     // `#ui/internal/navigation.ts` a lookup rather than a guess about which slot a `<slot/>` is.
     //
-    // On the cells rather than at module scope, because a server renders two callers at once and this
+    // On the states rather than at module scope, because a server renders two callers at once and this
     // is a fact about ONE of them. Rebuilt per run, never appended to.
     // Its full length up front: the descending fill would otherwise write past the end of an empty
     // array on its first step, which is a holey allocation every `chain[i]` read downstream pays for.
@@ -401,13 +401,13 @@ export function outletFrom(from: number): TemplateResult {
         chain[i] = node
         node = (held.wraps[i] as View)({ children: node })
     }
-    cells.chain = chain
+    states.chain = chain
     return node
 }
 
 /** What each layout of the current render was handed as children. Indexed by DEPTH. */
 export function outletChain(): TemplateResult[] {
-    return cellsFor().chain
+    return statesFor().chain
 }
 
 // --- the error page ----------------------------------------------------------
@@ -492,11 +492,11 @@ export function errorReady(held: Installed): Promise<void> | null {
  *
  * `outletFrom`'s shape with two differences, and both are the same fact: this render is TERMINAL. It
  * takes its entry rather than reading the route, because the route is what failed or never matched;
- * and it writes no `cells.chain`, because that record exists so a later navigation can patch INTO a
+ * and it writes no `states.chain`, because that record exists so a later navigation can patch INTO a
  * layout, and there is no fragment depth to answer for a page nothing navigated to.
  */
 export function errorOutlet(held: Installed, failure: Failure): TemplateResult {
-    const view = held.view.peek()
+    const view = held.view.peek() ?? null
     if (view === null) return NOTHING
     let node = view(failure as never)
     for (let i = held.wraps.length - 1; i >= 0; i--) {
@@ -516,8 +516,8 @@ export function errorOutlet(held: Installed, failure: Failure): TemplateResult {
  * is the one arrangement that is right however deep the two routes happen to agree.
  */
 export function placeableRouteName(): string {
-    const cells = cellsFor()
-    return cells.stood ? '' : cells.name.peek()
+    const states = statesFor()
+    return states.stood ? '' : states.name.peek()!
 }
 
 /**
@@ -531,7 +531,7 @@ export function placeableRouteName(): string {
  * a changed one is inside a subtree that is being replaced anyway.
  */
 export function sharedLayoutDepth(fromName: string): number {
-    const target = BY_NAME.get(cellsFor().name.peek())
+    const target = BY_NAME.get(statesFor().name.peek()!)
     const from = BY_NAME.get(fromName)
     if (target === undefined || from === undefined) return 0
     const wanted = target.layouts
@@ -544,7 +544,16 @@ export function sharedLayoutDepth(fromName: string): number {
 
 // --- where the caller is ------------------------------------------------------
 
-interface Cells {
+/**
+ * The router's own states, one record per caller — see `statesFor`, which is the only thing that
+ * builds one.
+ *
+ * EVERY FIELD IS CONSTRUCTED WITH A VALUE and nothing here ever invalidates one, so `peek()` on any
+ * of them cannot miss and the `!` at each read site is that fact rather than a guess. `peek` is
+ * `T | undefined` on every state because a load or a `memo` slot genuinely has a moment with nothing
+ * retained; these have none, and this is the one place that is worth writing down.
+ */
+interface States {
     name: State<string>
     params: State<Params>
     url: State<URL>
@@ -562,12 +571,12 @@ interface Cells {
     /**
      * What each layout of the last `outletFrom` run was handed as its children, indexed by depth.
      *
-     * Not a cell and never read to render — it is a lookup key, handed to `#ui` so a served fragment
+     * Not a state and never read to render — it is a lookup key, handed to `#ui` so a served fragment
      * can be put inside the layout it belongs in rather than over the whole outlet.
      */
     chain: TemplateResult[]
     /**
-     * Which served navigation is the LIVE one. A plain counter, not a cell: nothing reads it to
+     * Which served navigation is the LIVE one. A plain counter, not a state: nothing reads it to
      * render, it is read back across the awaits in `enter` to ask "am I still the newest?".
      *
      * A navigation resolves when its whole range has landed, and a reader can start another one
@@ -593,16 +602,16 @@ interface Cells {
      * the way through, and again in `enter`'s `finally` so no other exit can leave it set. An
      * overtaken navigation leaves it alone — the one that overtook it owns the range by then.
      *
-     * Not a cell: nothing renders from it, and the two readers are decisions taken inside `navigate`.
+     * Not a state: nothing renders from it, and the two readers are decisions taken inside `navigate`.
      */
     stood: boolean
     /**
      * The failure the range now standing in the outlet was rendered from, or `null` for every
      * ordinary page.
      *
-     * Not a cell, and it does not need to be: the write that puts one here is the same commit that
+     * Not a state, and it does not need to be: the write that puts one here is the same commit that
      * moves `name` to `''` and bumps `adopted`, and `outletFrom` reads both. So the wake is already
-     * paid for, and a cell would be a second record of one fact for every commit to keep in step.
+     * paid for, and a state would be a second record of one fact for every commit to keep in step.
      *
      * It is what stops a served 404 from blanking: without it `outletFrom` reads an empty name,
      * answers `NOTHING`, and wipes the range the server just filled — the error page appears and is
@@ -614,17 +623,17 @@ interface Cells {
 interface Here {
     /**
      * Where this caller is, built on the first READ — so a request that never routes pays for none
-     * of this, and the URL lives in the cells rather than beside them where a commit could drift.
+     * of this, and the URL lives in the states rather than beside them where a commit could drift.
      */
-    cells: Cells | null
+    states: States | null
     facade: Route | null
 }
 
 // The client's caller — one, forever — and the fallback every unscoped read uses. Doubling as the
 // storage key is what `state.shared` does with its map, for the same reason: the fallback and the
 // thing it is a fallback FOR should not be two declarations free to drift apart.
-const CLIENT: Here = { cells: null, facade: null }
-const makeHere = (): Here => ({ cells: null, facade: null })
+const CLIENT: Here = { states: null, facade: null }
+const makeHere = (): Here => ({ states: null, facade: null })
 
 function hereFor(): Here {
     return storeFor(CLIENT, makeHere, CLIENT)
@@ -734,12 +743,12 @@ function hrefOf(fallback?: string): string {
     )
 }
 
-function cellsFor(fallback?: string): Cells {
+function statesFor(fallback?: string): States {
     const here = hereFor()
-    if (here.cells !== null) return here.cells
+    if (here.states !== null) return here.states
     const url = new URL(hrefOf(fallback))
     const found = lookup(url.pathname)
-    const made: Cells = {
+    const made: States = {
         name: state(found === null ? '' : found.held.pattern.path),
         params: state(found === null ? NO_PARAMS : found.params),
         url: state(url),
@@ -750,7 +759,7 @@ function cellsFor(fallback?: string): Cells {
         entering: 0,
         stood: false,
     }
-    here.cells = made
+    here.states = made
     return made
 }
 
@@ -774,61 +783,61 @@ function sameParams(left: Params, right: Params): boolean {
     return mine === theirs
 }
 
-// Write the three cells a match decides — name, params and url. `navigating` and `adopted` are the
+// Write the three states a match decides — name, params and url. `navigating` and `adopted` are the
 // other two, and they are written by the callers that know about a navigation rather than here.
-// Each is identity-deduped by the cell itself, so the only thing this has to
+// Each is identity-deduped by the state itself, so the only thing this has to
 // get right is not handing over a FRESH object for a value that did not change — which is exactly
 // what a match produces, and exactly what would wake every reader of it.
 //
 // The match is handed IN rather than looked up here: `navigate` already resolved this exact pathname
 // to decide what to load, and a table walk per navigation is the whole cost of the second lookup.
-function commit(cells: Cells, url: URL, found: Match | null, failure: Failure | null = null): void {
+function commit(states: States, url: URL, found: Match | null, failure: Failure | null = null): void {
     // Written on EVERY commit, including the ordinary ones that pass nothing — a failure left behind
     // by the page a reader has already navigated away from is a 404 rendered over a route that
     // matched perfectly well.
-    cells.failure = found === null ? failure : null
-    const heldParams = cells.params.peek()
+    states.failure = found === null ? failure : null
+    const heldParams = states.params.peek()!
     if (found === null) {
-        cells.name.set('')
-        cells.params.set(NO_PARAMS)
+        states.name.set('')
+        states.params.set(NO_PARAMS)
     } else {
-        cells.name.set(found.held.pattern.path)
-        cells.params.set(sameParams(heldParams, found.params) ? heldParams : found.params)
+        states.name.set(found.held.pattern.path)
+        states.params.set(sameParams(heldParams, found.params) ? heldParams : found.params)
     }
-    const before = cells.url.peek()
-    cells.url.set(before.href === url.href ? before : url)
+    const before = states.url.peek()!
+    states.url.set(before.href === url.href ? before : url)
 }
 
 // A class rather than an object of getter closures: a server builds one of these per request, and
 // prototype getters cost one monomorphic object holding one field instead of five function objects
 // over a captured environment that then stays alive as long as the facade does.
 class RouteFacade implements Route {
-    private readonly cells: Cells
+    private readonly states: States
 
-    constructor(cells: Cells) {
-        this.cells = cells
+    constructor(states: States) {
+        this.states = states
     }
 
     get name(): string {
-        return this.cells.name()
+        return this.states.name()
     }
 
     // Derived from the name rather than held: "did anything match" is what the name already says,
-    // and a second cell would be a second record of one fact for every commit to keep in step.
+    // and a second state would be a second record of one fact for every commit to keep in step.
     get kind(): RouteKind {
-        return this.cells.name() === '' ? 'missing' : 'page'
+        return this.states.name() === '' ? 'missing' : 'page'
     }
 
     get params(): Params {
-        return this.cells.params()
+        return this.states.params()
     }
 
     get url(): URL {
-        return this.cells.url()
+        return this.states.url()
     }
 
     get navigating(): boolean {
-        return this.cells.navigating()
+        return this.states.navigating()
     }
 }
 
@@ -839,7 +848,7 @@ class RouteFacade implements Route {
 export function route(): Route {
     const here = hereFor()
     if (here.facade !== null) return here.facade
-    const facade = new RouteFacade(cellsFor())
+    const facade = new RouteFacade(statesFor())
     here.facade = facade
     return facade
 }
@@ -946,7 +955,7 @@ function hereHref(): string {
     // A REACTIVE read, not a peek: a relative href is a fact about the current URL, so one built into
     // a template has to move when the route does. Only these two shapes pay it — the root-absolute
     // pattern every app writes never reaches here.
-    return here.cells === null ? hrefOf(NOWHERE) : here.cells.url().href
+    return here.states === null ? hrefOf(NOWHERE) : here.states.url().href
 }
 
 /**
@@ -1050,8 +1059,8 @@ function drivesDocument(): boolean {
  * different moments: the URL moves when the first piece is on screen, and the route is committed when
  * the range behind it is whole.
  */
-function place(cells: Cells, url: URL, options: NavigateOptions | undefined): void {
-    const moved = cells.url.peek().pathname !== url.pathname
+function place(states: States, url: URL, options: NavigateOptions | undefined): void {
+    const moved = states.url.peek()!.pathname !== url.pathname
     const sink = drivesDocument() ? HISTORY_SINK : null
     if (sink === null) return
     sink.push(url.href, options?.replace === true)
@@ -1060,15 +1069,15 @@ function place(cells: Cells, url: URL, options: NavigateOptions | undefined): vo
     if (moved && options?.keepScroll !== true) sink.toTop()
 }
 
-function land(cells: Cells, url: URL, options: NavigateOptions | undefined, found: Match | null): void {
-    place(cells, url, options)
-    commit(cells, url, found)
+function land(states: States, url: URL, options: NavigateOptions | undefined, found: Match | null): void {
+    place(states, url, options)
+    commit(states, url, found)
 }
 
 /**
  * Whether this move is one the client can already paint, so the round trip buys nothing.
  *
- * The route ALREADY SHOWING, with its module resolved: the page is on screen, the params are cells,
+ * The route ALREADY SHOWING, with its module resolved: the page is on screen, the params are states,
  * and the render that follows therefore PATCHES. `outlet` reads the name and not the params, so it
  * does not even re-run — the page's own reads move and its nodes keep their identity, which is the
  * whole point. A carousel keeps its scroll offset, an open `<details>` stays open, and focus stays
@@ -1087,14 +1096,14 @@ function land(cells: Cells, url: URL, options: NavigateOptions | undefined, foun
  * given — but a login redirect on a same-route move reaches the reader as failed calls instead.
  * Crossing to another route is unchanged and still goes through the onion.
  */
-function paintsLocally(cells: Cells, found: Match | null): boolean {
+function paintsLocally(states: States, found: Match | null): boolean {
     if (found === null) return false
     // A served range is standing that nothing has committed, so the route below names a page whose
     // nodes are gone — reclaimed when that range was filled. "The page is on screen and the render
     // that follows therefore patches" is the whole premise of this path, and it is false here: the
     // params would move, the page's own reads would wake, and they would patch nothing at all.
-    if (cells.stood) return false
-    if (found.held.pattern.path !== cells.name.peek()) return false
+    if (states.stood) return false
+    if (found.held.pattern.path !== states.name.peek()) return false
     // A route can be the one showing and still have nothing to render with — an async loader whose
     // first module has not landed. Then the server is the faster answer as well as the only one.
     //
@@ -1121,7 +1130,7 @@ function paintsLocally(cells: Cells, found: Match | null): boolean {
  * makes a page interactive, not what makes it appear.
  */
 async function enter(
-    cells: Cells,
+    states: States,
     url: URL,
     options: NavigateOptions | undefined,
     found: Match | null,
@@ -1138,8 +1147,8 @@ async function enter(
     // Handed to the sink as well, because the checks here are all AFTER an await and the sink writes
     // to the document inside one: by the time the check below runs, an overtaken answer has already
     // stood its page over the one the reader chose.
-    const live = (): boolean => cells.entering === mine
-    cells.navigating.set(true)
+    const live = (): boolean => states.entering === mine
+    states.navigating.set(true)
     try {
         const entered = await sink.enter(url, live)
         // The browser is taking this URL and its own load answers everything below, so this side
@@ -1147,12 +1156,12 @@ async function enter(
         // rather than waiting on `complete`, which is a promise nothing settles: the caller asked to
         // move and the move is happening, just not here.
         if (entered.left) return
-        if (cells.entering !== mine) return
+        if (states.entering !== mine) return
         // The first piece is on screen, so the address bar is now behind what the reader is looking
         // at. This is the half that cannot wait for the range to be whole — and the range standing
         // there is now what the screen IS, which is what the committed route has stopped describing.
-        cells.stood = true
-        place(cells, url, options)
+        states.stood = true
+        place(states, url, options)
         await entered.complete
         if (loading !== null) await loading
         // The ERROR page's own module, and it has to be awaited here for the same reason `loading`
@@ -1167,14 +1176,14 @@ async function enter(
             const failingLoad = failing === null ? null : errorReady(failing)
             if (failingLoad !== null) await failingLoad
         }
-        if (cells.entering !== mine) return
+        if (states.entering !== mine) return
         // The sink's own answer about what it stood there, which for a served `error.abide` is the
         // only route the failure has: nothing MATCHED, so `found` is null either way and the null
         // cannot tell a 404 the server rendered from a path this table simply has no row for.
-        commit(cells, url, found, failure)
+        commit(states, url, found, failure)
         // In the same synchronous region as the commit, so the renderer takes both in ONE flush and
-        // the page's view runs once for the navigation however many cells moved.
-        cells.adopted.set(cells.adopted.peek() + 1)
+        // the page's view runs once for the navigation however many states moved.
+        states.adopted.set(states.adopted.peek()! + 1)
     } finally {
         // Only the live navigation may say either of these is over: an overtaken one finishing its
         // stream would otherwise clear them while the newer one is still in flight.
@@ -1188,9 +1197,9 @@ async function enter(
         // its way through, so the cost is one round trip rather than a page stuck on the server. An
         // OVERTAKEN navigation deliberately leaves it set: the one that overtook it owns the range
         // now, and clears it on its own commit.
-        if (cells.entering === mine) {
-            cells.stood = false
-            cells.navigating.set(false)
+        if (states.entering === mine) {
+            states.stood = false
+            states.navigating.set(false)
         }
     }
 }
@@ -1236,41 +1245,41 @@ export function navigate(target: string, options?: NavigateOptions): Promise<voi
     // itself: a route is committed when its page arrives, and seeding at the target would have the
     // caller already standing on a page that has not loaded. Built only when it is going to be USED —
     // the seed belongs to the first navigation, and every later one would parse it to discard it.
-    const cells = here.cells ?? cellsFor(new URL('/', new URL(target, NOWHERE)).href)
-    const url = mountedTarget(new URL(target, cells.url.peek().href), cells.url.peek())
+    const states = here.states ?? statesFor(new URL('/', new URL(target, NOWHERE)).href)
+    const url = mountedTarget(new URL(target, states.url.peek()!.href), states.url.peek()!)
     const found = lookup(url.pathname)
 
     // Claimed HERE rather than inside `enter`, so the local arm takes one too. A local move is the
     // arm that most needs it: it lands in the same tick, so it is the one a reader reaches for while
     // a served answer is still on the wire, and that answer then committed on top of it.
-    const mine = ++cells.entering
+    const mine = ++states.entering
 
     // Where there is a document showing the outlet, a navigation the client cannot already paint is
     // the SERVER's to answer: the page is rendered by the app's own middleware onion once, at the URL
     // being asked for, and this side claims what comes back.
     //
     // A request being served and a test driving a route on the side each render locally.
-    const sink = drivesDocument() && !paintsLocally(cells, found) ? NAVIGATION_SINK : null
-    if (sink !== null) return enter(cells, url, options, found, sink, mine)
+    const sink = drivesDocument() && !paintsLocally(states, found) ? NAVIGATION_SINK : null
+    if (sink !== null) return enter(states, url, options, found, sink, mine)
 
     const loading = found === null ? null : loadFor(found.held)
     // Nothing to wait for, so nothing can overtake it between the claim above and the landing: the
     // check the other arm makes would be reading a counter that has not been touched since.
     if (loading === null) {
-        land(cells, url, options, found)
+        land(states, url, options, found)
         return SETTLED
     }
-    cells.navigating.set(true)
+    states.navigating.set(true)
     return loading.then(
         () => {
             // Overtaken while its module was arriving. Landing anyway would move the address bar back
             // to a page the reader has already left, which is the served arm's bug in the other lane.
-            if (cells.entering !== mine) return
-            land(cells, url, options, found)
-            cells.navigating.set(false)
+            if (states.entering !== mine) return
+            land(states, url, options, found)
+            states.navigating.set(false)
         },
         (error: unknown) => {
-            if (cells.entering === mine) cells.navigating.set(false)
+            if (states.entering === mine) states.navigating.set(false)
             throw error
         },
     )

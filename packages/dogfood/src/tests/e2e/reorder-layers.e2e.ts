@@ -95,8 +95,18 @@ const swap = () => (document.getElementById('swap') as HTMLButtonElement).click(
 // assertions that can drift apart while still reading as a comparison. A `test()` per row, so the two
 // still report and fail separately.
 const REORDERS = [
-    { title: 'a 1000-row keyed swap spends a MINORITY of the engine work in script', path: '/demos/complex', op: swap, label: 'swap two rows of 1000, in a <table>' },
-    { title: 'so does a full re-sort of 500 keyed rows, table or not', path: '/demos/media', op: resort, label: 're-sort 500 keyed rows, in a grid' },
+    {
+        title: 'a 1000-row keyed swap spends a MINORITY of the engine work in script',
+        path: '/demos/complex',
+        op: swap,
+        label: 'swap two rows of 1000, in a <table>',
+    },
+    {
+        title: 'so does a full re-sort of 500 keyed rows, table or not',
+        path: '/demos/media',
+        op: resort,
+        label: 're-sort 500 keyed rows, in a grid',
+    },
 ] as const
 
 for (const reorder of REORDERS) {
@@ -184,9 +194,10 @@ test.describe('the layout lever', () => {
         // these pages gained a stylesheet. A layout is a COST rather than a count — CLAUDE.md's own rule
         // — so the ms is reported above and the count is what is gated, because the count is the
         // mechanism and the mechanism is the finding.
-        expect(layouts['content-visibility'], 'content-visibility no longer splits the layout').toBeGreaterThan(
-            (layouts['as shipped'] as number) * 10,
-        )
+        expect(
+            layouts['content-visibility'],
+            'content-visibility no longer splits the layout',
+        ).toBeGreaterThan((layouts['as shipped'] as number) * 10)
 
         // …and it still renders. A lever that wins by not drawing the page is not a lever.
         await page.goto('/demos/media')

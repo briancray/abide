@@ -67,14 +67,14 @@ export const USECASES: UseCase[] = [
     {
         name: 'simple',
         blurb:
-            'The smallest thing that is still an app: one cell, one list of ten rows, one event ' +
+            'The smallest thing that is still an app: one state, one list of ten rows, one event ' +
             'handler. Here as the floor the other five are read against.',
         ops: [{ label: 'increment', on: '#inc' }],
     },
     {
         name: 'dashboard',
         blurb:
-            'A filtered table of 200 records: two cells, two derived values over them, and a ' +
+            'A filtered table of 200 records: two states, two derived values over them, and a ' +
             'component reused four times. The shape most application pages actually have.',
         // The checkbox first: it is a TOGGLE, so the replay at the end puts it back where it started
         // and the demo is left as a reader would want to find it.

@@ -273,7 +273,12 @@ export async function engine(page: Page, options: EngineOptions = {}): Promise<E
  * Every field is 0 when `taskMs` is 0, which is what an op under the counter's resolution reads as.
  * That is a real answer: there is no share to name because there is no time to divide.
  */
-export function shares(work: EngineWork): { script: number; recalcStyle: number; layout: number; other: number } {
+export function shares(work: EngineWork): {
+    script: number
+    recalcStyle: number
+    layout: number
+    other: number
+} {
     if (work.taskMs <= 0) return { script: 0, recalcStyle: 0, layout: 0, other: 0 }
     const script = work.scriptMs / work.taskMs
     const recalcStyle = work.recalcStyleMs / work.taskMs

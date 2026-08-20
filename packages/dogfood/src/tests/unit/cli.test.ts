@@ -258,7 +258,7 @@ test('`repl` keeps what a line declared, and prints what the next one is', async
 test('`repl` has the abide surface in scope, and prints a source as one', async () => {
     const said = await replies([
         'const count = state(1)',
-        // Naming a cell hands back the CELL, and the prompt says what it is holding rather than
+        // Naming a state hands back the STATE, and the prompt says what it is holding rather than
         // `[Function]` — read through `peek`, so printing one starts nothing.
         'count',
         'count.set(4)',
@@ -287,8 +287,8 @@ test('`repl` runs a top-level await, and keeps the name it landed in', async () 
         // await — and the name still has to survive into the next line.
         'const landed = await Promise.resolve("here")',
         'landed',
-        // A cell is thenable, so a prompt that awaited every result would print what is INSIDE the
-        // cell instead of the cell.
+        // A state is thenable, so a prompt that awaited every result would print what is INSIDE the
+        // state instead of the state.
         'const held = state(7)',
         'held',
     ])

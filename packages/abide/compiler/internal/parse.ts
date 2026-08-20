@@ -120,7 +120,7 @@ export const BRANCHES: Record<string, Record<string, BranchTail>> = {
  *
  * Exported because `emit.ts` asks the same question of a name it is about to write into output —
  * whether a member can be a dotted access or has to be a quoted key, whether an attribute value is a
- * bare cell read. One grammar, so the two halves cannot disagree about what a name is. Anchored and
+ * bare state read. One grammar, so the two halves cannot disagree about what a name is. Anchored and
  * non-global, so `test` carries no `lastIndex` between callers.
  */
 export const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
@@ -478,7 +478,10 @@ function onlyStringLiteral(source: string): string | null {
     let found: string | null = null
     for (const token of tokensOf(source)) {
         if (found !== null) return null
-        if (token.kind !== SyntaxKind.StringLiteral && token.kind !== SyntaxKind.NoSubstitutionTemplateLiteral) {
+        if (
+            token.kind !== SyntaxKind.StringLiteral &&
+            token.kind !== SyntaxKind.NoSubstitutionTemplateLiteral
+        ) {
             return null
         }
         found = token.text.slice(1, -1)
@@ -956,7 +959,8 @@ function meaningful(text: string): boolean {
 }
 
 function skipSpace(reader: Reader): void {
-    while (reader.at < reader.source.length && WHITESPACE.test(reader.source[reader.at] as string)) reader.at++
+    while (reader.at < reader.source.length && WHITESPACE.test(reader.source[reader.at] as string))
+        reader.at++
 }
 
 function scanWhile(reader: Reader, pattern: RegExp): number {

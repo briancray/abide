@@ -129,15 +129,17 @@ test('a session is the same session however the bytes arrive', () => {
     // one character short of its own body, and the character it takes instead comes off the frame
     // AFTER it — so a mis-measured message at the end of a buffer parses fine and says nothing.
     const text = '<main>\n    <p>count · {broken</p>\n</main>\n'
-    const conversation = new Uint8Array(Bun.concatArrayBuffers([
-        frame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
-        frame({
-            jsonrpc: '2.0',
-            method: 'textDocument/didOpen',
-            params: { textDocument: { uri: URI, version: 1, text } },
-        }),
-        frame({ jsonrpc: '2.0', id: 2, method: 'shutdown' }),
-    ]))
+    const conversation = new Uint8Array(
+        Bun.concatArrayBuffers([
+            frame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
+            frame({
+                jsonrpc: '2.0',
+                method: 'textDocument/didOpen',
+                params: { textDocument: { uri: URI, version: 1, text } },
+            }),
+            frame({ jsonrpc: '2.0', id: 2, method: 'shutdown' }),
+        ]),
+    )
 
     const whole: Uint8Array[] = []
     const bulk = new LanguageServer({ write: (message) => whole.push(message), exit: () => {} })
@@ -401,14 +403,16 @@ test('an editor is told about a type error in the buffer, on the `.abide` line',
     })
     try {
         child.stdin.write(
-            new Uint8Array(Bun.concatArrayBuffers([
-                frame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
-                frame({
-                    jsonrpc: '2.0',
-                    method: 'textDocument/didOpen',
-                    params: { textDocument: { uri, languageId: 'abide', version: 1, text: edited } },
-                }),
-            ])),
+            new Uint8Array(
+                Bun.concatArrayBuffers([
+                    frame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
+                    frame({
+                        jsonrpc: '2.0',
+                        method: 'textDocument/didOpen',
+                        params: { textDocument: { uri, languageId: 'abide', version: 1, text: edited } },
+                    }),
+                ]),
+            ),
         )
         await child.stdin.flush()
 
@@ -555,7 +559,7 @@ test('a hover carries the doc comment from the module a name was imported from',
             before.split('\n').length - 1,
             offset - (before.lastIndexOf('\n') + 1),
         )
-        expect(found?.docs).toContain('A cell holding a value you write yourself')
+        expect(found?.docs).toContain('A state holding a value you write yourself')
     } finally {
         live.close()
     }
@@ -610,15 +614,15 @@ test('an import goes to the file its specifier names, without asking the checker
     }
 })
 
-// `Cell` is the one public name an author READS and never writes — the sugar is the point, so a prop
+// `State` is the one public name an author READS and never writes — the sugar is the point, so a prop
 // is used by name and the type behind it never had to be said out loud until a hover said it. The
 // claim is that the hover connects the name back to the spelling the author already knows.
-test('a hover over a cell says what a cell is, in the spelling the author uses', async () => {
+test('a hover over a state says what a state is, in the spelling the author uses', async () => {
     const written: Uint8Array[] = []
     const server = new LanguageServer({
         write: (message) => written.push(message),
         exit: () => {},
-        typeAt: async () => ({ type: 'Cell<string>', docs: null }),
+        typeAt: async () => ({ type: 'State<string>', docs: null }),
     })
     const text = '<script>\nconst className = props<{ class?: string }>()\n</script>\n<p>x</p>\n'
     server.feed(frame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }))
@@ -632,9 +636,9 @@ test('a hover over a cell says what a cell is, in the spelling the author uses',
     ask(server, 2, 'textDocument/hover', after(text, 'const classNa'))
     await Bun.sleep(20)
     const value = hovered(written, 2)
-    // The type still leads: `className.set(…)` is a real spelling and hiding the cell would deny it.
-    expect(value).toContain('Cell<string>')
-    // WHY it is a cell and not a `string`, which is the question a reader actually has.
+    // The type still leads: `className.set(…)` is a real spelling and hiding the state would deny it.
+    expect(value).toContain('State<string>')
+    // WHY it is a state and not a `string`, which is the question a reader actually has.
     expect(value).toContain('that can CHANGE')
     expect(value).toContain('a plain value cannot say it moved')
     // …and the spelling they use MOST — the name alone, in markup — before the one they rarely do.
@@ -642,13 +646,13 @@ test('a hover over a cell says what a cell is, in the spelling the author uses',
     expect(value).toContain('`{className}`')
 })
 
-// A type that merely MENTIONS a cell is not one, so the note is anchored rather than searched for.
-test('a type that only mentions a cell is not described as being one', async () => {
+// A type that merely MENTIONS a state is not one, so the note is anchored rather than searched for.
+test('a type that only mentions a state is not described as being one', async () => {
     const written: Uint8Array[] = []
     const server = new LanguageServer({
         write: (message) => written.push(message),
         exit: () => {},
-        typeAt: async () => ({ type: '(value: string) => Cell<string>', docs: null }),
+        typeAt: async () => ({ type: '(value: string) => State<string>', docs: null }),
     })
     const text = '<script>\nconst make = 1\n</script>\n<p>x</p>\n'
     server.feed(frame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }))
@@ -661,7 +665,7 @@ test('a type that only mentions a cell is not described as being one', async () 
     )
     ask(server, 2, 'textDocument/hover', after(text, 'const ma'))
     await Bun.sleep(20)
-    expect(hovered(written, 2)).not.toContain('is a **cell**')
+    expect(hovered(written, 2)).not.toContain('is a **state**')
 })
 
 // --- go to definition ------------------------------------------------------

@@ -4,10 +4,10 @@ import { state } from 'abide'
 const name = state('ada')
 </script>
 
-<!-- A bind is a READ and a WRITE, which is two slots on one element: the property is set from the cell,
-     and the cell is set back on the event that says the user changed it — `input`, here.
+<!-- A bind is a READ and a WRITE, which is two slots on one element: the property is set from the state,
+     and the state is set back on the event that says the user changed it — `input`, here.
 
-     `bind:value={name}` hands over the CELL rather than its value, which is what lets it write at all.
-     Naming a cell alone is what does that; `bind:value={name()}` would hand over a string. -->
+     `bind:value={name}` hands over the STATE rather than its value, which is what lets it write at all.
+     Naming a state alone is what does that; `bind:value={name()}` would hand over a string. -->
 <input bind:value={name} />
 <p>hello {name}</p>

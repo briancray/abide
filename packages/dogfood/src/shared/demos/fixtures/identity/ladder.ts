@@ -15,7 +15,12 @@ import THREE from './3-decide-who-the-caller-is.ts?source'
 import TWO from '#server/rpc/docs/identity/the-writers-are-the-servers.ts?source'
 
 export const LADDER: Example[] = [
-    { adds: 'ask who this is — anonymous IS an answer, never null', of: ['identity'], source: ONE, view: One },
+    {
+        adds: 'ask who this is — anonymous IS an answer, never null',
+        of: ['identity'],
+        source: ONE,
+        view: One,
+    },
     {
         adds: "the two writers are the server's, and a browser calling one is told so",
         of: ['identity'],

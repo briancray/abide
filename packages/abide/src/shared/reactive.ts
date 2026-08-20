@@ -14,7 +14,6 @@
 // `memo` sits on and nothing outside abide imports.
 
 export {
-    type Cell,
     type Memo,
     type State,
     scope,

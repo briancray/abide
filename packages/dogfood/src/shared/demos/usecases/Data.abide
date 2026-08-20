@@ -4,7 +4,7 @@
      The other three pages build their rows in the browser from an id, so their graph starts warm and
      the only question is what a mutation costs. This one starts COLD and over a wire, which is where
      an app actually starts, and it is the shape the async work is for: a pending arm the server
-     streams, a fan of memos that must not all re-run when one cell moves, and a payload whose cost
+     streams, a fan of memos that must not all re-run when one state moves, and a payload whose cost
      is in its nesting rather than in its row count.
 
      WHAT TO WATCH, and each is a control on the page:
@@ -89,7 +89,7 @@ const SORTS: Record<string, (a: CatalogueEntry, b: CatalogueEntry) => number> = 
 </script>
 
 <script>
-// Read ONCE at setup from the url this render was asked for. A plain const, not a cell: the sweep
+// Read ONCE at setup from the url this render was asked for. A plain const, not a state: the sweep
 // reloads the page per n rather than navigating, so nothing here has to react to it changing.
 const asked = Number(route().url.searchParams.get('size'))
 const SIZE = Number.isFinite(asked) && asked > 0 ? asked : DEFAULT_SIZE
@@ -108,7 +108,7 @@ let showRuntimes = state(false)
  * `catalogue({…})` SELECTS the slot and starts nothing; the read inside this body is what reaches the
  * server, and it SIGNALS while the first answer is in flight — so this body does not complete, every
  * memo below it does not run, and none of them needs to know the value might be missing. `shard` is
- * read in the args, so asking for another key is an ordinary write to an ordinary cell.
+ * read in the args, so asking for another key is an ordinary write to an ordinary state.
  */
 const rows = memo(() => {
     RUNS.rows++
@@ -257,7 +257,7 @@ const sample = (): void => {
      it directly above, so the only thing left to say here is the n — which is `?size=`'s to move and
      so the one number that page head cannot carry. -->
 <p>{SIZE} entries, about {SIZE * OBJECTS_PER_ENTRY} objects. The counters below are memo BODY RUNS —
-the work, which is what moving one cell is supposed to change and what nothing about the rendered
+the work, which is what moving one state is supposed to change and what nothing about the rendered
 numbers can tell you.</p>
 
 <div class="controls">
@@ -274,7 +274,7 @@ numbers can tell you.</p>
         <option value="rating">Rating</option>
     </select>
     <button id="shard" onclick={() => { shard = shard + 1 }}>next shard ({shard})</button>
-    <button id="refresh" onclick={() => catalogue.refresh({ shard: shard.peek(), size: SIZE })}>refresh</button>
+    <button id="refresh" onclick={() => catalogue.refresh({ shard: shard.peek()!, size: SIZE })}>refresh</button>
     <button id="invalidate" onclick={() => catalogue.invalidate()}>invalidate</button>
     <button id="sample" onclick={sample}>sample the counters</button>
     <label><input id="runtimes" type="checkbox" bind:checked={showRuntimes}/> runtimes panel</label>

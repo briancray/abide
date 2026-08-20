@@ -4,7 +4,7 @@ import { state, watch } from 'abide'
 const name = state('ada')
 const runs = state(0)
 
-// Reading a cell inside a `watch` IS the subscription. There is no dependency array — naming it is the
+// Reading a state inside a `watch` IS the subscription. There is no dependency array — naming it is the
 // whole of it, the same as naming it in a slot.
 watch(() => {
     name

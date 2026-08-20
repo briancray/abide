@@ -1,5 +1,5 @@
 <script>
-import { props, type State } from 'abide'
+import { props } from 'abide'
 import type { Book, Rate, Shelf } from '../models.ts'
 import { assertType, type Exact } from '../exact.ts'
 
@@ -7,24 +7,25 @@ import { assertType, type Exact } from '../exact.ts'
 // what brings them into scope. Without the call the signature is `Record<string, never>`, which is
 // what makes `<Props n="x"/>` an error at the CALLER rather than a runtime surprise.
 //
-// The author writes what a prop IS. What arrives is a CELL of it, because the position showing this
-// component holds the instance and writes each prop into a cell of its own — so the name reads, the
+// The author writes what a prop IS. What arrives is a STATE of it, because the position showing this
+// component holds the instance and writes each prop into a state of its own — so the name reads, the
 // way every other name in a `.abide` template reads, and a new `book` repaints without the component
-// being rebuilt. `State<string>` is not special any more: it says only that `bind:` may write.
+// being rebuilt. A props type therefore names VALUES only: `note: State<string>` is refused, because
+// it reads as a declaration that buys something and buys nothing — see `REACTIVE_TYPES`' `refused`.
 type Props = {
     book: Book
     shelf: Shelf
-    /** Declared as a cell, so `bind:` may write it — and passed through rather than wrapped twice. */
-    note: State<string>
-    /** Renamed, because `class` cannot be a binding — and the cell rule follows the LOCAL name. */
+    /** A plain string, and `bind:` writes it anyway — whose state it is, is the CALLER's spelling. */
+    note: string
+    /** Renamed, because `class` cannot be a binding — and the state rule follows the LOCAL name. */
     class?: string
     footnote?: string
-    /** A callback is CALLED, not read, so it is one of the two things a prop cell is not made of. */
+    /** A callback is CALLED, not read, so it is one of the two things a prop state is not made of. */
     onpick?: (title: string) => void
     /**
      * …and the same callback behind a NAME, which the emit cannot follow and the checker can. The
-     * emit's answer is the one that stands, because the emit is what WROTE the `propCell` — so this
-     * arrives as a cell, and calling it reads the cell first. The arrow spelling above is what says
+     * emit's answer is the one that stands, because the emit is what WROTE the `propState` — so this
+     * arrives as a state, and calling it reads the state first. The arrow spelling above is what says
      * "callback"; a name is data until something can resolve it.
      */
     onrate?: Rate
@@ -33,15 +34,15 @@ type Props = {
 const { book, shelf, note, class: className = '', footnote, onpick, onrate } = props<Props>()
 
 // The props arrive typed, not as `unknown` — the whole claim of declaring the type — and every one of
-// them that is data arrives behind a cell.
+// them that is data arrives behind a state.
 assertType<Exact<ReturnType<typeof book>, Book>>()
 assertType<Exact<ReturnType<typeof shelf>, Shelf>>()
 assertType<Exact<ReturnType<typeof footnote>, string | undefined>>()
-// A default collapses the optional: the cell reads a `string`, whatever the caller left out.
+// A default collapses the optional: the state reads a `string`, whatever the caller left out.
 assertType<Exact<ReturnType<typeof className>, string>>()
 // A function prop is handed over as it was written.
 assertType<Exact<typeof onpick, ((title: string) => void) | undefined>>()
-// …and one behind a name is a cell OF it, which is what the emit beside it built.
+// …and one behind a name is a state OF it, which is what the emit beside it built.
 assertType<Exact<ReturnType<typeof onrate>, Rate | undefined>>()
 </script>
 
@@ -49,8 +50,8 @@ assertType<Exact<ReturnType<typeof onrate>, Rate | undefined>>()
     <h3>{book.title}</h3>
     <p>{book.author.name} · {shelf} · {book.pages} pages</p>
     <input bind:value={note} />
-    <!-- The read is explicit because the CALL has to be optional: `onrate` is a cell of a callback
-         that may not have been passed, so the guard belongs on what the cell holds. -->
+    <!-- The read is explicit because the CALL has to be optional: `onrate` is a state of a callback
+         that may not have been passed, so the guard belongs on what the state holds. -->
     <button @click={() => onrate()?.(book.pages)}>rate</button>
     {#if footnote}<small>{footnote}</small>{/if}
 </article>

@@ -241,7 +241,9 @@ test('the demos index carries six links, not six demos worth of source text', ()
     // `server/rpc/catalogue.ts` is a LABEL in `SOURCES.ts` and can be nowhere else in a client build:
     // the module it names elides to its address in the client lane, so the string is the source list
     // or it is nothing.
-    const carrying = [...reached].filter((name) => (texts.get(name) ?? '').includes('server/rpc/catalogue.ts'))
+    const carrying = [...reached].filter((name) =>
+        (texts.get(name) ?? '').includes('server/rpc/catalogue.ts'),
+    )
     expect(carrying, 'the demos index reaches the use-case source text').toEqual([])
 })
 
@@ -465,7 +467,11 @@ test('an app is bundled from its pages, split per route', async () => {
         // first load and this is the assertion that would still pass if it did not.
         const modules = document.graph?.modules as Record<string, string>
         const entry = document.entries[GENERATED_ENTRY] as string
-        const chunks = ['src/ui/pages/layout.abide', 'src/ui/pages/page.abide', 'src/ui/pages/about/page.abide']
+        const chunks = [
+            'src/ui/pages/layout.abide',
+            'src/ui/pages/page.abide',
+            'src/ui/pages/about/page.abide',
+        ]
         for (const source of chunks) {
             expect(modules[source]).toBeDefined()
             expect(modules[source]).not.toBe(entry)

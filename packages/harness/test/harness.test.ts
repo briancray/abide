@@ -13,7 +13,7 @@
 //
 // The `harness` and `harness/measure` import lines below are the layering, asserted by being written:
 // `smokeBench` knows what a `Case` is and `timeArms` does not know what abide is. The abide line is a
-// case's own vocabulary rather than the harness's — a view to render, and a cell to write to it.
+// case's own vocabulary rather than the harness's — a view to render, and a state to write to it.
 
 import { describe, expect, test } from 'bun:test'
 import { html, state } from 'abide'
@@ -69,7 +69,7 @@ describe('equals — what `is` means by equal', () => {
     })
 
     test('anything with a prototype of its own compares by IDENTITY', () => {
-        // A Map, a Set, a cell, a DOM node. This is the rule most likely to surprise: two Maps with
+        // A Map, a Set, a state, a DOM node. This is the rule most likely to surprise: two Maps with
         // the same entries are NOT equal, so a case asserting one has to spread it — which is what
         // the `tracestate` assertion in the serve tests does.
         const map = new Map([['a', 1]])
@@ -224,9 +224,9 @@ describe('AssertionError — what the card and the runner both catch', () => {
  * table, unstyled, which is how this was noticed at all.
  *
  * The root is the half nothing could see. A swept host is detached and a mount nobody disposed goes
- * on writing into it, so the next write to a cell the view read still costs DOM work and a bench
+ * on writing into it, so the next write to a state the view read still costs DOM work and a bench
  * counting that write counts it once per copy. Which is why the second expectation is not about the
- * document at all: it is what the cell COSTS afterwards.
+ * document at all: it is what the state COSTS afterwards.
  *
  * Verified by reverting each half on its own — the `finally` out reads 4 leftover nodes instead of 0,
  * and the dispose loop out of `sweepContainers` reads 2 DOM calls for a write nobody is watching.
@@ -256,7 +256,7 @@ describe('a bench row sweeps what its arms rendered', () => {
 
         // The holder itself stays — it is reused — so what is asserted is that it is EMPTY.
         expect(document.querySelectorAll('[data-abide-scratch] *').length).toBe(0)
-        // …and that the two views it held are not still on the other end of the cell.
+        // …and that the two views it held are not still on the other end of the state.
         expect(total(await measureFlush(() => word.set('z')))).toBe(0)
     })
 })
@@ -383,7 +383,7 @@ describe('Timing.ops — how many operations a number is the average of', () => 
     /**
      * An arm sized against a world that then changed, which is the shape that cost two minutes.
      *
-     * `/bench/client`'s first arm writes a cell that a LATER arm's lazy fixture mounts a thousand-row
+     * `/bench/client`'s first arm writes a state that a LATER arm's lazy fixture mounts a thousand-row
      * list onto. Sized before that fixture existed it calibrated at 125 ns an op, was 21 µs an op by
      * the time it was measured, and spent nine passes of 320,000 iterations finding out — 112 seconds
      * for a row beside others that take three. Nothing about the reported number was wrong, which is

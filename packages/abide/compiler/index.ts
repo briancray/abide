@@ -53,6 +53,24 @@ export type { ImportedModule, TypeSource } from './internal/shape.ts'
 export { SHAPES_FILE } from './SHAPES_FILE.ts'
 export { TRANSPORT_MODULE } from './TRANSPORT.ts'
 
+/**
+ * What `import x from './y.abide?source'` hands back — the file's text, and the file's own NAME.
+ *
+ * The name is here because the only thing anybody shows a source with is a label, and every label
+ * written by hand is a label that can lie about which file is in the pane. It comes off the resolved
+ * path in `plugin.ts`, so it cannot: a file that MOVES relabels itself, and a rename that was going to
+ * leave a page pointing at a filename nothing has is not a shape this can be in.
+ *
+ * The default export rather than a named one beside the text, so a caller that only wants the label —
+ * a tab strip — and a caller that only wants the text are the same import.
+ */
+export interface SourceFile {
+    /** The basename, extension included: `36-a-prop-the-child-writes-back.parent.abide`. */
+    label: string
+    /** The file's own text. `text` rather than `source`, so a rung's file reads `rung.source.text`. */
+    text: string
+}
+
 export interface CompileOptions {
     /** Names the default export and every diagnostic. */
     filename?: string
@@ -63,7 +81,7 @@ export interface CompileOptions {
      *
      * A prop's kind is read off the member's declaration TEXT, so an imported type needed the other
      * file's bytes and nothing more. Absent, an imported type classifies as it always has — every
-     * member a cell — which is the degradation, not an error.
+     * member a state — which is the degradation, not an error.
      */
     resolve?: TypeSource
 }

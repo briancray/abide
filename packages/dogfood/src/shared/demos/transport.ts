@@ -33,8 +33,33 @@ import {
     type Wire,
 } from 'abide/runtime/transport'
 import { ElisionError, elide, endpointId, type ImportedModule, kindOf, type TypeSource } from 'abide/compiler'
-import { config, DELETE, error, GET, type HttpError, json, jsonl, type JsonSchema, onConfig, POST, page, redirect, type Schema, type SchemaRefusal, type StandardSchemaV1, socket, sse } from 'abide/server'
-import { endpoints, openapi, register, renderToString, SCHEMA_ERROR, validateJson } from 'abide/server/internal'
+import {
+    config,
+    DELETE,
+    error,
+    GET,
+    type HttpError,
+    json,
+    jsonl,
+    type JsonSchema,
+    onConfig,
+    POST,
+    page,
+    redirect,
+    type Schema,
+    type SchemaRefusal,
+    type StandardSchemaV1,
+    socket,
+    sse,
+} from 'abide/server'
+import {
+    endpoints,
+    openapi,
+    register,
+    renderToString,
+    SCHEMA_ERROR,
+    validateJson,
+} from 'abide/server/internal'
 import { loopback, reader, sleep, suite, until } from 'harness'
 import { countCalls, duration, nsPerOp, tick } from 'harness/measure'
 import { hydrate } from 'abide/ui'
@@ -461,7 +486,7 @@ export default suite({
 
         {
             title: 'a failure crosses the wire with its NAME',
-            note: "A failed load throws from the READ, which is the cell's rule already — so a transport failure needs no error path of its own. What the transport does have to carry is the NAME: an error that crossed a wire arrives as a plain object, so `instanceof` on it is false however faithfully it was serialised, and `isError(e, name)` is the question that outlives the constructor.",
+            note: "A failed load throws from the READ, which is the state's rule already — so a transport failure needs no error path of its own. What the transport does have to carry is the NAME: an error that crossed a wire arrives as a plain object, so `instanceof` on it is false however faithfully it was serialised, and `isError(e, name)` is the question that outlives the constructor.",
             async run({ is, rejects }) {
                 // `error.typed` is the declaration of that name, once, and it is what the handler
                 // fails with — a `never`, so the checker knows the line after it is unreachable.
@@ -666,7 +691,7 @@ export default suite({
 
         {
             title: 'a handler that yields is a stream on both sides',
-            note: 'A generator declaration is recognised from the function itself, so the browser lane knows to read the response as chunks without a type-checker. The cell does the rest: it holds the LATEST chunk, `chunks()` holds the transcript, and a second consumer replays what already arrived before following what comes next.',
+            note: 'A generator declaration is recognised from the function itself, so the browser lane knows to read the response as chunks without a type-checker. The state does the rest: it holds the LATEST chunk, `chunks()` holds the transcript, and a second consumer replays what already arrived before following what comes next.',
             async run({ is }) {
                 const countdown = GET(async function* ({ from }: { from: number }) {
                     for (let n = from; n > 0; n--) yield n
@@ -1128,25 +1153,24 @@ export default suite({
                 })
                 register('socket', [['demo/shape/chat', 'chat']], { chat })
                 const remoteChat = sock<{ name: string }>('demo/shape/chat', { channel: { tail: 4 } })
+                const held = remoteChat()
                 const upgraded = wire.connected
-                remoteChat.chunks()
+                held.chunks()
                 await until(() => wire.connected > upgraded)
 
-                remoteChat.publish({ name: 'ada' })
-                await until(() => remoteChat.chunks().length === 1)
-                is('a client publish that matches reaches the room', remoteChat.chunks(), [{ name: 'ada' }])
+                held.publish({ name: 'ada' })
+                await until(() => held.chunks().length === 1)
+                is('a client publish that matches reaches the room', held.chunks(), [{ name: 'ada' }])
 
-                remoteChat.publish({ name: '' })
+                held.publish({ name: '' })
                 await sleep(10)
-                is('…and one that does not is dropped at the wire', remoteChat.chunks(), [{ name: 'ada' }])
+                is('…and one that does not is dropped at the wire', held.chunks(), [{ name: 'ada' }])
 
-                chat.publish({ nope: true } as never)
-                await until(() => remoteChat.chunks().length === 2)
-                is(
-                    'a SERVER publish is the channel’s own, and goes through',
-                    remoteChat.chunks()[1] as unknown,
-                    { nope: true },
-                )
+                chat().publish({ nope: true } as never)
+                await until(() => held.chunks().length === 2)
+                is('a SERVER publish is the channel’s own, and goes through', held.chunks()[1] as unknown, {
+                    nope: true,
+                })
                 remoteChat.close()
             },
             bench: {
@@ -2615,46 +2639,128 @@ export default suite({
         },
 
         {
-            title: 'every PROBE on a remote socket answers without opening the connection',
-            note: 'SPEC says probes never throw and never start work, and a remote socket is where that is hardest to keep: its members are forwarded to a `Connection` that does not exist until something asks, so a member wired to the building arm rather than the cold one opens a socket for a question. `isError` was — and because it is the one probe with no cold value to answer from, it had been given the channel’s implementation through `held()` rather than the pure function that implementation IS. On an address not resolvable yet that did not merely start work, it threw, out of a member the spec says never does. Asserted over the WHOLE probe list rather than over `isError`, because the next member added to this table is the one that will be wired to the wrong arm, and the count is what says the list was not trimmed to what passes.',
+            title: 'the room a DECLARATION holds outlives its last subscriber',
+            note: 'What `tail` promises — how many messages a late subscriber is caught up with — and it is a promise about a GAP, since a late subscriber is by definition one that was not there. The bare stream a socket used to hand out kept it for free: a channel has no owner to be forgotten by. Once `s()` became an ordinary room it came under the sweep that bounds the room table, so the transcript went with the last client to disconnect, and a server holding the room published into an orphan nobody could reach. Rooms a CALLER names still go — that table is one an arriving connection can grow without a bound, and that is what the sweep is for. Asserted across a disconnect, because nothing that only ever connects can see it.',
             async run({ is }) {
-                // Registered, so the read at the bottom has something to reach — the claim is that
-                // the probes do not open this, not that they cannot.
+                const held = socket<{ n: number }>({ channel: { tail: 4 } })
+                held().publish({ n: 1 })
+                held().publish({ n: 2 })
+
+                // One subscriber arrives and leaves — the sweep's trigger.
+                const stop = held().subscribe(() => {})
+                stop()
+
+                is('the transcript survived the gap', held().chunks(), [{ n: 1 }, { n: 2 }])
+                // The same object, so a server holding `s()` is still publishing where readers look.
+                const after = held()
+                held().publish({ n: 3 })
+                is('…and it is still the room a publisher holds', after.chunks(), [
+                    { n: 1 },
+                    { n: 2 },
+                    { n: 3 },
+                ])
+
+                // A room a CALLER named is not held, and still goes — the bound this must not remove.
+                const named = socket<{ n: number }, { room: string }>({ channel: { tail: 4 } })
+                const one = named({ room: 'a' })
+                const leave = one.subscribe(() => {})
+                leave()
+                is('a caller-named room is still swept', named({ room: 'a' }) === one, false)
+            },
+        },
+
+        {
+            title: 'a socket has no bare stream — the omitted call is the `{}` room',
+            note: 'Full parity with the other law: there is no argless rpc, because `Rpc` extends `KeyedMemo` and `asRpc` resolves an omitted argument to `{}` — so `f()` and `f({})` are one slot at one address. A socket resolves the same way, so `s()` and `s({})` are one room on one connection, and the bare stream `channel()` still has is one a socket simply never hands out. That is what makes the two halves of the sentence "adding transport collapses the two forms into one" true rather than nearly true: before this, `s()` was a third thing, neither a room nor a read. The WIRE is the one place the two laws encode `{}` differently, and it is deliberate — an rpc\'s args ARE its address and must reach a handler as `{}` rather than as nothing, while a room is re-resolved by this same coercion on the server, so an empty query and an explicit `{}` already land in the same room from both directions.',
+            async run({ is }) {
+                const both = socket<{ n: number }, { room?: string }>({ channel: { tail: 4 } })
+                is('the omitted call and `{}` are one room', both() === both({}), true)
+                is('…and a named room is not that one', both({ room: 'a' }) === both(), false)
+                // An explicit `undefined` is the THIRD spelling of the same room, and it is the one
+                // arity cannot see: left on `given.length` it reached `channel()`'s own call, which
+                // branches on VALUE and reads — handing back a message where the type says `Channel`.
+                is('…and an explicit `undefined` is that room too', both(undefined) === both(), true)
+
+                // The server half, over the wire: a client that omits the room and one that sends
+                // `{}` must reach what `s()` published into.
+                register('socket', [['demo/socket/parity', 'both']], { both })
+                const upgraded = wire.connected
+                const held = { channel: { tail: 4 } }
+                const omitted = sock<{ n: number }, { room?: string }>('demo/socket/parity', held)
+                const explicit = sock<{ n: number }, { room?: string }>('demo/socket/parity', held)
+                omitted().chunks()
+                explicit({}).chunks()
+                await until(() => wire.connected >= upgraded + 2)
+
+                both().publish({ n: 7 })
+                await until(() => omitted().chunks().length === 1 && explicit({}).chunks().length === 1)
+                is('the omitted client received it', omitted().peek(), { n: 7 })
+                is('and so did the one that sent `{}`', explicit({}).peek(), { n: 7 })
+                omitted.close()
+                explicit.close()
+
+                // The WIRE, which the two claims above cannot see: the server re-resolves an
+                // undecoded room into `{}`, so delivery is right whichever address the client used.
+                // What decides it is that a socket's `{}` room has nothing to say on a query — where
+                // an rpc's `f()` must carry `?__abide_args={}` so the HANDLER is handed `{}` rather
+                // than nothing. Asserted, or the two encodings drift without a symptom.
+                const dialled: string[] = []
+                const watched = remoteSocket<{ n: number }, { room?: string }>('demo/socket/parity', {
+                    base: wire.base,
+                    open: (at) => {
+                        dialled.push(at.slice(at.indexOf('/__abide')))
+                        return wire.open(at)
+                    },
+                })
+                watched().chunks()
+                watched({ room: 'named' }).chunks()
+                await until(() => dialled.length === 2)
+                is('the `{}` room addresses the bare path', dialled[0], '/__abide/socket/demo/socket/parity')
+                is(
+                    'a named room carries its query',
+                    dialled[1],
+                    '/__abide/socket/demo/socket/parity?room=named',
+                )
+                watched.close()
+            },
+        },
+
+        {
+            title: 'NAMING a socket opens nothing; SELECTING opens nothing; ASKING opens it',
+            note: 'A socket always selects, so it is on the ordinary kick rule rather than exempt from it — `s()` is to a connection what `m(args)` is to a slot. A probe answering off a `Connection` that might not exist is a fact wearing the wrong answer for the same reason a cold slot probing `false` was — "no load is running" where the truth is "none has begun" — and it costs twice on a page. A socket whose only mention is a probe never connects at all; and the guard the shape invites, `s.pending() ? fallback : s()`, cannot short-circuit its own first evaluation, so it falls through to the read and defers the region it was written to keep painting. Asserted over the WHOLE probe list, so the next member added is not quietly wired to the wrong arm, and over `isError` separately, because it is the one probe with no cold value to answer from and it once threw out of a member the spec says never does.',
+            async run({ is }) {
                 const quiet = socket<{ n: number }>({ channel: { tail: 2 } })
                 register('socket', [['demo/socket/quiet', 'quiet']], { quiet })
                 const idle = sock<{ n: number }>('demo/socket/quiet')
                 const before = wire.connected
 
-                // Every probe SPEC lists, asked on a socket nothing has read. The answers are the
-                // cold ones; what is under test is that asking produced no connection.
-                is('pending', idle.pending(), false)
-                is('refreshing', idle.refreshing(), false)
-                is('settled', idle.settled(), false)
-                is('done', idle.done(), false)
-                is('streaming', idle.streaming(), true)
-                is('error', idle.error(), undefined)
-                is('peek', idle.peek(), undefined)
-                is('isError says no for an unrelated failure', idle.isError(new Error('x'), 'Nope'), false)
+                // Naming it, and selecting it. Neither is a question, so neither opens anything —
+                // the same two acts that are free on a keyed memo.
+                const held = idle()
+                is('selecting opened nothing', wire.connected, before)
+
+                // `isError` answers from its ARGUMENTS and has no cold value to read, so it is the
+                // one probe that still starts nothing — the same way `peek` does on a state.
+                is('isError says no for an unrelated failure', held.isError(new Error('x'), 'Nope'), false)
                 const named = new Error('inner')
                 named.name = 'Nope'
                 is(
                     'and yes for the named one, wrapped as a cause',
-                    idle.isError(new Error('outer', { cause: named }), 'Nope'),
+                    held.isError(new Error('outer', { cause: named }), 'Nope'),
                     true,
                 )
+                is('…and neither ask opened it', wire.connected, before)
 
-                // The discriminating assertion, and it has to come AFTER `isError`. `connect` builds
-                // without opening — "opened by the first READ" — so a connection made here moves no
-                // socket count and nothing above would notice. What it does move is `bare` from null
-                // to a `Connection` whose first message is a LOAD, and every probe then reads off
-                // that instead of the cold value: `pending()` answers `true` and never goes back.
-                is('pending is still false after asking isError', idle.pending(), false)
-                is('and settled still false', idle.settled(), false)
-                is('no connection was opened by any of them', wire.connected, before)
-                // And the read still does, so what is asserted above is the probes being quiet
-                // rather than the socket being broken.
-                idle()
+                // Now ASK. A connection is a load, so the first probe starts it and reports it.
+                is('pending, which is what asking started', held.pending(), true)
                 await until(() => wire.connected > before)
+                is('the rest of the probe list still answers', held.refreshing(), false)
+                is('settled', held.settled(), false)
+                is('done', held.done(), false)
+                is('streaming', held.streaming(), true)
+                is('error', held.error(), undefined)
+                is('peek', held.peek(), undefined)
+                is('one connection, not one per probe', wire.connected, before + 1)
                 idle.close()
             },
         },
@@ -2667,24 +2773,27 @@ export default suite({
                 register('socket', [['demo/socket/ticks', 'ticks']], { ticks })
                 const remoteTicks = sock<{ n: number }>('demo/socket/ticks', { channel: { tail: 8 } })
 
-                is('nothing has arrived', remoteTicks.peek(), undefined)
+                const live = remoteTicks()
+                is('nothing has arrived', live.peek(), undefined)
                 const upgraded = wire.connected
-                // The READ is what opens the connection; a probe never does.
-                remoteTicks()
+                // Selecting hands back the connection and opens nothing; ASKING it is what opens it,
+                // and a read is one of the asks — see the probe case above.
+                live()
                 // Waited for, not slept past: the upgrade is a detached turn of the loop, and a
                 // publish that beats it is dropped rather than queued.
                 await until(() => wire.connected > upgraded)
 
                 // Published on the SERVER, into a plain channel. Nothing about the publish knows a
                 // socket exists.
-                ticks.publish({ n: 1 })
-                ticks.publish({ n: 2 })
-                await until(() => remoteTicks.chunks().length === 2)
+                const served = ticks()
+                served.publish({ n: 1 })
+                served.publish({ n: 2 })
+                await until(() => live.chunks().length === 2)
 
-                is('the client channel holds the transcript', remoteTicks.chunks(), [{ n: 1 }, { n: 2 }])
-                is('…and the latest', remoteTicks.peek(), { n: 2 })
-                is('the whole source surface answers', remoteTicks.settled(), true)
-                is('a channel never loads, so it never ends', remoteTicks.done(), false)
+                is('the client channel holds the transcript', live.chunks(), [{ n: 1 }, { n: 2 }])
+                is('…and the latest', live.peek(), { n: 2 })
+                is('the whole source surface answers', live.settled(), true)
+                is('a channel never loads, so it never ends', live.done(), false)
                 remoteTicks.close()
             },
         },
@@ -2702,17 +2811,18 @@ export default suite({
                     listeners.push(sock<{ n: number }>('demo/socket/fanout', { channel: { tail: 4 } }))
                 }
                 const upgraded = wire.connected
-                for (const listening of listeners) listening()
+                const held = listeners.map((listening) => listening())
+                for (const room of held) room()
                 await until(() => wire.connected >= upgraded + listeners.length)
 
                 const encodes = countCalls(JSON, 'stringify')
-                feed.publish({ n: 1 })
+                feed().publish({ n: 1 })
                 encodes.restore()
                 is('one encode for the publish, not one per subscriber', encodes.calls, 1)
 
-                await until(() => listeners[0]?.chunks().length === 1)
-                for (const listening of listeners) {
-                    is('…and every subscriber got it', listening.peek(), { n: 1 })
+                await until(() => held[0]?.chunks().length === 1)
+                for (const room of held) {
+                    is('…and every subscriber got it', room.peek(), { n: 1 })
                 }
                 for (const listening of listeners) listening.close()
             },
@@ -2723,14 +2833,16 @@ export default suite({
                 const out = stage(host)
                 const shown = el('p', 'font-mono text-xs text-verdigris min-h-5')
                 out.append(shown)
+                const live = remoteFeed()
+                const served = feed()
                 reader(() => {
-                    shown.textContent = remoteFeed.chunks().join(' · ') || '(nothing yet)'
-                    log.live('client peek()', remoteFeed.peek())
+                    shown.textContent = live.chunks().join(' · ') || '(nothing yet)'
+                    log.live('client peek()', live.peek())
                 })
                 let n = 0
                 host.append(
                     row(
-                        button('publish on the SERVER', () => feed.publish(`tick ${++n}`)),
+                        button('publish on the SERVER', () => served.publish(`tick ${++n}`)),
                         button('close the connection', () => {
                             remoteFeed.close()
                             log('closed', 'the server keeps publishing; nothing arrives')
@@ -3002,7 +3114,7 @@ export default suite({
         },
         {
             title: 'a socket that has not received yet SIGNALS, so hydration keeps what the server wrote',
-            note: 'A `channel` never loads, so its cold read hands back `undefined` and the slot paints empty — which on a client that has just adopted server markup blanks a value the server got right, warns, and fills it back in a round trip later. A `memo` in the same slot does not, because its pending read signals. A connection IS a load, so `remoteSocket` spells it as one and every catcher already knows what to do with it. The server is untouched: `socket()`s server half is `channel()`, and a walk that waited on a channel which may never receive would wait forever.',
+            note: 'A `channel` never loads, so its cold read hands back `undefined` and the slot paints empty — which on a client that has just adopted server markup blanks a value the server got right, warns, and fills it back in a round trip later. A `memo` in the same slot does not, because its pending read signals. A connection IS a load, so `remoteSocket` spells it as one and every catcher already knows what to do with it. The server is untouched: a `socket` is a `channel` with an address in front of it — `s()` selects the same stream `channel()` built — and a walk that waited on a channel which may never receive would wait forever.',
             async run({ is, host }) {
                 // The server's half: a plain channel holding a value, rendered to markup.
                 const served = channel<string>()
@@ -3028,12 +3140,15 @@ export default suite({
                 const adopted = el('div')
                 adopted.innerHTML = markup
                 host.append(adopted)
+                // The SELECT stays inside the thunk: the slot takes a source and reads it, so
+                // `${() => feed()}` is the isomorphic spelling and `${() => room()}` would be a read.
                 hydrate(adopted, () => html`<p>${() => feed()}</p>`)
                 await tick()
+                const room = feed()
                 const text = () => (adopted.textContent ?? '').trim()
 
                 is('the server’s value survived hydration', text(), 'STATUS-OK')
-                is('…because the connection reads as a load', feed.pending(), true)
+                is('…because the connection reads as a load', room.pending(), true)
 
                 // Connected, but still nothing to show — the markup is still the best answer.
                 ;(live as Wire | null)?.onopen?.()
@@ -3043,21 +3158,21 @@ export default suite({
                 ;(live as Wire | null)?.onmessage?.({ data: JSON.stringify('STATUS-LIVE') })
                 await tick()
                 is('the first message is what repaints it', text(), 'STATUS-LIVE')
-                is('…and the load is over', feed.pending(), false)
+                is('…and the load is over', room.pending(), false)
 
                 // A dropped wire is a reload in flight over a value still being served — the one
                 // thing a subscriber could not otherwise ask, since after the first message a
                 // healthy connection and a dead one read identically.
-                is('a live wire is not refreshing', feed.refreshing(), false)
+                is('a live wire is not refreshing', room.refreshing(), false)
                 ;(live as Wire | null)?.onclose?.()
                 await tick()
-                is('a dropped one is', feed.refreshing(), true)
+                is('a dropped one is', room.refreshing(), true)
                 is('…while still serving the last message', text(), 'STATUS-LIVE')
-                is('…and without going back to pending', feed.pending(), false)
+                is('…and without going back to pending', room.pending(), false)
 
                 feed.close()
                 await tick()
-                is('closing is not reconnecting', feed.refreshing(), false)
+                is('closing is not reconnecting', room.refreshing(), false)
             },
         },
     ],

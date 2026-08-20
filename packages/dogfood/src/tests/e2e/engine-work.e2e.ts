@@ -123,7 +123,9 @@ test('nodes and listeners are deltas, and go both ways', async ({ page }) => {
     await retained.close()
 })
 
-test('a layout the work did not wait for is charged to the work, not to the next reading', async ({ page }) => {
+test('a layout the work did not wait for is charged to the work, not to the next reading', async ({
+    page,
+}) => {
     await page.goto('/docs/state')
     await quiet(page)
     const reading = await engine(page)
@@ -148,7 +150,9 @@ test('a layout the work did not wait for is charged to the work, not to the next
     // The following reading does nothing at all, so anything it reports was the previous op's.
     const after = await reading.around(() => page.evaluate(() => undefined))
 
-    expect(mutating.layout, 'the deferred layout was not charged to the work that caused it').toBeGreaterThan(0)
+    expect(mutating.layout, 'the deferred layout was not charged to the work that caused it').toBeGreaterThan(
+        0,
+    )
     expect(after.layout, "the previous op's layout was billed to an op that did nothing").toBeLessThan(1)
 
     await page.evaluate(() => document.getElementById('late-layout')?.remove())

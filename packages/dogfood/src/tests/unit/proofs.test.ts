@@ -3,7 +3,7 @@
 // The per-rung sweep lives in a BROWSER, on `/docs/<callable>`, and that is an architectural fact
 // rather than a preference. A ladder is a real module with real module-scope effects, and two things
 // that mount the same rung in one process are not independent: `verbs`' own suite asserts that a cold
-// load shows its placeholder, and a sweep that had already mounted that rung warmed the very cell the
+// load shows its placeholder, and a sweep that had already mounted that rung warmed the very state the
 // claim is about. The app is arranged around the same fact — `/docs/<callable>` pulls only the ladders
 // that callable's rungs are in, so a page mounts each rung once and nothing else in the process has an
 // opinion about it. `e2e/docs.e2e.ts` is where the sweep is asserted, over all forty-five pages.

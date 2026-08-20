@@ -29,7 +29,7 @@ export function App(): TemplateResult {
             <p class=${() => (count() > 2 ? 'high' : 'low')}>
                 count ${() => count()} · doubled ${() => doubled()}
             </p>
-            <button @click=${() => count.set(count.peek() + 1)}>increment</button>
+            <button @click=${() => count.set(count.peek()! + 1)}>increment</button>
             <input .value=${() => filter()} @input=${onInput} />
             <ul>
                 ${() => (search({ q: filter() })() ?? []).map((word) => html`<li>${word}</li>`)}

@@ -4,7 +4,7 @@ import { state } from 'abide'
 // A second argument is a TRANSFORM, and every write goes through it before storage — the `initial`
 // included, so there is no first value that escaped the rule.
 //
-// Untracked, so reading a cell inside one subscribes nobody. A throw is a FAILED WRITE rather than a
+// Untracked, so reading a state inside one subscribes nobody. A throw is a FAILED WRITE rather than a
 // stored error, which is what makes it a place to refuse a value rather than a place to log one.
 const count = state(0, (n) => Math.max(0, Math.min(10, n)))
 </script>

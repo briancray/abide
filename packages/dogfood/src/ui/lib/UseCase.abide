@@ -30,7 +30,7 @@
 <script module>
 import type { Metric, Profile } from 'harness'
 import { substrate } from 'harness'
-import type { SourceFile } from '#shared/demos/usecases/SOURCES.ts'
+import type { SourceFile } from 'abide/compiler'
 import type { UseCase } from '#shared/demos/usecases/USECASES.ts'
 import { priceOps } from './priceOps.ts'
 import Files from './Files.abide'
@@ -59,7 +59,7 @@ const running = state(false)
  * whole of what keeps an op honest.
  */
 async function run(): Promise<void> {
-    const element = demo.peek()
+    const element = demo.peek() ?? null
     if (element === null || running.peek()) return
     running = true
     trouble = ''

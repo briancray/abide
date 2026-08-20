@@ -56,7 +56,7 @@ test('an interact face survives being poked — the claim no headless run can ma
     // The field below is the client's, and typing into it early erases the text. See `interactive`.
     await interactive(page)
 
-    // The `state` suite's interactive case: a field that writes a cell, and an effect that paints it.
+    // The `state` suite's interactive case: a field that writes a state, and an effect that paints it.
     // Opening the row is what puts its controls on screen; the case itself already ran.
     //
     // `summary` is taken FIRST rather than by itself: a row contains source panes, which are `<details>`
@@ -241,7 +241,9 @@ test('the filter and the column names pin together, level with the sidebar', asy
     expect(Math.round(pinned.head), 'the card head is not on the line the sidebar starts at').toBe(
         Math.round(pinned.sidebar),
     )
-    expect(pinned.head, 'the card head pinned flush under the chrome, not clear of it').toBeGreaterThan(pinned.chrome)
+    expect(pinned.head, 'the card head pinned flush under the chrome, not clear of it').toBeGreaterThan(
+        pinned.chrome,
+    )
     expect(pinned.field, 'the filter scrolled away, so only the table pinned').toBeGreaterThan(pinned.chrome)
 })
 

@@ -7,7 +7,12 @@
 // Derived purely from an id, like `rows.ts` and `media.ts`, so the server can build a shard per
 // request without a fixture on disk and two shards differ in their DATA rather than only their size.
 
-import { CREDITS_PER_PERSON, EPISODES_PER_SEASON, PEOPLE_PER_ENTRY, SEASONS_PER_ENTRY } from './ENTRY_SHAPE.ts'
+import {
+    CREDITS_PER_PERSON,
+    EPISODES_PER_SEASON,
+    PEOPLE_PER_ENTRY,
+    SEASONS_PER_ENTRY,
+} from './ENTRY_SHAPE.ts'
 import { titleFor } from './media.ts'
 
 /**
@@ -66,8 +71,18 @@ export interface CatalogueEntry {
 }
 
 const SURNAMES = [
-    'okonkwo', 'lindqvist', 'moreau', 'nakamura', 'ferreira', 'abadi', 'novak', 'castellanos',
-    'brennan', 'haldane', 'sorrentino', 'vasquez',
+    'okonkwo',
+    'lindqvist',
+    'moreau',
+    'nakamura',
+    'ferreira',
+    'abadi',
+    'novak',
+    'castellanos',
+    'brennan',
+    'haldane',
+    'sorrentino',
+    'vasquez',
 ]
 
 const FORENAMES = ['ada', 'grace', 'lin', 'ida', 'kai', 'rune', 'nour', 'tam', 'esi', 'bo']

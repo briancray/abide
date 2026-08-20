@@ -63,7 +63,9 @@ function load(documentId: string, serving: string, fails = false): Page {
     }
     const fetch = (): Promise<{ text: () => Promise<string> }> => {
         page.fetches++
-        return fails ? Promise.reject(new TypeError('Load failed')) : Promise.resolve({ text: async () => page.serving })
+        return fails
+            ? Promise.reject(new TypeError('Load failed'))
+            : Promise.resolve({ text: async () => page.serving })
     }
     const setTimeout = (run: () => void): number => page.timers.push(run)
 

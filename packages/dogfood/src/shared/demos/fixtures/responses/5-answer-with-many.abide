@@ -2,7 +2,7 @@
 import { catalogue } from '#server/rpc/docs/responses/answer-with-many.ts'
 import { state } from 'abide'
 
-// The call IS the cell, so nothing here collects anything: a handle retains its own TRANSCRIPT and
+// The call IS the state, so nothing here collects anything: a handle retains its own TRANSCRIPT and
 // `chunks()` is every line that has landed, growing as they arrive. Accumulating by hand instead —
 // `rows = [...rows, row]` around a `for await` — copies the whole list per chunk, which is quadratic
 // over a stream and is exactly the copy `chunks()` handing back the LIVE buffer exists to avoid.

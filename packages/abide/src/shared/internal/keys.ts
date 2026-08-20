@@ -114,8 +114,12 @@ function sortedKey(args: Record<string, unknown>, keys: string[]): string {
  *
  * No pattern means every slot, and that case does not even look at the args.
  */
+// Hoisted: `matcher(undefined)` is the common spelling of every bulk verb and of a set probe,
+// which a template slot asks per render — one shared predicate rather than one per ask.
+const ALWAYS = (): boolean => true
+
 export function matcher(pattern: unknown): (args: unknown) => boolean {
-    if (pattern === undefined) return () => true
+    if (pattern === undefined) return ALWAYS
     if (typeof pattern !== 'object' || pattern === null) {
         const wanted = keyOf(pattern)
         return (args) => keyOf(args) === wanted

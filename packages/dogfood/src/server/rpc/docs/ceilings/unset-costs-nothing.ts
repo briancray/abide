@@ -10,7 +10,8 @@ import { config, GET } from 'abide/server'
  */
 export const asShipped = GET(() => {
     const settings = config()
-    const say = (ceiling: number): string => (ceiling === Number.POSITIVE_INFINITY ? 'unset' : String(ceiling))
+    const say = (ceiling: number): string =>
+        ceiling === Number.POSITIVE_INFINITY ? 'unset' : String(ceiling)
     return {
         ABIDE_MAX_GLOBAL_CACHE_SIZE: say(settings.ABIDE_MAX_GLOBAL_CACHE_SIZE),
         ABIDE_MAX_STREAM_BUFFER_SIZE: say(settings.ABIDE_MAX_STREAM_BUFFER_SIZE),

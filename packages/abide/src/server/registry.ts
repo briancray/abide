@@ -393,8 +393,14 @@ async function authorized(
     return refuse(`${id} could not upgrade`, 400)
 }
 
+// Still a branch, and it has to be: a socket selects by ARITY, not by value — the same rule
+// `Selecting` and `argsQuery` already keep, since an omitted argument and an explicit `undefined`
+// are one thing to the type and two at runtime. The facade resolves the omitted call to `{}`, but
+// `stream(undefined)` reaches `channel()`'s own call, which branches on VALUE and READS the bare
+// stream — so passing an undecoded room straight through would hand back a message where a
+// `Channel` is declared. The `undefined` arm has to spell the omission as an omission.
 function roomFor(stream: AnySocket, room: unknown): Channel<unknown> {
-    return room === undefined ? (stream as Channel<unknown>) : stream(room)
+    return room === undefined ? stream() : stream(room)
 }
 
 // --- the socket over ordinary http -------------------------------------------
@@ -655,9 +661,7 @@ const socketLog = abideLog.channel('socket')
  * volume, not to hide breakage — so it says so where `DEBUG=abide:*` can see it, and nowhere else.
  */
 function dropped(connection: ServerWebSocket<SocketData>, why: unknown): void {
-    socketLog.debug(
-        `${connection.data.id} dropped a client publish: ${messageOf(why)}`,
-    )
+    socketLog.debug(`${connection.data.id} dropped a client publish: ${messageOf(why)}`)
 }
 
 /**

@@ -125,7 +125,7 @@ const rows = memo((): CaseRow[] => {
 })
 
 /**
- * The query, as the terms it is made of. A cell rather than a local inside `shown`, because the rows
+ * The query, as the terms it is made of. A state rather than a local inside `shown`, because the rows
  * need it too: `matches` decides which rows are here and `marked` paints WHY inside each of them, and
  * the two answering off different splits of the same string is a row lit for a term it was not kept by.
  *
@@ -156,7 +156,7 @@ const shown = memo((): { suite: string; rows: CaseRow[] }[] => {
  * How many cases are on the page, out of how many there are.
  *
  * A function rather than a memo because one slot reads it and nothing else does — there is no second
- * reader for a cell to serve, and the slot it is called from already tracks everything it touches.
+ * reader for a state to serve, and the slot it is called from already tracks everything it touches.
  */
 function shownCount(): string {
     let showing = 0

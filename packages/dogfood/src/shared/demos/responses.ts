@@ -89,11 +89,11 @@ export default suite({
             note: 'The handler above them is an ordinary async generator and does not know which it got — which is the claim, and it cannot be made by testing either alone. So both arms consume the SAME generator function and the assertion is that the records survive the framing, not that a particular string came out.',
             async run({ is }) {
                 const lines = await jsonl(items()).text()
-                is(
-                    'one JSON document per line',
-                    lines.trim().split('\n'),
-                    ['{"id":1}', '{"id":2}', '{"id":3}'],
-                )
+                is('one JSON document per line', lines.trim().split('\n'), [
+                    '{"id":1}',
+                    '{"id":2}',
+                    '{"id":3}',
+                ])
 
                 const events = await sse(items()).text()
                 const carried: unknown[] = []
@@ -101,7 +101,11 @@ export default suite({
                     if (line.startsWith('data: ')) carried.push(JSON.parse(line.slice(6)))
                 }
                 is('the same three records, framed as events', carried, [{ id: 1 }, { id: 2 }, { id: 3 }])
-                is('and an EventSource is told so', sse(items()).headers.get('content-type'), 'text/event-stream')
+                is(
+                    'and an EventSource is told so',
+                    sse(items()).headers.get('content-type'),
+                    'text/event-stream',
+                )
             },
         },
     ],

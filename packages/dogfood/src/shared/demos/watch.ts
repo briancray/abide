@@ -43,7 +43,7 @@ export default suite({
     cases: [
         {
             title: 'the read is the subscription',
-            note: 'And the dependency set is re-collected on every run, so a branch that stops reading a cell stops waking for it.',
+            note: 'And the dependency set is re-collected on every run, so a branch that stops reading a state stops waking for it.',
             async run({ is }) {
                 const useLeft = state(true)
                 const left = state('L1')
@@ -119,13 +119,13 @@ export default suite({
                 arms: (() => {
                     // What a component mount and unmount costs, per binding. A template slot creates
                     // exactly one of these.
-                    const cell = state(1)
-                    const plain = vanilla.cell(1)
+                    const source = state(1)
+                    const plain = vanilla.state(1)
                     return [
                         {
                             label: 'abide — watch() then dispose()',
                             run: () => {
-                                const dispose = watch(() => void cell())
+                                const dispose = watch(() => void source())
                                 dispose()
                             },
                         },
@@ -165,7 +165,7 @@ export default suite({
                 is('the order', events, ['up:0', 'down:0', 'up:1', 'down:1'])
 
                 // "it is untracked" is the other half of the note, and the order above is blind to
-                // it: the teardown here reads no cell, so a tracked teardown would produce the same
+                // it: the teardown here reads no state, so a tracked teardown would produce the same
                 // four events. This one reads one. A teardown that subscribed its effect to what it
                 // touched would re-run the BODY on the next write to `touched` — right value, work
                 // nobody asked for, which is the shape only a counter sees.
@@ -182,7 +182,7 @@ export default suite({
                 is('the body ran once per write to what it reads', runs, 2)
                 touched.set(1)
                 await tick()
-                is('and a cell only the TEARDOWN read wakes it not at all', runs, 2)
+                is('and a state only the TEARDOWN read wakes it not at all', runs, 2)
                 stop()
             },
         },
@@ -345,10 +345,10 @@ export default suite({
                     // arm the card can only say the declared spelling beats the discovered one, not
                     // that it costs what declaring the dependency by hand costs.
                     {
-                        label: 'vanilla — subscribe(declared), handler reads the other cell freely',
+                        label: 'vanilla — subscribe(declared), handler reads the other state freely',
                         run: async () => {
-                            const declared = vanilla.cell(0)
-                            const noise = vanilla.cell(0)
+                            const declared = vanilla.state(0)
+                            const noise = vanilla.state(0)
                             let runs = 0
                             const off = declared.subscribe(() => {
                                 void noise.get()
@@ -368,7 +368,7 @@ export default suite({
 
         {
             title: 'x.watch(handler) — the same effect, spelled off the source',
-            note: 'Every source carries it, so a caller holding one cell does not have to reach for the effect to react to it. The handler is untracked for the same reason: which source you asked IS the declaration.',
+            note: 'Every source carries it, so a caller holding one state does not have to reach for the effect to react to it. The handler is untracked for the same reason: which source you asked IS the declaration.',
             async run({ is }) {
                 const name = state('ada')
                 const seen: string[] = []
@@ -399,7 +399,7 @@ export default suite({
 
         {
             title: 'untrack — read without subscribing',
-            note: 'The same thing `peek()` does for one cell, for a whole region.',
+            note: 'The same thing `peek()` does for one state, for a whole region.',
             async run({ is }) {
                 const tracked = state(1)
                 const ignored = state(1)
@@ -412,7 +412,7 @@ export default suite({
 
                 ignored.set(100)
                 await tick()
-                is('writing the untracked cell wakes nothing', runs, 1)
+                is('writing the untracked state wakes nothing', runs, 1)
 
                 tracked.set(2)
                 await tick()
@@ -423,14 +423,14 @@ export default suite({
                 kind: 'time',
                 arms: (() => {
                     // Swap the current node out and back. The vanilla equivalent is not reading the
-                    // cell at all, which is why the comparison is against a bare call.
-                    const cell = state(1)
+                    // state at all, which is why the comparison is against a bare call.
+                    const held = state(1)
                     return [
                         {
                             label: 'abide — untrack(() => x())',
-                            run: () => keep(untrack(() => cell())),
+                            run: () => keep(untrack(() => held())),
                         },
-                        { label: 'abide — x.peek()', run: () => keep(cell.peek()) },
+                        { label: 'abide — x.peek()', run: () => keep(held.peek()) },
                         { label: 'vanilla — a bare read', run: () => keep(1) },
                     ]
                 })(),
@@ -478,14 +478,14 @@ export default suite({
                 arms: (() => {
                     // The hand-written version is an array of unsubscribes you have to remember to
                     // build, and the failure mode when you forget is a leak nobody sees.
-                    const cell = state(1)
-                    const plain = vanilla.cell(1)
+                    const source = state(1)
+                    const plain = vanilla.state(1)
                     return [
                         {
                             label: 'abide — scope()',
                             run: () => {
                                 const held = scope(() => {
-                                    for (let i = 0; i < 50; i++) watch(() => void cell())
+                                    for (let i = 0; i < 50; i++) watch(() => void source())
                                 })
                                 held.dispose()
                             },
@@ -530,7 +530,7 @@ export default suite({
                 host.append(
                     row(
                         button('n.set(n + 1)', async () => {
-                            n.set(n.peek() + 1)
+                            n.set(n.peek()! + 1)
                             await tick()
                             report()
                         }),
@@ -612,7 +612,7 @@ export default suite({
 
         {
             title: 'the subscription LEDGER — every shape that a re-collect can get wrong',
-            note: 'A run detaches from every source and the body re-collects them, so the observer list of a hot cell is torn down and rebuilt on every wake. What that list IS — a Set, an array with back-pointers — is an implementation detail with no output to show for it: get the bookkeeping wrong and a reader stops waking, or wakes twice, and the value it reads is still right either way. So the shapes that can break are enumerated here as WAKE COUNTS rather than left to be discovered. A source read twice in one run is the one that separates a container which dedupes from one that does not; a dependency dropped between runs is the one that separates detaching from pretending to.',
+            note: 'A run detaches from every source and the body re-collects them, so the observer list of a hot state is torn down and rebuilt on every wake. What that list IS — a Set, an array with back-pointers — is an implementation detail with no output to show for it: get the bookkeeping wrong and a reader stops waking, or wakes twice, and the value it reads is still right either way. So the shapes that can break are enumerated here as WAKE COUNTS rather than left to be discovered. A source read twice in one run is the one that separates a container which dedupes from one that does not; a dependency dropped between runs is the one that separates detaching from pretending to.',
             async run({ is }) {
                 // 1. Fan-out. Every reader wakes, each exactly once.
                 const shared = state(0)
@@ -626,12 +626,12 @@ export default suite({
                 await tick()
                 shared.set(1)
                 await tick()
-                is('every reader of one cell woke exactly once', runs, [2, 2, 2])
+                is('every reader of one state woke exactly once', runs, [2, 2, 2])
 
                 // 2. The same source read TWICE in one run, and then ONCE. The list holds one entry
                 // per read, so the run that drops to a single read has to give exactly one of them
                 // back — and a container that cannot hold a duplicate gives back BOTH, leaving the
-                // reader unsubscribed from a cell it is still reading. It then goes silent for good,
+                // reader unsubscribed from a state it is still reading. It then goes silent for good,
                 // with the last value it happened to compute still on screen and nothing to say so.
                 const twice = state(1)
                 const readTwice = state(true)
@@ -750,7 +750,7 @@ export default suite({
 
                 // The moved reader now drops `shuffled`. Detaching at a position it no longer
                 // occupies takes a BYSTANDER's entry out instead of its own, and leaves itself
-                // subscribed to a cell it has stopped reading — so the write below wakes it. That is
+                // subscribed to a state it has stopped reading — so the write below wakes it. That is
                 // the whole failure, and neither a value nor a DOM counter has anything to say about
                 // it: nothing this effect renders would be wrong.
                 stays.set(false)
@@ -785,7 +785,7 @@ export default suite({
         },
 
         {
-            title: 'awaiting a cell inside an effect does not subscribe it',
+            title: 'awaiting a state inside an effect does not subscribe it',
             note: 'Nothing can be tracked through an await anyway, so `await x` reads untracked on purpose — otherwise an effect would silently acquire dependencies it cannot re-collect.',
             async run({ is }) {
                 const source = state(Promise.resolve(1))
@@ -805,7 +805,7 @@ export default suite({
 
         {
             title: 'a watch is what a template slot IS',
-            note: 'One slot, one effect. Nothing else on the page re-renders when the cell moves — the client renderer creates exactly this subscription for you, one per slot.',
+            note: 'One slot, one effect. Nothing else on the page re-renders when the state moves — the client renderer creates exactly this subscription for you, one per slot.',
             async run({ host, is }) {
                 const angle = state(0)
                 const box = document.createElement('div')
@@ -832,7 +832,7 @@ export default suite({
                 })
                 host.append(
                     row(
-                        button('+30°', () => angle.set(angle.peek() + 30)),
+                        button('+30°', () => angle.set(angle.peek()! + 30)),
                         button('reset', () => angle.set(0)),
                     ),
                 )
@@ -841,14 +841,14 @@ export default suite({
 
         {
             title: 'a watch in a <script module> runs once per CALLER, not once per process',
-            note: 'The third module-scope spelling that meant "once for the server process", and the one a lazy wrap could not fix: a cell can wait for somebody to read it, and an effect has no read to wait for. So the component that declared it is what asks — its setup kicks, the first instance in a caller runs the body, and every instance after it finds the effect already running. A component nobody renders in this request runs no effect in it, which is the honest reading of per-caller. Asserted as BODY RUNS, because an effect that runs three times instead of once produces exactly the same values.',
+            note: 'The third module-scope spelling that meant "once for the server process", and the one a lazy wrap could not fix: a state can wait for somebody to read it, and an effect has no read to wait for. So the component that declared it is what asks — its setup kicks, the first instance in a caller runs the body, and every instance after it finds the effect already running. A component nobody renders in this request runs no effect in it, which is the honest reading of per-caller. Asserted as BODY RUNS, because an effect that runs three times instead of once produces exactly the same values.',
             async run({ is }) {
                 let bodyRuns = 0
-                const cell = state.scoped(() => state(0))
+                const held = state.scoped(() => state(0))
                 // What the compiler writes for `watch(…)` in a `<script module>`.
                 const kick = scopedEffect(() =>
                     watch(() => {
-                        cell()
+                        held()
                         bodyRuns++
                     }),
                 )
@@ -869,11 +869,10 @@ export default suite({
                 // And it goes with the caller: the scope above is gone, so a write reaches no effect
                 // either request left behind.
                 const settled = bodyRuns
-                cell.set(cell.peek() + 1)
+                held.set(held.peek()! + 1)
                 await tick()
                 is('a disposed caller leaves nothing running', bodyRuns, settled)
             },
         },
-
     ],
 })

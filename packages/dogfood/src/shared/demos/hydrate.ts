@@ -124,10 +124,10 @@ interface Sized {
 
 async function sized(n: number): Promise<Sized> {
     const rows = build(n)
-    // Through a cell rather than the array, so the list slot has the same reactive shape a real page
+    // Through a state rather than the array, so the list slot has the same reactive shape a real page
     // gives it — an arm reading a constant subscribes to nothing and skips work every size pays.
-    const cell = state(rows)
-    const view = listView(() => cell())
+    const held = state(rows)
+    const view = listView(() => held())
     return {
         n,
         rows,
@@ -163,7 +163,7 @@ const detached = lazy((): HTMLElement => {
  * The one live mount an arm is allowed to leave behind, so a run does not retain every iteration.
  *
  * Dropping the host is not enough and that is the whole of this: a mount's list slot is SUBSCRIBED to
- * the cell it reads, so the effect outlives the nodes and holds the entire part tree with it. Twenty
+ * the state it reads, so the effect outlives the nodes and holds the entire part tree with it. Twenty
  * undisposed mounts wake twenty readers on one write — measured, and the number this suite would
  * report is right either way. At 10000 rows over a calibrated run it is more than a million nodes the
  * collector cannot touch, which is enough for Safari to reload the tab out from under the run. That
@@ -291,12 +291,14 @@ export default suite({
 
         {
             title: 'a `{#try}` that CAUGHT on the server reaches the same arm on the client',
-            note: 'The isomorphism half of the boundary, and the one that broke first. The server\'s `{#try}` owns a buffer and catches a throw from anywhere under it, so a body that blows up in a slot thunk renders the `{:catch}` arm; the client used to catch only what running the BODY threw, and a body returns a template whose slots are thunks — so it re-ran the body, hit the same throw one level down and let it escape. A page whose server render succeeded then failed to hydrate, which is strictly worse than the original bug because only one substrate was wrong. The region cannot be ADOPTED either way: this side has to reach the throw to know which arm it is, and by then the walk has compared structure against the arm\'s markup — so it mismatches, rebuilds, and renders the arm. The claim below is that the two agree, not that no work happens.',
+            note: "The isomorphism half of the boundary, and the one that broke first. The server's `{#try}` owns a buffer and catches a throw from anywhere under it, so a body that blows up in a slot thunk renders the `{:catch}` arm; the client used to catch only what running the BODY threw, and a body returns a template whose slots are thunks — so it re-ran the body, hit the same throw one level down and let it escape. A page whose server render succeeded then failed to hydrate, which is strictly worse than the original bug because only one substrate was wrong. The region cannot be ADOPTED either way: this side has to reach the throw to know which arm it is, and by then the walk has compared structure against the arm's markup — so it mismatches, rebuilds, and renders the arm. The claim below is that the two agree, not that no work happens.",
             async run({ is }) {
                 const arms = {
                     pending: undefined,
                     then: undefined,
-                    catch: ((error: Error) => html`<b>caught: ${error.message}</b>`) as (e: unknown) => unknown,
+                    catch: ((error: Error) => html`<b>caught: ${error.message}</b>`) as (
+                        e: unknown,
+                    ) => unknown,
                     finally: undefined,
                 }
                 const blows = (): string => {
@@ -304,7 +306,8 @@ export default suite({
                 }
                 // The shape a layout's `<slot/>` produces: the throw is in a THUNK, so it happens after
                 // the body returned and past the guard the boundary used to be.
-                const view = (): TemplateResult => html`${boundary(() => html`<p>${() => blows()}</p>`, arms)}`
+                const view = (): TemplateResult =>
+                    html`${boundary(() => html`<p>${() => blows()}</p>`, arms)}`
 
                 const served = await renderToString(view(), { hydrate: true })
                 // In PIECES, because a hydratable render puts a slot marker between the arm's own text
@@ -360,7 +363,11 @@ export default suite({
                 is('nothing removed', work.remove, 0)
                 is('nothing built', work.createElement, 0)
                 is('the SAME body element is still there', host.querySelector('#body') === before, true)
-                is('…and the arm is still beside it', host.querySelector('small')?.textContent, 'asked either way')
+                is(
+                    '…and the arm is still beside it',
+                    host.querySelector('small')?.textContent,
+                    'asked either way',
+                )
                 host.remove()
             },
         },
@@ -373,7 +380,8 @@ export default suite({
                 const frame = document.createElement('iframe')
                 host.append(frame)
                 // A frame's document is not there on the same tick it is appended.
-                for (let waited = 0; frame.contentDocument?.body == null && waited < 50; waited++) await sleep(10)
+                for (let waited = 0; frame.contentDocument?.body == null && waited < 50; waited++)
+                    await sleep(10)
                 const inner = frame.contentDocument
                 if (inner?.body == null) {
                     log('no frame document', 'this lane has no frames — nothing to count')
@@ -577,7 +585,7 @@ export default suite({
 
         {
             title: 'every ROW KIND an array can hold renders the same on both substrates',
-            note: 'The server walks an array with its general emit, so every one of these renders there. The client sends an array to the keyed reconcile, which reads `.strings` off every row — so a row that was not a template threw, and `${() => [\'a\', \'b\']}` was source that renders on the server and crashes in the browser. That is a divergence rather than a missing feature, which is why the expectation here is the SERVER’S OWN OUTPUT rather than a string written by hand: an expectation written twice can be got wrong in the same direction twice. A row that cannot be reconciled is wrapped into one that can, at one call site, so it patches its text on a later pass instead of rebuilding. Adoption of a non-template row falls back to building — the server writes no per-row marker for one — which is the documented recovery and asserted here as such.',
+            note: "The server walks an array with its general emit, so every one of these renders there. The client sends an array to the keyed reconcile, which reads `.strings` off every row — so a row that was not a template threw, and `${() => ['a', 'b']}` was source that renders on the server and crashes in the browser. That is a divergence rather than a missing feature, which is why the expectation here is the SERVER’S OWN OUTPUT rather than a string written by hand: an expectation written twice can be got wrong in the same direction twice. A row that cannot be reconciled is wrapped into one that can, at one call site, so it patches its text on a later pass instead of rebuilding. Adoption of a non-template row falls back to building — the server writes no per-row marker for one — which is the documented recovery and asserted here as such.",
             async run({ is }) {
                 const kinds: [string, () => TemplateResult][] = [
                     ['templates', () => html`<ul>${() => [html`<li>x</li>`, html`<li>y</li>`]}</ul>`],
@@ -725,7 +733,7 @@ export default suite({
                 is('every row is the SAME element', Array.from(host.querySelectorAll('li')), before)
 
                 // And the keys survived the adoption, so a swap moves.
-                const next = rows.peek().slice()
+                const next = rows.peek()!.slice()
                 const held = next[1] as Item
                 next[1] = next[2] as Item
                 next[2] = held
@@ -753,7 +761,7 @@ export default suite({
                             log.live('adopt 200 rows', nonZero(work))
                         }),
                         button('…now swap two of them', async () => {
-                            const next = rows.peek().slice()
+                            const next = rows.peek()!.slice()
                             const held = next[1] as Item
                             next[1] = next[198] as Item
                             next[198] = held
@@ -848,7 +856,7 @@ export default suite({
 
         {
             title: 'a bench arm takes down the iteration before it',
-            note: 'The claim is about the HARNESS, and it is here because the benches below are what broke without it. Dropping an arm’s host does not free what it built: the list slot is subscribed to the cell it reads, so the effect outlives the nodes and holds the whole part tree. Every iteration then retains one more, the numbers stay correct throughout, and at 10000 rows over a calibrated run it is upwards of a million nodes the collector cannot touch — Safari reloads the tab and the run dies with it. Nothing about a duration could show that, and neither could a DOM counter: what grows is the number of readers still subscribed, so the assertion is wake-ups. One live mount is what a page has; the rest is a leak with no symptom until the tab is gone.',
+            note: 'The claim is about the HARNESS, and it is here because the benches below are what broke without it. Dropping an arm’s host does not free what it built: the list slot is subscribed to the state it reads, so the effect outlives the nodes and holds the whole part tree. Every iteration then retains one more, the numbers stay correct throughout, and at 10000 rows over a calibrated run it is upwards of a million nodes the collector cannot touch — Safari reloads the tab and the run dies with it. Nothing about a duration could show that, and neither could a DOM counter: what grows is the number of readers still subscribed, so the assertion is wake-ups. One live mount is what a page has; the rest is a leak with no symptom until the tab is gone.',
             async run({ is, log }) {
                 const rows = state([1, 2, 3])
                 let runs = 0
@@ -915,8 +923,7 @@ export default suite({
                 const shout = state('ada')
                 type Props = { who: State<string> }
                 const Greeting = ({ who }: Props): TemplateResult => html`<b>hello ${() => who()}!</b>`
-                const view = (): TemplateResult =>
-                    html`<p>${() => component(Greeting, { who: shout() })}</p>`
+                const view = (): TemplateResult => html`<p>${() => component(Greeting, { who: shout() })}</p>`
 
                 const host = await served(view)
                 const bold = host.querySelector('b')
@@ -930,7 +937,7 @@ export default suite({
                 log('work to adopt a component', nonZero(work))
 
                 // The instance is HELD by the position that adopted it, which is what makes the next
-                // pass a write into a prop cell rather than a second call of the view.
+                // pass a write into a prop state rather than a second call of the view.
                 const wrote = await measureFlush(() => shout.set('grace'))
                 is('a new prop costs one text write', wrote.textWrite, 1)
                 is('…and nothing else', wrote.createElement + wrote.insert + wrote.remove, 0)
@@ -967,7 +974,7 @@ export default suite({
                 // Whatever survived is subscribed to this.
                 beat.set(1)
                 await tick()
-                is('one live reader of the cell, not two', reads - afterAdopt, 1)
+                is('one live reader of the state, not two', reads - afterAdopt, 1)
                 is('and the rebuilt subtree is correct', host.querySelector('p')?.textContent, '1')
                 host.remove()
             },
@@ -1023,7 +1030,9 @@ export default suite({
 
                 // The placeholder the shell went out with is GONE, and the settled arm is in its
                 // place — which only happens if the document ran the two lines the server sent.
-                const settled = Array.from(inner.querySelectorAll('.is-ahead')).map((node) => node.textContent)
+                const settled = Array.from(inner.querySelectorAll('.is-ahead')).map(
+                    (node) => node.textContent,
+                )
                 log('what the patches brought', settled.join(' · '))
                 is('both deferred panels landed', settled.length, 2)
                 is('the slow one settled', settled[0], 'the load settled')
@@ -1045,7 +1054,9 @@ export default suite({
                 // attribute — the prepare, billed to the hydrate.
                 mount(document.createElement('div'), view).dispose()
 
-                await frame.write(`<!doctype html><html><body>${await renderToString(view(), { hydrate: true })}</body></html>`)
+                await frame.write(
+                    `<!doctype html><html><body>${await renderToString(view(), { hydrate: true })}</body></html>`,
+                )
                 const root = frame.document.body
                 is('the server’s markup is in the frame', root.querySelector('p')?.textContent, 'hello ada!')
                 const paragraph = root.querySelector('p')
@@ -1079,7 +1090,11 @@ export default suite({
                 // Unsettled at render time, which is what makes the server DEFER it rather than await
                 // it inline — a resolved promise takes the in-order path and the patch never exists.
                 const view = (): TemplateResult =>
-                    html`<main>${() => awaited(sleep(5).then(() => 'landed'), arms)}</main>`
+                    html`<main>${() =>
+                        awaited(
+                            sleep(5).then(() => 'landed'),
+                            arms,
+                        )}</main>`
 
                 const body = await servedDocument(view)
                 const root = body.querySelector('slot') as HTMLElement
@@ -1109,7 +1124,7 @@ export default suite({
 
         {
             title: 'a PROBED region hydrates onto the answer, not back to its placeholder',
-            note: 'The case above is the `awaited` shape, and `ChildPart` has a branch for it: whatever the server sent for that subtree is already the settled arm, so hydration takes it rather than asking the probe again. A region that defers because it PROBED has no such marker — it is an ordinary thunk that happened to ask — and the client that runs it has a COLD cell, because cells do not cross the wire. So the probe kicks, reports `pending`, and the first pass paints the placeholder over the answer the patch already installed: value, then `waiting`, then value. Correct output the whole way, which is why the assertion is the WRITE COUNT. The cell is invalidated before hydrating because one process holds both halves here; a browser gets the cold cell for free.',
+            note: 'The case above is the `awaited` shape, and `ChildPart` has a branch for it: whatever the server sent for that subtree is already the settled arm, so hydration takes it rather than asking the probe again. A region that defers because it PROBED has no such marker — it is an ordinary thunk that happened to ask — and the client that runs it has a COLD state, because states do not cross the wire. So the probe kicks, reports `pending`, and the first pass paints the placeholder over the answer the patch already installed: value, then `waiting`, then value. Correct output the whole way, which is why the assertion is the WRITE COUNT. The state is invalidated before hydrating because one process holds both halves here; a browser gets the cold state for free.',
             async run({ is, log }) {
                 const answer = memo(async () => {
                     await sleep(5)
@@ -1123,7 +1138,7 @@ export default suite({
                 const root = body.querySelector('slot') as HTMLElement
                 is('the patch landed', root.querySelector('main')?.textContent, 'landed')
 
-                // What a browser has: markup carrying the answer, and a cell that has never loaded.
+                // What a browser has: markup carrying the answer, and a state that has never loaded.
                 answer.invalidate()
 
                 const work = measure(() => void hydrate(root, view))
@@ -1149,6 +1164,5 @@ export default suite({
                 fresh.remove()
             },
         },
-
     ],
 })

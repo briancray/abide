@@ -621,7 +621,7 @@ export class TypeReader {
     /**
      * Where the type starting at `at` ENDS, and nothing else.
      *
-     * The desugar needs the extent rather than the shape: a type carries no expressions, so a cell
+     * The desugar needs the extent rather than the shape: a type carries no expressions, so a state
      * name inside one is neither a read nor a binding and every rewrite must leave it alone. Reusing
      * this grammar rather than writing a second one is the whole point — two parsers that could
      * disagree about where a type stops would put the rewrite one token off exactly where the

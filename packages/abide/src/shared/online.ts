@@ -2,7 +2,7 @@
 //
 // REACTIVE, for the same reason `route()` is: connectivity changes without a new caller arriving, so
 // a probe that only answered on the next ask would leave a banner up after the network came back —
-// and take one down that nobody had noticed go up. It is a `state` cell behind a call, which is the
+// and take one down that nobody had noticed go up. It is a `state` behind a call, which is the
 // spelling every other source already has.
 //
 // A server is always online in the only sense this question has. It is not asking whether the process
@@ -23,7 +23,7 @@ const NAVIGATOR = globalThis as { navigator?: { onLine?: boolean } }
 const connected = state(NAVIGATOR.navigator?.onLine ?? true)
 
 // Listeners rather than a poll, and attached once at import rather than per reader: the events are
-// what the platform already fires, and a cell with no readers costs nothing to keep current.
+// what the platform already fires, and a state with no readers costs nothing to keep current.
 if (typeof addEventListener === 'function' && NAVIGATOR.navigator?.onLine !== undefined) {
     addEventListener('online', () => connected.set(true))
     addEventListener('offline', () => connected.set(false))

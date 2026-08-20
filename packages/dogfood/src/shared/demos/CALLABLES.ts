@@ -89,9 +89,9 @@ export const CALLABLES = {
             'Own a value. `x()` reads and subscribes, `x.set(v)` writes. Handing one a promise starts a ' +
             'LOAD instead of storing the promise, so the read is the same call either way.',
         pitfall:
-            'There is no spelling that makes a cell keep the PROMISE — a gate written as ' +
-            '`state(inFlight)` reads as whatever it resolved to. And every cell is awaitable and iterable ' +
-            'at once, so `x.set(anotherCell)` is taken as a stream rather than as a value.',
+            'There is no spelling that makes a state keep the PROMISE — a gate written as ' +
+            '`state(inFlight)` reads as whatever it resolved to. And every state is awaitable and iterable ' +
+            'at once, so `x.set(anotherState)` is taken as a stream rather than as a value.',
         ladders: ['state', 'compiler'],
     },
     memo: {
@@ -101,7 +101,7 @@ export const CALLABLES = {
             'Derive one or load one. Declaring an argument is the declaration that the args are the ' +
             'dependency set — and that they are the cache key.',
         pitfall:
-            'The keyed form tracks only the KEY: the body is untracked, so a cell it reads that is not in ' +
+            'The keyed form tracks only the KEY: the body is untracked, so a state it reads that is not in ' +
             'the args will never re-run it. Argless is the tracked form, and the choice between them is ' +
             'the choice of what "changed" means.',
         ladders: ['memo', 'scope', 'compiler'],
@@ -120,7 +120,7 @@ export const CALLABLES = {
         name: 'watch',
         from: 'abide',
         blurb:
-            'React to the graph. Reading a cell inside a `watch` IS the subscription — there is no ' +
+            'React to the graph. Reading a state inside a `watch` IS the subscription — there is no ' +
             'dependency array — and the set is whatever the LAST RUN read.',
         pitfall:
             'A source behind a branch that did not run this time is not subscribed, so an effect can go ' +
@@ -142,7 +142,7 @@ export const CALLABLES = {
         from: 'abide',
         blurb: 'It may be STALE: keep serving what is held and re-run the body now. Needs a body, so plain `state` has none.',
         pitfall:
-            'A cell you write yourself has nothing to recompute, so the verb is not merely a no-op on a ' +
+            'A state you write yourself has nothing to recompute, so the verb is not merely a no-op on a ' +
             'plain `state` — it is not on it at all, and lives on `Memo` and `MemoHandle`.',
         ladders: ['verbs'],
     },
@@ -165,17 +165,17 @@ export const CALLABLES = {
         pitfall:
             '`<script>` only — module scope has no instance, so a `props()` in a `<script module>` is a ' +
             'compile error. A `...spread`’s key set is fixed at SETUP: a key the spread gains later has ' +
-            'no cell to be written into, and is reported rather than dropped in silence.',
+            'no state to be written into, and is reported rather than dropped in silence.',
         ladders: ['template'],
     },
     route: {
         name: 'route',
         from: 'abide',
         blurb:
-            'Which page this URL named, as a REACTIVE ambient — four small cells, so a same-route move ' +
+            'Which page this URL named, as a REACTIVE ambient — four small states, so a same-route move ' +
             'republishes rather than remounting.',
         pitfall:
-            'Read the member you need rather than the whole record — four cells is what lets a query ' +
+            'Read the member you need rather than the whole record — four states is what lets a query ' +
             'change wake nothing that only read `.name`. A LAYOUT that asks a load about it is the one ' +
             'shape to avoid: it renders before its page, so the answer is settled on a server and pending ' +
             'in a browser, and hydration rebuilds what it was handed correct.',
@@ -246,7 +246,6 @@ export const CALLABLES = {
         ladders: ['identity'],
     },
 
-
     // --- `abide/server` — the transports -----------------------------------------
     GET: {
         name: 'GET',
@@ -299,7 +298,7 @@ export const CALLABLES = {
     socket: {
         name: 'socket',
         from: 'abide/server',
-        blurb: 'The second law: a `channel` whose subscribers arrived over a wire. The server half is `channel()` unchanged.',
+        blurb: 'The second law: a `channel` whose subscribers arrived over a wire. It always SELECTS — `s()` is the stream, `s(args)` a room — and the stream it selects is `channel()` unchanged.',
         pitfall:
             'Everything true of a room is true here, and the one that surprises is retention: a room is ' +
             'FORGOTTEN when its last subscriber leaves, with whatever it was holding, because rooms are ' +

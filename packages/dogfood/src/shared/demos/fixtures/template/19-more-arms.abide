@@ -8,7 +8,7 @@ const level = state(0)
 <!-- `{:else if}` is a CHAIN and not a nested block, so the arms are siblings and exactly one shows.
 
      A condition reads ONCE into a local and its arm narrows off that local, which is what lets a `{#if}`
-     over a cell that might be undefined drop the `?.` inside it — TypeScript narrows a const, never a
+     over a state that might be undefined drop the `?.` inside it — TypeScript narrows a const, never a
      call, and every read in a template is a call. -->
 {#if level > 1}
     <p>{name}: danger</p>

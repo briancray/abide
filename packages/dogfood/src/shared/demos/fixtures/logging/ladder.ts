@@ -20,5 +20,10 @@ export const LADDER: Example[] = [
         view: One,
     },
     { adds: 'a named channel, off until `DEBUG` names it', of: ['log'], source: TWO, view: Two },
-    { adds: '`enabled()`, for when building the message is the cost', of: ['log'], source: THREE, view: Three },
+    {
+        adds: '`enabled()`, for when building the message is the cost',
+        of: ['log'],
+        source: THREE,
+        view: Three,
+    },
 ]

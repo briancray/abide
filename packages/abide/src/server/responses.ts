@@ -120,7 +120,7 @@ export interface FramingWritten extends FramingSpec {
  * server and `await catalogue()` answered a `Response`.
  *
  * So the rpc lane takes `values` and gives `release` back, and `respond` writes the framing again
- * over the cell's own transcript. The response built here is then never read — which is exactly why
+ * over the state's own transcript. The response built here is then never read — which is exactly why
  * the hold is out here rather than inside `heldFrames`, and why it is a release rather than a cancel:
  * cancelling would call `return()` on the generator the lane is about to iterate.
  */
@@ -158,7 +158,7 @@ const SSE_FRAMING: FramingSpec = {
 
 /**
  * The response a framing writes, over any source — used to build one and, in `respond`, to write the
- * same one again over the cell that took its values.
+ * same one again over the state that took its values.
  *
  * NOT branded here: a re-frame is the body somebody is about to read, and marking it would invite a
  * second lane to take those values too.

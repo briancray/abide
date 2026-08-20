@@ -14,7 +14,7 @@
  * rather than rendering it — that is the one question both substrates ask, and the whole reason the
  * mark exists.
  *
- * Narrower than `Cell`: every cell is a source, but a channel is a source that is not a cell (no
+ * Narrower than `State`: every state is a source, but a channel is a source that is not a state (no
  * `set`, no `refresh`, not awaitable). The slot recogniser wants the wider question.
  *
  * Not exported: the two functions below are the whole of what anyone needs of it, and a caller
@@ -24,7 +24,7 @@ const SOURCE = Symbol.for('abide.source')
 
 /**
  * Stamp a callable as a source. Every maker calls this FIRST, before any other member is assigned,
- * so all five — the cell `makeCell` builds, `memo`'s argless facade, `channel`, `remoteSocket` and a
+ * so all five — the state `makeState` builds, `memo`'s argless facade, `channel`, `remoteSocket` and a
  * socket `Connection` — gain the brand at the same point and stay monomorphic.
  *
  * A helper rather than the cast written out per maker: the cast is what a SIXTH source type would
@@ -39,7 +39,7 @@ export function markSource<T>(callable: T): T {
 /**
  * Whether this value is one — the reader of the mark, beside the writer of it.
  *
- * `source` is the right question rather than `cell`: a cell is a source you can also `set` and
+ * `source` is the right question rather than `state`: a state is a source you can also `set` and
  * `await`, a channel is a source that is neither, and what a slot or a prop needs to know is only
  * whether to READ it.
  */

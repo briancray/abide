@@ -25,8 +25,8 @@ assertType<Exact<ReturnType<typeof pair>, Pair<string, number>>>()
 assertType<Exact<ReturnType<typeof first<Book>>, Book | undefined>>()
 
 // A type ARGUMENT list in an expression, which the desugar has to leave alone while still reading
-// the cell that follows it.
-export const held = new Map<string, ReturnType<typeof books>>([['books', books]])
+// the state that follows it.
+export const held = new Map<string, ReturnType<typeof books>>([['books', books ?? []]])
 assertType<Exact<typeof held, Map<string, Book[]>>>()
 </script>
 

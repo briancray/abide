@@ -7,6 +7,6 @@ const rest = state<Record<string, string>>({ title: 'ada lovelace', lang: 'en' }
 
 <!-- Every key becomes an attribute here, and a PROP on a component. The two differ in one way worth
      knowing: on a component the key set is fixed at SETUP, because the child bound its locals then — so
-     a key a later spread ADDS has no cell to be written into and is reported rather than dropped. -->
+     a key a later spread ADDS has no held to be written into and is reported rather than dropped. -->
 <p {...rest}>hello {name}</p>
 <button onclick={() => (rest = { title: 'ada, again', lang: 'en' })}>rewrite them</button>

@@ -11,7 +11,7 @@
 import { expect, test } from 'bun:test'
 import { homedir } from 'node:os'
 import { dirname, sep } from 'node:path'
-import { health, html, identity, log, memo, route } from 'abide'
+import { health, html, identity, log, memo, refresh, route } from 'abide'
 import type { RouteEntry } from 'abide/runtime'
 import { outlet, ready, routes } from 'abide/runtime'
 import { remote } from 'abide/runtime/transport'
@@ -182,9 +182,7 @@ test('a served body does not await a chunk its source already had', async () => 
         serve(new Request('https://x.test/rows'), () => jsonl(rows)).body as ReadableStream<Uint8Array>,
     )
     const async_ = await turnsBeforeFirstChunk(
-        serve(new Request('https://x.test/rows'), () => jsonl(streamed())).body as ReadableStream<
-            Uint8Array
-        >,
+        serve(new Request('https://x.test/rows'), () => jsonl(streamed())).body as ReadableStream<Uint8Array>,
     )
     expect(sync).toBe(2)
     expect(async_).toBe(5)
@@ -309,6 +307,65 @@ test('a keyed memo is per-request under serve', async () => {
     expect(bodyRuns).toBe(2)
     expect(one).toEqual({ id: 7, seat: 1 })
     expect(two).toEqual({ id: 7, seat: 2 })
+})
+
+test('a tag verb reaches this caller and no other, and a global copy either way', async () => {
+    // The reach of `refresh({ tags })` / `invalidate({ tags })`, which no `isolate` arm can ask:
+    // the registry is one module-level map and per-caller slots join it, so before this the walk
+    // reached every concurrent request's copy — and `refresh` RAN each body inline, in the calling
+    // request's scope. Bob's slot came back filled from Alice's cookies and Bob's request served it.
+    //
+    // Two memos, differing only in `global`. A global memo has one copy everyone shares, which is
+    // what the flag promises, so the verb still reaches it from whoever asked.
+    const seen: string[] = []
+    const who = (): string => cookies().get('who') ?? '<none>'
+    const mine = memo(async ({ id }: { id: string }) => {
+        seen.push(`mine:${who()}`)
+        return `${who()} has ${id}`
+    })
+    // KEYED and global, and first read inside BOB's request below — which is what makes the
+    // null-caller guard visible. This slot is process-wide, so binding it to the request that
+    // happened to create it would leave every other caller unable to reach it.
+    const shared = memo(
+        async ({ pair }: { pair: string }) => {
+            seen.push(`shared:${who()}`)
+            return `${pair} rate`
+        },
+        { tags: ['sweep'], global: true },
+    )
+    const tagged = memo(
+        async ({ id }: { id: string }) => {
+            seen.push(`tagged:${who()}`)
+            return `${who()} has ${id}`
+        },
+        { tags: ['sweep'] },
+    )
+    let bobServed: unknown
+    const bob = as('who=bob', async () => {
+        await mine({ id: 'row' })
+        await tagged({ id: 'row' })
+        await shared({ pair: 'usd' })
+        await sleep(40)
+        bobServed = tagged({ id: 'row' }).peek()
+    })
+
+    await sleep(10)
+    seen.length = 0
+    const alice = as('who=alice', async () => {
+        await mine({ id: 'row' })
+        await tagged({ id: 'row' })
+        refresh({ tags: ['sweep'] })
+        await sleep(5)
+    })
+
+    await Promise.all([alice, bob])
+
+    // Sorted: the walk is over a Set and its order is registration order, which is not the claim.
+    // Alice's own two bodies, then the refresh reaching her tagged copy and the shared one. No
+    // `:bob` in here at all — that IS the claim, and the count is the other half of it: Bob's copy
+    // re-run would read `tagged:alice`, which is the disclosure rather than merely extra work.
+    expect(seen.slice().sort()).toEqual(['mine:alice', 'shared:alice', 'tagged:alice', 'tagged:alice'])
+    expect(bobServed).toBe('bob has row')
 })
 
 test('a synchronous handler never becomes a promise', () => {

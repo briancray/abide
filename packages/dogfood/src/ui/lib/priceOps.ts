@@ -157,7 +157,10 @@ export async function priceOps(container: Element, ops: readonly Op[]): Promise<
             // ONE pass on a coarse clock, so a sample under the floor says so instead of printing
             // digits the instrument cannot support. The DOM calls above are the number to read on a
             // small op — they are exact, and they are the same in both substrates.
-            value: took < floor() ? `under ${floor().toFixed(1)} ms — this clock’s floor` : `≈ ${took.toFixed(1)} ms`,
+            value:
+                took < floor()
+                    ? `under ${floor().toFixed(1)} ms — this clock’s floor`
+                    : `≈ ${took.toFixed(1)} ms`,
         })
     }
 

@@ -57,14 +57,14 @@ export const META = {
         blurb:
             'Subscribe to values arriving over time. `feed()` is the latest message and subscribes the ' +
             'caller — the same call every other source spells a read with. The reactive reads go through ' +
-            'a `state` cell, so a component re-renders on publish with no bridging code.',
+            'a `state`, so a component re-renders on publish with no bridging code.',
         tag: 'subscribe to them',
     },
     watch: {
         name: 'watch',
         title: 'watch · untrack · scope',
         blurb:
-            'React to the graph. Reading a cell inside a `watch` IS the subscription — there is no ' +
+            'React to the graph. Reading a state inside a `watch` IS the subscription — there is no ' +
             'dependency array. Effects are batched onto a microtask, isolated per node, and owned by ' +
             'whatever `scope` they were created inside.',
         tag: 'react · untrack · scope',
@@ -84,7 +84,7 @@ export const META = {
         blurb:
             'Which page a URL names, and what that page may ask about the caller that asked for it. ' +
             '`route()` is an ambient like `request()`, but a REACTIVE one — a client moves without a new ' +
-            'caller arriving — so it is four small cells rather than one record, and a same-route ' +
+            'caller arriving — so it is four small states rather than one record, and a same-route ' +
             'navigation is a republish rather than a remount.',
         tag: 'route · url · navigate',
     },

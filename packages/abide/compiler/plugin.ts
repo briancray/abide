@@ -11,7 +11,7 @@
 // `readFileSync` because a Bun plugin's `load` runs SYNCHRONOUSLY and `Bun.file().text()` is a
 // promise; `node:path` stands in for nothing, since Bun ships no path api.
 import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 import type { BunPlugin } from 'bun'
 import {
     compile,
@@ -20,6 +20,7 @@ import {
     elide,
     type ImportedModule,
     SHAPES_FILE,
+    type SourceFile,
     TRANSPORT_MODULE,
 } from './index.ts'
 
@@ -158,15 +159,18 @@ export const abidePlugin: BunPlugin = {
                 namespace: SOURCE_NAMESPACE,
             }
         })
-        // A module that exports the string, rather than `loader: 'text'`: the bundler accepts the
+        // A module that exports an OBJECT, rather than `loader: 'text'`: the bundler accepts the
         // text loader and the RUNTIME lane does not, and the two lanes have to load this the same way
         // or a demo means something different under `bun test` than it does on the page.
-        build.onLoad({ filter: /.*/, namespace: SOURCE_NAMESPACE }, async (args) => ({
-            loader: 'js',
-            contents: `export default ${JSON.stringify(
-                await Bun.file(args.path.slice(0, -SOURCE_QUERY.length)).text(),
-            )}`,
-        }))
+        //
+        // The `label` is the basename, and it is here rather than written at the import site because a
+        // label written by hand is one that can name a file the pane is not showing. Read off the
+        // RESOLVED path, so a seam alias and a relative specifier answer with the same name.
+        build.onLoad({ filter: /.*/, namespace: SOURCE_NAMESPACE }, async (args) => {
+            const path = args.path.slice(0, -SOURCE_QUERY.length)
+            const file: SourceFile = { label: basename(path), text: await Bun.file(path).text() }
+            return { loader: 'js', contents: `export default ${JSON.stringify(file)}` }
+        })
         build.onLoad({ filter: /\.abide$/ }, async (args) => {
             const source = await Bun.file(args.path).text()
             try {

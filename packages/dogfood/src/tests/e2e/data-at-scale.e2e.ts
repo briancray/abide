@@ -76,7 +76,9 @@ test('the data demo lays out what can be seen, not what it holds', async ({ page
 
     // What was asked for actually arrived. Without this the gate goes green on a page that rendered
     // nothing — the cheapest possible way to hold a layout bound, and the one worth ruling out.
-    expect(entries, `the page did not render the ${ENTRIES.toLocaleString()} entries it was asked for`).toBe(ENTRIES)
+    expect(entries, `the page did not render the ${ENTRIES.toLocaleString()} entries it was asked for`).toBe(
+        ENTRIES,
+    )
 
     expect(
         work.layoutObjects,

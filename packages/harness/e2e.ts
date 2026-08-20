@@ -35,7 +35,7 @@ export type { Page }
  * What that costs a driver is not a slow page but a LOST one. Playwright's actionability checks
  * usually cover the gap by accident, so a spec that types into a server-rendered field passes on a
  * quiet machine and fails under load — and it fails in the worst way available, because hydration
- * writes the cell's value back over what was typed. The field reads `""`, the markup is still
+ * writes the state's value back over what was typed. The field reads `""`, the markup is still
  * perfectly correct, and nothing anywhere reports an error.
  *
  * So: before the first click or keystroke on a freshly loaded page, await this. Reading a page needs

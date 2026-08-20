@@ -104,7 +104,7 @@ export const TOPICS = {
         title: 'routing',
         lead:
             'The address, as three callables over one idea. `route()` says which page this URL named and ' +
-            'is REACTIVE — four small cells, so a same-route move republishes rather than remounting — ' +
+            'is REACTIVE — four small states, so a same-route move republishes rather than remounting — ' +
             '`navigate` moves without a new caller arriving, and `url` builds the target so that a link ' +
             'and a `navigate` cannot disagree about where they go.',
         callables: ['route', 'navigate', 'url'],

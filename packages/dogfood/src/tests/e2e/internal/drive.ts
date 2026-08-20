@@ -110,7 +110,12 @@ export interface Swept {
  * row's number, and the message that reported `/docs` red named "rung 7" of a four-rung ladder. Two
  * crossings total — a count, then one `evaluateAll` for both columns.
  */
-export async function sweepStatuses(page: Page, row: string, badge: string, timeout: number): Promise<Swept[]> {
+export async function sweepStatuses(
+    page: Page,
+    row: string,
+    badge: string,
+    timeout: number,
+): Promise<Swept[]> {
     const rows = page.locator(row)
     const count = await rows.count()
     if (count === 0) return []

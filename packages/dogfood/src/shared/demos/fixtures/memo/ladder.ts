@@ -26,9 +26,29 @@ export const LADDER: Example[] = [
     { adds: 'derive one — no args, so the body is the dependency set', of: ['memo'], source: ONE, view: One },
     { adds: 'load one — declaring args makes them the cache key', of: ['memo'], source: TWO, view: Two },
     { adds: 'say what to show meanwhile, with nothing awaiting', of: ['memo'], source: THREE, view: Three },
-    { adds: 'your own `catch` cannot swallow the signal — the value it builds is discarded', of: ['memo'], source: FOUR, view: Four },
-    { adds: 'how long a settled slot is served, and why that is a read and not a timer', of: ['memo'], source: FIVE, view: Five },
+    {
+        adds: 'your own `catch` cannot swallow the signal — the value it builds is discarded',
+        of: ['memo'],
+        source: FOUR,
+        view: Four,
+    },
+    {
+        adds: 'how long a settled slot is served, and why that is a read and not a timer',
+        of: ['memo'],
+        source: FIVE,
+        view: Five,
+    },
     { adds: 'pace the revalidation — and a cold slot is never paced', of: ['memo'], source: SIX, view: Six },
-    { adds: 'a transform between the body and the options, so the memo IS its return', of: ['memo'], source: SEVEN, view: Seven },
-    { adds: 'read the same pair as DECLARED DEPENDENCIES, and let the untracked body load', of: ['memo'], source: EIGHT, view: Eight },
+    {
+        adds: 'a transform between the body and the options, so the memo IS its return',
+        of: ['memo'],
+        source: SEVEN,
+        view: Seven,
+    },
+    {
+        adds: 'read the same pair as DECLARED DEPENDENCIES, and let the untracked body load',
+        of: ['memo'],
+        source: EIGHT,
+        view: Eight,
+    },
 ]

@@ -54,7 +54,13 @@ export const LADDER: Example[] = [
         client: TWO_CLIENT,
         view: Two,
     },
-    { adds: 'your own store, one per request', of: ['bag'], source: THREE, client: THREE_CLIENT, view: Three },
+    {
+        adds: 'your own store, one per request',
+        of: ['bag'],
+        source: THREE,
+        client: THREE_CLIENT,
+        view: Three,
+    },
     {
         adds: 'the id that ties this request’s log lines to the caller’s',
         of: ['trace'],

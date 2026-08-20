@@ -1,14 +1,16 @@
-// The other law's declaration, in the directory that says which law it is. The server half is
-// `channel()` unchanged — served at `/__abide/socket/feed/ticks`.
+// The other law's declaration, in the directory that says which law it is. The stream a socket
+// selects is `channel()` unchanged — served at `/__abide/socket/feed/ticks`.
 
 import { socket } from 'abide/server'
 
 /**
  * A `GET` is a `memo` whose body is a fetch; this is a `channel` whose subscribers arrived over a
- * wire — the same declaration, and the server half is `channel()` unchanged.
+ * wire — the same declaration, and the stream it selects is `channel()` unchanged.
  *
- * So `ticks()` on a client is the read every other source spells the same way, and `tail` means here
- * exactly what it means on a local channel: how many messages a late subscriber is caught up with.
+ * A socket always SELECTS, so `ticks()` is the connection and `ticks()()` is the read every other
+ * source spells the same way — the grammar `rpc` already has over `memo`, where a no-args endpoint is
+ * still `fn()`. `tail` means here exactly what it means on a local channel: how many messages a late
+ * subscriber is caught up with.
  */
 export const ticks = socket<{ n: number }>({ channel: { tail: 8 } })
 

@@ -78,7 +78,7 @@ export function kindOf(modulePath: string): Kind | null {
  * different name. Both land on `kindOf`, so there is still one answer to what a transport module is.
  *
  * Getting this wrong is silent and expensive: an rpc the emitter does not recognise is not registered
- * as a keyed source, so the cell sugar stops inserting the read and `bodyOf(args).source` compiles to
+ * as a keyed source, so the state sugar stops inserting the read and `bodyOf(args).source` compiles to
  * a property access on a handle.
  */
 export function kindOfImport(specifier: string): Kind | null {

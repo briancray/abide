@@ -17,7 +17,7 @@ import { Transcript } from './internal/graph.ts'
 import { keyOf, matcher, seedKey } from './internal/keys.ts'
 import { mounted } from './internal/mount.ts'
 import { RPC_PREFIX, SOCKET_PREFIX } from './internal/PATHS.ts'
-import { hasFile, isNamedError } from './internal/probes.ts'
+import { hasFile } from './internal/probes.ts'
 import { takeSeed } from './internal/seed.ts'
 import { arm } from './internal/timers.ts'
 import { traceHeaders } from './internal/trace.ts'
@@ -36,8 +36,13 @@ import {
     TTL_HEADER,
     wireError,
 } from './internal/wire.ts'
-import { type KeyedMemo, type MemoHandle, memo, type Selecting } from './memo.ts'
+import { type KeyedMemo, type MemoHandle, memo, type Selecting, selectedArgs, selectedRoom } from './memo.ts'
 import { state } from './reactive.ts'
+
+// The key every empty room shares. A socket's `{}` addresses the BARE path — an rpc's `f()` must
+// carry `?__abide_args={}` so the handler is handed `{}` rather than nothing, but a room is
+// re-resolved from an undecoded query on the server and lands in `{}` from either direction.
+const EMPTY_ROOM = keyOf({})
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -53,7 +58,7 @@ export interface CallOptions {
 }
 
 /**
- * A slot's cell, plus the loop a handler that yields is consumed by — and the refusals it declared.
+ * A slot's state, plus the loop a handler that yields is consumed by — and the refusals it declared.
  *
  * `F` is what makes a caught failure more than a name. A handler that `return`s an `error.typed`
  * failure puts it in its own return type, `GET` splits that union into the value and the refusals,
@@ -63,7 +68,7 @@ export interface CallOptions {
  */
 export interface RpcHandle<T, F extends Failed = never> extends MemoHandle<T> {
     /**
-     * The CHUNKS, which are `T`. Narrowed from the cell's own iterator rather than extending
+     * The CHUNKS, which are `T`. Narrowed from the state's own iterator rather than extending
      * `AsyncIterable<T>` beside it: a handle is `State<T | undefined>`, because `undefined` is what
      * it holds before anything has landed — but that is not something the loop ever yields, and
      * declaring the same member through two supertypes is a conflict rather than an intersection.
@@ -122,7 +127,7 @@ function raceAbort<T>(promise: PromiseLike<T>, signal: AbortSignal): Promise<T> 
  * The slot, with an await that gives up when the signal does.
  *
  * A VIEW rather than a second slot: everything but `then` reaches the real handle through the
- * prototype, so `peek`, the probes and the verbs are the same cell's. Built only when a signal is
+ * prototype, so `peek`, the probes and the verbs are the same state's. Built only when a signal is
  * passed, which is why the prototype walk it costs is not on anyone's ordinary path.
  */
 function abandonable<T>(handle: RpcHandle<T>, signal: AbortSignal): RpcHandle<T> {
@@ -149,32 +154,31 @@ export function asRpc<Args, T>(
         url(args: Args): string
     },
 ): Rpc<Args, T> {
-    // The ONE place the three faces agree about an omitted argument, which is what `Selecting` made
-    // reachable — `f()` is `f({})`, so the omitted call keys the same slot, travels as the same
-    // query and reaches a handler destructuring its parameter with something to destructure. An
-    // empty query would arrive as `undefined` and throw inside the body; see `argsQuery`, which
-    // takes the hatch for `{}` for this same reason.
+    // `f()` is `f({})`, so the omitted call keys the same slot, travels as the same query and
+    // reaches a handler destructuring its parameter with something to destructure. An empty query
+    // would arrive as `undefined` and throw inside the body; see `argsQuery`, which takes the hatch
+    // for `{}` for this same reason. `selectedArgs` is the shared resolution — see it for why the
+    // arity decides rather than `?? {}`.
     //
     // Each face is written with the VARIADIC list it is being cast to rather than as `(args?, …)`:
     // `Selecting<Args>` is unresolved while `Args` is a type parameter, so the two forms are not
     // comparable and the cast that used to be free would need an `unknown` under it.
-    // OMITTED, not `?? {}`: `Args` of `void` is a read whose argument is `undefined` and whose
-    // address is the bare one, and coalescing put `?$args=%7B%7D` on every such URL. The arity is
-    // the only place the two are distinguishable at runtime, since `Selecting` is erased.
-    const selected = (call: readonly unknown[]): Args =>
-        call.length === 0 ? ({} as Args) : (call[0] as Args)
     const rpc = ((...given: [...Selecting<Args>, options?: CallOptions]): RpcHandle<T> => {
-        // Nothing to attach: a handle IS a cell, and every cell carries its own iterator. The
+        // Nothing to attach: a handle IS a state, and every state carries its own iterator. The
         // per-slot attach this replaced existed only because the loop lived out here.
-        const handle = call(selected(given)) as RpcHandle<T>
+        const handle = call(selectedArgs<Args>(given)) as RpcHandle<T>
         const options = given[1] as CallOptions | undefined
         if (options === undefined || options.signal === undefined) return handle
         return abandonable(handle, options.signal)
     }) as Rpc<Args, T>
     rpc.invalidate = call.invalidate
     rpc.refresh = call.refresh
-    rpc.raw = (...given) => spec.raw(selected(given), given[1] as RequestInit | undefined)
-    rpc.url = (...given) => spec.url(selected(given))
+    // The SET probes, which is the only spelling that asks about an endpoint without addressing a
+    // call on it — `fn(args).pending()` names a key, and on a mutation naming one is how it is made.
+    rpc.pending = call.pending
+    rpc.refreshing = call.refreshing
+    rpc.raw = (...given) => spec.raw(selectedArgs<Args>(given), given[1] as RequestInit | undefined)
+    rpc.url = (...given) => spec.url(selectedArgs<Args>(given))
     Object.defineProperty(rpc, 'method', { value: spec.method, enumerable: true })
     Object.defineProperty(rpc, 'description', { value: spec.description, enumerable: true })
     return rpc
@@ -367,7 +371,7 @@ export function remote<Args, T, F extends Failed = never>(
         return payload as T
     }
 
-    // Returned SYNCHRONOUSLY, so the cell sees an async iterable and consumes it as a stream. An
+    // Returned SYNCHRONOUSLY, so the state sees an async iterable and consumes it as a stream. An
     // `async` function here would hand it a promise OF a generator, and the whole transcript would
     // land as one value.
     async function* chunks(args: Args): AsyncGenerator<T> {
@@ -392,7 +396,7 @@ export function remote<Args, T, F extends Failed = never>(
      * trip over markup that is already on screen and correct.
      *
      * A STREAM looks too, and what it finds is the whole TRANSCRIPT the server drained. Handed over
-     * as one rather than replayed through the cell's `for await`, which costs a tick per chunk and
+     * as one rather than replayed through the state's `for await`, which costs a tick per chunk and
      * would leave the slot `streaming` for as many microtasks as the answer has chunks — long enough
      * for a hydrating region to read a partial transcript and rebuild rows against markup that
      * already holds all of them. Settled in the call, the region adopts instead.
@@ -452,7 +456,7 @@ export interface RemoteSocketOptions {
  * type a component is checked against is the server module's, because the stub only exists at build
  * time. It is here for the caller that owns the connection: a test, a script, a page tearing down.
  */
-export type RemoteSocket<T, Args = void> = Channel<T> & KeyedChannel<Args, T> & { close(): void }
+export type RemoteSocket<T, Args = void> = KeyedChannel<Args, T> & { close(): void }
 
 /** One room's connection: an ordinary channel with the wire's verb on it. */
 type Connection<T> = Channel<T> & { close(): void }
@@ -466,66 +470,55 @@ export function remoteSocket<T, Args = void>(
     options: RemoteSocketOptions = {},
 ): RemoteSocket<T, Args> {
     const rooms = new Map<string, { args: Args; room: Connection<T> }>()
-    let bare: Connection<T> | null = null
-    const held = (): Connection<T> => (bare ??= connect<T>(id, undefined, options))
 
-    const self = markSource(((args?: Args) => {
-        if (args === undefined) return held()()
+    /**
+     * The call SELECTS a room, and the OMITTED call selects `{}` — the same room `s({})` selects,
+     * through the `selectedArgs` every face shares. A socket has no bare stream: every call is
+     * keyed, which is what "there is no argless rpc" means one law over.
+     *
+     * Selecting opens nothing either way. `connect` builds, and the first ASK of what it built is
+     * what opens the wire — a read or a probe, the rule every keyed slot already follows. Before
+     * this the bare call READ, so the probes had to answer from a connection they were not allowed
+     * to open: a page whose only mention of a socket was a probe never connected, and the guard the
+     * shape invites, `s.pending() ? … : s()`, fell through to the read on its first pass and deferred
+     * the region it was written to keep painting.
+     *
+     * The `{}` room addresses the BARE path, where an rpc's `f()` travels as `?__abide_args={}`. The
+     * two encodings differ because the two questions do: an rpc's args ARE its address and have to
+     * reach the handler as `{}` rather than as nothing, while a room is re-resolved by this same
+     * coercion on the server — `roomFor` hands an undecoded room to `s()`, which lands in `{}`. So an
+     * empty query and an explicit `{}` are already the same room on both sides, and a query carrying
+     * nothing would be a query for nobody to read.
+     */
+    // `unknown` under the cast because a plain function is not comparable to an interface requiring
+    // `invalidate`, which is assigned two lines below.
+    const self = markSource(((...given: Selecting<Args>) => {
+        const args = selectedRoom<Args>(given)
         const key = keyOf(args)
         const entry = rooms.get(key)
         if (entry !== undefined) return entry.room
-        const room = connect<T>(id, args, options)
+        // The KEY decides the address, never the arity. `s()`, `s({})` and `s(undefined)` are one
+        // room, so they must dial one URL — read off arity, whichever spelling opened it first won
+        // and the other reached the same room at a different address.
+        const room = connect<T>(id, key === EMPTY_ROOM ? undefined : args, options)
         rooms.set(key, { args, room })
         return room
-    }) as RemoteSocket<T, Args>)
+    }) as unknown as RemoteSocket<T, Args>)
 
-    // Forwarded rather than inherited, because `bare` does not exist until something asks: a socket
-    // an app imported and never read must not open a connection. A READ builds it; a probe answers
-    // the channel's own cold value instead, which is what keeps probes questions rather than causes.
-    //
-    // A TABLE typed by `keyof Channel`, not one assignment per member — the same reason `memo.ts` builds
-    // its facade this way: a member added to the channel surface is a type error HERE, rather than a
-    // member left silently `undefined` on every remote socket, in the one lane with a wire in it.
-    // `invalidate` is out of it because a room pattern is the one thing this shape means differently.
-    const forward: { [K in keyof Omit<Channel<T>, 'invalidate'>]: Channel<T>[K] } = {
-        publish: (message) => held().publish(message),
-        peek: () => bare?.peek(),
-        chunks: () => held().chunks(),
-        settled: () => bare?.settled() ?? false,
-        pending: () => bare?.pending() ?? false,
-        refreshing: () => bare?.refreshing() ?? false,
-        error: () => bare?.error(),
-        streaming: () => bare?.streaming() ?? true,
-        done: () => bare?.done() ?? false,
-        // The one probe with no cold value to answer from, so it answers from the ARGUMENTS — which
-        // is what a channel's own `isError` does too. Through `held()` it was the only probe in this
-        // table that opened a connection, and on a socket whose address is not resolvable yet it did
-        // not merely start work, it THREW, out of a member the spec says never does either.
-        isError: isNamedError,
-        watch: (handler) => held().watch(handler),
-        subscribe: (listener) => held().subscribe(listener),
-        tail: () => held().tail(),
-        [Symbol.asyncIterator]: () => held()[Symbol.asyncIterator](),
-    }
-    Object.assign(self, forward)
-
+    // One walk now that `{}` is an ordinary room: no pattern matches everything, which is what the
+    // separate `bare?.invalidate()` used to be for.
     self.invalidate = (pattern?: Partial<Args>): void => {
         const wanted = matcher(pattern)
         for (const entry of rooms.values()) if (wanted(entry.args)) entry.room.invalidate()
-        // A pattern names ROOMS, so it stops there; a bare `invalidate()` means everything, and the
-        // stream the bare `ch()` reads is part of everything.
-        if (pattern === undefined) bare?.invalidate()
     }
     self.close = (): void => {
         for (const entry of rooms.values()) entry.room.close()
         rooms.clear()
-        bare?.close()
-        bare = null
     }
     return self
 }
 
-/** One room, one connection. Opened by the first READ, never by construction. */
+/** One room, one connection. Opened by the first ASK — a read or a probe — never by construction. */
 function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Connection<T> {
     const received = channel<T>(options.channel)
     const path = mounted(SOCKET_PREFIX + id)
@@ -554,10 +547,10 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
      *
      * A connection genuinely is a load: something is in flight and there is nothing to show yet. So
      * it is spelled as one, and every catcher already knows what to do with it — the slot is not
-     * painted, `settledOf` waits on this cell, and the first message wakes it. No new mechanism.
+     * painted, `settledOf` waits on this state, and the first message wakes it. No new mechanism.
      *
      * Only on `remoteSocket`, never on `channel`: a server walk reading a channel that may never
-     * receive would wait forever, and `socket()`'s server half is `channel()` unchanged.
+     * receive would wait forever, and the stream a `socket` selects is `channel()` unchanged.
      */
     let arrived: (() => void) | null = null
     const first = state(
@@ -567,7 +560,7 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
     )
 
     /**
-     * Where the wire is, as a CELL, because `refreshing()` has to wake the region asking it.
+     * Where the wire is, as a STATE, because `refreshing()` has to wake the region asking it.
      *
      * One tri-state rather than a `connected` flag beside a `closed` one: every transition then has
      * exactly one write, so closing a socket that was already down still wakes whoever is showing a
@@ -580,8 +573,18 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
      */
     const link = state<'idle' | 'live' | 'down'>('idle')
 
+    /**
+     * A retry is ARMED, so the backoff means what it says whoever asks.
+     *
+     * `wire === null` cannot stand in for it: that is exactly the state the backoff gap is in, and
+     * `onclose` wakes the region showing a reconnect banner on its way into it. That region asks
+     * `refreshing()`, which starts the connection — so the one reader guaranteed to run during a
+     * disconnect was the one that reconnected immediately and left the armed timer to no-op.
+     */
+    let retrying = false
+
     function start(): void {
-        if (wire !== null || closed) return
+        if (wire !== null || closed || retrying) return
         const connection = open(url)
         wire = connection
         connection.onopen = () => {
@@ -608,7 +611,11 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
             link.set('down')
             // Reconnecting is the whole difference between a socket and a websocket: a subscriber
             // asked for the stream, not for one TCP connection's worth of it.
-            arm(start, backoff)
+            retrying = true
+            arm(() => {
+                retrying = false
+                start()
+            }, backoff)
             backoff = Math.min(backoff * 2, RECONNECT_CAP)
         }
     }
@@ -621,8 +628,8 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
     const iterator = received[Symbol.asyncIterator]
     const tail = received.tail
 
-    // Reads may start work; probes may not. `peek` and the probes therefore never open a connection,
-    // which is what keeps them questions rather than causes.
+    // `peek` alone never opens a connection — it has a cold value to answer from. The probes below
+    // do start one, because a connection IS a load; see `self.pending`.
     const self = markSource((() => {
         start()
         // SIGNALS while nothing has arrived — see `first`. A no-op read once it has, and in a
@@ -634,7 +641,14 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
     Object.setPrototypeOf(self, received)
     // `chunks()` deliberately does NOT signal. At `tail: 0` the transcript is empty however many
     // messages have arrived, so a reader waiting for it to fill would wait forever.
-    self.pending = () => first.pending()
+    // `start()` here for the same reason `chunks`/`subscribe`/`tail` have it: a connection IS a load,
+    // so asking about it starts it, exactly as a probe on a cold slot does. `first` is a
+    // `state(promise)` and has nothing of its own to kick, which is why this is a call rather than
+    // something the graph could infer.
+    self.pending = () => {
+        start()
+        return first.pending()
+    }
     /**
      * A reload in flight over a value still being served — which for a socket is RECONNECTING.
      *
@@ -643,13 +657,16 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
      * it is the one thing a subscriber could not otherwise ask — after the first message a healthy
      * connection and a dead one read identically.
      *
-     * The `settled` conjunct keeps the two probes disjoint the way they are on a cell: a wire that
+     * The `settled` conjunct keeps the two probes disjoint the way they are on a state: a wire that
      * drops before anything has ARRIVED has nothing to serve, so it is still `pending`, not
      * `refreshing`. And this must not be true merely because the socket is up — the server half is
-     * `channel()`, where it is always false, so a region asking it would render one thing on each
-     * side and mismatch on hydration.
+     * the stream a `socket` selects, where it is always false, so a region asking it would render one
+     * thing on each side and mismatch on hydration.
      */
-    self.refreshing = () => link() === 'down' && first.settled()
+    self.refreshing = () => {
+        start()
+        return link() === 'down' && first.settled()
+    }
     self.chunks = () => {
         start()
         return chunks()

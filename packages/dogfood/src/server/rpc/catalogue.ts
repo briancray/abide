@@ -17,7 +17,9 @@ const DELAY_MS = 120
 // count an interaction crosses a frame, and 2000 was under the answer on every arm.
 const MOST = 20_000
 
-export const catalogue = GET(async ({ shard, size }: { shard: number; size: number }): Promise<CatalogueEntry[]> => {
-    await Bun.sleep(DELAY_MS)
-    return buildCatalogue(shard, Math.min(Math.max(size, 0), MOST))
-})
+export const catalogue = GET(
+    async ({ shard, size }: { shard: number; size: number }): Promise<CatalogueEntry[]> => {
+        await Bun.sleep(DELAY_MS)
+        return buildCatalogue(shard, Math.min(Math.max(size, 0), MOST))
+    },
+)

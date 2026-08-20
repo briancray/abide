@@ -195,4 +195,3 @@ export function benchText(row: BenchRow): string {
     for (const arm of row.arms) text += ` ${arm.label}`
     return text
 }
-

@@ -3,7 +3,7 @@ import { state } from 'abide'
 import { FIRST } from '../models.ts'
 import Props from '../valid/props.abide'
 
-// The other half of `valid/calls.abide`: an optional prop takes the value OR the cell, and neither
+// The other half of `valid/calls.abide`: an optional prop takes the value OR the state, and neither
 // of them is "anything". Widening `Given` far enough to let a literal through — to `unknown`, or by
 // dropping the conditional — compiles that file and this one, and nothing else in the tree would say.
 const note = state('scribbled')

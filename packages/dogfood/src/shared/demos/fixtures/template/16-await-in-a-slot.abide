@@ -4,7 +4,7 @@ import { state } from 'abide'
 const name = state('ada')
 
 /**
- * A promise, and deliberately NOT a cell holding one — one const, so the thunks below await the same
+ * A promise, and deliberately NOT a state holding one — one const, so the thunks below await the same
  * promise on every pass rather than making a new one.
  *
  * A promise handed to `state` is a LOAD, and reading a load that has not landed SIGNALS instead of
@@ -19,7 +19,7 @@ const later = Promise.resolve('the answer')
      Legal in every position with something to resolve one — a child slot, an attribute quoted or not, a
      spread, a toggle, a component prop, and the three block heads.
 
-     REFUSED in the three that have none: a `bind:` hands over the cell and emits no thunk, a `by` key
+     REFUSED in the three that have none: a `bind:` hands over the state and emits no thunk, a `by` key
      is an identity compared per row and a fresh promise never matches one, and a `{#try}` body is
      evaluated as one unit so `{:catch}` can see a throw — which a rejection is not.
 

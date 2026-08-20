@@ -14,9 +14,9 @@ const count = state(0)
  * In a handler `peek` is also the honest type: a read among a setup block's statements is emitted as
  * `peek()` and typed `T | undefined` for it, while a read in a FUNCTION body is a real read.
  */
-const twice = (): void => count.set(count.peek() + 2)
+const twice = (): void => count.set(count.peek()! + 2)
 </script>
 
 <p>count {count()}</p>
-<button onclick={() => count.set(count.peek() + 1)}>add one, explicitly</button>
+<button onclick={() => count.set(count.peek()! + 1)}>add one, explicitly</button>
 <button onclick={twice}>add two</button>

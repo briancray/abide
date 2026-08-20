@@ -7,7 +7,7 @@
 // observe, since the served navigation path is browser-only to begin with.
 //
 // What it is really guarding: `outletFrom` reads the committed route name, and a 404 commits an EMPTY
-// one. Before `Cells.failure` existed that answered `NOTHING` and wiped the range the server had just
+// one. Before `States.failure` existed that answered `NOTHING` and wiped the range the server had just
 // filled — so the error page appeared and vanished a microtask later, which is a correct-looking
 // server response and a blank screen.
 
@@ -51,14 +51,16 @@ test('a link to a path nothing serves paints the error page without leaving the 
 
     // THE CLAIM.
     const stayed = await page.evaluate(() => (window as unknown as Record<string, unknown>).__stayed)
-    expect(stayed, 'the browser reloaded the document instead of painting the error page').toBe('same-document')
+    expect(stayed, 'the browser reloaded the document instead of painting the error page').toBe(
+        'same-document',
+    )
 
     // And the address bar moved with it, or the reader is looking at a page they cannot link to or
     // reload — which is the same defect from the other side.
     expect(new URL(page.url()).pathname).toBe('/nothing-is-served-here')
 
     // Still a live page: the error page's own link works, and going back to a real route re-renders
-    // the outlet rather than leaving the 404 standing. This is the half `Cells.failure` has to CLEAR
+    // the outlet rather than leaving the 404 standing. This is the half `States.failure` has to CLEAR
     // — a failure left behind renders a 404 over a route that matched perfectly well.
     await page.click('a[href="/"]')
     await expect(page.locator('h1')).not.toHaveText('nothing is served here')

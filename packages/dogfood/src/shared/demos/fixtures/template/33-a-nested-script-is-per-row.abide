@@ -6,7 +6,7 @@ const rows = state(['alpha', 'beta'])
 
 <!-- A NESTED setup block is branch-local. It must be the FIRST node of a block body, carries no
      `import`, and resolves off that level's scope — so `row` here is the loop binding, which SHADOWS
-     any cell of the same name and is therefore an ordinary string.
+     any state of the same name and is therefore an ordinary string.
 
      In a `{#for}` it is spliced into the row closure, which means it runs once PER ROW. Every other
      block body pays one call for it. -->

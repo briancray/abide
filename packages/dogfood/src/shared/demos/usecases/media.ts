@@ -20,13 +20,24 @@ export interface Media {
     progress: number
 }
 
-const TITLE_HEADS = [
-    'the', 'a', 'my', 'our', 'their', 'one', 'last', 'first', 'next', 'lost',
-]
+const TITLE_HEADS = ['the', 'a', 'my', 'our', 'their', 'one', 'last', 'first', 'next', 'lost']
 
 const TITLE_BODIES = [
-    'winter', 'harbour', 'signal', 'orchard', 'lantern', 'quarry', 'meridian', 'saltwater',
-    'foundry', 'thicket', 'reservoir', 'almanac', 'catalogue', 'observatory', 'wireline',
+    'winter',
+    'harbour',
+    'signal',
+    'orchard',
+    'lantern',
+    'quarry',
+    'meridian',
+    'saltwater',
+    'foundry',
+    'thicket',
+    'reservoir',
+    'almanac',
+    'catalogue',
+    'observatory',
+    'wireline',
 ]
 
 const TITLE_TAILS = ['story', 'files', 'season', 'report', 'letters', 'diaries', 'circuit']

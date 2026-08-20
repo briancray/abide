@@ -33,8 +33,8 @@ import BindOpen from './09-bind-a-disclosure.abide'
 import BIND_OPEN from './09-bind-a-disclosure.abide?source'
 import BindElement from './10-bind-the-element.abide'
 import BIND_ELEMENT from './10-bind-the-element.abide?source'
-import RefHandler from './11-a-handler-instead-of-a-cell.abide'
-import REF_HANDLER from './11-a-handler-instead-of-a-cell.abide?source'
+import RefHandler from './11-a-handler-instead-of-a-state.abide'
+import REF_HANDLER from './11-a-handler-instead-of-a-state.abide?source'
 import BindAccessors from './12-bind-an-accessor-pair.abide'
 import BIND_ACCESSORS from './12-bind-an-accessor-pair.abide?source'
 import ClassToggle from './13-a-class-toggle.abide'
@@ -73,8 +73,8 @@ import Inline from './29-an-inline-component.abide'
 import INLINE from './29-an-inline-component.abide?source'
 import { Row } from './30-the-same-tag-hand-written.ts'
 import HAND_WRITTEN from './30-the-same-tag-hand-written.ts?source'
-import Chosen from './31-a-cell-chooses-the-component.abide'
-import CHOSEN from './31-a-cell-chooses-the-component.abide?source'
+import Chosen from './31-a-state-chooses-the-component.abide'
+import CHOSEN from './31-a-state-chooses-the-component.abide?source'
 import TwoScopes from './32-two-scopes-in-one-file.abide'
 import TWO_SCOPES from './32-two-scopes-in-one-file.abide?source'
 import NestedScript from './33-a-nested-script-is-per-row.abide'
@@ -84,12 +84,20 @@ import SCOPED_STYLES from './34-scoped-styles.abide?source'
 import NestedStyle from './35-a-nested-style-scopes-a-subtree.abide'
 import NESTED_STYLE from './35-a-nested-style-scopes-a-subtree.abide?source'
 import WRITTEN_BACK from './36-a-prop-the-child-writes-back.abide?source'
+import WrittenBack from './36-a-prop-the-child-writes-back.parent.abide'
+import WRITTEN_BACK_PARENT from './36-a-prop-the-child-writes-back.parent.abide?source'
 import Callback from './37-a-callback-prop-is-called.abide'
 import CALLBACK from './37-a-callback-prop-is-called.abide?source'
 
 export const LADDER: Example[] = [
     // --- the hole, and what each position does with it ---------------------------
-    { adds: 'a slot in child position is CONTENT', of: [], spells: ['expression'], source: CONTENT, view: Content },
+    {
+        adds: 'a slot in child position is CONTENT',
+        of: [],
+        spells: ['expression'],
+        source: CONTENT,
+        view: Content,
+    },
     {
         adds: 'inside a tag it is a WHOLE attribute value, unquoted',
         of: [],
@@ -118,7 +126,7 @@ export const LADDER: Example[] = [
     // differently — a boolean, a membership, a node ref — and as an address each is what a reader
     // arrived holding. `bind:checked` is not a variation on `bind:value` to somebody looking it up.
     {
-        adds: 'a bind is a read AND a write: the property from the cell, the cell from the event',
+        adds: 'a bind is a read AND a write: the property from the state, the state from the event',
         of: [],
         spells: ['bind-value'],
         source: BIND_VALUE,
@@ -139,7 +147,7 @@ export const LADDER: Example[] = [
         view: BindGroup,
     },
     {
-        adds: 'the same spelling on RADIOS, where the cell is the one value rather than a list',
+        adds: 'the same spelling on RADIOS, where the state is the one value rather than a list',
         of: [],
         spells: ['bind-group'],
         source: BIND_RADIO_GROUP,
@@ -173,7 +181,13 @@ export const LADDER: Example[] = [
         source: BIND_ACCESSORS,
         view: BindAccessors,
     },
-    { adds: '`class:` is a toggle, not a string', of: [], spells: ['class'], source: CLASS_TOGGLE, view: ClassToggle },
+    {
+        adds: '`class:` is a toggle, not a string',
+        of: [],
+        spells: ['class'],
+        source: CLASS_TOGGLE,
+        view: ClassToggle,
+    },
     {
         adds: 'one style PROPERTY, by the same rule and with the same refusal on a component',
         of: [],
@@ -220,7 +234,13 @@ export const LADDER: Example[] = [
         view: FailureArm,
     },
     { adds: 'a list, once per item, matched by POSITION', of: [], spells: ['for'], source: LIST, view: List },
-    { adds: '`by` is the KEY, so a row that moves is MOVED', of: [], spells: ['for'], source: KEYED, view: Keyed },
+    {
+        adds: '`by` is the KEY, so a row that moves is MOVED',
+        of: [],
+        spells: ['for'],
+        source: KEYED,
+        view: Keyed,
+    },
     {
         adds: 'a second binding is the INDEX — the one thing that must never be the key',
         of: [],
@@ -280,7 +300,7 @@ export const LADDER: Example[] = [
         view: Row,
     },
     {
-        adds: 'a component is a VALUE, so a CELL can choose which one — and the tag re-mounts on a change',
+        adds: 'a component is a VALUE, so a STATE can choose which one — and the tag re-mounts on a change',
         of: [],
         spells: ['tag'],
         source: CHOSEN,
@@ -314,18 +334,23 @@ export const LADDER: Example[] = [
         source: NESTED_STYLE,
         view: NestedStyle,
     },
-    // Last, and the two of them are the same lesson from the child's side: a prop is a cell, so what a
-    // rung here adds is which KIND of traffic the declaration asks for. Both need a parent to mean
-    // anything, which is why they sit after the tag that writes one.
+    // Last, and the two of them are the same lesson from the child's side: a prop is a state, so what a
+    // rung here adds is what the POSITION did with it. Both need a parent to mean anything, which is
+    // why they sit after the tag that writes one.
     //
-    // No `view` on the first, and that is the same fact rather than an omission: its prop is REQUIRED
-    // and is the parent's cell, so there is nothing to render it with — a default would make it this
-    // component's own cell and quietly demonstrate the opposite. The source is the example.
+    // TWO FILES on the first, and the second is the parent because the parent is the whole lesson: the
+    // child cannot tell whether it was handed the state or a copy, so a rung showing only the child
+    // shows none of it. This used to claim the opposite — that declaring the prop `State<…>` was what
+    // let the child write back — which was never true in either lane: both spellings emitted the same
+    // `propState`, and a child declaring a plain `string` writes back identically. `.abide` refuses
+    // the source spelling in a props type now, so the claim cannot come back.
     {
-        adds: 'a prop declared `State<…>` is the parent’s own cell, so the child writes back',
+        adds: 'the PARENT decides whether a child’s write comes back — the state, or a read of it',
         of: ['props'],
         spells: ['bind-value'],
         source: WRITTEN_BACK,
+        client: WRITTEN_BACK_PARENT,
+        view: WrittenBack,
     },
     {
         adds: 'a FUNCTION member is a callback — handed over as written, and CALLED',

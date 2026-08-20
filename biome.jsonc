@@ -1,10 +1,18 @@
 {
-    "$schema": "https://biomejs.dev/schemas/2.5.7/schema.json",
+    "$schema": "https://biomejs.dev/schemas/2.5.9/schema.json",
     "vcs": {
         "enabled": true,
         "clientKind": "git",
         "useIgnoreFile": true
     },
+    // The `lint` and `format` scripts NAME their paths instead of passing `.`, and this is why:
+    // `editors/zed/grammars/` is where Zed clones the tree-sitter grammar when the dev extension is
+    // installed — untracked, git-ignored, and carrying a `biome.jsonc` of its own. A second ROOT
+    // config is a hard error, so `bun run lint` exited 1 on a tree with nothing wrong in it. Nothing
+    // in this file can reach it: the config walk runs BEFORE `includes`, before `useIgnoreFile` and
+    // before `files.experimentalScannerIgnores`, and all three were tried with the identical error.
+    // So the paths are enumerated, and `editors/zed` is the one left out — it carries `.scm` queries
+    // and a `.toml`, none of which biome reads. Anything lintable added there needs naming here.
     "formatter": {
         "enabled": true,
         "indentStyle": "space",
@@ -76,7 +84,7 @@
             "suspicious": {
                 // `escape` in src/html.ts is an exported public name; the global is never used here.
                 "noShadowRestrictedNames": "off",
-                // The framework implements thenables on purpose (async cells settle through `then`).
+                // The framework implements thenables on purpose (async states settle through `then`).
                 "noThenProperty": "off",
                 // Tests and template literals carry `${...}` inside plain strings as expected output.
                 "noTemplateCurlyInString": "off"

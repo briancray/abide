@@ -6,6 +6,7 @@
 // split has to read identically on a state, a derivation, a keyed slot and a channel.
 
 import { channel, invalidate, memo, refresh, state } from 'abide'
+import { isolate } from 'abide/internal'
 import { reader, scratch, sleep, suite, until } from 'harness'
 import { tick } from 'harness/measure'
 import { button, el, row } from './dom.ts'
@@ -48,7 +49,7 @@ export default suite({
                 is('the slot reloads on read', slot(), 'v1')
 
                 // A channel's load probes never wake a reader: they are constants now, and before
-                // that they answered off a cell that can never load. So this holds for both
+                // that they answered off a state that can never load. So this holds for both
                 // implementations and does NOT distinguish them — what the constants actually saved
                 // is the `Async` tracker the first probe used to allocate, and nothing here counts
                 // allocations. It is asserted anyway because it is the contract a reader relies on:
@@ -70,7 +71,7 @@ export default suite({
 
         {
             title: 'refresh is only where there is a BODY to re-run',
-            note: 'A cell with no body has nothing to recompute, so it does not carry the verb — "every source carries every verb" does not survive contact with `state`.',
+            note: 'A state with no body has nothing to recompute, so it does not carry the verb — "every source carries every verb" does not survive contact with `state`.',
             async run({ is }) {
                 const own = state('a')
                 const derived = memo(() => own())
@@ -408,7 +409,7 @@ export default suite({
 
         {
             title: 'an untagged memo is unreachable by tag, and a doubly-tagged one is acted on ONCE',
-            note: 'Joining is opt-in. A module-level verb that swept everything would be a different, much worse feature.',
+            note: 'Joining is opt-in, so a tag reaches SPECIFIC data and reaches nothing it was not named on. Breadth is the no-selector form below, which is a different question and does not go through this registry at all.',
             async run({ is }) {
                 let taggedRuns = 0
                 const config = memo(async () => `config#${++taggedRuns}`, { tags: ['sweep', 'settings'] })
@@ -424,6 +425,62 @@ export default suite({
 
                 invalidate({ tags: ['sweep'] })
                 is('the untagged memo is untouched', plain({ id: 1 }).peek(), 'v1')
+            },
+        },
+
+        {
+            title: 'no selector — everything the CALLER holds, tagged or not',
+            note: "What a \"refresh everything\" button needs, and what a tag cannot answer: reach that depends on every declaration having remembered to name one is reach that quietly shrinks as an app grows, with nothing red to say so. The registry holds one entry per `memo()` DECLARATION rather than one per slot, because each memo's own no-selector verb is already this caller's — the keyed cache is `storeFor`'d and the argless facade picks per caller, so the per-caller question is answered one level down. Run inside an `isolate` here, which is not scaffolding but the claim itself: the walk visits every declaration in the process, including this page's own, and what stops it touching them is that each one answers for the ASKING CALLER. Outside the isolate this case refreshed the page it was running in — the browser row went blank and `bun test` stayed green, because a headless run has no page to blank. Asserted in BODY RUNS: every one of these serves the right value either way.",
+            async run({ is }) {
+                let tagged = 0
+                let untagged = 0
+                let argless = 0
+                const settings = memo(async () => `settings#${++tagged}`, { tags: ['settings'] })
+                const rows = memo(async ({ id }: { id: number }) => `row${id}#${++untagged}`)
+                const total = memo(async () => `total#${++argless}`)
+
+                await isolate(async () => {
+                    await settings
+                    await rows({ id: 1 })
+                    await rows({ id: 2 })
+                    await total
+                    is('one run each to start', [tagged, untagged, argless], [1, 2, 1])
+
+                    refresh()
+                    await tick()
+                    // Two slots on `rows`, so the keyed memo re-runs twice — the walk is over SLOTS
+                    // once it is inside a declaration, which is what `m.refresh()` already meant.
+                    is('every declaration re-ran, untagged included', [tagged, untagged, argless], [2, 4, 2])
+
+                    invalidate()
+                    is('and the no-selector drop reaches them too', rows({ id: 1 }).peek(), undefined)
+                })
+            },
+        },
+
+        {
+            title: 'a declaration made INSIDE a caller stays reachable after that caller leaves',
+            note: 'The reach of the no-selector verbs is by DECLARATION, and what decides how long one lives is whether anything can still reach it — never the scope that happened to be running when it was constructed. The two differ for the case that matters most: abide `import()`s a page module lazily, inside the first request that renders its route, so a module-level `memo()` in one is built under that request. Disposing with that scope deleted it permanently, for every later caller — the exact failure the no-selector form exists to fix, one level up and just as silent. A module holds its declarations, so a `WeakRef` keeps them; the ones a component or a request builds are garbage with their owner, so those go without a disposer to get wrong.',
+            async run({ is }) {
+                let runs = 0
+                let declared!: () => Promise<number>
+                // The lazy import: the declaration is constructed inside one caller's scope.
+                await isolate(async () => {
+                    declared = memo(async () => ++runs) as unknown as () => Promise<number>
+                    await declared()
+                })
+                is('the first caller filled its own slot', runs, 1)
+
+                await isolate(async () => {
+                    await declared()
+                })
+                is('a second caller filled its own', runs, 2)
+
+                await isolate(async () => {
+                    refresh()
+                    await tick()
+                })
+                is('the declaration is still reachable by a sweep', runs, 3)
             },
         },
 
@@ -616,7 +673,7 @@ export default suite({
             note: '`settled` is the wider question — is anything still in flight? `done` is the one a caller asks before trusting the value. A stream is why the two are not the same probe: chunks can have landed without there being an outcome yet.',
             async run({ is }) {
                 const ready = state(1)
-                is('a sync cell is done in the call', ready.done(), true)
+                is('a sync state is done in the call', ready.done(), true)
 
                 const failed = state<string | undefined>(undefined)
                 failed.set(Promise.reject(new Error('offline')))
@@ -728,7 +785,7 @@ export default suite({
 
         {
             title: 'the documented `refresh` rung runs',
-            note: 'What `/docs/refresh` shows and mounts, mounted here and asserted — including the claim that verb exists to make: the OLD value is still on screen while the new one loads. The rung\'s memo is its own, a setup block being per INSTANCE, so the verb is reached the way a reader reaches it: through the button the rung renders.',
+            note: "What `/docs/refresh` shows and mounts, mounted here and asserted — including the claim that verb exists to make: the OLD value is still on screen while the new one loads. The rung's memo is its own, a setup block being per INSTANCE, so the verb is reached the way a reader reaches it: through the button the rung renders.",
             async run({ is }) {
                 const host = scratch(() => RefreshByTag({}))
                 const line = (): string => host.querySelector('p')?.textContent ?? ''
