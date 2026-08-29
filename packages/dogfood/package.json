@@ -1,0 +1,27 @@
+{
+    "name": "dogfood",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "description": "The abide documentation app, and the app abide is dogfooded on",
+    "imports": {
+        "#shared": "./src/shared/index.ts",
+        "#shared/*": "./src/shared/*",
+        "#ui": "./src/ui/index.ts",
+        "#ui/*": "./src/ui/*",
+        "#server": "./src/server/index.ts",
+        "#server/*": "./src/server/*"
+    },
+    "scripts": {
+        "build": "abide build --root ./src",
+        "start": "abide start --root ./src",
+        "dev": "abide dev --root ./src",
+        "typecheck": "tsgo -p tsconfig.json"
+    },
+    "dependencies": {
+        "abide": "workspace:*"
+    },
+    "devDependencies": {
+        "tailwindcss": "^4.3.3"
+    }
+}

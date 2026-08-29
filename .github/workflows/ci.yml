@@ -1,0 +1,22 @@
+name: ci
+
+on:
+  push:
+    branches: [abidewhat]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+      # Serial: two cases price a ratio, and a loaded runner can tie two arrivals a
+      # quiet one separates. A timing failure under --parallel is not believed until
+      # it reproduces here (CLAUDE.md, "checks").
+      - run: bun run test:serial

@@ -1,0 +1,8 @@
+[install]
+linker = "hoisted"
+
+[test]
+# Registers the DOM the framework's own tests render into. Run `bun test` from the
+# REPO ROOT or this path does not resolve, and the suites measure a different code
+# path while still passing — see CLAUDE.md, "checks".
+preload = ["./packages/harness/src/measure/preload.ts"]

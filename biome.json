@@ -1,0 +1,67 @@
+{
+    "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+    "vcs": {
+        "enabled": true,
+        "clientKind": "git",
+        "useIgnoreFile": true
+    },
+    "files": {
+        "includes": ["**/*.{json,ts,js}", "!**/dist", "!**/node_modules", "!**/.abide"]
+    },
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 100
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single",
+            "semicolons": "asNeeded",
+            "trailingCommas": "all",
+            "arrowParentheses": "always"
+        }
+    },
+    "json": {
+        "formatter": {
+            "indentWidth": 4,
+            "trailingCommas": "none"
+        }
+    },
+    "css": {
+        "formatter": { "enabled": true },
+        "parser": { "tailwindDirectives": true }
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "preset": "recommended",
+            "suspicious": {
+                "noExplicitAny": "off"
+            },
+            "correctness": {
+                "noUnusedVariables": "error",
+                "noUnusedImports": "error",
+                "noUnusedFunctionParameters": "error"
+            },
+            "style": {
+                "useImportType": "error",
+                "useNodejsImportProtocol": "error"
+            }
+        }
+    },
+    "overrides": [
+        {
+            "includes": ["**/*.test.ts"],
+            "linter": {
+                "rules": {
+                    "style": { "noNonNullAssertion": "off" }
+                }
+            }
+        }
+    ],
+    "assist": {
+        "enabled": true,
+        "actions": { "source": { "organizeImports": "on" } }
+    }
+}

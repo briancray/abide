@@ -1,0 +1,31 @@
+{
+    "name": "abide",
+    "version": "0.0.0",
+    "type": "module",
+    "description": "Isomorphic type-safe framework for async interfaces for humans and machines",
+    "license": "MIT",
+    "bin": {
+        "abide": "./bin/abide.ts"
+    },
+    "exports": {
+        ".": "./src/shared/index.ts",
+        "./runtime": "./src/ui/index.ts",
+        "./server": "./src/server/index.ts",
+        "./package.json": "./package.json"
+    },
+    "imports": {
+        "#shared": "./src/shared/index.ts",
+        "#shared/*": "./src/shared/*",
+        "#ui": "./src/ui/index.ts",
+        "#ui/*": "./src/ui/*",
+        "#server": "./src/server/index.ts",
+        "#server/*": "./src/server/*"
+    },
+    "scripts": {
+        "typecheck": "tsgo -p tsconfig.json"
+    },
+    "files": [
+        "src",
+        "bin"
+    ]
+}

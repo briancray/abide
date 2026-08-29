@@ -1,0 +1,30 @@
+{
+    "name": "abide-workspace",
+    "private": true,
+    "type": "module",
+    "workspaces": [
+        "packages/*"
+    ],
+    "scripts": {
+        "typecheck": "tsgo -p packages/abide/tsconfig.json && tsgo -p packages/harness/tsconfig.json && tsgo -p packages/dogfood/tsconfig.json",
+        "test": "bun run build && bun test --parallel",
+        "test:serial": "bun run build && bun test",
+        "test:changed": "bun test --changed",
+        "build": "bun run --filter dogfood build",
+        "lint": "biome lint",
+        "format": "biome check --write --linter-enabled=false",
+        "check": "biome check --write",
+        "knip": "bunx knip --workspace packages/abide",
+        "e2e": "playwright test",
+        "e2e:changed": "playwright test --only-changed",
+        "e2e:failed": "playwright test --last-failed",
+        "verify": "bun run lint && bun run typecheck && bun run test"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.5.11",
+        "@playwright/test": "^1.62.1",
+        "@types/bun": "^1.4.0",
+        "@typescript/native-preview": "^7.0.0-dev.20260707.2",
+        "typescript": "^7.0.2"
+    }
+}
