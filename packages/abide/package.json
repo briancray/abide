@@ -22,7 +22,7 @@
         "#server/*": "./src/server/*"
     },
     "scripts": {
-        "typecheck": "tsgo -p tsconfig.json"
+        "typecheck": "tsc -p tsconfig.json"
     },
     "files": [
         "src",

@@ -6,7 +6,7 @@
         "packages/*"
     ],
     "scripts": {
-        "typecheck": "tsgo -p packages/abide/tsconfig.json && tsgo -p packages/harness/tsconfig.json && tsgo -p packages/dogfood/tsconfig.json",
+        "typecheck": "tsc -p packages/abide/tsconfig.json && tsc -p packages/harness/tsconfig.json && tsc -p packages/dogfood/tsconfig.json",
         "test": "bun run build && bun test --parallel",
         "test:serial": "bun run build && bun test",
         "test:changed": "bun test --changed",
@@ -24,7 +24,6 @@
         "@biomejs/biome": "^2.5.11",
         "@playwright/test": "^1.62.1",
         "@types/bun": "^1.4.0",
-        "@typescript/native-preview": "^7.0.0-dev.20260707.2",
         "typescript": "^7.0.2"
     }
 }

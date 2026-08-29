@@ -32,7 +32,7 @@ of a ratio be timed by the same clock and the same batch sizing as the abide arm
 
 ## Checks
 
-    bun run typecheck     tsgo over all three packages
+    bun run typecheck     tsc (TypeScript 7, the native port) over all three packages
     bun run test          abide build, then bun test --parallel
     bun run test:serial   the same, unparallelised — re-run a TIMING failure here before believing it
     bun run test:changed  only what a change reaches
