@@ -1,0 +1,12 @@
+{
+    "title": "Bring in the app's stylesheet",
+    "summary": "One import in the layout. In force on every page below it, once.",
+    "files": ["src/ui/app.css", "src/ui/pages/layout.abide"],
+    "compiled": ["routes/invoices.a1f3b207.css"],
+    "route": "/invoices/42",
+    "states": [
+        {
+            "file": "result.html"
+        }
+    ]
+}

@@ -1,0 +1,19 @@
+<script>
+// A side-effect import with no binding. Global, deduped by resolved
+// specifier, and folded into this route's stylesheet at build time —
+// so ten components importing it emit it once.
+import '#ui/app.css'
+</script>
+
+<style>
+/* A <style> block is the other half: scoped to this file's markup,
+   and it cannot reach the page rendered through the slot. */
+header {
+    margin-bottom: 1rem;
+    font-weight: 650;
+    letter-spacing: -.01em;
+}
+</style>
+
+<header>Ledger</header>
+<slot/>

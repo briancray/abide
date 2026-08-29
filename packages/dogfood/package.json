@@ -16,7 +16,9 @@
         "build": "abide build --root ./src",
         "start": "abide start --root ./src",
         "dev": "abide dev --root ./src",
-        "typecheck": "tsc -p tsconfig.json"
+        "typecheck": "tsc -p tsconfig.json",
+        "docs": "bun run scripts/buildDocs.ts",
+        "docs:serve": "bun run scripts/buildDocs.ts --serve"
     },
     "dependencies": {
         "abide": "workspace:*"

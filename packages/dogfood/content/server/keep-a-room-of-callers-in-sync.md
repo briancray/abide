@@ -1,0 +1,17 @@
+---
+title: Keep a room of callers in sync
+nav: Rooms & sockets
+intent: Chat, presence, a live feed — many callers on one subject, pushed rather than polled.
+covers:
+  - `channel`
+  - `Channel`
+  - `Room`
+  - `Message`
+  - `socket`
+  - `Socket`
+  - `clientPublish`
+  - `server/sockets/chat.ts`
+  - `server/sockets/feed.ts`
+  - `src/server/sockets/**/*.ts`
+status: stub
+---

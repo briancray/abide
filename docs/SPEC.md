@@ -1156,6 +1156,7 @@ it. Two spreads against each other are still source order, there being nothing e
 | nested `<script>` | Branch-local (per-ITEM in a `{#for}`). Must be the FIRST node of a block body, carries no `import`, and resolves off the level's scope. Setup, so it runs ONCE per item and does not track — what makes `memo(() => f(result))` in one re-run is the memo tracking `result`, which is a live binding rather than a snapshot. |
 | `<style>` | Component-scoped: every root element carries a scope token and every selector requires it on its rightmost compound. Registered once at module scope |
 | nested `<style>` | Subtree-scoped — an element carries every scope in force, so an outer rule reaches in and an inner one cannot reach out |
+| `import './app.css'` | A stylesheet the component DEPENDS ON, from any `<script>` in the file or any `.ts` it reaches. GLOBAL, not scoped — and the asymmetry with `<style>` is the point: a `<style>` block is written inside the component, so scoping it is what the author meant, while an imported file is authored elsewhere to be SHARED, and scoping it would defeat the one thing it is for. A side-effect import with NO binding; `import styles from './app.css'` is a compile error naming the bare form, because a second mechanism for the same file is what CSS modules are and one is enough. |
 | `:global(…)` | The escape, PER SELECTOR: the compound inside it is not required to carry the scope, so `.card :global(.child-thing)` stays scoped on the left and reaches a child component on the right. Without it a scope can never style anything it did not render |
 
 ### Expectations
@@ -1174,6 +1175,19 @@ spelled out loud and `Args` is where anything caller-specific goes.
 * A scope token is ONE attribute holding a space-separated list — `data-abide="a1f3 b207"`, matched `[data-abide~="a1f3"]` — not one attribute per scope, so nesting depth costs no extra DOM writes per node.
 * A `<style>` BLOCK IS A BUILD ARTIFACT, NOT INLINE OUTPUT. Every scope a route can reach is known at compile time, so the compiler writes them into a content-hashed stylesheet and the head carries a `<link rel="stylesheet">` to it. That is what a crawler, a view-source, a scriptless client and an email get, with no adoption anywhere and nothing to feature-detect — and it is why `style-src 'self'` needs neither a nonce nor a hash list: a linked sheet is not inline output at all. It also keeps the shell head byte-invariant, since a hash is chosen at build rather than per response, and gets the sheet `immutable` for free off the same rule the bundle is served under.
 * The client reaches for `document.adoptedStyleSheets` only for a scope the document never LINKED: a lazily navigated route's component. A constructed sheet is not a `<style>` element either, so `style-src` does not reach it. There is NO fallback: `adoptedStyleSheets` in its mutable-array form is Chrome 99, Firefox 101 and Safari 16.4, so the newest engine without it predates anything abide targets. A branch that mounts LATER on a route already linked needs nothing — its scope was in the sheet before the branch existed, a scope token costing nothing on an element that never renders.
+* AN IMPORTED STYLESHEET IS THE SAME BUILD ARTIFACT A `<style>` BLOCK IS, not a second path: the
+compiler collects the `.css` imports out of a route's module graph and folds them into that route's
+content-hashed sheet, ahead of the scoped blocks so a component rule can override an app-wide one
+without `!important`. Deduped by RESOLVED specifier, so a file ten components import is emitted once,
+and ordered by the graph, so the same source builds the same bytes.
+* WHERE the import sits does not matter, because the collection is a build fact and not a runtime
+walk — `<script>` and `<script module>` are the same here. A nested `<script>` still carries no
+`import` at all, so there is nothing to decide about a branch-local stylesheet.
+* An import reached ONLY from a lazily navigated route travels with that route, through the same
+`adoptedStyleSheets` path its scopes take. Nothing an app writes changes between the two cases.
+* This is how an app brings a whole design system in — `import '#ui/app.css'` in `layout.abide` puts
+it on every route under that layout, once — and it is the only reason the framework needs to know
+what a `.css` file is.
 * An email is pure SSR and never touches the adopted path. It is still not email-SAFE — mail clients strip head styles and handle attribute selectors badly — so an email render wants a declaration-inlining pass over the same output, not a second rendering path.
 
 # Pages / routing
