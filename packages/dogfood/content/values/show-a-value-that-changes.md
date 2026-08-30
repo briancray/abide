@@ -1,6 +1,6 @@
 ---
 title: Show a value that changes
-nav: Owned values
+nav: Local state
 intent: Hold something the page can edit, and have the page follow it without being told to.
 covers:
   - `state`

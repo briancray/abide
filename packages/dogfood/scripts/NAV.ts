@@ -2,6 +2,10 @@
 // A page's TITLE and INTENT are not here — they live in the markdown's own front
 // matter, so there is one place to edit a page's words. This file is the ORDER and
 // the GROUPING only, and `slug` is both the content path and the output path.
+//
+// A section's first page is its OVERVIEW, `<folder>/index`. It owns the opening that
+// `content/index.md` shows through `{% lead <folder>/index %}`, so those words have one
+// home. See "Documentation structure" in docs/BRAND.md.
 
 export const NAV = [
     {
@@ -16,6 +20,7 @@ export const NAV = [
     {
         section: 'Reactive values',
         pages: [
+            'values/index',
             'values/show-a-value-that-changes',
             'values/show-a-value-that-isnt-there-yet',
             'values/derive-a-value-from-other-values',
@@ -30,6 +35,7 @@ export const NAV = [
     {
         section: 'Data from the server',
         pages: [
+            'server/index',
             'server/read-data-without-writing-an-api',
             'server/change-something-on-the-server',
             'server/refuse-a-request-and-say-why',
@@ -46,6 +52,7 @@ export const NAV = [
     {
         section: 'Pages and navigation',
         pages: [
+            'pages/index',
             'pages/add-a-page',
             'pages/give-pages-the-same-chrome',
             'pages/show-a-page-when-something-fails',
@@ -60,6 +67,7 @@ export const NAV = [
     {
         section: 'Templates',
         pages: [
+            'templates/index',
             'templates/read-and-write-state-by-name',
             'templates/put-a-value-in-the-markup',
             'templates/respond-to-a-click',
@@ -74,6 +82,7 @@ export const NAV = [
     {
         section: 'The running app',
         pages: [
+            'app/index',
             'app/configure-the-app',
             'app/run-code-at-start-and-stop',
             'app/know-who-is-calling',
@@ -88,6 +97,7 @@ export const NAV = [
     {
         section: 'Shipping',
         pages: [
+            'ship/index',
             'ship/start-a-new-app',
             'ship/run-the-app-while-you-work',
             'ship/build-and-serve-the-app',
@@ -99,7 +109,7 @@ export const NAV = [
     {
         section: 'Reference',
         pages: [
-            'reference/containers',
+            'reference/reactive',
             'reference/transports',
             'reference/ambient-values',
             'reference/helpers',

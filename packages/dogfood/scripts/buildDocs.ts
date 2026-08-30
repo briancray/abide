@@ -10,8 +10,8 @@
 
 import { rm } from 'node:fs/promises' // bun has no recursive directory remove of its own
 import { NAV } from './NAV.ts'
-import { readExample } from './renderExample.ts'
-import { renderInline, renderMarkdown } from './renderMarkdown.ts'
+import { exampleMarkdown, readExample } from './renderExample.ts'
+import { EXAMPLE, LEAD, renderInline, renderMarkdown } from './renderMarkdown.ts'
 import { type ZipEntry, zip } from './zip.ts'
 
 const CONTENT_DIR = new URL('../content/', import.meta.url)
@@ -24,6 +24,10 @@ type Page = {
     nav: string
     intent: string
     covers: string[]
+    // The example DIRECTORIES this page embeds, repo-relative. Front matter rather than
+    // convention, so an agent reading the markdown alone knows where the files are without
+    // being told how `{% example name %}` resolves.
+    examples: string[]
     stub: boolean
     body: string
 }
@@ -68,6 +72,7 @@ export async function readPages(): Promise<Page[]> {
                 nav: fields.get('nav')?.[0] ?? fields.get('title')?.[0] ?? slug,
                 intent: fields.get('intent')?.[0] ?? '',
                 covers: fields.get('covers') ?? [],
+                examples: fields.get('examples') ?? [],
                 stub: fields.get('status')?.[0] === 'stub',
                 body,
             })
@@ -81,6 +86,10 @@ export async function readPages(): Promise<Page[]> {
 function linkTo(from: string, to: string): string {
     const depth = from.split('/').length - 1
     return `${'../'.repeat(depth)}${to}.html`
+}
+
+function basename(slug: string): string {
+    return slug.slice(slug.lastIndexOf('/') + 1)
 }
 
 function renderNav(pages: Page[], current: string): string {
@@ -101,9 +110,9 @@ function renderNav(pages: Page[], current: string): string {
     return section ? `${html}</ul>` : html
 }
 
-// The rail is read off the RENDERED body rather than the markdown, so a heading's
+// The heading list is read off the RENDERED body rather than the markdown, so a heading's
 // link text is the same inline HTML the heading itself got — a `code` span included.
-function renderTableOfContents(body: string): string {
+function renderHeadingList(body: string): string {
     const pattern = /<h([23]) id="([^"]+)">(.*?)<\/h\1>/g
     let items = ''
     let count = 0
@@ -112,8 +121,21 @@ function renderTableOfContents(body: string): string {
         items += `<li class="lvl-${match[1]}"><a href="#${match[2]}">${match[3]}</a></li>`
     }
     // One heading is not a table of contents, it is a repeat of the title.
-    if (count < 2) return ''
-    return `<aside class="toc" aria-labelledby="toc-title"><h2 id="toc-title">On this page</h2><ul>${items}</ul></aside>`
+    return count < 2 ? '' : items
+}
+
+// The rail is where a reader is already looking for "what else is here", so the markdown
+// downloads sit under the heading list rather than in the nav. It renders on EVERY page:
+// a page with one heading has no table of contents and still has a download.
+function renderRail(headings: string, markdownName: string, root: string): string {
+    const contents = headings
+        ? `<h2 id="toc-title">On this page</h2><ul aria-labelledby="toc-title">${headings}</ul>`
+        : ''
+    return `<aside class="toc">${contents}<h2 id="md-title">Markdown</h2>
+<ul class="downloads" aria-labelledby="md-title">
+<li><a href="${markdownName}" download>Download this page</a></li>
+<li><a href="${root}abide.md" download>Download full docs</a></li>
+</ul></aside>`
 }
 
 // Scroll-spy. Offsets are MEASURED ONCE — on load, on resize, and after the webfonts
@@ -196,17 +218,34 @@ for (const example of document.querySelectorAll('.example')) {
     for (const tab of example.querySelectorAll('.ex-files button')) {
       if (tab.dataset.file.startsWith(group)) tab.setAttribute('aria-selected', String(tab === button))
     }
-    for (const body of example.querySelectorAll('.ex-panel pre[data-file]')) {
+    for (const body of example.querySelectorAll('.ex-panel > [data-file]')) {
       if (body.dataset.file.startsWith(group)) body.hidden = body.dataset.file !== file
     }
   })
 }
 `
 
-async function renderPage(page: Page, pages: Page[], index: number): Promise<string> {
+// A section overview OWNS its opening paragraphs; the main overview SHOWS the same words
+// by pulling them, so the seam between the two cannot drift. The lead is everything before
+// the section page's first `##`.
+function leadOf(pages: Page[], slug: string): string {
+    const source = pages.find((candidate) => candidate.slug === slug)
+    if (!source) throw new Error(`buildDocs: {% lead ${slug} %} names a page NAV does not list`)
+    const lead = source.body.split(/^## /m)[0]?.trim() ?? ''
+    if (!lead) throw new Error(`buildDocs: ${slug} has no lead — its body opens on a heading`)
+    // It renders on pages at other depths, so a relative link would resolve wrong.
+    if (/]\((?!https?:|#)/.test(lead))
+        throw new Error(
+            `buildDocs: the lead of ${slug} has a relative link; leads render elsewhere`,
+        )
+    return lead
+}
+
+export async function renderPage(page: Page, pages: Page[], index: number): Promise<string> {
     const previous = pages[index - 1]
     const next = pages[index + 1]
     const root = '../'.repeat(page.slug.split('/').length - 1)
+    const markdownName = `${basename(page.slug)}.md`
     let body = renderMarkdown(page.body)
     // Re-read per page rather than caching: the download links are relative to the
     // page they sit on, and there are two example embeds in the whole site.
@@ -214,8 +253,13 @@ async function renderPage(page: Page, pages: Page[], index: number): Promise<str
         const example = await readExample(match[1] ?? '', root)
         body = body.replace(match[0], example.html)
     }
+    for (const match of [...body.matchAll(/<!--lead:([\w/-]+)-->/g)]) {
+        body = body.replace(match[0], renderMarkdown(leadOf(pages, match[1] ?? '')))
+    }
+    body = linksToHtml(body)
+
     const hasExample = body.includes('<figure class="example"')
-    const toc = renderTableOfContents(body)
+    const headings = renderHeadingList(body)
     let footer = ''
     if (previous)
         footer += `<a href="${linkTo(page.slug, previous.slug)}">&larr; ${renderInline(previous.nav)}</a>`
@@ -226,12 +270,13 @@ async function renderPage(page: Page, pages: Page[], index: number): Promise<str
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${page.title.replaceAll('\`', '')} — abide</title>
+<title>${page.title.replaceAll('`', '')} — abide</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&family=Space+Grotesk:wght@600;700&display=swap">
 <link rel="stylesheet" href="${root}docs.css">
-<body${toc ? ' class="has-toc"' : ''}>
+<link rel="alternate" type="text/markdown" href="${markdownName}" title="${page.title.replaceAll('`', '')} as Markdown">
+<body class="has-toc">
 <a class="skip" href="#content">Skip to content</a>
 <nav>
 <a class="brand" href="${root}index.html">abide<span>docs</span></a>
@@ -244,12 +289,68 @@ ${page.intent ? `<p class="intent">${renderInline(page.intent)}</p>` : ''}
 ${body}
 <footer>${footer}</footer>
 </main>
-${toc}
-${toc ? `<script>${SCROLL_SPY}</script>` : ''}
+${renderRail(headings, markdownName, root)}
+${headings ? `<script>${SCROLL_SPY}</script>` : ''}
 ${hasExample ? `<script>${EXAMPLE_TABS}</script>` : ''}
 </body>
 </html>
 `
+}
+
+// MARKDOWN IS THE PAGE and HTML is derived from it, so `content/` links name the `.md`
+// — which is what makes a content file correct when it is read where it lies, on GitHub
+// or as a download, rather than only after a build. This is the derivation. An absolute
+// URL keeps its own.
+function linksToHtml(html: string): string {
+    return html.replace(/href="(?!https?:|#)([^"]+)\.md/g, 'href="$1.html')
+}
+
+// The page EXPANDED — front matter as a heading, directives as fences — which is what the
+// bundle needs and only the bundle: a reader who has the repo gets `content/<slug>.md`
+// itself, hints intact, because that file is already the page.
+export async function renderPageMarkdown(page: Page, pages: Page[]): Promise<string> {
+    const root = '../'.repeat(page.slug.split('/').length - 1)
+    let body = page.body.trim()
+    // The directives expand into FENCES rather than panels — same source, same order,
+    // no tab a reader of plain text cannot open.
+    for (const match of [...body.matchAll(new RegExp(EXAMPLE.source, 'gm'))]) {
+        body = body.replace(match[0], await exampleMarkdown(match[1] ?? '', root))
+    }
+    for (const match of [...body.matchAll(new RegExp(LEAD.source, 'gm'))]) {
+        body = body.replace(match[0], leadOf(pages, match[1] ?? ''))
+    }
+
+    let head = `# ${page.title}\n`
+    if (page.intent) head += `\n*${page.intent}*\n`
+    if (page.stub) head += `\n> Stub — title and intent decided, prose not written.\n`
+    return `${head}\n${body}\n`
+}
+
+// ONE FILE in reading order, for an agent that would otherwise fetch seventy. The text is
+// the per-page `.md` verbatim; what this adds is the ORDER, the grouping the nav carries,
+// and each page's own path — without which its relative links resolve against nothing.
+export function renderBundle(pages: Page[], rendered: string[]): string {
+    let contents = ''
+    let section = ''
+    let body = ''
+    for (let index = 0; index < pages.length; index += 1) {
+        const page = pages[index]
+        if (!page) continue
+        if (page.section !== section) {
+            section = page.section
+            contents += `\n**${section}**\n\n`
+        }
+        contents += `- ${page.nav} — \`${page.slug}.md\`${page.stub ? ' (stub)' : ''}\n`
+        body += `\n---\n\n<!-- ${page.slug}.md -->\n\n${rendered[index] ?? ''}`
+    }
+    return `# abide documentation
+
+The whole of the abide documentation in reading order. Every page is also served on its own
+at the \`.md\` beside its \`.html\`, and the links below point at those files — relative to
+the path each page's marker comment names.
+
+## Contents
+${contents}${body}`
 }
 
 // The design brief lives in `src/ui/app.css` — a REAL stylesheet at the address the
@@ -268,6 +369,7 @@ export async function buildDocs(): Promise<Page[]> {
     // Start from empty: a renamed page or a deleted example file otherwise lingers in
     // the output and goes on being served long after its source is gone.
     await rm(OUTPUT_DIR, { recursive: true, force: true })
+    const markdown: string[] = []
     for (let index = 0; index < pages.length; index += 1) {
         const page = pages[index]
         if (!page) continue
@@ -275,7 +377,16 @@ export async function buildDocs(): Promise<Page[]> {
             new URL(`${page.slug}.html`, OUTPUT_DIR),
             await renderPage(page, pages, index),
         )
+        // A COPY, not a render: `content/<slug>.md` is already the page, so the download
+        // and the repo file are the same bytes and there is nothing to keep in sync.
+        await Bun.write(
+            new URL(`${page.slug}.md`, OUTPUT_DIR),
+            Bun.file(new URL(`${page.slug}.md`, CONTENT_DIR)),
+        )
+        // Indexed rather than pushed: the bundle reads it back by the page's own index.
+        markdown[index] = await renderPageMarkdown(page, pages)
     }
+    await Bun.write(new URL('abide.md', OUTPUT_DIR), renderBundle(pages, markdown))
     await Bun.write(new URL('docs.css', OUTPUT_DIR), Bun.file(STYLESHEET_SOURCE))
 
     // ONE ZIP PER EXAMPLE, so Download is a button rather than a menu. Entries carry
@@ -301,7 +412,7 @@ if (import.meta.main) {
     const pages = await buildDocs()
     const written = pages.filter((page) => !page.stub).length
     console.log(
-        `docs: ${pages.length} pages -> packages/dogfood/dist (${written} written, ${pages.length - written} stubs)`,
+        `docs: ${pages.length} pages -> packages/dogfood/dist (${written} written, ${pages.length - written} stubs), html and md, plus abide.md`,
     )
 
     if (Bun.argv.includes('--serve')) {

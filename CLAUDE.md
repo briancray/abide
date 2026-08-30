@@ -1,4 +1,4 @@
-# abide - isomorphic type-safe framework for async interfaces for humans and machines built on bun and web standards
+# abide - isomorphic type-safe framework for reactive async interfaces for humans and machines built on bun and web standards
 
 # project goals
 

@@ -1,6 +1,6 @@
 # abide
 
-An isomorphic, type-safe framework for async interfaces — for humans and for machines —
+An isomorphic, type-safe framework for reactive async interfaces — for humans and for machines —
 built on Bun and web standards.
 
 Same callable, same name, same *intent* on both sides. A state is read and written BY NAME
@@ -48,7 +48,21 @@ holds the prose, and a throwaway static build renders it while `.abide` cannot y
 
 `content/**.md` is what you edit; `scripts/` is scaffolding and goes when `abide build` can
 serve those pages itself. The information architecture is `scripts/NAV.ts`; a page's `title`,
-short `nav` label, `intent` and `covers` claim live in its own front matter.
+short `nav` label, `intent`, `covers` claim and `examples` paths live in its own front matter.
+
+MARKDOWN IS THE PAGE and HTML is derived from it. A content link names the `.md`, and the
+renderer rewrites it to `.html` on the way out — so a content file is correct read where it
+LIES, on GitHub or as a download, and not only after a build. `examples:` names each embedded
+example's directory repo-relative for the same reason: an agent reading the markdown alone
+knows where the files are without being told how `{% example <name> %}` resolves. `bun test`
+gates both — front matter against the directives in the body, every link against the nav.
+
+Every page is downloadable as markdown, and `dist/<slug>.md` is a byte COPY of the content
+file rather than a second render, so there is nothing to keep in sync. `dist/abide.md` is the
+one GENERATED markdown: every page in nav order with the examples expanded inline, for an
+agent that has the file and not the repo. It is built rather than checked in — an agent with
+the repo reads `packages/dogfood/content/` directly, which is the whole point of the two
+rules above.
 
 The site's stylesheet is `packages/dogfood/src/ui/app.css` — a real file at the address the
 app's own `import '#ui/app.css'` resolves to once `.abide` compiles, so the CSS does not move
@@ -97,8 +111,9 @@ There are no horizontal rules anywhere — not the `<hr>` element, and not a bor
 its job on a heading, a footer or a nav group. Spacing and the heading colour carry the
 structure instead, and the renderer has no `---` branch, so one cannot come back by accident.
 
-A page with two or more `##` headings gets an "on this page" rail with scroll-spy; one
-heading is a repeat of the title, so it does not. A file is shown by the SPECIFIER an author types — `#server/rpc/invoices.ts`, never the
+The rail renders on EVERY page, because it carries the markdown downloads. The "on this
+page" list inside it, with scroll-spy, appears only where there are two or more `##`
+headings — one heading is a repeat of the title. A file is shown by the SPECIFIER an author types — `#server/rpc/invoices.ts`, never the
 disk form — so the renderer maps `src/<seam>/` onto `#<seam>/` in every fence label and
 file tab. Build output has no seam and is left alone.
 

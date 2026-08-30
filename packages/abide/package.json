@@ -2,7 +2,7 @@
     "name": "abide",
     "version": "0.0.0",
     "type": "module",
-    "description": "Isomorphic type-safe framework for async interfaces for humans and machines",
+    "description": "Isomorphic type-safe framework for reactive async interfaces for humans and machines",
     "license": "MIT",
     "bin": {
         "abide": "./bin/abide.ts"

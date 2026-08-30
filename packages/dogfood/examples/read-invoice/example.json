@@ -1,8 +1,28 @@
 {
     "title": "Read an invoice",
-    "summary": "A row from your database on the page, with nothing between them.",
-    "files": ["src/server/rpc/invoices.ts", "src/ui/pages/invoices/[id]/page.abide"],
-    "compiled": ["client/rpc/invoices.js"],
+    "summary": "A row from your database on the page, with nothing between them. Two files, 13 lines — one is the handler you would have written anyway.",
+    "files": [
+        "src/server/rpc/invoices.ts",
+        "src/ui/pages/invoices/[id]/page.abide"
+    ],
+    "compiled": [
+        "client/rpc/invoices.js"
+    ],
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/invoices/getInvoice?id=42",
+            "requestHeaders": {
+                "abide-render": "0c8f1a4e9b2d7c31",
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tA"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"number\": \"INV-0042\",\n    \"total\": \"$1,240.00\",\n    \"dueOn\": \"2026-09-14\"\n}"
+        }
+    ],
     "tests": {
         "note": "`bun test examples/read-invoice`. The spec itself ships in the download.",
         "rows": [
@@ -49,18 +69,14 @@
             },
             {
                 "metric": "Lines of code",
-                "abide": "14",
+                "abide": "8",
                 "vanilla": "48",
-                "ratio": "0.29x"
+                "ratio": "0.17x"
             }
         ]
     },
     "route": "/invoices/42",
     "states": [
-        {
-            "file": "result.pending.html",
-            "hold": 1400
-        },
         {
             "file": "result.html"
         }

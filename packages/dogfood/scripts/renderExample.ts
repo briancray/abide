@@ -35,7 +35,7 @@ function orderedFiles(paths: string[], about: 'ui' | 'server'): string[] {
 
 // Only `title`, `summary`, `files`, `result` and `route` are owed. A panel an example
 // has no artifact for is NOT RENDERED — a Wire tab on an example that makes no request
-// would be a claim about work that never happened.
+// would be a claim about work that never happened, so Result is a lone pane there.
 type Manifest = {
     title: string
     summary: string
@@ -106,6 +106,31 @@ ${renderHeaders(entry.responseHeaders)}
 <pre><code>${highlight(entry.body)}</code></pre>`
     }
     return html
+}
+
+// Result and Wire answer the same question — what came back — so they are one panel
+// with two tabs rather than two panels a reader holds side by side. The tablist is the
+// one Files already uses; only the bodies differ.
+function renderResultGroup(browser: string, wire: Manifest['wire']): string {
+    if (!wire?.length) return browser
+    const entries = [
+        { label: 'Rendered', side: 'browser', body: browser },
+        ...wire.map((entry) => ({
+            label: entry.request,
+            side: 'server',
+            body: renderWire([entry]),
+        })),
+    ]
+    let tabs = ''
+    let bodies = ''
+    for (let index = 0; index < entries.length; index += 1) {
+        const entry = entries[index]
+        if (!entry) continue
+        const selected = index === 0
+        tabs += `<button role="tab" aria-selected="${selected}" data-side="${entry.side}" data-file="result:${index}">${escapeHtml(entry.label)}</button>`
+        bodies += `<div data-file="result:${index}"${selected ? '' : ' hidden'}>${entry.body}</div>`
+    }
+    return `<div class="ex-files" role="tablist">${tabs}</div>${bodies}`
 }
 
 function renderTests(tests: NonNullable<Manifest['tests']>): string {
@@ -214,9 +239,12 @@ export async function readExample(name: string, root: string): Promise<Example> 
 
     const panels: [string, string, string][] = [
         ['files', 'Files', renderFileGroup(files, 'files')],
-        ['result', 'Result', renderResult(states, manifest.route, appCss)],
+        [
+            'result',
+            'Result',
+            renderResultGroup(renderResult(states, manifest.route, appCss), manifest.wire),
+        ],
     ]
-    if (manifest.wire) panels.push(['wire', 'Wire', renderWire(manifest.wire)])
     if (compiled.length)
         panels.push(['compiled', 'Compiled', renderFileGroup(compiled, 'compiled')])
     if (vanilla.length) panels.push(['vanilla', 'Vanilla', renderFileGroup(vanilla, 'vanilla')])
@@ -238,4 +266,35 @@ ${bodies}
 </figure>`
 
     return { name, html }
+}
+
+// The same example directory the panels are built from, flattened for a reader who gets
+// TEXT instead of tabs. Files and wire only: `compiled`, `vanilla`, `bench` and `tests`
+// are claims ABOUT the framework rather than the answer to the page's problem, and they
+// ship in the zip this links to.
+export async function exampleMarkdown(name: string, root: string): Promise<string> {
+    const manifest: Manifest = await Bun.file(new URL(`${name}/example.json`, EXAMPLES_DIR)).json()
+    const files = await readGroup(
+        name,
+        'files',
+        orderedFiles(manifest.files, manifest.about ?? 'ui'),
+    )
+
+    let markdown = `**${manifest.title}** — ${manifest.summary}\n`
+    for (const file of files) {
+        // The extension IS the fence language for every file kind an example holds, so
+        // the label reads exactly like a hand-written fence in `content/`.
+        const language = file.path.slice(file.path.lastIndexOf('.') + 1)
+        markdown += `\n\`\`\`${language} ${displayPath(file.path)}\n${file.source.trimEnd()}\n\`\`\`\n`
+    }
+    for (const entry of manifest.wire ?? []) {
+        let exchange = entry.request
+        for (const [header, value] of Object.entries(entry.requestHeaders))
+            exchange += `\n${header}: ${value}`
+        exchange += `\n\n${entry.status}`
+        for (const [header, value] of Object.entries(entry.responseHeaders))
+            exchange += `\n${header}: ${value}`
+        markdown += `\n\`\`\`http\n${exchange}\n\n${entry.body}\n\`\`\`\n`
+    }
+    return `${markdown}\nThe whole example, runnable: [${name}.zip](${root}examples/${name}.zip)\n`
 }

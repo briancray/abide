@@ -1,4 +1,5 @@
-// The app's client seam. `routes/` holds the addresses — page.abide, layout.abide,
-// error.abide — which the build discovers rather than this file exporting.
+// The app's client seam. `pages/` holds the addresses — page.abide, layout.abide,
+// error.abide — which the build discovers BY CONVENTION (SPEC, "Routing"), so there is no
+// config naming the directory and nothing here exporting them.
 
 export {}

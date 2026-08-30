@@ -65,6 +65,11 @@ main h2, main h3 { scroll-margin-top:1.5rem; }
 .toc a:hover { color:var(--ink); }
 .toc a[aria-current] { color:var(--signal); border-left-color:var(--signal); }
 .toc .lvl-3 a { padding-left:1.6rem; font-size:12px; }
+/* The heading list is a spine a reader's eye tracks down; the downloads are two links at
+   the end of it, so they take the rail's type and drop the spine. */
+.toc h2 + h2, .toc ul + h2 { margin-top:2rem; }
+.toc .downloads { border-left:0; }
+.toc .downloads a { padding-left:0; }
 .toc code { background:none; padding:0; font-size:1em; }
 h1 { font:600 2.35rem/1.1 var(--display); letter-spacing:-.03em; margin:0 0 .55rem;
   color:var(--heading); }
@@ -162,8 +167,14 @@ code { font-family:var(--mono); }
 .ex-line code::before { margin-right:.45rem; }
 .ex-request code::before { content:'\2192'; color:var(--cool); }
 .ex-status code::before { content:'\2190'; color:var(--warm); }
-.ex-headers { margin:.4rem 1rem .8rem; width:calc(100% - 2rem); font-size:12px; }
-.ex-headers td { padding:.18rem .6rem .18rem 0; border:0; }
+/* Request and response headers are two separate tables, so their columns only line up
+   if the geometry is DECLARED — auto layout sizes each one from its own content, which
+   put the values at two different left edges. 11rem fits the longest header name abide
+   sends at this size; a longer one wraps rather than shifting the column. */
+.ex-headers { margin:.4rem 1rem .8rem; width:calc(100% - 2rem); font-size:12px;
+  table-layout:fixed; }
+.ex-headers td { padding:.18rem .6rem .18rem 0; border:0; overflow-wrap:anywhere; }
+.ex-headers tr td:first-child { width:11rem; }
 .ex-headers code { background:none; padding:0; }
 .ex-headers tr td:first-child code { color:var(--muted); }
 .ex-bench, .ex-tests { margin:.9rem 1rem; width:calc(100% - 2rem); }

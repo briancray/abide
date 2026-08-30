@@ -1,6 +1,6 @@
 ---
 title: Decide when a value reloads
-nav: Invalidation
+nav: Reloading
 intent: Mark something stale, force it to reload now, or let it expire on its own.
 covers:
   - `m.invalidate`

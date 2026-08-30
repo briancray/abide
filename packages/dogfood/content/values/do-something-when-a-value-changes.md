@@ -1,6 +1,6 @@
 ---
 title: Do something when a value changes
-nav: Effects
+nav: On change
 intent: Run a side effect on change — and clean it up when the value moves again.
 covers:
   - `watch`

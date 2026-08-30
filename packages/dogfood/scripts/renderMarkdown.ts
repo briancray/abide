@@ -8,7 +8,10 @@
 // disappearing, which is the behaviour that keeps a prose mistake visible.
 
 const HEADING = /^(#{1,4})\s+(.*)$/
-const EXAMPLE = /^\{%\s*example\s+([\w-]+)\s*%\}$/
+// The directive spellings. Anchored and line-at-a-time here; a caller sweeping a whole
+// body takes `new RegExp(EXAMPLE.source, 'gm')` rather than writing the pattern again.
+export const EXAMPLE = /^\{%\s*example\s+([\w-]+)\s*%\}$/
+export const LEAD = /^\{%\s*lead\s+([\w/-]+)\s*%\}$/
 const FENCE = /^```(\S*)[ \t]*(.*)$/
 const BULLET = /^\s*[*-]\s+(.*)$/
 const ORDERED = /^\s*\d+\.\s+(.*)$/
@@ -143,6 +146,13 @@ export function renderMarkdown(source: string): string {
             continue
         }
 
+        const lead = LEAD.exec(line.trim())
+        if (lead) {
+            html += `<!--lead:${lead[1]}-->\n`
+            index += 1
+            continue
+        }
+
         const heading = HEADING.exec(line)
         if (heading) {
             const level = (heading[1] ?? '#').length
@@ -217,7 +227,7 @@ export function renderMarkdown(source: string): string {
             const next = lines[index] ?? ''
             if (next.trim() === '') break
             if (HEADING.test(next) || FENCE.test(next) || BULLET.test(next)) break
-            if (EXAMPLE.test(next.trim())) break
+            if (EXAMPLE.test(next.trim()) || LEAD.test(next.trim())) break
             if (ORDERED.test(next) || QUOTE.test(next) || next.startsWith('|')) break
             paragraph.push(next)
             index += 1

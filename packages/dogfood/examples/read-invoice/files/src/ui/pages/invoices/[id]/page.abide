@@ -6,8 +6,4 @@ const invoice = memo(() => getInvoice({ id: route.params.id }))
 </script>
 
 <h1>Invoice {invoice.number}</h1>
-{#if invoice.pending()}
-    <p>Loading…</p>
-{:else}
-    <p>{invoice.total} due {invoice.dueOn}</p>
-{/if}
+<p>{invoice.total} due {invoice.dueOn}</p>

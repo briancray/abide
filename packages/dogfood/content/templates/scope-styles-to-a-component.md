@@ -7,6 +7,8 @@ covers:
   - `:global(…)`
   - `import './app.css'`
 status: stub
+examples:
+  - packages/dogfood/examples/app-stylesheet
 ---
 
 {% example app-stylesheet %}

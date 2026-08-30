@@ -11,6 +11,8 @@ covers:
   - `server/rpc/name.ts`
   - `server/rpc/users.ts`
   - `src/server/rpc/**/*.ts`
+examples:
+  - packages/dogfood/examples/read-invoice
 ---
 
 You have a database and a page that needs a row. Most stacks make that four artifacts: a
@@ -19,7 +21,7 @@ exist only because the halves are in different processes.
 
 Here you write the handler.
 
-## Declare it
+## Declaring a handler under `#server/rpc`
 
 Anything under `#server/rpc/**/*.ts` is callable. Wrap it in `GET` and export it.
 
@@ -36,7 +38,7 @@ address from the file path and export name:
 You never write that address down. It is there so a log line or a network tab tells you which
 export you are looking at.
 
-## Call it
+## Calling the handler from a page
 
 ```abide #ui/pages/invoices/[id]/page.abide
 <script>
@@ -56,10 +58,10 @@ The import is real — name, argument type and return type are the ones you just
 The page reads `invoice`, which starts the load. The document goes out immediately with holes
 where the values are. The holes fill when the row lands.
 
-## What the browser ships
+## What the browser receives
 
-Not that file. The build **generates** a separate client module with one export per
-declaration, carrying:
+Not `#server/rpc/invoices.ts` — the browser never sees it. The build **generates** a separate
+client module with one export per declaration, carrying:
 
 * the HTTP method
 * the mount-relative address
@@ -72,9 +74,9 @@ something an optimiser is trusted to have achieved.
 Import a non-declaration from `#server/**` and you get a compile error naming it. Never a stub
 that silently does nothing.
 
-## You get a `State`, not a promise
+## You get a `Reactive`, not a promise
 
-`getInvoice({ id })` hands back the same container `state` and `memo` and `channel` do.
+`getInvoice({ id })` hands back the same `Reactive` that `state`, `memo` and `channel` do.
 
 ```abide #ui/pages/invoices/[id]/page.abide — excerpt
 {#if invoice.pending()}
@@ -87,7 +89,7 @@ that silently does nothing.
 ```
 
 So `refreshing()` tells a reload from a first load, `await invoice` waits, `invoice.refresh()`
-reloads. See [Loading states](../values/show-a-value-that-isnt-there-yet.html).
+reloads. See [Loading states](../values/show-a-value-that-isnt-there-yet.md).
 
 ## Two callers, one load
 
@@ -97,7 +99,7 @@ for invoice `42` are one request, and the second gets the value the first is wai
 Hand `GET` the memo directly to name the caching yourself:
 
 ```ts #server/rpc/invoices.ts
-const invoiceById = memo(({ id }: { id: string }) => database.invoice.find(id), undefined, {
+const invoiceById = memo(({ id }: { id: string }) => database.invoice.find(id), {
   ttl: 30_000,
 })
 
@@ -127,10 +129,10 @@ The session cookie is `SameSite=Lax`, so a top-level navigation from another sit
 `GET` that writes is reachable from an `<a href>` on a page you do not control, with your
 user's credentials attached.
 
-If it writes, declare it with [`POST`](change-something-on-the-server.html).
+If it writes, declare it with [`POST`](change-something-on-the-server.md).
 
 ## Next
 
-* [Failures](refuse-a-request-and-say-why.html) — when the row is missing, or not theirs
-* [Schemas](check-what-callers-send-you.html) — declaring the shape instead of deriving it
-* [Authorization](decide-who-may-call-what.html) — a rung in front of this
+* [Failures](refuse-a-request-and-say-why.md) — when the row is missing, or not theirs
+* [Schemas](check-what-callers-send-you.md) — declaring the shape instead of deriving it
+* [Authorization](decide-who-may-call-what.md) — a rung in front of this

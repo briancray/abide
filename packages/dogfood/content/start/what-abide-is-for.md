@@ -1,9 +1,9 @@
 ---
 title: What abide is for
 nav: Why abide
-intent: One container for everything that changes, instead of three that disagree.
+intent: One type for everything that changes, instead of three that disagree.
 covers:
-  - `State`
+  - `Reactive`
 ---
 
 An interface is mostly waiting. Something is loading, reloading, streaming, stale, or failed.
@@ -18,7 +18,7 @@ user is asking: **is it here yet?**
 
 abide has one answer.
 
-## Everything is a container
+## Everything is a reactive value
 
 ```abide #ui/pages/editor/page.abide
 import { state, memo } from 'abide'
@@ -33,12 +33,12 @@ const room    = chat({ id })                        // pushed
 
 Four ways of getting a value, one type back — `state`, `memo` and `channel` are the three
 primitives, and `chat` is a `channel` reached over a socket. Calling it with args hands
-back that room, which is a `State` with a `publish` on it.
+back that room. See [Rooms & sockets](../server/keep-a-room-of-callers-in-sync.md).
 
 That is not a naming convenience:
 
 * the branch you write for "loading" works on all four
-* a component taking a `State<User>` does not care where the user came from
+* a component taking a `Reactive<User>` does not care where the user came from
 * swapping a local value for a remote one changes the declaration and nothing downstream
 
 ## Reading is what starts the work
@@ -94,5 +94,5 @@ far side of an HTTP request, identically.
 
 ## Next
 
-* [First page](your-first-page.html) — write one and run it
-* [Loading states](../values/show-a-value-that-isnt-there-yet.html) — the branch you write most
+* [First page](your-first-page.md) — write one and run it
+* [Loading states](../values/show-a-value-that-isnt-there-yet.md) — the branch you write most
