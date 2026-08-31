@@ -5,7 +5,10 @@ intent: Mark something stale, force it to reload now, or let it expire on its ow
 covers:
   - `m.invalidate`
   - `m.refresh`
-  - `ttl`
+  - `Selection`
+  - `refresh`
+  - `invalidate`
+  - state › `ttl`
   - `s.peek`
 status: stub
 ---

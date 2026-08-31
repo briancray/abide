@@ -8,6 +8,8 @@ covers:
   - `s.done`
   - `s.success`
   - `s.streaming`
+  - `pending`
+  - `refreshing`
   - `s.error`
   - `await s`
 status: stub

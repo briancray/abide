@@ -71,7 +71,7 @@ nothing.
 
 ## And for machines
 
-The declaration serving your page already describes itself: address, method, argument and
+The handler serving your page already describes itself: address, method, argument and
 result schemas, description. An agent calling your app calls what your app already does.
 
 That is why failures are strict. A refusal is a **named value carrying data**, not a status

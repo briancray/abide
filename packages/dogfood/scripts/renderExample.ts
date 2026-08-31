@@ -1,6 +1,7 @@
 // An EXAMPLE is a DIRECTORY, not a fence: real files that the build can one day
 // compile, serve, test and bench, per docs/SPEC.md ("Documentation"). This module
-// reads one and renders the panelled component a page embeds with `{% example name %}`.
+// reads one and renders what a page embeds with `{% example name %}`: the panelled component
+// for the site, and the same files as fences for the markdown bundle.
 //
 // SCAFFOLDING, with a seam that is meant to survive: `result`, `compiled`, `wire` and
 // `bench` are read from the example DIRECTORY rather than written into this file, so

@@ -2,10 +2,13 @@
 // only so the documentation's WORDS can be read and revised before abide can compile
 // a `.abide` file. It goes when `abide build` can serve `content/` as pages.
 //
-// The subset is what the docs actually use: ATX headings, paragraphs, fenced code,
-// pipe tables, bullet and ordered lists, blockquotes, rules, and inline code, links,
-// bold and italic. Anything outside it renders as literal text rather than silently
-// disappearing, which is the behaviour that keeps a prose mistake visible.
+// The subset is what the docs actually use: ATX headings, paragraphs, fenced code, pipe
+// tables, bullet and ordered lists, blockquotes, and inline code, links, bold and italic.
+// Anything outside it renders as literal text rather than silently disappearing, which is
+// the behaviour that keeps a prose mistake visible.
+//
+// There is no `---` branch, and that is the DESIGN rule rather than an omission: the site
+// carries no horizontal rules at all, so one cannot come back by accident.
 
 const HEADING = /^(#{1,4})\s+(.*)$/
 // The directive spellings. Anchored and line-at-a-time here; a caller sweeping a whole

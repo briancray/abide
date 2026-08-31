@@ -81,10 +81,10 @@ Read on: [Sharing](share-one-value-across-components.md)
 
 ## Running code when a value changes
 
-`watch` runs a handler when its sources change and hands back a disposer, so the
+`watch` runs an effect when its sources change and hands back a disposer, so the
 cleanup is the return value rather than a second argument you might forget.
 
-Read on: [On change](do-something-when-a-value-changes.md)
+Read on: [On value change](do-something-when-a-value-changes.md)
 
 ## Keeping more than the latest value
 

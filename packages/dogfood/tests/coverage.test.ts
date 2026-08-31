@@ -1,27 +1,106 @@
 import { expect, test } from 'bun:test'
 import { readPages } from '../scripts/buildDocs.ts'
 import { NAV } from '../scripts/NAV.ts'
-import { EXAMPLE } from '../scripts/renderMarkdown.ts'
+import { EXAMPLE, LEAD } from '../scripts/renderMarkdown.ts'
+import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
 
 const SPEC = new URL('../../../docs/SPEC.md', import.meta.url)
 const CONTENT_DIR = new URL('../content/', import.meta.url)
 
-// Every name in the FIRST column of a SPEC table is a capability or a variant an app
-// author can reach. The docs' contract is that a problem-oriented guide covers each
-// one — this reads the SPEC rather than a copied list, so a capability added there
-// fails here until a page claims it.
-async function specCapabilities(): Promise<string[]> {
-    const names = new Set<string>()
-    for (const line of (await Bun.file(SPEC).text()).split('\n')) {
-        if (!line.startsWith('| `')) continue
-        // The cell ends at the first UNESCAPED pipe — a type signature carries `\\|`.
-        let end = 1
-        while (end < line.length && !(line[end] === '|' && line[end - 1] !== '\\')) end += 1
-        const cell = line.slice(1, end).trim().replaceAll('\\|', '|')
-        if (cell !== 'Name') names.add(cell)
+type SpecRow = { name: string; signature: string | undefined; section: string }
+
+function cells(line: string): string[] {
+    const out: string[] = []
+    // A cell ends at the first UNESCAPED pipe — a type signature carries `\|`.
+    let start = 1
+    for (let at = 1; at <= line.length; at += 1) {
+        if (at < line.length && !(line[at] === '|' && line[at - 1] !== '\\')) continue
+        out.push(line.slice(start, at).trim().replaceAll('\\|', '|'))
+        start = at + 1
     }
-    return [...names]
+    return out
 }
+
+// Every name in the FIRST column of a SPEC table is a capability or a variant an app
+// author can reach. This reads the SPEC rather than a copied list, so a capability
+// added there fails the tests below until a page claims it.
+//
+// Only a `Name | (Type) Signature | …` table carries a SIGNATURE. The others — file
+// conventions, CLI commands, generated headers — put prose in the second cell, and
+// reading that as a signature is what would make one capability restated in two tables
+// look like two capabilities that disagree.
+async function specRows(): Promise<SpecRow[]> {
+    const rows: SpecRow[] = []
+    let section = ''
+    let signed = false
+    for (const line of (await Bun.file(SPEC).text()).split('\n')) {
+        // The QUALIFIER is the nearest `##`, trimmed to its first code span:
+        // "## `memo` — the loaded value" is `memo`.
+        if (line.startsWith('## ')) {
+            const heading = line.slice(3).trim()
+            section = /`([^`]+)`/.exec(heading)?.[1] ?? heading
+            continue
+        }
+        if (line.startsWith('# ')) section = line.slice(2).trim()
+        // A header row, never the `| --- |` separator under it — which would reset this
+        // to false before the table's own rows are read.
+        if (line.startsWith('| ') && !line.startsWith('| `') && !line.startsWith('| ---')) {
+            signed = /^(Type )?Signature$/.test(cells(line)[1] ?? '')
+            continue
+        }
+        if (!line.startsWith('| `')) continue
+        const row = cells(line)
+        if (row[0] === undefined) continue
+        rows.push({ name: row[0], signature: signed ? (row[1] ?? '') : undefined, section })
+    }
+    return rows
+}
+
+// A name in two sections is TWO CAPABILITIES by default — `Args` is a memo key, a room
+// and a set of URL parameters; `tail` retains values in one section and messages in
+// another. Both spell `number`, so the signature cannot tell a variant from a
+// restatement and the DEFAULT has to be the safe direction: qualify, and make somebody
+// decide. `covers: Args` satisfying all four is what let three of them go unwritten.
+//
+// The exceptions are listed, because they are the short half: one capability written
+// down in two tables, where a qualified claim would be two claims for one thing.
+const RESTATED = new Set([
+    '`onConfig`', '`onHealth`',
+    '`abide openapi [--out <file>] [--url <origin>]`', '`abide mcp [--url <origin>]`',
+    '`src/ui/pages/**/page.abide`', '`src/ui/pages/**/error.abide`',
+])
+
+async function specSections(): Promise<Map<string, Map<string, string | undefined>>> {
+    const sections = new Map<string, Map<string, string | undefined>>()
+    for (const { name, signature, section } of await specRows()) {
+        const seen = sections.get(name) ?? new Map<string, string | undefined>()
+        if (!seen.has(section) || signature !== undefined) seen.set(section, signature)
+        sections.set(name, seen)
+    }
+    return sections
+}
+
+async function specCapabilities(): Promise<string[]> {
+    const keys = new Set<string>()
+    for (const [name, seen] of await specSections()) {
+        if (seen.size < 2 || RESTATED.has(name)) keys.add(name)
+        else for (const section of seen.keys()) keys.add(`${section} › ${name}`)
+    }
+    return [...keys]
+}
+
+// A restatement that stopped matching is not a restatement. `onConfig` was written down
+// twice with two different options bags, and both read as authoritative — the drift is
+// invisible unless the two are compared, which nothing did.
+test('a restated capability is restated identically', async () => {
+    const drifted: string[] = []
+    for (const [name, seen] of await specSections()) {
+        if (!RESTATED.has(name)) continue
+        const signatures = [...seen.values()].filter((one) => one !== undefined)
+        if (new Set(signatures).size > 1) drifted.push(name)
+    }
+    expect(drifted).toEqual([])
+})
 
 test('every SPEC capability is covered by a guide', async () => {
     const pages = await readPages()
@@ -211,4 +290,108 @@ test('every example directory the front matter names is on disk', async () => {
         }
     }
     expect(missing).toEqual([])
+})
+
+// BRAND, "Documentation structure": the main overview shows one section per area, each
+// through that area's own `{% lead %}`, so the words have one home. A section added to NAV
+// and not to the overview is what makes the home page stop being a map, and the drift is
+// SILENT — both files stay valid alone. Written after Reference had gone eight sections
+// without an opening. The exception is derived rather than listed: the section whose first
+// page IS the overview has no separate opening to pull.
+test('every nav section shows its opening on the main overview', async () => {
+    const overview = await Bun.file(new URL('index.md', CONTENT_DIR)).text()
+    const shown = new Set<string>()
+    for (const match of overview.matchAll(new RegExp(LEAD.source, 'gm'))) shown.add(match[1] ?? '')
+
+    const missing: string[] = []
+    for (const group of NAV) {
+        const first = group.pages[0] ?? ''
+        if (first !== 'index' && !shown.has(first)) missing.push(`${group.section} (${first})`)
+    }
+    expect(missing).toEqual([])
+})
+
+// A type signature names other types, and every one has to be declared somewhere or the
+// SPEC carries a name a reader cannot look up. `WireError` was used twice and declared
+// nowhere, and nothing in the document pointed at it.
+//
+// Three things count as a declaration: a first-column cell, a HEADING (an options bag is
+// a `### ChannelOptions` section rather than a row), and a TYPE PARAMETER bound anywhere
+// in the document — `Failures` and `Data` are spelled in one signature's binder and used
+// in the next row's, which is the shape a per-row scan reads as dangling.
+function binder(signature: string): string {
+    if (!signature.startsWith('`<')) return ''
+    let depth = 0
+    for (let at = 1; at < signature.length; at += 1) {
+        if (signature[at] === '<') depth += 1
+        else if (signature[at] === '>') {
+            depth -= 1
+            if (depth === 0) return signature.slice(2, at)
+        }
+    }
+    return ''
+}
+
+async function declaredTypes(): Promise<Set<string>> {
+    const declared = new Set<string>()
+    for (const line of (await Bun.file(SPEC).text()).split('\n')) {
+        const heading = /^#{1,4}\s+`?([A-Za-z_$][\w$]*)/.exec(line)
+        if (heading?.[1]) declared.add(heading[1])
+        // A fenced `type X = …`, which is where the adoption unwrap is spelled out.
+        const alias = /^type\s+([A-Za-z_$][\w$]*)/.exec(line)
+        if (alias?.[1]) declared.add(alias[1])
+    }
+    for (const { name, signature } of await specRows()) {
+        const own = /^`?([A-Za-z_$][\w$]*)/.exec(name)?.[1]
+        if (own) declared.add(own)
+        // The LEADING `<…>` only, matched to its own closing angle — a default can
+        // nest one (`Stored = AdoptedValue<Computed>`). Every other `<…>` is an
+        // ARGUMENT list, and reading `Reactive<Params>` as DECLARING `Params` is how
+        // this test would stop testing.
+        for (const part of binder(signature ?? '').split(','))
+            declared.add((/^\s*([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1]) ?? '')
+    }
+    return declared
+}
+
+test('every type a signature names is declared somewhere', async () => {
+    const declared = await declaredTypes()
+    const dangling: string[] = []
+    for (const { name, signature } of await specRows()) {
+        for (const match of (signature ?? '').matchAll(/\b([A-Z][A-Za-z0-9]*)\b/g)) {
+            const type = match[1] ?? ''
+            if (!BUILTIN_TYPES.has(type) && !declared.has(type)) dangling.push(`${name}: ${type}`)
+        }
+    }
+    expect([...new Set(dangling)]).toEqual([])
+})
+
+// A capability claimed by two pages is a capability neither page owns. `transform` was
+// claimed by the streaming guide for the stream join and by the form guide for the write
+// refusal — two jobs, one claim, and the coverage test satisfied by either.
+test('each capability is claimed by exactly one page', async () => {
+    const claims = new Map<string, string[]>()
+    for (const page of await readPages())
+        for (const name of page.covers) claims.set(name, [...(claims.get(name) ?? []), page.slug])
+    const shared = [...claims]
+        .filter(([, pages]) => pages.length > 1)
+        .map(([name, pages]) => `${name}: ${pages.join(', ')}`)
+    expect(shared).toEqual([])
+})
+
+// docs/BRAND.md, Documentation structure: "A label stands alone." A nav label is read
+// with no sentence around it, so a fragment refers to nothing — "By name" and "On change"
+// wait for a noun the reader does not have.
+//
+// The SHAPE is a preposition and a single word, never a leading preposition alone: "On
+// value change" is the repair BRAND names, so a check that banned the preposition would
+// have failed the label it recommends. Narrow on purpose — "stands alone" is not
+// checkable, and a fragment built another way is still a review question.
+const BARE_PREPOSITIONAL = /^(on|by|in|with|for|from|at|to|of|about|after|before)\s+\S+$/i
+
+test('no nav label begins with a preposition', async () => {
+    const offenders: string[] = []
+    for (const page of await readPages())
+        if (BARE_PREPOSITIONAL.test(page.nav)) offenders.push(`${page.slug}: ${page.nav}`)
+    expect(offenders).toEqual([])
 })

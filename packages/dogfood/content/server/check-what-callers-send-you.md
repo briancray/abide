@@ -4,10 +4,11 @@ nav: Schemas
 intent: Reject a malformed body at the boundary, with a type on the other side that matches.
 covers:
   - `schemas`
-  - `schema`
+  - socket › `schema`
   - `Schema<T>`
   - `JsonValue`
   - `Issue`
   - `validateJson`
+  - `JsonSchema`
 status: stub
 ---

@@ -6,13 +6,14 @@ covers:
   - `principal.authenticated`
   - `principal.expiresAt`
   - `principal.error`
-  - `principal.claims`
+  - `principal.resolved`
   - `principal.caller`
   - `principal.set`
   - `principal.clear`
   - `Principal`
   - `onPrincipal`
   - `authenticated`
+  - `error`
   - `expiresAt`
   - `cookies`
   - `ABIDE_PRINCIPAL_SECRET`

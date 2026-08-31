@@ -9,7 +9,7 @@ covers:
   - `bind:open`
   - `bind:group`
   - `bind:value={{get, set}}`
-  - `transform`
+  - state › `transform`
 ---
 
 A form is state you can see. The usual cost of saying so is a handler per field — read the
@@ -107,13 +107,13 @@ The accessor pair is the general form. Naming a state is the sugar over it.
 ## Refusing a value as it is written
 
 A `transform` runs on the way into a state, and it may **refuse** — return a `Failed` and the
-write is rejected rather than stored and checked later. `error.typed` declares the failure
+write is rejected rather than stored and checked later. `refuse.typed` declares the failure
 once, and resolves on both sides, so the same name serves a form field and a handler.
 
 ```ts #shared/failures.ts
-import { error } from 'abide'
+import { refuse } from 'abide'
 
-export const notAnEmail = error.typed('NotAnEmail', 422)
+export const notAnEmail = refuse.typed('NotAnEmail', 422)
 ```
 
 ```abide #ui/pages/account/page.abide

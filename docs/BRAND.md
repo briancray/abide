@@ -92,8 +92,14 @@ Three levels, and a reader may stop at any of them.
 * **A nav label and a title are two registers.** The label is what a reader scans a sidebar
   for — one or two words, and words they ALREADY OWN rather than ours or another framework's.
   "Effects" was advertising the concept the pitch opens by refusing. The title is the problem
-  they are solving, and it is a sentence: "On change" and "Do something when a value changes"
-  are the same page.
+  they are solving, and it is a sentence: "On value change" and "Do something when a value
+  changes" are the same page.
+* **A label stands alone.** A nav label, a panel name and a heading are read with no sentence
+  around them, so each carries its own subject. "By name" and "On change" are fragments waiting
+  for a noun the reader does not have; "Values by name" and "On value change" are not. This is
+  the heading rule extended to every label met out of context, and it is stricter — the pronoun
+  check passes a fragment with no pronoun in it. Only the common shape is GATED — a
+  preposition and a single word — and a fragment built another way is still a review question.
 * **An overview does not declare `covers:`.** It routes; the topic page covers. A capability
   counted as covered by a page that only links to it is a gate that has quietly stopped working.
 * **If a section exists because pages were left over, split it.** Two one-line sections beat
@@ -109,9 +115,12 @@ three pages later.
 | reactive value | container, store, atom, signal, observable | The type is `Reactive` and the prose word is "reactive value" — one word family at two registers, which is why nothing needs a separate noun for the thing as against its current value. Vue's `reactive()` is a transparent proxy rather than something you read with a call; the collision is accepted because every alternative is owned too and none of them is more precise |
 | declaration | hook | `hook` is taken: `onStart`, `onStop`, `onConfig` are abide's lifecycle hooks |
 | room | topic, subscription, channel instance | A room is what `channel` and `socket` both hand back, and it is a `Reactive` with `publish` |
-| refusal, failure | error | An error is what went wrong; a refusal is a declared answer with a name and data |
+| refusal, failure | error (as the noun for a declared answer) | An error is what went wrong unexpectedly — `onError`'s subject, and what `s.error()` hands back. A refusal is a declared answer with a name and data, and `refuse` / `refuse.typed` are how one is spelled. The API keeps `error` where it means the first thing; prose keeps `refusal` where it means the second |
+| middleware, rung | onion (as a noun for the mechanism) | `middleware` is the API and a rung is one layer of it. "Onion" describes the ORDER and is worth reaching for only where the order is the subject |
+| reactive value | state (for anything but `state()`) | `state()` is one of the four; the by-name rule, the probes and `Reactive` reach all of them. Calling a memo or `route.url` "a state" is what made the by-name guide read as a `state()` rule |
+| selection | group, set, query, batch | What `pending`, `refresh` and `invalidate` take — one memo, or every entry carrying a tag. A selection names entries; it does not run a query over them |
 | probe | flag, status boolean | `pending()`, `refreshing()`, `done()` — a probe never throws and never starts work |
-| sink | placeholder, suspense boundary | An addressable slot a value in flight fills later |
+| sink, hole | placeholder, suspense boundary, slot | An addressable hole in the output a value in flight fills later. TWO REGISTERS OF ONE THING, the way `Reactive` and "reactive value" are: the SINK is the mechanism and the HOLE is what a reader sees, so "opens a sink; the hole fills" is one sentence about one thing. `slot` is `<slot/>` and nothing else — a value's position in text is a text position — and a `<slot/>` takes CHILDREN, never "holes" |
 | seam | layer, boundary | `#ui`, `#server`, `#shared` — an import edge the build enforces |
 | both sides | isomorphic (in body copy) | *isomorphic* is the headline word and stays in the statement; every page after it says "both sides", which is what the docs already do. A third spelling is the drift this table exists to stop |
 | by name | auto-tracking, magic reactivity | Reading `count` in a template IS `count()`; the sugar is over the explicit form, never instead of it |
@@ -145,7 +154,7 @@ three pages later.
   search result has no previous section. "Whether it has landed" is a pronoun with nothing to
   refer to; "Probes: `pending`, `refreshing`, `done`" is not.
 * **A claim with no code beside it links out rather than being made.** Where the page does not
-  demonstrate it, name the API in one clause and point at the page that does — "`invoice.reload()`
+  demonstrate it, name the API in one clause and point at the page that does — "`invoice.refresh()`
   reloads. See Loading states." Prose evidence is for costs, which is what makes them credible.
 * **Name the cost.** Every real trade gets said out loud — the seams are all-or-nothing, a
   `GET` that writes is reachable cross-origin, `config()` throws in a browser. Naming costs is

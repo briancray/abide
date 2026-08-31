@@ -6,6 +6,8 @@ covers:
   - `url`
   - `Query`
   - `ParamsOf<P>`
+  - `HasParams<P>`
+  - `ParamNames<P>`
   - `navigate`
   - `route.url`
   - `route.navigating`

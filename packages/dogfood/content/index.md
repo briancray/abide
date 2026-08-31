@@ -29,7 +29,7 @@ Read on: [Reactive values](values/index.md) ·
 {% lead templates/index %}
 
 Read on: [Templates](templates/index.md) ·
-[State by name](templates/read-and-write-state-by-name.md) ·
+[Values by name](templates/read-and-write-a-value-by-name.md) ·
 [Conditionals](templates/show-markup-conditionally.md) ·
 [Lists](templates/repeat-markup-over-a-list.md)
 
@@ -62,13 +62,32 @@ Read on: [The running app](app/index.md) ·
 [Auth & principal](app/know-who-is-calling.md) · [Logging](app/record-what-happened.md)
 
 
+## For machines
+
+{% lead machines/index %}
+
+Read on: [For machines](machines/index.md) ·
+[OpenAPI](machines/describe-your-api-without-writing-a-spec.md) ·
+[MCP](machines/let-a-model-call-your-handlers.md)
+
+
 ## Shipping
 
 {% lead ship/index %}
 
 Read on: [Shipping](ship/index.md) ·
 [Scaffold](ship/start-a-new-app.md) · [Checks](ship/catch-mistakes-before-you-ship.md) ·
-[Build & start](ship/build-and-serve-the-app.md)
+[Build & start](ship/build-and-serve-the-app.md) ·
+[Call a handler](ship/call-a-handler-from-the-terminal.md)
+
+
+## Reference
+
+{% lead reference/index %}
+
+Read on: [Reference](reference/index.md) · [Reactive](reference/reactive.md) ·
+[Transports](reference/transports.md) · [`.abide` files](reference/abide-files.md) ·
+[CLI](reference/cli.md)
 
 
 ## Start here

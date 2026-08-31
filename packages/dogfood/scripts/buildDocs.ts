@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
-// Renders `content/**.md` into `dist/**.html` against the order in NAV.
+// Renders `content/**.md` into `dist/**.html` against the order in NAV, COPIES each content
+// file beside its page, and concatenates the set into `dist/abide.md`.
 //
 // SCAFFOLDING, and deliberately so: it exists to make the documentation READABLE
 // while the words are still being decided, and it is deleted once `abide build` can

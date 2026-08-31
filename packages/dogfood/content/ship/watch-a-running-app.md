@@ -1,6 +1,6 @@
 ---
 title: Watch a running app
-nav: Logs
+nav: Tail a deployed app
 intent: Tail a deployed app's log channels from your terminal.
 covers:
   - `abide logs`

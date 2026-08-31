@@ -39,7 +39,7 @@ export const NAV = [
             'server/read-data-without-writing-an-api',
             'server/change-something-on-the-server',
             'server/refuse-a-request-and-say-why',
-            'server/send-rows-as-they-are-ready',
+            'server/send-data-as-it-arrives',
             'server/keep-a-room-of-callers-in-sync',
             'server/check-what-callers-send-you',
             'server/decide-who-may-call-what',
@@ -68,7 +68,7 @@ export const NAV = [
         section: 'Templates',
         pages: [
             'templates/index',
-            'templates/read-and-write-state-by-name',
+            'templates/read-and-write-a-value-by-name',
             'templates/put-a-value-in-the-markup',
             'templates/respond-to-a-click',
             'templates/bind-a-form-to-state',
@@ -95,6 +95,14 @@ export const NAV = [
         ],
     },
     {
+        section: 'For machines',
+        pages: [
+            'machines/index',
+            'machines/describe-your-api-without-writing-a-spec',
+            'machines/let-a-model-call-your-handlers',
+        ],
+    },
+    {
         section: 'Shipping',
         pages: [
             'ship/index',
@@ -104,11 +112,14 @@ export const NAV = [
             'ship/catch-mistakes-before-you-ship',
             'ship/ship-a-single-binary',
             'ship/watch-a-running-app',
+            'ship/call-a-handler-from-the-terminal',
+            'ship/watch-a-room-from-the-terminal',
         ],
     },
     {
         section: 'Reference',
         pages: [
+            'reference/index',
             'reference/reactive',
             'reference/transports',
             'reference/ambient-values',

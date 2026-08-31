@@ -6,6 +6,9 @@ covers:
   - `log`
   - `log.info` / `log.warning` / `log.error` / `log.debug`
   - `log.channel`
+  - `Logger`
+  - `LogRecord`
+  - `log.records`
   - `log.enabled`
   - `abide:request`
   - `abide:socket`

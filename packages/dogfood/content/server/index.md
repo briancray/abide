@@ -40,10 +40,10 @@ Read on: [Failures](refuse-a-request-and-say-why.md)
 
 ## Streaming data and pushed rooms
 
-One declaration can serve the whole result and the data as it arrives. A room goes
+One handler can serve the whole result and the data as it arrives. A room goes
 further: many callers on one subject, pushed rather than polled.
 
-Read on: [Streaming](send-rows-as-they-are-ready.md) ·
+Read on: [Streaming data](send-data-as-it-arrives.md) ·
 [Rooms & sockets](keep-a-room-of-callers-in-sync.md)
 
 ## Validation, authorization and ceilings

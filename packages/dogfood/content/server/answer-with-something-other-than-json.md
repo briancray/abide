@@ -6,6 +6,7 @@ covers:
   - `page`
   - `json`
   - `redirect`
+  - `RedirectStatus`
   - `x-content-type-options: nosniff`
   - `cache-control: no-store`
   - `cache-control: private, no-store`

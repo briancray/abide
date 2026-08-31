@@ -5,8 +5,8 @@ intent: Call a server function from a page. No route, no fetch, no client.
 covers:
   - `GET`
   - `Rpc`
-  - `Declarable`
   - `Value`
+  - rpc › `Args`
   - `description`
   - `server/rpc/name.ts`
   - `server/rpc/users.ts`
@@ -61,7 +61,7 @@ where the values are. The holes fill when the row lands.
 ## What the browser receives
 
 Not `#server/rpc/invoices.ts` — the browser never sees it. The build **generates** a separate
-client module with one export per declaration, carrying:
+client module with one export per handler, carrying:
 
 * the HTTP method
 * the mount-relative address
@@ -71,7 +71,7 @@ Nothing else. Your database import and any module-level work in `invoices.ts` we
 of the module the browser got — so "no server code shipped" is how the build works, not
 something an optimiser is trusted to have achieved.
 
-Import a non-declaration from `#server/**` and you get a compile error naming it. Never a stub
+Import a non-handler from `#server/**` and you get a compile error naming it. Never a stub
 that silently does nothing.
 
 ## You get a `Reactive`, not a promise
@@ -118,7 +118,7 @@ export const getInvoice = GET(invoiceById, {
 
 So there is no un-memoized endpoint to reason about.
 
-Fill in `description`. It rides onto every surface the declaration generates, and it is what an
+Fill in `description`. It rides onto every surface the handler generates, and it is what an
 agent reads to decide whether this is the call it wants.
 
 ## A `GET` must not write

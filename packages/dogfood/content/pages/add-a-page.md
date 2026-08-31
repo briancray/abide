@@ -8,6 +8,7 @@ covers:
   - `[[name]]`
   - `[...name]`
   - `route.params`
+  - `Params`
   - `route.name`
 status: stub
 ---

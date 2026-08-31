@@ -6,7 +6,16 @@ covers:
   - `channel`
   - `Channel`
   - `Room`
-  - `Message`
+  - channel › `Message`
+  - socket › `Message`
+  - channel › `Args`
+  - socket › `Args`
+  - channel › `tail`
+  - channel › `ttl`
+  - channel › `transform`
+  - socket › `crossOrigin`
+  - socket › `middleware`
+  - `SocketEvent`
   - `socket`
   - `Socket`
   - `clientPublish`

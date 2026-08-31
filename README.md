@@ -3,7 +3,7 @@
 An isomorphic, type-safe framework for reactive async interfaces — for humans and for machines —
 built on Bun and web standards.
 
-Same callable, same name, same *intent* on both sides. A state is read and written BY NAME
+Same callable, same name, same *intent* on both sides. A reactive value is read and written BY NAME
 inside a `.abide` file, and the explicit `x()` / `x.set(v)` spelling keeps compiling: the sugar
 is over it, never instead of it.
 
@@ -99,7 +99,8 @@ compiler and the harness are meant to REPLACE, which is why they are artifacts i
 directory rather than markup in the renderer.
 
 `bun test` gates that every embedded example exists, that every example directory is
-embedded, and that every path a manifest names is on disk. The suite roots are enumerated in
+embedded, that every path a manifest names is on disk, and that a page's `examples:` front
+matter names exactly the directories its body embeds. The suite roots are enumerated in
 the `test` script because an example's own test is an artifact the docs display and cannot run
 until the framework exists.
 
@@ -110,6 +111,8 @@ a matching one there is what makes the home page stop being a map.
 There are no horizontal rules anywhere — not the `<hr>` element, and not a border doing
 its job on a heading, a footer or a nav group. Spacing and the heading colour carry the
 structure instead, and the renderer has no `---` branch, so one cannot come back by accident.
+The rules between pages in `dist/abide.md` are the exception that proves it: that file is
+plain text an agent reads, not a page, and nothing renders it.
 
 The rail renders on EVERY page, because it carries the markdown downloads. The "on this
 page" list inside it, with scroll-spy, appears only where there are two or more `##`

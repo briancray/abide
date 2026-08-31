@@ -1,9 +1,9 @@
 ---
-title: Read and write state by name
-nav: State by name
+title: Read and write a value by name
+nav: Values by name
 intent: What `count` means in a template, and the explicit spelling it is sugar over.
 covers:
-  - `foo` in an operand, slot, attribute or value-typed argument
+  - `foo` in an operand, text, attribute or value-typed argument
   - `const x = foo` / `return foo` / a `Reactive<…>`-typed argument
   - `foo = bar` where `bar` is a `Reactive`
   - `foo = bar`

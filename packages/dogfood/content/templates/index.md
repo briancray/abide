@@ -12,7 +12,7 @@ than instead of it.
 | --- | --- | --- |
 | `{invoice}` | `invoice()` | the value |
 | `{await invoice}` | `await invoice` | the value, once it lands |
-| `{#for await row of rows}` | `for await (…of rows)` | each value as it arrives |
+| `{#for await item of source}` | `for await (…of source)` | each value as it arrives |
 | `{#if invoice.pending()}` | `invoice.pending()` | a first load, nothing to show yet |
 
 ```abide
@@ -26,10 +26,10 @@ Those four rows are the part you write every day, not the whole grammar.
 
 ## Putting a value into markup
 
-A name in a slot is a live read, not a snapshot taken when the component mounted. The
+A name in text is a live read, not a snapshot taken when the component mounted. The
 same name works in text, in an attribute, in a class and in an inline style.
 
-Read on: [State by name](read-and-write-state-by-name.md) ·
+Read on: [Values by name](read-and-write-a-value-by-name.md) ·
 [Expressions](put-a-value-in-the-markup.md)
 
 ## Choosing what to render
