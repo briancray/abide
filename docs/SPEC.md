@@ -4,26 +4,26 @@
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `Reactive` | `Reactive<Stored = undefined, Failures = never>` | A reactive value, and the ONLY face any of the four hands back. `Failures` is the union of `Failed<Name, Data>` its producer declared, inferred rather than written: an rpc handler's return type, a memo body's, a refusing `transform`. A union of VALUES rather than of names, so the data type rides along and `isError` narrows to it with no registry to consult. It defaults to `never`, so `state<number>(0)` is one parameter as it reads and `s.isError` is correctly unusable where nothing declared a failure. |
-| `Input` | `unknown` | What `set` accepts, BEFORE `Transformer` runs. |
-| `Stored` | `unknown` | What is held and what a read returns, AFTER `Transformer` runs. Identical to `Input` where there is no transform, so `state<number>(0)` is still one type. |
-| `Transformer` | `<Input, Stored, Failures = never>(value: Awaited<Input>) => Stored \| Failures` | Normalises the value untracked before storing, and MAY REFUSE IT by returning a `Failed`. Runs on the SETTLED value, never on the promise and never per chunk — the same rule `identity` follows. A refusal fills the `Reactive`'s `Failures`, so the write is rejected at the boundary rather than stored and checked later. |
-| `state` | `<Input, Stored = Awaited<Input>, Failures = never>(initial: Input, options?: StateOptions<Awaited<Input>, Stored, Failures>) => Reactive<Stored, Failures>` | `Reactive` factory. `Stored` is `Awaited<Input>` because a state holding something UNSETTLED serves the value, never the promise — `state(fetchUser())` is a `Reactive<User>`, not a `Reactive<Promise<User>>`. |
+| `Reactive` | `Reactive<Stored = undefined, Failures = never, Produced = Stored>` | A reactive value, and the ONLY face any of the four hands back. `Produced` is THE UNIT THE PRODUCER YIELDED and what a cursor walks — identical to `Stored` for a state and a room, where a production is the whole value, and the CHUNK for a streaming producer whose `Stored` is the accumulation. It defaults to `Stored`, so nothing that is not a stream ever writes it, and it is what puts a type behind the unit rule `tail` states in prose. `Failures` is the union of `Failed<Name, Data>` its producer declared, inferred rather than written: an rpc handler's return type, a memo body's, a refusing `transform`. A union of VALUES rather than of names, so the data type rides along and `isError` narrows to it with no registry to consult. It defaults to `never`, so `state<number>(0)` is one parameter as it reads and `s.isError` is correctly unusable where nothing declared a failure. |
+| `Accepted` | `unknown` | What `set` and `state` accept, BEFORE `Transformer` runs, and SETTLED. Either is written with a value or with a load — `Accepted \| Promise<Accepted>` — and an unsettled one makes the `Reactive` loaded, which is ONE RULE at construction and at every write after it. |
+| `Stored` | `unknown` | What is held and what a read returns, AFTER `Transformer` runs. Identical to `Accepted` where there is no transform, so `state<number>(0)` is still one type. |
+| `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | Normalises the value untracked before storing, and MAY REFUSE IT by returning a `Failed`. Runs on the SETTLED value, never on the promise and never per chunk — the same rule `identity` follows. A refusal fills the `Reactive`'s `Failures`, so the write is rejected at the boundary rather than stored and checked later. |
+| `state` | `<Accepted, Stored = Accepted, Failures = never>(initial: Accepted \| Promise<Accepted>, options?: StateOptions<Accepted, Stored, Failures>) => Reactive<Stored, Failures>` | `Reactive` factory. `Accepted` is the SETTLED type because a state holding something UNSETTLED serves the value, never the promise — `state(fetchUser())` is a `Reactive<User>`, not a `Reactive<Promise<User>>`, and `user.set(edited)` writes a `User` rather than being made to wrap one. That is why `Awaited<>` is absent from these signatures rather than threaded through them: the raw form is used at exactly one position, and taking the settled type instead removes it from four. |
 | `Shared` | `interface Shared {}` | The app's own DECLARATION-MERGED registry of shared keys. Empty here and widened by the app, which is what types `state.share`'s key and what stops two modules disagreeing about `Stored` under one name. |
-| `state.share` | `<Key extends keyof Shared>(key: Key, create: () => Reactive<Shared[Key]>) => Reactive<Shared[Key]>` | GET-OR-CREATE a reactive value in the current scope by `key`: the one already shared, or `build()` shared under it. ONE call rather than a share/read pair, so there is no ordering hazard and no miss to define. `Shared` is an app's own declaration-merged registry, which is what types the key and what stops two modules disagreeing about `Stored` under one name. |
+| `state.share` | `<Key extends keyof Shared>(key: Key, create: () => Reactive<Shared[Key]>) => Reactive<Shared[Key]>` | GET-OR-CREATE a reactive value in the current scope by `key`: the one already shared, or what `create()` built, shared under it. ONE call rather than a share/read pair, so there is no ordering hazard and no miss to define. `Shared` is an app's own declaration-merged registry, which is what types the key and what stops two modules disagreeing about `Stored` under one name. |
 
 ### `StateOptions`
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `transform` | `Transformer<Input, Stored, Failures>` | Normalise on the way in, or REFUSE — returning a `Failed` rejects the write and fills `Failures`, which is what a `bind:` field validates through. An OPTION rather than a positional parameter, because `ttl` and `tail` are the common case and a positional `transform` made every one of them write `undefined` first. |
+| `transform` | `Transformer<Accepted, Stored, Failures>` | Normalise on the way in, or REFUSE — returning a `Failed` rejects the write and fills `Failures`, which is what a `bind:` field validates through. An OPTION rather than a positional parameter, because `ttl` and `tail` are the common case and a positional `transform` made every one of them write `undefined` first. |
 | `tail` | `number` | How many past productions are RETAINED for a later reader to replay. Default 1 — latest only, which is a snapshot and nothing more. A memory ceiling on the `Reactive` and nothing else, and the DEFAULT a bare `s.tail()` replays. THE UNIT IS WHAT THE PRODUCER YIELDED, which is one rule reading three ways: a `set` yields a value, a `publish` yields a message, a stream body yields a chunk. So `room.tail(100)` is a hundred messages and `stream.tail(100)` is a hundred chunks, while a `tail` on a `Reactive<Row[]>` is a hundred ARRAYS — because pushing into an array is not a production, it is a mutation of one value. Where a tail over items is what is wanted, the item is what gets produced. |
-| `ttl` | `number` | ms a HELD value stays servable. Default: infinity. Past it, a `Reactive` with a producer recomputes on the next read; one without drops the entry. That is the whole difference between a state's `ttl` and a memo's — one definition, two reactive values. |
+| `ttl` | `number` | THE LIFE OF A RETAINED PRODUCTION, which is one definition reaching all three. Default: infinity. A `Reactive` at the default `tail` retains ONE production — the current value — so past its `ttl` a producer recomputes on the next read; a room at `tail: 100` retains a hundred, each on its own clock. On an OWNED value there is no producer and nothing was loaded, so `ttl` is INERT rather than destructive: it never drops what an app put there. It still reaches a state that was GIVEN a load, `state(fetchUser())` having a production to expire and `refresh()` to reload it. |
 
 ### Expectations
 
 * `Stored` can be anything in javascript
-* THE PROBES ARE `Reactive`'s, NOT `memo`'s. A state handed something unsettled already reports `pending()`, `refreshing()` and `error()`, already opens a sink, and already has `tail` and `await`. Nothing has to be memoized to have a face — what a `memo` adds on top is IDENTITY PER ARGS, which is what coalescing, `ttl` and `invalidate` are all built on.
+* THE PROBES ARE `Reactive`'s, NOT `memo`'s. A state handed something unsettled already reports `pending()`, `refreshing()` and `error()`, already opens a sink, and already has `tail` and `await`. Nothing has to be memoized to have a face — what a KEYED `memo` adds on top is IDENTITY PER ARGS, which is what coalescing, `ttl` and `invalidate` are all built on. An unkeyed one adds no face at all, being a `Reactive` outright; what it adds is a BODY, which is what makes it recompute.
 * Readers are only notified when read identity changes
 * A read of a SETTLED value returns it. A read of one still in flight returns `undefined` and opens a SINK — it never awaits — `{await s}` and `{#await s then v}` block, `{#await s}{:then v}` renders its pending branch instead. `pending()` is what tells `undefined`-because-in-flight from a value that resolved to `undefined`.
 * A read of a FAILED value THROWS, which is how a failure reaches the nearest `{#try}` or `error.abide` and what `s.peek` means by throwing what a read throws. `error()` and the other probes never throw, so `s.success() ? s() : fallback` is how a caller declines to escalate.
@@ -64,13 +64,13 @@ const answer = memo(() => complete({ prompt }), { transform: (chunks) => chunks.
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `s` | `() => Stored` | Read current value. |
-| `s.set` | `(value: Input) => void \| Failures` | Set current value. Takes what the transform takes and hands back only its REFUSAL — an `Input` that is unsettled has no `Stored` to return yet, and `s()` is the read. Where no transform refuses, `Failures` is `never` and this is `void`. The refusal reaches the writer the way `publish`'s does, and fills the `Reactive` for readers either way. |
+| `s.set` | `(value: Accepted \| Promise<Accepted>) => void \| Failures` | Set current value, and THE ONLY `set` IN THE DESIGN — `m.set(v)` on an unkeyed memo, `m(args).set(v)` on a keyed one and `room.set(message)` are all this member reached three ways. Takes what the transform takes, settled or in flight, and hands back only its REFUSAL — an unsettled write has no `Stored` to return yet, and `s()` is the read. Where no transform refuses, `Failures` is `never` and this is `void`. The refusal reaches the writer the way `publish`'s does, and fills the `Reactive` for readers either way. ON A MEMO THE RETURNED UNION IS ONE ARM TOO WIDE, a write running the transform and never the body, so only the transform's refusals are reachable — sharpening it would cost a fourth parameter on the most-used type in the design to narrow a return nobody switches exhaustively on, and that is the trade taken rather than an oversight. |
 | `s.peek` | `() => Stored` | Read WITHOUT joining the flow. Otherwise identical to `s()` — it starts work and throws what a read throws. `watch(sources, …)` is the whitelist for the same problem; this is the blacklist, and it is what a `memo` has instead, having no `sources` form. "Held, but do not load" is `s.success() ? s.peek() : fallback`, since a probe never starts work. |
-| `Tail<Stored>` | `Iterable<Stored> & AsyncIterable<Stored>` | What `s.tail` hands back: the snapshot pulled synchronously, the live cursor pulled asynchronously, and nothing allocated until one of the two is. |
-| `s.tail` | `(n?: number) => Tail<Stored>` | ALWAYS CALLED. A cursor over what was produced — values, messages or chunks, per `tail`'s unit rule — `Iterable` and `AsyncIterable`: `[...s.tail()]` is the snapshot, `for await (… of s.tail())` replays that snapshot and then goes live from the point it ended, so a reader sees no gap and no duplicate. `n` IS REPLAY DEPTH AND NOTHING ELSE — `min(n, retained)`, defaulting to `retained` — so it says how far back a reader STARTS and says nothing about what a block goes on to accumulate. `tail(0)` replays nothing and goes live. NOT an array: patching `Symbol.asyncIterator` onto one is a shape mutation per call, and a cursor allocates nothing until the sync iterator is pulled. |
-| `for await (… of s)` | `AsyncIterable<Stored>` | The live cursor face of a read. |
+| `Tail<Produced>` | `Iterable<Produced> & AsyncIterable<Produced>` | What `s.tail` hands back: the snapshot pulled synchronously, the live cursor pulled asynchronously, and nothing allocated until one of the two is. |
+| `s.tail` | `(n?: number) => Tail<Produced>` | ALWAYS CALLED. A cursor over what was produced — values, messages or chunks, per `tail`'s unit rule — `Iterable` and `AsyncIterable`: `[...s.tail()]` is the snapshot, `for await (… of s.tail())` replays that snapshot and then goes live from the point it ended, so a reader sees no gap and no duplicate. `n` IS REPLAY DEPTH AND NOTHING ELSE — `min(n, retained)`, defaulting to `retained` — so it says how far back a reader STARTS and says nothing about what a block goes on to accumulate. `tail(0)` replays nothing and goes live. NOT an array: patching `Symbol.asyncIterator` onto one is a shape mutation per call, and a cursor allocates nothing until the sync iterator is pulled. |
+| `for await (… of s)` | `AsyncIterable<Produced>` | The live cursor face of a read. |
 | `await s` | `Promise<Stored>` | The settled value. |
-| `s[Symbol.asyncIterator]` | `() => AsyncIterator<Stored>` | Subscribes and receives new values. Defined as `tail()` — the live cursor is not a second mechanism, and the bare form cannot mean something a spelled-out `tail()` does not. `tail(0)` is how a reader asks for live-only. |
+| `s[Symbol.asyncIterator]` | `() => AsyncIterator<Produced>` | Subscribes and receives new values. Defined as `tail()` — the live cursor is not a second mechanism, and the bare form cannot mean something a spelled-out `tail()` does not. `tail(0)` is how a reader asks for live-only. |
 
 ### Probes
 
@@ -81,10 +81,21 @@ Probes never throw and never start work. Reading one subscribes to THAT probe: a
 | `s.pending` | `() => boolean` | A first load is in flight and there is nothing to show. A STREAM REPORTS THIS UNTIL IT CLOSES, not until its first chunk: chunks are parts of one value, so there is nothing complete to show until the last one. A ROOM reports it only until its FIRST MESSAGE, a message being whole on arrival — see "A ROOM IS NOT A STREAM". That is what leaves no state in which none of `{#await}`'s branches is mounted, and what keeps the accumulation O(n) — the whole is materialised once, on close, rather than concatenated per chunk. `streaming()` is what a progress indicator inside the pending body reads. |
 | `s.refreshing` | `() => boolean` | A reload is in flight over a value still being served. |
 | `s.done` | `() => boolean` | It has finished, however it finished — and STAYS true through a `refresh()`, the load that finished having still finished. That is what keeps `{:finally}` mounted where `refreshing()` is what moves. |
-| `s.success` | `() => boolean` | It landed, it did not fail, and nothing is still arriving. STAYS TRUE THROUGH A `refresh()`, as `done()` does and for the same reason — the load that landed still landed, and a reload over a value being served is what `refreshing()` is for. "Still arriving" is about a stream that has not finished, never about a refresh. |
+| `s.success` | `() => boolean` | It landed, it did not fail, and nothing is still arriving. STAYS TRUE THROUGH A `refresh()`, as `done()` does and for the same reason — the load that landed still landed, and a reload over a value being served is what `refreshing()` is for. "Still arriving" is about a stream that has not finished, never about a refresh. A VALUE WITH NO PRODUCER HAS LANDED AT CONSTRUCTION: `state()` with no initial is `success()` true and `undefined`, an owned value being nothing that loads — which is what leaves no `Reactive` in a state where none of `{#await}`'s branches is mounted, rather than that claim resting on inspection. |
 | `s.streaming` | `() => boolean` | It is currently producing chunks. |
 | `s.error` | `() => unknown` | The failure it ended with, if it failed. |
 | `s.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | Whether a caught failure is the one named. A PREDICATE: matching narrows `error.data` to what that failure declared, because `Failures` carries the `Failed<Name, Data>` rather than the name alone. |
+
+### Triggers
+
+EVERY `Reactive` CARRIES THEM, not only a memo. Naming a value by hand is the app saying so about that
+one value — `s.refresh()` on a `state(fetchUser())` reloads it for the same reason `ttl` reaches one —
+and what is bounded to producers is the SWEEP rather than the member: see "Selections".
+
+| Name | Type Signature | Description |
+| --- | --- | --- |
+| `s.invalidate` | `() => void` | Marks it stale: the next read is FETCHED FRESH rather than served from what is held. INERT on a value with no producer, there being nothing to fetch. It does not itself hold rendering — whether a template waits is the template's own choice of form (`{await s}` and `{#await s then v}` wait, `{#await s}{:then}` does not). |
+| `s.refresh` | `() => void` | Stale while revalidate: what is held keeps being served, and `s.refreshing()` is true, until the new value lands. Inert on a value with no producer, for the same reason. |
 
 ### Effects
 
@@ -96,35 +107,57 @@ Probes never throw and never start work. Reading one subscribes to THAT probe: a
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `Memo` | `<Stored, Args, Failures>(args?: Args) => Reactive<Stored, Failures>` | A derived value, and WRITABLE. `Failures` is inferred from the body AND from a refusing `transform`, the same way an rpc's is from its handler — a body may `return myError(data)` and a reader narrows it with `isError`. UNKEYED — no `Args` — it is TRACKED: it recomputes whenever anything it read changes. KEYED — `Args` declared — it is UNTRACKED: one entry per args key, and its only ways back are `ttl`, an explicit `invalidate` / `refresh`, and eviction. |
+| `Memo` | `((args: Args) => Reactive<Stored, Failures>) & { invalidate(pattern?: Partial<Args>): void; refresh(pattern?: Partial<Args>): void }` | WHAT A KEYED MEMO IS: a factory with the two triggers ON IT, the factory being what has an args space to narrow over. AN UNKEYED MEMO IS NOT THIS — it IS a `Reactive`, which is what makes `{doubled / 2}` and `data.refreshing()` read by name and what makes `m.set(v)` the one `set` there is. THE DISCRIMINANT IS THE BODY'S PARAMETER, which is syntax: `memo(() => …)` is unkeyed and TRACKED, recomputing whenever anything it read changes; `memo((args: A) => …)` is keyed and UNTRACKED, one entry per args key whose only ways back are `ttl`, an explicit `invalidate` / `refresh`, and eviction. Both are WRITABLE. `Failures` is inferred from the body AND from a refusing `transform`, the same way an rpc's is from its handler — a body may `return myError(data)` and a reader narrows it with `isError`. |
 | `Args` | `Record<string, JsonValue> \| undefined` | The key. Serializable by contract, because the key IS the wire form. |
-| `memo` | `<Computed, Stored = AdoptedValue<Computed>, Args = undefined, Failures = never>(body: (args?: Args) => Computed, options?: MemoOptions<AdoptedValue<Computed>, Stored, Failures>) => Memo<Stored, Args, AdoptedFailures<Computed> | Failures>` | Memo factory. `Stored` defaults to the ADOPTED value rather than to `Computed`, so a body returning a `Reactive` types as its payload; the transform takes the same, running after adoption. See "Adoption". |
+| `memo` | `<Computed, Stored = AdoptedValue<Computed>, Failures = never>(body: () => Computed, options?: MemoOptions<AdoptedValue<Computed>, Stored, Failures>) => Reactive<Stored, AdoptedFailures<Computed> \| Failures, AdoptedProduced<Computed>>` | UNKEYED. Hands back a `Reactive` and nothing wrapping one, so every probe, trigger and `set` on it is the member `Reactive` already declares. |
+| `memo` | `<Computed, Args, Stored = AdoptedValue<Computed>, Failures = never>(body: (args: Args) => Computed, options?: MemoOptions<AdoptedValue<Computed>, Stored, Failures>) => Memo<Stored, Args, AdoptedFailures<Computed> \| Failures>` | KEYED. TWO OVERLOADS RATHER THAN ONE SIGNATURE with an optional parameter, because the two hand back genuinely different things and an `args?` collapsed them into a type neither one is — which is what left `m.set` and `data.pending()` unspellable while the prose used both. `Stored` defaults to the ADOPTED value rather than to `Computed`, so a body returning a `Reactive` types as its payload; the transform takes the same, running after adoption. See "Adoption". |
 
 ### Triggers
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `m.invalidate` | `(pattern?: Partial<Args>) => void` | DEFINED AS `invalidate(m)` narrowed by args — see "Selections" — not a second mechanism. Marks it stale: the next read is FETCHED FRESH rather than served from what is held. It does not itself hold rendering — whether a template waits is the template's own choice of form (`{await m}` and `{#await m then v}` wait, `{#await m}{:then}` does not). |
-| `m.refresh` | `(pattern?: Partial<Args>) => void` | DEFINED AS `refresh(m)` narrowed by args, the same way. Stale while revalidate: what is held keeps being served, and `m.refreshing()` is true, until the new value lands. |
+THESE ARE THE KEYED MEMO'S, on the factory, and they take a pattern because the factory is what has an
+args space. An UNKEYED memo reaches `Reactive`'s own two, which take none — see "Triggers" under `state`.
+
+| Name | Type Signature | Description |
+| --- | --- | --- |
+| `m.invalidate` | `(pattern?: Partial<Args>) => void` | DEFINED AS `invalidate(m)` narrowed by args — see "Selections" — not a second mechanism. Marks every matching entry stale: the next read is FETCHED FRESH rather than served from what is held. It does not itself hold rendering — whether a template waits is the template's own choice of form (`{await m(args)}` and `{#await m(args) then v}` wait, `{#await m(args)}{:then}` does not). |
+| `m.refresh` | `(pattern?: Partial<Args>) => void` | DEFINED AS `refresh(m)` narrowed by args, the same way. Stale while revalidate: what is held keeps being served, and `m(args).refreshing()` is true, until the new value lands. |
 
 ### Writes
 
 * A memo is WRITABLE, and a write stands until the next recompute clobbers it. On an unkeyed memo that means it survives until something the body read moves — which is what makes `memo(() => structuredClone(upstream))` a local draft re-seeded from its source, one primitive rather than a second one beside it.
 * There is NO WARNING on the write. `memo(() => structuredClone(upstream))` and `memo(() => a + b)` are indistinguishable to a compiler, neither having an lvalue, so a warning would fire hardest on the good pattern. Unlike an unbound prop there is no caller to name and no second fix to offer.
-* `set` is on the INVOKED result, never the factory, so a keyed memo is unambiguous: `m(args).set(v)` is one entry. An unkeyed memo is its own args-less invocation, so `m.set(v)` is the same rule.
-* A write is not a load: it leaves `success()` true and `refreshing()` false, and moves no probe.
+* THERE IS ONE `set` AND IT IS `Reactive`'S. A keyed memo is a FACTORY, so the write is on the invoked result — `m(args).set(v)` is one entry — and an unkeyed memo IS a `Reactive`, so `m.set(v)` is that same member reached directly. Nothing about a write is a memo's own.
+* A WRITE OF A SETTLED VALUE IS NOT A LOAD: it leaves `success()` true and `refreshing()` false, and moves no probe. A write of an UNSETTLED one IS a load and moves the probes the way any load does — `refreshing()` over a value still being served, `pending()` where there is nothing to show. That is not a second rule but the existing probe definitions applied to a write, and it is what makes `set` mean the same thing at construction and after it. A recompute landing while such a write is in flight CLOBBERS it, the way it clobbers a settled one.
 
 ### Adoption
 
-* A `Reactive` returned from a memo body is ADOPTED, not stored: `memo(() => getData(args))` forwards reads, probes and triggers to what the body returned, and re-adopts when the body recomputes. Without it the outer memo is a `Reactive<Reactive<Value>>` and `data.name` reaches the wrapper rather than the payload.
+* A `Reactive` returned from a memo body is ADOPTED, not stored. ADOPTION IS A MIRRORING SUBSCRIPTION, NOT TRANSPARENT FORWARDING: the outer memo is always its own `Reactive` — it subscribes to the inner, mirrors its productions into its own ring, runs `transform` on the way in, and forwards its probes and triggers. That is what lets EVERY memo carry EVERY option with each one applying to itself, which is the property worth having over a rule about whose ring won: `tail: 50` on the outer is the outer's retention and needs no adjudication. Without adoption the outer is a `Reactive<Reactive<Value>>` and `data.name` reaches the wrapper rather than the payload.
+* WHAT MIRRORING COSTS is one slot per retained production and one push plus a version bump per production — a POINTER WRITE, not a copy of the payload, the outer's ring holding the same objects the inner's does. `transform` is the one arm that allocates per production and that allocation is the transform's, not adoption's. The ratio is owed per production against reading the inner directly, and asserted by counting WAKE-UPS rather than ms: the failure that would falsify it is an outer keeping subscriber bookkeeping where a pointer write was claimed, which leaves every value right.
+* EXTRA MEMBERS ARE FORWARDED BY DELEGATION, which is what keeps a room a room: `memo(() => chat({ id }))` is a `Room`, and its `publish` reaches whatever is currently adopted. Mirroring carries PRODUCTIONS and delegation carries MEMBERS, and `publish` is the only member there is to carry.
+* ON RE-ADOPTION THE OUTER CLEARS where the newly adopted `Reactive` has nothing to serve. Without that clause mirroring would go on serving the old value across a swap — stale-while-revalidate by accident — where the rule below is that such a swap reports `pending()`.
 * The unwrap is IN THE TYPE, not only in the prose. Three names, each one thing, rather than one
 conditional threading an accumulator:
 
 ```ts
-type AdoptedValue<T>    = T extends Reactive<infer Inner, any>     ? AdoptedValue<Inner>        : T
-type AdoptedFailures<T> = T extends Reactive<infer Inner, infer F> ? F | AdoptedFailures<Inner> : never
-type Adopted<T>         = Reactive<AdoptedValue<T>, AdoptedFailures<T>>
+type AdoptedValue<T>    = T extends Reactive<infer Inner, any, any>    ? AdoptedValue<Inner>
+                        : T extends Promise<infer Settled>              ? AdoptedValue<Settled>
+                        : T extends AsyncIterable<infer Chunk>          ? Chunk[]
+                        : Exclude<T, Failed<any, any>>
+type AdoptedProduced<T> = T extends Reactive<any, any, infer Unit>     ? Unit
+                        : T extends Promise<infer Settled>              ? AdoptedProduced<Settled>
+                        : T extends AsyncIterable<infer Chunk>          ? Chunk
+                        : AdoptedValue<T>
+type AdoptedFailures<T> = T extends Reactive<infer Inner, infer F, any> ? F | AdoptedFailures<Inner>
+                        : T extends Promise<infer Settled>              ? AdoptedFailures<Settled>
+                        : Extract<T, Failed<any, any>>
+type Adopted<T>         = T extends Room<infer Message, infer F>       ? Room<Message, F>
+                        : T extends Promise<infer Settled>              ? Adopted<Settled>
+                        : Reactive<AdoptedValue<T>, AdoptedFailures<T>, AdoptedProduced<T>>
 ```
+
+  FIVE ARMS, EACH ONE A RULE ALREADY STATED IN PROSE. The `Reactive` arm is the unwrap. The `Promise` arm is `state`'s own rule reaching the other three producers: a body returning something UNSETTLED is a load, and what is held is the SETTLED type — `memo(async () => rollUp(rows))` is a `Reactive<Rollup>`, never a `Reactive<Promise<Rollup>>`, the same way `state(fetchUser())` is a `Reactive<User>`. THE ORDER IS LOAD-BEARING and is why it is second rather than first: a `Reactive` is awaitable, so a `Promise` arm ahead of it would swallow every adoption and lose `Failures` and `Produced` with it. It recurses rather than unwrapping once, which is what carries an async body that returns a stream to `Chunk[]` and one that returns a room to a room. In `AdoptedFailures` it is the arm that stops an async body's `return myError(data)` landing in `Stored` — `Extract<Promise<Value | Failed>, Failed>` is `never`, so without it the refusal a read is specified to THROW would be typed as a value. The `AsyncIterable` arm is what gives a streaming body a `Stored` of `Chunk[]` and a `Produced` of `Chunk`, which is "a streaming producer's `Stored` is the accumulated chunks" and the unit rule, in the type rather than beside it. The `Failed` exclusion is what stops a body that may `return myError(data)` widening `Stored` with the value a read is specified to THROW — the refusal belongs in `Failures`, and `Extract` is where it goes. The `Room` arm is the member delegation above: adopting a room hands back a room.
 
   `Failures` accumulates down the same recursion the value unwraps on, so `memo(() => getData(args))` is `Reactive<Value, Failures>` and `data.isError(error, 'DataAccessDenied')` narrows through the wrapper. Recursive, which is what makes a memo of a memo of a state collapse in one loop on both sides at once — the runtime loop and the conditional bottom out on the same condition.
 * THE `transform` OPTION IS WHAT ADOPTION LEAVES ROOM FOR, and is why `Computed` and `Stored` are two
@@ -156,11 +189,11 @@ memo(() => getUsers(args), { transform: (u) => new Set(u.map(…)) })  // adopts
 
 ### `MemoOptions`
 
-`MemoOptions<Input, Stored, Failures> extends StateOptions<Input, Stored, Failures>`, so `transform`,
+`MemoOptions<Accepted, Stored, Failures> extends StateOptions<Accepted, Stored, Failures>`, so `transform`,
 `tail` and `ttl` are
 the state's own and mean there what they
-mean everywhere. `ttl` past its window recomputes rather than drops, a memo being the `Reactive` that
-has a producer. `tail` defaults to 1 like every other `Reactive`: a `global` memo fanning one stream
+mean everywhere — `ttl` being the life of a retained production wherever it is written, and a memo
+always having a producer to recompute with when one lapses. `tail` defaults to 1 like every other `Reactive`: a `global` memo fanning one stream
 out to late readers spells `tail: Infinity`, rather than getting it from a hidden branch on whether
 the body produced a stream. THE SEED BUFFER IS NOT THE MEMO'S `tail` — hydration is answered from the
 buffered transcript whatever the memo retained, so the default costs the ordinary render/hydrate path
@@ -173,14 +206,14 @@ a truncated answer, and the same failure a chat room's default retention of 1 ha
 | `tags` | `string[] \| ((args: Args) => string[])` | What a `Selection` matches on, which is the only thing that reaches ACROSS memos — `invalidate({ tags: ['invoice'] })` marks every entry carrying one, wherever it was declared. The function form receives the memo's `args`, so a tag can name the row rather than the query. |
 | `throttle` | `number` | Revalidation of a `memo` fires immediately, then at most once per window — HOWEVER TRIGGERED, an unkeyed memo's dependency-driven recompute as well as an explicit `invalidate` / `refresh`. Inside the window the held value is served and `refreshing()` is true, which is the `refresh()` contract already and no new probe behaviour. |
 | `debounce` | `number` | Revalidation of a `memo` waits until the triggers stop, however triggered. Set with `throttle`, this wins. |
-| `identity` | `(value: Stored) => unknown` | WHAT MAKES IT THE SAME VALUE, named after the invariant it controls — readers wake when this moves, not when the reference does. Default `(value) => value`, which is the reference. `canonical` is exported for the common opt-in — an args object, a derived record, a URL — and is the same builder a memo key uses. It is NOT the default for objects: canonicalising is O(size) per recompute, so a five-thousand-row result would be serialised on every run to decide whether to wake anyone, which is a cost per write buying a cheaper read. Runs on the SETTLED value, never per chunk. |
+| `identity` | `(value: Stored) => unknown` | WHAT MAKES IT THE SAME VALUE, named after the invariant it controls — readers wake when this moves, not when the reference does. Default `(value) => value`, which is the reference. `canonical` is exported for the common opt-in — an args object, a derived record, a URL — and is the same builder a memo key uses. It is NOT the default for objects: canonicalising is O(size) per recompute, so a five-thousand-row result would be serialised on every run to decide whether to wake anyone, which is a cost per write buying a cheaper read. Runs on the SETTLED value, never per chunk — on a streaming producer that means the ACCUMULATION, `Stored` being what it compares and `Produced` being the unit it is not asked about. |
 
 ## `channel` — the subscribed value
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `Channel` | `<Message, Args, Failures>(args?: Args) => Room<Message, Failures>` | A room keyed by `args`, that anyone may publish to and anyone may read. |
-| `Room` | `Reactive<Message, Failures> & { publish: (message: Message) => number \| Failed<Name, Data> }` | WHAT A ROOM IS: a `Reactive` whose value is the latest message, plus `publish`, the one member a room has that a plain value does not. So a bare read is the latest, `room.tail(n)` is the cursor, the probes answer, and there is no second `Reactive` type to learn — `{room}` and `{#for await m of room.tail(100)}` are the same two spellings every other `Reactive` has. `publish` hands back the `seq` it minted, or the `Failed` `transform` refused it with — the same two on both sides, `transform` running wherever the publish came from. |
+| `Room` | `Reactive<Message, Failures> & { publish: (message: Message) => number \| Failures; revoke: (seq: number) => void; clear: () => void }` | WHAT A ROOM IS: a `Reactive` whose value is the latest message, plus `publish` and the two retroactive edits. So a bare read is the latest, `room.tail(n)` is the cursor, the probes answer, and there is no second `Reactive` type to learn — `{room}` and `{#for await m of room.tail(100)}` are the same two spellings every other `Reactive` has. `publish` hands back the `seq` it minted, or the `Failed` `transform` refused it with — the same two on both sides, `transform` running wherever the publish came from. It is typed `number \| Failures` exactly as `s.set` is `void \| Failures`, a room's publish being its write. `revoke` and `clear` are the retroactive edits — see "Retroactive edits". |
 | `Args` | `Record<string, JsonValue> \| undefined` | The room. Keyed by the same canonical wire form a memo's args are. |
 | `Message` | `unknown` | Message type |
 | `channel` | `<Message, Args, Failures>(options?: ChannelOptions<Message, Failures>) => Channel<Message, Args, Failures>` | Channel factory. `Failures` is inferred from what `transform` may return, the same way every other `Reactive`'s is. |
@@ -190,7 +223,7 @@ a truncated answer, and the same failure a chat room's default retention of 1 ha
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `tail` | `number` | How many past messages the room retains. Default 1 — latest only. 0 is passthrough and drop. It is how far back a RECONNECT can resume — a cursor older than the tail is answered with the whole tail, never with a gap — and what a bare `room.tail()` replays. |
-| `ttl` | `number` | ms a message is kept in tail. Default: infinity |
+| `ttl` | `number` | The life of a retained production, which here is a MESSAGE in the tail. Default: infinity. The same definition `state` and `memo` take — see `StateOptions` — with the unit decided by what the producer yielded, as `tail`'s is. |
 | `clientPublish` | `boolean` | Whether a caller OUTSIDE the process may publish at all. Default false. It lives on the CHANNEL rather than the socket because a room is reachable two ways — a socket and a `POST` — and a gate declared per transport is a gate with a way around it. |
 | `transform` | `Transformer<Message, Message, Failures>` | The same option `state` and `memo` take, on the third `Reactive`: normalise on the way in, or refuse. WHAT A VALID MESSAGE IS: it may rewrite the message or REFUSE it by returning a `Failed`. Runs on EVERY publish, the server's own included, because normalising is not a question about who is asking — the two were one option and the trim silently skipped itself in-process. A refusal is what fills `Reactive`'s `Failures`, so a publisher narrows it with `isError`; a SUBSCRIBER's failures are abide's own and reach `{#for await}`'s `{:catch}` instead. `publish` therefore returns `number \| Failed<…>` on both sides. |
 
@@ -201,12 +234,43 @@ is legal, allocates no entry, and reads as `pending()` — so the room count is 
 AUTHORITY, which `clientPublish` already gates, rather than by how many argument keys a caller can
 think of. That is the whole bound, and it is why there is no room-count ceiling to configure: a
 `clientPublish: false` channel can only be grown by the app's own code.
-* A ROOM IS DISCARDED WHEN ITS SUBSCRIBER COUNT REACHES 0 AND STAYS THERE FOR `ttl`. The same `ttl`
-that bounds a message's life in the tail bounds the room's own idle life, there being nothing left to
-keep once the last subscriber has gone and the last message has expired. A resubscribe inside the
-window finds the room and its tail intact, which is what makes a page navigation away and back free.
+* A ROOM IS DISCARDED WHEN ITS SUBSCRIBER COUNT REACHES 0 AND ITS RETENTION HAS DRAINED. That is a
+CONSEQUENCE of `ttl` rather than a second use of it: nothing is left to keep once the last subscriber
+has gone and the last retained message has expired, so the room's death falls out of its productions'
+and there is no idle window to configure. A resubscribe before then finds the room and its tail intact,
+which is what makes a page navigation away and back free.
 * Rooms are PROCESS-WIDE, unlike a `memo`'s default scope: a room every caller can reach is what a
 room IS, and `Args` is how one caller's room is told from another's.
+
+### Retroactive edits
+
+A `publish` APPENDS. The three below CHANGE WHAT WAS ALREADY PRODUCED, which a moderator clearing a room
+or removing one message is doing, and they are one mechanism widened rather than a second one: each moves
+the room's EPOCH, and a moved epoch is already what makes a live `{#for await}` clear its accumulated
+rows and repaint from the tail (see `socket`).
+
+| Name | Does |
+| --- | --- |
+| `room.set(message)` | Replaces the NEWEST production in place, minting no `seq`. `Reactive`'s own `set`, meaning here what it means everywhere — which is why it reaches only the latest message and is not how a room is cleared |
+| `room.revoke(seq)` | Drops one retained production, by the `seq` its `publish` handed back |
+| `room.clear()` | Drops the retention |
+
+* THE EPOCH IS THE ROOM'S HISTORY VERSION, and a process restart is one thing that moves it rather than
+the definition of it. A retroactive edit moves it too, so every live subscriber takes the tail marked as
+a reset and repaints — no new wire form, no new block behaviour, and the reflow already priced as rare
+enough that correctness beats it.
+* THEY ARE SERVER-ONLY AND `clientPublish` DOES NOT GATE THEM. That flag opens APPENDING, and a caller
+who may append is not thereby a caller who may rewrite history; reading one gate as covering both is a
+silent privilege escalation. There is no socket frame, no `POST` form and no tool for any of the three.
+IN A BROWSER `revoke` AND `clear` THROW, naming the room and the accessor the way `principal.caller`
+does. A retroactive edit is the server's account of what was produced, so a client rewriting its own
+copy would be holding a history no other subscriber has — and throwing is what keeps the name meaning
+one thing on both sides rather than succeeding locally and reaching nobody.
+* WHAT THEY COST IS A REPAINT PER SUBSCRIBER, O(rows painted) each. That is right for moderation and
+wrong per message. THE PER-MESSAGE SHAPE IS AN ORDINARY PUBLISH of a tombstone the `{#for}` body renders
+as removed: one appended row for a live subscriber, both messages replayed for a late one, no epoch and
+no repaint. Reach for the ring edit only where the content must not be SERVED again — a legal removal —
+which is the rarer case and the one it is for.
 
 ## `watch` — the effect
 
@@ -238,21 +302,22 @@ watch and the app re-establishes it if the failure was transient.
 
 ## Selections — over many entries
 
-A probe answers about ONE `Reactive`; a selection answers about a set of them. The gap is that a
-`Memo` FACTORY is not a `Reactive` — it is `(args?) => Reactive`, so the probes are on
+A probe answers about ONE `Reactive`; a selection answers about a set of them. The gap is that a KEYED
+`Memo` is a FACTORY rather than a `Reactive` — it is `(args) => Reactive`, so the probes are on
 `getInvoice({ id })` and there is no `getInvoice.pending()` — while `m.invalidate` and `m.refresh`
-already act over every args key. Triggers could reach a set and probes could not, and neither could
-reach ACROSS memos, which is what `tags` is declared for.
+already act over every args key. An UNKEYED memo IS a `Reactive`, so `data.pending()` on one is the
+ordinary probe and none of this reaches it. Triggers could reach a set and probes could not, and neither
+could reach ACROSS memos, which is what `tags` is declared for.
 
 So the four are free functions rather than members, and the member spellings are DEFINED as them.
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `Selection` | `Memo<unknown, Args, unknown> \| { tags: string[] }` | WHAT IS BEING ASKED ABOUT: one memo — every args key of it — or every entry carrying any of these `tags`, across memos. Narrowing WITHIN a memo is the member's own `pattern`, so there is one place args-granularity is spelled and it is the place that has the `Args` type. |
+| `Selection` | `Reactive<any, any, any> \| Memo<any, any, any> \| { tags: string[] }` | WHAT IS BEING ASKED ABOUT: one `Reactive`, one keyed memo — every args key of it — or every entry carrying any of these `tags`, across memos. Narrowing WITHIN a memo is the member's own `pattern`, so there is one place args-granularity is spelled and it is the place that has the `Args` type. |
 | `pending` | `(selection?: Selection) => boolean` | Whether ANY entry in the selection is pending. Bare, it is anything in flight in this scope, which is what an app-wide progress strip reads. |
 | `refreshing` | `(selection?: Selection) => boolean` | The same over `refreshing()` — a reload in flight over values still being served. |
-| `refresh` | `(selection?: Selection) => void` | Stale while revalidate, over the selection. `m.refresh(pattern)` IS `refresh(m)` narrowed by args, not a second mechanism. |
-| `invalidate` | `(selection?: Selection) => void` | Marks the selection stale, over the same set. `m.invalidate(pattern)` IS `invalidate(m)` narrowed the same way. |
+| `refresh` | `(selection?: Selection) => void` | Stale while revalidate, over the selection. THE MEMBERS ARE DEFINED AS THIS: `s.refresh()` IS `refresh(s)` over one `Reactive`, and `m.refresh(pattern)` IS `refresh(m)` narrowed by args. Not a second mechanism at either width. |
+| `invalidate` | `(selection?: Selection) => void` | Marks the selection stale, over the same set, and `s.invalidate()` / `m.invalidate(pattern)` are defined as it the same way. |
 
 ### Expectations
 
@@ -265,16 +330,21 @@ n entries reloading together is 2 effect re-runs, not 2n.
 it is why only these two probes have a free form. `done()` and `success()` over a set are genuinely
 ambiguous between any and all, and an aggregate `error()` would have to decide WHICH failure to hand
 back — so a caller wanting either asks the entries.
-* THE TRIGGERS REACH ONLY WHAT HAS A PRODUCER, where the bare probes reach every `Reactive`. A
-`state(0)` cleared by an app-wide `invalidate()` is silent data loss, and a room has nothing to
-re-run, so `Selection` is memos and tags. A room is reached by name.
+* NAMING REACHES ANYTHING; SWEEPING REACHES PRODUCERS. A `Reactive` named by hand is the app saying so
+about that one value — `s.refresh()` on a `state(fetchUser())` reloads it, `s.invalidate()` on a value
+with no producer is inert — which is why the triggers are `Reactive`'s (see "Triggers" under `state`)
+rather than a memo's. What is bounded is the SWEEP: a bare `invalidate()` matches only entries WITH a
+producer, because a `state(0)` caught by one is silent data loss and a room has nothing to re-run.
 * `invalidate` IS LAZY AND `refresh` IS EAGER, and at this width that stops being a nuance: an
 `invalidate()` over a scope holding two hundred entries marks two hundred and LOADS only what
 something reads, where `refresh()` loads all two hundred. So `invalidate()` is the reconnect
 default — `watch(() => { if (online) invalidate() })` — and `refresh()` is for warming data before
 anyone asks.
-* A SELECTION IS SCOPE-BOUNDED, as a memo is: this scope's entries plus `global` ones (see "Scope").
-A tag READS process-wide and is not, so one request can never invalidate another's. ON A SERVER THAT
+* A SELECTION IS SCOPE-BOUNDED, as a memo is: this scope's entries plus `global` ones (see "Scope"),
+and A TAG IS SCOPED THE SAME WAY — request-local on a server, process-local in a browser, where there is
+one caller. So one request can never invalidate another's, and the ONE SIGNAL a selection holds lives in
+that scope keyed by the CANONICAL FORM of its tag set, which is what stops a freshly built
+`{ tags: [...] }` from being a second selection with a signal of its own. ON A SERVER THAT
 MAKES A BARE `invalidate()` REACH EVERY `global` MEMO IN THE PROCESS — its own request-scoped entries
 die with the request anyway, so the global ones are the whole effect. That is what an operator's
 flush endpoint wants and is never what a handler being defensive wants.
@@ -339,9 +409,11 @@ does not define refusals; it says how they cross a wire.
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `refuse.typed` | `<Name extends string, Data extends JsonValue = undefined>(name: Name, status?: number, message?: string, options?: { schema }) => (data?: Data) => Failed<Name, Data>` | A reusable factory for a named, narrowable failure, its message optional the same way. The status defaults to 500 — a fault is ours until an app says whose it is — and the phrase is resolved at the DECLARATION. With a `schema` the data is checked synchronously at construction. CONSTRUCTION IS INERT: `myError(data)` BUILDS a `Failed` and does not throw, which is what lets a `clientPublish` gate RETURN one and what puts the failure in the handler's return type honestly rather than by `never` vanishing from a union. |
+| `refuse.typed` | `<Name extends string, Data extends JsonValue = undefined>(name: Name, status?: number, message?: string, options?: { schema }) => ((data?: Data) => Failed<Name, Data>) & { is: (error: unknown) => error is Failed<Name, Data> }` | A reusable factory for a named, narrowable failure, its message optional the same way. THE STATUS DEFAULTS TO 400: a DECLARED refusal is by construction an expected answer, and 500 is the one status certainly wrong for it — an OpenAPI response a generated client reads as a server fault, a status a model retries instead of re-planning, exit `7` instead of `8`, and a page in front alerting on it. "A fault is ours until an app says whose it is" is `refuse`'s rule and stays there, where abide genuinely does not know; declaring a named refusal IS the app saying whose it is. The phrase is resolved where the refusal is DECLARED. THE FACTORY CARRIES `is`, which is the only narrowing available where there is no `Reactive` in scope — `error.abide` receives a bare failure as a prop, so `s.isError(e, 'Name')` has nothing to hang off — and it needs no registry, the factory carrying its own type. With a `schema` the data is checked synchronously at construction. CONSTRUCTION IS INERT: `myError(data)` BUILDS a `Failed` and does not throw, which is what lets a `clientPublish` gate RETURN one and what puts the failure in the handler's return type honestly rather than by `never` vanishing from a union. |
 | `Failed<Name, Data>` | `Error & { name: Name; status: number; message: string; data: Data }`, `Failed<Name extends string = string, Data = undefined>` | THE ONE REFUSAL TYPE, in-process and over a wire alike — there is no second http-shaped one, and `HttpError` names the UNDECLARED instance rather than a class of its own (see `refuse`). Structural, because what a caller catches is a shape rather than a class it imported. |
 | `return myError(data)` | `Failed<Name, Data>` | One spelling for every refusal: a handler RETURNS them. RETURNING is what refuses — the value is inert until it reaches a return, so the refusal is at the boundary and visible in the type, where `Rpc`'s third parameter picks it up. A `throw myError(data)` refuses identically and only loses the caller's ability to name it. `refuse(status)` is the other spelling and still THROWS, returning `never`, so a bare `refuse(404)` remains a guard. |
+| `notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', …>` | ABIDE'S OWN, built with `refuse.typed` like any other. Returned where no route matched and where no handler is mounted at that address and method, so `error.abide` renders a 404 by holding a named refusal rather than by a second convention — and a page narrows it with `notFound.is(failure)` to say which path. |
+| `validationError` | `(data?: readonly Issue[]) => Failed<'ValidationError', …>` | The other one, at 422, returned where a schema refuses. Two named refusals and no more: a name is public surface forever, and the rest of what abide raises — 403 on an origin mismatch, 413 over-size, 504 on a timeout — has no data to narrow TO, so it stays the undeclared `HttpError` at its status, which is what `refuse(status)` already means. |
 | `myError(data)` DISCARDED | compile error | A `Failed` built and thrown away is a refusal that did not happen. Because construction is inert, `if (!user.member) notMember({ group: 'staff' })` would fall through silently — so an expression statement whose type is `Failed` is REFUSED, naming the two repairs: `return` it, or `throw` it. Detectable in syntax, and it is why the guard form does not have to be given up to make construction inert. |
 
 # Transports
@@ -352,10 +424,8 @@ over the mux, both mounted by file path and export name (see "Mount paths"). "An
 words are not interchangeable — a mapping written over rpcs silently omits every room, which is the
 mistake `# Generated surfaces` would make if it said rpc where it says handler.
 
-DECLARE IS THE VERB AND HANDLER IS THE NOUN. "A declaration" was tried as the noun and abandoned: in
-JavaScript a function declaration is `function f() {}`, where every handler here is a `const` bound to
-an EXPRESSION, so the word named the one shape these are not. The verb has no such collision — you
-DECLARE a handler with `GET`. The genus needs a word of its own at all because `rpc` is spoken for
+DECLARE IS THE VERB AND HANDLER IS THE NOUN — see `docs/BRAND.md`'s vocabulary for why, a prose
+word being decided there. The genus needs a word of its own at all because `rpc` is spoken for
 three times already: `Rpc` the type a caller gets back, `rpc.url` / `rpc.isError` / `rpc.method` the
 members on one, and `#server/rpc/**` the directory.
 
@@ -370,11 +440,12 @@ an `Effect`, which is what `## watch — the effect` had called it all along.
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Failures>` | `Rpc` puts an http transport in front of what the handler ADDRESSES, or proxies it on the server. `signal` aborts the reader. `Failures` is the union of declared `Failed<Name, Data>`, inferred from the handler's return type — values rather than names, so `rpc.isError` narrows to the data with no registry to consult. A caller always gets a `Reactive` back, whichever of the three was declared — the parameter it fills is `Reactive`'s own, and nothing about an rpc is a second kind of `Reactive`. |
-| `Value` | `unknown` | What the addressed `Reactive` yields — serialized for http transport, returned raw on the server. |
+| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Failures, Produced>` | `Rpc` puts an http transport in front of what the handler ADDRESSES, or proxies it on the server. It hands back THE SAME `Reactive` SHAPE the handler had, `Produced` included, so a streaming handler's cursor walks chunks on the caller's side exactly as it did on the server's and `for await` means one thing across the wire. `signal` aborts the reader. THERE IS NO RETENTION OPTION HERE and none is owed: a call is made inside a memo, and that memo's `tail` IS the caller's retention — see "Adoption". `Failures` is the union of declared `Failed<Name, Data>`, inferred from the handler's return type — values rather than names, so `rpc.isError` narrows to the data with no registry to consult. A caller always gets a `Reactive` back, whichever of the three was declared — the parameter it fills is `Reactive`'s own, and nothing about an rpc is a second kind of `Reactive`. |
+| `Value` | `unknown` | What the addressed `Reactive` HOLDS — the accumulation where the handler streams, the message where it is a room — serialized for http transport, returned raw on the server. |
+| `Produced` | `unknown` | What it YIELDS, per the unit rule: a chunk from a streaming handler, a message from a room, and `Value` itself otherwise. |
 | `Args` | `Record<string, JsonValue> \| undefined` | Arguments, in the request body on `POST`/`PUT`/`PATCH`. Serializable by contract — the wire form is also the memo key. NARROWED TO FLAT on `GET`/`DELETE`, where the wire form is URL parameters. |
 | `Middleware` | `<Ctx, Result>(next: (ctx?: Ctx) => Promise<Result>, ctx: Ctx) => Result \| Promise<Result>` | One rung of an onion. `next` is the NEXT rung and hands back whatever that rung returns; where there is no next rung, `next` runs the operation itself and the onion is complete. Returning without calling `next` short-circuits. A throw escapes the whole onion rather than unwinding through it. `Ctx` is a RECORD naming what that lane actually has: the APP lane is `Middleware<{ request: Request }, Response>` and runs PRE-ROUTING, so it has no route and no args; the RPC lane is `Middleware<{ request: Request; args: () => Args }, Response>`, typed to that one handler; the socket lane is `Middleware<SocketEvent, void>`, where a throw is the only refusal. |
-| `GET` | `<Value, Args, Failures>(handler: Memo<Value, Args, Failures> \| Channel<Value, Args, Failures> \| ((args?: Args) => Value), options?: RpcOptions<Value, Args>) => Rpc<Value, Args, Failures>` | Declares a READ any surface may call, addressed by its arguments. WHAT IT MAY BE DECLARED OVER is the union above: a `Reactive`, and there are two of them. A `memo` is identity per args — coalescing, `ttl`, `invalidate` — and is what you generally write. A `channel` is a room. A PLAIN FUNCTION is the third arm and is SUGAR, not a third kind: `GET(fn)` is `GET(memo(fn))`, the same way `{#for await x of s}` is `s.tail()` — a bare form that IS the spelled-out one rather than a shortcut past it. So there is no un-memoized endpoint to reason about, and nothing has to tell the arms apart: already a `Reactive`, use it; a function, wrap it. Over a channel it is the read-only view of a room — jsonl by default, sse on `Accept` — where the socket is the two-way one. A read has no side effects — `SameSite=Lax` volunteers the principal cookie on a top-level GET navigation, so a `GET` that changes something is reachable from an `<a href>` on another origin. |
+| `GET` | `<Value, Args, Failures>(handler: Reactive<Value, Failures> \| Memo<Value, Args, Failures> \| Channel<Value, Args, Failures> \| ((args?: Args) => Value), options?: RpcOptions<Value, Args>) => Rpc<Value, Args, Failures>` | Declares a READ any surface may call, addressed by its arguments. WHAT IT MAY BE DECLARED OVER is the union above. AN UNKEYED MEMO IS A `Reactive` and a KEYED ONE IS A FACTORY, which is why both are in it and why the first arm is not redundant: `GET(() => 'foo')` addresses one entry and is called `rpc()`, where `GET(getInvoice)` addresses one per args key. A `memo` is identity per args — coalescing, `ttl`, `invalidate` — and is what you generally write. A `channel` is a room. A PLAIN FUNCTION is the third arm and is SUGAR, not a third kind: `GET(fn)` is `GET(memo(fn))`, the same way `{#for await x of s}` is `s.tail()` — a bare form that IS the spelled-out one rather than a shortcut past it. So there is no un-memoized endpoint to reason about, and nothing has to tell the arms apart: already a `Reactive`, use it; a function, wrap it. Over a channel it is the read-only view of a room — jsonl by default, sse on `Accept` — where the socket is the two-way one. A read has no side effects — `SameSite=Lax` volunteers the principal cookie on a top-level GET navigation, so a `GET` that changes something is reachable from an `<a href>` on another origin. |
 | `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declare a mutation, which retains nothing by default: a memo handed to one has its `ttl` DEFAULTED TO 0 unless it named one, so coalescing covers the in-flight window and nothing after it. That is the whole per-method difference, and it is what makes a memoized mutation safe — a double-click inside one flight is one write, two sequential clicks are two, and `ttl` is how an app says "never more than once". A `POST` is also a legitimate READ, for a query too big for a URL, so caching one is a thing to be able to ask for rather than a mistake to prevent. A `POST` over a channel is a PUBLISH into the room, gated by that channel's `clientPublish` — the same gate the socket reads, which is why it is declared on the channel and not per transport. |
 | `rpc.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | The rpc's `isError`, NARROWED by what the handler declared: matching the name gives back `.data` with the schema's type on it, `.status` and `.name`. |
 | `rpc.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The same call handed back as the raw response instead of a decoded value. |
@@ -413,10 +484,12 @@ through here — `refuse.typed` and `Failed` are not response helpers.
 ### Expectations
 
 * A HANDLER THAT CAN BE ADDRESSED OVER HTTP. What it addresses decides what it brings — see `GET` — so "it is a memo" is true of the form you generally write and not of the mechanism
+* AN UNKEYED MEMO IS ITS VALUE; A NO-ARG RPC IS STILL A CALL. `Rpc` is uniformly callable in both arms — `GET(() => 'foo')` is reached as `rpc()` — because the CALL is what issues the request, where a memo's unkeyed arm can be a `Reactive` outright. A `Reactive`-shaped rpc would read well against "reading is what loads it" and leaves `signal` nowhere to go, so the asymmetry is stated here rather than left for a reader to trip on.
 * HTTP path is determined by filepath + export name.
 * Return type dictates Content-Type
 * Browser only sees a wrapped `fetch(rpc.url, { method: rpc.method })` not the whole server module. That wrapper is a module the build GENERATES — one export per handler, carrying `method`, the mount-relative ADDRESS and `description` and nothing else — rather than the server module shaken down to it, so "no server code shipped" is a property of the build and not an outcome of an optimizer. A module-level side effect in an rpc file cannot reach a browser, because the browser's module was never derived from that file.
 * Importing a name from `#server/**` that is NOT an rpc or socket handler is a COMPILE ERROR from the client graph, never a silent stub; only `#server/rpc/**` and `#server/sockets/**` resolve from `#ui` and `.abide` at all.
+* THE COST OF THAT IS THAT A PAGE HAS NO DIRECT SERVER READ. A `.abide` file runs on both sides, so every server-side read it makes at render time goes through an rpc — including one the browser will never issue, because the page always had the value. There is no server-only region of a page and no partial mode; what buys it is that the render and the hydration make the SAME call, which is what the seed buffer answers and what makes re-executing setup affordable at all.
 * Validation is SERVER-authoritative, since a `schemas` entry may be a runtime object built from server imports. A schema an app puts in its own `#shared` module is importable from both sides, which is how a client-side check is written when one is wanted.
 * An rpc returning a binary — `Uint8Array`, `ArrayBuffer`, `Blob`, `DataView` — transports it as `application/octet-stream`, or as a `Blob`'s own `type` where it has one. The client decodes it back to a `Uint8Array`.
 * An rpc returning a raw value transports as application/json
@@ -432,6 +505,13 @@ buffer stays a byte count rather than a list of decoded values it would have to 
 `ttl`, `invalidate` and `refresh` came in on the `memo` that was passed; `tail` and `clientPublish` came
 in on the `channel`. So a handler over a memo and one over a channel take the SAME options and
 differ only in what the `Reactive` brought.
+* CALLER-SIDE RETENTION IS THE ENCLOSING MEMO'S `tail`, AND THAT IS WHY THE TRANSPORT NEEDS NO OPTION
+FOR IT. A call is made inside a memo — `memo(() => getData(args), { tail: 50 })` — the memo MIRRORS what
+the rpc produces into its own ring, and that ring is what the caller replays. Two `Reactive`s, two
+rings, each bounded where it lives: the handler's `tail` on the server, the memo's on the client. A
+`tail` on the call would be a THIRD place to say it with no rule for which won, which is the duplication
+this bullet exists to refuse. Under a transparent-forwarding adoption there would have been a gap here,
+the outer's `tail` meaning nothing; mirroring is what closes it.
 * `GET` / `DELETE` args are passed as URLSearchParameters, not as json, and are therefore typed FLAT — `Record<string, string | number | boolean | null | Array<string | number | boolean>>`, an array being the repeated key a `URLSearchParams` already has a form for. That is what makes "args that cannot be keyed are exactly args that cannot be sent" TRUE rather than nearly true: a nested object is keyable and is not sendable, so it is refused at compile time, naming the method. The fix is to make the call a `POST`, which is `JsonValue` — and which gives up the browser cache, so the error says that too.
 * `POST` / `PUT` / `PATCH` accept JSON or `multipart/form-data` or `application/x-www-form-urlencoded`
 * THE SEED IS THE CLIENT'S OWN REQUEST, never a copy in the document. A render's loads are buffered,
@@ -439,7 +519,13 @@ and the client's call to the same address is answered from where the document re
 the client is a real rpc response: inspectable in a network panel, and carrying whatever
 `cache-control` the handler set. ONE MANIFEST ISSUES THEM ALL: the head carries `(method, address,
 args)` — what to fetch, never the data — and the byte-invariant bootstrap issues every seeded call
-before the bundle loads, GET and POST alike. There is no `<link rel="preload" as="fetch">`, and not
+before the bundle loads, GET and POST alike. THE BOOTSTRAP HANDS ITS CALLS TO THE RUNTIME THROUGH A REGISTRY, which is
+what makes "the seed buffer answers the calls the re-run makes" a mechanism rather than an intention:
+each issued `Promise<Response>` is stashed under the same canonical `(method, address, args)` form the
+memo key uses, and the rpc wrapper consults it before issuing — hit, adopt and delete; miss, an ordinary
+fetch. SINGLE-USE THEREFORE MEANS ONE THING ON EACH SIDE, and an entry hydration never claims — a branch
+the client took differently — is dropped on the same timer the server's is, rather than held for the life
+of the tab. There is no `<link rel="preload" as="fetch">`, and not
 having one is what makes the browser cache work: the RENDER ID TRAVELS AS A REQUEST HEADER,
 `abide-render`, so the URL stays the plain one. A custom request header does not fragment the HTTP
 cache — only a `Vary`-listed one does, and no abide response ever varies on this header — so a
@@ -579,7 +665,7 @@ as any other unmounted method.
 * channels are carried over a single web socket mux
 * upgrade goes through `middleware`
 * Clients are read-only by default, the server may publish and read, and `clientPublish` on the CHANNEL is what opens the other direction — for this socket and for a `POST` at the same room alike, there being one gate rather than one per transport.
-* Every message carries a `seq`, monotonic per room and minted at publish, and a room carries an EPOCH — its incarnation, since a counter held in memory goes back to zero when the process does. Both are INTERNAL. An app never writes either: `room.tail(n)` already replays its snapshot and goes live from where it ended with no gap and no duplicate, so the reconnect carries the last `seq` it rendered and compares epochs underneath, and a moved epoch means the client takes the tail MARKED AS A RESET rather than being told there is nothing new. The reset is announced because it has to be: a server that changed incarnation cannot know what the client painted, so replaying the tail silently would duplicate rows a `{#for await}` had already appended. On a reset the block CLEARS its accumulated rows and repaints from the tail — the one place it is not append-only, and rare enough that correctness beats the reflow. That is what makes the three handoffs ONE mechanism rather than three — the seed buffer, a socket that dropped and reopened, a tab too slow to adopt — with `room.tail(n)` the only spelling any of them has.
+* Every message carries a `seq`, monotonic per room and minted at publish, and a room carries an EPOCH — its HISTORY VERSION. A process restart moves it, a counter held in memory going back to zero when the process does, and so does a retroactive edit (see "Retroactive edits" under `channel`); the restart is one cause of a moved epoch rather than the definition of one. Both are INTERNAL. An app never writes either: `room.tail(n)` already replays its snapshot and goes live from where it ended with no gap and no duplicate, so the reconnect carries the last `seq` it rendered and compares epochs underneath, and a moved epoch means the client takes the tail MARKED AS A RESET rather than being told there is nothing new. The reset is announced because it has to be: a server that changed incarnation cannot know what the client painted, so replaying the tail silently would duplicate rows a `{#for await}` had already appended. On a reset the block CLEARS its accumulated rows and repaints from the tail — the one place it is not append-only, and rare enough that correctness beats the reflow. That is what makes the three handoffs ONE mechanism rather than three — the seed buffer, a socket that dropped and reopened, a tab too slow to adopt — with `room.tail(n)` the only spelling any of them has.
 * A cursor an app PERSISTED across sessions is the one thing this would not serve, and it could not be served anyway: the tail is a memory ring bounded by `tail` and `ttl`, so a cursor older than that is always past it. Catching up over that horizon is app data behind an ordinary rpc, not a room.
 * `seq` is `{#for await}`'s DEFAULT key where the source is a room, so a streamed list off a channel is keyed without an app declaring one. A stream that is not a room — a jsonl rpc — has no `seq` and is positional unless the block spells `by`.
 
@@ -602,7 +688,7 @@ first request that reaches whichever one won.
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `Schema<T>` | `((value: unknown) => boolean) \| StandardSchemaV1<T> \| JsonSchema` | The three forms. A schema RETURNS what it accepts, so it normalises as well as refuses. |
+| `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T> \| JsonSchema` | The three forms. A schema RETURNS what it accepts, so it normalises as well as refuses — which is why the function form is `=> T` and not a predicate. A `boolean` cannot normalise, and a `false` stored as the value is the silent version of a refusal; `(v) => typeof v === 'number'` failing to compile is the error that says "return the value". |
 | `JsonValue` | `null \| boolean \| number \| string \| JsonValue[] \| { [k: string]: JsonValue }` | What an `Args` may hold. The bound exists because the canonical wire form of an args object is also its cache key. |
 | `Issue` | `{ path: string; message: string }` | One thing wrong, and where. `path` is `''` for the value itself, and for the plain-function form, which throws a sentence and has no path to give. |
 | `JsonSchema` | `JsonValue` | A JSON Schema document, the NATIVE form — what a handler means, and the only one publishable to a tool definition or an OpenAPI operation. |
@@ -611,11 +697,12 @@ first request that reaches whichever one won.
 ### Expectations
 
 * `JsonSchema` is the native form — what a handler MEANS, and the only one publishable to a tool definition or OpenAPI operation.
-* a plain function `(value: unknown) => boolean` returns what it accepts and THROWS what it refuses.
+* DERIVING A SCHEMA FROM AN ANNOTATION MEANS THE BUILD RESOLVES TYPES, so build time is typecheck time and a schema is only as good as the inference that reached it. Where inference FAILS the compiler READS rather than refusing the file — valid TypeScript has to compile — so an unresolved annotation degrades to a wider schema SILENTLY. That is the cost of "the shape is never declared twice", and the repair is the one an app already has: declare `schemas` where the derivation cannot be trusted.
+* a plain function `(value: unknown) => T` returns what it accepts and THROWS what it refuses.
 * a Standard Schema `StandardSchemaV1<T>` is the interop spec zod/valibot/arktype answer to.
 * `rpc.isError(e, 'ValidationError')` narrows `e.data` to the issues with nothing declared. |
-* schemas coerce the args from strings when they're url params, at the `ctx.args()` that first asks for them — so every rung after that one, and the handler, see the coerced value
-* When no schema is specified, its derived by type annotation, or arg defaults. `GET(({ id }: { id: number }) => …)` and `GET(({ id = 1 }) => …)` both build schemas for `{ id: number }`
+* COERCION IS THE PIPELINE'S, NOT THE SCHEMA'S. `validateJson` stays a checker; a `GET` / `DELETE`'s text args are coerced from the JSON Schema's declared `type` BEFORE validation — `"number"` through `Number()`, `"boolean"` from `"true"` / `"false"`, `"array"` from the repeated key — which is total over the flat arg types and is the same table `style: form, explode: true` publishes. It happens at the `ctx.args()` that first asks, so every rung after that one, and the handler, see the coerced value. Putting it in the schema instead would ask every form of `Schema` to coerce, which the native `validateJson` does not do and a Standard Schema does its own way.
+* When no schema is specified, it is derived from the type annotation and the argument defaults, and A DEFAULT MAKES A MEMBER OPTIONAL AT BOTH LEVELS. `GET(({ id }: { id: number }) => …)` builds `{ id: number }` with `id` REQUIRED. `GET(({ id = 1 }) => …)` builds `{ id?: number }` carrying `default: 1`. `GET(({ id = 1 } = {}) => …)` makes `Args` ITSELF optional, so the address is a valid call with a bare URL. One rule — `required` is which destructured members lack defaults, and `Args` is optional where the parameter has one — derivable from syntax alone, and it is why a handler with no parameter at all is called `rpc()`.
 
 ## Headers abide generates
 
@@ -657,7 +744,7 @@ it is the human one; what belongs here is `Clients`, which governs all four.
 | --- | --- | --- |
 | ui | true | An rpc exists to be called by the app's own pages, that being the case it was declared for |
 | openapi | true | An operation describes an address an http caller could have found by trying it, so describing it reveals no reachability that was not already there |
-| mcp | true | A model is a caller like the others, and a surface an app has to opt into is a surface most apps never get. What keeps this safe is not a default but the LIST BEING PER-CALLER: a model is shown the tools that caller may reach, so an unauthenticated one is shown nothing it could have called |
+| mcp | true | A model is a caller like the others, and a surface an app has to opt into is a surface most apps never get. WHAT KEEPS IT SAFE IS WHAT KEEPS `openapi` SAFE: a tool describes an address an http caller could have found by trying it, so listing it reveals no reachability that was not already there. The list IS filtered by whatever the APP-LANE rung already decided — a caller who cannot reach `/__abide/mcp` is shown nothing — but a handler's OWN rung cannot be speculatively run, one authorising on `ctx.args()` having no args to run it against, so a tool that rung would refuse is still listed and still refused on the call, with the same `Failed` a browser would get. An app for which a handler's EXISTENCE is sensitive says `mcp: false`, which is a listing decision, which is what `clients` is for |
 | cli | true | The CLI authenticates as the operator, with `ABIDE_APP_TOKEN`, who can already reach every address directly |
 
 ### Expectations
@@ -847,7 +934,7 @@ CHOSEN and not where a second client is written.
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `nonce` | `() => string` | This request's CSP nonce, built on first ask and the same for every later one. 16 bytes of `crypto.getRandomValues`, base64url. What `csp()` names in the header and what the render stamps on abide's own inline output. |
+| `nonce` | `() => string` | This request's CSP nonce, for AN APP'S OWN inline `<script>` emitted through `{raw()}`. Built on first ask and the same for every later one; 16 bytes of `crypto.getRandomValues`, base64url. What `csp()` names in the header. abide's own inline output — the bootstrap, the sink filler and every sink script — carries BUILD-TIME HASHES instead, so nothing in the head and nothing in a sink consumes this, which is what lets the shell head be cut once at boot. Throws in a browser, a nonce being a response's business. |
 
 ## `bag`
 
@@ -919,12 +1006,16 @@ cannot touch, which is the same silent-success failure `principal.set` throws to
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `online` | `Reactive<boolean>` | Whether the client currently has connectivity. |
+| `online` | `Reactive<boolean>` | Whether the caller can reach the app. |
 
 ### Expectations
 
-* Uses browser api to verify on the client
-* Always true on server, so a document rendered for an offline client says `true` and the first client read corrects it. That correction is an ordinary state change, not a hydration mismatch
+* In a browser that is `navigator.onLine` and its events.
+* ON A SERVER THE ARRIVING REQUEST IS THE ANSWER, so it is `true` — a MEASUREMENT rather than a
+default, the caller having demonstrably reached the app to be served at all. A client that has gone
+offline since is corrected by its own first read, which is an ordinary state change and not a
+hydration mismatch. That is what keeps one question behind the name on both sides rather than a
+browser reading and a server constant.
 
 ## `trace`
 
@@ -1127,8 +1218,9 @@ same name, same room — what differs is where a record is written and who can a
 * OPT-IN, because every directive can break an app that had a reason abide cannot see.
 * abide's own inline output is covered by BUILD-TIME HASHES rather than by a nonce. There are exactly
 two executable inline strings — the bootstrap defining the sink filler, and the filler call — and both
-are byte-invariant once per-sink data lives in template ATTRIBUTES, so `script-src` carries a
-`'sha256-…'` for each. The one inline DATA block is the SEED MANIFEST — `(method, address, args)`
+are byte-invariant once per-sink data lives in ATTRIBUTES: a region sink's on its `<template>`, a
+property sink's on the owning element. So `script-src` carries a `'sha256-…'` for each, and it is two
+hashes for both sink shapes rather than one per shape. The one inline DATA block is the SEED MANIFEST — `(method, address, args)`
 triples, never response data — and a `<script type="application/json">` never reaches "prepare the
 script", so `script-src` does not govern it at all.
 * So NOTHING IN THE HEAD CONSUMES A NONCE, which is what lets the shell head stay cut once at boot. The
@@ -1140,6 +1232,11 @@ array drops it; a name the baseline lacks is added.
 * The baseline: `default-src 'self'`, `script-src 'self'`, `style-src 'self'`, `img-src 'self' data:`,
 `font-src 'self'`, `connect-src 'self'`, `style-src-attr 'unsafe-inline'`, `object-src 'none'`,
 `base-uri 'self'`, `frame-ancestors 'none'`, `form-action 'self'`.
+* `script-src 'self'` IS CORRECT BY CONSTRUCTION BECAUSE THE ASSETS ARE UNDER THE MOUNT. `APP_URL`'s
+path is the app's base and the built bundle and stylesheets are served under it, so there is no separate
+asset ORIGIN and nothing for the policy to be wrong about. A CDN goes in FRONT of the app as a reverse
+proxy rather than beside it as another origin — which is the smaller design, and it is what keeps this
+line from being a policy that blocks the app's own bundle.
 * `script-src` carries no `'unsafe-inline'` — it does not need one, and a browser honouring a hash or a
 nonce ignores `'unsafe-inline'` anyway, which is the mechanism that makes an injected `<script>` fail
 while abide's own runs. `style-src-attr` is the one weakened line and is weakened deliberately: a `style=`
@@ -1161,11 +1258,12 @@ csp({ 'style-src-attr': [] })
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `url` | `<P extends string>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query] : [queryParams?: Query]) => URL` | Builds a URL. ONE signature: the arity is DERIVED FROM THE LITERAL rather than discriminated at the call, so `ParamsOf<'/admin/[tab]'>` is `{ tab: string \| number }` and a missing `tab` is a compile error. A path that is only `string` at compile time degrades to `(url, queryParams?)` and is discriminated at runtime by whether the pattern contains `[`. |
-| `HasParams<P>` | `boolean` | Whether the literal `P` carries a `[segment]`, which is what decides `url`'s arity at the call rather than at a discriminated overload. |
-| `ParamNames<P>` | `string` | The union of segment names in `P` — `ParamNames<'/admin/[tab]'>` is `'tab'`. |
+| `url` | `<P extends string>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query] : HasSegments<P> extends true ? [params?: ParamsOf<P>, queryParams?: Query] : [queryParams?: Query]) => URL` | Builds a URL. ONE signature: the arity is DERIVED FROM THE LITERAL rather than discriminated at the call, so `ParamsOf<'/admin/[tab]'>` is `{ tab: string \| number }` and a missing `tab` is a compile error. ARITY IS DECIDED BY WHETHER A REQUIRED SEGMENT EXISTS, and each key's own optionality is decided by its KIND — a path of only `[[optional]]` and `[...rest]` segments takes the params object optionally rather than forcing an empty one at every call site. A path that is only `string` at compile time degrades to `(url, queryParams?)` and is discriminated at runtime by whether the pattern contains `[`. |
+| `HasParams<P>` | `boolean` | Whether the literal `P` carries a REQUIRED `[segment]`, which is what decides whether the params object is required. |
+| `HasSegments<P>` | `boolean` | Whether it carries a segment of ANY kind, which is what decides whether there is a params position at all. |
+| `ParamNames<P>` | `string` | The union of segment names in `P` of every kind — `ParamNames<'/admin/[tab]'>` is `'tab'`. `RequiredNames`, `OptionalNames` and `RestNames` are the three it is the union of, and are what `ParamsOf` maps over separately. |
 | `Query` | `Record<string, unknown> \| URLSearchParams` | The query half, always last. |
-| `ParamsOf<P>` | `Record<ParamNames<P>, string \| number>` | A segment is stringified, so a param is text or a number — never an object, which would arrive as `[object Object]`. |
+| `ParamsOf<P>` | `& { [K in RequiredNames<P>]: string \| number } & { [K in OptionalNames<P>]?: string \| number } & { [K in RestNames<P>]?: string \| number \| Array<string \| number> }` | THREE SEGMENT KINDS, THREE BEHAVIOURS, which one mapped type over `ParamNames` could not express: `[[optional]]` OMITS ITS KEY, so it is optional here; `[...rest]` is the `/`-joined remainder, so it takes an array as well as a scalar and joins it. A segment is stringified, so a param is text or a number — never an object, which would arrive as `[object Object]`. |
 
 ### Expectations
 
@@ -1215,9 +1313,9 @@ const doubled = memo(() => count * 2)
 const dataArgs = memo(() => ({ id: dataId }))
 const data = memo(() => getData(dataArgs))
 const longData = memo(() => getLongData(dataArgs))
-const events = memo(() => getDataStatusEvents(dataArgs), { tail: 50 })
+const events = memo(() => getDataStatusEvents(dataArgs), { tail: 50 })   // over a `channel` → a Room, so `{events}` is the LATEST
 const name = memo(() => data.name)            // member off a `Reactive` reads → TRACKS
-const room = chat(dataArgs)
+const room = memo(() => chat(dataArgs))     // adopts, so the room FOLLOWS `id` — and stays a Room
 
 count.watch((value) => void loadsPerId[dataId] = value)
 
@@ -1263,7 +1361,7 @@ h1 {
         </style>
         <pre>{json}</pre>
     {:catch error}
-        {#if data.isError(error, 'DataAccessDenied')}
+        {#if longData.isError(error, 'DataAccessDenied')}
             <p>Access denied to data. Must be in group {String(error.data.group)}.</p>
         {/if}
     {:finally}
@@ -1327,7 +1425,7 @@ the one the whole design is arranged against, so it decides the rule.
 | `foo` in an operand, text, attribute or value-typed argument | A live reactive READ |
 | `const x = foo` / `return foo` / a `Reactive<…>`-typed argument | The `Reactive` — no `$` needed. This is what makes adoption free |
 | `foo = bar` where `bar` is a `Reactive` | A COMPILE ERROR naming both repairs: `memo(() => …)` where the name should follow a different `Reactive` over time, `foo = bar()` to copy the value once |
-| `foo = bar` | A write |
+| `foo = bar` | A write. `bar` may be SETTLED or a LOAD — `user = fetchUser()` is the write that makes it loaded, `set` taking `Accepted \| Promise<Accepted>` — so a name is written the same way it is constructed |
 | `foo.bar = v` | A write THROUGH A PATH: copy-on-write down the path, then `set`, so identity moves and readers wake |
 | `foo.push(v)` | The same, where the TYPE resolves the call to a known mutator |
 | `foo.bar` | The VALUE's `bar`. Not called, so never the `Reactive` API — `data.error` and `data.success` and `data.status` are the payload's, today and after anything is added |
@@ -1403,7 +1501,7 @@ adoption is the accepted cost and refusing the file is not.
 | `bind:open` | The same, on a `<details>`, written back from `toggle`. |
 | `bind:group` | Radio/checkbox membership, compared against the input's own `value`; never emitted as a `group` attribute |
 | `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair |
-| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | Node ref (state) or per-instance handler with the node as argument, which may RETURN a disposer run when the node goes. Client-only |
+| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | Node ref (state) or per-instance handler with the node as argument, which may RETURN a disposer run when the node goes. There is no node until there is a document, so it fills at HYDRATION rather than being switched off on a server. |
 | `class:name={cond}` | Toggle a class on an element. |
 | `style:prop={value}` | Set one style property on an element. |
 | `{...expr}` | Spread props (component) / attributes (element) |
@@ -1438,7 +1536,7 @@ never a string, so there is no attribute-as-code position to escape into.
 #### Expectations
 
 * CONTROL BLOCKS NARROW TYPES, and what makes that true of a read BY NAME is that A BLOCK BINDS EACH REACTIVE READ AND PROBE CALL IN ITS SUBJECT ONCE FOR THE BODY: `{#if invoice}` lowers to `const _invoice = invoice()`, and every `invoice.total` under it resolves to `_invoice.total` rather than to a second `invoice()?.total`. TypeScript narrows REFERENCES, never calls, so without that binding `{#if isFruit(apple)}` is `isFruit(apple())` and narrows nothing, and `{#if invoice}` leaves `invoice.total` optional because the short-circuit is still in the lowering — the block would READ as narrowing while narrowing nothing. With it, a user-defined predicate narrows, `Stored | undefined` narrows to `Stored` with the `?.` correctly gone inside the block, and `{#switch invoice.kind}` narrows a discriminated union by the same mechanism. THE PROBE IS IN THE SET FOR THE SAME REASON THE READ IS: `{#if email.isError(email.error(), 'NotAnEmail')}` binds `const _failure = email.error()`, so the predicate narrows a REFERENCE and `email.error().data.value` in the body resolves to `_failure.data.value` with `.data` typed to what that failure declared. Leave probes out and the pattern cannot typecheck at all — `error()` is `unknown` and the body's call is a second expression — and it is the only spelling a REFUSED WRITE has, a refusing `transform` filling `error()` rather than throwing to a `{:catch}` that would have bound it.
-* A TEMPLATE-LOCAL BINDING NEEDS NONE OF THAT, being an ordinary local: `{:catch e}`, `{:then v}` and `{#for item}` narrow the way any TypeScript binding does, which is why `data.isError(error, 'DataAccessDenied')` already narrows `error.data` in the example above.
+* A TEMPLATE-LOCAL BINDING NEEDS NONE OF THAT, being an ordinary local: `{:catch e}`, `{:then v}` and `{#for item}` narrow the way any TypeScript binding does, which is why `longData.isError(error, 'DataAccessDenied')` already narrows `error.data` in the example above. IT IS THAT `Reactive`'S OWN `isError`, narrowed by what THAT producer declared — reaching for a sibling's is a compile error where the unions differ, and matches nothing where two producers happen to declare one name.
 * The binding is per block EVALUATION, so the body reads ONE consistent snapshot rather than two reads a value could move between, and the block still re-runs when what it read changes. THREE THINGS DO NOT NARROW, and each is right: narrowing dies across a nested function in the body, which is TypeScript's own rule; an explicit re-read — `invoice()`, `invoice.$` — opts out of the binding and so out of the narrowing; and a probe's BOOLEAN says nothing about the value's type, so `{#if invoice.pending()}` narrows the value nothing — what binding a probe buys is that `isError` can narrow the RESULT of `error()`, which is the other question.
 * A BINDING TAKES A PATTERN, not only a name — `{#await invoice then { total }}`, `{:then { total }}`, `{#for await { message } of room.tail(100)}` — and THE DESTRUCTURED NAMES STAY LIVE: they lower to path reads off the block's value, never to a `const` snapshot taken when the branch mounted. That is what keeps "the `{:then}` body is UPDATED rather than rebuilt" true for the destructured spelling, which is the one an author reaches for. A snapshot leaves the right value in the `Reactive` and stale text on screen after a `refresh()`, with nothing thrown and nothing wrong in the markup — so it is asserted by re-reading the body after a refresh, not by rendering it once. This is the `props()` exemption seen from the template side: a BINDING POSITION the compiler lowers stays live, and `const { total } = invoice` written in a script is the dead snapshot that warns.
 
@@ -1485,7 +1583,8 @@ const { class: className = '', note, count = 0 } = props<Props>()
 * no `props()` call means the component accepts no props of its own, and a caller passing one is an error
 *  `props()` with no type | `Record<string, unknown>` — the opt-out, and what `const { ...rest } = props()` is for
 * A PROP IS NOT A `Reactive`. Declared as a plain `T` it is a LIVE READ of the caller's expression, not a snapshot — `count={total}` tracks `total`, `count={total * 2}` tracks it as a derived read, and neither reinstantiates the component — and there is nothing behind it to write to, which is already why `bind:count={total * 2}` has nothing to bind. So `count.$` on one is a compile error rather than a `Reactive` minus `set`. That is what leaves `Reactive<T>` as the only other face: a child declaring it makes `bind:` at the call site a COMPILE requirement, so every call site is forced to comply and there is no runtime warning to issue. The marker still sits at the CALL SITE — on the side giving write access up, where a reader sees it without opening the child — and the child declaring is what lets the compiler check it, which a child inspecting its own call sites could not do
-* DESTRUCTURING `props()` IS NOT DESTRUCTURING A `Reactive`, so the warning that one is a dead snapshot does not reach it: `props()` hands back per-key ACCESSORS rather than a value, which is what keeps each binding live. `const { name } = data` on a `Reactive` is the dead one.
+* `props()` HANDS BACK ONE ACCESSOR PER KEY, AND THE ACCESSOR IS WHAT THE KEY'S TYPE DECLARES. A plain `T` is a read-only accessor over the caller's expression — live, no members, which is why `count.$` on one is a compile error and why there is nothing to write to. A `Reactive<T>` is the caller's own `Reactive`, passed through unchanged, which is what `bind:` writes through and why a child declaring one makes `bind:` a compile requirement at every call site. ONE LOWERING, TWO ACCESSOR SHAPES, decided by the declared type — the same type-direction the lifted mutators and the dynamic-spread form already use.
+* DESTRUCTURING `props()` IS NOT DESTRUCTURING A `Reactive`, so the warning that one is a dead snapshot does not reach it: an accessor is what keeps each binding live. `const { name } = data` on a `Reactive` is the dead one.
 * THE LOWERING IS TYPE-DIRECTED, as the lifted mutators are. A declared `Props` with no index
 signature has a known key set, so every prop is one accessor and the shape is fixed whatever the call
 site spelled. A `Props` carrying `Record<string, unknown>` is the component asking for the dynamic
@@ -1550,7 +1649,7 @@ what a `.css` file is.
 | --- | --- |
 | `src/ui/pages/**/page.abide` | A route |
 | `src/ui/pages/**/layout.abide` | A layout; renders its child page through `<slot/>` |
-| `src/ui/pages/**/error.abide` | The page a refusal renders in, resolved nearest-ancestor like a layout. It takes the failure as a prop, renders inside the layouts ABOVE it so the chrome survives, and answers with the failure's own status. 404 is this file holding a `Failed<'NotFound'>`, not a second convention. Where the thing that FAILED is one of those layouts, the boundary is the nearest `error.abide` strictly ABOVE it — rendering inside the layout that threw would re-run the throw — and because the chain is static the escalation is a compile-time list rather than a walk that could regress. The LAST entry on that list is abide's own minimal document — a status line and the failure's message, no layout and no app code — because app code is what is failing, and a fallback cannot be the thing that broke. Reaching it means an error page itself failed, so it warns on `abide:render`. `{#try}` is the same boundary at template granularity |
+| `src/ui/pages/**/error.abide` | The page a refusal renders in, resolved nearest-ancestor like a layout. It takes the failure as a prop, renders inside the layouts ABOVE it so the chrome survives, and answers with the failure's own status. 404 is this file holding the `notFound` refusal abide declares — see "Refusals" — returned where no route matched, so it is a named failure a page can narrow with `notFound.is(failure)` and read a path off, rather than a second convention or a bare status. Where the thing that FAILED is one of those layouts, the boundary is the nearest `error.abide` strictly ABOVE it — rendering inside the layout that threw would re-run the throw — and because the chain is static the escalation is a compile-time list rather than a walk that could regress. The LAST entry on that list is abide's own minimal document — a status line and the failure's message, no layout and no app code — because app code is what is failing, and a fallback cannot be the thing that broke. Reaching it means an error page itself failed, so it warns on `abide:render`. `{#try}` is the same boundary at template granularity |
 | `[name]` | Required dynamic segment → `route.params.name` |
 | `[[name]]` | Optional segment (absent → param omitted) |
 | `[...name]` | Rest / catch-all (terminal) → the `/`-joined remaining segments |
@@ -1576,7 +1675,7 @@ bundle was fetched from, which would name the CDN when there is one.
 * A `<head>` element in a `.abide` file contributes its children to the document head. TOP LEVEL only — never inside a control block — the same restriction `<script module>` carries, and what makes the next line possible.
 * HOISTED AT COMPILE TIME. The positions are static, so the shell knows the whole set before it flushes; only interpolated VALUES are dynamic, which is what keeps "flush the head ASAP" true for a page three layouts deep.
 * Merged BY KEY, deepest contributor wins: `title`, `meta[name]`, `meta[property]`, `link[rel][href]`, `html[lang]`. Everything else appends in tree order, so a page's `<title>` replaces its layout's while two `<link rel=preload>` for different hrefs both survive.
-* NOTHING HOLDS THE FLUSH BY DEFAULT, the head included. `<title>{name}</title>` is an ordinary read: unsettled, it renders what it has and is corrected when the value lands. Holding is OPT-IN and spelled the same way it is spelled anywhere else — `<title>{await name}</title>` — so the author decides whether a correct title is worth the delay to first byte, rather than the position deciding for them. The cost of not opting in is a visible flash in the tab, and a scriptless client keeps the uncorrected title, since there is no script to run the fill.
+* NOTHING HOLDS THE FLUSH BY DEFAULT, the head included. `<title>{name}</title>` is an ordinary read: unsettled, it renders what it has and is corrected when the value lands, through the PROPERTY SINK the element carries — see "Sinks", which is where the RCDATA positions get a shape that is not a `<template>`. Holding is OPT-IN and spelled the same way it is spelled anywhere else — `<title>{await name}</title>` — so the author decides whether a correct title is worth the delay to first byte, rather than the position deciding for them. The cost of not opting in is a visible flash in the tab, and a scriptless client keeps the uncorrected title, since there is no script to run the fill.
 * On a client navigation the incoming page's keyed contributions replace the outgoing page's by key. A layout's do not move, matching layouts never being rebuilt.
 
 ## View transitions
@@ -1628,9 +1727,24 @@ into an inert `<template>` beside every boundary. A boundary that does not fail 
 is still open.
 * A scriptless client cannot be repaired after the first flush. That is inherent to streaming, and it
 is why `{await expr}` — which blocks — is what a page that must work without script uses.
-* The wire form is a `<template>` carrying id, mode and target in ATTRIBUTES, followed by a
-byte-identical `<script>` that reads the template beside it. Identical bytes are what let one
-build-time hash cover every sink in every document, which is what keeps a nonce out of the head.
+* TWO SINK SHAPES, NOT THREE, and which one a position takes is syntax. A REGION SINK is a `<template>`
+carrying id, mode and target in ATTRIBUTES, followed by a byte-identical `<script>` that reads the
+template beside it — flow content, a `{#try}` region, a `{#for await}`'s rows. A PROPERTY SINK carries
+its id as an attribute on the OWNING ELEMENT and the filler writes one property, which is what covers
+every position an element cannot go in:
+
+| Position | Owner carries | Filler writes |
+| --- | --- | --- |
+| `href={await x}`, any attribute | the element | the attribute or property |
+| `class:`, `style:`, `bind:` | the element | the class, the style property, the bound property |
+| `<title>{name}</title>` | `<title data-abide-sink="…">` | `.textContent` |
+| `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` |
+
+  RCDATA is why the second shape has to exist rather than being a tidier spelling of the first: the parser
+creates no elements inside `<title>` or `<textarea>`, so a `<template>` there is text. The fill PAIR is
+still emitted at fill time wherever the stream has reached and finds its target by id, so it never has to
+sit in a position it would be illegal in. Identical bytes are what let one build-time hash cover every
+filler in every document, which is what keeps a nonce out of the head, and it is one hash for both shapes.
 
 ## Rendering
 
@@ -1666,7 +1780,7 @@ what `abide:hydrate`'s "a mismatched sink rebuilt" is reporting.
 
 | Name | Type | Description |
 | --- | --- | --- |
-| `PORT` | `number` | Listen port (default `3000`). `--port` on a command overrides it by DECLARING it, so `config().PORT` is the port. Resolved as an integer `0`–`65535` whether a variable or an `onConfig` default named it — anything else is the floor, so no reader checks the range again. `0` is the kernel's "whatever is free" and is the one number here that may be zero. |
+| `PORT` | `number` | Listen port (default `3000`). `--port` on a command overrides it by DECLARING it, so `config().PORT` is the port. Resolved as an integer `0`–`65535` whether a variable or an `onConfig` default named it — anything else falls back to the DEFAULT, so no reader checks the range again and a malformed `PORT` never silently binds a random port. `0` is the kernel's "whatever is free" and is the one number here that may be zero. |
 | `APP_URL` | `string \| null` | The app's public URL. Its ORIGIN is what both gates compare against (WS CSWSH, CSRF) — undeclared, they fall back to the REQUEST's own, which is the weaker answer, since a caller controls its own `Host`, and the wrong one behind TLS termination, where that origin is the proxy's. Its PATH is the app's mount base: `https://abide.com/v2` serves every page, endpoint and asset under `/v2`. |
 | `NODE_ENV` | `string` | Verbatim, and DEFAULTED FROM THE COMMAND when unset: `abide start` is `production`, `abide dev` is `development`. An explicit value always wins, completely — `NODE_ENV=production abide dev` minifies, requires `ABIDE_PRINCIPAL_SECRET`, sets `Secure` and ships no reload client. There is no second production flag: `config().NODE_ENV === 'production'` is the one comparison, and the command only supplies its default. |
 | `APP_NAME` | `string` | The app's name, and therefore `log`'s default channel. Falls back to the nearest package.json `name`, then `abide`. |
@@ -1853,17 +1967,24 @@ Non-interactively it streams until the room ends or the process is signalled, wh
 * Exit codes `0` ok · `1` failed/unreachable · `2` usage · `3` 422 · `4` 401/403 · `5` 404 · `6` 504 · `7` 5xx · `8` other 4xx.
 * `abide start` and `abide dev` assemble from the same code, and differ in three
 decisions: where the bundle came from, what a taken port means, and whether Bun's `development` is on.
-* `abide dev` is ONE process: the main thread watches and owns the lifecycle, and a WORKER holds the
-app. Replacing that worker is the reload. What has to be thrown away is a module graph, not an
+* `abide dev` is ONE process: the main thread watches, BINDS AND SERVES, and a WORKER holds the app.
+Replacing that worker is the reload. THE LISTENER IS THE MAIN THREAD'S so that a reload cannot drop it —
+which is what "PINS what it bound so no restart moves the app" is promising — and what that costs is
+marshalling `(method, url, headers, body stream)` to the worker and streaming the response back, a
+per-request proxy that exists on no production path. ON REPLACEMENT THE MAIN THREAD FORCE-CLOSES EVERY
+LIVE SOCKET, which is what fires the reload trigger below: a socket that outlived the worker would never
+reopen, and reopening is the whole mechanism. What has to be thrown away is a module graph, not an
 operating system process — a graph is cached by resolved path and cannot be evicted, so re-importing
 `app.ts` behind a cache-busting query would reload that one file while every module it imports stayed
 as it was, leaving the app half of two versions with nothing saying so. An isolate is the smallest
 thing that contains a whole graph, so terminating one is the reload. There is no dependency graph
 deciding that a css edit "only" needs the client rebuilt.
 * Everything a child process would have cost is therefore absent rather than handled: no stdout to
-relay and no colour lost to relaying it, no IPC to carry the port back, no exit code to forward, no
-signal to pass down, and no way to leave a server running that outlived its supervisor — killing the
-pid takes the socket with it, because it is the same pid.
+relay and no colour lost to relaying it, no port to carry back at all since the main thread is what
+bound it, no exit code to forward, no signal to pass down, and no way to leave a server running that
+outlived its supervisor — killing the pid takes the socket with it, because it is the same pid. THE ONE
+COST THE SPLIT DOES HAVE is the per-request marshalling to the worker named above, which is a
+dev-only path and the price of a listener a reload cannot drop.
 * The dev bundle is `Bun.build` into memory: unminified, and entry-named by its SOURCE (`client.js`, not
 `client-<hash>.js`) so a breakpoint and a stack frame survive a rebuild — which is what `no-store` on
 every dev asset pays for. Nothing is written so `abide dev` cannot leave a
@@ -1893,4 +2014,15 @@ answers 404 → exit `5`. Nothing answering at all has no status to map → exit
 * Every user-exposed behavior or capability should be documented as real .abide and/or .ts files as EXAMPLES.
 * All EXAMPLES should also be benchmarked and a part of end-to-end testing.
 * Benchmarking should take into account DOM work, repaint/reflow, wall time ms, render frames, cpu/memory. All benchmarks should be exposed 
-* EXAMPLES and prose should be product-focused, not engineering focused. Not what can it do, but what problem does an app author use it to solve.
+* THREE LEVELS, and a reader may stop at any of them: a MAIN OVERVIEW with one section per area,
+each showing that area's own opening; a SECTION OVERVIEW carrying that same opening and then what does
+not fit on a landing page; and a TOPIC PAGE, one problem solved.
+* A SECTION OVERVIEW OWNS ITS OPENING, and the main overview shows the same words by pulling them with
+`{% lead <slug> %}`, so there is one place to edit them and the seam cannot drift. THE BUILD REFUSES A
+LEAD THAT CARRIES A RELATIVE LINK, because it renders at two depths.
+* `covers:` IN THE FRONTMATTER is where a page declares which capabilities it covers, so the order a
+concept is introduced in is checkable rather than remembered. AN OVERVIEW DOES NOT DECLARE ONE — it
+routes, and the topic page covers; a capability counted as covered by a page that only links to it is
+a gate that has quietly stopped working.
+* The VOICE, the vocabulary and the register of a title against a nav label are `docs/BRAND.md`'s —
+rules a reviewer enforces rather than the build.

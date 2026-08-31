@@ -125,7 +125,7 @@ agent reads to decide whether this is the call it wants.
 
 The one rule the framework cannot enforce for you.
 
-The session cookie is `SameSite=Lax`, so a top-level navigation from another site sends it. A
+The principal cookie is `SameSite=Lax`, so a top-level navigation from another site sends it. A
 `GET` that writes is reachable from an `<a href>` on a page you do not control, with your
 user's credentials attached.
 

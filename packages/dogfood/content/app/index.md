@@ -51,7 +51,7 @@ Read on: [CSP](lock-down-what-the-page-may-load.md)
 
 ## Knowing the connection dropped
 
-A value that says whether the browser has connectivity, so a page can show it, queue
+A value that says whether the caller can reach the app, so a page can show it, queue
 around it, and recover when it comes back.
 
 Read on: [Offline](know-when-the-browser-goes-offline.md)

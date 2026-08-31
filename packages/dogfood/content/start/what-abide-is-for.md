@@ -39,7 +39,7 @@ That is not a naming convenience:
 
 * the branch you write for "loading" works on all four
 * a component taking a `Reactive<User>` does not care where the user came from
-* swapping a local value for a remote one changes the declaration and nothing downstream
+* swapping a local value for a remote one changes how it is declared and nothing downstream
 
 ## Reading is what starts the work
 

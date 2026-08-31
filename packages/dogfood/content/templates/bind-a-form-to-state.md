@@ -165,7 +165,7 @@ const { count } = props<Props>()
 <button onclick={() => count += 1}>{count}</button>
 ```
 
-That declaration makes `bind:` a **compile requirement** at every call site — not a runtime
+Declaring it that way makes `bind:` a **compile requirement** at every call site — not a runtime
 warning, and not something the component discovers about how it was called:
 
 ```abide
@@ -174,7 +174,7 @@ warning, and not something the component discovers about how it was called:
 
 Leave the `bind:` off and it does not compile. The marker sits at the call site on purpose:
 that is the side giving write access up, so a reader sees it without opening the child, while
-the child's declaration is what lets the compiler check every caller.
+the child declaring it is what lets the compiler check every caller.
 
 `bind:` needs the same lvalue a native binding does — a state name, a member path, or a
 `{get, set}` pair.

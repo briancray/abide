@@ -6,7 +6,7 @@ covers:
   - `state`
   - `s`
   - `s.set`
-  - `Input`
+  - `Accepted`
   - `Stored`
   - `Transformer`
 status: stub

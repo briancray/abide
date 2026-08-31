@@ -44,7 +44,7 @@ nav a { flex:1; display:block; padding:.24rem .5rem; margin-left:-.5rem; border-
 nav a:hover { opacity:1; background:color-mix(in srgb, var(--signal) 10%, transparent); }
 nav a[aria-current] { opacity:1; color:var(--signal); font-weight:600;
   background:color-mix(in srgb, var(--signal) 12%, transparent); }
-.stub { width:4px; height:4px; border-radius:50%; background:var(--warm);
+.stub { width:4px; height:4px; border-radius:50%; background:var(--muted);
   opacity:.55; flex:none; align-self:center; }
 nav li:has(.stub) a { opacity:.52; }
 nav li:has(.stub) a:hover, nav li:has(.stub) a[aria-current] { opacity:1; }

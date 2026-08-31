@@ -14,38 +14,20 @@ decision the rest of this page explains: **the document is not held for the data
 goes out as soon as it is known, the markup follows, and the values that were still in flight
 fill the places they were read.
 
-| Stage | What runs |
-| --- | --- |
-| the request arrives | your app's own route, then the middleware onion |
-| the route resolves | the `page.abide` at that path, inside its layouts |
-| the render starts | every load the page reads, all of them at once |
-| the first bytes leave | the head, then the markup as far as it goes |
-| the values land | each one fills the hole it left |
-| the browser takes over | the same setup runs again, against the nodes already there |
-
-## Three directories, and where each one runs
-
-`src/` is the app. What decides where a file runs is which directory it is in, and the build
-enforces it — a client graph that reaches into `#server/**` for anything but a handler is a
-compile error naming the import, never a stub that quietly does nothing in a browser.
-
-| Directory | Runs | Reached as |
+| | Stage | What runs |
 | --- | --- | --- |
-| `src/ui/**` | the browser, and the server that renders it | `#ui/…` |
-| `src/server/**` | the server only | `#server/…` |
-| `src/shared/**` | both sides | `#shared/…` |
+| 1 | the request arrives | your app's own route, then the middleware onion |
+| 2 | the route resolves | the `page.abide` at that path, inside its layouts |
+| 3 | the render starts | every load the page reads, all of them at once |
+| 4 | the first bytes leave | the head, then the markup as far as it goes |
+| 5 | the values land | each one fills the hole it left |
+| 6 | the browser takes over | the same setup runs again, against the nodes already there |
+| 7 | the next navigation | the browser renders it, and shared layouts are not rebuilt |
 
-Two files in there are addresses rather than names, and both are optional:
+The seven sections below are those seven rows, in that order and under the same names. Where each
+file in `src/` runs is a separate question, and the map for it is the last section.
 
-| File | What it is |
-| --- | --- |
-| `#server/app.ts` | the app's own route, and where app-wide lifecycle hooks are registered |
-| `#ui/app.html` | the document pages are served in |
-
-Read on: [Config](../app/configure-the-app.md) ·
-[Lifecycle](../app/run-code-at-start-and-stop.md)
-
-## What answers before the router does
+## 1. The request arrives
 
 `#server/app.ts` default-exports a route of your own, and it is asked first — a `robots.txt`, a
 webhook, anything you would rather answer without a page. Return nothing and the request carries
@@ -73,10 +55,11 @@ the caller's own cookie.
 Read on: [Auth & principal](../app/know-who-is-calling.md) ·
 [Authorization](../server/decide-who-may-call-what.md)
 
-## The document a page renders into
+## 2. The route resolves
 
-`#ui/app.html` is your shell. `<slot></slot>` is where the page goes; everything around it is
-yours, and it is served as written.
+The path picks a `page.abide`, and the layouts above it in the directory tree wrap it. All of
+that renders into one document, and `#ui/app.html` is that document. `<slot></slot>` is where the
+outermost layout goes; everything around it is yours, and it is served as written.
 
 ```html #ui/app.html
 <!doctype html>
@@ -96,16 +79,16 @@ CSS the client graph imported is linked in for you — so a content hash never a
 you maintain. Leave `#ui/app.html` out entirely and abide serves its own minimal shell.
 
 A page's `<head>` elements are merged into that document by key, deepest contributor winning, so
-a page's `<title>` replaces its layout's. The positions are known at compile time, which is what
-lets the head flush before the body has been walked.
+a page's `<title>` replaces its layout's. The positions are known at compile time, which is why
+step 4 can flush the head before the body has been walked.
 
 Read on: [Head & metadata](../pages/set-the-title-and-social-preview.md) ·
 [Layouts](../pages/give-pages-the-same-chrome.md) ·
 [Manual rendering](../pages/render-a-document-yourself.md)
 
-## Every load starts at once, and nothing waits its turn
+## 3. The render starts
 
-Rendering a page runs its setup: the `<script>` blocks, the `state` declarations, the `memo`
+Rendering a page runs its setup: the `<script>` blocks, the `state` calls, the `memo`
 bodies the markup reads. Each read that needs the server starts its work immediately, so the
 loads on a page are in flight together rather than in the order the markup happens to mention
 them.
@@ -113,18 +96,25 @@ them.
 The total time is the slowest one, not the sum — and the first byte does not wait for any of
 them.
 
-## Holes the values fill later
+## 4. The first bytes leave
 
-A read of a value still in flight renders nothing and opens a **sink**: an addressable slot the
-value fills when it lands. The markup after it keeps going out.
+The head goes first, then the markup. A read of a value still in flight renders nothing and
+opens a **sink**: an addressable slot the value fills when it lands. The markup after it keeps
+going out.
 
 ```abide #ui/pages/invoices/[id]/page.abide
+<script>
+import { memo, route } from 'abide'
+import { getInvoice } from '#server/rpc/invoices'
+
+const invoice = memo(() => getInvoice({ id: route.params.id }))
+</script>
+
 <h1>Invoice {invoice.number}</h1>
 <p>{invoice.total} due {invoice.dueOn}</p>
 ```
 
-Three sinks, one document, no loading branch. If the row arrives before the document closes, the
-holes are filled in place; if it does not, the browser's own request picks it up.
+Three sinks, one document, no loading branch.
 
 Waiting is the opt-in, and `await` is how it is asked for:
 
@@ -147,23 +137,50 @@ A `then` takes a name or a pattern, and both bind the **resolved value** — `th
 whole invoice, `then { total }` takes the one field off it. The names stay live, so a
 reload updates the body rather than rebuilding it.
 
-**The cost is a client with no script.** Nothing filled after the first flush reaches it, because
-filling is what the script does — so a page that must work without one uses `{await}` and pays
-the delay to first byte deliberately.
-
 Read on: [Streaming HTML](../pages/send-the-page-before-the-data-lands.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md)
 
-## What the browser is sent
+## 5. The values land
 
-Not a serialized tree to diff, and not a copy of your data in the document. The client gets
-markers — the sink and block boundaries the render emitted — plus the bundle, and it runs the
-same setup the server ran: every `<script>`, every `state`, every `memo` body, again.
+A document is a one-way stream, so a value cannot be written back at the position it was read
+from. What goes out at that position is an **address**, and when the row lands the fill is
+appended wherever the stream has got to and routed back to it:
 
-That sounds like paying twice, and for the loads it is not: the render **buffers what it
-fetched**, and the calls the re-run makes are answered from that buffer instead of going back
-over the network. One code path on both sides, and no round trip to reproduce what is already on
-screen.
+```
+  the walk               the document, in the order it goes out
+  ------------------     --------------------------------------
+  head is known      ->  <head> manifest . bootstrap </head>
+                         <body>
+  read .number       ->  <h1>Invoice [3]</h1>                   <-+
+  read .total .dueOn ->  <p>[4] due [5]</p>                     <-|
+  the walk goes on   ->  <footer>...</footer>                     |
+                         ...                                      |
+  the row lands      ->  [3]=42  [4]=$120.00  [5]=Mar 3 -----------+
+  document closes    ->  </body></html>
+```
+
+The walk never pauses at a read, nothing is buffered waiting for the row, and nothing is
+re-sent. Appending the fill at the tail rather than at the hole is also what frees a value from
+arriving somewhere it would be illegal — inside a `<title>`, between two `<tr>`s.
+
+**The document closes on the last blocking sink, not on the last value.** A row still in flight
+at that point is simply never filled, and the browser's own request picks it up instead.
+
+**The cost is a client with no script.** Nothing filled after the first flush reaches it, because
+filling is what the script does — so a page that must work without one uses `{await}` from step 4
+and pays the delay to first byte deliberately.
+
+## 6. The browser takes over
+
+Markers and the bundle. Not a serialized tree to diff, and not a copy of your data in the
+document — the client re-runs the same setup the server ran: every `<script>`, every `state`,
+every `memo` body, again.
+
+That sounds like paying twice, and for the loads it is not. `memo(() => getInvoice(…))` runs a
+second time in the browser and makes the same call — one the browser already issued before the
+bundle loaded. The render **buffered what it fetched**, so that call is answered from the buffer
+rather than from the database. One code path on both sides, and no round trip to reproduce what
+is already on screen.
 
 Binding happens against the nodes that are already there. A marker whose content does not match
 rebuilds its own block, not the page.
@@ -175,7 +192,7 @@ runs on the server and arrives as data.
 Read on: [Reading data](../server/read-data-without-writing-an-api.md) ·
 [Rooms & sockets](../server/keep-a-room-of-callers-in-sync.md)
 
-## Every navigation after the first
+## 7. The next navigation
 
 Once the page has hydrated, the browser does the rendering. A navigation fetches what the next
 page reads rather than a new document, and the layouts a route shares with the one before it are
@@ -183,6 +200,78 @@ never rebuilt — a header with an open menu in it stays exactly as it was.
 
 Read on: [Links & navigation](../pages/link-to-another-page.md) ·
 [View transitions](../pages/animate-from-one-page-to-the-next.md)
+
+## The same seven steps, in bytes
+
+`/invoices/42`, against the page in step 4. This is what actually leaves the server.
+
+**Steps 1–4, the head.** Nothing was awaited to produce it. Two of its elements are abide's: the
+seed manifest, naming the calls this render is making, and the bootstrap that issues them.
+
+```html
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script type="application/json" data-abide-seed>
+[["GET","/__abide/rpc/invoices/getInvoice",{"id":"42"}]]
+</script>
+<script>/* issues each call above, stashes each Promise<Response> under its key */</script>
+<link rel="stylesheet" href="/_abide/app.7f3c9a1e.css">
+</head>
+<body>
+```
+
+The manifest is `(method, address, args)` — what to fetch, never what was fetched. So the browser
+has the request in flight before the bundle exists, and before the body it will fill has been
+written.
+
+**Step 4, the markup.** The row has not landed, so each read leaves a sink: a `<template>`
+holding the slot's id, and the filler script beside it.
+
+```html
+<h1>Invoice <template data-abide-sink="3"></template><script>/* fill 3 */</script></h1>
+<p><template data-abide-sink="4"></template><script>/* fill 4 */</script>
+ due <template data-abide-sink="5"></template><script>/* fill 5 */</script></p>
+```
+
+Those filler scripts are **byte-identical** — every one of them, in every document abide serves.
+Each reads the `<template>` next to it, which is where everything specific to the slot lives.
+That is what lets one build-time hash cover them all, and what keeps a per-request nonce out of
+the head.
+
+**Step 5, a fill.** Written at the current end of the document, finding the hole by id. Where an
+element genuinely cannot go, the id rides on the owning element instead and the filler writes one
+property.
+
+```html
+<template data-abide-sink="3" data-abide-fill>42</template><script>/* fill 3 */</script>
+```
+
+**Step 6.** The bundle loads and re-runs the setup. `getInvoice` is called again and answered
+from the buffer, and binding happens against the nodes above.
+
+## Three directories, and where each one runs
+
+`src/` is the app. What decides where a file runs is which directory it is in, and the build
+enforces it — a client graph that reaches into `#server/**` for anything but a handler is a
+compile error naming the import, never a stub that quietly does nothing in a browser.
+
+| Directory | Runs | Reached as |
+| --- | --- | --- |
+| `src/ui/**` | the browser, and the server that renders it | `#ui/…` |
+| `src/server/**` | the server only | `#server/…` |
+| `src/shared/**` | both sides | `#shared/…` |
+
+Two files in there are addresses rather than names, and both are optional:
+
+| File | What it is |
+| --- | --- |
+| `#server/app.ts` | the app's own route, and where app-wide lifecycle hooks are registered |
+| `#ui/app.html` | the document pages are served in |
+
+Read on: [Config](../app/configure-the-app.md) ·
+[Lifecycle](../app/run-code-at-start-and-stop.md)
 
 ## Next
 

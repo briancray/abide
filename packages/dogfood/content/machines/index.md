@@ -33,7 +33,7 @@ definition and an OpenAPI operation need are the pieces `GET` and `POST` already
 | Piece | Where it comes from |
 | --- | --- |
 | address | the file path and the export name |
-| method | which declaration gave it an address |
+| method | which handler gave it an address |
 | argument schema | the annotations you already wrote, or the schema you named |
 | result schema | the handler's return type |
 | description | `description`, the one thing worth writing by hand |

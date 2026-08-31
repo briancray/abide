@@ -7,7 +7,7 @@ intent: Four ways to declare a value, and the one type all four hand back.
 Four ways to declare a value. **One type back** — every one of them is a `Reactive`,
 so everything below reads the same.
 
-| Declaration | The value comes from |
+| You write | The value comes from |
 | --- | --- |
 | `state(0)` | you |
 | `memo(() => a + b)` | other values |
@@ -74,7 +74,7 @@ Read on: [Derived values](derive-a-value-from-other-values.md) ·
 
 ## Reading one value from two components
 
-The same value in two places is one declaration, not a prop threaded through every
+The same value in two places is declared once, not a prop threaded through every
 level between them.
 
 Read on: [Sharing](share-one-value-across-components.md)

@@ -7,7 +7,7 @@ intent: A file under #server/rpc is callable, and the method you declare it with
 A file under `#server/rpc/**` is callable. The method you declare it with is the whole
 difference between a read and a write.
 
-| Declaration | Means |
+| You declare | Means |
 | --- | --- |
 | `GET(…)` | a read any surface may call, addressed by its arguments |
 | `POST` / `PUT` / `PATCH` / `DELETE` | a mutation, retaining nothing by default |

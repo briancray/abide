@@ -5,7 +5,7 @@ intent: A log pane, a chat scrollback, the last n readings — bounded, and chea
 covers:
   - state › `tail`
   - `s.tail`
-  - `Tail<Stored>`
+  - `Tail<Produced>`
   - `for await (… of s)`
   - `s[Symbol.asyncIterator]`
   - `ABIDE_MAX_STREAM_BUFFER_SIZE`
