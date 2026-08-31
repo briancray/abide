@@ -8,6 +8,10 @@ covers:
   - `ParamsOf<P>`
   - `HasParams<P>`
   - `ParamNames<P>`
+  - `HasSegments<P>`
+  - `RequiredNames<P>`
+  - `OptionalNames<P>`
+  - `RestNames<P>`
   - `navigate`
   - `route.url`
   - `route.navigating`

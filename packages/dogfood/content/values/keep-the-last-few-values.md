@@ -6,6 +6,7 @@ covers:
   - state › `tail`
   - `s.tail`
   - `Tail<Produced>`
+  - `Produced`
   - `for await (… of s)`
   - `s[Symbol.asyncIterator]`
   - `ABIDE_MAX_STREAM_BUFFER_SIZE`

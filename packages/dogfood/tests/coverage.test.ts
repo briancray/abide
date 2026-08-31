@@ -319,6 +319,15 @@ test('every nav section shows its opening on the main overview', async () => {
 // a `### ChannelOptions` section rather than a row), and a TYPE PARAMETER bound anywhere
 // in the document — `Failures` and `Data` are spelled in one signature's binder and used
 // in the next row's, which is the shape a per-row scan reads as dangling.
+//
+// A STRING LITERAL is not a name to look up. `Failed<'NotFound', …>` spells the key
+// `isError` narrows BY, not a type declared elsewhere, and the scan matched inside the
+// quotes. Blanking the span rather than exempting the word keeps the check exact: a type
+// is only ever referenced unquoted, so nothing this caught before stops being caught.
+function withoutLiterals(signature: string): string {
+    return signature.replaceAll(/'[^']*'/g, "''")
+}
+
 function binder(signature: string): string {
     if (!signature.startsWith('`<')) return ''
     let depth = 0
@@ -350,6 +359,11 @@ async function declaredTypes(): Promise<Set<string>> {
         // this test would stop testing.
         for (const part of binder(signature ?? '').split(','))
             declared.add((/^\s*([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1]) ?? '')
+        // A MAPPED TYPE binds its key where it uses it — `[K in RequiredNames<P>]` is the
+        // same declaration a leading `<…>` makes, in the other syntax. `ParamsOf<P>` is
+        // three of them, and without this the key reads as a type nothing declares.
+        for (const match of (signature ?? '').matchAll(/\[\s*([A-Z][A-Za-z0-9]*)\s+in\b/g))
+            declared.add(match[1] ?? '')
     }
     return declared
 }
@@ -358,7 +372,7 @@ test('every type a signature names is declared somewhere', async () => {
     const declared = await declaredTypes()
     const dangling: string[] = []
     for (const { name, signature } of await specRows()) {
-        for (const match of (signature ?? '').matchAll(/\b([A-Z][A-Za-z0-9]*)\b/g)) {
+        for (const match of withoutLiterals(signature ?? '').matchAll(/\b([A-Z][A-Za-z0-9]*)\b/g)) {
             const type = match[1] ?? ''
             if (!BUILTIN_TYPES.has(type) && !declared.has(type)) dangling.push(`${name}: ${type}`)
         }

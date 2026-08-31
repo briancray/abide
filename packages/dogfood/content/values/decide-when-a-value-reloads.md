@@ -5,6 +5,8 @@ intent: Mark something stale, force it to reload now, or let it expire on its ow
 covers:
   - `m.invalidate`
   - `m.refresh`
+  - `s.invalidate`
+  - `s.refresh`
   - `Selection`
   - `refresh`
   - `invalidate`

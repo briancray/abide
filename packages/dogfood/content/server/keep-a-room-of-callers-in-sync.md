@@ -6,6 +6,9 @@ covers:
   - `channel`
   - `Channel`
   - `Room`
+  - `room.set(message)`
+  - `room.revoke(seq)`
+  - `room.clear()`
   - channel › `Message`
   - socket › `Message`
   - channel › `Args`

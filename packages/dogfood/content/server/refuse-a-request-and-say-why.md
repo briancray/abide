@@ -5,6 +5,8 @@ intent: Turn a refusal into something the caller can name, narrow and render —
 covers:
   - `refuse`
   - `refuse.typed`
+  - `notFound`
+  - `validationError`
   - `Failed<Name, Data>`
   - `return myError(data)`
   - `myError(data)` DISCARDED
