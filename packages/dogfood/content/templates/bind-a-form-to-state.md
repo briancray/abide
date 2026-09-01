@@ -16,7 +16,7 @@ A form is state you can see. The usual cost of saying so is a handler per field 
 event, pull `target.value`, set the state, and remember to seed the input from the state on
 the way back. `bind:` is that pair written once.
 
-```abide #ui/pages/account/page.abide
+```abide #ui/pages/account/page.abide — excerpt
 <script>
 import { state } from 'abide'
 
@@ -27,7 +27,7 @@ const name = state('')
 <p>Hello {name}</p>
 ```
 
-Two lines, one direction each, and no handler between them.
+*2 lines, 1 direction each* — and no handler between them.
 
 ## Binding a text input
 
@@ -35,7 +35,7 @@ Two lines, one direction each, and no handler between them.
 single copy — there is no separate form model to keep in step with it, and no submit handler
 needed to find out what the fields hold.
 
-```abide
+```abide abide
 <input bind:value={email}>
 <textarea bind:value={notes}></textarea>
 <select bind:value={plan}>
@@ -55,7 +55,7 @@ and **never stringifies it**, so a `false` is an absent attribute rather than th
 `bind:open` is the same binding on a `<details>`, written back from its `toggle` event, so a
 disclosure's open state is somewhere you can read rather than somewhere in the DOM.
 
-```abide
+```abide abide
 <label><input type="checkbox" bind:checked={subscribed}> Email me</label>
 
 <details bind:open={showAdvanced}>
@@ -75,7 +75,7 @@ disclosure is state, so the rest of the page can branch on it.
 `value`**, and `group` is never emitted as an attribute — it is a binding, not something that
 reaches the DOM.
 
-```abide
+```abide abide
 <label><input type="radio" bind:group={plan} value="monthly"> Monthly</label>
 <label><input type="radio" bind:group={plan} value="yearly"> Yearly</label>
 ```
@@ -83,7 +83,7 @@ reaches the DOM.
 Point several checkboxes at one array and the same binding collects them, each contributing
 its own `value`.
 
-```abide
+```abide abide
 <label><input type="checkbox" bind:group={topics} value="releases"> Releases</label>
 <label><input type="checkbox" bind:group={topics} value="security"> Security</label>
 ```
@@ -98,7 +98,7 @@ does not, because `bind:value={price * 2}` has nothing to write back to.
 
 Where the value you want is computed, hand over the pair explicitly:
 
-```abide
+```abide abide
 <input bind:value={{ get: () => cents / 100, set: (v) => cents = v * 100 }}>
 ```
 
@@ -116,7 +116,7 @@ import { refuse } from 'abide'
 export const notAnEmail = refuse.typed('NotAnEmail', 422)
 ```
 
-```abide #ui/pages/account/page.abide
+```abide #ui/pages/account/page.abide — excerpt
 <script>
 import { state } from 'abide'
 import { notAnEmail } from '#shared/failures'
@@ -168,7 +168,7 @@ const { count } = props<Props>()
 Declaring it that way makes `bind:` a **compile requirement** at every call site — not a runtime
 warning, and not something the component discovers about how it was called:
 
-```abide
+```abide abide
 <Stepper bind:count={total}/>
 ```
 

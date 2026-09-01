@@ -13,7 +13,7 @@ difference between a read and a write.
 | `POST` / `PUT` / `PATCH` / `DELETE` | a mutation, retaining nothing by default |
 | `channel()` behind a `socket(…)` | a room many callers share |
 
-```ts #server/rpc/invoices.ts
+```ts #server/rpc/invoices.ts — excerpt
 export const listInvoices = GET(() => database.invoice.all())
 export const payInvoice = POST(({ id }: { id: string }) => database.invoice.pay(id))
 ```
@@ -44,7 +44,7 @@ One handler can serve the whole result and the data as it arrives. A room goes
 further: many callers on one subject, pushed rather than polled.
 
 Read on: [Streaming data](send-data-as-it-arrives.md) ·
-[Rooms & sockets](keep-a-room-of-callers-in-sync.md)
+[Sockets](keep-a-room-of-callers-in-sync.md)
 
 ## Validation, authorization and ceilings
 

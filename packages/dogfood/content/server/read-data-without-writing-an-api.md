@@ -52,6 +52,9 @@ const invoice = memo(() => getInvoice({ id: route.params.id }))
 <p>{invoice.total} due {invoice.dueOn}</p>
 ```
 
+*2 files, 0 API between them* — against a route, a fetch, a client wrapper and a type kept in
+step by hand.
+
 The import is real — name, argument type and return type are the ones you just wrote. No
 `fetch`, no loading boilerplate, no `await` in the markup.
 
@@ -98,7 +101,7 @@ for invoice `42` are one request, and the second gets the value the first is wai
 
 Hand `GET` the memo directly to name the caching yourself:
 
-```ts #server/rpc/invoices.ts
+```ts #server/rpc/invoices.ts — excerpt
 const invoiceById = memo(({ id }: { id: string }) => database.invoice.find(id), {
   ttl: 30_000,
 })

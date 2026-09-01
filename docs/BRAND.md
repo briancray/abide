@@ -92,14 +92,20 @@ Three levels, and a reader may stop at any of them.
 | Section overview | that same opening, then what does not fit on a landing page — every part linking to the page that covers it |
 | Topic page | one problem, solved |
 
-The mechanisms — `{% lead %}` and the `covers:` gate — are `docs/SPEC.md`'s, because the build
-enforces them. What is below is what a reviewer enforces.
+The mechanisms — `{% lead %}` and the `covers:` gate — are `docs/SPEC.md`'s, because the build and
+`packages/dogfood/tests/coverage.test.ts` enforce them between them. SOME OF WHAT IS BELOW IS
+ENFORCED THERE TOO: a heading leaning on a pronoun, a nav label that is a bare prepositional
+fragment, a link whose text no longer matches the `nav` it points at, an uncaptioned fence. A rule
+here that turns out to be checkable belongs in that file rather than in this list — what stays here
+is what only a reader can decide.
 
 * **A nav label and a title are two registers.** The label is what a reader scans a sidebar
   for — one or two words, and words they ALREADY OWN rather than ours or another framework's.
-  "Effects" was advertising the concept the pitch opens by refusing. The title is the problem
-  they are solving, and it is a sentence: "On value change" and "Do something when a value
-  changes" are the same page.
+  "Effects" was advertising the concept the pitch opens by refusing. "Watching values" is not
+  that trade: `watch` is a callable an app imports and types, so the label names a primitive
+  rather than a mental model — naming what we ship is only a cost where the pitch declines the
+  thing. The title is the problem they are solving, and it is a sentence: "Watching values" and
+  "Do something when a value changes" are the same page.
 * **A label stands alone.** A nav label, a panel name and a heading are read with no sentence
   around them, so each carries its own subject. "By name" and "On change" are fragments waiting
   for a noun the reader does not have; "Values by name" and "On value change" are not. This is
@@ -146,8 +152,11 @@ three pages later.
   `.abide` or `.ts` file, benchmarked and covered end to end, which is what keeps it evidence
   rather than illustration.
 * **Copy introduces the example and prices it.** A sentence before the block says which
-  problem it solves; the caption after says what it cost — *1 file, 3 lines* against the seven.
-  A reader should never have to work out why a block is on the page.
+  problem it solves; the line after says what it cost — *1 file, 3 lines* against the seven. THE
+  PAGE'S OPENING EXAMPLE IS THE ONE THAT MUST BE PRICED, that being the block carrying the claim the
+  title made; the snippets after it are already inside an argument the reader has accepted, and
+  pricing each of them turns the device into furniture. A reader should never have to work out why a
+  block is on the page.
 * **Second person, imperative.** What *you* write, what *it* does. "You write one instead", not
   "an author writes one instead".
 * **Primitives, not plumbing.** The feeling to reinforce is weightlessness: the isomorphism and
@@ -186,7 +195,7 @@ The full token set is `packages/dogfood/src/ui/app.css`; it is the source, not a
 | | |
 | --- | --- |
 | Ground | A deep green-black in dark, a cool paper in light. Calm and technical — never black-with-a-neon-accent — `--paper`, `--ink`, `--muted` |
-| Signal | Teal. Links, active nav, the `.abide` spine — `--signal` |
+| Signal | Teal. Links, active nav, the BOTH-SIDES spine — `--signal` |
 | Headings | Terracotta. Warm against a cold palette, and deliberately NOT the amber below — `--heading` |
 | Amber | The SERVER side — the spine, and the response arrow beside it — `--warm` |
 | Blue | The BROWSER side, the same way — `--cool` |
@@ -196,10 +205,15 @@ A stub marker takes `--muted`. It marks an ABSENCE, so it takes the ground's own
 rather than a reserved colour, and it goes when the framework is written — which is why it has no
 row here to inherit.
 
-**The signature is the code-block spine.** Every snippet carries a colored edge and a caption
-naming which side it runs on — server, browser, or a `.abide` file that is both. It is the
-framework's central idea made visible, and it is the one device to keep wherever the brand
-appears.
+**The signature is the code-block spine.** Every snippet of SOURCE carries a colored edge and a
+caption naming which side it runs on — a file path, or one of `server`, `browser`, `shared`,
+`abide`. Four words and three colours: `shared` and `abide` are BOTH SIDES, the seam deciding it
+rather than the extension, so a `#shared/*.ts` takes the same edge a `.abide` file does. A block
+that is not source — a shell transcript, a directory tree — carries no language and no caption,
+having no side to name. A caption showing part of a file says so: `— excerpt`, because an address
+a reader cannot open is a claim, and one that contradicts the same address on another page is a
+claim that has already broken. It is the framework's central idea made visible, and it is the one
+device to keep wherever the brand appears.
 
 # Status
 

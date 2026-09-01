@@ -18,7 +18,9 @@ const count = state(0)
 <button onclick={() => count += 1}>Click</button>
 ```
 
-Nine lines, and the app serves `/`. One file holds the value, the markup that shows it, and the
+*1 file, 9 lines* — and the app serves `/`.
+
+One file holds the value, the markup that shows it, and the
 handler that changes it — there is no store to declare, no component to register, and no
 re-render to ask for.
 
@@ -123,7 +125,7 @@ Work that belongs to a real browser goes where there is one: an event handler, o
 own load hook.
 
 Read on: [Request to paint](how-a-page-becomes-html.md) ·
-[On load](../templates/run-code-when-a-component-loads.md)
+[Scripts](../templates/run-code-when-a-component-loads.md)
 
 ## Running what you wrote
 

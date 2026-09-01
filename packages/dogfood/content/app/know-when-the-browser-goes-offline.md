@@ -15,7 +15,7 @@ You need two things: a way to tell them, and a way to catch up when the connecti
 
 Read it by name, like any other.
 
-```abide #ui/pages/orders/page.abide
+```abide #ui/pages/orders/page.abide — excerpt
 <script>
 import { online } from 'abide'
 </script>
@@ -24,6 +24,9 @@ import { online } from 'abide'
     <p role="status">You are offline. Nothing is being saved.</p>
 {/if}
 ```
+
+*1 name, 0 listeners* — against `online` and `offline` handlers, the teardown for both, and a
+flag between them.
 
 There is no listener to attach and no cleanup to remember. Reading it is what subscribes,
 and the paragraph mounts and unmounts as the answer moves.
@@ -47,7 +50,7 @@ hydration mismatch: nothing is rebuilt, the text updates where it stands.
 When the connection comes back, what you want reloaded is whatever the reader is actually
 looking at — not every value the scope is holding.
 
-```abide #ui/pages/layout.abide
+```abide #ui/pages/layout.abide — excerpt
 <script>
 import { online, watch, invalidate } from 'abide'
 
@@ -82,4 +85,4 @@ expect and wrong as the gate on a write: the load that failed is the honest sign
 
 * [Loading states](../values/show-a-value-that-isnt-there-yet.md) — what a page shows before a value lands
 * [Reloading](../values/decide-when-a-value-reloads.md) — `invalidate` against `refresh`, over one value or a selection
-* [On value change](../values/do-something-when-a-value-changes.md) — what `watch` runs, and when it stops
+* [Watching values](../values/do-something-when-a-value-changes.md) — what `watch` runs, and when it stops

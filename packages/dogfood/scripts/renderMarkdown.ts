@@ -29,9 +29,13 @@ export function escapeHtml(text: string): string {
         .replaceAll('"', '&quot;')
 }
 
-// A fence's label is a file path or a one-word side. Which SIDE it names is derived
-// from it rather than written twice: a `.abide` file is both sides at once, which is
-// the distinction the spine colour exists to show.
+// A fence's label is a file path or one of four words — `server`, `browser`, `shared`,
+// `abide`. Which SIDE it names is derived from it rather than written twice. Four words
+// and three colours: `shared` and `abide` are both sides at once, which is the
+// distinction the spine exists to show, and the seam is what decides it rather than the
+// extension — a `#shared/*.ts` is as much both sides as a `.abide` file is.
+export const EXCERPT = / — excerpt$/
+
 // A compact highlighter: enough to make a snippet scannable, not a parser. Order in
 // the alternation is the precedence — a keyword inside a string stays a string.
 const TOKEN =
@@ -64,15 +68,27 @@ export function highlight(code: string): string {
 // — and showing the disk form teaches a path nobody writes. Build output is untouched,
 // having no seam to name.
 export function displayPath(path: string): string {
+    const suffix = EXCERPT.test(path) ? ' — excerpt' : ''
+    const address = path.replace(EXCERPT, '')
     for (const seam of ['ui', 'server', 'shared']) {
-        if (path.startsWith(`src/${seam}/`)) return `#${seam}/${path.slice(`src/${seam}/`.length)}`
+        if (address.startsWith(`src/${seam}/`))
+            return `#${seam}/${address.slice(`src/${seam}/`.length)}${suffix}`
     }
     return path
 }
 
+// The spine has three values and the seams have three names, and they do not line up
+// one to one: `#shared` and a `.abide` file are BOTH SIDES, so they take the same colour.
+// `— excerpt` is a suffix on the caption, never part of the address, so it is stripped
+// before the seam is read.
 export function sideOf(label: string): 'server' | 'abide' | 'browser' {
-    if (label.endsWith('.abide')) return 'abide'
-    return label.includes('server') ? 'server' : 'browser'
+    const address = label.replace(EXCERPT, '')
+    if (address.endsWith('.abide') || address === 'abide') return 'abide'
+    if (address.startsWith('#shared/') || address.startsWith('src/shared/') || address === 'shared')
+        return 'abide'
+    if (address.startsWith('#server/') || address.startsWith('src/server/') || address === 'server')
+        return 'server'
+    return 'browser'
 }
 
 export function slugify(text: string): string {

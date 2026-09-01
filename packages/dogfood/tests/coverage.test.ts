@@ -409,3 +409,65 @@ test('no nav label begins with a preposition', async () => {
         if (BARE_PREPOSITIONAL.test(page.nav)) offenders.push(`${page.slug}: ${page.nav}`)
     expect(offenders).toEqual([])
 })
+
+// docs/SPEC.md, Documentation: an overview ROUTES and a reference page ENUMERATES, so
+// neither covers. `machines/index` had grown four entries the section's topic pages
+// should have owned, and nothing said so — the coverage tests above are satisfied by a
+// claim from any page, which is exactly what makes the WRONG page's claim invisible.
+test('no overview or reference page declares covers', async () => {
+    const offenders: string[] = []
+    for (const page of await readPages()) {
+        const routes = page.slug.endsWith('/index') || page.slug.startsWith('reference/')
+        if (routes && page.covers.length > 0) offenders.push(page.slug)
+    }
+    expect(offenders).toEqual([])
+})
+
+// docs/BRAND.md, Documentation structure: a nav label is what a reader scans a sidebar
+// for, and a link standing in for a page is read as that label. So a RENAME has two
+// halves and only one of them is in the file being renamed — "Rooms & sockets" survived
+// in nine links after the page became "Sockets", and "On value change" in two.
+//
+// A link to a section OVERVIEW is labelled with the SECTION name, that being what a
+// reader is sent to; a CODE label names an API and the link is where to read about it.
+test('a link is labelled with the nav of the page it points at', async () => {
+    const pages = await readPages()
+    const navOf = new Map(pages.map((page) => [page.slug, page.nav]))
+    const sectionOf = new Map(pages.map((page) => [page.slug, page.section]))
+
+    const stale: string[] = []
+    for (const page of pages) {
+        const from = page.slug.slice(0, page.slug.lastIndexOf('/') + 1)
+        for (const [, label, target] of page.body.matchAll(/\[([^\]]+)\]\(([^)]+)\.md\)/g)) {
+            const slug = new URL(`${target}`, `abide:/${from}`).pathname.slice(1)
+            const nav = navOf.get(slug)
+            if (nav === undefined || label === undefined || label.startsWith('`')) continue
+            const overview = slug.endsWith('/index') ? sectionOf.get(slug) : undefined
+            if (label !== nav && label !== overview)
+                stale.push(`${page.slug}: "${label}" -> ${slug}, whose nav is "${nav}"`)
+        }
+    }
+    expect(stale).toEqual([])
+})
+
+// docs/BRAND.md, Visual identity: the code-block spine is the one device to keep, and an
+// uncaptioned fence renders without it — 46 of 87 did. The caption is a file path or one
+// of the four side words; a fence with NO LANGUAGE is exempt, being a shell transcript or
+// a directory tree rather than source, with no side to name.
+test('every source fence carries a caption', async () => {
+    const bare: string[] = []
+    for (const page of await readPages()) {
+        let fenced = false
+        for (const line of page.body.split('\n')) {
+            if (!line.startsWith('```')) continue
+            if (fenced) {
+                fenced = false
+                continue
+            }
+            fenced = true
+            if (line.trim() !== '```' && !/^```\S+\s+\S/.test(line))
+                bare.push(`${page.slug}: ${line.trim()}`)
+        }
+    }
+    expect(bare).toEqual([])
+})

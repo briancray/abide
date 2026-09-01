@@ -14,9 +14,9 @@ so everything below reads the same.
 | `memo(() => getThing({ id }))` | your server |
 | `channel()` | someone else |
 
-```ts
+```ts shared
 const draft = state('')
-const words = memo(() => draft.split(' ').length)
+const words = memo(() => draft().split(' ').length)
 ```
 
 ## What reading a value does
@@ -72,6 +72,14 @@ Read on: [Derived values](derive-a-value-from-other-values.md) ·
 [Reloading](decide-when-a-value-reloads.md) ·
 [Throttle & debounce](slow-down-a-value-that-changes-too-fast.md)
 
+## Values with no owner
+
+A room is the third kind. A state is written by whoever owns it and a memo is computed by its
+body; a room is written by **anything that can reach it**, and read the same way. So a bare read
+is the latest message, `pending()` runs until the first one, and `tail` counts messages.
+
+Read on: [Rooms](let-anything-publish-and-anything-read.md)
+
 ## Reading one value from two components
 
 The same value in two places is declared once, not a prop threaded through every
@@ -84,7 +92,7 @@ Read on: [Sharing](share-one-value-across-components.md)
 `watch` runs an effect when its sources change and hands back a disposer, so the
 cleanup is the return value rather than a second argument you might forget.
 
-Read on: [On value change](do-something-when-a-value-changes.md)
+Read on: [Watching values](do-something-when-a-value-changes.md)
 
 ## Keeping more than the latest value
 

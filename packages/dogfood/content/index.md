@@ -22,7 +22,7 @@ reading it is what loads it — there is nothing in between for you to write.
 Read on: [Reactive values](values/index.md) ·
 [Local state](values/show-a-value-that-changes.md) ·
 [Loading states](values/show-a-value-that-isnt-there-yet.md) ·
-[Rooms & sockets](server/keep-a-room-of-callers-in-sync.md)
+[Sockets](server/keep-a-room-of-callers-in-sync.md)
 
 ## Templates
 
@@ -41,7 +41,7 @@ Read on: [Templates](templates/index.md) ·
 Read on: [Data from the server](server/index.md) ·
 [Reading data](server/read-data-without-writing-an-api.md) ·
 [Mutations](server/change-something-on-the-server.md) ·
-[Rooms & sockets](server/keep-a-room-of-callers-in-sync.md)
+[Sockets](server/keep-a-room-of-callers-in-sync.md)
 
 
 ## Pages and navigation

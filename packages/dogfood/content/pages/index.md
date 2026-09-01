@@ -13,7 +13,7 @@ A file is a route. The parts of the path in brackets become values you can read.
 | `#ui/pages/layout.abide` | the chrome for everything below it |
 | `#ui/pages/error.abide` | where a failure renders, 404 included |
 
-```abide
+```abide abide
 <a href={url('/invoices/[id]', { id })}>See more</a>
 ```
 

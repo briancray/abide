@@ -22,8 +22,9 @@ export const NAV = [
         pages: [
             'values/index',
             'values/show-a-value-that-changes',
-            'values/show-a-value-that-isnt-there-yet',
             'values/derive-a-value-from-other-values',
+            'values/let-anything-publish-and-anything-read',
+            'values/show-a-value-that-isnt-there-yet',
             'values/load-once-per-set-of-arguments',
             'values/decide-when-a-value-reloads',
             'values/slow-down-a-value-that-changes-too-fast',
@@ -100,6 +101,7 @@ export const NAV = [
             'machines/index',
             'machines/describe-your-api-without-writing-a-spec',
             'machines/let-a-model-call-your-handlers',
+            'machines/keep-a-handler-off-a-surface',
         ],
     },
     {

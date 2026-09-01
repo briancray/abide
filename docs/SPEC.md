@@ -224,16 +224,16 @@ a truncated answer, and the same failure a chat room's default retention of 1 ha
 | --- | --- | --- |
 | `tail` | `number` | How many past messages the room retains. Default 1 — latest only. 0 is passthrough and drop. It is how far back a RECONNECT can resume — a cursor older than the tail is answered with the whole tail, never with a gap — and what a bare `room.tail()` replays. |
 | `ttl` | `number` | The life of a retained production, which here is a MESSAGE in the tail. Default: infinity. The same definition `state` and `memo` take — see `StateOptions` — with the unit decided by what the producer yielded, as `tail`'s is. |
-| `clientPublish` | `boolean` | Whether a caller OUTSIDE the process may publish at all. Default false. It lives on the CHANNEL rather than the socket because a room is reachable two ways — a socket and a `POST` — and a gate declared per transport is a gate with a way around it. |
 | `transform` | `Transformer<Message, Message, Failures>` | The same option `state` and `memo` take, on the third `Reactive`: normalise on the way in, or refuse. WHAT A VALID MESSAGE IS: it may rewrite the message or REFUSE it by returning a `Failed`. Runs on EVERY publish, the server's own included, because normalising is not a question about who is asking — the two were one option and the trim silently skipped itself in-process. A refusal is what fills `Reactive`'s `Failures`, so a publisher narrows it with `isError`; a SUBSCRIBER's failures are abide's own and reach `{#for await}`'s `{:catch}` instead. `publish` therefore returns `number \| Failed<…>` on both sides. |
 
 ### Expectations
 
 * A ROOM IS CREATED BY A PUBLISH, NEVER BY A SUBSCRIBE. Subscribing to a room nothing has published to
 is legal, allocates no entry, and reads as `pending()` — so the room count is bounded by publish
-AUTHORITY, which `clientPublish` already gates, rather than by how many argument keys a caller can
-think of. That is the whole bound, and it is why there is no room-count ceiling to configure: a
-`clientPublish: false` channel can only be grown by the app's own code.
+AUTHORITY rather than by how many argument keys a caller can think of. That is the whole bound, and it
+is why there is no room-count ceiling to configure: a bare `channel` has no publisher but the app's own
+code, and every way a caller OUTSIDE the process reaches one is a thing the app declared — a `socket`
+with `clientPublish`, or an rpc that publishes.
 * A ROOM IS DISCARDED WHEN ITS SUBSCRIBER COUNT REACHES 0 AND ITS RETENTION HAS DRAINED. That is a
 CONSEQUENCE of `ttl` rather than a second use of it: nothing is left to keep once the last subscriber
 has gone and the last retained message has expired, so the room's death falls out of its productions'
@@ -259,7 +259,7 @@ rows and repaint from the tail (see `socket`).
 the definition of it. A retroactive edit moves it too, so every live subscriber takes the tail marked as
 a reset and repaints — no new wire form, no new block behaviour, and the reflow already priced as rare
 enough that correctness beats it.
-* THEY ARE SERVER-ONLY AND `clientPublish` DOES NOT GATE THEM. That flag opens APPENDING, and a caller
+* THEY ARE SERVER-ONLY AND A SOCKET'S `clientPublish` DOES NOT GATE THEM. That flag opens APPENDING, and a caller
 who may append is not thereby a caller who may rewrite history; reading one gate as covering both is a
 silent privilege escalation. There is no socket frame, no `POST` form and no tool for any of the three.
 IN A BROWSER `revoke` AND `clear` THROW, naming the room and the accessor the way `principal.caller`
@@ -446,7 +446,7 @@ an `Effect`, which is what `## watch — the effect` had called it all along.
 | `Args` | `Record<string, JsonValue> \| undefined` | Arguments, in the request body on `POST`/`PUT`/`PATCH`. Serializable by contract — the wire form is also the memo key. NARROWED TO FLAT on `GET`/`DELETE`, where the wire form is URL parameters. |
 | `Middleware` | `<Ctx, Result>(next: (ctx?: Ctx) => Promise<Result>, ctx: Ctx) => Result \| Promise<Result>` | One rung of an onion. `next` is the NEXT rung and hands back whatever that rung returns; where there is no next rung, `next` runs the operation itself and the onion is complete. Returning without calling `next` short-circuits. A throw escapes the whole onion rather than unwinding through it. `Ctx` is a RECORD naming what that lane actually has: the APP lane is `Middleware<{ request: Request }, Response>` and runs PRE-ROUTING, so it has no route and no args; the RPC lane is `Middleware<{ request: Request; args: () => Args }, Response>`, typed to that one handler; the socket lane is `Middleware<SocketEvent, void>`, where a throw is the only refusal. |
 | `GET` | `<Value, Args, Failures>(handler: Reactive<Value, Failures> \| Memo<Value, Args, Failures> \| Channel<Value, Args, Failures> \| ((args?: Args) => Value), options?: RpcOptions<Value, Args>) => Rpc<Value, Args, Failures>` | Declares a READ any surface may call, addressed by its arguments. WHAT IT MAY BE DECLARED OVER is the union above. AN UNKEYED MEMO IS A `Reactive` and a KEYED ONE IS A FACTORY, which is why both are in it and why the first arm is not redundant: `GET(() => 'foo')` addresses one entry and is called `rpc()`, where `GET(getInvoice)` addresses one per args key. A `memo` is identity per args — coalescing, `ttl`, `invalidate` — and is what you generally write. A `channel` is a room. A PLAIN FUNCTION is the third arm and is SUGAR, not a third kind: `GET(fn)` is `GET(memo(fn))`, the same way `{#for await x of s}` is `s.tail()` — a bare form that IS the spelled-out one rather than a shortcut past it. So there is no un-memoized endpoint to reason about, and nothing has to tell the arms apart: already a `Reactive`, use it; a function, wrap it. Over a channel it is the read-only view of a room — jsonl by default, sse on `Accept` — where the socket is the two-way one. A read has no side effects — `SameSite=Lax` volunteers the principal cookie on a top-level GET navigation, so a `GET` that changes something is reachable from an `<a href>` on another origin. |
-| `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declare a mutation, which retains nothing by default: a memo handed to one has its `ttl` DEFAULTED TO 0 unless it named one, so coalescing covers the in-flight window and nothing after it. That is the whole per-method difference, and it is what makes a memoized mutation safe — a double-click inside one flight is one write, two sequential clicks are two, and `ttl` is how an app says "never more than once". A `POST` is also a legitimate READ, for a query too big for a URL, so caching one is a thing to be able to ask for rather than a mistake to prevent. A `POST` over a channel is a PUBLISH into the room, gated by that channel's `clientPublish` — the same gate the socket reads, which is why it is declared on the channel and not per transport. |
+| `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declare a mutation, which retains nothing by default: a memo handed to one has its `ttl` DEFAULTED TO 0 unless it named one, so coalescing covers the in-flight window and nothing after it. That is the whole per-method difference, and it is what makes a memoized mutation safe — a double-click inside one flight is one write, two sequential clicks are two, and `ttl` is how an app says "never more than once". A `POST` is also a legitimate READ, for a query too big for a URL, so caching one is a thing to be able to ask for rather than a mistake to prevent. A `POST` over a channel is a PUBLISH into the room, and DECLARING THAT HANDLER IS THE AUTHORISATION: a room is not reachable by `POST` until an app writes the rpc that publishes into it, so the intent is spelled by the declaration rather than by a second flag beside it. That is why `clientPublish` is the SOCKET's and not the channel's — a socket accepts frames at a room an app never named, so it is the transport that needs a gate. |
 | `rpc.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | The rpc's `isError`, NARROWED by what the handler declared: matching the name gives back `.data` with the schema's type on it, `.status` and `.name`. |
 | `rpc.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The same call handed back as the raw response instead of a decoded value. |
 | `rpc.method` | `string` | HTTP method |
@@ -502,7 +502,7 @@ gets the same address framed that way. One url with two bodies, so it carries `v
 buffer stays a byte count rather than a list of decoded values it would have to walk to measure.
 * RETENTION AND STALENESS BELONG TO THE `Reactive`, NEVER THE TRANSPORT. `RpcOptions` is `description`,
 `schemas`, `middleware`, `timeout`, `crossOrigin`, `maxBodySize` — an address and how it is spoken to.
-`ttl`, `invalidate` and `refresh` came in on the `memo` that was passed; `tail` and `clientPublish` came
+`ttl`, `invalidate` and `refresh` came in on the `memo` that was passed; `tail` came
 in on the `channel`. So a handler over a memo and one over a channel take the SAME options and
 differ only in what the `Reactive` brought.
 * CALLER-SIDE RETENTION IS THE ENCLOSING MEMO'S `tail`, AND THAT IS WHY THE TRANSPORT NEEDS NO OPTION
@@ -648,7 +648,7 @@ as any other unmounted method.
 | `Socket` | `<Message, Args, Failures>(args?: Args) => Room<Message, Failures>` | A `channel` over a web socket, and the SAME `Room` a channel invokes to — a socket over a channel is a channel over a socket, so there is nothing about the shape that says which transport carried it. |
 | `Args` | `Record<string, JsonValue> \| undefined` | The room, keyed as a memo's args are. |
 | `Message` | `unknown` | Message type |
-| `socket` | `<Message, Args, Failures>(channel?: Channel<Message, Args, Failures>, options?: SocketOptions<Message>) => Socket<Message, Args, Failures>` | Socket factory. `SocketOptions` is the UPGRADE and nothing else — who may connect, and what a frame must look like; whether a caller may publish came in on the channel. |
+| `socket` | `<Message, Args, Failures>(channel?: Channel<Message, Args, Failures>, options?: SocketOptions<Message>) => Socket<Message, Args, Failures>` | Socket factory. `SocketOptions` is the UPGRADE AND WHAT MAY COME UP IT — who may connect, what a frame must look like, and whether a frame may publish. A channel declares no such thing: in-process every publisher is the app's own code, so the gate belongs where the untrusted frames arrive. |
 
 ### `SocketOptions`
 
@@ -657,14 +657,15 @@ as any other unmounted method.
 | `schema` | `Schema<Message>` | The declared shape of a message. Derived from type when not provided. |
 | `middleware` | `Middleware<SocketEvent, void>[]` | The same middleware as the http lane, instantiated over `SocketEvent` — `{ kind: 'subscribe' \| 'publish', room, message, request }`. `next(event)` hands back what the next rung returns; the innermost one performs the subscribe or the publish. There is no `Response` to return, so a THROW is the only refusal. |
 | `SocketEvent` | `{ kind: 'subscribe' \| 'publish'; room: Args; message?: Message; request: Request }` | What the socket lane's onion carries. `message` is absent on a subscribe, there being nothing published yet. |
-| `crossOrigin` | `boolean \| string[]` | Which origins may upgrade| `crossOrigin` | `boolean \| string[]` | Which origins may upgrade, closed unless declared. `true` is any origin, as on the http lane. |
+| `crossOrigin` | `boolean \| string[]` | Which origins may upgrade, closed unless declared. `true` is any origin, as on the http lane. |
+| `clientPublish` | `boolean` | Whether a frame from a caller OUTSIDE the process may publish at all. Default false, so a socket is read-only until an app says otherwise. IT GATES THIS TRANSPORT AND NOTHING ELSE, which is what makes it a socket option rather than a channel one: a socket accepts frames at a room nobody named, where the other way into a room from outside — a `POST` — exists only because an app DECLARED an rpc that publishes into it, and that declaration is already the intent a flag would be restating. `transform` still runs on the publish this admits, refusing being a question about the message rather than about who asked. |
 | `clients` | `Omit<Clients, 'openapi'>` | The same record the http lane takes, minus the key a room has no meaning for. `ui: false` withholds the generated subscriber; `mcp: false` withholds the resource AND the publish tool, those being one handler's two halves. |
 
 ### Expectations
 
 * channels are carried over a single web socket mux
 * upgrade goes through `middleware`
-* Clients are read-only by default, the server may publish and read, and `clientPublish` on the CHANNEL is what opens the other direction — for this socket and for a `POST` at the same room alike, there being one gate rather than one per transport.
+* Clients are read-only by default, the server may publish and read, and `clientPublish` on THIS SOCKET is what opens the other direction. It gates this transport and nothing else: a `POST` at the same room is reachable only if an app declared an rpc that publishes into it, and that declaration is its own authorisation.
 * Every message carries a `seq`, monotonic per room and minted at publish, and a room carries an EPOCH — its HISTORY VERSION. A process restart moves it, a counter held in memory going back to zero when the process does, and so does a retroactive edit (see "Retroactive edits" under `channel`); the restart is one cause of a moved epoch rather than the definition of one. Both are INTERNAL. An app never writes either: `room.tail(n)` already replays its snapshot and goes live from where it ended with no gap and no duplicate, so the reconnect carries the last `seq` it rendered and compares epochs underneath, and a moved epoch means the client takes the tail MARKED AS A RESET rather than being told there is nothing new. The reset is announced because it has to be: a server that changed incarnation cannot know what the client painted, so replaying the tail silently would duplicate rows a `{#for await}` had already appended. On a reset the block CLEARS its accumulated rows and repaints from the tail — the one place it is not append-only, and rare enough that correctness beats the reflow. That is what makes the three handoffs ONE mechanism rather than three — the seed buffer, a socket that dropped and reopened, a tab too slow to adopt — with `room.tail(n)` the only spelling any of them has.
 * A cursor an app PERSISTED across sessions is the one thing this would not serve, and it could not be served anyway: the tail is a memory ring bounded by `tail` and `ttl`, so a cursor older than that is always past it. Catching up over that horizon is app data behind an ordinary rpc, not a room.
 * `seq` is `{#for await}`'s DEFAULT key where the source is a room, so a streamed list off a channel is keyed without an app declaring one. A stream that is not a room — a jsonl rpc — has no `seq` and is positional unless the block spells `by`.
@@ -863,7 +864,7 @@ apart.
 | --- | --- |
 | a `memo`, described | a TOOL — the model chooses to call it, and the result is one value |
 | a `channel`'s read view | a RESOURCE with subscription. A room does not end, so a tool call that drained it would hang; `notifications/resources/updated` is the shape the protocol already has for a value that goes on arriving |
-| a `channel`'s publish view | a TOOL, gated by that channel's `clientPublish` — the same gate the socket reads, so a model publishes on exactly the terms a browser does |
+| a `channel`'s publish view | a TOOL, on exactly the terms a browser has one — the socket's `clientPublish` for a room served over a socket, an app's own publishing rpc otherwise. There is no publish tool for a room nothing exposed |
 | a `GET` with flat args | ADDITIONALLY a resource template, `abide://rpc/<address>{?args}`. A `GET`'s args are FLAT by type, which is what a URI template can express and a `POST` body cannot, so the split falls out of the existing rule rather than being decided here |
 
 A `GET` is both because the two surfaces are read by different things: a host attaches a RESOURCE to
@@ -1960,8 +1961,8 @@ abide could never add a built-in again without silently taking a name some app h
 One prefix costs four characters and removes both. There is nothing to report at startup, because
 there is nothing that can collide.
 * A SOCKET IS A COMMAND THAT DOES NOT RETURN. Naming a room SUBSCRIBES and prints each message as it
-arrives; `--publish <message>` publishes instead, gated by that channel's `clientPublish` — the same
-gate the socket and the `POST` read, so a terminal publishes on exactly the terms a browser does.
+arrives; `--publish <message>` publishes instead, gated by that socket's `clientPublish` — the same
+gate a browser's frames read, so a terminal publishes on exactly the terms a browser does.
 Non-interactively it streams until the room ends or the process is signalled, which is what makes
 `abide call <room> | grep` an ordinary thing to write.
 
@@ -2026,6 +2027,16 @@ LEAD THAT CARRIES A RELATIVE LINK, because it renders at two depths.
 * `covers:` IN THE FRONTMATTER is where a page declares which capabilities it covers, so the order a
 concept is introduced in is checkable rather than remembered. AN OVERVIEW DOES NOT DECLARE ONE — it
 routes, and the topic page covers; a capability counted as covered by a page that only links to it is
-a gate that has quietly stopped working.
+a gate that has quietly stopped working. A REFERENCE PAGE DECLARES NONE EITHER, for the opposite
+reason: it ENUMERATES a surface rather than solving a problem with it, so counting it would mark every
+capability covered by the page that merely lists them all. A TOPIC page declaring none is not a hole —
+what the gate asks is that every capability is claimed EXACTLY ONCE somewhere, so a page walking a
+reader through capabilities other pages own has nothing of its own to claim.
+* `packages/dogfood/tests/coverage.test.ts` IS WHERE THIS IS ENFORCED, against this document read as
+the source: every capability covered, none claimed twice, none claimed that is not here. Beside it are
+the BRAND rules a check can reach — a heading that leans on a pronoun, a nav label that is a bare
+prepositional fragment, a link whose text no longer matches the `nav` it points at, an `abide` snippet
+teaching the explicit spelling back, a fence with no caption to hang a spine on. What is left to a
+reviewer is whether an entry is the RIGHT page's, which no check can decide.
 * The VOICE, the vocabulary and the register of a title against a nav label are `docs/BRAND.md`'s —
 rules a reviewer enforces rather than the build.

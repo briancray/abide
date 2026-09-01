@@ -43,6 +43,9 @@ export default (request: Request) =>
   new URL(request.url).pathname === '/robots.txt' ? new Response('User-agent: *') : undefined
 ```
 
+*1 file, 3 declarations* — a rung stack, a startup hook and a route, in the one place an app
+owns before the router.
+
 Each `middleware` rung runs per request, and they run **before** the route resolves — so a rung has
 the request and nothing else. Anything that needs to know which row is being asked for is a
 handler's own rung instead, where the arguments exist.
@@ -190,7 +193,7 @@ nothing to seed for a pure computation. That is the case that belongs behind a h
 runs on the server and arrives as data.
 
 Read on: [Reading data](../server/read-data-without-writing-an-api.md) ·
-[Rooms & sockets](../server/keep-a-room-of-callers-in-sync.md)
+[Sockets](../server/keep-a-room-of-callers-in-sync.md)
 
 ## 7. The next navigation
 
@@ -208,7 +211,7 @@ Read on: [Links & navigation](../pages/link-to-another-page.md) ·
 **Steps 1–4, the head.** Nothing was awaited to produce it. Two of its elements are abide's: the
 seed manifest, naming the calls this render is making, and the bootstrap that issues them.
 
-```html
+```html browser
 <!doctype html>
 <html lang="en">
 <head>
@@ -229,7 +232,7 @@ written.
 **Step 4, the markup.** The row has not landed, so each read leaves a sink: a `<template>`
 holding the slot's id, and the filler script beside it.
 
-```html
+```html browser
 <h1>Invoice <template data-abide-sink="3"></template><script>/* fill 3 */</script></h1>
 <p><template data-abide-sink="4"></template><script>/* fill 4 */</script>
  due <template data-abide-sink="5"></template><script>/* fill 5 */</script></p>
@@ -244,7 +247,7 @@ the head.
 element genuinely cannot go, the id rides on the owning element instead and the filler writes one
 property.
 
-```html
+```html browser
 <template data-abide-sink="3" data-abide-fill>42</template><script>/* fill 3 */</script>
 ```
 

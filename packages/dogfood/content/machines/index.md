@@ -2,11 +2,6 @@
 title: For machines
 nav: Overview
 intent: One handler, four surfaces — a page, an endpoint, a tool, a command.
-covers:
-  - `Clients`
-  - rpc › `clients`
-  - socket › `clients`
-  - Generated surfaces › `clients`
 ---
 
 A handler you already wrote carries everything a caller needs in order to call it: an
@@ -49,5 +44,6 @@ abide's commands belong in one place, so it is written with the rest of them.
 
 Read on: [OpenAPI](describe-your-api-without-writing-a-spec.md) ·
 [MCP](let-a-model-call-your-handlers.md) ·
+[Withholding a surface](keep-a-handler-off-a-surface.md) ·
 [Call a handler](../ship/call-a-handler-from-the-terminal.md) ·
 [Watch a room](../ship/watch-a-room-from-the-terminal.md)

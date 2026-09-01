@@ -15,7 +15,7 @@ than instead of it.
 | `{#for await item of source}` | `for await (…of source)` | each value as it arrives |
 | `{#if invoice.pending()}` | `invoice.pending()` | a first load, nothing to show yet |
 
-```abide
+```abide abide
 <h1>{invoice.number}</h1>
 {#if invoice.pending()}
     <p>Loading…</p>

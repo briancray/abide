@@ -14,7 +14,7 @@ around.
 | `health` | what a load balancer reads, before your auth runs |
 | `log.info(…)` | structured logs, on channels you turn on one at a time |
 
-```abide
+```abide abide
 {#if principal.authenticated}<a href="/account">Account</a>{/if}
 ```
 

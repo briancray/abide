@@ -20,7 +20,8 @@ abide has one answer.
 
 ## Everything is a reactive value
 
-```abide #ui/pages/editor/page.abide
+```abide #ui/pages/editor/page.abide — excerpt
+<script>
 import { state, memo } from 'abide'
 import { getInvoice } from '#server/rpc/invoices'
 import { chat } from '#server/sockets/chat'
@@ -29,11 +30,15 @@ const draft   = state('')                           // you own it
 const words   = memo(() => draft.split(' ').length) // derived
 const invoice = memo(() => getInvoice({ id }))      // loaded
 const room    = chat({ id })                        // pushed
+</script>
 ```
+
+*4 declarations, 1 type* — against component state, a query library and a socket client, each
+with its own loading convention.
 
 Four ways of getting a value, one type back — `state`, `memo` and `channel` are the three
 primitives, and `chat` is a `channel` reached over a socket. Calling it with args hands
-back that room. See [Rooms & sockets](../server/keep-a-room-of-callers-in-sync.md).
+back that room. See [Sockets](../server/keep-a-room-of-callers-in-sync.md).
 
 That is not a naming convenience:
 
