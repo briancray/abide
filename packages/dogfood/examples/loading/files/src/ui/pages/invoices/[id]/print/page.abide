@@ -1,0 +1,28 @@
+<script>
+import { memo, route } from 'abide'
+import { getInvoice } from '#server/rpc/invoices'
+
+// A print view must not go to paper with holes in it, so this is
+// the page that HOLDS. Not blocking is the default everywhere
+// else; here it is the opt-in, spelled three ways.
+const invoice = memo(() => getInvoice({ id: route.params.id }))
+</script>
+
+{#await invoice}
+    <p>Preparing…</p>
+{:then row}
+    <h1>Invoice {row.number}</h1>
+    <p>{row.dueOn}</p>
+{:catch failure}
+    <p class="error">Could not load that invoice.</p>
+{:finally}
+    <p class="hint">Last checked just now.</p>
+{/await}
+
+<p>{await invoice.total} due</p>
+
+{#await invoice then row}
+    <p class="stub">Detach and return with {row.number}</p>
+{:catch failure}
+    <p class="error">No payment stub for this invoice.</p>
+{/await}

@@ -36,7 +36,7 @@ watch(() => {
 *5 lines, cancel included* — the teardown is the return value rather than a second argument you
 might forget.
 
-## Running an effect on change
+## `watch` runs an effect on change
 
 `watch(effect)` runs the effect immediately and again whenever anything it **read** changes — the
 same tracking a memo body gets, and the same absence of a dependency list.
@@ -55,7 +55,7 @@ plain `.ts` module has nobody to tear it down, and the returned disposer is what
 const stop = unread.watch((count) => { document.title = `${count} unread` })
 ```
 
-## Cleaning up with the returned disposer
+## `watch` hands back a disposer
 
 An effect may return a `Disposer`, and abide runs it in two places:
 
@@ -70,7 +70,7 @@ removal for one in a `{#for}` body, process end for a `<script module>` one.
 That is why the timer above is correct without a guard. Every rerun cancels the timer the
 previous run started, and the unmount cancels the last one.
 
-## Narrowing what wakes an effect
+## A `sources` list narrows what wakes an effect
 
 The tracked form subscribes to everything the body read, which is usually what you want and
 occasionally more than you want — a body that reads five values to build one log line wakes on
@@ -89,7 +89,7 @@ blacklist, and a memo has only the second, having no `sources` form.
 
 Read on: [Reloading](decide-when-a-value-reloads.md)
 
-## Where tracking stops
+## Tracking stops outside the render flow
 
 A value is tracked only where it is part of the **render flow** — where something downstream will
 be rebuilt from it. An event handler falls out of that rather than being excepted: it runs in
@@ -113,10 +113,10 @@ a value it is in the middle of producing.
 Read on: [Values by name](../templates/read-and-write-a-value-by-name.md) ·
 [Lifecycle](../app/run-code-at-start-and-stop.md)
 
-## What a watch does on a server
+## A watch runs once on a server
 
-It runs **once**. There is no rerender, so a tracked read registers no subscriber and there is
-nothing to wake it a second time. The disposer still runs at scope teardown.
+There is no rerender, so a tracked read registers no subscriber and there is nothing to wake it
+a second time. The disposer still runs at scope teardown.
 
 That is isomorphism of intent rather than of schedule — same callable, same name, same meaning,
 and what differs is that one side has a flow to feed and the other does not. It is worth saying

@@ -53,14 +53,14 @@ column cites it, so where the two disagree SPEC is right and the claim is stale.
 
 | Claim | Will rest on |
 | --- | --- |
-| **Call a server function from a page.** No route, no fetch, no client. | The build GENERATES the client module — one export per handler, carrying method, mount-relative address and description, nothing else. It is not the server module shaken down, and importing a non-handler from `#server/**` is a compile error rather than a silent stub. A page has no back door either: a `.abide` file runs on both sides, so its render-time reads go through the same handler the browser would call. ONE CALL, NOT TWO PATHS — which is what lets the render's own answer be what the browser hydrates from. |
+| **Call a server function from a page.** No route, no fetch, no client. | The build GENERATES the client module — one export per handler, carrying method, mount-relative address and description, nothing else. It is not the server module shaken down, and importing a non-handler from `#server/**` is a compile error rather than a silent stub. A page has no back door either: a `.abide` file runs on both sides, so its render-time reads go through the same handler the browser would call — the same rungs, the same argument check, the same refusal. ONE CALL, NOT TWO PATHS — which is what lets the render's own answer be what the browser hydrates from, and what stops an authorisation rung being reachable by a browser and missed by the render. |
 | **One handler, four surfaces.** A page, an OpenAPI operation, an MCP tool, a CLI command. | All four are DERIVED from the route table — a build artifact — rather than authored beside it, so no surface can describe a handler that does not exist or miss one that does. There is no document hook to rewrite the OpenAPI with and no second tool list: `abide mcp` forwards to the same endpoint rather than assembling its own. `clients` is the one record that withholds a surface, and every key defaults to true. It is NOT access control: `ui: false` is a compile error at the import, and the other three withhold a LISTING while the http address answers exactly as it did. Who MAY call is middleware, the same rung that decides it for a browser. |
-| **One type back.** | `Reactive` is the only face. `state`, `memo`, `channel`, `rpc` and `socket` all RESOLVE to one — `state` and an unkeyed `memo` hand one straight back, the rest hand back a factory you call with its arguments first — so `pending()`, `await`, `for await` and the probes mean the same thing wherever you arrive. |
+| **One type back.** | `Reactive` is the only face. `state`, `memo`, `channel`, `rpc` and `socket` all RESOLVE to one — `state` and an unkeyed `memo` hand one straight back, the rest hand back a factory you call with its arguments first — so `pending()`, `settled()`, `for await` and the probes mean the same thing wherever you arrive. |
 | **Same name, both sides.** | Same callable, same name, same question — `route.url`, `cookies()`, `log.info` and the rest resolve on either side, each answering it from what its side has. Nothing is a shim that no-ops on one of them; where a name genuinely cannot mean anything it throws and names the component and the accessor. |
 | **Reading is what loads it.** | A `memo` runs its body on first read. An unkeyed one re-runs when what the body read changes; a keyed one is one entry per args key, and `ttl`, `invalidate` and `refresh` are its ways back. There is no effect, no mount hook, no `load()` — and no serialized setup either: the browser re-runs the same bodies, and what the render already fetched is what answers them, so the read that loads on the server is the read that hydrates in the browser. |
-| **It does not block.** | A read of a value still in flight returns `undefined` and opens a sink; the document goes out and the hole fills. Holding is opt-in and spelled `{await x}`. |
-| **A refusal is a value.** | `Failed<Name, Data>` carries data and narrows by name with `isError`, in-process and over a wire, for a template and for a model alike. It LANDS in the `Failures` of the `Reactive` that produced it — one place, whether a handler refused a request or a `transform` refused a write — so a refusal is read where the value is read rather than caught somewhere else. |
-| **The schema is the type.** | A handler's `schemas` are DERIVED from the TypeScript annotation and argument defaults — `GET(({ id }: { id: number }) => …)` builds the runtime schema for `{ id: number }` — so the shape is never declared twice. A derived schema is exactly as good as the inference that reached it, and where inference cannot resolve an annotation the schema WIDENS rather than the file being refused, because valid TypeScript has to compile; declaring `schemas` is how an app pins one it will not have widened. `abide check` type-checks `.abide` templates as well as the TypeScript, reporting each diagnostic on the `.abide` line. |
+| **It does not block.** | A read returns what it has — `undefined` where nothing landed — and a `pending()` value opens a sink; the document goes out and the hole fills. That reaches a DERIVED value too: an unkeyed memo is pending while what its body read is, so a placeholder built from an absent input is a hole rather than the answer. Holding is opt-in and spelled `{await x}`. |
+| **A refusal is a value.** | `Failed<Name, Data>` carries data and narrows by name with `isError`, in-process and over a wire, for a template and for a model alike. It LANDS in the `Failures` of the `Reactive` that produced it — one place, whether a handler refused a request or a `transform` refused a write — so a refusal is read where the value is read rather than caught somewhere else. A REFUSED WRITE DOES NOT TAKE THE VALUE AWAY: the write is rejected, the last accepted value goes on being served, and the refusal sits beside it — which is what lets a bound input render its own validation message instead of unmounting. |
+| **The schema is the type.** | A handler's schemas are DERIVED from the TypeScript annotation and argument defaults — `GET(({ id }: { id: number }) => …)` builds the runtime schema for `{ id: number }` — so the shape is never declared twice. A derived schema is exactly as good as the inference that reached it, and where inference cannot resolve an annotation the schema WIDENS rather than the file being refused, because valid TypeScript has to compile; declaring `schema` — the input — or `transform` — the output — ON THE `Reactive` is how an app pins one it will not have widened — a shape is a fact about the value, so it rides in on the `Reactive` the way `ttl` does rather than sitting on the address. `abide check` type-checks `.abide` templates as well as the TypeScript, reporting each diagnostic on the `.abide` line. |
 | **Bun and web standards, not a wrapper over them.** | `cookies()` IS `Bun.CookieMap` on a server; an app that needs another bind address reaches `Bun.serve`'s own options rather than a variable abide would only pass through; the build is `Bun.build`. Handlers speak `Request` and `Response`, and rows arrive over a `ReadableStream`. |
 
 # What we do not say
@@ -94,8 +94,9 @@ Three levels, and a reader may stop at any of them.
 
 The mechanisms — `{% lead %}` and the `covers:` gate — are `docs/SPEC.md`'s, because the build and
 `packages/dogfood/tests/coverage.test.ts` enforce them between them. SOME OF WHAT IS BELOW IS
-ENFORCED THERE TOO: a heading leaning on a pronoun, a nav label that is a bare prepositional
-fragment, a link whose text no longer matches the `nav` it points at, an uncaptioned fence. A rule
+ENFORCED THERE TOO: a heading leaning on a pronoun, a heading that enumerates less than the table
+under it, a nav label that is a bare prepositional fragment, a link whose text no longer matches
+the `nav` it points at, an uncaptioned fence, a code sample wider than the column it renders in. A rule
 here that turns out to be checkable belongs in that file rather than in this list — what stays here
 is what only a reader can decide.
 
@@ -129,7 +130,7 @@ three pages later.
 | middleware, rung | onion (as a noun for the mechanism) | `middleware` is the API and a rung is one layer of it. "Onion" describes the ORDER and is worth reaching for only where the order is the subject |
 | reactive value | state (for anything but `state()`) | `state()` is one of the four; the by-name rule, the probes and `Reactive` reach all of them. Calling a memo or `route.url` "a state" is what made the by-name guide read as a `state()` rule |
 | selection | group, set, query, batch | What `pending`, `refresh` and `invalidate` take — one memo, or every entry carrying a tag. A selection names entries; it does not run a query over them |
-| probe | flag, status boolean | `pending()`, `refreshing()`, `done()` — a probe never throws and never starts work |
+| probe | flag, status boolean | `pending()`, `refreshing()`, `done()`, `success()`, `streaming()`, `error()` — a probe never throws and never starts work |
 | sink, hole | placeholder, suspense boundary, slot | An addressable hole in the output a value in flight fills later. TWO REGISTERS OF ONE THING, the way `Reactive` and "reactive value" are: the SINK is the mechanism and the HOLE is what a reader sees, so "opens a sink; the hole fills" is one sentence about one thing. `slot` is `<slot/>` and nothing else — a value's position in text is a text position — and a `<slot/>` takes CHILDREN, never "holes" |
 | adoption, adopt | wrapping, proxying, unwrapping, transparent forwarding | A memo body returning a `Reactive` ADOPTS it: the outer subscribes and MIRRORS its productions into its own ring, so the outer is always its own `Reactive` and every option applies to itself. Mirroring carries PRODUCTIONS and delegation carries MEMBERS, which is what keeps an adopted room a room — so "forwards" names the half it is not |
 | production | value, message, chunk, item (as the general noun for what is retained) | What the producer YIELDED, one rule reading three ways: a `set` yields a value, a `publish` a message, a stream body a chunk. `tail` and `ttl` count productions, so reaching for any of the three as the general noun is what breaks the unit rule |
@@ -149,8 +150,10 @@ three pages later.
   A reader who can check a claim in two seconds holds it; one who is asked to follow an
   argument is still deciding. This is the strongest form of "claim, then evidence" and the
   default — reach for prose evidence only where no example fits. Every example is a real
-  `.abide` or `.ts` file, benchmarked and covered end to end, which is what keeps it evidence
-  rather than illustration.
+  `.abide` or `.ts` file, and owes a bench and a spec, which is what keeps it evidence rather
+  than illustration. TODAY THOSE ARE AUTHORED, not run — neither can execute until the compiler
+  does — and every panel carrying one says so, because a number that reads as measured is worse
+  than no number.
 * **Copy introduces the example and prices it.** A sentence before the block says which
   problem it solves; the line after says what it cost — *1 file, 3 lines* against the seven. THE
   PAGE'S OPENING EXAMPLE IS THE ONE THAT MUST BE PRICED, that being the block carrying the claim the
@@ -172,7 +175,28 @@ three pages later.
   problem-shaped — a heading can be problem-shaped and still be a riddle.
 * **A heading carries its own subject.** Someone arriving from the on-this-page list or a
   search result has no previous section. "Whether it has landed" is a pronoun with nothing to
-  refer to; "Probes: `pending`, `refreshing`, `done`" is not.
+  refer to; "Probes: `pending`, `refreshing`, `done`, `success`, `streaming`, `error`" is not.
+* **A heading that ENUMERATES names the whole set.** The line above is the shape a reader scans
+  for, and that is exactly what makes a partial one expensive: it reads as the complete list, so
+  a name left out of it is a name absent from the one line anybody checks. This rule was written
+  because the example beside it was wrong — the probes heading named four and its table listed
+  six, in the page and in this file, for as long as both had existed. Name every one, or make the
+  heading a claim and let the table be the list.
+* **The code under a heading answers that heading.** A section about `.abide` sugar showing a
+  `.ts` file, or a section about the shape of a keyed memo showing its `tags` option too, reads
+  as two subjects and teaches neither. `{% snippet %}` takes several anchors for this reason —
+  pull the lines the heading is about, and if they are not one construct, say so with the
+  elision rather than widening until they fit.
+* **A heading names what an author WRITES, not a type they have not met.** "A `Transformer`
+  normalises a value" is the type of an option spelled `transform`, so the reader scans for a
+  word that is not in their file. Name the property, then introduce the type under it. `Reactive`
+  and `Accepted` are fair — nothing else is spelled those.
+* **A heading may not state an absolute the page then qualifies.** "A read never awaits" was
+  false two sections above `{await invoice}`, and the reader who believes the heading is the one
+  the page then contradicts. Say "by default" in the heading and put the opt-in under it.
+* **A heading belongs to its page's subject.** On a page about caching, "A body that takes args
+  is a keyed memo" is about memos; "A memo's cache is one entry per args key" is about the cache.
+  Same fact, and only one of them answers why the reader is on that page.
 * **A claim with no code beside it links out rather than being made.** Where the page does not
   demonstrate it, name the API in one clause and point at the page that does — "`invoice.refresh()`
   reloads. See Loading states." Prose evidence is for costs, which is what makes them credible.
@@ -201,6 +225,24 @@ The full token set is `packages/dogfood/src/ui/app.css`; it is the source, not a
 | Blue | The BROWSER side, the same way — `--cool` |
 | Type | Space Grotesk for headings, IBM Plex Sans for body, IBM Plex Mono for code, captions and status |
 
+A snippet renders in a 44rem column at 13px mono — about 76 characters. Past that a sample is a
+thing to scroll rather than a thing to read, so the width is a property of the SOURCE rather than
+of the block: biome does not reach inside a fence, and the check is `coverage.test.ts`'s.
+
+**A TIP is the documentation's own voice.** Teal-washed, with a mark on it, and it means the
+same thing wherever it appears: an aside in prose, written `> [!TIP]`, and an annotation inside a
+rendered example. That second use is what it exists for. A result panel claims to show what the
+app renders, so ANYTHING IN A RENDER THAT THE EXAMPLE'S OWN FILES DO NOT PRODUCE BELONGS IN A TIP
+— a control that drives the demo, a count of work that is normally invisible. Outside one, a
+reader is entitled to read every pixel as the app's output. `coverage.test.ts` checks the
+controls; the rest is a reviewer's.
+
+**An example leads with the running page.** The render sits above the tabs and stays there;
+Files, Requests, Bench and Tests are what a reader consults ABOUT it — Requests being
+the rpc calls the page made, which is the one artifact showing a seam the app never writes. The thing an example is
+for is the thing that runs, and a reader who has to find a tab before seeing one has been handed
+source to read instead of something to try.
+
 A stub marker takes `--muted`. It marks an ABSENCE, so it takes the ground's own recessive tone
 rather than a reserved colour, and it goes when the framework is written — which is why it has no
 row here to inherit.
@@ -214,6 +256,12 @@ having no side to name. A caption showing part of a file says so: `— excerpt`,
 a reader cannot open is a claim, and one that contradicts the same address on another page is a
 claim that has already broken. It is the framework's central idea made visible, and it is the one
 device to keep wherever the brand appears.
+
+NONE OF THAT IS TYPED ANY MORE, on a page that has been converted. `{% snippet %}` names an
+example and a line in it, and the caption, the language, the `— excerpt` and the colour are all
+DERIVED from the address — so a snippet cannot claim a seam its path contradicts, and a sample
+that drifts from the file fails the build rather than the reader. The four bare words are what a
+page still carries until its example exists; they are a stage, not a second spelling.
 
 # Status
 

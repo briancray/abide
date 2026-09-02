@@ -15,10 +15,14 @@ const HEADING = /^(#{1,4})\s+(.*)$/
 // body takes `new RegExp(EXAMPLE.source, 'gm')` rather than writing the pattern again.
 export const EXAMPLE = /^\{%\s*example\s+([\w-]+)\s*%\}$/
 export const LEAD = /^\{%\s*lead\s+([\w/-]+)\s*%\}$/
+// `{% snippet <example> <file> [anchor] %}`. The anchor runs to the closing `%}` because
+// it is a line of CODE and code has spaces in it; no anchor means the whole file.
+export const SNIPPET = /^\{%\s*snippet\s+([\w-]+)\s+(\S+)(?:\s+(.*?))?\s*%\}$/
 const FENCE = /^```(\S*)[ \t]*(.*)$/
 const BULLET = /^\s*[*-]\s+(.*)$/
 const ORDERED = /^\s*\d+\.\s+(.*)$/
 const QUOTE = /^>\s?(.*)$/
+const TIP = /^\[!TIP\]\s*/
 const TABLE_DIVIDER = /^\|(\s*:?-+:?\s*\|)+$/
 
 export function escapeHtml(text: string): string {
@@ -117,11 +121,25 @@ export function renderInline(text: string): string {
     return html
 }
 
+// A cell opening on `yes` / `no` is a VERDICT and its REASON — the answer is what the
+// column is scanned for and the reason is why, and undifferentiated they read as one wall
+// of prose. The verdict has to END there: `no route matched, or no handler is mounted` is
+// a sentence that begins with the word, so the tell is what FOLLOWS — end of cell,
+// punctuation, or the em dash the reason is introduced with.
+const VERDICT = /^(yes|no)(?=$|[,;.]|\s+—)(.*)$/
+
+function renderCell(value: string, cell: 'td' | 'th'): string {
+    const verdict = cell === 'td' ? VERDICT.exec(value) : null
+    if (!verdict?.[1]) return `<${cell}>${renderInline(value)}</${cell}>`
+    const why = verdict[2] ?? ''
+    const reason = why ? `<span class="verdict-why">${renderInline(why)}</span>` : ''
+    return `<${cell}><b class="verdict-${verdict[1]}">${verdict[1]}</b>${reason}</${cell}>`
+}
+
 function renderTableRow(line: string, cell: 'td' | 'th'): string {
     const trimmed = line.replace(/^\|/, '').replace(/\|$/, '')
     let html = '<tr>'
-    for (const value of trimmed.split('|'))
-        html += `<${cell}>${renderInline(value.trim())}</${cell}>`
+    for (const value of trimmed.split('|')) html += renderCell(value.trim(), cell)
     return `${html}</tr>`
 }
 
@@ -165,6 +183,20 @@ export function renderMarkdown(source: string): string {
             continue
         }
 
+        const snippet = SNIPPET.exec(line.trim())
+        if (snippet) {
+            // JSON rather than a delimiter, because an anchor is arbitrary source and
+            // every separator worth typing occurs in some line of it.
+            const address = {
+                example: snippet[1] ?? '',
+                file: snippet[2] ?? '',
+                anchor: snippet[3] ?? '',
+            }
+            html += `<!--snippet:${JSON.stringify(address)}-->\n`
+            index += 1
+            continue
+        }
+
         const lead = LEAD.exec(line.trim())
         if (lead) {
             html += `<!--lead:${lead[1]}-->\n`
@@ -201,6 +233,16 @@ export function renderMarkdown(source: string): string {
                 if (!quote) break
                 body.push(quote[1] ?? '')
                 index += 1
+            }
+            // `> [!TIP]` on the opening line makes the quote a TIP — the same component
+            // a result frame annotates a render with, so the documentation speaks in one
+            // voice whether it is talking beside a page or inside one. A quote without it
+            // stays a quote: that one is someone ELSE talking.
+            const first = body[0] ?? ''
+            if (TIP.test(first)) {
+                body[0] = first.replace(TIP, '')
+                html += `<aside class="tip">${renderInline(body.join(' ').trim())}</aside>\n`
+                continue
             }
             html += `<blockquote>${renderInline(body.join(' '))}</blockquote>\n`
             continue

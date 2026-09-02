@@ -1,0 +1,11 @@
+<nav class="switch">
+<a href="/customers/42" data-customer="42" aria-current="page">Customer 42</a>
+<a href="/customers/43" data-customer="43">Customer 43</a>
+</nav>
+
+<h1></h1>
+<p>Plan: </p>
+<p>Balance  USD, about  EUR</p>
+
+<p class="tip">requests to <code>getCustomer</code>: <b>1</b>, in flight · requests to <code>getRate</code>:
+<b>1</b>, ever. Two readers, one request. The page and the <code>Plan</code> component asked for the same args key, so the second read joined the load the first one started.</p>

@@ -28,7 +28,7 @@ const results = memo(() => search({ q: query }), { debounce: 200 })
 *1 option, 0 markup changed* — it goes on the memo that pays the cost, and the probes did not
 move either.
 
-## `throttle` against `debounce`
+## `throttle` fires first and rate-limits; `debounce` waits for quiet
 
 Both cap **revalidation**, and both apply however it was triggered — a dependency moving, an
 explicit `invalidate`, a `refresh`, a `ttl` lapsing. There is no second rule for the manual case.
@@ -45,10 +45,10 @@ where the first update should be immediate and the rate is the problem. `debounc
 the intermediate values are not answers — a half-typed query being the example the whole page is
 built on.
 
-## What a capped memo reports while it waits
+## A capped memo keeps serving the held value
 
-Nothing new. Inside the window the held value keeps being served and `refreshing()` is true,
-which is the `refresh()` contract already:
+Inside the window the held value keeps being served and `refreshing()` is true, which is the
+`refresh()` contract already:
 
 ```abide abide
 {#if results.refreshing()}<span class="text-xs">Searching…</span>{/if}
@@ -60,25 +60,43 @@ load still reports `pending()`, there being nothing held to serve.
 Read on: [Loading states](show-a-value-that-isnt-there-yet.md) ·
 [Reloading](decide-when-a-value-reloads.md)
 
-## Where the cap belongs
+## The cap belongs on the memo, not at the call site
 
-On the memo, not at the call site. A memo that must not join a stampede says so about itself,
-where the knowledge is — a tag-wide `invalidate({ tags: ['invoice'] })` cannot know what else it
-matched, so it is the wrong place to decide how hard any one entry may be hit.
+A memo that must not join a stampede says so about itself, where the knowledge is — a tag-wide
+`invalidate({ tags: ['invoice'] })` cannot know what else it matched, so it is the wrong place to
+decide how hard any one entry may be hit.
 
 Read on: [Caching](load-once-per-set-of-arguments.md)
 
-## Waking readers only when the value moved
+## `identity` wakes readers only when the value moved
 
 The other half of "too fast" is a value that changes without changing. `identity` is what makes
 it the same value — **readers wake when this moves, not when the reference does**:
 
 ```ts #server/rpc/rows.ts
-const summary = memo(({ id }: { id: string }) => rollUp(id), { identity: canonical })
+const summary = memo(({ id }: { id: string }) => rollUp(id), {
+    identity: canonical,
+})
 ```
 
 The default is `(value) => value`, which is the reference. `canonical` is exported for the common
 opt-in — an args object, a derived record, a URL — and is the same builder a memo key uses.
+
+It is an option on every `Reactive`, not something a memo has. A state holding an object is the
+case you hit first: a form binding rewrites it per keystroke, a `refresh()` on `state(fetchUser())`
+returns a structurally identical user, and a write through a member path copies down the path —
+each of them a new reference for a value that did not move.
+
+```ts #ui/state/filters.ts
+const filters = state({ status: 'open', assignee: null }, {
+    identity: canonical,
+})
+```
+
+On a room it reads as **consecutive duplicates collapse** — a presence channel republishing an
+unchanged roster every five seconds wakes nobody, and `publish` hands back the standing `seq`. The
+default being the reference, a room collapses nothing until it asks for it: two separately built
+messages are never reference-equal, so a double-sent chat line is still two messages.
 
 This is the failure that leaves the output right and the work wrong. A body that rebuilds its
 result every run defeats the identity check, so `oldValue !== value` is always true and every
@@ -86,15 +104,17 @@ propagation cutoff downstream of it silently stops working. Nothing renders inco
 just re-renders on every recompute. It is the same shape as a memo whose value is a **component**,
 where a rebuilt identity re-mounts the whole subtree and throws away the DOM.
 
-## What `identity` costs
+## `identity` costs O(size) per production
 
-Canonicalising is O(size) per recompute, which is why it is not the default for objects. A
-five-thousand-row result would be serialised on every run to decide whether to wake anyone — a
-cost paid per write to buy a cheaper read, and worth it only where the reads outnumber the writes
-and the rebuild is real.
+Canonicalising is O(size) per production — per `set`, per recompute, per publish — which is why it
+is not the default for objects. A five-thousand-row result would be serialised on every run to
+decide whether to wake anyone: a cost paid per write to buy a cheaper read, and worth it only where
+the reads outnumber the writes and the rebuild is real.
 
-It runs on the **settled** value, never per chunk. On a streaming producer that means the
-accumulation.
+It compares the **stored** value against the previous one, which is why it never runs per chunk —
+a streaming producer has one stored value, materialised when it closes. It holds one token and not
+a set, so uniqueness is against the previous stored value rather than against the tail, and raising
+`tail` never makes a write dearer.
 
 ## Next
 

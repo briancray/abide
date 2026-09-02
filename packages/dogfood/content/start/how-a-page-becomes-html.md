@@ -40,7 +40,9 @@ middleware(csp(), requireAuth())
 onStart(async (start) => { await database.migrate(); await start() })
 
 export default (request: Request) =>
-  new URL(request.url).pathname === '/robots.txt' ? new Response('User-agent: *') : undefined
+  new URL(request.url).pathname === '/robots.txt'
+    ? new Response('User-agent: *')
+    : undefined
 ```
 
 *1 file, 3 declarations* — a rung stack, a startup hook and a route, in the one place an app
@@ -182,8 +184,14 @@ every `memo` body, again.
 That sounds like paying twice, and for the loads it is not. `memo(() => getInvoice(…))` runs a
 second time in the browser and makes the same call — one the browser already issued before the
 bundle loaded. The render **buffered what it fetched**, so that call is answered from the buffer
-rather than from the database. One code path on both sides, and no round trip to reproduce what
-is already on screen.
+rather than from the database. One code path on both sides.
+
+What that saves is the **handler's work**, not the request — the bootstrap issues real fetches, and
+what the buffer answers instead of is the database hit. They go out of the head ahead of the bundle,
+so on a first visit the bundle load covers them and they cost nothing. On a repeat visit the bundle
+is cached and arrives at once, so the fetches are exposed — which is why a handler that answers
+`public, max-age` is worth declaring: the second visit is served from the browser cache and costs
+nothing again.
 
 Binding happens against the nodes that are already there. A marker whose content does not match
 rebuilds its own block, not the page.
@@ -204,7 +212,7 @@ never rebuilt — a header with an open menu in it stays exactly as it was.
 Read on: [Links & navigation](../pages/link-to-another-page.md) ·
 [View transitions](../pages/animate-from-one-page-to-the-next.md)
 
-## The same seven steps, in bytes
+## The wire carries the same seven steps
 
 `/invoices/42`, against the page in step 4. This is what actually leaves the server.
 
@@ -219,7 +227,7 @@ seed manifest, naming the calls this render is making, and the bootstrap that is
 <script type="application/json" data-abide-seed>
 [["GET","/__abide/rpc/invoices/getInvoice",{"id":"42"}]]
 </script>
-<script>/* issues each call above, stashes each Promise<Response> under its key */</script>
+<script>/* issues each call, stashes each Promise under its key */</script>
 <link rel="stylesheet" href="/_abide/app.7f3c9a1e.css">
 </head>
 <body>
@@ -233,9 +241,11 @@ written.
 holding the slot's id, and the filler script beside it.
 
 ```html browser
-<h1>Invoice <template data-abide-sink="3"></template><script>/* fill 3 */</script></h1>
+<h1>Invoice
+<template data-abide-sink="3"></template><script>/* fill 3 */</script></h1>
 <p><template data-abide-sink="4"></template><script>/* fill 4 */</script>
- due <template data-abide-sink="5"></template><script>/* fill 5 */</script></p>
+due <template data-abide-sink="5"></template><script>/* fill 5 */</script>
+</p>
 ```
 
 Those filler scripts are **byte-identical** — every one of them, in every document abide serves.
@@ -248,17 +258,18 @@ element genuinely cannot go, the id rides on the owning element instead and the 
 property.
 
 ```html browser
-<template data-abide-sink="3" data-abide-fill>42</template><script>/* fill 3 */</script>
+<template data-abide-sink="3" data-abide-fill>42</template>
+<script>/* fill 3 */</script>
 ```
 
 **Step 6.** The bundle loads and re-runs the setup. `getInvoice` is called again and answered
 from the buffer, and binding happens against the nodes above.
 
-## Three directories, and where each one runs
+## The directory a file is in decides where it runs
 
-`src/` is the app. What decides where a file runs is which directory it is in, and the build
-enforces it — a client graph that reaches into `#server/**` for anything but a handler is a
-compile error naming the import, never a stub that quietly does nothing in a browser.
+`src/` is the app, and the build enforces the split — a client graph that reaches into
+`#server/**` for anything but a handler is a compile error naming the import, never a stub that
+quietly does nothing in a browser.
 
 | Directory | Runs | Reached as |
 | --- | --- | --- |

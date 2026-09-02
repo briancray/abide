@@ -1,0 +1,11 @@
+<script>
+import { route } from 'abide'
+import { thread } from '#shared/threads'
+
+// The same room, reached by the same args. No prop, no context and
+// no provider between this and the page — the channel IS the
+// shared thing, and a bare read is the latest message.
+const room = thread({ id: route.params.id })
+</script>
+
+<p class="hint">latest from {room.author}</p>

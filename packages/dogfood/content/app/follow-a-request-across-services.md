@@ -6,9 +6,7 @@ covers:
   - `trace`
   - `trace.span`
   - `trace.sampled`
-  - `trace.state`
   - `trace.headers`
-  - `trace.responseHeaders`
   - `traceresponse`
 status: stub
 ---

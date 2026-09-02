@@ -17,6 +17,69 @@ const FONTS =
 
 type ExampleFile = { path: string; source: string }
 
+// Runs INSIDE the result frame, which is the only place it can run: `mirror` follows an
+// input as it is typed and a round trip to the parent per keystroke would swap the whole
+// document out from under the caret. A TRANSITION is the opposite — it replaces the
+// document — so that one is posted up and the parent decides.
+//
+// The transforms are a FIXED SET, and deliberately small: they stand in for the code the
+// page is teaching until the compiler can run it, so a demo can only mock what some
+// example's source actually says. Anything needing a sixth is asking for bespoke
+// per-example script, which is the thing this exists instead of.
+const DRIVER = `<script>
+const machine = JSON.parse(document.querySelector('[data-machine]').textContent)
+const TRANSFORMS = {
+  trim: (v) => v.trim(),
+  lowercase: (v) => v.toLowerCase(),
+  uppercase: (v) => v.toUpperCase(),
+  slug: (v) => v.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+  count: (v) => String(v.length),
+}
+function mirror() {
+  for (const rule of machine.mirror) {
+    const from = document.querySelector(rule.from)
+    const to = document.querySelector(rule.to)
+    if (!from || !to) continue
+    const value = from.type === 'checkbox' ? String(from.checked) : from.value
+    to.textContent = rule.transform ? TRANSFORMS[rule.transform](value) : value
+  }
+}
+function fire(kind, event) {
+  for (const key of Object.keys(machine.on)) {
+    const space = key.indexOf(' ')
+    if (key.slice(0, space) !== kind) continue
+    if (!event.target.closest(key.slice(space + 1))) continue
+    event.preventDefault()
+    parent.postMessage({ abide: machine.on[key] }, '*')
+    return
+  }
+}
+// The frame is as tall as its content, and only the frame can know that. It reports
+// rather than the parent measuring, because the parent has no origin to read across.
+function measure() {
+  parent.postMessage({ abideHeight: document.documentElement.scrollHeight }, '*')
+}
+new ResizeObserver(measure).observe(document.documentElement)
+// A WHEEL OVER THE FRAME IS THE PAGE'S, not the example's. A cross-document scroll does
+// not chain to the parent, so a frame sized to its content — which is every one of them —
+// swallows the gesture and the reader stops dead halfway down the page. Forwarded only
+// when this document genuinely has nowhere to scroll, so an example that grows a scroller
+// of its own keeps it.
+addEventListener('wheel', (event) => {
+  const root = document.documentElement
+  if (root.scrollHeight > root.clientHeight) return
+  event.preventDefault()
+  parent.postMessage({ abideWheel: { x: event.deltaX, y: event.deltaY } }, '*')
+}, { passive: false })
+addEventListener('input', mirror)
+addEventListener('input', (event) => fire('input', event))
+addEventListener('change', (event) => fire('change', event))
+addEventListener('click', (event) => fire('click', event))
+addEventListener('submit', (event) => fire('submit', event))
+mirror()
+measure()
+</script>`
+
 // WHICH FILE A READER OPENS FIRST is the one the problem is solved in. That is the
 // `.abide` file for almost every problem — the page is where an author starts, and
 // the handler is what they reach back for — so the order is DERIVED from each file's
@@ -37,20 +100,40 @@ function orderedFiles(paths: string[], about: 'ui' | 'server'): string[] {
 // Only `title`, `summary`, `files`, `result` and `route` are owed. A panel an example
 // has no artifact for is NOT RENDERED — a Wire tab on an example that makes no request
 // would be a claim about work that never happened, so Result is a lone pane there.
-type Manifest = {
+export type Manifest = {
     title: string
     summary: string
     files: string[]
     route: string
-    // A settled snapshot cannot show `pending()`, so a result is a SEQUENCE. `hold`
-    // is how long a state stays before the next one replaces it; the last has none.
-    states: { file: string; hold?: number }[]
+    // A settled snapshot cannot show `pending()`, so a result is never one document.
+    // It is a MACHINE: `hold` waits and then goes to `then`, `on` goes somewhere on
+    // something the reader did, and `mirror` is the one thing that happens WITHOUT a
+    // state change — text following an input as it is typed. A film strip is the case
+    // where only `hold` is used, which is why there is no second shape for it.
+    //
+    // `after` NAMES its target rather than meaning the next entry, because a reload
+    // returns to the state it reloaded — array order could express a strip and could
+    // not express that, and an implicit rule that only works for the simple case is
+    // the one that breaks silently on the first case it does not.
+    states: {
+        id: string
+        file: string
+        hold?: number
+        after?: string
+        on?: Record<string, string>
+        mirror?: { from: string; to: string; transform?: string }[]
+    }[]
     about?: 'ui' | 'server'
     compiled?: string[]
+    // The hand-written arm every bench ratio is against. It SHIPS, in the download and in the
+    // line counts, and it is not a panel: nobody reads it, they read the ratio it produced.
     vanilla?: string[]
     // Test RESULTS, not test source: what a reader wants from this panel is whether
     // the example holds, and the spec itself is in the download.
     tests?: { note?: string; rows: { name: string; result: string }[] }
+    // A REFUSAL is the one artifact whose source cannot live in `files/` — that source is
+    // wrong on purpose, and an example the build rejects is not an example. It gets its own
+    // folder, so what a reader downloads still runs.
     wire?: {
         request: string
         requestHeaders: Record<string, string>
@@ -58,9 +141,29 @@ type Manifest = {
         responseHeaders: Record<string, string>
         body: string
     }[]
-    bench: {
+    bench?: {
         note: string
         rows: { metric: string; abide: string; vanilla: string; ratio: string }[]
+    }
+}
+
+// BOTH WAYS A MACHINE CAN BE WRONG ARE SILENT. A duplicate id makes one state
+// unreachable and the other arbitrary; a transition naming no state dead-ends on the
+// click that takes it. Neither shows in the rendered output, because the output of the
+// state you never reach is not rendered at all — so they are refused at build.
+export function checkMachine(name: string, states: Manifest['states']): void {
+    const ids = new Set<string>()
+    for (const state of states) {
+        if (ids.has(state.id)) throw new Error(`example ${name}: two states share id ${state.id}`)
+        ids.add(state.id)
+    }
+    for (const state of states) {
+        for (const [event, target] of Object.entries(state.on ?? {})) {
+            if (ids.has(target)) continue
+            throw new Error(`example ${name}: ${state.id} on "${event}" names no state ${target}`)
+        }
+        if (state.hold && !ids.has(state.after ?? ''))
+            throw new Error(`example ${name}: ${state.id} holds but names no state to go to`)
     }
 }
 
@@ -97,43 +200,41 @@ function renderHeaders(headers: Record<string, string>): string {
     return `<table class="ex-headers"><tbody>${rows}</tbody></table>`
 }
 
-function renderWire(entries: NonNullable<Manifest['wire']>): string {
-    let html = ''
-    for (const entry of entries) {
-        html += `<p class="ex-line ex-request"><code>${escapeHtml(entry.request)}</code></p>
-${renderHeaders(entry.requestHeaders)}
-<p class="ex-line ex-status"><code>${escapeHtml(entry.status)}</code></p>
-${renderHeaders(entry.responseHeaders)}
-<pre><code>${highlight(entry.body)}</code></pre>`
-    }
-    return html
+// A TAB IS THE HANDLER AND ITS ARGUMENTS, which is the whole of what tells two calls apart.
+// The mount prefix is the same on every one, so it is furniture in a label: three tabs reading
+// `/__abide/rpc/…` differ in their last eight characters and a reader has to find them.
+function wireLabel(request: string): string {
+    const [method = 'GET', address = ''] = request.split(' ')
+    const call = address.slice(address.lastIndexOf('/') + 1)
+    return method === 'GET' ? call : `${method} ${call}`
 }
 
-// Result and Wire answer the same question — what came back — so they are one panel
-// with two tabs rather than two panels a reader holds side by side. The tablist is the
-// one Files already uses; only the bodies differ.
-function renderResultGroup(browser: string, wire: Manifest['wire']): string {
-    if (!wire?.length) return browser
-    const entries = [
-        { label: 'Rendered', side: 'browser', body: browser },
-        ...wire.map((entry) => ({
-            label: entry.request,
-            side: 'server',
-            body: renderWire([entry]),
-        })),
-    ]
+// Stacked, three exchanges is a page to scroll for the one you want. Tabbed, it is the same
+// device Files already uses — and the tablist markup is that one, so the panel script that
+// switches files switches these without knowing they are not files.
+function renderWire(entries: NonNullable<Manifest['wire']>): string {
     let tabs = ''
     let bodies = ''
     for (let index = 0; index < entries.length; index += 1) {
         const entry = entries[index]
         if (!entry) continue
         const selected = index === 0
-        tabs += `<button role="tab" aria-selected="${selected}" data-side="${entry.side}" data-file="result:${index}">${escapeHtml(entry.label)}</button>`
-        bodies += `<div data-file="result:${index}"${selected ? '' : ' hidden'}>${entry.body}</div>`
+        tabs += `<button role="tab" aria-selected="${selected}" data-side="server" data-file="wire:${index}">${escapeHtml(wireLabel(entry.request))}</button>`
+        bodies += `<div data-file="wire:${index}"${selected ? '' : ' hidden'}>
+<p class="ex-line ex-request"><code>${escapeHtml(entry.request)}</code></p>
+${renderHeaders(entry.requestHeaders)}
+<p class="ex-line ex-status"><code>${escapeHtml(entry.status)}</code></p>
+${renderHeaders(entry.responseHeaders)}
+<pre><code>${highlight(entry.body)}</code></pre>
+</div>`
     }
     return `<div class="ex-files" role="tablist">${tabs}</div>${bodies}`
 }
 
+// Wire used to be a second tab beside Rendered, on the reasoning that both answer "what
+// came back". They do — but only one of them is the THING, and burying the running page
+// behind a tab made an example something to read. The render is now always on screen and
+// Wire is a panel of its own beside Files.
 function renderTests(tests: NonNullable<Manifest['tests']>): string {
     let rows = ''
     for (const row of tests.rows) {
@@ -164,6 +265,37 @@ function renderBench(bench: NonNullable<Manifest['bench']>): string {
 <p class="ex-note">${renderInline(bench.note)}</p>`
 }
 
+// WHAT THE RESULT FRAME TAKES FROM THE APP STYLESHEET, by the text each rule starts
+// with. Lifted rather than restated so an example renders the way an abide page renders
+// and the two cannot drift — which is also the failure mode: rename one of these in
+// app.css and the frame quietly loses that rule, with the page still rendering. The
+// check in `snippet.test.ts` is what makes that loud.
+export const FRAME_RULES = [
+    ':root',
+    '@media (prefers-color-scheme: dark)',
+    '\nh1 {',
+    '\np {',
+    '\na {',
+    '\na[aria-current]',
+    '\n.switch {',
+    '\n.switch a {',
+    '\n.switch a:hover',
+    '\n.switch a[aria-current]',
+    '\ninput, textarea, select {',
+    '\ninput:focus-visible',
+    '\nbutton {',
+    '\nbutton:hover',
+    '\nlabel {',
+    '\nlabel input, label select',
+    '\nlabel input[type=checkbox]',
+    '\nlabel:has(> input[type=checkbox])',
+    '\n.tip {',
+    '\n.tip::before',
+    '\n.tip button {',
+    '\n.tip button:hover',
+    '\n.tip code',
+]
+
 function ruleAt(css: string, selector: string): string {
     const at = css.indexOf(selector)
     if (at === -1) return ''
@@ -186,7 +318,7 @@ function ruleAt(css: string, selector: string): string {
 // and a palette change reaches it for free. Only the tokens: the site's chrome is a
 // sidebar grid, and a page that is not the docs would be wrecked by it.
 function renderResult(
-    states: { hold: number; body: string }[],
+    states: (Manifest['states'][number] & { body: string })[],
     route: string,
     appCss: string,
 ): string {
@@ -194,26 +326,62 @@ function renderResult(
     // renders the way an abide page renders. Every rule is lifted from the app
     // stylesheet rather than restated, except `body` — the site's own is a sidebar
     // grid, which is chrome rather than a default.
-    const base = [':root', '@media (prefers-color-scheme: dark)', '\nh1 {', '\np {']
-        .map((selector) => ruleAt(appCss, selector))
-        .join('')
-    const document = (body: string) => `<!doctype html><meta charset="utf-8">
+    const base = FRAME_RULES.map((selector) => ruleAt(appCss, selector)).join('')
+    const document = (state: Manifest['states'][number], body: string) =>
+        `<!doctype html><meta charset="utf-8">
 <link rel="stylesheet" href="${FONTS}">
 <style>${base}
 body { margin:0; padding:1.5rem; background:var(--paper); color:var(--ink);
-  font:400 15px/1.6 var(--sans); }</style>${body}`
+  font:400 15px/1.6 var(--sans); }
+</style>${body}
+<script type="application/json" data-machine>${JSON.stringify({
+    on: state.on ?? {},
+    mirror: state.mirror ?? [],
+}).replaceAll('<', '\\u003c')}</script>${DRIVER}`
 
-    const frames = states.map((state) => ({ hold: state.hold, html: document(state.body) }))
-    const settled = frames.at(-1)?.html ?? ''
+    const frames = states.map((state) => ({
+        id: state.id,
+        hold: state.hold ?? 0,
+        after: state.after ?? '',
+        on: state.on ?? {},
+        mirror: state.mirror ?? [],
+        html: document(state, state.body),
+    }))
+    // WHERE A MACHINE RESTS is WHERE THE CLOCK STOPS: follow `hold` from the first state
+    // and settle on the first one that does not have it. A film strip rests on its last
+    // frame, having already finished by the time anyone looks; a driven machine rests on
+    // its first, waiting for the reader; and one that loads and THEN waits — a hold into
+    // an editable form — rests on the form rather than on whatever a click leads to.
+    // Decided here rather than in script, so the frame is right before any JS runs.
+    let home = 0
+    for (let step = 0; step < frames.length && frames[home]?.hold; step += 1) {
+        const next = frames.findIndex((frame) => frame.id === frames[home]?.after)
+        if (next === -1) break
+        home = next
+    }
     // `<` is escaped so a state's own markup cannot close this script element.
     const data = JSON.stringify(frames).replaceAll('<', '\\u003c')
 
-    // Replay is only meaningful where there is more than one state to move between.
-    const replay = frames.length > 1 ? '<button type="button" data-replay>Replay</button>' : ''
+    // One button, back to the first state — but not one word for it. REPLAY is what a
+    // clock-driven strip does, and there is nothing to replay on a machine the reader
+    // drives: that one is a RESET, and calling it a replay promises a performance that
+    // never comes.
+    const label = frames.some((frame) => frame.hold) ? 'Replay' : 'Reset'
+    const replay =
+        frames.length > 1
+            ? `<button type="button" class="ex-replay" data-replay>${label}</button>`
+            : ''
 
+    // `allow-scripts` WITHOUT `allow-same-origin`: the driver has to run to answer a
+    // click, and withholding the origin is what keeps it from reaching this document.
+    // The parent hears about a transition by message rather than by reading the frame.
+    //
+    // `loading="lazy"` was here and did NOTHING, which is worth stating so it does not
+    // come back: the attribute defers a FETCH, and a srcdoc frame has no fetch to defer.
+    // Measured 2642px below the fold with the attribute set and the frame's own script
+    // already run. So a section overview renders every example it carries, at load.
     return `<div class="ex-browser">
-<div class="ex-bar"><div class="ex-url"><code>localhost:3000${escapeHtml(route)}</code></div>${replay}</div>
-<iframe class="ex-result" title="The example's rendered output" sandbox="allow-same-origin" srcdoc="${escapeHtml(settled)}"></iframe>
+<iframe class="ex-result" title="The rendered output of ${escapeHtml(route)}" sandbox="allow-scripts" srcdoc="${escapeHtml(frames[home]?.html ?? '')}"></iframe>${replay}
 <script type="application/json" data-states>${data}</script>
 </div>`
 }
@@ -229,26 +397,22 @@ export async function readExample(name: string, root: string): Promise<Example> 
     const sourcePaths = orderedFiles(manifest.files, manifest.about ?? 'ui')
     const files = await readGroup(name, 'files', sourcePaths)
     const compiled = await readGroup(name, 'compiled', manifest.compiled ?? [])
-    const vanilla = await readGroup(name, 'vanilla', manifest.vanilla ?? [])
-    const states: { hold: number; body: string }[] = []
+    checkMachine(name, manifest.states)
+    const states: (Manifest['states'][number] & { body: string })[] = []
     for (const state of manifest.states) {
         const file = Bun.file(new URL(`${name}/${state.file}`, EXAMPLES_DIR))
         if (!(await file.exists())) throw new Error(`example ${name}: ${state.file} is missing`)
-        states.push({ hold: state.hold ?? 0, body: await file.text() })
+        states.push({ ...state, body: await file.text() })
     }
     const appCss = await Bun.file(APP_STYLESHEET).text()
 
-    const panels: [string, string, string][] = [
-        ['files', 'Files', renderFileGroup(files, 'files')],
-        [
-            'result',
-            'Result',
-            renderResultGroup(renderResult(states, manifest.route, appCss), manifest.wire),
-        ],
-    ]
+    // THE RENDER IS NOT A PANEL. It is the thing the example IS, so it sits above the
+    // tabs and stays there — what the tabs hold is everything you consult ABOUT it.
+    const render = renderResult(states, manifest.route, appCss)
+    const panels: [string, string, string][] = [['files', 'Files', renderFileGroup(files, 'files')]]
+    if (manifest.wire?.length) panels.push(['wire', 'Requests', renderWire(manifest.wire)])
     if (compiled.length)
         panels.push(['compiled', 'Compiled', renderFileGroup(compiled, 'compiled')])
-    if (vanilla.length) panels.push(['vanilla', 'Vanilla', renderFileGroup(vanilla, 'vanilla')])
     if (manifest.bench) panels.push(['bench', 'Bench', renderBench(manifest.bench)])
     if (manifest.tests) panels.push(['tests', 'Tests', renderTests(manifest.tests)])
 
@@ -262,6 +426,7 @@ export async function readExample(name: string, root: string): Promise<Example> 
 
     const html = `<figure class="example">
 <figcaption><span class="ex-title">${escapeHtml(manifest.title)}</span><span class="ex-summary">${escapeHtml(manifest.summary)}</span></figcaption>
+${render}
 <div class="ex-tabs"><div class="ex-tablist" role="tablist">${tabs}</div>${renderDownload(name, root)}</div>
 ${bodies}
 </figure>`

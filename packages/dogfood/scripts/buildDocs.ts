@@ -12,7 +12,8 @@
 import { rm } from 'node:fs/promises' // bun has no recursive directory remove of its own
 import { NAV } from './NAV.ts'
 import { exampleMarkdown, readExample } from './renderExample.ts'
-import { EXAMPLE, LEAD, renderInline, renderMarkdown } from './renderMarkdown.ts'
+import { EXAMPLE, LEAD, SNIPPET, renderInline, renderMarkdown } from './renderMarkdown.ts'
+import { snippetHtml, snippetMarkdown } from './renderSnippet.ts'
 import { type ZipEntry, zip } from './zip.ts'
 
 const CONTENT_DIR = new URL('../content/', import.meta.url)
@@ -196,9 +197,31 @@ for (const example of document.querySelectorAll('.example')) {
     const state = states[index]
     if (!state || !frame) return
     frame.srcdoc = state.html
-    if (state.hold && index < states.length - 1) timer = setTimeout(() => play(index + 1), state.hold)
+    if (!state.hold) return
+    const next = states.findIndex((candidate) => candidate.id === state.after)
+    if (next !== -1) timer = setTimeout(() => play(next), state.hold)
   }
-  if (states.length > 1) play(states.length - 1)
+  // NOTHING PLAYS AT LOAD, and an auto-play on scroll-in was tried and removed: Result
+  // leads now, so the frame is already showing the render, and starting the strip blanks
+  // the thing the reader just arrived at. Measured at 210ms of settled before the swap —
+  // a fifth of a second of showing the answer and then taking it away. REPLAY is the
+  // offer instead, which is the button's whole reason for existing.
+  addEventListener('message', (event) => {
+    if (!frame || event.source !== frame.contentWindow) return
+    // A measured height, which is the one thing a stylesheet cannot know.
+    if (event.data && event.data.abideHeight) {
+      frame.style.height = event.data.abideHeight + 'px'
+      return
+    }
+    // The gesture the frame declined, put back where the reader aimed it.
+    if (event.data && event.data.abideWheel) {
+      scrollBy(event.data.abideWheel.x, event.data.abideWheel.y)
+      return
+    }
+    const id = event.data && event.data.abide
+    const index = states.findIndex((state) => state.id === id)
+    if (index !== -1) play(index)
+  })
 
   example.addEventListener('click', (event) => {
     if (event.target.closest('[data-replay]')) { play(0); return }
@@ -250,12 +273,18 @@ export async function renderPage(page: Page, pages: Page[], index: number): Prom
     let body = renderMarkdown(page.body)
     // Re-read per page rather than caching: the download links are relative to the
     // page they sit on, and there are two example embeds in the whole site.
+    // LEAD FIRST: a lead is a section page's opening, and an opening carries the example
+    // that page leads with — so the passes that expand one have to run after it, or the
+    // overview ships the marker instead of the figure.
+    for (const match of [...body.matchAll(/<!--lead:([\w/-]+)-->/g)]) {
+        body = body.replace(match[0], renderMarkdown(leadOf(pages, match[1] ?? '')))
+    }
     for (const match of [...body.matchAll(/<!--example:([\w-]+)-->/g)]) {
         const example = await readExample(match[1] ?? '', root)
         body = body.replace(match[0], example.html)
     }
-    for (const match of [...body.matchAll(/<!--lead:([\w/-]+)-->/g)]) {
-        body = body.replace(match[0], renderMarkdown(leadOf(pages, match[1] ?? '')))
+    for (const match of [...body.matchAll(/<!--snippet:(\{.*?\})-->/g)]) {
+        body = body.replace(match[0], await snippetHtml(JSON.parse(match[1] ?? '{}')))
     }
     body = linksToHtml(body)
 
@@ -306,19 +335,30 @@ function linksToHtml(html: string): string {
     return html.replace(/href="(?!https?:|#)([^"]+)\.md/g, 'href="$1.html')
 }
 
-// The page EXPANDED — front matter as a heading, directives as fences — which is what the
-// bundle needs and only the bundle: a reader who has the repo gets `content/<slug>.md`
-// itself, hints intact, because that file is already the page.
+// The page EXPANDED — front matter as a heading, directives as fences — which is what every
+// markdown reader gets, the per-page download and the bundle alike. `content/<slug>.md` is the
+// source and keeps its hints; a reader who wants those has the repo.
 export async function renderPageMarkdown(page: Page, pages: Page[]): Promise<string> {
     const root = '../'.repeat(page.slug.split('/').length - 1)
     let body = page.body.trim()
     // The directives expand into FENCES rather than panels — same source, same order,
-    // no tab a reader of plain text cannot open.
+    // no tab a reader of plain text cannot open. LEAD runs first for the reason the HTML
+    // path gives: an opening it pulls in may itself embed an example or a snippet.
+    for (const match of [...body.matchAll(new RegExp(LEAD.source, 'gm'))]) {
+        body = body.replace(match[0], leadOf(pages, match[1] ?? ''))
+    }
     for (const match of [...body.matchAll(new RegExp(EXAMPLE.source, 'gm'))]) {
         body = body.replace(match[0], await exampleMarkdown(match[1] ?? '', root))
     }
-    for (const match of [...body.matchAll(new RegExp(LEAD.source, 'gm'))]) {
-        body = body.replace(match[0], leadOf(pages, match[1] ?? ''))
+    for (const match of [...body.matchAll(new RegExp(SNIPPET.source, 'gm'))]) {
+        body = body.replace(
+            match[0],
+            await snippetMarkdown({
+                example: match[1] ?? '',
+                file: match[2] ?? '',
+                anchor: match[3] ?? '',
+            }),
+        )
     }
 
     let head = `# ${page.title}\n`
@@ -378,14 +418,15 @@ export async function buildDocs(): Promise<Page[]> {
             new URL(`${page.slug}.html`, OUTPUT_DIR),
             await renderPage(page, pages, index),
         )
-        // A COPY, not a render: `content/<slug>.md` is already the page, so the download
-        // and the repo file are the same bytes and there is nothing to keep in sync.
-        await Bun.write(
-            new URL(`${page.slug}.md`, OUTPUT_DIR),
-            Bun.file(new URL(`${page.slug}.md`, CONTENT_DIR)),
-        )
         // Indexed rather than pushed: the bundle reads it back by the page's own index.
-        markdown[index] = await renderPageMarkdown(page, pages)
+        const rendered = await renderPageMarkdown(page, pages)
+        markdown[index] = rendered
+        // The RENDERED page, not a copy of the content file. The copy was byte-identical to
+        // the repo file, which is the same thing as the page only while the page carries no
+        // directive — a section overview is `{% lead %}` markers and little else, so the
+        // download was the markers. `content/<slug>.md` keeps the hints; this is what
+        // "Download this page" means by the page.
+        await Bun.write(new URL(`${page.slug}.md`, OUTPUT_DIR), rendered)
     }
     await Bun.write(new URL('abide.md', OUTPUT_DIR), renderBundle(pages, markdown))
     await Bun.write(new URL('docs.css', OUTPUT_DIR), Bun.file(STYLESHEET_SOURCE))

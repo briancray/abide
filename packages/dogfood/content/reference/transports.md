@@ -1,6 +1,6 @@
 ---
 title: Transports
 nav: Transports
-intent: rpc, socket, schemas, response helpers and the headers abide sends.
+intent: rpc, socket, response helpers and the headers abide sends.
 status: stub
 ---

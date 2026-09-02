@@ -1,0 +1,17 @@
+<script>
+import { state } from 'abide'
+import { handle, profile, save } from '#shared/profile'
+
+const topics = state<string[]>([])
+const chosen = state<string | undefined>(undefined)
+</script>
+
+<h1>{profile.name}</h1>
+
+<label>
+    Handle
+    <input bind:value={handle}>
+</label>
+<p class="hint">Saved as {handle}</p>
+
+<button onclick={save}>Save</button>

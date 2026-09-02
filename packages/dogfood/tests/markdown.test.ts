@@ -110,3 +110,21 @@ test('a rendered page links to html, and every link resolves', async () => {
     }
     expect(broken).toEqual([])
 })
+
+// A table cell opening on `yes` / `no` renders as a coloured verdict and a recessive
+// reason. The guard is the half worth testing: `no route matched, or no handler is
+// mounted` is a SENTENCE beginning with the word, and styling its first two letters red
+// is wrong in a way nothing would report — the page still renders and the table still
+// reads. Both directions are asserted, because loosening the pattern breaks only one.
+test('a verdict cell is marked up, and a sentence that opens on one is not', async () => {
+    const pages = await readPages()
+    const holds = pages.find((page) => page.slug === 'values/show-a-value-that-isnt-there-yet')
+    const rendered = await renderPage(holds!, pages, 0)
+    expect(rendered).toContain('<b class="verdict-no">no</b>')
+    expect(rendered).toContain('<b class="verdict-yes">yes</b>')
+    expect(rendered).toContain('<span class="verdict-why"> — the pending body')
+
+    const failures = pages.find((page) => page.slug === 'server/refuse-a-request-and-say-why')
+    const prose = await renderPage(failures!, pages, 0)
+    expect(prose).toContain('<td>no route matched')
+})

@@ -1,0 +1,155 @@
+{
+    "title": "Two readers, one request",
+    "summary": "A page and a component that both need customer 42, with nothing lifted and nothing threaded down. Switch customers, then switch back and watch the request count refuse to move.",
+    "files": [
+        "src/ui/pages/customers/[id]/page.abide",
+        "src/ui/components/Plan.abide",
+        "src/server/rpc/customers.ts",
+        "src/server/rpc/rates.ts"
+    ],
+    "route": "/customers/42",
+    "states": [
+        {
+            "id": "loading42",
+            "file": "loading42.html",
+            "hold": 700,
+            "after": "ready42"
+        },
+        {
+            "id": "ready42",
+            "file": "ready42.html",
+            "on": {
+                "click [data-customer='43']": "loading43"
+            }
+        },
+        {
+            "id": "loading43",
+            "file": "loading43.html",
+            "hold": 700,
+            "after": "ready43"
+        },
+        {
+            "id": "ready43",
+            "file": "ready43.html",
+            "on": {
+                "click [data-customer='42']": "cached42"
+            }
+        },
+        {
+            "id": "cached42",
+            "file": "cached42.html",
+            "on": {
+                "click [data-customer='43']": "cached43"
+            }
+        },
+        {
+            "id": "cached43",
+            "file": "cached43.html",
+            "on": {
+                "click [data-customer='42']": "cached42"
+            }
+        }
+    ],
+    "bench": {
+        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler.",
+        "rows": [
+            {
+                "metric": "Second reader, same key",
+                "abide": "0.02 ms",
+                "vanilla": "0.02 ms",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Requests, two readers",
+                "abide": "1",
+                "vanilla": "1",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Requests returning to a held key",
+                "abide": "0",
+                "vanilla": "0",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Client bytes",
+                "abide": "4.2 kB",
+                "vanilla": "2.0 kB",
+                "ratio": "2.10x"
+            },
+            {
+                "metric": "Lines of code",
+                "abide": "41",
+                "vanilla": "76",
+                "ratio": "0.54x"
+            }
+        ]
+    },
+    "tests": {
+        "note": "`bun test examples/caching`. The request counts are the contract; the rendered customer is right whether or not the cache worked.",
+        "rows": [
+            {
+                "name": "two readers of one args key make one request",
+                "result": "pass"
+            },
+            {
+                "name": "a different args key is a different entry",
+                "result": "pass"
+            },
+            {
+                "name": "returning to a held key makes no request and shows no spinner",
+                "result": "pass"
+            },
+            {
+                "name": "a `global` entry is not reloaded per caller",
+                "result": "pass"
+            }
+        ]
+    },
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/customers/getCustomer?id=42",
+            "requestHeaders": {
+                "abide-render": "0c8f1a4e9b2d7c31",
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tA"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"name\": \"Ada Lovelace\",\n    \"plan\": \"Pro\",\n    \"balance\": 1240\n}"
+        },
+        {
+            "request": "GET /__abide/rpc/customers/getCustomer?id=43",
+            "requestHeaders": {
+                "abide-render": "0c8f1a4e9b2d7c31",
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tA"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"name\": \"Grace Hopper\",\n    \"plan\": \"Team\",\n    \"balance\": 880\n}"
+        },
+        {
+            "request": "GET /__abide/rpc/rates/getRate?pair=USDEUR",
+            "requestHeaders": {
+                "abide-render": "0c8f1a4e9b2d7c31",
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tA"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "public, max-age=60"
+            },
+            "body": "{\n    \"rate\": 0.92\n}"
+        }
+    ],
+    "vanilla": [
+        "customer.js",
+        "index.html",
+        "server.ts"
+    ]
+}

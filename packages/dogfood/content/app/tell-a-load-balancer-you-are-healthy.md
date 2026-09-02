@@ -6,9 +6,7 @@ covers:
   - `health`
   - `Health`
   - `onHealth`
-  - `reachable`
   - `version`
   - `startedAt`
-  - `uptime`
 status: stub
 ---

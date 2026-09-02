@@ -49,7 +49,7 @@ fetch, so it does nothing rather than clearing what you put there.
 
 Read on: [Loading states](show-a-value-that-isnt-there-yet.md)
 
-## Reloading a keyed memo, all of it or part
+## A keyed memo reloads by pattern, all of it or part
 
 On a keyed memo the two triggers live on the **factory**, that being what has an args space to
 narrow over, and they take a pattern:
@@ -65,7 +65,7 @@ granularity is spelled, and it is the place that has the `Args` type to check it
 
 Read on: [Caching](load-once-per-set-of-arguments.md)
 
-## Reloading a set of entries with a selection
+## A `Selection` names the entries to reload
 
 The members above are conveniences over four free functions, and a `Selection` is what those take:
 
@@ -79,10 +79,10 @@ The members above are conveniences over four free functions, and a `Selection` i
 ```ts shared
 import { invalidate, refresh, pending, refreshing } from 'abide'
 
-invalidate(invoice)                        // ≡ invoice.invalidate()
-invalidate({ tags: ['invoice:42'] })       // across every memo that tagged it
-refresh(getInvoice)                        // every args key, loaded now
-pending()                                  // is anything in this scope in flight
+invalidate(invoice)                     // ≡ invoice.invalidate()
+invalidate({ tags: ['invoice:42'] })    // across every memo that tagged it
+refresh(getInvoice)                     // every args key, loaded now
+pending()                               // anything in this scope in flight
 ```
 
 The member spellings are **defined as** these, not a second mechanism at a second width:
@@ -104,7 +104,7 @@ handler being defensive wants.
 There is no bare form wider than the scope. A probe reports and a trigger acts, so the widest
 read is free and the widest write is one an app should have to mean.
 
-## Reloading when the connection comes back
+## A reconnect invalidates everything at once
 
 At this width the lazy/eager difference stops being a nuance:
 
@@ -124,14 +124,16 @@ anyone asks.
 Read on: [Offline](../app/know-when-the-browser-goes-offline.md) ·
 [Watching values](do-something-when-a-value-changes.md)
 
-## Expiring a value on its own with `ttl`
+## `ttl` expires a value with nobody asking
 
 `ttl` is the life of a **retained production** — one definition reaching all three producers. At
 the default retention a value holds one production, so past its `ttl` the producer recomputes on
 the next read. A room retaining a hundred messages has a hundred, each on its own clock.
 
 ```ts #server/rpc/rates.ts — excerpt
-const exchangeRate = memo(({ pair }: { pair: string }) => fetchRate(pair), { ttl: 60_000 })
+const exchangeRate = memo(({ pair }: { pair: string }) => fetchRate(pair), {
+    ttl: 60_000,
+})
 ```
 
 Expiry **wakes nobody**. Entries past it are dropped on the read that follows — no timer per
@@ -145,7 +147,7 @@ load, `state(fetchUser())` having a production to expire and `refresh()` to relo
 Read on: [Local state](show-a-value-that-changes.md) ·
 [History & tail](keep-the-last-few-values.md)
 
-## Reading without starting a load
+## `peek` reads without starting a load
 
 Since reading is what loads, a read from somewhere that only wants to look is a subscription you
 did not want. `peek` is the read that does not join the flow:

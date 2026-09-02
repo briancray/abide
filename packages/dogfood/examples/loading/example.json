@@ -1,0 +1,129 @@
+{
+    "title": "An invoice that loads, reloads and fails",
+    "summary": "One read, no loading branch. Watch the hole fill, press Refresh to see a reload that keeps the row on screen, and break it to see the failure decline to escalate.",
+    "files": [
+        "src/ui/pages/invoices/[id]/page.abide",
+        "src/ui/pages/invoices/[id]/print/page.abide",
+        "src/ui/pages/layout.abide",
+        "src/server/rpc/invoices.ts"
+    ],
+    "route": "/invoices/42",
+    "states": [
+        {
+            "id": "pending",
+            "file": "pending.html",
+            "hold": 800,
+            "after": "settled"
+        },
+        {
+            "id": "settled",
+            "file": "settled.html",
+            "on": {
+                "click [data-refresh]": "refreshing",
+                "click [data-break]": "failed"
+            }
+        },
+        {
+            "id": "refreshing",
+            "file": "refreshing.html",
+            "hold": 800,
+            "after": "settled"
+        },
+        {
+            "id": "failed",
+            "file": "failed.html",
+            "on": {
+                "click [data-retry]": "pending"
+            }
+        }
+    ],
+    "bench": {
+        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler.",
+        "rows": [
+            {
+                "metric": "First paint, value in flight",
+                "abide": "16.7 ms",
+                "vanilla": "16.7 ms",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "DOM nodes moved on refresh",
+                "abide": "1",
+                "vanilla": "1",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Branches remounted on refresh",
+                "abide": "0",
+                "vanilla": "0",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Client bytes",
+                "abide": "4.0 kB",
+                "vanilla": "1.9 kB",
+                "ratio": "2.11x"
+            },
+            {
+                "metric": "Lines of code",
+                "abide": "48",
+                "vanilla": "63",
+                "ratio": "0.76x"
+            }
+        ]
+    },
+    "tests": {
+        "note": "`bun test examples/loading`. The refresh case asserts that NOTHING unmounted — the output is identical either way, which is why it is counted rather than compared.",
+        "rows": [
+            {
+                "name": "a read in flight leaves a hole and does not block",
+                "result": "pass"
+            },
+            {
+                "name": "`success()` stays true through a refresh",
+                "result": "pass"
+            },
+            {
+                "name": "a refresh remounts no branch and moves one node",
+                "result": "pass"
+            },
+            {
+                "name": "`error()` hands the failure back instead of throwing",
+                "result": "pass"
+            }
+        ]
+    },
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/invoices/getInvoice?id=42",
+            "requestHeaders": {
+                "abide-render": "0c8f1a4e9b2d7c31",
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tA"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"number\": \"INV-0042\",\n    \"total\": \"$1,240.00\",\n    \"dueOn\": \"2026-09-14\"\n}"
+        },
+        {
+            "request": "GET /__abide/rpc/invoices/getInvoice?id=9999",
+            "requestHeaders": {
+                "abide-render": "0c8f1a4e9b2d7c31",
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tA"
+            },
+            "status": "404 Not Found",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"name\": \"HttpError\",\n    \"status\": 404,\n    \"message\": \"No such invoice.\"\n}"
+        }
+    ],
+    "vanilla": [
+        "index.html",
+        "invoice.js",
+        "server.ts"
+    ]
+}

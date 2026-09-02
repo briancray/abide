@@ -11,7 +11,6 @@ covers:
   - `foo.push(v)`
   - `foo.bar`
   - `foo.bar(…)`
-  - `foo.$`
   - `foo()` / `foo.set(v)`
 status: stub
 ---

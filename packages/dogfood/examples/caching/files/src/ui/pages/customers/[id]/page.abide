@@ -1,0 +1,21 @@
+<script>
+import { memo, route, url } from 'abide'
+import { getCustomer } from '#server/rpc/customers'
+import { getRate } from '#server/rpc/rates'
+import Plan from '#ui/components/Plan.abide'
+
+const customer = memo(() => getCustomer({ id: route.params.id }))
+
+// A `global` entry, so this one load is every caller's — not this
+// request's. Switching customers never reaches it.
+const rate = memo(() => getRate({ pair: 'USDEUR' }))
+</script>
+
+<nav class="switch">
+    <a href={url('/customers/[id]', { id: '42' })}>Customer 42</a>
+    <a href={url('/customers/[id]', { id: '43' })}>Customer 43</a>
+</nav>
+
+<h1>{customer.name}</h1>
+<Plan id={route.params.id}/>
+<p>Balance {customer.balance} USD, about {customer.balance * rate} EUR</p>

@@ -7,7 +7,6 @@ covers:
   - `Query`
   - `ParamsOf<P>`
   - `HasParams<P>`
-  - `ParamNames<P>`
   - `HasSegments<P>`
   - `RequiredNames<P>`
   - `OptionalNames<P>`

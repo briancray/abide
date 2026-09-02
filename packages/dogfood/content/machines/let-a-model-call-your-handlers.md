@@ -6,5 +6,6 @@ covers:
   - `/__abide/mcp`
   - `abide mcp [--url <origin>]`
   - `abide:mcp`
+  - `ABIDE_MCP`
 status: stub
 ---

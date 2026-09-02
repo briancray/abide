@@ -9,69 +9,63 @@ covers:
   - `Accepted`
   - `Stored`
   - `Transformer`
+examples:
+  - packages/dogfood/examples/local-state
 ---
 
-A counter is the smallest form of the problem every page has: something is held, something on
+Editing a profile is the whole of the problem every page has: something is held, something on
 screen shows it, and the two have to stay in step. `state` is the holding. The staying in step
 is not something you arrange.
 
-```abide #ui/pages/counter/page.abide
-<script>
-import { state } from 'abide'
+{% example local-state %}
 
-const count = state(0)
-</script>
+*2 values, 0 handlers* — no event listener, no setter threaded through the markup, no re-render
+to schedule, and no dependency to list. Everything below is a feature of that one page.
 
-<button onclick={() => count += 1}>Clicked {count} times</button>
-```
-
-*1 declaration, 1 write* — no setter threaded through the markup, no re-render to schedule, and
-no dependency to list.
-
-## Declaring a state
+## `state(initial)` hands back a `Reactive`
 
 `state(initial)` hands back a `Reactive` — the same one `memo`, `channel` and every rpc handler
 hand back. So everything this section says about probes, `await` and `tail` is already true of
-the counter above; nothing has to be wrapped in anything to have a face.
+the profile above; nothing has to be wrapped in anything to have a face.
 
-```abide abide
-const name = state('')
-const rows = state<Row[]>([])
-const chosen = state<string | undefined>(undefined)
-```
+{% snippet local-state src/ui/pages/profile/page.abide const topics … const chosen %}
+
+Whatever goes in — a literal, a type argument, nothing at all, or the load two sections
+down — one type comes back.
 
 `state()` with no argument is a `Reactive<undefined>` that has **already landed**. An owned value
 is not something that loads, so it reports `success()` from the moment it exists — which is what
 keeps a page from having a value in a state none of `{#await}`'s branches would mount for.
 
-## Reading and writing by name
+## The name is the value inside a `.abide` file
 
-Inside a `.abide` file the name is the value: `count` in an expression reads it, `count = 4`
-writes it, `count += 1` does both. Naming it alone — a binding, a return, an argument typed as a
-`Reactive` — hands over the value itself rather than reading it.
+Inside a `.abide` file the name is the value: `handle` in an expression reads it, `handle = 'ada'`
+writes it, and `bind:value={handle}` does both. Naming it alone — a binding, a return, an argument
+typed as a `Reactive` — hands over the value itself rather than reading it.
 
-The sugar sits **over** two members, and both keep compiling everywhere:
+{% snippet local-state src/ui/pages/profile/page.abide <h1> … <input bind:value %}
 
-```ts shared
-count()        // the read — takes no arguments, ever
-count.set(4)   // the write
-```
+Neither line says `.get` or `.value`. The name in an expression is the read, and the
+`bind:` is the read and the write at once.
 
-A `.ts` file has no sugar, so that is what you write there. In a `.abide` file the explicit
-spelling still compiles and still means exactly this — it is never a different mechanism.
+The sugar sits **over** two members, and both keep compiling everywhere — which is what a
+`.ts` file, having no sugar, has to write out:
+
+{% snippet local-state src/shared/profile.ts export function save %}
+
+That is the same read and the same write the two lines above are spelled over. In a
+`.abide` file this explicit form still compiles and still means exactly this — it is never
+a different mechanism.
 
 Read on: [Values by name](../templates/read-and-write-a-value-by-name.md)
 
-## What a write accepts, and what a read returns
+## `Accepted` goes in, `Stored` comes out
 
-`Accepted` is what goes in, `Stored` is what comes out. With no transform they are one type, so
-`state<number>(0)` is one parameter as it reads.
+With no transform they are one type, so `state<number>(0)` is one parameter as it reads.
 
 `set` takes what `state` took — a settled value, or a load:
 
-```abide abide
-const user = state(fetchUser())
-```
+{% snippet local-state src/shared/profile.ts export const profile %}
 
 That is a `Reactive<User>`, never a `Reactive<Promise<User>>`. The state serves the **settled**
 value, so `user = edited` writes a `User` rather than being made to wrap one. Hand it something
@@ -86,20 +80,24 @@ never drop what an app put there.
 Read on: [Loading states](show-a-value-that-isnt-there-yet.md) ·
 [Reloading](decide-when-a-value-reloads.md)
 
-## Normalising a value on the way in
+## A `transform` normalises a value on the way in
 
-A `Transformer` runs on the settled value before it is stored, which is where `Accepted` and
-`Stored` come apart:
+`transform` runs on the settled value before it is stored, which is where `Accepted` and
+`Stored` come apart. Its type is `Transformer`:
 
-```abide abide
-const slug = state('', { transform: (value) => value.trim().toLowerCase() })
-```
+{% snippet local-state src/shared/profile.ts export const handle %}
 
 It runs untracked, on the settled value — never on the promise and never per chunk — so a
 transform sees whole values whatever the producer was.
 
 A transform may also **refuse**: return a `Failed` and the write is rejected at the boundary
-rather than stored and checked later. That is the validation path a `bind:` field goes through.
+rather than stored and checked later.
+
+Both gates can refuse, and what you refuse **with** decides which one you reach for. A `schema`
+refuses as `ValidationError` carrying the messages. A `transform` refuses as a name you declared
+— `notAnEmail({ value })` — which is the only way a refusal arrives under its own name with its
+own data. So an input check that wants a name is written here even though `schema` is nominally
+the input gate.
 
 Read on: [Form binding](../templates/bind-a-form-to-state.md) ·
 [Failures](../server/refuse-a-request-and-say-why.md)

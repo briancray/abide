@@ -7,5 +7,6 @@ covers:
   - `abide:openapi`
   - `OpenApiDocument`
   - `abide openapi [--out <file>] [--url <origin>]`
+  - `ABIDE_OPENAPI`
 status: stub
 ---

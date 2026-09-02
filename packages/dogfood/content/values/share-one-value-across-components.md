@@ -29,10 +29,12 @@ lifetime of its own.
 Any other component calling `state.share('unread', …)` gets that same value. Whichever one runs
 first creates it; the rest get what is there.
 
-## Declaring a shared key
+## `Shared` is your app's own registry of keys
 
-`Shared` is your app's own registry, widened by declaration merging. It is what types the key and
-what stops two modules disagreeing about the value under one name.
+`Shared` is your app's own registry, widened by declaration merging — and an **opt-in tightening**,
+not a precondition. A key it declares is checked against it; a key it does not is inferred from the
+thunk, so `state.share` works before you have written one. What the registry buys is that two
+modules cannot disagree about the value under one name.
 
 ```ts #shared/shared.ts
 declare module 'abide' {
@@ -43,12 +45,12 @@ declare module 'abide' {
 }
 ```
 
-`state.share` takes `Key extends keyof Shared`, so a typo is a compile error and the value type
-follows from the key.
+With the key declared, a typo is a compile error and the value type follows from the key. Without
+one, `state.share('scratch', () => state(0))` is a `Reactive<number>` inferred from what you built.
 
-A dynamic key cannot typecheck, and that is deliberate rather than a limitation to work around: a
-per-room value is what a `channel`'s args are for. It is also what makes the count of shared keys
-fixed by the source, so there is no runtime bound to enforce and nothing to refuse.
+A **dynamic key is a build error**, declared or not, and that is deliberate rather than a limitation
+to work around: a per-room value is what a `channel`'s args are for. It is also what keeps the set of
+shared keys fixed by the source, so there is no runtime bound to enforce and nothing to refuse.
 
 Read on: [Sockets](../server/keep-a-room-of-callers-in-sync.md)
 
@@ -66,7 +68,7 @@ local name goes on being read by the module that made it while every other modul
 shared one, and both are correct-looking. The thunk is what keeps the loser's value from being
 built at all.
 
-## Where a shared value lives, and when it goes
+## A shared value lives in the scope a memo's cache lives in
 
 The scope is the one a memo's default scope is: **request-local on a server, process-local in a
 browser**, where there is one caller and no request. Same callable, same name, same intent; what
@@ -84,7 +86,7 @@ nobody can refresh.
 
 Read on: [Caching](load-once-per-set-of-arguments.md)
 
-## When a prop is the right answer instead
+## A prop beats sharing where the parent already has the value
 
 Sharing is for values with no owner on the path between the readers. Where a parent already has
 the value, hand it down: a plain `T` prop is a **live read** of the caller's expression, so

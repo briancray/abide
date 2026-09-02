@@ -17,6 +17,7 @@ covers:
   - `abide:health`
   - `abide:config`
   - `abide:render`
+  - `abide:reactive`
   - `abide:watch`
   - `abide:hydrate` / `abide:navigate`
   - `ABIDE_LOGS`
@@ -24,5 +25,6 @@ covers:
   - `ABIDE_MAX_LOG_BUFFER_COUNT`
   - `DEBUG`
   - `NO_COLOR`
+  - `FORCE_COLOR`
 status: stub
 ---

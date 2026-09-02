@@ -6,37 +6,22 @@ covers:
   - `channel`
   - `Channel`
   - `Room`
-  - `room.set(message)`
   - channel › `Message`
   - channel › `Args`
   - channel › `tail`
   - channel › `ttl`
   - channel › `transform`
+examples:
+  - packages/dogfood/examples/rooms
 ---
 
 A state has one owner and a memo has a body. The third kind of value has neither: a **room** is a
 subject anything may write to and anything may read, and nobody holds it.
 
-```ts #shared/rooms.ts
-import { channel } from 'abide'
+{% example rooms %}
 
-export const notifications = channel<{ text: string; level: 'info' | 'warn' }>()
-```
-
-```abide #ui/pages/orders/page.abide — excerpt
-<script>
-import { notifications } from '#shared/rooms'
-
-const inbox = notifications()
-</script>
-
-<button onclick={() => inbox.publish({ text: 'Order saved', level: 'info' })}>Save</button>
-
-{#if inbox}<p role="status" class="toast">{inbox.text}</p>{/if}
-```
-
-*2 files, 0 props threaded* — a button in one component and a banner in another, with neither
-one owning the value.
+*2 components, 0 props threaded* — a list on the page and a badge in the heading, with neither
+one owning the value and nothing passed between them.
 
 ## A room is a `Reactive` with `publish`
 
@@ -46,11 +31,12 @@ is **the latest message**, plus `publish`.
 So there is no second type to learn. A bare read is the latest message, the probes answer, `await`
 waits, and `room.tail(n)` is the cursor:
 
-```abide abide
-{inbox.text}                                   <!-- the latest message -->
-{#if inbox.pending()}<p>Nothing yet.</p>{/if}
-{#for await note of inbox.tail(20)}<li>{note.text}</li>{/for}
-```
+{% snippet rooms src/ui/pages/threads/[id]/page.abide {#if room.pending()} … {#for await post %}
+
+The badge in the heading is the bare read — `{room.author}` is the latest message's author,
+reached with no probe and no cursor:
+
+{% snippet rooms src/ui/components/Unread.abide <p class="hint"> %}
 
 `publish` hands back the message's `seq` — monotonic per room — which is what a reconnect resumes
 from.
@@ -69,22 +55,31 @@ That symmetry is the whole difference from the other two. A state is written by 
 memo is computed by its body; a room is written by **anything that can reach it**, and read the
 same way.
 
-In-process nothing is gated — the code above publishes because it is your code. Whether a caller
+The page publishes and the badge reads, and neither knows the other exists:
+
+{% snippet rooms src/ui/pages/threads/[id]/page.abide <button onclick %}
+
+{% snippet rooms src/ui/components/Unread.abide const room = thread %}
+
+In-process nothing is gated — the page publishes because it is your code. Whether a caller
 **outside** the process may publish is a separate question with a separate answer, defaulting to
 no, and it belongs to the transport rather than here.
 
 Read on: [Sockets](../server/keep-a-room-of-callers-in-sync.md)
 
-## One channel, many rooms
+## A channel is a space of rooms
 
 `Channel` is `(args?) => Room`, so a channel is a **space of rooms** and `args` picks one:
 
-```ts shared
-export const thread = channel<Message, { id: string }>()
+{% snippet rooms src/ui/pages/threads/[id]/page.abide const room = thread %}
 
-thread({ id: 'general' })   // one room
-thread({ id: 'design' })    // another
-```
+That one line is a different room per `id` in the address bar, from a single declaration —
+which is why changing rooms is changing the URL and nothing else:
+
+{% snippet rooms src/ui/pages/threads/[id]/page.abide <nav class="switch"> %}
+
+Switch between them in the example above. Each room has its own messages, its own tail and
+its own `seq`, and coming back to one finds it as you left it.
 
 Args are keyed by the same canonical wire form a memo's args use — sorted, `undefined` dropped,
 `Date` written ISO — so a fresh object built each run lands on the same room.
@@ -105,7 +100,7 @@ body declares chunks of one value, so no chunk is a whole anything.
 | | the producer yields | `pending()` until | a bare read | `tail(n)` |
 | --- | --- | --- | --- | --- |
 | room | a complete `Message` | the **first** message | the latest message | the last n messages |
-| stream | a **chunk** of one value | it **closes** | the accumulated chunks | the last n chunks |
+| stream | a **chunk** of one value | it **closes** | the accumulation, once it closes | the last n chunks |
 
 So `{inbox}` is the latest message and `{await inbox}` blocks until the first one, both meaningful.
 And `done()` stays false while a room is live — a room is not a thing that finishes — so
@@ -113,14 +108,12 @@ And `done()` stays false while a room is live — a room is not a thing that fin
 
 Read on: [Streaming data](../server/send-data-as-it-arrives.md)
 
-## Keeping past messages with `tail`
+## `tail` decides how many past messages a room keeps
 
 `tail` is how many past messages the room retains, and it defaults to **1** — latest only, like
 every other `Reactive`. A chat pane asks for more:
 
-```ts shared
-export const thread = channel<Message, { id: string }>({ tail: 50, ttl: 3_600_000 })
-```
+{% snippet rooms src/shared/threads.ts export const thread %}
 
 Fifty is also how far back a **reconnect** can resume: a cursor older than the tail is answered
 with the whole tail, never with a gap. `tail: 0` is passthrough and drop.
@@ -129,29 +122,37 @@ with the whole tail, never with a gap. `tail: 0` is passthrough and drop.
 
 Read on: [History & tail](keep-the-last-few-values.md)
 
-## Normalising or refusing a message
+## `transform` refuses a message under a name you declared
 
 `transform` is the same option `state` and `memo` take, on the third `Reactive`. It may rewrite the
-message or **refuse** it by returning a `Failed`:
+message or **refuse** it by returning a `Failed` — and that is what it is for here, `schema` being
+where a message's *shape* goes. Both gates refuse; what you refuse **with** picks between them, and
+only this one carries a name and data of your own:
 
-```ts #shared/rooms.ts — excerpt
-export const thread = channel<Message, { id: string }>({
-    transform: (message) =>
-        message.text.length > 500 ? tooLong({ length: message.text.length }) : message,
-})
-```
+It is the last option on the channel above. What it refuses with is declared once, and the
+name and its data are the type on both sides:
+
+{% snippet rooms src/shared/failures.ts export const tooLong %}
 
 It runs on **every** publish, the app's own included — normalising is not a question about who is
 asking.
 
+A message's **shape** is the sibling option, `schema`, and it is the channel's rather than the
+socket's for this same reason — one declared at the transport would have skipped itself
+in-process exactly the way a trim did. So `channel({ schema: messageSchema })` is where a
+message's shape is stated, `transform` is there for the rarer case of storing something other
+than what was published, and the `socket` is left declaring who may connect and whether a frame
+may publish at all.
+
 Read on: [Failures](../server/refuse-a-request-and-say-why.md) ·
+[Schemas](../server/check-what-callers-send-you.md) ·
 [Local state](show-a-value-that-changes.md)
 
-## When a room goes away
+## A room is discarded once nobody subscribes and nothing is retained
 
-When its subscriber count reaches zero **and** its retention has drained. That falls out of `ttl`
-rather than being a second use of it: nothing is left to keep once the last subscriber has gone and
-the last retained message has expired, so there is no idle window to configure.
+Both conditions, and the second falls out of `ttl` rather than being a second use of it: nothing
+is left to keep once the last subscriber has gone and the last retained message has expired, so
+there is no idle window to configure.
 
 A resubscribe before then finds the room and its tail intact, which is what makes navigating away
 and back free.
@@ -165,7 +166,7 @@ one caller's room is told from another's.
 So on a server a `channel()` is shared across requests by design. Anything caller-specific belongs
 in the `args`, exactly as it does for a `global` memo.
 
-## Why a room is not `state.share`
+## `state.share` is one caller; a room is many
 
 They look alike — both give distant components one thing with no prop between them — and they are
 opposites underneath.

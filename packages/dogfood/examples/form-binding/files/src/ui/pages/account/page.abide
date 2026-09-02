@@ -1,0 +1,8 @@
+<script>
+import { state } from 'abide'
+
+const name = state('')
+</script>
+
+<input bind:value={name} placeholder="your name">
+<p>Hello {name}</p>

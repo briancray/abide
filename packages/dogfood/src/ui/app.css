@@ -7,7 +7,7 @@
   --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
   --syn-comment:#7A8781; --syn-string:#2F6B44; --syn-key:#0A6B62;
   --syn-tag:#2C5C8F; --syn-num:#6B4A8F;
-  --heading:#8E4426;
+  --heading:#8E4426; --good:#2F6B44; --bad:#A33A3A;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -22,6 +22,9 @@ body { margin:0; display:grid; grid-template-columns:15.5rem minmax(0,1fr);
   background:var(--paper); color:var(--ink); font:400 15px/1.6 var(--sans);
   -webkit-font-smoothing:antialiased; }
 a { color:var(--signal); text-decoration-thickness:1px; text-underline-offset:2px; }
+/* WHERE YOU ARE, as an element default rather than nav chrome — an example's own links
+   need it too, and the frame lifts this rule rather than restating it. */
+a[aria-current] { font-weight:600; text-decoration:none; }
 .skip { position:absolute; left:-9999px; }
 .skip:focus { left:.5rem; top:.5rem; z-index:2; background:var(--raised);
   padding:.5rem .8rem; border-radius:6px; }
@@ -112,6 +115,69 @@ code { font-family:var(--mono); }
 .t-block { color:var(--syn-key); font-weight:500; }
 .t-num { color:var(--syn-num); }
 
+/* FORM DEFAULTS. Here rather than in renderExample because the result frame LIFTS them
+   from this file — an example with no `<style>` of its own has to render the way an abide
+   page renders, and a second copy of these values is how those two drift apart. */
+input, textarea, select { font:400 14px/1.4 var(--sans); color:var(--ink);
+  background:var(--raised); border:1px solid var(--rule); border-radius:6px;
+  padding:.42rem .6rem; }
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline:none;
+  border-color:var(--signal);
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--signal) 20%, transparent); }
+button { font:500 13px/1 var(--sans); color:var(--paper); background:var(--signal);
+  border:0; border-radius:6px; padding:.52rem .9rem; cursor:pointer; }
+button:hover { background:color-mix(in srgb, var(--signal) 86%, var(--ink)); }
+/* The label sits ABOVE its control and is set like a nav section header — same size,
+   case and tracking, because it is the same job: naming the thing under it. */
+label { display:block; margin:1.1rem 0 0; font:500 9px/1 var(--mono);
+  text-transform:uppercase; letter-spacing:.14em; color:var(--muted); }
+label input, label select, label textarea { display:block; margin-top:.4rem;
+  text-transform:none; letter-spacing:normal; }
+/* A box and its own label share a line, so those two keep the flow they were born with —
+   and the label goes back to being a SENTENCE. The uppercase tracking above names a field
+   sitting under it; beside a checkbox it is just shouting. */
+label input[type=checkbox], label input[type=radio] { display:inline-block;
+  margin:0 .4rem 0 0; }
+label:has(> input[type=checkbox]), label:has(> input[type=radio]) {
+  font:400 14px/1.5 var(--sans); text-transform:none; letter-spacing:normal;
+  color:var(--ink); }
+
+/* A PAGE'S OWN NAV, which is not this site's sidebar — `nav a` is already the sidebar, so
+   an app's switcher takes a name rather than fighting it for the element. Segmented rather
+   than underlined, because it is a control you operate and not a list you read. */
+.switch { display:flex; flex-wrap:wrap; gap:.2rem; margin:0 0 1.3rem; }
+.switch a { padding:.36rem .72rem; border-radius:999px; text-decoration:none;
+  font:500 12.5px/1 var(--sans); color:var(--muted);
+  border:1px solid transparent; }
+.switch a:hover { color:var(--ink); border-color:var(--rule); }
+.switch a[aria-current] { color:var(--paper); background:var(--signal);
+  border-color:var(--signal); font-weight:600; }
+
+/* A TIP is the DOCUMENTATION SPEAKING, and it means that wherever it appears: annotating
+   a render inside the result frame, or standing on its own in prose. One rule for both,
+   so an aside cannot come to mean one thing in the page and another in an example. */
+.tip { position:relative; margin:1.1rem 0; padding:.7rem .9rem .7rem 2.15rem;
+  border:1px solid color-mix(in srgb, var(--signal) 28%, var(--rule));
+  border-radius:6px; background:color-mix(in srgb, var(--signal) 7%, transparent);
+  font:400 12.5px/1.55 var(--sans); color:var(--muted); }
+/* Centred on the FIRST LINE, not on the box: the padding-top plus half the difference
+   between that line's height and the mark's — .7rem + (12.5px * 1.55 - 15px) / 2. A box a
+   tip grows to three lines would otherwise drift its mark down away from the sentence it
+   belongs to. The glyph is 800 because an `i` at this size is two strokes and loses one. */
+.tip::before { content:'i'; position:absolute; left:.78rem; top:.84rem; width:15px;
+  height:15px; border-radius:50%; background:var(--signal); color:var(--paper);
+  font:800 10px/15px var(--sans); text-align:center; letter-spacing:0; }
+/* A control the DOCUMENTATION offers, not one the app renders — anything the example's
+   own files do not produce belongs in here, where it is already marked as us talking.
+   Outlined rather than filled, so it never reads as the page's own button. */
+.tip button { appearance:none; padding:.2em .55em; border:1px solid var(--signal);
+  border-radius:5px; background:transparent; color:var(--signal);
+  font:500 11.5px/1.4 var(--mono); cursor:pointer; }
+.tip button:hover { background:color-mix(in srgb, var(--signal) 12%, transparent); }
+.tip code { font:400 12px/1 var(--mono); color:var(--ink);
+  background:color-mix(in srgb, var(--ink) 8%, transparent);
+  padding:.15em .35em; border-radius:4px; }
+
 /* An example is a whole artifact, so it reads as one object with panels rather than
    as several code blocks that happen to be adjacent. */
 .example { margin:1.9rem 0; background:var(--raised); border:1px solid var(--rule);
@@ -123,9 +189,12 @@ code { font-family:var(--mono); }
   background:color-mix(in srgb, var(--ink) 4%, transparent); }
 .ex-tablist { display:flex; gap:.1rem; overflow-x:auto; scrollbar-width:none; }
 .ex-tablist::-webkit-scrollbar { display:none; }
+/* `border-radius:0` is the one property the bare `button` default above is not already
+   overridden for, and it rounded the focus ring on a tab. A tab is an underline, not a
+   pill — the app default is for an app's own buttons, and this is chrome. */
 .ex-tablist button { flex:none; appearance:none; background:none; border:0;
-  border-bottom:2px solid transparent; padding:.6rem .55rem; cursor:pointer;
-  font:500 12px/1 var(--mono); color:var(--muted); }
+  border-radius:0; border-bottom:2px solid transparent; padding:.6rem .55rem;
+  cursor:pointer; font:500 12px/1 var(--mono); color:var(--muted); }
 .ex-tablist button:hover { color:var(--ink); }
 .ex-tablist button[aria-selected=true] { color:var(--heading); border-bottom-color:var(--heading); }
 
@@ -135,9 +204,10 @@ code { font-family:var(--mono); }
 .ex-download:hover { color:var(--ink); border-color:var(--muted); }
 
 .ex-panel { border-top:1px solid var(--rule); }
-.ex-files { display:flex; gap:.1rem; overflow-x:auto; padding:.45rem .6rem;
-  border-bottom:1px solid var(--rule); scrollbar-width:none; }
-.ex-files::-webkit-scrollbar { display:none; }
+/* WRAPS rather than scrolls. One example per page means four to six files is the normal
+   case, and a hidden scrollbar put the last of them off the edge with nothing to say so. */
+.ex-files { display:flex; flex-wrap:wrap; gap:.1rem .1rem; padding:.45rem .6rem;
+  border-bottom:1px solid var(--rule); }
 .ex-files button { flex:none; display:flex; align-items:center; gap:.4rem; appearance:none;
   background:none; border:0; border-radius:5px; padding:.3rem .5rem; cursor:pointer;
   font:400 11.5px/1 var(--mono); color:var(--muted); }
@@ -151,17 +221,22 @@ code { font-family:var(--mono); }
   background:color-mix(in srgb, var(--ink) 7%, transparent); }
 .example pre { margin:0; border:0; border-radius:0; background:transparent; }
 
-.ex-browser { padding:1rem; background:color-mix(in srgb, var(--ink) 4%, transparent); }
-.ex-bar { display:flex; align-items:center; gap:.5rem; margin:0 auto .55rem; max-width:30rem; }
-.ex-bar button { flex:none; appearance:none; cursor:pointer; padding:.4rem .7rem;
-  border:1px solid var(--rule); border-radius:999px; background:var(--raised);
-  color:var(--muted); font:500 11px/1 var(--mono); }
-.ex-bar button:hover { color:var(--ink); border-color:var(--muted); }
-.ex-url { flex:1; display:flex; padding:.4rem .7rem; min-width:0;
-  border:1px solid var(--rule); border-radius:999px; background:var(--raised); }
-.ex-url code { background:none; padding:0; font-size:11px; color:var(--muted); }
-.ex-result { width:100%; height:15rem; border:1px solid var(--rule); border-radius:8px;
-  background:#f6f6f4; display:block; }
+/* No fake browser chrome: a URL bar is two rows of furniture around the one thing worth
+   looking at, and the address is on the frame's title where it costs nothing. */
+.ex-browser { position:relative; padding:.7rem;
+  background:color-mix(in srgb, var(--ink) 4%, transparent); }
+.ex-replay { position:absolute; top:1.15rem; right:1.15rem; z-index:1;
+  padding:.28rem .6rem; border-radius:999px; border:1px solid var(--rule);
+  background:var(--raised); color:var(--muted); font:500 10.5px/1 var(--mono); }
+.ex-replay:hover { background:var(--raised); color:var(--ink); border-color:var(--muted); }
+/* The height is SET BY THE FRAME, which is the only side that can measure its content —
+   see the driver in renderExample.ts. This is the floor before the first report. */
+/* CONTENT-BOX against the global border-box: the height reported is the CONTENT height, and
+   a border-box frame would be that much shorter than its own document — two pixels of scroll
+   the reader never asked for, and enough to make the frame keep a wheel gesture. */
+.ex-result { box-sizing:content-box; width:100%; height:6rem;
+  border:1px solid var(--rule); border-radius:7px;
+  background:var(--paper); display:block; }
 .ex-line { margin:0; padding:.7rem 1rem .1rem; font-size:12px; }
 .ex-line code { background:none; padding:0; color:var(--muted); }
 .ex-line code::before { margin-right:.45rem; }
@@ -180,12 +255,17 @@ code { font-family:var(--mono); }
 .ex-bench, .ex-tests { margin:.9rem 1rem; width:calc(100% - 2rem); }
 .ex-status { width:1%; white-space:nowrap; text-align:right; font:500 11px/1 var(--mono); }
 .ex-ratio { text-align:right; }
+/* A verdict cell: the answer carries the colour, the reason recedes behind it. */
+.verdict-yes { font-weight:600; color:var(--good); }
+.verdict-no { font-weight:600; color:var(--bad); }
+.verdict-why { font-size:.88em; color:var(--muted); }
+
 .ex-good { color:var(--good); }
 .ex-bad { color:var(--bad); }
 .ex-result-pass { color:var(--good); }
 .ex-result-pass::before { content:''; display:inline-block; width:5px; height:5px;
   margin-right:.45rem; border-radius:50%; background:currentColor; }
-.ex-bench th, .ex-tests th { padding-bottom:.5rem; }
+.ex-bench th, .ex-tests th th { padding-bottom:.5rem; }
 .ex-note { margin:0 1rem 1rem; font-size:12px; color:var(--muted); }
 
 table { border-collapse:collapse; width:100%; margin:1.5rem 0; font-size:14.5px; }

@@ -15,8 +15,8 @@ for it; each one links back to the guide that does.
 
 | Page | Holds |
 | --- | --- |
-| [Reactive](reactive.md) | `state`, `memo`, `channel`, `watch` — every member and option of the one type all four hand back, and the selections that ask about many at once |
-| [Transports](transports.md) | `rpc`, `socket`, schemas, response helpers, and the headers abide sends |
+| [Reactive](reactive.md) | `state`, `memo`, `channel`, `watch` — every member and option of the one type all four hand back, the schemas that say what a valid value and a valid args object are, and the selections that ask about many at once |
+| [Transports](transports.md) | `rpc`, `socket`, response helpers, and the headers abide sends |
 | [Ambient values](ambient-values.md) | `request`, `route`, `cookies`, `principal`, `config`, `trace`, `health` |
 | [Helpers](helpers.md) | `log`, `csp`, `url`, `navigate` |
 | [`.abide` files](abide-files.md) | The template grammar, and the rules that let a reactive value be read and written by name |

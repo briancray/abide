@@ -15,50 +15,73 @@ difference between a read and a write.
 
 ```ts #server/rpc/invoices.ts — excerpt
 export const listInvoices = GET(() => database.invoice.all())
-export const payInvoice = POST(({ id }: { id: string }) => database.invoice.pay(id))
+export const payInvoice = POST(
+    ({ id }: { id: string }) => database.invoice.pay(id),
+)
 ```
 
-## Reading data from a page
+## Reading data
 
-The import is real: the name, the argument type and the return type are the ones you
-wrote on the server. There is no route to register and no client to generate.
+{% lead server/read-data-without-writing-an-api %}
 
 Read on: [Reading data](read-data-without-writing-an-api.md)
 
-## Mutations, and coalescing a double-click
+## Mutations
 
-A mutation retains nothing by default, and a double-click is one write rather than two.
+{% lead server/change-something-on-the-server %}
 
 Read on: [Mutations](change-something-on-the-server.md)
 
-## Refusals that carry typed data
+## Failures
 
-A refusal is a named value carrying data, not a status code and a sentence — so a
-template and a model on the far side of a request narrow it the same way.
+{% lead server/refuse-a-request-and-say-why %}
 
 Read on: [Failures](refuse-a-request-and-say-why.md)
 
-## Streaming data and pushed rooms
+## Streaming data
 
-One handler can serve the whole result and the data as it arrives. A room goes
-further: many callers on one subject, pushed rather than polled.
+{% lead server/send-data-as-it-arrives %}
 
-Read on: [Streaming data](send-data-as-it-arrives.md) ·
-[Sockets](keep-a-room-of-callers-in-sync.md)
+Read on: [Streaming data](send-data-as-it-arrives.md)
 
-## Validation, authorization and ceilings
+## Sockets
 
-Validation, authorization and ceilings all sit in front of the handler, and run before
-it parses anything.
+{% lead server/keep-a-room-of-callers-in-sync %}
 
-Read on: [Schemas](check-what-callers-send-you.md) ·
-[Authorization](decide-who-may-call-what.md) ·
-[Limits](put-a-ceiling-on-a-request.md) · [CORS](let-another-origin-call-you.md)
+Read on: [Sockets](keep-a-room-of-callers-in-sync.md)
 
-## Responses that are not JSON
+## Schemas
 
-A document, a redirect or a file, each with the caching headers it should carry — and
-the address a handler answers on, for the caller that is not a page.
+{% lead server/check-what-callers-send-you %}
 
-Read on: [Response types](answer-with-something-other-than-json.md) ·
-[Handler URLs](find-the-url-a-handler-answers-on.md)
+Read on: [Schemas](check-what-callers-send-you.md)
+
+## Authorization
+
+{% lead server/decide-who-may-call-what %}
+
+Read on: [Authorization](decide-who-may-call-what.md)
+
+## CORS
+
+{% lead server/let-another-origin-call-you %}
+
+Read on: [CORS](let-another-origin-call-you.md)
+
+## Limits
+
+{% lead server/put-a-ceiling-on-a-request %}
+
+Read on: [Limits](put-a-ceiling-on-a-request.md)
+
+## Response types
+
+{% lead server/answer-with-something-other-than-json %}
+
+Read on: [Response types](answer-with-something-other-than-json.md)
+
+## Handler URLs
+
+{% lead server/find-the-url-a-handler-answers-on %}
+
+Read on: [Handler URLs](find-the-url-a-handler-answers-on.md)

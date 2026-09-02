@@ -1,15 +1,17 @@
 import { expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { getInvoice } from './files/src/server/rpc/invoices.ts'
+import { getInvoice } from '../files/src/server/rpc/invoices.ts'
 
 test('the handler answers with the invoice', async () => {
     const invoice = getInvoice({ id: '42' })
-    await expect(invoice).resolves.toMatchObject({ number: 'INV-0042' })
+    await expect(invoice.settled()).resolves.toMatchObject({ number: 'INV-0042' })
 })
 
 test('a missing invoice refuses by name, not by status alone', async () => {
     const invoice = getInvoice({ id: 'nope' })
-    await invoice
+    // `settled()` REJECTS with what the read would throw, so the refusal is caught
+    // here rather than failing the test — `error()` is the probe that never throws.
+    await invoice.settled().catch(() => {})
     expect(invoice.isError(invoice.error(), 'NotFound')).toBe(true)
 })
 

@@ -78,7 +78,7 @@ Read on: [Local state](../values/show-a-value-that-changes.md) ·
 [Values by name](../templates/read-and-write-a-value-by-name.md) ·
 [Events](../templates/respond-to-a-click.md)
 
-## Putting something from the server on the page
+## A page reaches your database through an import
 
 The same page reaches your database by importing the function that reads it. Anything exported
 from `#server/rpc/**` is callable from a page under the name it was declared with.
@@ -87,7 +87,9 @@ from `#server/rpc/**` is callable from a page under the name it was declared wit
 import { GET } from 'abide'
 import { database } from '#server/database'
 
-export const getInvoice = GET(({ id }: { id: string }) => database.invoice.find(id), {
+export const getInvoice = GET(
+    ({ id }: { id: string }) => database.invoice.find(id),
+    {
   description: 'One invoice, by id.',
 })
 ```
@@ -127,7 +129,7 @@ own load hook.
 Read on: [Request to paint](how-a-page-becomes-html.md) ·
 [Scripts](../templates/run-code-when-a-component-loads.md)
 
-## Running what you wrote
+## `abide dev` keeps the app up while you edit
 
 `abide scaffold my-app` writes a project with this page already in it, and `abide dev` keeps the
 app up while you edit — one process, restarted on every change, with the browser reloading

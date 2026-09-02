@@ -11,23 +11,16 @@ covers:
   - `pending`
   - `refreshing`
   - `s.error`
-  - `await s`
+  - `s.settled`
+examples:
+  - packages/dogfood/examples/loading
 ---
 
 The usual shape of this is a loading flag, an error branch and a value, kept in step by hand —
 three variables that can disagree, and usually do on the reload. Here the value carries all
 three, and the ordinary page branches on none of them.
 
-```abide #ui/pages/invoices/[id]/page.abide — excerpt
-<script>
-import { memo, route } from 'abide'
-import { getInvoice } from '#server/rpc/invoices'
-
-const invoice = memo(() => getInvoice({ id: route.params.id }))
-</script>
-
-<h1>Invoice {invoice.number}</h1>
-```
+{% example loading %}
 
 *1 read, 0 loading branches* — against a loading flag, an error branch and a value kept in step
 by hand.
@@ -35,23 +28,31 @@ by hand.
 That page has no loading branch in it. The read starts the load, the document goes out with a
 hole where `invoice.number` was, and the hole fills when the row lands.
 
-## A read never awaits
+## Reads are non-blocking by default
 
 Reading is the whole subscription — there is no mount hook to put the load in and no `load()` to
 call. What a read gives back depends only on where the value has got to:
 
 | The value is | A read gives you |
 | --- | --- |
-| settled | the value |
-| still in flight | `undefined`, and a sink opens where it was read |
-| failed | it throws, to the nearest `{#try}` or to `error.abide` |
+| landed | the value |
+| pending — its own load, or one it derives from | what it has, `undefined` where nothing landed, and a sink opens where it was read |
+| failed with nothing to serve | it throws, to the nearest `{#try}` or to `error.abide` |
+| holding a refusal over a value — a rejected write, a reload that failed | the last accepted value; `error()` carries the refusal |
 
 Member access on a `Reactive` short-circuits, so an in-flight `invoice.total` is `undefined`
 rather than a TypeError, and the whole chain after it goes with it. That is what makes
 `{data.name ?? 'Loading'}` and `{#for stat of data.stats ?? []}` read the same way — an `{#for}`
 over `undefined` iterates zero times.
 
-## Probes: `pending`, `refreshing`, `done`, `success`
+The sink is opened by `pending()` rather than by an absent value, and the difference shows on a
+derived memo: it holds a placeholder built from a source still in flight, so keying the hole on
+absence would flush that placeholder as the answer and never correct it.
+
+*By default*, because a read can be made to hold on purpose. `{await invoice}` is that opt-in,
+and it is two sections down.
+
+## Probes: `pending`, `refreshing`, `done`, `success`, `streaming`, `error`
 
 A probe answers about the load without reading the value. **A probe never throws and never starts
 work**, so it is safe in a branch that runs before anything has arrived.
@@ -61,46 +62,73 @@ work**, so it is safe in a branch that runs before anything has arrived.
 | `pending()` | a first load is in flight and there is nothing to show |
 | `refreshing()` | a reload is in flight over a value still being served |
 | `done()` | it finished, however it finished |
-| `success()` | it landed, it did not fail, and nothing is still arriving |
+| `success()` | there is a landed value to serve and nothing is still arriving |
 | `streaming()` | it is currently producing chunks |
-| `error()` | hands back the failure it ended with, if it failed |
+| `error()` | hands back the standing refusal — what the last write or production was refused with |
 
 `pending()` is what tells `undefined`-because-in-flight from a value that genuinely resolved to
 `undefined`. And `done()` and `success()` **stay true through a `refresh()`** — the load that
 finished still finished — so `refreshing()` is the only one that moves on a reload. A spinner
 reads `refreshing()`; a table keeps rendering the rows it already has.
 
+`success()` and `error()` are **orthogonal, not opposite**. One asks whether there is a value to
+show, the other whether the last write or production was refused, and a refused write over a
+landed value answers yes to both — which is what leaves a bound input on screen beside its own
+message. An accepted write clears the refusal.
+
 Reading a probe subscribes you to **that probe alone**. A value change does not wake a
 `refreshing()` reader, and a `refreshing()` flip does not wake a value reader, which is why the
 spinner and the table do not re-render each other.
 
-```abide #ui/pages/invoices/[id]/page.abide — excerpt
-{#if invoice.refreshing()}<span class="text-xs">Updating…</span>{/if}
-<p>{invoice.total} due {invoice.dueOn}</p>
+{% snippet loading src/ui/pages/invoices/[id]/page.abide {#if invoice.refreshing()} … <p>{invoice.total} %}
+
+Press Refresh in the example above and this is what moves: the `<span>` appears, and the
+`<p>` under it is not re-rendered at all.
+
+## A derived value is pending while what it reads is
+
+An unkeyed `memo` answers `pending()` for **its own load or any value its body read**. Without that a memo deriving from a value still in flight is quietly wrong: a read that has
+not landed hands back `undefined`, so
+
+```ts shared
+const visible = memo(() => (rows() ?? []).filter((row) => !row.paid))
 ```
+
+runs to completion, returns `[]`, and reports `success()` — a page rendering "0 invoices" with
+nothing pending and nothing failed, for the length of the load.
+
+It is the same **any, not all** question a selection asks, over the set the memo already tracks in
+order to recompute — and it costs nothing to keep. `pending()` is monotone: a source leaves it once,
+and when it does its value moves, which wakes the memo through the subscription that reading it
+already took. So the count is taken on the walk the body's reads already make, and the transition
+that could make it stale is the same event that recomputes. Depth is the chain, not the whole graph.
+
+`refreshing()` does **not** propagate. A reload can start and finish without the value moving — one
+landing an equal value wakes nobody — so there is nothing to recount on, and following it would mean
+a subscription per source rebuilt on every recompute, to drive a spinner. Read the source's own probe
+instead: `rows.refreshing()` is the truer question anyway, since `rows` is the thing reloading.
+
+Two ways to ask for the placeholder instead of the wait. Read the **probe** rather than the value —
+`rows.pending()` subscribes to that probe and is not a read of the value, so it never makes its own
+reader pending. Or `peek()`, which is already reading without joining the flow.
+
+A failure needs none of this: a source with nothing to serve throws on the read, so the body fails
+with it and the failure is the memo's own.
+
+A **keyed** memo propagates nothing. Its body is untracked, so there is no set to aggregate over.
 
 ## Every `{#await}` branch is bound to a probe
 
 `{#await}` is the spelled-out form of the same four questions, and each branch is bound to a
 probe rather than to settledness:
 
-```abide abide
-{#await invoice}
-    <p>Loading invoice…</p>
-{:then row}
-    <p>{row.total} due {row.dueOn}</p>
-{:catch failure}
-    <p class="error">Could not load that invoice.</p>
-{:finally}
-    <p class="text-xs">Last checked just now.</p>
-{/await}
-```
+{% snippet loading src/ui/pages/invoices/[id]/print/page.abide {#await invoice} %}
 
 | Branch | Probe |
 | --- | --- |
 | the body | `pending()` |
 | `{:then}` | `success()` |
-| `{:catch}` | `error()` |
+| `{:catch}` | `error()` with nothing to serve |
 | `{:finally}` | `done()` |
 
 Two consequences worth having in front of you. `{:finally}` renders **alongside** whichever of
@@ -113,22 +141,22 @@ There is no state in which none of the branches is mounted. A value with no prod
 at construction, and a stream reports `pending()` until it **closes** rather than until its first
 chunk — so nothing falls between them.
 
-## Waiting on purpose
+## `await` is how a read holds on purpose
 
 Not blocking is the default; holding is the opt-in, and there are two spellings of it.
 
-```abide abide
-<p>{await invoice.total} due</p>
-```
+{% snippet loading src/ui/pages/invoices/[id]/print/page.abide <p>{await invoice.total} %}
 
 `await` governs the whole **expression**, not the name — every reactive read inside it blocks —
 and the reads are started before they are awaited, so `{await a.x + b.y}` is one round trip
 rather than two loads serialized behind one hole.
 
-The block form is the other one, and **the tell is whether there is a pending body**:
+The block form is the other one. Set against a plain read, **the tell is whether there is a
+pending body**:
 
 | Form | Holds |
 | --- | --- |
+| `{invoice}` | no — the read renders nothing and opens a sink the value fills later |
 | `{await invoice}` | yes |
 | `{#await invoice then row}` | yes — there is no pending branch, so there is nothing to render instead |
 | `{#await invoice}{:then row}` | no — the pending body is what renders while it loads |
@@ -136,13 +164,7 @@ The block form is the other one, and **the tell is whether there is a pending bo
 So `then` on the opening tag is not shorthand for the same block. It is the deliberate wait, and
 what it trades away is the branch that would have covered the wait:
 
-```abide abide
-{#await invoice then row}
-    <p>{row.total} due {row.dueOn}</p>
-{:catch failure}
-    <p class="error">Could not load that invoice.</p>
-{/await}
-```
+{% snippet loading src/ui/pages/invoices/[id]/print/page.abide {#await invoice then row} %}
 
 `{:catch}` and `{:finally}` still attach. The binding takes a name or a destructuring pattern —
 `then { total }` — and stays live either way, so the body is **updated** when the value moves
@@ -154,18 +176,12 @@ value settles. A source that never closes holds forever; that is the author's to
 Read on: [Conditionals](../templates/show-markup-conditionally.md) ·
 [Expressions](../templates/put-a-value-in-the-markup.md)
 
-## Asking about everything in flight at once
+## The free probes answer over a selection
 
 The probes above are one value's. The free forms take a **selection** and answer over a set —
 one memo, or every entry carrying a tag, or the whole scope when you pass nothing:
 
-```abide #ui/pages/layout.abide — excerpt
-<script>
-import { pending, refreshing } from 'abide'
-</script>
-
-{#if pending() || refreshing()}<div class="progress-strip" role="status"></div>{/if}
-```
+{% snippet loading src/ui/pages/layout.abide {#if pending() %}
 
 Bare, that is anything in flight in this scope — which is what an app-wide progress strip wants.
 Only these two probes have a free form: **any, not all** is the one question that aggregates
@@ -177,19 +193,22 @@ zero. Ten entries reloading together wake that strip twice, not twenty times.
 
 Read on: [Reloading](decide-when-a-value-reloads.md)
 
-## A failed read throws; `error()` does not
+## A read throws only where there is nothing to serve
 
-A read of a failed value throws, which is how a failure reaches the nearest `{#try}` or
-`error.abide` without every call site checking. `error()` hands the failure back instead, so a
-page that wants to render a message rather than escalate has a way to decline:
+A first load that failed has no value, so the read throws and the failure reaches the nearest
+`{#try}` or `error.abide` without every call site checking. A **refused write** and a **failed
+reload** both leave a value standing, so neither throws and neither unmounts `{:then}` — which is
+why `{:catch}` is bound to a failure with nothing to serve rather than to `error()` alone. The
+cost of that is a failed reload nothing escalates: it fills `error()`, warns on `abide:reactive`,
+and is otherwise invisible until something reads it.
 
-```abide abide
-{#if invoice.error()}
-    <p class="error">Could not load that invoice.</p>
-{:else}
-    <p>{invoice.total}</p>
-{/if}
-```
+`error()` hands the failure back without throwing, so a page that wants to render a message
+rather than escalate has a way to decline:
+
+{% snippet loading src/ui/pages/invoices/[id]/page.abide {#if invoice.error()} %}
+
+That is the branch **Break it** reaches in the example above — the page renders a message
+instead of the failure reaching `error.abide`.
 
 `isError` narrows a caught failure by name, and `.data` is typed to what that failure declared.
 

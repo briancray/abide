@@ -1,0 +1,72 @@
+{
+    "title": "A field bound to state",
+    "summary": "Type in the field. The value below is the state, normalised on the way in by the transform the code declares.",
+    "files": [
+        "src/ui/pages/account/page.abide"
+    ],
+    "route": "/account",
+    "states": [
+        {
+            "id": "editing",
+            "file": "handle.html",
+            "mirror": [
+                {
+                    "from": "input[name=name]",
+                    "to": "[data-echo]"
+                }
+            ]
+        }
+    ],
+    "bench": {
+        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler.",
+        "rows": [
+            {
+                "metric": "Keystroke to paint",
+                "abide": "16.7 ms",
+                "vanilla": "16.7 ms",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "DOM nodes moved per keystroke",
+                "abide": "1",
+                "vanilla": "1",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Handlers written",
+                "abide": "0",
+                "vanilla": "2",
+                "ratio": "0.00x"
+            },
+            {
+                "metric": "Client bytes",
+                "abide": "3.1 kB",
+                "vanilla": "1.4 kB",
+                "ratio": "2.21x"
+            },
+            {
+                "metric": "Lines of code",
+                "abide": "6",
+                "vanilla": "11",
+                "ratio": "0.55x"
+            }
+        ]
+    },
+    "tests": {
+        "note": "`bun test examples/form-binding`.",
+        "rows": [
+            {
+                "name": "`bind:value` writes the state and seeds the field",
+                "result": "pass"
+            },
+            {
+                "name": "a keystroke moves one text node and nothing else",
+                "result": "pass"
+            }
+        ]
+    },
+    "vanilla": [
+        "account.js",
+        "index.html"
+    ]
+}

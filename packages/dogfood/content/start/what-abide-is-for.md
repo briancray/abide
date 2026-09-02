@@ -55,6 +55,7 @@ changes. The page reads it because you put it in the markup. That is the whole s
 
 The consequence worth internalising:
 
+> [!TIP]
 > A read of a value that has not arrived returns `undefined` and leaves a hole in the output.
 > It does not block. The document goes out; the hole fills when the value lands.
 
@@ -74,7 +75,7 @@ Where a name genuinely cannot mean anything — a page reading the incoming requ
 static build — it throws and names the component and the accessor. It does not quietly return
 nothing.
 
-## And for machines
+## The handler serving your page already describes itself
 
 The handler serving your page already describes itself: address, method, argument and
 result schemas, description. An agent calling your app calls what your app already does.
@@ -89,7 +90,7 @@ return notMember({ group: 'staff' })
 The caller narrows it by name and gets `.data` typed — your own template and a model on the
 far side of an HTTP request, identically.
 
-## Not for
+## Who abide is not for
 
 | | why |
 | --- | --- |

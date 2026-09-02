@@ -5,6 +5,7 @@ intent: Headers, the raw Request, and a place to keep something for the rest of 
 covers:
   - `request`
   - `bag`
+  - `Bag`
   - `server`
 status: stub
 ---

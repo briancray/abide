@@ -7,6 +7,8 @@ covers:
   - `memo` body, keyed
   - `global`
   - `tags`
+examples:
+  - packages/dogfood/examples/caching
 ---
 
 A sidebar shows a customer's name. A panel below it shows their plan. Both need customer `42`,
@@ -15,32 +17,21 @@ and thread it back down as a prop.
 
 A keyed memo is that repair with nothing lifted: **identity per arguments**.
 
-```abide #ui/pages/customers/[id]/page.abide
-<script>
-import { memo, route } from 'abide'
-import { getCustomer } from '#server/rpc/customers'
-
-const customer = memo(() => getCustomer({ id: route.params.id }))
-</script>
-
-<h1>{customer.name}</h1>
-<Plan id={route.params.id}/>
-```
+{% example caching %}
 
 *1 request, 2 readers* — against lifting the fetch to a common parent and threading it back down.
 
-`Plan` asks for the same id and gets the load already in flight.
+`Plan` asks for the same id and gets the load already in flight:
 
-## Declaring a keyed memo
+{% snippet caching src/ui/components/Plan.abide const customer %}
 
-The discriminant is the body's parameter. A body that **takes args** is keyed: one entry per args
-key, computed on first read of that key and held.
+## A memo's cache is one entry per args key
 
-```ts #server/rpc/customers.ts
-const customerById = memo(({ id }: { id: string }) => database.customer.find(id), {
-    ttl: 30_000,
-})
-```
+There is a cache at all because the body takes args, and the discriminant is exactly that: a body
+that **takes args** is keyed, and gets one entry per args key, computed on the first read of that
+key and held.
+
+{% snippet caching src/server/rpc/customers.ts const customerById %}
 
 A keyed memo is **untracked**. It does not re-run because something its body read moved — its
 ways back are `ttl`, an explicit `invalidate` or `refresh`, and eviction. An unkeyed memo is the
@@ -52,11 +43,19 @@ Calling it hands back a `Reactive` for that key, so the probes and the triggers 
 Read on: [Derived values](derive-a-value-from-other-values.md) ·
 [Reloading](decide-when-a-value-reloads.md)
 
-## What makes two calls the same call
+## Two reads share an entry when their args canonicalize the same
 
-`Args` is a `Record<string, JsonValue>`, serializable by contract, because **the key is the wire
-form**. An args object becomes a key by its canonical serialization — keys sorted, `undefined`
-members dropped, `Date` written ISO — which is the same canonicalization the transport uses.
+Which is the cache's whole question, and the answer is the wire. `Args` is a
+`Record<string, JsonValue>`, serializable by contract, because **the key is the wire form**. An
+args object becomes a key by its canonical serialization — keys sorted, `undefined` members
+dropped, `Date` written ISO — which is the same canonicalization the transport uses.
+
+| You write | The key it lands on |
+| --- | --- |
+| `{ id: '42' }` | `{"id":"42"}` |
+| `{ page: 2, id: '42' }` | `{"id":"42","page":2}` — sorted, so argument order never splits an entry |
+| `{ id: '42', after: undefined }` | `{"id":"42"}` — dropped, so an absent option is the same entry as an omitted one |
+| `{ since: new Date(0) }` | `{"since":"1970-01-01T00:00:00.000Z"}` — ISO |
 
 One canonicalization rather than two: args that cannot be keyed are exactly args that cannot be
 sent, so both fail in the same place.
@@ -69,10 +68,16 @@ Args are always plain args. A reactive value in an argument position **reads**; 
 follow that value is the enclosing unkeyed memo's job, which is what the wrapper in the first
 snippet is doing.
 
-## Where the cache lives
+## A memo's cache is request-local on a server, process-local in a browser
 
-A memo without `global` is **request-local on a server and process-local in a browser** — one
-scope is one caller on both sides, and what differs is only what a caller is there.
+One scope is one caller on both sides, and what differs is only what a caller is there.
+
+| | server | browser |
+| --- | --- | --- |
+| a caller is | one request | the one person at the tab |
+| the cache is built | when the request arrives | when the app starts |
+| and dropped | when the response is sent | when the tab closes |
+| `ttl: Infinity` means | to the end of that request | to the end of that session |
 
 It follows that it is built and dropped with its scope. `ttl: Infinity` means to the end of that
 scope rather than forever, the cache cannot grow without bound, and one caller's answer can never
@@ -81,22 +86,42 @@ be served to another.
 Coalescing is within a scope, too. Two calls inside one request share one load; two concurrent
 requests are two scopes and load twice.
 
-## Sharing one cache across callers with `global`
+## `global` shares one cache across callers
 
 `global: true` opts into a process-wide cache that outlives every request, and it is the only
 thing that makes two callers one load — which is what it is for where the load is expensive.
 
-```ts #server/rpc/rates.ts
-const exchangeRate = memo(({ pair }: { pair: string }) => fetchRate(pair), {
-    global: true,
-    ttl: 60_000,
-})
-```
+{% snippet caching src/server/rpc/rates.ts const exchangeRate %}
+
+The page above reads it beside the customer, and that read is the difference the example is
+showing: switching customers loads a second customer and never touches the rate.
+
+`global` also decides what the answer says about caching, and the `ttl` above is where it says it.
+An rpc answer is `private, no-store` by default; a `GET` over a global memo answers
+`max-age=<the ttl>` instead, because those are one number and writing it twice in two units is how
+they come apart. Compare the two responses in the Requests panel.
+
+**`public` or `private` is the rung's to decide, not `global`'s.** This handler has no
+authorization on it, so its answer is reachable unauthenticated already and `public` gives a shared
+cache nothing the endpoint would not. Put a rung on it and the same derivation answers `private,
+max-age=60` — a browser may still hold it, and a CDN may not hand it to someone who never signed
+in.
+
+Read on: [Authorization](../server/decide-who-may-call-what.md) ·
+[Response types](../server/answer-with-something-other-than-json.md)
+
+{% snippet caching src/ui/pages/customers/[id]/page.abide const rate %}
 
 Two costs, and both are yours rather than abide's.
 
-`principal` does not bound a global memo, so **anything caller-specific belongs in its `Args`**.
-An entry keyed on nothing that identifies the caller is an entry every caller is served.
+**A global body may not read the request scope.** `request()`, `principal`, `cookies()`, `csp.nonce()`
+and `route` are a build error inside one, and the error names the ambient. An entry outlives the
+request that built it and is served to every caller after it, so a request ambient in the body
+bakes the first caller's request into everybody's answer — which is why anything caller-specific
+belongs in the `Args`, where it keys an entry instead of hiding in one.
+
+That refusal is also what lets the `cache-control` above be derived rather than trusted: the answer
+is not about who asked because the shape that would make it so does not compile.
 
 And a global memo is bounded by its own `ttl` and the app's `invalidate` and by nothing else.
 There is no byte ceiling and no eviction count: measuring an arbitrary value costs an O(size)
@@ -111,24 +136,17 @@ is a truncated answer rather than an error.
 Read on: [History & tail](keep-the-last-few-values.md) ·
 [Auth & principal](../app/know-who-is-calling.md)
 
-## Tagging entries across memos
+## `tags` invalidate entries across memos
 
 `tags` is the only thing that reaches **across** memos. An entry carries them, and a selection
 matches on them:
 
-```ts #server/rpc/invoices.ts — excerpt
-const invoiceById = memo(({ id }: { id: string }) => database.invoice.find(id), {
-    tags: ({ id }) => ['invoice', `invoice:${id}`],
-})
-```
+{% snippet caching src/server/rpc/customers.ts const invoicesForCustomer %}
 
-The function form receives the memo's args, so a tag can name the **row** rather than the query —
-which is what lets a mutation that touched invoice `42` invalidate every entry about invoice `42`
-wherever it was declared, without knowing which memos those were.
-
-```ts shared
-invalidate({ tags: ['invoice:42'] })
-```
+The function form receives the memo's args, so a tag can name the **row** rather than the query.
+That is what lets `invalidate({ tags: ['customer:42'] })` reach every entry about customer `42`
+without knowing which memos those were — any other memo declaring the same tag joins the same
+selection, in any file.
 
 A tag is scoped the way a memo is: request-local on a server, process-local in a browser. One
 request can never invalidate another's.

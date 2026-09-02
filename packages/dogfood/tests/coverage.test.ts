@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { readPages } from '../scripts/buildDocs.ts'
 import { NAV } from '../scripts/NAV.ts'
-import { EXAMPLE, LEAD } from '../scripts/renderMarkdown.ts'
+import { EXAMPLE, LEAD, SNIPPET } from '../scripts/renderMarkdown.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
 
 const SPEC = new URL('../../../docs/SPEC.md', import.meta.url)
@@ -137,12 +137,21 @@ const EXAMPLES_DIR = new URL('../examples/', import.meta.url)
 
 // An example is real files, so a page can reference one that does not exist and a
 // directory can rot with nothing embedding it. Both are silent without this.
+// A page EMBEDS an example either way it reaches one: `{% example %}` shows the whole
+// directory as panels, `{% snippet %}` shows one slice of one of its files. Both make the
+// page's code that directory's code, which is the property every check below is about.
+function embeddedExamples(body: string): string[] {
+    const names: string[] = []
+    for (const match of body.matchAll(new RegExp(EXAMPLE.source, 'gm'))) names.push(match[1] ?? '')
+    for (const match of body.matchAll(new RegExp(SNIPPET.source, 'gm'))) names.push(match[1] ?? '')
+    return names
+}
+
 test('every embedded example exists, and every example is embedded', async () => {
     const embedded = new Set<string>()
     for (const path of new Bun.Glob('**/*.md').scanSync({ cwd: CONTENT_DIR.pathname })) {
         const source = await Bun.file(new URL(path, CONTENT_DIR)).text()
-        for (const match of source.matchAll(new RegExp(EXAMPLE.source, 'gm')))
-            embedded.add(match[1] ?? '')
+        for (const name of embeddedExamples(source)) embedded.add(name)
     }
 
     const onDisk = new Set<string>()
@@ -173,6 +182,47 @@ test('every file an example manifest names is on disk', async () => {
         }
     }
     expect(missing).toEqual([])
+})
+
+// A heading of the form `Subject: `a`, `b`, `c`` is a GLOSSARY LABEL — BRAND names
+// "Probes: `pending`, `refreshing`, `done`" as the shape a reader scans for. What makes
+// it worth having is also what makes it dangerous: it reads as the whole set. The probes
+// heading named four and the table under it listed six, so `streaming()` and `error()`
+// were in the docs and absent from the one line a reader checks. Compared against the
+// table rather than against a list here, because the table is what the section teaches.
+const ENUMERATING = /^#{2,4}\s+[^:`]+:\s+((?:`[^`]+`)(?:,\s*`[^`]+`)+)\s*$/
+const CELL = /^\|\s*`([^`]+)`/
+
+// `pending` in a heading and `pending()` in a cell are one name.
+function bare(name: string): string {
+    return name.replace(/^s\./, '').replace(/\(\)$/, '')
+}
+
+test('a heading that enumerates names everything its table lists', async () => {
+    const partial: string[] = []
+    for (const page of await readPages()) {
+        const lines = page.body.split('\n')
+        for (let at = 0; at < lines.length; at += 1) {
+            const named = ENUMERATING.exec(lines[at] ?? '')
+            if (!named?.[1]) continue
+            const heading = named[1].split(',').map((one) => bare(one.trim().slice(1, -1)))
+
+            const listed: string[] = []
+            for (let scan = at + 1; scan < lines.length; scan += 1) {
+                const line = lines[scan] ?? ''
+                if (line.startsWith('#')) break
+                // The FIRST table only: a section may follow one with another about
+                // something else, and reading both would compare against a union.
+                if (listed.length > 0 && !line.startsWith('|')) break
+                const cell = CELL.exec(line)
+                if (cell?.[1]) listed.push(bare(cell[1]))
+            }
+            if (listed.length === 0) continue
+            if (heading.join() !== listed.join())
+                partial.push(`${page.slug}: "${heading.join(', ')}" vs table ${listed.join(', ')}`)
+        }
+    }
+    expect(partial).toEqual([])
 })
 
 // docs/BRAND.md, Voice: "A heading carries its own subject." A reader arriving from the
@@ -271,14 +321,29 @@ test('front matter names exactly the example directories the page embeds', async
     const wrong: string[] = []
     for (const page of await readPages()) {
         const embedded: string[] = []
-        for (const match of page.body.matchAll(new RegExp(EXAMPLE.source, 'gm')))
-            embedded.push(`${EXAMPLES_PREFIX}${match[1]}`)
+        for (const name of embeddedExamples(page.body))
+            embedded.push(`${EXAMPLES_PREFIX}${name}`)
         if (page.examples.join() !== [...new Set(embedded)].join())
             wrong.push(
                 `${page.slug}: front matter ${page.examples.join()}, body ${embedded.join()}`,
             )
     }
     expect(wrong).toEqual([])
+})
+
+// ONE EXAMPLE PER PAGE. A page's opening example is the full coverage for that page, and
+// every snippet under it is a feature OF that example — so a reader who has watched the
+// thing at the top run has already seen where every line below it comes from. A second
+// example on one page breaks exactly that: the snippet is real, and real somewhere the
+// reader has not been. The repair is to widen the page's own example with another file,
+// which costs a tab rather than a page.
+test('a page embeds at most one example', async () => {
+    const several: string[] = []
+    for (const page of await readPages()) {
+        const names = new Set(embeddedExamples(page.body))
+        if (names.size > 1) several.push(`${page.slug}: ${[...names].join(', ')}`)
+    }
+    expect(several).toEqual([])
 })
 
 test('every example directory the front matter names is on disk', async () => {
@@ -448,6 +513,46 @@ test('a link is labelled with the nav of the page it points at', async () => {
         }
     }
     expect(stale).toEqual([])
+})
+
+// A fence renders in `main`'s 44rem column at `font: 400 13px/1.6 var(--mono)` — about 76
+// characters before `pre`'s own `overflow-x:auto` takes over. Past that the sample is a
+// thing to scroll rather than a thing to read, and the ONE line that overflows is usually
+// the line the section is about: 50 of 545 did, worst at 107. Nothing else checks this —
+// biome's `files.includes` is `**/*.{json,ts,js}`, so a fence is formatted by nobody, and
+// the example FILES are here for the same reason: they render in the same column.
+const COLUMN = 76
+
+function overlongLines(source: string, fencedOnly: boolean): number[] {
+    const over: number[] = []
+    let fenced = !fencedOnly
+    const lines = source.split('\n')
+    for (let at = 0; at < lines.length; at += 1) {
+        const line = lines[at] ?? ''
+        if (fencedOnly && line.startsWith('```')) {
+            fenced = !fenced
+            continue
+        }
+        if (fenced && line.length > COLUMN) over.push(at + 1)
+    }
+    return over
+}
+
+test('no code sample is wider than the column it renders in', async () => {
+    const wide: string[] = []
+    for (const path of new Bun.Glob('**/*.md').scanSync({ cwd: CONTENT_DIR.pathname })) {
+        const source = await Bun.file(new URL(path, CONTENT_DIR)).text()
+        for (const line of overlongLines(source, true)) wide.push(`content/${path}:${line}`)
+    }
+    // An example's own files, which the panel renders at the same width.
+    for (const path of new Bun.Glob('*/{files,compiled}/**/*').scanSync({
+        cwd: EXAMPLES_DIR.pathname,
+        onlyFiles: true,
+    })) {
+        const source = await Bun.file(new URL(path, EXAMPLES_DIR)).text()
+        for (const line of overlongLines(source, false)) wide.push(`examples/${path}:${line}`)
+    }
+    expect(wide).toEqual([])
 })
 
 // docs/BRAND.md, Visual identity: the code-block spine is the one device to keep, and an

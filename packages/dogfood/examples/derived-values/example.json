@@ -1,0 +1,98 @@
+{
+    "title": "A ledger that filters and totals itself",
+    "summary": "Rows from the server, a filter over them, and a total over that. Three derivations, no dependency lists — tick the box and watch which of them re-runs.",
+    "files": [
+        "src/ui/pages/ledger/page.abide",
+        "src/shared/ledger.ts",
+        "src/server/rpc/invoices.ts"
+    ],
+    "route": "/ledger",
+    "states": [
+        {
+            "id": "unpaid",
+            "file": "unpaid.html",
+            "on": {
+                "change input[name=paid]": "all"
+            }
+        },
+        {
+            "id": "all",
+            "file": "all.html",
+            "on": {
+                "change input[name=paid]": "unpaid"
+            }
+        }
+    ],
+    "bench": {
+        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler.",
+        "rows": [
+            {
+                "metric": "Recompute, 500 rows",
+                "abide": "1.9 ms",
+                "vanilla": "1.8 ms",
+                "ratio": "1.06x"
+            },
+            {
+                "metric": "DOM nodes moved",
+                "abide": "2",
+                "vanilla": "2",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Derivations re-run per toggle",
+                "abide": "2",
+                "vanilla": "2",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Client bytes",
+                "abide": "3.9 kB",
+                "vanilla": "1.7 kB",
+                "ratio": "2.29x"
+            },
+            {
+                "metric": "Lines of code",
+                "abide": "44",
+                "vanilla": "50",
+                "ratio": "0.88x"
+            }
+        ]
+    },
+    "tests": {
+        "note": "`bun test examples/derived-values`. The wake-up counts are the point: a correct total proves nothing about how often it was computed.",
+        "rows": [
+            {
+                "name": "a memo re-runs only when what its body read changed",
+                "result": "pass"
+            },
+            {
+                "name": "`showPaid` true drops `row.paid` out of the graph",
+                "result": "pass"
+            },
+            {
+                "name": "a recompute onto an unchanged total wakes no reader",
+                "result": "pass"
+            }
+        ]
+    },
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/invoices/listInvoices?year=2026",
+            "requestHeaders": {
+                "abide-render": "0c8f1a4e9b2d7c31",
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tA"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "[\n    { \"id\": 1, \"ref\": \"INV-0041\", \"total\": 400, \"paid\": true },\n    { \"id\": 2, \"ref\": \"INV-0042\", \"total\": 1240, \"paid\": false },\n    { \"id\": 3, \"ref\": \"INV-0043\", \"total\": 96, \"paid\": false }\n]"
+        }
+    ],
+    "vanilla": [
+        "index.html",
+        "ledger.js",
+        "server.ts"
+    ]
+}

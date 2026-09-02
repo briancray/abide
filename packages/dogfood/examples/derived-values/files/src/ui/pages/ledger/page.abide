@@ -1,0 +1,20 @@
+<script>
+import { rows, showPaid, total, visible } from '#shared/ledger'
+</script>
+
+<h1>Ledger</h1>
+
+<label>
+    <input type="checkbox" bind:checked={showPaid}>
+    Show paid
+</label>
+
+{#if rows.pending()}<p>Counting…</p>{/if}
+
+<ul>
+{#for row of visible by row.id}
+    <li>{row.ref} — {row.total}</li>
+{/for}
+</ul>
+
+<p>{total} due across {visible.length} invoices</p>

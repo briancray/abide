@@ -71,15 +71,16 @@ stream ever writes it. For a streaming producer they come apart: `Stored` is the
 Read on: [Streaming data](../server/send-data-as-it-arrives.md) ·
 [Sockets](../server/keep-a-room-of-callers-in-sync.md)
 
-## Reading what was retained
+## `s.tail(n)` is `Iterable` and `AsyncIterable` both
 
 `s.tail(n)` is always called, and hands back a `Tail<Produced>` — `Iterable` **and**
 `AsyncIterable`, with nothing allocated until one of the two is pulled.
 
 ```ts browser
-const recent = [...readings.tail()]              // the snapshot, synchronously
+const recent = [...readings.tail()]   // the snapshot, synchronously
 
-for await (const value of readings.tail(20)) {   // replay 20, then live from there
+// replay 20, then live from there
+for await (const value of readings.tail(20)) {
     chart.push(value)
 }
 ```
@@ -107,7 +108,7 @@ one number is what made a chat room's default retention render one message.
 Read on: [Lists](../templates/repeat-markup-over-a-list.md) ·
 [Loading states](show-a-value-that-isnt-there-yet.md)
 
-## Building an undo stack over the history
+## An undo stack builds on a state's own history
 
 A state's productions are its past values, so a `tail` past the default is the history an undo
 stack needs. abide gives you the history and not the stack, because what a stack should coalesce,
@@ -126,8 +127,9 @@ Read on: [Values by name](../templates/read-and-write-a-value-by-name.md)
 
 ## A mutated value replays nothing
 
-A write through a member path copies down that path and then sets, so identity moves and readers
-wake. The copy is what makes a tail worth having: `doc.title = 'Draft'` copies down the path, so
+A write through a member path copies down that path and then sets, so the reference moves and
+readers wake — at the default `identity`, which is the reference. The copy is what makes a tail
+worth having: `doc.title = 'Draft'` copies down the path, so
 each of those fifty entries is a distinct object. Mutate in place instead and the ring holds fifty
 references to one value — replaying it replays nothing, with nothing thrown and nothing wrong in
 the markup.
@@ -145,10 +147,10 @@ value is the item, retained by `tail`.
 
 Read on: [Values by name](../templates/read-and-write-a-value-by-name.md)
 
-## What retention costs per write
+## Retention costs nothing that scales with `tail`
 
-Nothing that scales with `tail`. Retention is **append-only**: a ring of `tail` entries, a version
-bump for readers to subscribe to, and the snapshot materialised on the read that follows.
+Retention is **append-only**: a ring of `tail` entries, a version bump for readers to subscribe
+to, and the snapshot materialised on the read that follows.
 
 That shape is the point of the design rather than an implementation note. Rebuilding an
 accumulating value to signal a change — `concat` per chunk — is O(n²) over a stream, so the signal
@@ -163,7 +165,7 @@ a later subscriber is the only reader an expiry is visible to.
 
 Read on: [Reloading](decide-when-a-value-reloads.md)
 
-## Capping a stream transcript in memory
+## `ABIDE_MAX_STREAM_BUFFER_SIZE` caps a transcript in memory
 
 `tail` counts productions. The thing that can actually run away is bytes, and one variable caps it
 wherever a transcript is held:

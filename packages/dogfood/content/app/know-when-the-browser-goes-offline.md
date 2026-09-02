@@ -31,10 +31,9 @@ flag between them.
 There is no listener to attach and no cleanup to remember. Reading it is what subscribes,
 and the paragraph mounts and unmounts as the answer moves.
 
-## What `online` answers
+## `online` answers whether the caller can reach the app
 
-Whether the caller can reach the app — one question, asked the same way on both sides and
-answered from what each side has.
+One question, asked the same way on both sides and answered from what each side has.
 
 | Side | Answered from |
 | --- | --- |

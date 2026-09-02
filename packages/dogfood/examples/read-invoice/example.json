@@ -1,6 +1,6 @@
 {
     "title": "Read an invoice",
-    "summary": "A row from your database on the page, with nothing between them. Two files, 13 lines — one is the handler you would have written anyway.",
+    "summary": "A row from your database on the page, with nothing between them. Two files, 16 lines — one is the handler you would have written anyway.",
     "files": [
         "src/server/rpc/invoices.ts",
         "src/ui/pages/invoices/[id]/page.abide"
@@ -41,7 +41,7 @@
         ]
     },
     "bench": {
-        "note": "500 rows, Chromium, 20 batches of 50. The ratio is against a hand-written arm that ships with the example once the harness can run it.",
+        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler.",
         "rows": [
             {
                 "metric": "First paint",
@@ -69,16 +69,29 @@
             },
             {
                 "metric": "Lines of code",
-                "abide": "8",
-                "vanilla": "48",
-                "ratio": "0.17x"
+                "abide": "13",
+                "vanilla": "26",
+                "ratio": "0.50x"
             }
         ]
     },
     "route": "/invoices/42",
     "states": [
         {
+            "id": "pending",
+            "file": "result.pending.html",
+            "hold": 700,
+            "after": "settled"
+        },
+        {
+            "id": "settled",
             "file": "result.html"
         }
+    ],
+    "vanilla": [
+        "index.html",
+        "invoice.js",
+        "server.ts",
+        "database.ts"
     ]
 }

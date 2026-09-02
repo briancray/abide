@@ -1,0 +1,23 @@
+<style>
+/* This file's own scoped block. It cannot reach the layout's
+   header, and the layout's cannot reach this. */
+article {
+    max-width: 22rem;
+    padding: 1.2rem 1.4rem;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--raised);
+}
+
+h1 {
+    margin: 0;
+    font: 500 11px/1 var(--mono);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+</style>
+
+<article>
+    <h1>The page, rendered through the slot</h1>
+</article>

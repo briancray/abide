@@ -1,0 +1,12 @@
+<script>
+import { pending, refreshing } from 'abide'
+</script>
+
+<!-- The FREE probes, over a selection rather than one value. Bare,
+     that is anything in flight in this scope — which is what an
+     app-wide progress strip wants. -->
+{#if pending() || refreshing()}
+    <div class="progress-strip" role="status"></div>
+{/if}
+
+<slot/>
