@@ -46,7 +46,7 @@ That is not a naming convenience:
 * a component taking a `Reactive<User>` does not care where the user came from
 * swapping a local value for a remote one changes how it is declared and nothing downstream
 
-## Reading is what starts the work
+## Reading starts the work
 
 No `useEffect`. No `load()`. No mount hook to put the fetch in.
 

@@ -134,7 +134,7 @@ Waiting is the opt-in, and `await` is how it is asked for:
 `{await invoice.total}` holds for the one field, and `{await a.x + b.y}` holds for both values —
 every reactive read under an `await` blocks, so there is no form of it to learn separately.
 
-Where `then` sits is what decides the `{#await}` block. On the opening tag it is the blocking
+Where `then` sits decides the `{#await}` block. On the opening tag it is the blocking
 form, and it mounts once with a value. As a `{:then}` branch it is not: the pending body goes out
 now and is swapped for the branch when the value lands.
 
@@ -214,7 +214,7 @@ Read on: [Links & navigation](../pages/link-to-another-page.md) ·
 
 ## The wire carries the same seven steps
 
-`/invoices/42`, against the page in step 4. This is what actually leaves the server.
+`/invoices/42`, against the page in step 4. This actually leaves the server.
 
 **Steps 1–4, the head.** Nothing was awaited to produce it. Two of its elements are abide's: the
 seed manifest, naming the calls this render is making, and the bootstrap that issues them.
@@ -250,7 +250,7 @@ due <template data-abide-sink="5"></template><script>/* fill 5 */</script>
 
 Those filler scripts are **byte-identical** — every one of them, in every document abide serves.
 Each reads the `<template>` next to it, which is where everything specific to the slot lives.
-That is what lets one build-time hash cover them all, and what keeps a per-request nonce out of
+That lets one build-time hash cover them all, and what keeps a per-request nonce out of
 the head.
 
 **Step 5, a fill.** Written at the current end of the document, finding the hole by id. Where an

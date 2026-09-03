@@ -77,7 +77,7 @@ abide emits it wherever an answer depends on a request header:
 | `accept` | a stream that can be framed as jsonl or as SSE |
 | `accept-encoding` | anything compressed or compressible |
 
-Nothing abide serves ever varies on `traceparent`, which is what keeps a seeded answer landing
+Nothing abide serves ever varies on `traceparent`, which keeps a seeded answer landing
 in the browser cache under its plain URL.
 
 Read on: [Streaming data](send-data-as-it-arrives.md)

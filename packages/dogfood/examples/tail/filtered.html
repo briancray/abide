@@ -1,0 +1,13 @@
+<h1>Console</h1>
+<label>
+Filter
+<input value="error">
+</label>
+<button data-undo>Undo</button>
+<button data-redo>Redo</button>
+<button>Copy last 10</button>
+<pre>12:04:04 error POST /invoices 500</pre>
+<pre>12:04:07 error GET /customers/9 404</pre>
+<p class="tip">The filter is a <code>state</code> with a <code>tail</code> of its own, and its
+productions are its past values — which is the whole of the history an undo stack needs. Press
+<b>Undo</b>.</p>

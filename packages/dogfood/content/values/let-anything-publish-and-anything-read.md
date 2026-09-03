@@ -85,7 +85,7 @@ Args are keyed by the same canonical wire form a memo's args use — sorted, `un
 `Date` written ISO — so a fresh object built each run lands on the same room.
 
 **A room is created by a publish, never by a subscribe.** Subscribing to one nothing has published
-to is legal, allocates no entry, and reads as `pending()`. That is what bounds the number of rooms
+to is legal, allocates no entry, and reads as `pending()`. That bounds the number of rooms
 by *publish authority* rather than by how many argument keys a caller can invent, and it is why
 there is no room-count ceiling to configure.
 
@@ -154,7 +154,7 @@ Both conditions, and the second falls out of `ttl` rather than being a second us
 is left to keep once the last subscriber has gone and the last retained message has expired, so
 there is no idle window to configure.
 
-A resubscribe before then finds the room and its tail intact, which is what makes navigating away
+A resubscribe before then finds the room and its tail intact, which makes navigating away
 and back free.
 
 ## Rooms are process-wide, not per caller

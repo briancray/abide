@@ -1,0 +1,21 @@
+<script>
+import { state } from 'abide'
+import { cookieStore } from '#shared/cookieStore'
+
+type Theme = 'light' | 'dark'
+
+// A store ANSWERS BEFORE the initial value: `'light'` is what a
+// MISS falls back to rather than what this starts at. `cookies()`
+// answers on both sides, so they address the same store and the
+// first paint is already right — no fallback frame, no correction
+// at hydration.
+const theme = state<Theme>('light', { store: cookieStore('theme') })
+</script>
+
+<h1>Settings</h1>
+
+<button onclick={() => { theme = theme === 'dark' ? 'light' : 'dark' }}>
+    Theme: {theme}
+</button>
+
+<p class="hint">Written on every production, read back at construction.</p>

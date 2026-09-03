@@ -43,7 +43,7 @@ Read on: [Local state](../values/show-a-value-that-changes.md)
 
 `bind:checked` is the boolean form. It mirrors a boolean DOM property as a boolean attribute
 and **never stringifies it**, so a `false` is an absent attribute rather than the string
-`"false"` — which is what makes `checked={false}` behave. It writes back on `change`.
+`"false"` — which makes `checked={false}` behave. It writes back on `change`.
 
 `bind:open` is the same binding on a `<details>`, written back from its `toggle` event, so a
 disclosure's open state is somewhere you can read rather than somewhere in the DOM.
@@ -138,7 +138,7 @@ reading back.
 
 ## A `transform` refuses under a name you declared
 
-Both gates refuse. What you refuse **with** is what picks between them: a schema refuses as
+Both gates refuse. What you refuse **with** picks between them: a schema refuses as
 `ValidationError`, and a `transform` refuses as a name of your own — the only way a failure
 arrives carrying data you chose. `refuse.typed` declares it once and resolves on both sides, so
 the same name serves a form field and a handler.
@@ -205,7 +205,7 @@ warning, and not something the component discovers about how it was called:
 
 Leave the `bind:` off and it does not compile. The marker sits at the call site on purpose:
 that is the side giving write access up, so a reader sees it without opening the child, while
-the child declaring it is what lets the compiler check every caller.
+the child declaring it lets the compiler check every caller.
 
 `bind:` needs the same lvalue a native binding does — a state name, a member path, or a
 `{get, set}` pair.

@@ -78,3 +78,9 @@ Read on: [Watching values](do-something-when-a-value-changes.md)
 {% lead values/keep-the-last-few-values %}
 
 Read on: [History & tail](keep-the-last-few-values.md)
+
+## Persistence
+
+{% lead values/keep-a-value-outside-the-process %}
+
+Read on: [Persistence](keep-a-value-outside-the-process.md)

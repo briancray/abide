@@ -51,7 +51,7 @@ runs before the route resolves, so it has a request and no arguments; the rpc la
 one handler's own arguments.
 
 The **Result** column is the difference that matters. The rpc lane hands back what the handler
-would have handed back, not a `Response`, and that is what lets the same rungs run on an
+would have handed back, not a `Response`, and that lets the same rungs run on an
 **in-process** call — a page rendering on the server reads through the handler, so a rung that
 authorises on an id in the arguments cannot be reachable by a browser and missed by the render.
 The app lane stays `Response`-shaped because pre-routing there is no value yet, which also makes
@@ -104,7 +104,7 @@ authorising by an id in the arguments — is necessarily a handler's own rung, w
 
 Read on: [Lifecycle](../app/run-code-at-start-and-stop.md) · [CSP](../app/lock-down-what-the-page-may-load.md)
 
-## `ctx.args()` parses lazily, and that is what orders the checks
+## `ctx.args()` parses lazily, and that orders the checks
 
 A rung that never asks for the arguments pays nothing. The first one that asks triggers the
 parse, and what comes back is **parsed, coerced and validated**:

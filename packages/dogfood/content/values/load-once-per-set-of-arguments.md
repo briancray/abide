@@ -61,7 +61,7 @@ One canonicalization rather than two: args that cannot be keyed are exactly args
 sent, so both fail in the same place.
 
 The key is therefore **structural**. `memo(() => getCustomer({ id }))` builds a fresh object on
-every run and still lands on the same entry, which is what makes the identity cutoff hold — a
+every run and still lands on the same entry, which makes the identity cutoff hold — a
 recompute onto a key already held wakes nobody and shows no spinner.
 
 Args are always plain args. A reactive value in an argument position **reads**; making the call
@@ -144,7 +144,7 @@ matches on them:
 {% snippet caching src/server/rpc/customers.ts const invoicesForCustomer %}
 
 The function form receives the memo's args, so a tag can name the **row** rather than the query.
-That is what lets `invalidate({ tags: ['customer:42'] })` reach every entry about customer `42`
+That lets `invalidate({ tags: ['customer:42'] })` reach every entry about customer `42`
 without knowing which memos those were — any other memo declaring the same tag joins the same
 selection, in any file.
 

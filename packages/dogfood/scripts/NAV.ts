@@ -24,6 +24,7 @@ export const NAV = [
             'values/show-a-value-that-changes',
             'values/derive-a-value-from-other-values',
             'values/let-anything-publish-and-anything-read',
+            'values/patch-a-list-from-a-live-feed',
             'values/show-a-value-that-isnt-there-yet',
             'values/load-once-per-set-of-arguments',
             'values/decide-when-a-value-reloads',
@@ -31,6 +32,7 @@ export const NAV = [
             'values/share-one-value-across-components',
             'values/do-something-when-a-value-changes',
             'values/keep-the-last-few-values',
+            'values/keep-a-value-outside-the-process',
         ],
     },
     {

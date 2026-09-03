@@ -23,6 +23,27 @@ test('no page ships an unexpanded directive', async () => {
     expect(leftovers).toEqual([])
 })
 
+// The unexpanded-directive test above caught a build bug ONLY BY LUCK. `String.replace`
+// with a STRING replacement reads `$&`, `` $` ``, `$'` and `$1` out of it, so an example
+// carrying `'$'` for a currency sign inserted the whole rest of the document at that point —
+// duplicating every section after it. What made it visible was that the duplicate happened
+// to contain directives; had the corrupted example been the LAST one, the build would have
+// shipped a page with three sections twice and exited 0. So the duplication is asserted
+// directly, on the one thing a doubled region cannot hide: a heading appearing twice.
+test('no page ships a section twice', async () => {
+    const { pages, rendered } = await markdownPages()
+    const doubled: string[] = []
+    for (let index = 0; index < pages.length; index += 1) {
+        const seen = new Set<string>()
+        for (const line of (rendered[index] ?? '').split('\n')) {
+            if (!line.startsWith('## ')) continue
+            if (seen.has(line)) doubled.push(`${pages[index]?.slug}: ${line}`)
+            seen.add(line)
+        }
+    }
+    expect(doubled).toEqual([])
+})
+
 // `content/` is where the link is written, and it names the `.md` — so this gates the
 // CONTENT, not a rewrite: a page that links to a slug NAV does not carry, or reverts to a
 // `.html` spelling, is a dead link when the file is read where it lies.

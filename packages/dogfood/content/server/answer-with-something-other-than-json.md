@@ -51,6 +51,30 @@ Before reaching for a helper, know what a plain return does:
 A binary decodes back to a `Uint8Array` on the caller's side, so an rpc that hands back a
 generated PDF needs no helper and no encoding step.
 
+## A returned `Blob` is served by range
+
+A `Blob` has `size` and `slice`, which is the whole of what range serving needs — so abide reads
+`Range`, honours `If-Range` against the ETag it derives, and answers `206` with `content-range`,
+`416` where the range is unsatisfiable and `304` on a matching `If-None-Match`. `Bun.file(path)`
+IS a `Blob`, so serving a file that seeks is returning one:
+
+```ts #server/rpc/media.ts
+export const playFile = GET(async ({ id }: { id: number }) => {
+    const path = await pathFor(id)
+    return Bun.file(path)
+})
+```
+
+*0 lines of range parsing* — against the sixty every media server writes once and gets
+`content-length` on a `206` wrong the first time, a player that will not seek being the only
+symptom. Reach it from markup with [`playFile.url({ id })`](find-the-url-a-handler-answers-on.md).
+
+A handler returning a whole `Response` instead — a playlist at `no-store` beside the segments it
+names at `immutable` — is answering the same way, with two consequences worth knowing: a second
+reader in the same request is teed rather than handed a consumed body, and `clients.mcp` and
+`clients.cli` default to **false**, a `Response` having no output schema to publish. Turn them
+back on where the body is JSON you wanted a header on.
+
 Read on: [Reading data](read-data-without-writing-an-api.md) · [Streaming data](send-data-as-it-arrives.md)
 
 ## `json` adds a status or a header to JSON

@@ -41,7 +41,7 @@ call. What a read gives back depends only on where the value has got to:
 | holding a refusal over a value — a rejected write, a reload that failed | the last accepted value; `error()` carries the refusal |
 
 Member access on a `Reactive` short-circuits, so an in-flight `invoice.total` is `undefined`
-rather than a TypeError, and the whole chain after it goes with it. That is what makes
+rather than a TypeError, and the whole chain after it goes with it. That makes
 `{data.name ?? 'Loading'}` and `{#for stat of data.stats ?? []}` read the same way — an `{#for}`
 over `undefined` iterates zero times.
 
@@ -66,14 +66,14 @@ work**, so it is safe in a branch that runs before anything has arrived.
 | `streaming()` | it is currently producing chunks |
 | `error()` | hands back the standing refusal — what the last write or production was refused with |
 
-`pending()` is what tells `undefined`-because-in-flight from a value that genuinely resolved to
+`pending()` tells `undefined`-because-in-flight from a value that genuinely resolved to
 `undefined`. And `done()` and `success()` **stay true through a `refresh()`** — the load that
 finished still finished — so `refreshing()` is the only one that moves on a reload. A spinner
 reads `refreshing()`; a table keeps rendering the rows it already has.
 
 `success()` and `error()` are **orthogonal, not opposite**. One asks whether there is a value to
 show, the other whether the last write or production was refused, and a refused write over a
-landed value answers yes to both — which is what leaves a bound input on screen beside its own
+landed value answers yes to both — which leaves a bound input on screen beside its own
 message. An accepted write clears the refusal.
 
 Reading a probe subscribes you to **that probe alone**. A value change does not wake a
@@ -159,7 +159,7 @@ pending body**:
 | `{invoice}` | no — the read renders nothing and opens a sink the value fills later |
 | `{await invoice}` | yes |
 | `{#await invoice then row}` | yes — there is no pending branch, so there is nothing to render instead |
-| `{#await invoice}{:then row}` | no — the pending body is what renders while it loads |
+| `{#await invoice}{:then row}` | no — the pending body renders while it loads |
 
 So `then` on the opening tag is not shorthand for the same block. It is the deliberate wait, and
 what it trades away is the branch that would have covered the wait:

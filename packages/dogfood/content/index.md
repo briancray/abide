@@ -11,7 +11,7 @@ on screen. Today that means a route, a handler, a fetch, a loading flag, an erro
 cache key, and a type you keep in sync by hand.
 
 In abide it is the handler, and a page that reads it. You declare what a value *is*, and
-reading it is what loads it — there is nothing in between for you to write.
+reading it loads it — there is nothing in between for you to write.
 
 {% example read-invoice %}
 
@@ -99,5 +99,5 @@ Read on: [Reference](reference/index.md) · [Reactive](reference/reactive.md) ·
 > **These docs run ahead of the code.** abide is documented before it is built, on purpose: a
 > capability that cannot be explained as a problem an app author has is not ready to be a
 > capability. Pages marked *stub* have a decided title and intent, and no prose yet, and an
-> example's Result, Compiled, Bench and Tests panels are written by hand until there is a
+> example's Result, Bench and Tests panels are written by hand until there is a
 > compiler and a harness to produce them. Files and Download are real.

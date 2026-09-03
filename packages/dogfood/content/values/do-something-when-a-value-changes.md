@@ -9,41 +9,30 @@ covers:
   - `Disposer`
   - `watch` effect
   - `Transformer`, `Disposer`, middleware, lifecycle hooks
+examples:
+  - packages/dogfood/examples/watching
 ---
 
 Most of what looks like an effect is a value. A title derived from a row, a filtered list, a
-count — those are `memo`, and reaching for an effect to assign them is what builds a graph you
+count — those are `memo`, and reaching for an effect to assign them builds a graph you
 have to run in your head.
 
 `watch` is for the rest: the things that happen **outside** the page. A timer, a subscription to
 something that is not a `Reactive`, a write to `localStorage`, an analytics call.
 
-```abide #ui/pages/editor/page.abide — excerpt
-<script>
-import { state, watch } from 'abide'
-
-const draft = state('')
-
-watch(() => {
-    const id = setTimeout(() => save(draft), 1000)
-    return () => clearTimeout(id)
-})
-</script>
-
-<textarea bind:value={draft}></textarea>
-```
+{% example watching %}
 
 *5 lines, cancel included* — the teardown is the return value rather than a second argument you
 might forget.
+
+{% snippet watching src/ui/pages/editor/page.abide watch(() => { %}
 
 ## `watch` runs an effect on change
 
 `watch(effect)` runs the effect immediately and again whenever anything it **read** changes — the
 same tracking a memo body gets, and the same absence of a dependency list.
 
-```ts browser
-const stop = watch(() => { document.title = `${unread()} unread` })
-```
+{% snippet watching src/ui/session.ts export const stopBeacon %}
 
 It hands back the way to stop it. That matters where the watch has no owner: a watch registered
 inside a component is owned by the component and torn down with it, but one registered from a
@@ -51,9 +40,7 @@ plain `.ts` module has nobody to tear it down, and the returned disposer is what
 
 `s.watch(effect)` is the same thing scoped to one value, handing the value to the effect:
 
-```ts browser
-const stop = unread.watch((count) => { document.title = `${count} unread` })
-```
+{% snippet watching src/ui/session.ts export const stopTitle %}
 
 ## `watch` hands back a disposer
 
@@ -68,7 +55,12 @@ Teardown means what the watch was registered in: component unmount for a `<scrip
 removal for one in a `{#for}` body, process end for a `<script module>` one.
 
 That is why the timer above is correct without a guard. Every rerun cancels the timer the
-previous run started, and the unmount cancels the last one.
+previous run started, and the unmount cancels the last one — nineteen keystrokes in the example
+start nineteen timers and leave one standing.
+
+The other half of that snippet is where the value is read. `draft` is read in the effect body and
+not inside the `setTimeout` callback, because the callback runs a second after the tracking pass
+has finished: a read from in there subscribes to nothing, and the watch never runs again.
 
 ## A `sources` list narrows what wakes an effect
 
@@ -76,16 +68,17 @@ The tracked form subscribes to everything the body read, which is usually what y
 occasionally more than you want — a body that reads five values to build one log line wakes on
 all five.
 
-```ts browser
-watch([user, plan], () => { analytics.identify(user(), plan()) })
-```
+{% snippet watching src/ui/pages/editor/page.abide watch([topic], () => { %}
 
 With `sources` as the first argument it runs only when those change. It is two overloads rather
 than a union, discriminated by that argument, so nothing has to be spelled to get the ordinary
 form.
 
-`peek()` is the same repair from the other side: `watch` narrows by whitelist, `peek` by
-blacklist, and a memo has only the second, having no `sources` form.
+`peek()` is the other way to the same place, and the two differ in what they do to the tracking:
+`sources` **replaces** it with a list you write, and `peek` leaves it on and takes **one read**
+out of it. So they are alternatives rather than partners — inside a `sources` list there is no
+tracking left for a `peek` to opt out of. The effect above reads the draft plainly and still wakes
+only on the topic, which is why nineteen keystrokes move no analytics count.
 
 Read on: [Reloading](decide-when-a-value-reloads.md)
 

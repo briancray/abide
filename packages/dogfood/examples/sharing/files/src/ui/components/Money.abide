@@ -1,0 +1,19 @@
+<script>
+import { memo, props, state } from 'abide'
+
+const { amount } = props<{ amount: number }>()
+
+// GET-OR-CREATE in the current scope, by key. Every instance of
+// this component runs this line and they all get ONE value —
+// whichever ran first built it, and the rest got what was there.
+const currency = state.share('currency', () => state('USD'))
+
+const RATE = { USD: 1, EUR: 0.92, GBP: 0.79 }
+const SIGN = { USD: '$', EUR: '€', GBP: '£' }
+
+const shown = memo(
+    () => `${SIGN[currency]}${(amount * RATE[currency]).toFixed(2)}`,
+)
+</script>
+
+<b>{shown}</b>

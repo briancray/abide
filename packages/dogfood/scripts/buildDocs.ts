@@ -277,14 +277,16 @@ export async function renderPage(page: Page, pages: Page[], index: number): Prom
     // that page leads with — so the passes that expand one have to run after it, or the
     // overview ships the marker instead of the figure.
     for (const match of [...body.matchAll(/<!--lead:([\w/-]+)-->/g)]) {
-        body = body.replace(match[0], renderMarkdown(leadOf(pages, match[1] ?? '')))
+        const lead = renderMarkdown(leadOf(pages, match[1] ?? ''))
+        body = body.replace(match[0], () => lead)
     }
     for (const match of [...body.matchAll(/<!--example:([\w-]+)-->/g)]) {
         const example = await readExample(match[1] ?? '', root)
-        body = body.replace(match[0], example.html)
+        body = body.replace(match[0], () => example.html)
     }
     for (const match of [...body.matchAll(/<!--snippet:(\{.*?\})-->/g)]) {
-        body = body.replace(match[0], await snippetHtml(JSON.parse(match[1] ?? '{}')))
+        const html = await snippetHtml(JSON.parse(match[1] ?? '{}'))
+        body = body.replace(match[0], () => html)
     }
     body = linksToHtml(body)
 
@@ -344,21 +346,26 @@ export async function renderPageMarkdown(page: Page, pages: Page[]): Promise<str
     // The directives expand into FENCES rather than panels — same source, same order,
     // no tab a reader of plain text cannot open. LEAD runs first for the reason the HTML
     // path gives: an opening it pulls in may itself embed an example or a snippet.
+    //
+    // EVERY REPLACEMENT TAKES THE FUNCTION FORM. A string replacement is not literal —
+    // `String.replace` reads `$&`, `` $` ``, `$'` and `$1` out of it — so an example
+    // holding `'$'` for a currency sign inserted the entire rest of the document and left
+    // every directive after it unexpanded, with the build still exiting 0.
     for (const match of [...body.matchAll(new RegExp(LEAD.source, 'gm'))]) {
-        body = body.replace(match[0], leadOf(pages, match[1] ?? ''))
+        const lead = leadOf(pages, match[1] ?? '')
+        body = body.replace(match[0], () => lead)
     }
     for (const match of [...body.matchAll(new RegExp(EXAMPLE.source, 'gm'))]) {
-        body = body.replace(match[0], await exampleMarkdown(match[1] ?? '', root))
+        const markdown = await exampleMarkdown(match[1] ?? '', root)
+        body = body.replace(match[0], () => markdown)
     }
     for (const match of [...body.matchAll(new RegExp(SNIPPET.source, 'gm'))]) {
-        body = body.replace(
-            match[0],
-            await snippetMarkdown({
-                example: match[1] ?? '',
-                file: match[2] ?? '',
-                anchor: match[3] ?? '',
-            }),
-        )
+        const markdown = await snippetMarkdown({
+            example: match[1] ?? '',
+            file: match[2] ?? '',
+            anchor: match[3] ?? '',
+        })
+        body = body.replace(match[0], () => markdown)
     }
 
     let head = `# ${page.title}\n`

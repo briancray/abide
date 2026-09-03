@@ -1,0 +1,19 @@
+<script>
+import Money from '#ui/components/Money.abide'
+
+// NOTHING ON THIS PATH KNOWS A CURRENCY EXISTS, which is the whole
+// reason the key beats a prop here: there is no expression in this
+// file to hand one down with, and adding one would be a parameter
+// this component exists to not have.
+const rows = [
+    { id: 'INV-0042', label: 'General ledger export', total: 1240 },
+    { id: 'INV-0061', label: 'Ledger reconciliation', total: 880 },
+    { id: 'INV-0088', label: 'Ledger import, Q3', total: 415 },
+]
+</script>
+
+<ul>
+    {#for row of rows by row.id}
+        <li>{row.label} — <Money amount={row.total}/></li>
+    {/for}
+</ul>

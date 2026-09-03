@@ -28,7 +28,7 @@ import { online } from 'abide'
 *1 name, 0 listeners* — against `online` and `offline` handlers, the teardown for both, and a
 flag between them.
 
-There is no listener to attach and no cleanup to remember. Reading it is what subscribes,
+There is no listener to attach and no cleanup to remember. Reading it subscribes,
 and the paragraph mounts and unmounts as the answer moves.
 
 ## `online` answers whether the caller can reach the app
@@ -51,16 +51,21 @@ looking at — not every value the scope is holding.
 
 ```abide #ui/pages/layout.abide — excerpt
 <script>
-import { online, watch, invalidate } from 'abide'
+import { online, refresh, watch } from 'abide'
 
-watch(() => { if (online) invalidate() })
+watch(() => { if (online) refresh() })
 </script>
 ```
 
-`invalidate()` marks the scope stale and loads nothing. The next read of each value fetches,
-so a scope holding two hundred entries marks two hundred and loads the handful on screen.
-`refresh()` would load all two hundred at the moment the network is least able to carry
-them, which is why the lazy one is the reconnect default.
+`refresh()` is bounded by what is **subscribed** rather than by the scope: it reloads the
+entries something is reading and degenerates to a mark for the rest. So a scope holding two
+hundred catches up the handful a reader is holding and marks the other hundred and ninety-odd,
+which is exactly the line above and makes it the reconnect default.
+
+`invalidate()` is the other choice, for where nothing on screen may move: it drops the same
+caches and leaves every value standing, so the catch-up happens on the next read. What it is
+not is a cheaper `refresh()` to reach for first — an invalidated entry has nothing left to
+serve, so a `refresh()` behind one drops every reader to its pending branch.
 
 See [Reloading](../values/decide-when-a-value-reloads.md) for the two in full.
 
@@ -72,7 +77,7 @@ DNS failure and a dead backend all read as online.
 
 That is the shape of what `online` is good for. It is right for telling a reader what to
 expect and wrong as the gate on a write: the load that failed is the honest signal, and
-`online` is what explains it. Read the failure, then read `online` to say why.
+`online` explains it. Read the failure, then read `online` to say why.
 
 ```abide #ui/pages/orders/page.abide — excerpt
 {#if orders.error()}

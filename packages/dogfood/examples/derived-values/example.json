@@ -79,8 +79,8 @@
         {
             "request": "GET /__abide/rpc/invoices/listInvoices?year=2026",
             "requestHeaders": {
-                "abide-render": "0c8f1a4e9b2d7c31",
-                "cookie": "abide-caller=Vd3kPq1sLm9xR2tA"
+                "traceparent": "00-9b3c1f0a7e5d42b8a1c6f0d3e8b47250-0c8f1a4e9b2d7c31-01",
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
             },
             "status": "200 OK",
             "responseHeaders": {

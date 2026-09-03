@@ -1,0 +1,10 @@
+<nav class="switch">
+<a href="/stock/east/A-70" data-warehouse="east" aria-current="page">East</a>
+<a href="/stock/west/A-70" data-warehouse="west">West</a>
+</nav>
+<h1>A-70</h1>
+<p>Counting the shelf…</p>
+<button disabled>Mark stale</button>
+<button disabled>Reload now</button>
+<button disabled>Book one out</button>
+<p class="tip">requests to <code>getStock</code>: <b>2</b>, in flight — and the value is GONE. There was nothing left to serve, so this is the <code>pending()</code> branch rather than stale-while-revalidate. <code>invalidate()</code> then <code>refresh()</code> is how a page blanks itself, and either of them alone is fine.</p>

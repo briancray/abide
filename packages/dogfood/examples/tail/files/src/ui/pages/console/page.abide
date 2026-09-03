@@ -1,0 +1,39 @@
+<script>
+import { memo, state } from 'abide'
+import { logs } from '#server/rpc/logs'
+import { undoStack } from '#shared/undo'
+
+// One number and no array beside it: two hundred lines retained,
+// fifty replayed below, then live from where the replay ended.
+const records = memo(() => logs({ stream: 'api' }), { tail: 200 })
+
+// A state's productions ARE its past values, so a `tail` past the
+// default is the history an undo stack needs. abide gives you the
+// history and not the stack, because what a stack should coalesce,
+// discard and restore differs per app.
+const filter = state('', { tail: 50 })
+const filters = undoStack(filter)
+
+// `s.tail(n)` is `Iterable` and `AsyncIterable` both, with nothing
+// allocated until one of the two is pulled. This is the
+// synchronous face — the snapshot, now.
+function copyRecent() {
+    const lines = [...records.tail(10)]
+    navigator.clipboard.writeText(lines.map((one) => one.text).join('\n'))
+}
+</script>
+
+<h1>Console</h1>
+
+<label>
+    Filter
+    <input bind:value={filter} placeholder="level:error">
+</label>
+
+<button onclick={filters.undo}>Undo</button>
+<button onclick={filters.redo}>Redo</button>
+<button onclick={copyRecent}>Copy last 10</button>
+
+{#for await line of records.tail(50)}
+    {#if line.text.includes(filter)}<pre>{line.text}</pre>{/if}
+{/for}

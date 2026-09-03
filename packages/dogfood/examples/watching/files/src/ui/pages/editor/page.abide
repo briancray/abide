@@ -1,0 +1,45 @@
+<script>
+import { state, watch } from 'abide'
+import { analytics } from '#shared/analytics'
+import { saveDraft } from '#server/rpc/drafts'
+import { savedAt } from '#ui/session'
+
+const draft = state('')
+const topic = state('billing')
+
+// The teardown is the RETURN VALUE rather than a second argument
+// you might forget: every rerun cancels the timer the previous run
+// started, and the unmount cancels the last one. The body is read
+// HERE and not in the callback — a read from inside the timeout
+// would run after the tracking pass and subscribe to nothing.
+watch(() => {
+    const body = draft
+    const id = setTimeout(async () => {
+        await saveDraft({ body })
+        savedAt = 'just now'
+    }, 1000)
+    return () => clearTimeout(id)
+})
+
+// `sources` is the WHITELIST: this body reads the draft as well,
+// and wakes when the topic moves rather than on every keystroke.
+// The draft is read plainly — naming `sources` turns the tracking
+// off, so there is nothing here for a `peek` to opt out of.
+watch([topic], () => {
+    analytics.compose(topic, draft.length)
+})
+</script>
+
+<h1>Draft</h1>
+
+<label>
+    Topic
+    <select bind:value={topic}>
+        <option value="billing">Billing</option>
+        <option value="support">Support</option>
+    </select>
+</label>
+
+<textarea bind:value={draft} placeholder="Type something"></textarea>
+
+<p class="hint">Saved {savedAt}</p>

@@ -146,7 +146,7 @@ the client painted, so replaying silently would duplicate rows a `{#for await}` 
 appended. On a reset the block clears its accumulated rows and repaints from the tail — the one
 place it is not append-only, and rare enough that correctness beats the reflow.
 
-That is what makes three handoffs one mechanism rather than three — seeding a first render, a
+That makes three handoffs one mechanism rather than three — seeding a first render, a
 socket that dropped and reopened, a tab too slow to adopt — with `room.tail(n)` the only
 spelling any of them has.
 

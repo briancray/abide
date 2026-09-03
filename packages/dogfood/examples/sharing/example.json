@@ -1,0 +1,120 @@
+{
+    "title": "Three instances, one value",
+    "summary": "A page that owns a currency and three instances of one component that read it, with a table in between that has never heard of a currency. Change the select.",
+    "files": [
+        "src/ui/pages/invoices/page.abide",
+        "src/ui/components/Money.abide",
+        "src/ui/components/InvoiceTable.abide",
+        "src/shared/shared.ts"
+    ],
+    "route": "/invoices",
+    "states": [
+        {
+            "id": "usd",
+            "file": "usd.html",
+            "on": {
+                "change [data-currency]": "eur"
+            }
+        },
+        {
+            "id": "eur",
+            "file": "eur.html",
+            "on": {
+                "change [data-currency]": "gbp"
+            }
+        },
+        {
+            "id": "gbp",
+            "file": "gbp.html",
+            "on": {
+                "change [data-currency]": "usd"
+            }
+        }
+    ],
+    "bench": {
+        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete. The rows above it are where the difference is, and they scale with the number of instances where the line count does not.",
+        "rows": [
+            {
+                "metric": "Instances sharing one value",
+                "abide": "3",
+                "vanilla": "3",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Props threaded through `InvoiceTable`",
+                "abide": "0",
+                "vanilla": "0",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Subscriptions registered and torn down by hand",
+                "abide": "0",
+                "vanilla": "3",
+                "ratio": "0.00x"
+            },
+            {
+                "metric": "Scopes the value can outlive",
+                "abide": "0",
+                "vanilla": "1",
+                "ratio": "0.00x"
+            },
+            {
+                "metric": "DOM nodes moved per change",
+                "abide": "3",
+                "vanilla": "3",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Client bytes",
+                "abide": "3.6 kB",
+                "vanilla": "1.9 kB",
+                "ratio": "1.89x"
+            },
+            {
+                "metric": "Lines of code",
+                "abide": "45",
+                "vanilla": "52",
+                "ratio": "0.87x"
+            }
+        ]
+    },
+    "tests": {
+        "note": "`bun test examples/sharing`. The losing thunk is asserted by COUNTING its runs: both spellings render the same three rows, and the one that builds three values is wrong in a way the markup cannot show.",
+        "rows": [
+            {
+                "name": "three instances asking for one key get one value",
+                "result": "pass"
+            },
+            {
+                "name": "only the first thunk runs",
+                "result": "pass"
+            },
+            {
+                "name": "a write from the page wakes every instance",
+                "result": "pass"
+            },
+            {
+                "name": "an instance mounted later joins the value already there",
+                "result": "pass"
+            },
+            {
+                "name": "an undeclared key is inferred from its thunk",
+                "result": "pass"
+            },
+            {
+                "name": "a dynamic key is refused at build",
+                "result": "pass"
+            },
+            {
+                "name": "one scope's shared value is never served to another",
+                "result": "pass"
+            }
+        ]
+    },
+    "vanilla": [
+        "index.html",
+        "store.js",
+        "money.js",
+        "invoices.js"
+    ]
+}

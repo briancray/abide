@@ -84,7 +84,7 @@ The repair is what the shapes wanted anyway. A read memo and a write memo have d
 `JsonValue` — a nested object is fine. `DELETE` carries URL parameters like a `GET`, so its
 arguments are flat.
 
-Three body encodings are accepted, which is what lets a plain `<form>` reach the same address
+Three body encodings are accepted, which lets a plain `<form>` reach the same address
 a script does:
 
 | `content-type` | From |

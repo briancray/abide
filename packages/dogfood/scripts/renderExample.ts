@@ -3,7 +3,7 @@
 // reads one and renders what a page embeds with `{% example name %}`: the panelled component
 // for the site, and the same files as fences for the markdown bundle.
 //
-// SCAFFOLDING, with a seam that is meant to survive: `result`, `compiled`, `wire` and
+// SCAFFOLDING, with a seam that is meant to survive: `result`, `wire` and
 // `bench` are read from the example DIRECTORY rather than written into this file, so
 // when the compiler and the harness land they replace those artifacts and nothing here
 // changes. Today they are checked-in static content.
@@ -124,9 +124,10 @@ export type Manifest = {
         mirror?: { from: string; to: string; transform?: string }[]
     }[]
     about?: 'ui' | 'server'
+    // What the build emits, and the hand-written arm every bench ratio is against. Neither is
+    // a panel: both SHIP, in the download and in the line counts, and a reader who wants the
+    // emitted code wants it in a file rather than beside the source it came from.
     compiled?: string[]
-    // The hand-written arm every bench ratio is against. It SHIPS, in the download and in the
-    // line counts, and it is not a panel: nobody reads it, they read the ratio it produced.
     vanilla?: string[]
     // Test RESULTS, not test source: what a reader wants from this panel is whether
     // the example holds, and the spec itself is in the download.
@@ -396,7 +397,6 @@ export async function readExample(name: string, root: string): Promise<Example> 
     const manifest: Manifest = await Bun.file(new URL(`${name}/example.json`, EXAMPLES_DIR)).json()
     const sourcePaths = orderedFiles(manifest.files, manifest.about ?? 'ui')
     const files = await readGroup(name, 'files', sourcePaths)
-    const compiled = await readGroup(name, 'compiled', manifest.compiled ?? [])
     checkMachine(name, manifest.states)
     const states: (Manifest['states'][number] & { body: string })[] = []
     for (const state of manifest.states) {
@@ -411,8 +411,6 @@ export async function readExample(name: string, root: string): Promise<Example> 
     const render = renderResult(states, manifest.route, appCss)
     const panels: [string, string, string][] = [['files', 'Files', renderFileGroup(files, 'files')]]
     if (manifest.wire?.length) panels.push(['wire', 'Requests', renderWire(manifest.wire)])
-    if (compiled.length)
-        panels.push(['compiled', 'Compiled', renderFileGroup(compiled, 'compiled')])
     if (manifest.bench) panels.push(['bench', 'Bench', renderBench(manifest.bench)])
     if (manifest.tests) panels.push(['tests', 'Tests', renderTests(manifest.tests)])
 

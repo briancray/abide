@@ -6,27 +6,19 @@ covers:
   - `throttle`
   - `debounce`
   - `identity`
+examples:
+  - packages/dogfood/examples/debouncing
 ---
 
-A search box is the case where "reading is what loads it" stops being free. Bind the input to a
+A search box is the case where "reading loads it" stops being free. Bind the input to a
 state, derive the results from it, and you have declared one request per keystroke.
 
-```abide #ui/pages/search/page.abide
-<script>
-import { state, memo } from 'abide'
-import { search } from '#server/rpc/search'
-
-const query = state('')
-const results = memo(() => search({ q: query }), { debounce: 200 })
-</script>
-
-<input bind:value={query} placeholder="Search">
-{#if results.refreshing()}<span class="text-xs">Searching…</span>{/if}
-<ul>{#for row of results ?? []}<li>{row.title}</li>{/for}</ul>
-```
+{% example debouncing %}
 
 *1 option, 0 markup changed* — it goes on the memo that pays the cost, and the probes did not
 move either.
+
+{% snippet debouncing src/ui/pages/search/page.abide const results = memo( %}
 
 ## `throttle` fires first and rate-limits; `debounce` waits for quiet
 
@@ -41,21 +33,23 @@ explicit `invalidate`, a `refresh`, a `ttl` lapsing. There is no second rule for
 Set both and `debounce` wins.
 
 `throttle` is right where the value is being watched — a live count, a cursor position, anything
-where the first update should be immediate and the rate is the problem. `debounce` is right where
-the intermediate values are not answers — a half-typed query being the example the whole page is
-built on.
+where the first update should be immediate and the rate is the problem:
+
+{% snippet debouncing src/server/rpc/search.ts const openCount = memo( %}
+
+`debounce` is right where the intermediate values are not answers — a half-typed query being the
+example the whole page is built on.
 
 ## A capped memo keeps serving the held value
 
 Inside the window the held value keeps being served and `refreshing()` is true, which is the
 `refresh()` contract already:
 
-```abide abide
-{#if results.refreshing()}<span class="text-xs">Searching…</span>{/if}
-```
+{% snippet debouncing src/ui/pages/search/page.abide {#if results.refreshing()} %}
 
 So a list does not blank between keystrokes, and there is no fourth probe to learn. A **first**
-load still reports `pending()`, there being nothing held to serve.
+load still reports `pending()`, there being nothing held to serve — which is the state the example
+above passes through once, on its way to the first result.
 
 Read on: [Loading states](show-a-value-that-isnt-there-yet.md) ·
 [Reloading](decide-when-a-value-reloads.md)
@@ -70,33 +64,45 @@ Read on: [Caching](load-once-per-set-of-arguments.md)
 
 ## `identity` wakes readers only when the value moved
 
-The other half of "too fast" is a value that changes without changing. `identity` is what makes
+The other half of "too fast" is a value that changes without changing. `identity` makes
 it the same value — **readers wake when this moves, not when the reference does**:
 
-```ts #server/rpc/rows.ts
-const summary = memo(({ id }: { id: string }) => rollUp(id), {
-    identity: canonical,
-})
-```
+{% snippet debouncing src/server/rpc/search.ts const facets = memo( %}
 
-The default is `(value) => value`, which is the reference. `canonical` is exported for the common
-opt-in — an args object, a derived record, a URL — and is the same builder a memo key uses.
+**`structural` is the default** on a state and a memo, so an args object, a derived record or a
+list rebuilt from the same rows collapses without being asked to. What the comparison is spent
+against is a **wake** — and a wake is a re-render and a DOM mutation, which costs more than the
+walk that avoids it. So it is not priced against zero; it is priced against the work it cancels.
+
+It BAILS rather than guesses: a `Map`, a `Set`, a class instance, a cycle, and it answers "not
+equal", so an indecisive comparison wakes readers instead of collapsing a change. `canonical` is
+not this and is not an equality at all; it builds a memo KEY, which has to be stable across
+processes and across sides, so it sorts, drops `undefined` and allocates a string.
+
+Write `identity: (value) => value` to opt back out, and your own comparator where `structural`
+bails on a shape you need compared.
+
+`identity` takes either form: a **projection** compared with `!==`, or a **comparator** answering
+directly. The second exists because "same length, same elements" cannot be projected — a freshly
+built array is `!==` whatever is in it — so an app whose values `structural` bails on passes its
+own two-argument function.
 
 It is an option on every `Reactive`, not something a memo has. A state holding an object is the
 case you hit first: a form binding rewrites it per keystroke, a `refresh()` on `state(fetchUser())`
 returns a structurally identical user, and a write through a member path copies down the path —
 each of them a new reference for a value that did not move.
 
-```ts #ui/state/filters.ts
-const filters = state({ status: 'open', assignee: null }, {
-    identity: canonical,
-})
-```
+{% snippet debouncing src/shared/filters.ts export const filters = state( %}
 
-On a room it reads as **consecutive duplicates collapse** — a presence channel republishing an
-unchanged roster every five seconds wakes nobody, and `publish` hands back the standing `seq`. The
-default being the reference, a room collapses nothing until it asks for it: two separately built
-messages are never reference-equal, so a double-sent chat line is still two messages.
+**A room is the one producer that defaults to the reference**, and that is a fact about what a
+production means there rather than an exception to the rule: a publish is an EVENT and two
+identical events are two events, where a state's or a memo's production is a VALUE and two
+identical values are one. So a chat room left at the default still mints two `seq`s for a
+double-sent line.
+
+Ask for it and it reads as **consecutive duplicates collapse** — a presence channel spelling
+`identity: structural` and republishing an unchanged roster every five seconds wakes nobody, and
+`publish` hands back the standing `seq`.
 
 This is the failure that leaves the output right and the work wrong. A body that rebuilds its
 result every run defeats the identity check, so `oldValue !== value` is always true and every
@@ -106,10 +112,12 @@ where a rebuilt identity re-mounts the whole subtree and throws away the DOM.
 
 ## `identity` costs O(size) per production
 
-Canonicalising is O(size) per production — per `set`, per recompute, per publish — which is why it
-is not the default for objects. A five-thousand-row result would be serialised on every run to
-decide whether to wake anyone: a cost paid per write to buy a cheaper read, and worth it only where
-the reads outnumber the writes and the rebuild is real.
+Walking is O(size) per production — per `set`, per recompute, per publish — and it is the cost the
+default accepts. A four-key record is 48 ns, and a hundred rows rebuilt over the same row
+references is 373 ns because every shared element settles on the first check. Five thousand rows
+all freshly built and all equal is 0.31 ms, which is the pathological end and still under 2% of a
+frame. The walk that finds its difference at the last row is the one that pays without
+collecting, and that is the tax the default accepts.
 
 It compares the **stored** value against the previous one, which is why it never runs per chunk —
 a streaming producer has one stored value, materialised when it closes. It holds one token and not

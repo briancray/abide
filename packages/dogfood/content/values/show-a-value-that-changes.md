@@ -75,10 +75,12 @@ after it.
 
 A state given a load has a producer, so `user.refresh()` reloads it and `ttl` reaches it. A state
 you put a value into has neither, and the triggers are inert on it rather than destructive — they
-never drop what an app put there.
+never drop what an app put there. A `store` is the other way to give one a producer, and it is
+what makes those same triggers mean something on a state you only ever wrote into.
 
 Read on: [Loading states](show-a-value-that-isnt-there-yet.md) ·
-[Reloading](decide-when-a-value-reloads.md)
+[Reloading](decide-when-a-value-reloads.md) ·
+[Persistence](keep-a-value-outside-the-process.md)
 
 ## A `transform` normalises a value on the way in
 

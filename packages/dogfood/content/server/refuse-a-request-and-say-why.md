@@ -60,12 +60,12 @@ expected answer, and 500 is the one status certainly wrong for it: a generated c
 as a server fault, a model retries instead of re-planning, the CLI exits `7` instead of `8`,
 and whatever is watching the app alerts on it.
 
-Declaring in `#shared` is what lets a page and a handler use the same names. A refusal resolves
+Declaring in `#shared` lets a page and a handler use the same names. A refusal resolves
 on both sides, so a `transform` in `#ui` refuses a write exactly as a handler refuses a request.
 
 Read on: [Local state](../values/show-a-value-that-changes.md)
 
-## Returning is what refuses
+## Returning refuses
 
 One spelling for every refusal: a handler **returns** it.
 

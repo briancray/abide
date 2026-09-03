@@ -26,7 +26,7 @@ re-render to ask for.
 
 ## Where the file goes decides the address
 
-The directory is the path, and a `page.abide` is what makes that directory a page.
+The directory is the path, and a `page.abide` makes that directory a page.
 
 | File | Answers on |
 | --- | --- |

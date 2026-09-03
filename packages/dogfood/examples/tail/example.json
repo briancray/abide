@@ -1,0 +1,123 @@
+{
+    "title": "Two hundred retained, fifty replayed",
+    "summary": "A log console that replays what it missed and then runs live, with a ring nobody wrote and an undo stack over the filter's own past values.",
+    "files": [
+        "src/ui/pages/console/page.abide",
+        "src/shared/undo.ts",
+        "src/server/rpc/logs.ts"
+    ],
+    "route": "/console",
+    "states": [
+        {
+            "id": "replay",
+            "file": "replay.html",
+            "hold": 900,
+            "after": "live"
+        },
+        {
+            "id": "live",
+            "file": "live.html",
+            "on": {
+                "click [data-filter]": "filtered"
+            }
+        },
+        {
+            "id": "filtered",
+            "file": "filtered.html",
+            "on": {
+                "click [data-undo]": "live"
+            }
+        }
+    ],
+    "bench": {
+        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler. The hand-written arm is a ring too, which is the point: the rows below are what writing one costs, not what avoiding one saves.",
+        "rows": [
+            {
+                "metric": "Lines retained",
+                "abide": "200",
+                "vanilla": "200",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Entries copied per arriving line",
+                "abide": "0",
+                "vanilla": "0",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Ring functions written",
+                "abide": "0",
+                "vanilla": "2",
+                "ratio": "0.00x"
+            },
+            {
+                "metric": "DOM nodes moved per arriving line",
+                "abide": "1",
+                "vanilla": "1",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Client bytes",
+                "abide": "4.6 kB",
+                "vanilla": "2.5 kB",
+                "ratio": "1.84x"
+            },
+            {
+                "metric": "Lines of code",
+                "abide": "49",
+                "vanilla": "89",
+                "ratio": "0.55x"
+            }
+        ]
+    },
+    "tests": {
+        "note": "`bun test examples/tail`. The gap-and-duplicate case is asserted on the SEQUENCE a reader received, not on the rendered list: a replay that overlapped the live cursor by one paints a list that looks right until two lines happen to match.",
+        "rows": [
+            {
+                "name": "a reader replays `min(n, retained)` and goes live with no gap",
+                "result": "pass"
+            },
+            {
+                "name": "`tail(0)` replays nothing and goes live",
+                "result": "pass"
+            },
+            {
+                "name": "a bare `for await` is `s.tail()`",
+                "result": "pass"
+            },
+            {
+                "name": "raising `tail` from 50 to 5000 does not make a write dearer",
+                "result": "pass"
+            },
+            {
+                "name": "a value mutated in place retains one reference and replays nothing",
+                "result": "pass"
+            },
+            {
+                "name": "an entry past its `ttl` is dropped on the read that follows",
+                "result": "pass"
+            }
+        ]
+    },
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/logs/logs?stream=api",
+            "requestHeaders": {
+                "accept": "application/x-ndjson",
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/x-ndjson",
+                "transfer-encoding": "chunked",
+                "cache-control": "private, no-store"
+            },
+            "body": "{ \"text\": \"12:04:01 info  GET /invoices 200\" }\n{ \"text\": \"12:04:02 info  GET /invoices/42 200\" }\n{ \"text\": \"12:04:04 error POST /invoices 500\" }\n{ \"text\": \"12:04:05 info  GET /customers 200\" }"
+        }
+    ],
+    "vanilla": [
+        "index.html",
+        "console.js",
+        "server.ts"
+    ]
+}

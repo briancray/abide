@@ -16,7 +16,7 @@ colleague who wants a `curl` line.
 The handler carries the address, so the string is derived rather than typed:
 
 ```abide #ui/pages/settings/page.abide — excerpt
-<form action={payInvoice.url} method={payInvoice.method}>
+<form action={payInvoice.url()} method={payInvoice.method}>
     <input name="id" value={route.params.id}/>
     <button>Pay</button>
 </form>
@@ -37,13 +37,28 @@ A mount is chosen after the build — `APP_URL` of `https://abide.com/v2` serves
 endpoint and asset under `/v2` — so a build artifact cannot hold the absolute form. That is
 what makes the same bundle deployable at a sub-path without a rebuild.
 
+## `rpc.url` takes the args on a read
+
+An address without its arguments is not something a browser can fetch, so on a `GET` or a `DELETE`
+the call takes them — written in the same canonical wire form the request itself uses, rather than
+a query string you assemble and the server parses back differently:
+
+```abide #ui/pages/media/page.abide — excerpt
+<video src={playFile.url({ id: file.id })} controls></video>
+<img src={getPoster.url({ path, width: 250 })} alt="">
+```
+
+That is how a handler is reached from markup at all, and it is the only surface a handler serving
+bytes has. On a mutation it takes nothing and is called bare — `payInvoice.url()` above — the body
+being where those arguments go.
+
 Read on: [Sub-path mounting](../pages/serve-the-app-under-a-sub-path.md) ·
 [Config](../app/configure-the-app.md)
 
 ## `rpc.method` says which verb the address wants
 
 The method the handler was declared with, as a string. Reading it rather than writing `"post"`
-is what keeps a form correct when a handler is redeclared — and only `GET` and `POST` are
+keeps a form correct when a handler is redeclared — and only `GET` and `POST` are
 form-reachable, so a `PUT` moved to a form is a bug the value makes visible.
 
 Read on: [Mutations](change-something-on-the-server.md)
@@ -103,7 +118,7 @@ A provider that calls you wants an absolute URL, which is `rpc.url` read on the 
 
 ```ts #server/app.ts — excerpt
 onStart(async (start) => {
-    await payments.registerWebhook(paymentSettled.url)
+    await payments.registerWebhook(paymentSettled.url())
     await start()
 })
 ```

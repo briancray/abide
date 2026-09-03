@@ -46,6 +46,17 @@ producing.
 A call that exceeds it fails with `504`. That is an undeclared refusal — `name: 'HttpError'`,
 no data — since a timeout has nothing to narrow **to**.
 
+## `timeout` is the floor as well as the ceiling
+
+Serving the handler raises the request's own idle timeout to the same number. A handler that will
+not produce a byte for minutes — a cold transcode, a report that scans before it yields — has said
+so once, and does not also have to reach for the server to keep its connection from being reaped.
+
+It RAISES only, and the request's floor is the **max** over every handler that ran in it: a fast
+handler calling a slow one in process is held for the slow one's declared bound with nothing
+declared at the outer, so nothing has to work out who calls whom. Unset raises nothing and the
+platform default stands; `Infinity` is an app saying never reap this connection.
+
 Read on: [Failures](refuse-a-request-and-say-why.md) · [Streaming data](send-data-as-it-arrives.md)
 
 ## `ABIDE_RPC_TIMEOUT` and `ABIDE_MAX_REQUEST_BODY_SIZE` set the floor

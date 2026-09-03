@@ -79,7 +79,7 @@ function in `schema` refuses by throwing, a function in `transform` refuses by r
 
 **What "input" means is what the producer consumes**, which is one rule read three ways. A state
 and a channel consume a value, so `schema` checks that value. A memo consumes **args** — its body
-is what takes them — so `schema` on a memo is the argument shape, re-declared over `Args` in
+takes them — so `schema` on a memo is the argument shape, re-declared over `Args` in
 `MemoOptions`. An unkeyed memo, consuming nothing, cannot spell it at all: a compile error naming
 the overload, not an option that quietly does nothing.
 
@@ -123,8 +123,8 @@ is one that **skips itself** every other way the handler is reached — composed
 memo, imported by a second server module — so the shape would hold for your untrusted callers
 and not for your own code.
 
-`GET(fn)` is still sugar for `GET(memo(fn))`. Writing the memo out is what you do when you have
-a schema to declare, and nothing you do when you do not.
+`GET(fn)` is still sugar for `GET(memo(fn))`. Write the memo out when you have a schema to
+declare, and not otherwise.
 
 ## `Schema<T>` takes three forms
 
@@ -288,8 +288,8 @@ question about who is asking. So the `socket` declares who may connect and wheth
 publish at all, and nothing about what a frame contains.
 
 But a channel also has a **room key**, and that is where it parts company with a memo. A memo's
-args *are* its input — the body is what consumes them — so a memo spells that `schema`. A room's
-key merely picks which room while the message is what flows, so it keeps a separate `args`:
+args *are* its input — the body consumes them — so a memo spells that `schema`. A room's
+key merely picks which room while the message flows, so it keeps a separate `args`:
 
 ```ts #shared/rooms.ts — excerpt
 export const thread = channel<Post, { id: string }>({

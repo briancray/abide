@@ -19,7 +19,7 @@ where derived values go stale.
 *3 derivations, 0 dependency lists* — against each computation written once and its inputs
 written again beside it.
 
-You never register anything. `visible` read `showPaid`, so `showPaid` is what re-runs it.
+You never register anything. `visible` read `showPaid`, so `showPaid` re-runs it.
 
 ## A memo re-runs when what its body read changes
 
@@ -35,7 +35,7 @@ declared either. Tick the box above and this is the read that leaves the graph.
 ## A memo is a `Reactive`, not a wrapper
 
 An unkeyed `memo` **is** a `Reactive`. It is not a box you unwrap and it has no members of its
-own, which is what makes all of this read the same as a state:
+own, which makes all of this read the same as a state:
 
 {% snippet derived-values src/ui/pages/ledger/page.abide {#if rows.pending()} … <p>{total} %}
 
@@ -53,13 +53,13 @@ rule reaching the other producers, so the probes work out the same: `pending()` 
 run is in flight, `refreshing()` over a value still being served.
 
 A body that returns another `Reactive` is **adopted**: the outer subscribes to the inner, mirrors
-its productions into its own ring and forwards its probes and triggers. That is what makes the
+its productions into its own ring and forwards its probes and triggers. That makes the
 wrapper around an rpc call load-bearing rather than ceremony —
 
 {% snippet derived-values src/shared/ledger.ts export const rows %}
 
 — because a `<script>` setup body is untracked, so the call alone would register nothing and the
-value would never follow `year`. The outer memo is what makes the call reactive to its arguments.
+value would never follow `year`. The outer memo makes the call reactive to its arguments.
 Without adoption you would also be holding a `Reactive<Reactive<Invoice[]>>`, and `rows.length`
 would reach the wrapper rather than the rows.
 
@@ -112,9 +112,10 @@ The handler this page's ledger reads is the second row — one parameter, so a f
 
 {% snippet derived-values src/server/rpc/invoices.ts export const listInvoices %}
 
-A `Memo` is `(args) => Reactive` with `invalidate` and `refresh` on it, the factory being what has
-an args space to narrow over. So the probes live on the invoked result — `listInvoices({
-year }).pending()` — and there is no `listInvoices.pending()` to reach for.
+A `Memo` is `(args) => Reactive` with `invalidate` and `refresh` on it as well — the invoked
+result carries those like any `Reactive`, and the factory holds every key, and so it is the only
+thing with an args space to narrow. The probes are on the result alone: `listInvoices({
+year }).pending()`, and there is no `listInvoices.pending()` to reach for.
 
 Read on: [Caching](load-once-per-set-of-arguments.md) ·
 [Reloading](decide-when-a-value-reloads.md)

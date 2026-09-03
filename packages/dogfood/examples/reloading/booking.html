@@ -1,0 +1,12 @@
+<nav class="switch">
+<a href="/stock/east/A-70" data-warehouse="east" aria-current="page">East</a>
+<a href="/stock/west/A-70" data-warehouse="west">West</a>
+</nav>
+<h1>A-70</h1>
+<span class="hint">Reloading…</span>
+<p>On hand 128</p>
+<p class="hint">Counted 2026-08-28</p>
+<button disabled>Mark stale</button>
+<button disabled>Reload now</button>
+<button disabled>Book one out</button>
+<p class="tip"><code>bookOut</code>: <b>1</b> · requests to <code>getStock</code>: <b>2</b>, in flight. The write has landed and the page is reloading its own entry by pattern. <code>refresh</code> and not <code>invalidate</code>, which is why 128 is still there rather than the pending branch.</p>

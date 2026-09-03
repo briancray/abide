@@ -8,6 +8,7 @@
 | `Accepted` | `unknown` | What `set` and `state` accept, before `schema` and then `transform` run, and settled. Either takes a value or a load — `Accepted \| Promise<Accepted>` — and an unsettled one makes the `Reactive` loaded, at construction and at every write alike. |
 | `Stored` | `unknown` | What is held and what a read returns, after `transform`. Identical to `Accepted` without one; a `schema` never moves the two apart, returning what it stores. |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | Shapes the value untracked into what is stored, and may refuse it by returning a `Failed`. Both gates refuse, and which you reach for is what you refuse with: a `schema` refuses as `ValidationError` carrying `Issues<T>`, this refuses under a name the app declared — `notAnEmail({ value })` — which is the only way a refusal reaches `isError` by name with data of its own. IT RUNS ON `Stored`, ONCE PER MATERIALISATION OF ONE: per write on a state, per publish on a room, once at close on a stream, on the accumulated chunks and never per chunk. Never on the promise. A refusal rejects the write — see "A rejected write is not a failed production". |
+| `Store` | `{ get: () => Accepted \| Promise<Accepted>; set: (value: Accepted, retention: { ttl: number }) => void \| Promise<void> }` | Where a value lives when this process does not. TWO MEMBERS AND NO WAY TO SPELL EITHER ALONE: a persister with no restore is `watch` under another name, and a restore with no persister is the `initial` a `state` already takes — so the pair is one option, and what it buys over both is that the two cannot disagree about where the value is. WHAT IT DOES NOT CARRY IS A ROOM'S HISTORY, and that falls out of `Accepted` rather than being a bound of its own: a channel's is one `Message`, so a store round-trips the standing message and a transcript past the ring stays app data behind an rpc rather than something a store backfills. IT IS OVER `Accepted` AND NOT OVER `Stored`, which is what makes a RESTORE A WRITE FROM ANOTHER SOURCE: what `get` answers with passes `schema` and then `transform` exactly as a `set` does, so the two paths are one and a value stored before a deploy that tightened the schema is CHECKED on the way back in rather than trusted. `set` receives the `Reactive`'s own `ttl` in ms rather than being told it a second time in the store's units — the same number twice is how `ttl: 60_000` and `max-age=60` come apart — and it is `Infinity` unless one was declared, which every store has to answer for. A RECORD and not a bare number because this is the one callback in the design that is a sink into a FOREIGN system, where `Transformer` and `Effect` are called at points abide controls: an adapter is where a namespace or a consistency level would have to arrive, and `Store` is implemented in app code, so a positional signature is the one shape abide could never widen. `redisStore = (key) => ({ get: () => parse(redis.get(key)), set: (value, { ttl }) => redis.set(key, stringify(value), ttl) })` is the whole shape of one, and abide ships none — a store is where the app's own dependency goes. |
 | `state` | `<Accepted, Stored = Accepted, Failures = never>(initial: Accepted \| Promise<Accepted>, options?: ReactiveOptions<Accepted, Stored, Failures>) => Reactive<Stored, Failures>` | `Reactive` factory. `Accepted` is the settled type: a state holding something unsettled serves the value, never the promise, so `state(fetchUser())` is a `Reactive<User>` and `user.set(edited)` writes a `User`. |
 | `Shared` | `interface Shared {}` | The app's declaration-merged registry of shared keys, and an opt-in tightening: a key it declares is checked against it, one it does not is inferred from the thunk. What it buys is that two modules cannot disagree about `Stored` under one name. |
 | `state.share` | `<Key extends string, Value>(key: Key, create: () => Reactive<Value>) => Key extends keyof Shared ? Reactive<Shared[Key]> : Reactive<Value>` | Get-or-create a reactive value in the current scope by `key`. One call rather than a share/read pair, so there is no ordering hazard and no miss to define. A non-literal key is a build error — read off the AST the way a parameter's `= 20` is — which bounds the key set to what the source spells. A per-caller `Reactive` is what a `channel`'s args are for. |
@@ -18,16 +19,19 @@
 `state` takes outright and `MemoOptions` and `ChannelOptions` extend. Every member is defined over
 productions rather than over an owned value: `tail` counts what the producer yielded, `ttl` is the life
 of one, `identity` decides whether one happened, and `schema` and `transform` are the two gates each
-one passes. A keyed `memo` is the one extender whose input is not the write, so it re-declares `schema`
-over its `Args`.
+one passes. `store` is the one member that is not, being defined over `Accepted` — which is what makes a
+restore a write and decides, per producer, how much of the ring one carries. A keyed `memo` is the one extender whose input is not the
+write, so it re-declares `schema` over its `Args`, and `store` for the same reason: a key is what a
+store is keyed on.
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `schema` | `Schema<Accepted>` | What a valid input is — the gate on the way in, where `transform` is the shaping on the way to storage. It runs first, on the settled value, and what it returns is what `transform` receives. It refuses by throwing, where a `Transformer` refuses by returning; the option name is the discriminant, so there is nothing to disambiguate. A refusal is `Failed<'ValidationError', Issues<Accepted>>`, contributed to `Failures` without being declared, and a throw is caught and converted rather than escaped — a refused write fills `error()` rather than reaching a `{:catch}`, which is what a `bind:` field reads through. It runs where the `Reactive` lives: declared in `#ui` it checks in a browser, in `#server` on a server, in `#shared` wherever it was used. |
 | `transform` | `Transformer<Accepted, Stored, Failures>` | What is stored: normalise, reshape, or refuse by returning a `Failed`. `{ transform: (all) => new Set(all.map((r) => r.id)) }` is the shape of it, with no validation in it — which is why it is not the input gate. Without one, `Stored` is `Accepted`. |
-| `identity` | `(value: Stored) => unknown` | What makes it the same value. Readers wake when this moves, not when the reference does, and it compares the new `Stored` against the previous one. Where a production is the `Stored`, one whose identity matches DID NOT HAPPEN — not retained, nobody woken — so the ring and the wake-up cannot disagree about what arrived. Default `(value) => value`, the reference, so nothing collapses unless an app asks: two separately built messages are never reference-equal, and a double-sent chat line is still two `seq`s. `canonical` is exported for the common opt-in and is the builder a memo key uses. It is not the default for objects: canonicalising is O(size) per `set`, per recompute, per publish — a cost per write buying a cheaper read. On a streaming producer it gates the value face alone; the chunks were in the ring before there was a `Stored` to compare. ONE TOKEN IS HELD, NEVER A SET — uniqueness is against the previous `Stored`, never against the tail, so it is O(1) memory at any `tail`. |
+| `store` | `Store<Accepted>` | Where the value lives when the process does not. `get` IS A PRODUCER, which is the whole of what this adds over a `watch` that writes: a `state` with one gains the producer it never had, so `refresh()` re-reads it, `invalidate()` stops being inert, and `ttl` may drop a value it can get back. An unsettled `get` is a load like any other — `pending()` while it is in flight, a sink opened, the value served when it lands — so nothing about the probes is new; a SYNCHRONOUS one is not a load at all, so a cookie or a `localStorage` store has the value at construction and never paints the fallback. `get` ANSWERS BEFORE THE INITIAL VALUE, which is the only order `state('light', { store })` can be read in: the store is where the value is and the argument is what a MISS falls back to. `set` runs PER PRODUCTION, so one `identity` collapsed is not written, and per the unit rule that is once at close on a stream, with the accumulation and never a partial. Where there is also a BODY it is a cache in front of one: `get` on a cold entry, the body on a miss, `set` on every production — the persistent form of the cache `ttl` already bounds. It runs where the `Reactive` is CONSTRUCTED, which in a `.abide` file is both sides — so a store reaching something only one side has is guarded there, and what that costs is a first paint from the other side's answer and a correction at hydration. A store BOTH sides address is the one that renders right the first time, and `cookies()` being isomorphic is what makes one spellable in `#shared`. |
+| `identity` | `((value: Stored) => unknown) \| ((next: Stored, previous: Stored) => boolean)` | What makes it the same value. Readers wake when this moves, not when the reference does, and it compares the new `Stored` against the previous one. Where a production is the `Stored`, one whose identity matches DID NOT HAPPEN — not retained, nobody woken — so the ring and the wake-up cannot disagree about what arrived. TWO FORMS, discriminated by arity: a PROJECTION compared with `!==`, or a COMPARATOR answering directly. The second exists because an allocation-free element-wise compare is unspellable as the first — to say "same length, same elements" you must build something, a fresh array being `!==` whatever is in it. Default `structural` on a `state` and a `memo`, and `(value) => value` — the reference — ON A ROOM, which is the one producer whose production is an EVENT: two identical events are two events, where a state's or a memo's production is a VALUE and two identical values are one. See `channel`. `structural` is exported for the common opt-in: `Object.is`, then `Date` by time, arrays by length and then elementwise, plain objects by own enumerable keys, recursing only where references differ — and BAILING on anything else, a `Map`, a `Set`, a `RegExp`, a class instance, a cycle. A BAIL IS "NOT EQUAL", never a guess, so it wakes rather than collapses: a spurious wake-up costs work where a missed one is a correctness bug, and the safe direction is the one an indecisive answer takes. That is what makes it fifty lines rather than two hundred — the contentious three quarters of a deep compare is exactly what it declines — and an app wanting those cases passes its own comparator. `canonical` is NOT this and is not an equality: it builds a memo KEY, which must be stable across processes and across sides, so it sorts, drops `undefined`, writes `Date` ISO, allocates a string and cannot short-circuit. Reach for it where wire-form equality is genuinely the question. WHY IT IS THE DEFAULT is that the thing it is spent against is a WAKE, and a wake is a re-render and a DOM mutation — which costs more than the walk that avoids it, per the hot-path rule that a DOM mutation costs more than the JS deciding it. So the comparison is not priced against zero, it is priced against the work it cancels, and the walk-for-nothing case is the one that pays the tax. Measured on JSC with no DOM: 48 ns for a four-key record, 373 ns for a hundred rows rebuilt over the same row references, and 0.31 ms for the pathological five thousand rows all freshly built and all equal — under 2% of a frame at the far end. A BROWSER ARM IS STILL OWED, the engine being part of the substrate. On a streaming producer it gates the value face alone; the chunks were in the ring before there was a `Stored` to compare. ONE TOKEN IS HELD, NEVER A SET — uniqueness is against the previous `Stored`, never against the tail, so it is O(1) memory at any `tail`. |
 | `tail` | `number` | How many past productions are retained for a later reader to replay. Default 1 — latest only. A memory ceiling and nothing else, and the default a bare `s.tail()` replays. THE UNIT IS WHAT THE PRODUCER YIELDED: a `set` yields a value, a `publish` a message, a stream body a chunk. So `room.tail(100)` is a hundred messages and a `tail` on a `Reactive<Row[]>` is a hundred arrays — pushing into an array is a mutation of one value, not a production. Where a tail over items is wanted, the item is what gets produced. |
-| `ttl` | `number` | The life of a retained production. Default: infinity. At the default `tail` a `Reactive` retains one — the current value — so past its `ttl` a producer recomputes on the next read; a room at `tail: 100` retains a hundred, each on its own clock. On a value with no producer it is inert rather than destructive: it never drops what an app put there. It still reaches a state that was given a load. |
+| `ttl` | `number` | The life of a retained production. Default: infinity. At the default `tail` a `Reactive` retains one — the current value — so past its `ttl` a producer recomputes on the next read; a room at `tail: 100` retains a hundred, each on its own clock. On a value with no producer it is inert rather than destructive: it never drops what an app put there. It still reaches a state that was given a load. AN EXPIRY LANDS WHERE AN `invalidate` LANDS — nothing loaded, nothing woken, and the read that follows fetched with nothing to serve — so at the default `tail` the two are one event. What separates them is the UNIT: a trigger is over a value or a `Selection` of them and never over part of one, where this is per production, so at `tail: 100` it drops part of a ring and keeps the rest, and it reaches a room's retained messages where a sweep passes over them. It is also DECLARED rather than called, so no pattern narrows it and no tag carries it across memos. |
 
 ### Expectations
 
@@ -67,6 +71,39 @@ materialised on the read that follows. Raising `tail` must not make a write dear
 entry, no version bump, since a timer that moved the version would put retention's cost back on the
 write. A live cursor delivers arrivals and never sees an expiry; `tail` bounds what a later subscriber
 replays, and a later subscriber is the only reader an expiry is visible to.
+* A RESTORE IS A WRITE FROM ANOTHER SOURCE, which is what `store` being over `Accepted` buys: what
+`get` answered with passes `schema` and then `transform` the way a `set` does, and it mints a
+production, so nothing downstream can tell a restored value from a written one. A STREAMING PRODUCER
+IS THE ONE ARM WHERE THAT IS MORE THAN ONE PRODUCTION: its `Accepted` is `Chunk[]`, which is
+elementwise its own ring, so a restore seeds the ring with the ELEMENTS and `transform` runs on them at
+close exactly as it would have. That is founded on a structural fact rather than a special case — for a
+state the ring is a history of past VALUES and `Stored` is one of them, where for a stream the
+accumulation IS the productions folded, so decomposing it is exact. Without it a restored entry holds a
+value and an empty ring, and `{#for await}` over it replays nothing while `{await}` reads correctly:
+one expression, two behaviours, both plausible.
+* A RESTORED STREAM FINISHED. `done()` and `success()` are true and `streaming()` is false — the load
+that finished still finished — and an accumulation longer than `tail` keeps the last `tail`, as any
+ring does. What it costs is that the CHUNKS are what is persisted rather than the transformed value,
+so a `transform` that shrinks a lot pays for the big shape; that is the price of the cursor and the
+value agreeing, and an app that only ever reads the value stores it under its own key instead.
+* A `store`'s `set` COALESCES LATEST-WINS rather than queueing: one write in flight, one pending, and a
+third replaces the pending one. A store handed an intermediate the app has already superseded is doing
+work nobody can observe, and a queue is how a slow store grows without bound behind a fast writer. IT
+NEVER BLOCKS A READER — the value is already held, and `set` is only how it leaves.
+* A `set` THAT FAILED DOES NOT TEAR THE STORE OFF, unlike a `watch` effect that throws. A persister
+that silently stopped is worse than none, so the failure reaches `onError` and warns on
+`abide:reactive` naming the value, and the next production is written like any other.
+* A `store` ON A `global` MEMO IS A CACHE TWO PROCESSES SHARE, and it is the app's own dependency
+rather than a mechanism abide supplies. WHAT CROSSES IS A SETTLED VALUE AND NEVER A PRODUCTION: an
+answer one instance finished is served to one that never computed it, where an in-flight stream's
+chunks do not reach it at all, `set` running once at close and never per chunk. So it removes the duplicate WORK and
+not the duplicate connection, and the rest of "it is also process-local" stands unchanged.
+* A ROOM'S STORE IS ITS LATEST MESSAGE, that being a room's `Stored`, and that is almost never what a
+transcript wanted. History past the ring is app data behind an rpc, and stitching that read to a live
+`tail()` is safe for a reason already stated — the cursor replays the ring before it goes live, so the
+two overlap and the join dedupes. What is unsafe is a ring the history query cannot reach across, and
+that failure is silent in the output; `abide:reactive` already reports it, a cursor having replayed
+fewer productions than the room had published.
 * A ROOM IS NOT A STREAM, and the difference is what the producer declared rather than anything a
 runtime sniffs. A `channel` declares `Message`, so every publish is a whole one. A `memo` or rpc body
 that is an async generator declares chunks of one `Value`, so no chunk is a whole anything.
@@ -103,7 +140,8 @@ live readers reading a value nobody can refresh.
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `s` | `() => Stored` | Read current value. |
-| `s.set` | `(value: Accepted \| Promise<Accepted>) => void \| Failures` | Set current value, and the only `set` in the design — `m.set(v)` on an unkeyed memo, `m(args).set(v)` on a keyed one and `room.set(message)` are all this member reached three ways. Takes what the transform takes, settled or in flight, and hands back only its refusal; `s()` is the read. Where no transform refuses, `Failures` is `never` and this is `void`. On a memo the returned union is one arm too wide, a write running the transform and never the body — the trade taken rather than a fourth parameter on the most-used type in the design. |
+| `s.set` | `(value: Accepted \| Promise<Accepted>) => void \| Failures` | Set current value, and the only `set` in the design — `m.set(v)` on an unkeyed memo, `m(args).set(v)` on a keyed one and `room.set(message)` are all this member reached three ways. Takes what the transform takes, settled or in flight, and hands back only its refusal; `s()` is the read. Where no transform refuses, `Failures` is `never` and this is `void`. On a memo the returned union is one arm too wide, a write running the transform and never the body — the trade taken rather than a fourth parameter on the most-used type in the design. IT PUSHES A PRODUCTION ON A STATE OR A MEMO AND REPLACES THE HEAD ON A ROOM, which is the event/value distinction rather than a second rule: a state's `tail` is for replaying past VALUES, an undo stack being the shape, so a write has to enter the ring — where a room's productions are the EVENTS `publish` mints, and a `set` is a correction to the standing one rather than another event, so it mints no `seq`. `s.patch` is that same replace reached by mutating instead of writing, which is what makes it available to the three that push. |
+| `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutate in place and mint a production for it, for the collection that is read whole and written per row: a socket frame folded into a cached list is one `Map.set` where `set` is a copy of everything else. It REPLACES the head production rather than appending one — `set` pushes on a state or a memo, this replaces, the way a history entry is pushed or replaced, and it is what a room's `set` already does — which is what keeps `tail` coherent: n mutations of one object genuinely are one entry's worth of information, so a value only ever patched retains one however deep its `tail`, and no two entries in the ring are ever the same object. The callback returns nothing and a replacement is `set`; two behaviours decided by whether a callback returned `undefined` is the ambiguity a schema's `boolean` form is refused for. THE BATCH IS THE UNIT — drain what has arrived and patch once, or n frames are n wake-ups where one was wanted — and what it gives up is a cursor: readers of the cursor face receive the same object identity every time, so this is for a value read whole and never for one streamed.
 | `s.peek` | `() => Stored` | Read without joining the flow. Otherwise identical to `s()` — it starts work and throws what a read throws. "Held, but do not load" is `s.success() ? s.peek() : fallback`, a probe never starting work. |
 | `Tail<Produced>` | `Iterable<Produced> & AsyncIterable<Produced>` | What `s.tail` hands back: the snapshot pulled synchronously, the live cursor pulled asynchronously, nothing allocated until one of the two is. |
 | `s.tail` | `(n?: number) => Tail<Produced>` | Always called. A cursor over what was produced, per `tail`'s unit rule: `[...s.tail()]` is the snapshot, `for await (… of s.tail())` replays that snapshot and then goes live from where it ended, so a reader sees no gap and no duplicate. `n` IS REPLAY DEPTH AND NOTHING ELSE — `min(n, retained)`, defaulting to `retained` — so it says how far back a reader starts and nothing about what a block accumulates. `tail(0)` replays nothing and goes live. NOT an array: patching `Symbol.asyncIterator` onto one is a shape mutation per call. |
@@ -137,8 +175,8 @@ see "Selections".
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `s.invalidate` | `() => void` | Marks it stale: the next read is fetched fresh rather than served from what is held. Inert on a value with no producer. It does not itself hold rendering — whether a template waits is the template's own choice of form. |
-| `s.refresh` | `() => void` | Stale while revalidate: what is held keeps being served, and `s.refreshing()` is true, until the new value lands. Inert on a value with no producer. |
+| `s.invalidate` | `() => void` | Drops the CACHE BEHIND the value and not the value: what is on screen stays on screen, nothing is loaded, and the next READ — a render, or a read by hand — is fetched fresh. So it never moves a node and never sends a request, subscribed or not. Inert on a value with no producer. It does not itself hold rendering — whether a template waits is the template's own choice of form. WHAT A READER SEES IS DECIDED ON THE NEXT LOAD: an invalidated entry has nothing left to serve, so that load renders the PENDING branch — a display, a read by hand and a `refresh()` alike. So the two are dangerous in that order and in no other: `invalidate(); refresh()` over a scope is how a page blanks itself, where either alone is fine. |
+| `s.refresh` | `() => void` | Stale while revalidate: what is held keeps being served, and `s.refreshing()` is true, until the new value lands — so this never renders a pending branch unless an `invalidate()` took the held value away first. WHERE NOTHING SUBSCRIBES TO IT there is no reader to serve and no spinner to show, so it degenerates to `s.invalidate()` — which is what makes the eager form bounded by WHAT IS SUBSCRIBED rather than by the scope. A subscriber is anything reading it into the output: the template showing it, or a `memo` that is itself subscribed — so a derived value nothing renders directly still counts, and "on screen" is the common case rather than the rule. Inert on a value with no producer. |
 
 ### Effects
 
@@ -178,6 +216,7 @@ args space. An unkeyed memo reaches `Reactive`'s own two, which take none — se
 * What mirroring costs is one slot per retained production and one push plus a version bump per production — a pointer write, not a copy of the payload, the outer's ring holding the same objects the inner's does. `transform` is the one arm that allocates per production and that allocation is the transform's, not adoption's. The ratio is owed per production against reading the inner directly, and asserted by counting WAKE-ups rather than ms: the failure that would falsify it is an outer keeping subscriber bookkeeping where a pointer write was claimed, which leaves every value right.
 * Extra members are forwarded by delegation, which is what keeps a room a room: `memo(() => chat({ id }))` is a `Room`, and its `publish` reaches whatever is currently adopted. Mirroring carries productions and delegation carries members, and `publish` is the only member there is to carry.
 * On re-adoption the outer clears where the newly adopted `Reactive` has nothing to serve, or mirroring goes on serving the old value across a swap — stale-while-revalidate by accident.
+* ADOPTION INHERITS THE ADOPTED `Reactive`'S IDENTITY where the outer declared none, so a production the inner minted is a production the outer mirrors. Without it `memo(() => chat(args))` would collapse a room's messages on the way through under a default chosen for values, which is the same "what keeps a room a room" delegation carries members for. An outer that declares its own decides for itself.
 * The unwrap is in the type, not only in the prose — three names, each one thing:
 
 ```ts
@@ -278,11 +317,12 @@ deriving `cache-control` from a global memo's `ttl`: not a promise the app made 
 but a shape the build refused to compile.
 * Coalescing is within a scope: two calls inside one request share one load; two concurrent requests are two scopes and load twice. `global: true` is therefore the only thing that makes two callers one load, which is what it is for where the load is expensive — an inference, a warehouse scan.
 * A `global` Memo over a stream fans one producer out, and the one thing it needs is `tail: Infinity` — retention is asked for, the default being 1 like every other `Reactive` rather than a hidden branch on whether the body produced a stream. With it the entry holds the whole transcript and a reader arriving mid-stream is a bare `tail()` — replay what landed, then live from where the replay ended, no gap and no duplicate. That is the cursor's existing contract, so N readers at N positions is one producer and one `tail`. Without it a late reader replays one chunk and goes live — a truncated answer rather than an error, which is the cost named under `MemoOptions`. A reader leaving is `signal`'s existing rule: it detaches that reader and the producer runs on for the others, which is what stops one closed tab cancelling everyone's inference.
+* THREE HOMES FOR SERVER STATE, and picking wrong is silent. `bag()` is the request's. A `global` memo is anything KEYED and rebuildable, where the scope is spelled out loud and `Args` is where anything caller-specific goes — a derived cache reads as module state and is one of these. A module-level binding in a `#server` module is the process's own storage and is the right place for the shapes that are neither: a coalescer, a counter, a queue, which have nothing to key on and no readers to wake. What makes one safe is the rule `global: true` already states, that nothing caller-specific goes in it, and it is the one of the three abide cannot check.
 
 ### `MemoOptions`
 
 `MemoOptions<Accepted, Stored, Failures, Args = undefined> extends ReactiveOptions<Accepted, Stored, Failures, Args>`, so `schema`,
-`transform`, `identity`, `tail` and `ttl` are
+`transform`, `identity`, `tail`, `ttl` and `store` are
 the `Reactive`'s own and mean there what they
 mean everywhere — `ttl` being the life of a retained production wherever it is written, and a memo
 always having a producer to recompute with when one lapses. `tail` defaults to 1 like every other `Reactive`: a `global` memo fanning one stream
@@ -311,6 +351,7 @@ check a wire caller gets.
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `schema` | `Schema<Args>` | `ReactiveOptions`'S own, narrowed to `Args`: a memo's input is its args, the body being what consumes them, so `schema` here checks the args rather than a written value. Unspellable on the unkeyed overload, where `Args` is `undefined` — a memo with no parameter has no input to check, and that is a compile error naming the overload rather than an option that quietly does nothing. A write through `m.set(v)` is gated by `transform`, which is where a memo's value end already was. It refuses and does not normalise the key — the entry is filed before this runs, so a normalisation here changes what the BODY sees and never which entry it is. See "Keys". Derived from the parameter's annotation and its defaults when not given, by the rules in "Schemas". |
+| `store` | `Store<Accepted> \| ((args: Args) => Store<Accepted>)` | `ReactiveOptions`'S own, widened by the function form for the same reason `schema` is narrowed to `Args`: a keyed memo builds one `Reactive` per args key, so a store keyed on anything has to be derivable FROM that key rather than closed over where the memo was declared. The form is `tags`'s, which had the identical problem first. |
 | `global` | `boolean` | Opts out of the default scope into one `memo` shared by every caller in the process. |
 | `tags` | `string[] \| ((args: Args) => string[])` | What a `Selection` matches on, which is the only thing that reaches across memos — `invalidate({ tags: ['invoice'] })` marks every entry carrying one, wherever it was declared. The function form receives the memo's `args`, so a tag can name the row rather than the query. |
 | `throttle` | `number` | Revalidation of a `memo` fires immediately, then at most once per window — However triggered, an unkeyed memo's dependency-driven recompute as well as an explicit `invalidate` / `refresh`. Inside the window the held value is served and `refreshing()` is true, which is the `refresh()` contract already and no new probe behaviour. |
@@ -329,15 +370,16 @@ check a wire caller gets.
 ### `ChannelOptions`
 
 `ChannelOptions<Message, Failures, Args> extends ReactiveOptions<Message, Message, Failures>`, so `schema`,
-`transform`, `identity`, `tail` and `ttl` are the `Reactive`'s own here too and mean what they mean
+`transform`, `identity`, `tail`, `ttl` and `store` are the `Reactive`'s own here too and mean what they mean
 everywhere. `Accepted` and `Stored` are both `Message`, a publish handing over the value that lands and a room having
 no second shape to normalise into. `identity` therefore reads on a room as consecutive duplicates
 collapse, by the same one-production rule it follows everywhere: a publish it deems unchanged is not a
 production, so it neither enters the tail nor wakes anyone, and the ring and the cursor cannot disagree
 about what arrived. THAT IS DEDUPE AGAINST THE PREVIOUS MESSAGE AND NOT AGAINST THE TAIL — a scan of `tail` entries per
-publish would make raising retention dearer per write. The default being the reference, a room
-collapses nothing until it asks: a presence room spelling `identity: canonical` stops republishing an
-unchanged roster, and a chat room left at the default still mints two `seq`s for a double-sent line.
+publish would make raising retention dearer per write. A ROOM IS THE ONE PRODUCER THAT DEFAULTS TO THE
+REFERENCE, so it collapses nothing until it asks: a presence room spelling `identity: structural` stops
+republishing an unchanged roster, and a chat room left at the default still mints two `seq`s for a
+double-sent line. THAT IS WHAT A PRODUCTION MEANS HERE AND NOT A PROPERTY OF THE DEFAULT: a publish is an EVENT, and two identical events are two events, where a state's or a memo's production is a VALUE and two identical values are one. So a room keeps reference-equality where a state and a memo default to `structural`, and it is the same rule reaching a different unit rather than an exception to it.
 
 `Accepted` being `Message` makes `schema` A message's shape, which is why the `socket` has none: what a
 valid message is is not a question about who is asking, and a schema at the transport would have
@@ -353,6 +395,7 @@ only the reading a room sharpens.
 | `args` | `Schema<Args>` | WHAT A valid room key is, and the one place a selector is not the input — a memo's args ARE what its body consumes, so a memo spells that `schema`, where a room's key merely picks which room and the message is what flows. Two positions, so two options, and this is the one producer with both. A room's `Args` arrives off the wire as much as a memo's does: URL parameters on a `GET` over the channel, and the room named in a socket's subscribe frame. It refuses only: a room is filed under the key as sent, so a normalisation here will not merge two spellings of one room, and two subscribers who disagree about case are in two rooms with nothing warning either. See "Keys". Derived from `Args` when not given. |
 | `tail` | `number` | The `Reactive`'s own, whose unit rule reads here as messages — default 1, latest only, and 0 is passthrough and drop. WHAT A room adds is that it is how far back a reconnect can resume: a cursor older than the tail is answered with the whole tail, never with a gap. |
 | `ttl` | `number` | The `Reactive`'s own, whose retained production reads here as a message in the tail. Default: infinity — a room drops nothing by age until it says so. |
+| `store` | `Store<Message> \| ((args: Args) => Store<Message>)` | The `Reactive`'s own, in the function form a keyed producer needs, and the one option a room SHARPENS INTO SOMETHING SMALLER: a room's `Stored` is its latest message, so this persists and restores that one message and never the tail. A room whose transcript must outlive the process keeps it behind an rpc — see "Editing what was produced" — and a store here is for the standing value a room happens to be, a roster or a status, where restoring the latest is the whole of what was wanted. |
 | `transform` | `Transformer<Message, Message, Failures>` | The `Reactive`'s own, and rarely wanted here — a room having no second shape to normalise into, `schema` is usually the whole of what a message declares. WHAT A room adds, to it and to `schema` alike, is that both run on every publish, the server's own included: normalising is not a question about who is asking. A refusal fills `Failures` for the publisher, who narrows it with `isError`; a subscriber's failures are abide's own and reach `{#for await}`'s `{:catch}` instead, which is why `publish` returns `number \| Failed<…>` on both sides. |
 
 ### Expectations
@@ -460,11 +503,16 @@ about that one value — `s.refresh()` on a `state(fetchUser())` reloads it, `s.
 with no producer is inert — which is why the triggers are `Reactive`'s (see "Triggers" under `state`)
 rather than a memo's. What is bounded is the sweep: a bare `invalidate()` matches only entries WITH a
 producer, because a `state(0)` caught by one is silent data loss and a room has nothing to re-run.
-* `invalidate` is lazy and `refresh` is eager, and at this width that stops being a nuance: an
-`invalidate()` over a scope holding two hundred entries marks two hundred and loads only what
-something reads, where `refresh()` loads all two hundred. So `invalidate()` is the reconnect
-default — `watch(() => { if (online) invalidate() })` — and `refresh()` is for warming data before
-anyone asks.
+* `invalidate` is lazy and `refresh` is eager, and at this width the eager one is BOUNDED BY WHAT
+IS SUBSCRIBED rather than by the scope: an `invalidate()` over two hundred entries drops two
+hundred caches and loads none of them, and a `refresh()` over the same set reloads only the ones
+something subscribes to, degenerating to a mark for the rest. So `refresh()` is the reconnect
+default — `watch(() => { if (online) refresh() })` — because it is the one that catches up what a
+reader is actually holding, and everywhere else it costs what the mark costs. A bare `invalidate()` at this width
+is for the case where nothing on screen may move: it reaches the same entries and leaves every
+value standing, so the catch-up happens on the next read. What it is NOT is a cheaper
+`refresh()` to reach for first — see `s.invalidate`, where the two in that order blank every
+reader.
 * A selection is scope-bounded, as a memo is: this scope's entries plus `global` ones (see "Scope"),
 and a tag is scoped the same way — request-local on a server, process-local in a browser, where there is
 one caller. So one request can never invalidate another's, and the one signal a selection holds lives in
@@ -571,7 +619,7 @@ ever holds.
 | `rpc.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | The rpc's `isError`, narrowed by what the handler and its rungs declared — a rung's refusal is the one a caller is likeliest to meet, so leaving it out of the union would leave the commonest failure unnameable. Matching the name gives back `.data` with the schema's type on it, `.status` and `.name`. |
 | `rpc.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The same call handed back as the raw response instead of a decoded value. |
 | `rpc.method` | `string` | HTTP method |
-| `rpc.url` | `string` | HTTP url, derived not baked: the generated wrapper carries the mount-relative address, and `url` resolves it against `<meta name="abide-mount">` in a browser and `config().APP_URL` on a server. A mount is chosen after the build, so a build artifact cannot hold the absolute form. |
+| `rpc.url` | `(args?: Args) => string` | HTTP url, derived not baked: the generated wrapper carries the mount-relative address, and `url` resolves it against `<meta name="abide-mount">` in a browser and `config().APP_URL` on a server. A mount is chosen after the build, so a build artifact cannot hold the absolute form. IT TAKES THE ARGS, because an address without them is not a url anything can fetch: `<video src={playFile.url({ id })}>` and `<img src={getImage.url({ path, width })}>` are how a handler is reached from markup at all, and a caller left to append its own query string is re-implementing the coercion table the server parses it back with. They are written in the same canonical wire form the memo key and the request already use, so one spelling produces one address. On a `GET` / `DELETE` it takes the args, the query string being their wire form already; on a mutation it takes none and is called bare, the body being where those args go — so `<form action={rpc.url()} method="post">` is the same member with nothing to put in it rather than a second spelling. |
 | `rpc.description` | `string \| undefined` | Human description |
 
 ### `RpcOptions`
@@ -580,7 +628,7 @@ ever holds.
 | --- | --- | --- |
 | `description` | `string` | The human description carried onto every generated surface. |
 | `middleware` | `Middleware<{ request: Request; args: () => Args }, Value \| Failures>[]` | Middleware run per call — on a request, inside the app's own and after routing, and on an in-process call too, see "A RUNG RUNS ON EVERY CALL". IT IS VALUE-SHAPED: a rung short-circuits by returning what the handler would have returned — `return forbidden({ id })` refuses, `return cached` answers, `return next(ctx)` goes on. Nothing distinguishes a short circuit from a pass at the type level, the caller having asked for a value and got one. What it gives up is a `Response` to decorate; a rung that must set a header is the app lane's. `ctx.args()` parses on first call and caches for the request — search params on `GET`/`DELETE`, the body otherwise — so a rung that never asks pays nothing and a 401 still precedes any parse failure. What it hands back is parsed, coerced and validated against the `schema` THE MEMO declared, this lane having none of its own, so a rung authorising on a resource id compares a number against a number whichever method carried it — AN AUTHORISATION CHECK PASSING ON A TYPE MISMATCH is the silent failure it prevents. Validation is LAZY, on that first call: a 401 rung that never asks for args still precedes every parse and every schema. A malformed body is 400 and a schema refusal is 422, both raised where the first rung asks. Throws escape the onion. |
-| `timeout` | `number` | ms the call may stay open before it fails. |
+| `timeout` | `number` | ms the call may stay open before it fails, AND the floor under it: serving this handler raises the request's idle timeout to the same number, so a handler that will not produce a byte for minutes says so once instead of reaching for `server()` mid-body. RAISES ONLY, and the request's floor is the max over every handler that ran in it — which is how a fast outer handler calling a slow inner one is held for the inner's declared bound with nothing declared at the outer, and needs no analysis of who calls whom. Unset raises nothing and the platform default stands; `Infinity` is an app saying never reap this connection. |
 | `clients` | `Clients` | Which surfaces carry this handler — `ui`, `mcp`, `cli`, `openapi`. Optional, every key optional, every default true; see `# Generated surfaces`. NOT access control: it decides what is generated and listed, never who may call. |
 | `crossOrigin` | `boolean \| string[]` | Whether other origins can call it; `true` is any origin, a `string[]` is the allow-list. Default: false. Where it is declared, abide answers the `OPTIONS` preflight itself. |
 | `maxBodySize` | `number` | The largest request body a mutation will accept, in bytes. |
@@ -607,7 +655,7 @@ through here — `refuse.typed` and `Failed` are not response helpers.
 * An unkeyed memo is its value; a no-arg rpc is still a call. `Rpc` is uniformly callable in both arms — `GET(() => 'foo')` is reached as `rpc()` — because the CALL is what issues the request, and a `Reactive`-shaped rpc leaves `signal` nowhere to go.
 * HTTP path is determined by filepath + export name.
 * Return type dictates Content-Type
-* Browser only sees a wrapped `fetch(rpc.url, { method: rpc.method })` not the whole server module. That wrapper is a module the build GENERATES — one export per handler, carrying `method`, the mount-relative address and `description` — rather than the server module shaken down to it, so "no server code shipped" is a property of the build rather than an optimizer's outcome. A module-level side effect in an rpc file cannot reach a browser, the browser's module never having been derived from that file.
+* Browser only sees a wrapped `fetch(rpc.url(args), { method: rpc.method })` not the whole server module. That wrapper is a module the build GENERATES — one export per handler, carrying `method`, the mount-relative address and `description` — rather than the server module shaken down to it, so "no server code shipped" is a property of the build rather than an optimizer's outcome. A module-level side effect in an rpc file cannot reach a browser, the browser's module never having been derived from that file.
 * Importing a name from `#server/**` that is not an rpc or socket handler is a compile error from the client graph, never a silent stub; only `#server/rpc/**` and `#server/sockets/**` resolve from `#ui` and `.abide` at all.
 * THE COST OF THAT IS THAT A PAGE HAS NO DIRECT SERVER READ. A `.abide` file runs on both sides, so every server-side read it makes at render time goes through an rpc — including one the browser will never issue, because the page always had the value. There is no server-only region of a page and no partial mode; what buys it is that the render and the hydration make the same call, which is what the seed buffer answers and what makes re-executing setup affordable at all.
 * A RUNG RUNS ON EVERY CALL, in process as much as over the wire. A page renders on both sides, so its
@@ -637,6 +685,8 @@ the handler declared, and that is what decides where it may be called from.
 * SHAPE BELONGS TO THE `Reactive`, never to the transport — the input's is `schema`, which on a handler's keyed memo is its args, and the output's is `transform`. A `channel` addressed by one adds `args` for the room key, its selector not being its input. This is the call `transform` on a `channel` already made against a schema on the `socket`, for the reason given there: a check declared at the transport silently skips itself in-process, so a memo composed inside another memo, or imported directly by a second server module, would be held to a shape only a wire caller was. What the transport does is READ it.
 * A schema runs where its `Reactive` Lives, which is the seams doing their job rather than a rule of validation's own: one declared in `#ui` checks in a browser, one in `#server` on a server, one in `#shared` wherever it was used. An rpc's handler is a memo in `#server`, so a browser calling it through the generated wrapper cannot pre-check. An app wanting the same shape checked on both sides puts it in a `#shared` module and declares it in both places — the one duplication this design asks for deliberately.
 * An rpc returning a binary — `Uint8Array`, `ArrayBuffer`, `Blob`, `DataView` — transports it as `application/octet-stream`, or as a `Blob`'s own `type` where it has one. The client decodes it back to a `Uint8Array`.
+* A RETURNED `Blob` IS RANGE-AWARE, and that falls out of the type rather than being a file case: a `Blob` has `size` and `slice`, which is the whole of what the protocol needs. abide reads `Range`, honours `If-Range` against the ETag it derives, and answers `206` with `content-range`, `accept-ranges` and `content-length`, `416` where the range is unsatisfiable, `304` on a matching `If-None-Match`. `Bun.file(path)` IS a `Blob`, so serving a file by range is returning one and the sendfile path is Bun's own. Without it every media handler hand-writes the same sixty lines and gets `content-length` on a `206` wrong the first time — a `Blob` body carries one where a stream does not, and a player that will not seek is the only symptom.
+* A HANDLER MAY RETURN A `Response`, for the branch that decides its own status and headers — a playlist at `no-store` beside the segments it names at `immutable`, a derived codecs string riding along. The value-shaped rpc lane still runs and an in-process caller gets that `Response` unconverted; what it costs is that `clients.mcp` and `clients.cli` default to FALSE, a `Response` having no output schema to publish, and an app returning one merely to set a header on json turns them back on. A SECOND READER IN THE SAME SCOPE IS TEED rather than handed a consumed body, bounded by `ABIDE_MAX_STREAM_BUFFER_SIZE` like every other transcript held in memory. NOTHING ABOUT CACHING CHANGES: the scope rules already decide it and decide it the same way for every return type — one scope shares one answer between two reads by one caller, two requests are two scopes — so a body that varies on `Range` or `Accept` is already answered per request without a rule of its own.
 * An rpc returning a raw value transports as application/json
 * An rpc returning undefined returns as 204
 * An rpc returning an AsyncGenerator is streamed as jsonl, which is the DEFAULT and not the only
@@ -809,7 +859,7 @@ enough of a bound.
 * Planned or not, a refusal serializes as `{ name, message, data }` and hydrates as a `Failed` — `{ name, status, message, data }`, the status coming from the response. An undeclared one carries `name: 'HttpError'` and no data; a declared one carries the name `refuse.typed` gave it.
 * a schema refusal is ``Failed<'ValidationError', Issues<Args>>`` at 422, and it crosses as a declared failure like any other rather than down a path of its own — a declared `schema` contributes that name to `Failures`, and the status is the one the name is registered at
 * A mutation — `POST` / `PUT` / `PATCH` / `DELETE` — compares its `Origin` against `APP_URL`'s origin before the handler runs, and a mismatch is 403. `Origin` is sent on every cross-origin request, form posts included, and cannot be set by script, so the gate holds independently of cookie policy; a declared `crossOrigin` allow-list replaces the same-origin comparison for that handler. `GET` needs no gate because it is a read, and `DELETE` is unreachable by navigation because a navigation is always GET. A mutation arriving with NO `Origin` at all is allowed: CSRF needs a browser's ambient authority and a browser always sends one, so an absent header is a non-browser caller with no ambient cookie to abuse. Refusing those callers is an app's rung, which is what middleware is for
-* A mutation answers a form navigation as a navigation. `<form action={rpc.url} method="post">` posts
+* A mutation answers a form navigation as a navigation. `<form action={rpc.url()} method="post">` posts
 to an address like any other caller, and where the request prefers `text/html` — which is what a
 browser form sends and what abide's own client wrapper never sends — the result is converted rather
 than serialized: a returned `redirect()` passes through, a returned value becomes `303 See Other` back
@@ -1359,14 +1409,58 @@ two — and the per-line ratio is owed before anything faster is said.
 | `abide:mcp` | `debug` `warning` | A handler withheld by `clients.mcp`, and a tool published with no `description` for a model to choose it by |
 | `abide:openapi` | `warning` | A handler whose schema had no JSON Schema export, so the type-derived superset published instead — naming the handler and the schema's vendor |
 | `abide:config` | `warning` | A second `onConfig` replacing the first |
-| `abide:render` | `warning` | An `error.abide` that itself failed, so the boundary escalated past it — abide's own minimal document is what answered |
-| `abide:reactive` | `warning` | A failed revalidation over a value still being served — nothing unmounts and no `{:catch}` mounts, so the line is the only sign of it |
+| `abide:render` | `warning` | An `error.abide` that itself failed, so the boundary escalated past it — abide's own minimal document is what answered; a dropped url scheme; and the fill-pair ratio below |
+| `abide:reactive` | `warning` | A failed revalidation over a value still being served — nothing unmounts and no `{:catch}` mounts, so the line is the only sign of it; a `store`'s `set` that failed; and the reactive lane of "Costs abide will not pay for you" |
 | `abide:watch` | `warning` | A `watch` effect or `Disposer` that threw, and the watch it stopped |
-| `abide:hydrate` / `abide:navigate` | `warning` | The browser lane: a mismatched sink rebuilt, a route whose chunk did not arrive |
+| `abide:hydrate` / `abide:navigate` | `warning` | The browser lane: a mismatched sink rebuilt, a route whose chunk did not arrive, a seed entry that expired unclaimed |
+
+### Costs abide will not pay for you
+
+Every channel above reports a correctness or a configuration failure: something threw, was dropped, or
+replaced something. These are the other kind — work abide can SEE is unnecessary and will not remove,
+because removing it means choosing a default for an app abide cannot see. THE OUTPUT IS RIGHT IN EVERY
+ONE OF THEM, which is why none of them is a test and all of them are a line.
+
+THE GATE PRECEDES THE MEASUREMENT, not just the publish. A closed channel means the compare is not run,
+the counter is not kept and the bookkeeping is not built — so a detection that is O(n) with the channel
+open is one boolean read with it shut, and `abide dev` is not quietly a different machine from the one a
+profile was taken on. A BUILD-time detection has no runtime to gate and always reports.
+
+| What it says | Channel | Points at |
+| --- | --- | --- |
+| a memo woke its readers n times running with a result nothing downstream could tell apart | `abide:reactive` | `identity` |
+| an identity walked and never collapsed, `structural` having bailed on a value it cannot decide — naming the constructor it hit | `abide:reactive` | a comparator of the app's own |
+| a reactive component re-mounted with a factory equal to the one it replaced — the subtree was thrown away and rebuilt identical | `abide:reactive` | `identity` |
+| a cursor replayed fewer productions than the room had published | `abide:reactive` | `tail` |
+| a `Reactive` retained a tail no cursor ever opened, counted at scope teardown | `abide:reactive` | `tail` |
+| a `global` memo's entry count at teardown, the bound being a number the app knows and abide does not | `abide:reactive` | `ttl`, `Args` |
+| a seed entry expired unclaimed, naming the address and both arg sets — the render's work was thrown away and the client fetched for real | `abide:hydrate` | setup that computed different args on the two sides |
+| fill pairs emitted against rows delivered, where the ratio approached one per row | `abide:render` | the flush, which is the batching unit |
+
+Four are BUILD-time and unconditional, having no runtime to gate:
+
+| What it says | Points at |
+| --- | --- |
+| a `POST` whose `Args` are flat could be a `GET`, and a `GET` is the one a browser caches | the method |
+| a `{#for}` body reads `index` over a keyed list, so a reorder pays one text write per row against a reconcile that moved far fewer nodes | dropping `index`, or accepting it |
+| a keyless `{#for}` over items carrying a stable identifier rebuilds where a keyed reconcile would move | `by` |
+| a reactive read an `await` dominates inside a tracked body, hoisting being the faster shape as well as the correct one | hoisting, or `peek()` |
+
+The last is stated at "Tracking" and predates the category; it is listed here because a rule that is the
+only member of a class reads as an exception.
+
+* NONE OF THESE IS APPLIED, and that is the decision rather than the omission. A collapsing default
+identity, a key inferred from a field called `id`, a method chosen for an app — each is right for most
+apps and silently wrong for one, and the one has no way to find out. So the line IS the intervention: it
+names the site, the option and the number, and the app decides.
+* WHAT IT BUYS BESIDES is the measurement the design's own rule asks for before a default moves. A
+count of wake-ups that changed nothing, against a count of walks that found a difference, is exactly
+the fraction `identity` says is unmeasured — so the channel that reports the cost is also what settles
+whether abide should stop charging it.
 
 ### Expectations
 
-* `DEBUG` in `config` gates named channels in debug-npm grammar (`abide:*`, `docs:cards,docs:db`, `*`, `*,-abide:*`). Read from the environment on a server and `localStorage.debug` in a browser.
+* `DEBUG` in `config` gates named channels in debug-npm grammar (`abide:*`, `docs:cards,docs:db`, `*`, `*,-abide:*`). Read from the environment on a server, and carried to the client by the document in a `<meta name="abide-debug">` the shell writes — for the same reason it is told the mount: a variable chosen after the build cannot be in a bundle. It is process-level rather than per-response, so it sits in the static half of the shell and costs nothing per request, and `config.invalidate()` re-cuts it. `localStorage.debug` answers where that meta is absent, never over it — which means an operator who set `DEBUG` on a deployment has decided it for every browser, and unsetting it is what hands the choice back.
 * A message is one line and one line is one `LogRecord`: the eight fields are the whole shape in every
 format, with tabs and newlines escaped. The trace is the operation the line was written in, `null` on
 a client and outside a request, and always present.
@@ -1629,7 +1723,7 @@ and where the fix is one rename, and it is why there is no sigil: a reserved nam
 ambiguity sayable, so it would live in the codebase forever and every reader downstream would have to
 know which spelling meant which. Refusing it means the ambiguity never exists to read, and it reserves
 nothing — a payload may carry any field it likes, including `$`.
-* `state.share` HANDS BACK THE ONE THAT WON, which may not be the one your `create` made, so the return value is the only name to use: `const message = state.share('chat', () => state(''))`. Building the `Reactive` outside the call and passing it in is what makes that go wrong silently — the local name goes on being read by the module that made it while every other module reads the shared one — and the thunk is what keeps the loser's `Reactive` from being built at all.
+* `state.share` HANDS BACK THE ONE THAT WON, which may not be the one your `create` made, so the return value is the only name to use: `const message = state.share('chat', () => state(''))`. Do not build the `Reactive` outside the call and pass it in. That fails silently — the local name goes on being read by the module that made it while every other module reads the shared one — and the thunk is what keeps the loser's `Reactive` from being built at all.
 * A template-local binding shadows a reactive value of the same name for the body it is bound in —
 `{#for await { message } of room.tail(100)}` inside a file that also has a `message` state.
 * MEMBER ACCESS ON A `Reactive` SHORT-CIRCUITS. Where the compiler knows the receiver is one, `foo.bar` lowers to `foo()?.bar` — so an in-flight read is `undefined` rather than a TypeError, and the whole chain after it short-circuits with it, `foo.items.map(f)` included. That is what makes the `??` forms read the same everywhere: `{data.name ?? 'Loading'}` in a slot, `{#for stat of data.stats ?? []}` over a block. An `{#for}` over `undefined` iterates zero times rather than throwing. `pending()` is still what separates in-flight from a value that RESOLVED to `undefined`.
@@ -1639,7 +1733,7 @@ nothing — a payload may carry any field it likes, including `$`.
 * A write through a member path — `foo.bar[k] = v` — compiles to a copy down that path plus a `set`,
 so the reference moves and readers wake at the default `identity`. A state that declared one still
 decides for itself, a path write being a write like any other: setting a field to the value it already
-held is where a `canonical` identity earns its cost, the copy alone having woken everyone.
+held is where a `structural` identity earns its cost, the copy alone having woken everyone.
 THE COPY IS THE POINT, not an implementation detail to optimise away: a `tail` past the default is for
 REPLAYING past values — an undo stack is the shape — and replaying a value that was mutated underneath
 you replays nothing. Mutating in place and bumping a version would be O(1) per write and would leave
@@ -1697,9 +1791,21 @@ is dropped and warned on `abide:render`. Dropped rather than thrown, since a bad
 to take the page down, and warned rather than silent, since it is a refusal. `javascript:` in an
 `href` is the injection this exists for, and `csp()` is not the backstop for it — `csp()` is opt-in and
 its `script-src` does not govern a URL scheme.
-* `srcdoc` and a whole-attribute `style=` take no interpolated string; a computed style is
-`style:prop={value}`, which is one property and one value. `on<event>` on an element takes a function,
-never a string, so there is no attribute-as-code position to escape into.
+* A `style=` INTERPOLATES BY LOWERING TO `style:prop`, never by building a string. The static text is
+syntax, so the compiler splits the declaration list at build and every interpolation lands inside
+exactly one value under a static property name — `style="padding-top:{n}px"` IS `style:padding-top={…}`
+and is not a second mechanism. That is what makes it safe with no sanitiser: `setProperty` parses one
+value and cannot be made to accept a second declaration, so an injected `;` yields an invalid value
+rather than a new property, and the `position:fixed` nobody wrote is unreachable. A server render has
+no CSSOM, so there the same rule is a CHECK — an interpolated value that does not parse as one
+declaration value is dropped and warned on `abide:render`, exactly as a bad URL scheme is, which is
+what keeps the two sides agreeing about what was written. `!important` is static text after the value
+and rides along as `setProperty`'s priority argument. REFUSED is every position with no declaration to
+lower into: `style={expr}`, `style="{expr}"`, an interpolated PROPERTY NAME, and an interpolation
+spanning a `;` — the error names `style:prop={value}`, which is what a computed property name is
+written with. `srcdoc` stays refused outright, an arbitrary document having no decomposable grammar
+and no per-slot API behind it; `on<event>` on an element takes a function, never a string, so there is
+no attribute-as-code position left to escape into.
 * `{raw(...)}` is the ONE escape and is the only place any of this is skipped. It is the app saying so.
 
 ### Control flow
@@ -1963,7 +2069,7 @@ trip is. That is what makes the browser cache load-bearing rather than a bonus �
 why the buffer answers the client's own request rather than embedding data in the document, a choice
 that has to be paid for out loud rather than assumed away. What is paid
 twice is a memo body that is expensive and is not a load, there being nothing to seed; that is the cost
-of the decision and the reason a heavy pure computation belongs behind an rpc.
+of the decision and the reason a heavy pure computation belongs behind an rpc, OR behind a memo the server render does not read. A memo is lazy, so one nothing reached on the server was never computed there and is paid once rather than twice — but that is a structure an app ARRANGES rather than one it gets: a page rendering the first screen off `memo(() => filtered.slice(0, 50))` and reaching the whole of `filtered` only from a client-side branch has moved the fold below the paint, where a block that iterates the whole list to gate its children has not. abide infers none of this, what is above the fold being a layout question.
 * A `{#for await}` the server already painted is reconciled, never appended to. The document is not held
 for an unfinished stream, so the server paints n rows inline and the client's own request is answered
 from the buffer with the transcript from the start — the rows the server already painted, then the rest.
@@ -2235,9 +2341,9 @@ all refused at build, because all three render fine and dead-end silently. Where
 the clock stops — follow `hold` from the first state and settle on the first one without it — and
 that is decided server-side so the frame is right before any script runs. Nothing plays at load.
 * A panel an example has no artifact for is not rendered. Beside Files and the render: `wire`,
-`compiled`, `bench` and `tests`. `vanilla` is not a panel — the hand-written arm ships in the download
-and in the line counts, and a reader consults it through the ratio it produced rather than by reading
-it. A panel is a high bar: a Logs panel was built, carried by five examples, and removed, because what
+`bench` and `tests`. `compiled` and `vanilla` are not panels — the emitted code and the hand-written
+arm ship in the download and in the line counts, and a reader consults the hand-written arm through
+the ratio it produced rather than by reading it. A panel is a high bar: a Logs panel was built, carried by five examples, and removed, because what
 the app said while it ran is a footnote on every page that does not turn on a count of runs.
 `wire` is the requests panel — the rpc calls the page made, each as its request line,
 its headers and what came back — which is the one artifact that shows the seam an app never writes.
