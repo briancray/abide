@@ -55,10 +55,10 @@ nothing to keep in step:
 | `message` | the human sentence, resolved where the refusal is declared |
 | `options.schema` | checks the data synchronously, at construction |
 
-The status defaults to 400 rather than 500 because a *declared* refusal is by construction an
-expected answer, and 500 is the one status certainly wrong for it: a generated client reads it
-as a server fault, a model retries instead of re-planning, the CLI exits `7` instead of `8`,
-and whatever is watching the app alerts on it.
+The status defaults to 400 rather than 500, because a *declared* refusal is by construction an
+expected answer and 500 is the one status certainly wrong for it. A generated client reads it as
+a server fault, a model retries instead of re-planning, the CLI exits `7` instead of `8`, and
+whatever is watching the app alerts on it.
 
 Declaring in `#shared` lets a page and a handler use the same names. A refusal resolves
 on both sides, so a `transform` in `#ui` refuses a write exactly as a handler refuses a request.
@@ -155,7 +155,7 @@ The refusal it raises is undeclared: `name` is `'HttpError'`, no data. That name
 because this instance only ever surfaces where http is the vocabulary — an OpenAPI default
 response, a wire body, an MCP error entry.
 
-## abide declares exactly two of its own
+## abide's own names: two you can narrow, and one you cannot
 
 Both built with `refuse.typed` like any other:
 
@@ -168,9 +168,13 @@ Both built with `refuse.typed` like any other:
 carries `Issues<Args>`, keyed by path, and `rpc.isError(e, 'ValidationError')` narrows `e.data` to it with
 nothing declared.
 
-Two and no more. A name is public surface forever, and the rest of what abide raises — 403 on
-an origin mismatch, 413 over-size, 504 on a timeout — has no data to narrow **to**, so it stays
-the undeclared `HttpError` at its status.
+`HttpError` is the third name and the last. It is undeclared, meaning it enters no `Failures`
+union and nothing can narrow to it — but it is still a name a caller reads, in a wire body, an
+OpenAPI default response and an MCP error entry. The rest of what abide raises — 403 on an origin
+mismatch, 413 over-size, 504 on a timeout — has no data to narrow **to**, so it stays `HttpError`
+at its status.
+
+Three and no more. A name is public surface forever.
 
 Read on: [Schemas](check-what-callers-send-you.md)
 

@@ -51,11 +51,11 @@ runs before the route resolves, so it has a request and no arguments; the rpc la
 one handler's own arguments.
 
 The **Result** column is the difference that matters. The rpc lane hands back what the handler
-would have handed back, not a `Response`, and that lets the same rungs run on an
-**in-process** call — a page rendering on the server reads through the handler, so a rung that
-authorises on an id in the arguments cannot be reachable by a browser and missed by the render.
-The app lane stays `Response`-shaped because pre-routing there is no value yet, which also makes
-it the lane where a rung that must set a header belongs.
+would have handed back, not a `Response`, and that lets the same rungs run on an **in-process**
+call. A page rendering on the server reads through the handler, so a rung that authorises on an
+id in the arguments cannot be reachable by a browser and missed by the render. The app lane
+stays `Response`-shaped because pre-routing there is no value yet, which also makes it the lane
+where a rung that must set a header belongs.
 
 A rung's refusals join the handler's own in what the caller can narrow, so `getInvoice.isError(
 error, 'NotYours')` reaches a name the rung declared and never the handler.

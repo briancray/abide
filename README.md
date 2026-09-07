@@ -8,7 +8,8 @@ inside a `.abide` file, and the explicit `x()` / `x.set(v)` spelling keeps compi
 is over it, never instead of it.
 
 Status: **shell**. The workspace, seams, checks and measurement lanes are in place; the
-framework itself is not written yet. `docs/SPEC.md` is the surface being built toward.
+framework itself is not written yet. `docs/REGISTRY.md` is the surface being built toward, and
+`docs/RULEBOOK.md` is what it has to do.
 
 ## Layout
 
@@ -32,7 +33,7 @@ of a ratio be timed by the same clock and the same batch sizing as the abide arm
 
 ## Brand
 
-`docs/BRAND.md` is to the marketing surface what `docs/SPEC.md` is to the code: the claims
+`docs/BRAND.md` is to the marketing surface what `docs/REGISTRY.md` is to the code: the claims
 that may be made, what each one rests on, the words that name things, and the ones that are
 off limits until something is measured. A claim whose supporting row changes is a claim that
 goes.
@@ -66,37 +67,36 @@ rules above.
 
 The site's stylesheet is `packages/dogfood/src/ui/app.css` — a real file at the address the
 app's own `import '#ui/app.css'` resolves to once `.abide` compiles, so the CSS does not move
-when the scaffold goes. SPEC's "Script / style blocks" carries that import: global rather than
-scoped, folded into the route's content-hashed sheet ahead of the scoped blocks.
+when the scaffold goes. RULEBOOK 34.5 carries that import: global rather than scoped, folded into
+the route's content-hashed sheet ahead of the scoped blocks.
 
-An EXAMPLE is a DIRECTORY under `packages/dogfood/examples/`, not a fence, per SPEC's
-"Documentation": real files, embedded with `{% example <name> %}`, rendered as one object
-with Files / Result / Wire / Compiled / Vanilla / Bench / Tests panels and a Download button that
+An EXAMPLE is a DIRECTORY under `packages/dogfood/examples/`, not a fence, per RULEBOOK 40: real
+files, embedded with `{% example <name> %}`, rendered as one object
+with Files / Requests / Bench / Tests panels and a Download button that
 serves one zip per example, built by `scripts/zip.ts` — STORED entries, no dependency and
 no system `zip`, since `Bun.hash.crc32` is the only piece a zip writer otherwise needs.
 An example solves ONE stated problem and every file in it contributes to that problem —
 a file that demonstrates something else belongs in the example whose problem it is.
 Bench and Tests are RESULTS, not source: a reader wants to know whether the example holds,
-and the spec itself ships in the zip. The DEFAULT panel set is Files, Result, Bench, Tests; Wire, Compiled and Vanilla appear
-only where they prove something about that example's own problem — read-invoice carries
-Compiled because the generated client module IS the proof that no server code shipped.
-A panel with no artifact is not rendered, so a Wire tab never appears on an example
-that makes no request. An example carries no styling it does not need: read-invoice has
-no `<style>` block at all, and the Result shows abide's own defaults. A result is a SEQUENCE of `states`, not one snapshot, because a settled snapshot cannot
-show a transient — `pending()` is invisible in the finished output. Each state names a
-file and a `hold`; opening the Result tab replays from the first, and a Replay button sits
-beside the URL where there is more than one state to move between. When the runtime lands, the
-replay becomes an actual re-run and the state files go.
+and the spec itself ships in the zip. A panel with no artifact is not rendered, so a Requests
+tab never appears on an example that makes no request. An example carries no styling it does not
+need: read-invoice has no `<style>` block at all, and the render shows abide's own defaults.
+
+THE RENDER RUNS THE HAND-WRITTEN ARM (RULEBOOK 40.19). `vanilla/` is real code — a real cache, a
+real in-flight table — bundled into the frame with a `fetch` shim that answers from the example's
+own `wire` fixture (40.20), so the request meter under the render is a count the arm made rather
+than a number somebody typed. It replaced a machine of authored HTML snapshots, and the arm is the
+substrate only until the compiler can run the `.abide` the Files panel shows.
 
 File ORDER is derived, not listed: a reader opens the file the problem is solved in,
 which is the `.abide` file for almost every problem — the page is where an author
 starts and the handler is what they reach back for. So files sort by SEAM
 (`.abide`, then browser, then server), and `"about": "server"` flips it for an example
 whose problem IS a server one — validating a body, authorising a call. The manifest's
-array order only breaks ties within a seam. `example.json` names the files each panel shows. `files/`, `vanilla/` and the downloads are
-real; `result.html`, `compiled/`, `wire` and `bench` are checked-in static content that the
-compiler and the harness are meant to REPLACE, which is why they are artifacts in the example
-directory rather than markup in the renderer.
+array order only breaks ties within a seam. `example.json` names the files each panel shows.
+`files/`, `vanilla/` and the downloads are real, and `vanilla/` now also RUNS; `compiled/`, `wire`
+and `bench` are checked-in static content the compiler and the harness are meant to REPLACE, which
+is why they are artifacts in the example directory rather than markup in the renderer.
 
 `bun test` gates that every embedded example exists, that every example directory is
 embedded, that every path a manifest names is on disk, and that a page's `examples:` front
@@ -122,11 +122,13 @@ file tab. Build output has no seam and is left alone.
 
 A fenced block may carry a LABEL after the language — ```` ```ts src/server/rpc/invoices.ts ```` —
 and the label decides the block's spine colour: a path naming `server` is one side, a `.abide`
-file is both, anything else is the browser. Which side a snippet runs on is the question these
-docs answer most often, so it is shown rather than said.
+file is both, anything else is the browser. THE CAPTION IS THE SYNTAX AND THE SPINE IS THE SIDE,
+which are two facts rather than one: a bare label renders as `.ts · browser`, derived from the
+fence's own language, because "browser" alone said where the code runs and left a reader guessing
+between a name read by name and `s()`. A path says both by itself.
 
-`bun test` gates the coverage claim: every capability named in a `docs/SPEC.md` table must be
-covered by some guide's `covers:` list, nothing may claim a capability the SPEC does not have,
+`bun test` gates the coverage claim: every capability named in a `docs/REGISTRY.md` table must be
+covered by some guide's `covers:` list, nothing may claim a capability the registry does not have,
 and no content file may be unreachable from the nav.
 
 ## Checks

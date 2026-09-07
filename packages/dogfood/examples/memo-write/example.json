@@ -1,0 +1,24 @@
+{
+    "title": "A write to a memo stands until the next recompute",
+    "summary": "An edit box seeded from a person the server sent. Type into it, then reload.",
+    "app": "crm",
+    "files": [
+        "src/ui/components/Draft.abide",
+        "src/server/rpc/people.ts"
+    ],
+    "route": "/memo/write",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/people/getPerson?id=42",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"id\": \"42\",\n    \"name\": \"Ada Lovelace\"\n}"
+        }
+    ]
+}

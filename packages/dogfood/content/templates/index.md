@@ -13,7 +13,7 @@ than instead of it.
 | `{invoice}` | `invoice()` | the value |
 | `{await invoice}` | `await invoice` | the value, once it lands |
 | `{#for await item of source}` | `for await (…of source)` | each value as it arrives |
-| `{#if invoice.pending()}` | `invoice.pending()` | a first load, nothing to show yet |
+| `{#if invoice.pending()}` | `invoice.pending()` | a load, nothing trustworthy to show yet |
 
 ```abide abide
 <h1>{invoice.number}</h1>

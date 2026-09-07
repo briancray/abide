@@ -8,6 +8,20 @@
   --syn-comment:#7A8781; --syn-string:#2F6B44; --syn-key:#0A6B62;
   --syn-tag:#2C5C8F; --syn-num:#6B4A8F;
   --heading:#8E4426; --good:#2F6B44; --bad:#A33A3A;
+  /* THE SCALE. Six steps, each about 1.6x the last, and every distance between two things
+     on this site is one of them. The name says what the gap SEPARATES rather than how big
+     it is, so a rule picks its step from what the two things ARE to each other — which is
+     also why the steps read as a hierarchy: a name is nearer its control than a paragraph
+     is to the next paragraph, and that ordering is the design.
+     Vertical rhythm is a container's `gap` throughout. Nothing carries a block margin, so
+     a distance is owned by the ONE box that contains both sides of it — there is no
+     collapsing to reason about, and no pair of rules that has to agree. */
+  --gap-hair:.2rem;      /* rows of one strip: tabs, chips, rail links */
+  --gap-tight:.45rem;    /* a mark and its word */
+  --gap-snug:.75rem;     /* a name and the thing it names */
+  --gap-flow:1.2rem;     /* one block of prose to the next */
+  --gap-section:2.2rem;  /* one section to the next */
+  --gap-page:3.4rem;     /* one region of the page to the next */
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -18,6 +32,17 @@
           --good:#9AD1A8; --bad:#E89A9A; }
 }
 * { box-sizing:border-box; }
+/* `hidden` IS A DISPLAY, and it is the UA's — so every rule in this file that sets one
+   outranks it, and a panel saying `display:flex` is on screen whether it is hidden or not.
+   All four example panels shipped stacked the day the panel became a flex column. Stated
+   once, `!important`, so the next container to take a `display` cannot turn a hidden
+   element back on from a rule that has nothing to do with visibility. */
+[hidden] { display:none !important; }
+/* The UA's block margins are cleared ONCE, here, rather than overridden a rule at a time —
+   every one of them is a distance the containing box now owns as a gap. The frame lifts
+   this rule with the rest, or an example would carry the defaults this file has stopped
+   compensating for. */
+h1, h2, h3, h4, p, ul, ol, li, pre, figure, table, blockquote, aside { margin:0; }
 body { margin:0; display:grid; grid-template-columns:15.5rem minmax(0,1fr);
   background:var(--paper); color:var(--ink); font:400 15px/1.6 var(--sans);
   -webkit-font-smoothing:antialiased; }
@@ -31,16 +56,20 @@ a[aria-current] { font-weight:600; text-decoration:none; }
 :focus-visible { outline:2px solid var(--signal); outline-offset:2px; border-radius:4px; }
 
 nav { position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
-  padding:1.7rem 1.1rem 4rem; border-right:1px solid var(--rule); }
-.brand { display:flex; align-items:baseline; gap:.45rem; text-decoration:none;
-  color:var(--ink); font:700 1.3rem/1 var(--display); letter-spacing:-.03em; margin-bottom:1.7rem; }
+  padding:1.7rem 1.1rem 4rem; border-right:1px solid var(--rule);
+  display:flex; flex-direction:column; gap:var(--gap-section); }
+.brand { display:flex; align-items:baseline; gap:var(--gap-tight); text-decoration:none;
+  color:var(--ink); font:700 1.3rem/1 var(--display); letter-spacing:-.03em; }
 .brand span { font:500 9px/1 var(--mono); text-transform:uppercase;
   letter-spacing:.16em; color:var(--muted); }
+nav section { display:flex; flex-direction:column; gap:var(--gap-snug); }
 nav h2 { font:500 9px/1 var(--mono); text-transform:uppercase; letter-spacing:.14em;
-  color:var(--muted); margin:2.2rem 0 .5rem; }
-nav h2:first-of-type { margin-top:0; }
-nav ul { list-style:none; margin:0; padding:0; }
-nav li { display:flex; align-items:baseline; gap:.3rem; margin:1px 0; }
+  color:var(--muted); }
+nav ul { list-style:none; padding:0; display:flex; flex-direction:column;
+  gap:var(--gap-hair); }
+nav li { display:flex; align-items:baseline; gap:var(--gap-tight); }
+/* The negative inset is not spacing: it pulls the link's own padding back off the rail so
+   the TEXT lines up with the section name above it, hover surface and all. */
 nav a { flex:1; display:block; padding:.24rem .5rem; margin-left:-.5rem; border-radius:5px;
   text-decoration:none; color:var(--ink); font-size:13.5px; opacity:.75;
   transition:opacity .12s ease, background-color .12s ease; }
@@ -53,60 +82,66 @@ nav li:has(.stub) a { opacity:.52; }
 nav li:has(.stub) a:hover, nav li:has(.stub) a[aria-current] { opacity:1; }
 
 body.has-toc { grid-template-columns:15.5rem minmax(0,44rem) 1fr; }
-main { max-width:44rem; padding:3.2rem 2.4rem 7rem; }
+/* THREE BOXES, THREE GAPS, and that is the whole of the page's vertical rhythm. `main`
+   separates REGIONS — the opening, each section, the footer. A `section` separates a
+   section's own prose from the subsections under it. A `.flow` is the prose itself, one
+   block to the next. The boxes are folded into the block stream by `groupSections` in
+   renderMarkdown.ts, which is what a markdown renderer's flat output does not give. */
+main { max-width:44rem; padding:3.2rem 2.4rem 7rem;
+  display:flex; flex-direction:column; gap:var(--gap-page); }
+main > header { display:flex; flex-direction:column; gap:var(--gap-snug); }
+main section { display:flex; flex-direction:column; gap:var(--gap-section); }
+.flow { display:flex; flex-direction:column; gap:var(--gap-flow); }
 main h2, main h3 { scroll-margin-top:1.5rem; }
 
 .toc { position:sticky; top:0; align-self:start; max-height:100vh; overflow-y:auto;
-  padding:3.5rem 1.5rem 4rem 1.6rem; }
+  padding:3.5rem 1.5rem 4rem 1.6rem;
+  display:flex; flex-direction:column; gap:var(--gap-section); }
+.toc section { display:flex; flex-direction:column; gap:var(--gap-snug); }
 .toc h2 { font:500 9px/1 var(--mono); text-transform:uppercase; letter-spacing:.14em;
-  color:var(--muted); margin:0 0 .75rem; }
-.toc ul { list-style:none; margin:0; padding:0; border-left:1px solid var(--rule); }
-.toc li { margin:0; }
+  color:var(--muted); }
+/* The heading list is a spine a reader's eye tracks down, so the rows are flush and the
+   distance between them is the link's own padding — a gap here would break the spine. */
+.toc ul { list-style:none; padding:0; gap:0; border-left:1px solid var(--rule); }
 .toc a { display:block; padding:.26rem 0 .26rem .8rem; margin-left:-1px;
   border-left:1px solid transparent; color:var(--muted); text-decoration:none;
   font-size:12.5px; line-height:1.45; transition:color .12s ease; }
 .toc a:hover { color:var(--ink); }
 .toc a[aria-current] { color:var(--signal); border-left-color:var(--signal); }
 .toc .lvl-3 a { padding-left:1.6rem; font-size:12px; }
-/* The heading list is a spine a reader's eye tracks down; the downloads are two links at
-   the end of it, so they take the rail's type and drop the spine. */
-.toc h2 + h2, .toc ul + h2 { margin-top:2rem; }
+/* The downloads are two links at the end of the rail, so they take its type and drop the
+   spine — same box as the heading list, one section along. */
 .toc .downloads { border-left:0; }
 .toc .downloads a { padding-left:0; }
 .toc code { background:none; padding:0; font-size:1em; }
-h1 { font:600 2.35rem/1.1 var(--display); letter-spacing:-.03em; margin:0 0 .55rem;
-  color:var(--heading); }
-main h2 { font:600 1.32rem/1.25 var(--display); letter-spacing:-.018em;
-  margin:3.6rem 0 .9rem; color:var(--heading); }
+h1 { font:600 2.35rem/1.1 var(--display); letter-spacing:-.03em; color:var(--heading); }
+main h2 { font:600 1.32rem/1.25 var(--display); letter-spacing:-.018em; color:var(--heading); }
 /* h3 is minor structure, so it only leans toward the accent rather than taking it. */
-main h3 { font:600 1.02rem/1.3 var(--display); margin:2rem 0 .4rem;
+main h3 { font:600 1.02rem/1.3 var(--display);
   color:color-mix(in srgb, var(--ink) 72%, var(--heading)); }
-.intent { font-size:1.1rem; line-height:1.55; color:var(--muted);
-  margin:0 0 2.4rem; max-width:34em; }
+.intent { font-size:1.1rem; line-height:1.55; color:var(--muted); max-width:34em; }
 .notice { font-size:13.5px; color:var(--muted); border:1px dashed var(--rule);
-  border-radius:6px; padding:.65rem .9rem; margin:0 0 1.7rem; }
-p { margin:1rem 0; }
-ul, ol { padding-left:1.15rem; margin:1rem 0; }
-li { margin:.3rem 0; }
+  border-radius:6px; padding:.65rem .9rem; }
+ul, ol { padding-left:1.15rem; display:flex; flex-direction:column; gap:var(--gap-tight); }
 
-pre { overflow-x:auto; margin:1.6rem 0; padding:.95rem 1.1rem; background:var(--raised);
+pre { overflow-x:auto; padding:.95rem 1.1rem; background:var(--raised);
   border:1px solid var(--rule); border-radius:7px; font:400 13px/1.6 var(--mono); }
 code { font-family:var(--mono); }
 :not(pre) > code { font-size:.875em; padding:.15em .35em; border-radius:4px;
   background:color-mix(in srgb, var(--ink) 7%, transparent); }
 
 /* The signature: a snippet's spine names the side it runs on. */
-.snippet { margin:1.6rem 0; background:var(--raised); border:1px solid var(--rule);
+.snippet { background:var(--raised); border:1px solid var(--rule);
   border-left:2px solid var(--side); border-radius:7px; overflow:hidden; }
 .snippet[data-side=server]  { --side:var(--warm); }
 .snippet[data-side=browser] { --side:var(--cool); }
 .snippet[data-side=abide]   { --side:var(--signal); }
-.snippet figcaption { display:flex; align-items:center; gap:.5rem;
+.snippet figcaption { display:flex; align-items:center; gap:var(--gap-tight);
   font:500 11px/1 var(--mono); color:var(--muted); padding:.62rem .9rem;
   border-bottom:1px solid var(--rule); }
 .snippet figcaption::before { content:''; width:6px; height:6px; border-radius:50%;
   background:var(--side); flex:none; }
-.snippet pre { margin:0; border:0; border-radius:0; background:transparent; }
+.snippet pre { border:0; border-radius:0; background:transparent; }
 
 .t-comment { color:var(--syn-comment); font-style:italic; }
 .t-string { color:var(--syn-string); }
@@ -124,28 +159,37 @@ input, textarea, select { font:400 14px/1.4 var(--sans); color:var(--ink);
 input:focus-visible, textarea:focus-visible, select:focus-visible { outline:none;
   border-color:var(--signal);
   box-shadow:0 0 0 3px color-mix(in srgb, var(--signal) 20%, transparent); }
+/* A control is as wide as it needs to be, not as wide as the column it stands in — the
+   page is a flex column, and stretch is that column's default rather than a decision. */
+button, label { align-self:start; }
 button { font:500 13px/1 var(--sans); color:var(--paper); background:var(--signal);
   border:0; border-radius:6px; padding:.52rem .9rem; cursor:pointer; }
 button:hover { background:color-mix(in srgb, var(--signal) 86%, var(--ink)); }
-/* The label sits ABOVE its control and is set like a nav section header — same size,
-   case and tracking, because it is the same job: naming the thing under it. */
-label { display:block; margin:1.1rem 0 0; font:500 9px/1 var(--mono);
+/* Two controls that belong together, on one line. In a column flow they are two rows
+   unless something says otherwise, and this is what a page says it with. */
+.row { display:flex; flex-wrap:wrap; align-items:center; gap:var(--gap-snug); }
+/* A CONTROL AND ITS ACTION SIT ON ONE LINE, and a stacked label in the row is what decides the
+   alignment: `center` would set the button against the middle of a two-part column, so it lands
+   level with the caption rather than with the field it acts on. */
+.row:has(> label) { align-items:flex-end; }
+/* The label WRAPS its control in both arms of every example, and is set like a nav section
+   header: same size, case and tracking, because it is the same job — naming the thing under
+   it. It is a column of two, so the distance between them is the label's gap. */
+label { display:flex; flex-direction:column; gap:var(--gap-snug); font:500 9px/1 var(--mono);
   text-transform:uppercase; letter-spacing:.14em; color:var(--muted); }
-label input, label select, label textarea { display:block; margin-top:.4rem;
-  text-transform:none; letter-spacing:normal; }
-/* A box and its own label share a line, so those two keep the flow they were born with —
-   and the label goes back to being a SENTENCE. The uppercase tracking above names a field
-   sitting under it; beside a checkbox it is just shouting. */
-label input[type=checkbox], label input[type=radio] { display:inline-block;
-  margin:0 .4rem 0 0; }
+label input, label select, label textarea { text-transform:none; letter-spacing:normal; }
+/* A box and its own label share a line, so those two go back to being a ROW — and the
+   label goes back to being a SENTENCE. The uppercase tracking above names a field sitting
+   under it; beside a checkbox it is just shouting. */
 label:has(> input[type=checkbox]), label:has(> input[type=radio]) {
+  flex-direction:row; align-items:center; gap:var(--gap-tight);
   font:400 14px/1.5 var(--sans); text-transform:none; letter-spacing:normal;
   color:var(--ink); }
 
 /* A PAGE'S OWN NAV, which is not this site's sidebar — `nav a` is already the sidebar, so
    an app's switcher takes a name rather than fighting it for the element. Segmented rather
    than underlined, because it is a control you operate and not a list you read. */
-.switch { display:flex; flex-wrap:wrap; gap:.2rem; margin:0 0 1.3rem; }
+.switch { display:flex; flex-wrap:wrap; gap:var(--gap-hair); }
 .switch a { padding:.36rem .72rem; border-radius:999px; text-decoration:none;
   font:500 12.5px/1 var(--sans); color:var(--muted);
   border:1px solid transparent; }
@@ -156,14 +200,67 @@ label:has(> input[type=checkbox]), label:has(> input[type=radio]) {
 /* A TIP is the DOCUMENTATION SPEAKING, and it means that wherever it appears: annotating
    a render inside the result frame, or standing on its own in prose. One rule for both,
    so an aside cannot come to mean one thing in the page and another in an example. */
-.tip { position:relative; margin:1.1rem 0; padding:.7rem .9rem .7rem 2.15rem;
+/* A DEMO CARD'S READOUTS ARE A STAT ROW, not sentences with numbers in them. A card claims
+   a number the reader has to find before they can check it, so the label is a small uppercase
+   mono tag and the value is display-sized under it — eyes land on the value, and the label is
+   there when they need it. Auto-fit, so three tiles are a row on
+   a page and a column in a narrow frame without either arm saying which. Lifted into the result
+   frame, so an example renders these the way the site would. */
+.grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap:var(--gap-snug) var(--gap-flow); list-style:none; padding:0; }
+.grid li { display:flex; flex-direction:column; gap:.2rem; }
+.grid li span { font:500 10px/1 var(--mono); letter-spacing:.09em;
+  text-transform:uppercase; color:var(--muted); }
+.grid li strong { font:600 1.45rem/1 var(--display); color:var(--ink); }
+
+/* A VALUE THAT IS NOT A SHORT NUMBER. A stat tile sets its value in display type and gives it a
+   column of its own, which is right for `4` and `$100` and wrong for everything else: a phone
+   number broke across two lines at 1.45rem and read as two values. A field is a ROW — the label
+   keeps the tile's register, the value is set in the body face — so length is ordinary rather
+   than a layout problem. Tiles for short numbers and labels, fields for the rest. */
+.fields { display:flex; flex-direction:column; gap:var(--gap-tight); list-style:none;
+  padding:0; margin:0; }
+.fields li { display:flex; flex-wrap:wrap; gap:var(--gap-tight); align-items:baseline; }
+.fields li span { flex:0 0 6.5rem; font:500 10px/1.6 var(--mono); letter-spacing:.09em;
+  text-transform:uppercase; color:var(--muted); }
+.fields li strong { font:600 1rem/1.4 var(--sans); color:var(--ink); }
+/* STACKED WHERE THE LABEL DOES NOT FIT THE COLUMN. Aligning labels buys a reader something
+   only while they are short enough to sit on one line: `PERSON THE SERVER SENT` broke over
+   two, and its value then hung to the right of a two-line label with nothing tying them
+   together. Above it, the label is read once and the value is where the eye already is. */
+.fields.stacked li { flex-direction:column; gap:.15rem; align-items:stretch; }
+.fields.stacked li span { flex:none; }
+
+/* A CONTROL BELONGS WITH THE VALUE IT CHANGES. Held apart from it, a button has to name its
+   own subject — "add one" of what — and that name is both longer and vaguer than the arrow it
+   replaced. Sat inside the tile, `+` and `−` need no subject at all: the label above the value
+   is already it, and the relationship is the layout rather than something to work out. */
+.stepper { display:flex; align-items:center; gap:var(--gap-tight); }
+.stepper button { padding:.15rem .55rem; font:600 1rem/1 var(--mono); }
+
+/* A STATUS THAT RESERVES ITS OWN LINE. A probe an example renders is on screen for as long as
+   a load takes and gone the rest of the time, so showing it by ADDING a node reflows everything
+   under it twice per press — and the frame reports its height to the page, so the shift reaches
+   past the example. The row is here whether or not there is anything to say. */
+.status { min-height:1.35em; font-size:.92em; color:var(--muted); }
+
+.tabs { display:flex; flex-wrap:wrap; gap:var(--gap-hair); }
+.tabs button { padding:.36rem .72rem; border-radius:999px; background:none;
+  font:500 12.5px/1 var(--sans); color:var(--muted); border:1px solid transparent; }
+.tabs button:hover { color:var(--ink); border-color:var(--rule); background:none; }
+.tabs button[aria-selected=true] { color:var(--paper); background:var(--signal);
+  border-color:var(--signal); }
+
+.tip { position:relative; padding:.7rem .9rem .7rem 2.15rem;
   border:1px solid color-mix(in srgb, var(--signal) 28%, var(--rule));
   border-radius:6px; background:color-mix(in srgb, var(--signal) 7%, transparent);
   font:400 12.5px/1.55 var(--sans); color:var(--muted); }
-/* Centred on the FIRST LINE, not on the box: the padding-top plus half the difference
-   between that line's height and the mark's — .7rem + (12.5px * 1.55 - 15px) / 2. A box a
-   tip grows to three lines would otherwise drift its mark down away from the sentence it
-   belongs to. The glyph is 800 because an `i` at this size is two strokes and loses one. */
+/* THE MARK IS INSIDE THE TEXT, not beside it, so it is placed rather than gapped: a flex
+   row would put it at the top of the BOX, and it belongs on the first LINE. Centred there
+   — the padding-top plus half the difference between that line's height and the mark's,
+   .7rem + (12.5px * 1.55 - 15px) / 2 — so a tip grown to three lines keeps its mark on the
+   sentence it belongs to. The glyph is 800 because an `i` at this size is two strokes and
+   loses one. */
 .tip::before { content:'i'; position:absolute; left:.78rem; top:.84rem; width:15px;
   height:15px; border-radius:50%; background:var(--signal); color:var(--paper);
   font:800 10px/15px var(--sans); text-align:center; letter-spacing:0; }
@@ -180,14 +277,19 @@ label:has(> input[type=checkbox]), label:has(> input[type=radio]) {
 
 /* An example is a whole artifact, so it reads as one object with panels rather than
    as several code blocks that happen to be adjacent. */
-.example { margin:1.9rem 0; background:var(--raised); border:1px solid var(--rule);
+.example { background:var(--raised); border:1px solid var(--rule);
   border-radius:8px; overflow:hidden; }
-.example figcaption { display:flex; flex-direction:column; gap:.15rem; padding:.8rem 1rem .7rem; }
+.example figcaption { display:flex; flex-direction:column; gap:var(--gap-hair);
+  padding:.8rem 1rem .7rem; }
 .ex-title { font:600 .95rem/1.3 var(--display); color:var(--ink); }
+/* A CARD'S TITLE IS A SIGNATURE and a gloss, so the code span in it is the subject rather
+   than a mention: sized to the display type it sits in rather than to the prose default,
+   which is a step smaller and made the signature read as a footnote to its own gloss. */
+.ex-title code { font-size:.95em; padding:.12rem .35rem; }
 .ex-summary { font-size:12.5px; color:var(--muted); }
-.ex-tabs { display:flex; align-items:center; gap:.5rem; padding:0 .6rem;
+.ex-tabs { display:flex; align-items:center; gap:var(--gap-tight); padding:0 .6rem;
   background:color-mix(in srgb, var(--ink) 4%, transparent); }
-.ex-tablist { display:flex; gap:.1rem; overflow-x:auto; scrollbar-width:none; }
+.ex-tablist { display:flex; gap:var(--gap-hair); overflow-x:auto; scrollbar-width:none; }
 .ex-tablist::-webkit-scrollbar { display:none; }
 /* `border-radius:0` is the one property the bare `button` default above is not already
    overridden for, and it rounded the focus ring on a tab. A tab is an underline, not a
@@ -203,14 +305,19 @@ label:has(> input[type=checkbox]), label:has(> input[type=radio]) {
   font:500 11px/1 var(--mono); text-decoration:none; }
 .ex-download:hover { color:var(--ink); border-color:var(--muted); }
 
-.ex-panel { border-top:1px solid var(--rule); }
+/* A panel is flush by default — Files is a tab strip with a code block under it and any
+   distance between them would read as a seam. The panels that hold a REPORT rather than a
+   file take the inset and the rhythm. */
+.ex-panel { border-top:1px solid var(--rule); display:flex; flex-direction:column; }
+.ex-panel[data-panel=bench], .ex-panel[data-panel=tests] { gap:var(--gap-snug);
+  padding-block:var(--gap-snug); }
 /* WRAPS rather than scrolls. One example per page means four to six files is the normal
    case, and a hidden scrollbar put the last of them off the edge with nothing to say so. */
-.ex-files { display:flex; flex-wrap:wrap; gap:.1rem .1rem; padding:.45rem .6rem;
+.ex-files { display:flex; flex-wrap:wrap; gap:var(--gap-hair); padding:.45rem .6rem;
   border-bottom:1px solid var(--rule); }
-.ex-files button { flex:none; display:flex; align-items:center; gap:.4rem; appearance:none;
-  background:none; border:0; border-radius:5px; padding:.3rem .5rem; cursor:pointer;
-  font:400 11.5px/1 var(--mono); color:var(--muted); }
+.ex-files button { flex:none; display:flex; align-items:center; gap:var(--gap-tight);
+  appearance:none; background:none; border:0; border-radius:5px; padding:.3rem .5rem;
+  cursor:pointer; font:400 11.5px/1 var(--mono); color:var(--muted); align-self:auto; }
 .ex-files button::before { content:''; width:5px; height:5px; border-radius:50%;
   background:var(--side); flex:none; }
 .ex-files button[data-side=server]  { --side:var(--warm); }
@@ -219,40 +326,58 @@ label:has(> input[type=checkbox]), label:has(> input[type=radio]) {
 .ex-files button:hover { color:var(--ink); }
 .ex-files button[aria-selected=true] { color:var(--ink);
   background:color-mix(in srgb, var(--ink) 7%, transparent); }
-.example pre { margin:0; border:0; border-radius:0; background:transparent; }
+.example pre { border:0; border-radius:0; background:transparent; }
 
 /* No fake browser chrome: a URL bar is two rows of furniture around the one thing worth
    looking at, and the address is on the frame's title where it costs nothing. */
 .ex-browser { position:relative; padding:.7rem;
-  background:color-mix(in srgb, var(--ink) 4%, transparent); }
+  background:color-mix(in srgb, var(--ink) 4%, transparent);
+  display:flex; flex-direction:column; gap:var(--gap-tight); }
+/* THE FRAME IS RUNNING, and nothing else on the page is — a reader who takes the render for
+   a screenshot never presses the button the claim is behind. Green rather than the signal
+   colour: this is a status, and it is the one word that says the counters under it are the
+   arm's own and are moving. */
+.ex-live { font:500 10.5px/1 var(--mono); letter-spacing:.08em; color:var(--good);
+  text-transform:uppercase; }
 .ex-replay { position:absolute; top:1.15rem; right:1.15rem; z-index:1;
   padding:.28rem .6rem; border-radius:999px; border:1px solid var(--rule);
   background:var(--raised); color:var(--muted); font:500 10.5px/1 var(--mono); }
 .ex-replay:hover { background:var(--raised); color:var(--ink); border-color:var(--muted); }
+/* WHAT THE ARM ACTUALLY DID, in the frame's own register: mono, recessive, and reading as an
+   instrument beside the render rather than as part of it. Hidden until the arm reports, so an
+   example that makes no request shows no empty line where a count would be — and `hidden` is
+   `display:none`, so the gap above it goes with it. */
 /* The height is SET BY THE FRAME, which is the only side that can measure its content —
    see the driver in renderExample.ts. This is the floor before the first report. */
 /* CONTENT-BOX against the global border-box: the height reported is the CONTENT height, and
    a border-box frame would be that much shorter than its own document — two pixels of scroll
    the reader never asked for, and enough to make the frame keep a wheel gesture. */
-.ex-result { box-sizing:content-box; width:100%; height:6rem;
+.ex-result { box-sizing:content-box; width:100%; height:6rem; flex:none;
   border:1px solid var(--rule); border-radius:7px;
   background:var(--paper); display:block; }
-.ex-line { margin:0; padding:.7rem 1rem .1rem; font-size:12px; }
+/* An exchange is a column of five: two lines, two header tables and a body. */
+.ex-panel > div[data-file] { display:flex; flex-direction:column; gap:var(--gap-tight);
+  padding-block:var(--gap-snug); }
+.ex-line { padding:0 1rem; font-size:12px; }
 .ex-line code { background:none; padding:0; color:var(--muted); }
-.ex-line code::before { margin-right:.45rem; }
+/* THE TWO MARGINS THE SCALE KEEPS, here and on `.ex-result-pass` below. A gap needs a box
+   on both sides of it and these are glyphs INSIDE a line — a marker on inline content, with
+   no container to own the distance. They take a step off the scale rather than a number. */
+.ex-line code::before { margin-right:var(--gap-tight); }
 .ex-request code::before { content:'\2192'; color:var(--cool); }
 .ex-status code::before { content:'\2190'; color:var(--warm); }
-/* Request and response headers are two separate tables, so their columns only line up
-   if the geometry is DECLARED — auto layout sizes each one from its own content, which
-   put the values at two different left edges. 11rem fits the longest header name abide
-   sends at this size; a longer one wraps rather than shifting the column. */
-.ex-headers { margin:.4rem 1rem .8rem; width:calc(100% - 2rem); font-size:12px;
-  table-layout:fixed; }
+/* THE INSET IS THE WIDTH, not a margin: a table cannot be padded from the outside, so the
+   1rem either side is stated as the width it leaves and centred in the column. Request and
+   response headers are two separate tables, so their columns only line up if the geometry is
+   DECLARED — auto layout sizes each one from its own content, which put the values at two
+   different left edges. 11rem fits the longest header name abide sends at this size; a
+   longer one wraps rather than shifting the column. */
+.ex-headers, .ex-bench, .ex-tests, .ex-note { width:calc(100% - 2rem); align-self:center; }
+.ex-headers { font-size:12px; table-layout:fixed; }
 .ex-headers td { padding:.18rem .6rem .18rem 0; border:0; overflow-wrap:anywhere; }
 .ex-headers tr td:first-child { width:11rem; }
 .ex-headers code { background:none; padding:0; }
 .ex-headers tr td:first-child code { color:var(--muted); }
-.ex-bench, .ex-tests { margin:.9rem 1rem; width:calc(100% - 2rem); }
 .ex-status { width:1%; white-space:nowrap; text-align:right; font:500 11px/1 var(--mono); }
 .ex-ratio { text-align:right; }
 /* A verdict cell: the answer carries the colour, the reason recedes behind it. */
@@ -264,21 +389,20 @@ label:has(> input[type=checkbox]), label:has(> input[type=radio]) {
 .ex-bad { color:var(--bad); }
 .ex-result-pass { color:var(--good); }
 .ex-result-pass::before { content:''; display:inline-block; width:5px; height:5px;
-  margin-right:.45rem; border-radius:50%; background:currentColor; }
-.ex-bench th, .ex-tests th th { padding-bottom:.5rem; }
-.ex-note { margin:0 1rem 1rem; font-size:12px; color:var(--muted); }
+  margin-right:var(--gap-tight); border-radius:50%; background:currentColor; }
+.ex-bench th { padding-bottom:.5rem; }
+.ex-note { font-size:12px; color:var(--muted); }
 
-table { border-collapse:collapse; width:100%; margin:1.5rem 0; font-size:14.5px; }
+table { border-collapse:collapse; width:100%; font-size:14.5px; }
 th { font:500 9.5px/1 var(--mono); text-transform:uppercase; letter-spacing:.11em;
   color:var(--muted); text-align:left; padding:0 .9rem .6rem 0;
   border-bottom:1px solid var(--rule); }
 td { padding:.62rem .9rem .62rem 0; border-bottom:1px solid var(--rule); vertical-align:top; }
 tr:last-child td { border-bottom:0; }
-blockquote { margin:1.7rem 0; padding:.9rem 1.1rem; border-left:2px solid var(--rule);
+blockquote { padding:.9rem 1.1rem; border-left:2px solid var(--rule);
   background:var(--raised); border-radius:0 6px 6px 0; color:var(--muted); font-size:14.5px; }
-blockquote p:first-child { margin-top:0; } blockquote p:last-child { margin-bottom:0; }
 
-footer { display:flex; gap:1rem; margin-top:5rem; font-size:14px; }
+footer { display:flex; gap:var(--gap-flow); font-size:14px; }
 footer .next { margin-left:auto; text-align:right; }
 
 @media (max-width:82rem) {

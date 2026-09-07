@@ -3,9 +3,14 @@ title: Slow down a value that changes too fast
 nav: Throttle & debounce
 intent: A search box that fires on every keystroke, without firing on every keystroke.
 covers:
-  - `throttle`
-  - `debounce`
-  - `identity`
+  - state › `throttle`
+  - memo › `throttle`
+  - channel › `throttle`
+  - state › `debounce`
+  - memo › `debounce`
+  - channel › `debounce`
+  - state › `identity`
+  - memo › `identity`
 examples:
   - packages/dogfood/examples/debouncing
 ---
@@ -22,15 +27,32 @@ move either.
 
 ## `throttle` fires first and rate-limits; `debounce` waits for quiet
 
-Both cap **revalidation**, and both apply however it was triggered — a dependency moving, an
-explicit `invalidate`, a `refresh`, a `ttl` lapsing. There is no second rule for the manual case.
+Both cap **how often the value changes**, and both apply however the change was driven. What
+drives it is what the producer is:
+
+| The value | What moves it | What a window collapses |
+| --- | --- | --- |
+| a `memo` over a load | a trigger — a dependency, an `invalidate`, a `refresh`, a `ttl` lapsing | reloads |
+| a `memo` over a stream | a chunk | recomputes |
+| a `state` | a write | wakes |
+| a `channel` | a publish | wakes |
 
 | | Fires |
 | --- | --- |
 | `throttle: n` | immediately, then at most once per `n` ms |
-| `debounce: n` | once the triggers stop for `n` ms |
+| `debounce: n` | once the changes stop for `n` ms |
 
-Set both and `debounce` wins.
+Declaring both is a build error naming the value, there being no reading under which one of
+them is what you meant.
+
+A window **delays**, and does not itself drop. It collapses a batch into one delivery, so a cursor
+over a capped room gets what the ring held in one go rather than one per frame, and a
+`{#for await}` block keyed on the sequence number stays sound. For a plain read the batch is the
+latest value, which is why the same rule looks like two behaviours.
+
+What survives the batch is `tail`'s business and never the window's. There is no second buffer
+behind a cap, so a room capped at the default retention serves the latest message and loses the
+ones between it. Raise `tail` where the ones between are the point.
 
 `throttle` is right where the value is being watched — a live count, a cursor position, anything
 where the first update should be immediate and the rate is the problem:
@@ -40,7 +62,7 @@ where the first update should be immediate and the rate is the problem:
 `debounce` is right where the intermediate values are not answers — a half-typed query being the
 example the whole page is built on.
 
-## A capped memo keeps serving the held value
+## A capped value keeps serving what it holds
 
 Inside the window the held value keeps being served and `refreshing()` is true, which is the
 `refresh()` contract already:
@@ -54,11 +76,15 @@ above passes through once, on its way to the first result.
 Read on: [Loading states](show-a-value-that-isnt-there-yet.md) ·
 [Reloading](decide-when-a-value-reloads.md)
 
-## The cap belongs on the memo, not at the call site
+## The cap belongs on the value, not at the call site
 
-A memo that must not join a stampede says so about itself, where the knowledge is — a tag-wide
+A value that must not join a stampede says so about itself, where the knowledge is — a tag-wide
 `invalidate({ tags: ['invoice'] })` cannot know what else it matched, so it is the wrong place to
 decide how hard any one entry may be hit.
+
+The one read that ignores the cap is a `bind:`. The binding is what wrote the value, so it sees
+its own write immediately while the rest of the page waits out the window — otherwise a throttled
+state under `bind:value` would snap the text back under a typist between keystrokes.
 
 Read on: [Caching](load-once-per-set-of-arguments.md)
 
@@ -88,17 +114,17 @@ built array is `!==` whatever is in it — so an app whose values `structural` b
 own two-argument function.
 
 It is an option on every `Reactive`, not something a memo has. A state holding an object is the
-case you hit first: a form binding rewrites it per keystroke, a `refresh()` on `state(fetchUser())`
-returns a structurally identical user, and a write through a member path copies down the path —
-each of them a new reference for a value that did not move.
+case you hit first. A form binding rewrites it per keystroke, a `refresh()` on
+`state(fetchUser())` returns a structurally identical user, and a write through a member path
+copies down the path. Each of them is a new reference for a value that did not move.
 
 {% snippet debouncing src/shared/filters.ts export const filters = state( %}
 
 **A room is the one producer that defaults to the reference**, and that is a fact about what a
-production means there rather than an exception to the rule: a publish is an EVENT and two
-identical events are two events, where a state's or a memo's production is a VALUE and two
-identical values are one. So a chat room left at the default still mints two `seq`s for a
-double-sent line.
+production means there rather than an exception to the rule. A publish is an EVENT, and two
+identical events are two events. A state's or a memo's production is a VALUE, and two identical
+values are one. So a chat room left at the default still mints two `seq`s for a double-sent
+line.
 
 Ask for it and it reads as **consecutive duplicates collapse** — a presence channel spelling
 `identity: structural` and republishing an unchanged roster every five seconds wakes nobody, and

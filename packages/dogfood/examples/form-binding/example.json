@@ -1,24 +1,13 @@
 {
     "title": "A field bound to state",
     "summary": "Type in the field. The value below is the state, normalised on the way in by the transform the code declares.",
+    "app": "unconverted",
     "files": [
         "src/ui/pages/account/page.abide"
     ],
     "route": "/account",
-    "states": [
-        {
-            "id": "editing",
-            "file": "handle.html",
-            "mirror": [
-                {
-                    "from": "input[name=name]",
-                    "to": "[data-echo]"
-                }
-            ]
-        }
-    ],
     "bench": {
-        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler.",
+        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete \u2014 markup, client and handler.",
         "rows": [
             {
                 "metric": "Keystroke to paint",

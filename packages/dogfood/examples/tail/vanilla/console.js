@@ -47,12 +47,33 @@ function render() {
     list.replaceChildren(...rows)
 }
 
-const socket = new WebSocket('/api/logs')
+// The stream is one response that never finishes rather than one
+// that arrives, so it is read a line at a time. A chunk boundary
+// lands wherever the network put it — mid-line as often as not —
+// so the remainder is held over for the chunk that completes it.
+async function* frames(response) {
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let held = ''
+    for (;;) {
+        const { value, done } = await reader.read()
+        if (done) return
+        held += decoder.decode(value, { stream: true })
+        let at = held.indexOf('\n')
+        while (at !== -1) {
+            yield JSON.parse(held.slice(0, at))
+            held = held.slice(at + 1)
+            at = held.indexOf('\n')
+        }
+    }
+}
 
-socket.addEventListener('message', (event) => {
-    push(JSON.parse(event.data))
-    render()
-})
+async function follow() {
+    for await (const line of frames(await fetch('/api/logs?stream=api'))) {
+        push(line)
+        render()
+    }
+}
 
 field.addEventListener('input', () => {
     history.length = at + 1
@@ -83,3 +104,4 @@ copy.addEventListener('click', () => {
 })
 
 render()
+follow()

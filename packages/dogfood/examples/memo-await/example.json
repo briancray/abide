@@ -1,0 +1,9 @@
+{
+    "title": "A read after an `await` registers nothing",
+    "summary": "Two counts under one contact filter, differing in one line. Change the filter.",
+    "app": "crm",
+    "files": [
+        "src/ui/components/Counts.abide"
+    ],
+    "route": "/memo/await"
+}

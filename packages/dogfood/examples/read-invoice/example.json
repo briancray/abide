@@ -1,6 +1,7 @@
 {
     "title": "Read an invoice",
-    "summary": "A row from your database on the page, with nothing between them. Two files, 16 lines — one is the handler you would have written anyway.",
+    "summary": "A row from your database on the page, with nothing between them. Two files, 16 lines \u2014 one is the handler you would have written anyway.",
+    "app": "unconverted",
     "files": [
         "src/server/rpc/invoices.ts",
         "src/ui/pages/invoices/[id]/page.abide"
@@ -41,7 +42,7 @@
         ]
     },
     "bench": {
-        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler.",
+        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete \u2014 markup, client and handler.",
         "rows": [
             {
                 "metric": "First paint",
@@ -76,18 +77,6 @@
         ]
     },
     "route": "/invoices/42",
-    "states": [
-        {
-            "id": "pending",
-            "file": "result.pending.html",
-            "hold": 700,
-            "after": "settled"
-        },
-        {
-            "id": "settled",
-            "file": "result.html"
-        }
-    ],
     "vanilla": [
         "index.html",
         "invoice.js",

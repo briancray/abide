@@ -38,9 +38,9 @@ Read on: [Mutations](change-something-on-the-server.md)
 
 ## `timeout` is milliseconds without progress
 
-Not wall-clock from the first byte. On a handler that yields, it is **per chunk** — which is
-what makes one number right for both shapes: a report that produces a row every second runs for
-an hour under `timeout: 30_000`, and the same number still catches a source that has stopped
+Not wall-clock from the first byte. On a handler that yields, it is **per chunk**, which is what
+makes one number right for both shapes. A report that produces a row every second runs for an
+hour under `timeout: 30_000`, and the same number still catches a source that has stopped
 producing.
 
 A call that exceeds it fails with `504`. That is an undeclared refusal — `name: 'HttpError'`,
@@ -52,7 +52,7 @@ Serving the handler raises the request's own idle timeout to the same number. A 
 not produce a byte for minutes — a cold transcode, a report that scans before it yields — has said
 so once, and does not also have to reach for the server to keep its connection from being reaped.
 
-It RAISES only, and the request's floor is the **max** over every handler that ran in it: a fast
+It RAISES only, and the request's floor is the **max** over every handler that ran in it. A fast
 handler calling a slow one in process is held for the slow one's declared bound with nothing
 declared at the outer, so nothing has to work out who calls whom. Unset raises nothing and the
 platform default stands; `Infinity` is an app saying never reap this connection.

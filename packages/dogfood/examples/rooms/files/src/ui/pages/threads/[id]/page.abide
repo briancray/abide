@@ -24,7 +24,7 @@ const draft = state('')
 </ul>
 
 <label>
-    Message
+    <div>Message</div>
     <input bind:value={draft}>
 </label>
 <p class="hint">{draft.length} of 500 characters</p>

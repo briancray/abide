@@ -27,9 +27,9 @@ export const getStock = GET(stockForShelf)
 // warehouse.
 //
 // `invalidate` and not `refresh`: NOTHING HERE IS DISPLAYING THE
-// VALUE, and a `refresh()` with no reader to serve degenerates to
-// exactly this. The caller whose page is showing the number does
-// its own, in its own scope.
+// VALUE, and a sweep over a memo reloads only what something is
+// reading, so `refresh` would come to exactly this. The caller
+// whose page is showing the number does its own, in its own scope.
 export const bookOut = POST(async ({ warehouse, sku }: Shelf) => {
     await database.stock.decrement(warehouse, sku)
     getStock.invalidate({ sku })

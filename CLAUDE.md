@@ -1,5 +1,48 @@
 # abide - isomorphic type-safe framework for reactive async interfaces for humans and machines built on bun and web standards
 
+# documents
+
+four documents carry what has been DECIDED, each answering one question, and a statement in the
+wrong one is the drift they exist to stop. this file is a fifth and it answers a different
+question — how to WORK here. the other four are about the product.
+
+* `docs/REGISTRY.md` — every name an app author can write, its signature, one sentence of what it
+IS, and the clauses that govern it. behaviour is cited, never described.
+* `docs/RULEBOOK.md` — every rule, numbered, stated ONCE. anything that needs a rule cites its
+number rather than restating it, because a second copy drifts and only one of them gets fixed.
+* `docs/DECISIONS.md` — every road not taken, naming the alternative it refused and the clauses it
+decided. a reason a MAINTAINER needs; a reason a USER needs is a guide's.
+* `docs/BRAND.md` — positioning, voice, vocabulary, visual identity.
+
+BEFORE WRITING A DOCUMENTATION PAGE, read RULEBOOK 40 and BRAND. 40 is the docs system — one
+example per BEHAVIOUR TAUGHT (40.23, 40.24), what a `{% snippet %}` guarantees (40.8-40.12), and
+what a panel earns (40.13, 40.14) —
+and BRAND is the voice, the vocabulary, and the register of a title against a nav label. both bind
+today, where most of the rulebook describes a design nothing can run yet.
+
+BEFORE DECIDING BEHAVIOUR, grep RULEBOOK for a clause rather than inventing one. deciding new
+behaviour means writing three things: the clause, the registry row it hangs off, and the DECISIONS
+entry wherever an alternative was refused. AMENDING a clause means one more: grep `Assumes:` for
+its number. a decision resting on a premise the amendment removes goes on reading as valid in both
+documents, nothing contradicting it and only its REASON having stopped being true — which is how D3
+outlived the monotonicity it was built on for fifty-two entries. the framework is not written, so a clause is not
+something to check code against — what it stops is one rule being decided twice, differently, by
+two sessions that never met.
+
+each of the four states its own format rules at the top and `packages/dogfood/tests/rulebook.test.ts`
+gates them, in both directions: a rule with no name to hang off, and a name with no rule. a rule
+that turns out to be checkable belongs in a test rather than in prose — here as much as there.
+
+SOME OF THIS FILE IS GATED TOO, and where it is, the test is the rule and this is the reason:
+`packages/abide/tests/conventions.test.ts` holds the self-import ban, the `node:` justification, the
+constants leaf and the file-naming rule; `packages/harness/tests/lanes.test.ts` holds the measure
+lane's isolation, resolved through the built graph rather than the source text; and
+`packages/dogfood/tests/coverage.test.ts` holds the ratio rule — a bench row with no arm beside it
+is a figure, not a claim. WHAT IS NOT GATED IS JUDGEMENT, and it is most of the file: whether a name
+is descriptive, whether a comment is load-bearing, whether the share was named before the layer was
+changed. a check produces CANDIDATES and the rule decides; where no check can produce one, the rule
+is all there is.
+
 # project goals
 
 * exclusively use bun apis and javascript native apis when they're available
@@ -8,9 +51,17 @@
 * maintain a consistent runtime between all builds and environments
 * isomorphism by default — same callable, same name, same *intent* on both sides
 * uses typescript 7 for compiler
-* valid typescript or javascript should always compile — in a `.abide`
-* a state is read and written BY NAME inside a `.abide` file, and the explicit `x()` / `x.set(v)` spelling must keep compiling — the sugar is over it, never instead of it. Naming a state alone hands over the STATE; using it in an expression reads it.
+* valid typescript or javascript should always compile — in a `.abide`. RULEBOOK 19.13 is the
+rule and D22 is why it widens rather than refusing
+* a state is read and written BY NAME inside a `.abide` file, and the explicit `x()` / `x.set(v)`
+spelling keeps compiling — the sugar is over it, never instead of it. RULEBOOK 31.1, 31.3 and 31.9,
+and D28 is why a binding holds rather than reads
 * small and low level client bundle built from compiled .abide
+* prefer UNIFORMITY over a hard-coded exception, even where the uniform variant is inert. an
+option that exists everywhere and does nothing on one producer is one concept; the same option
+withheld from that producer is two — the option, and the exception. an inert variant is
+understood from the invariant it already carries, where an exception has to be taught, is a
+branch in the implementation, and is a case in every debugging session
 * value performance when all other conditions are met
 
 # seams and imports

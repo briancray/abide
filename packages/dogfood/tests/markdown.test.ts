@@ -149,3 +149,108 @@ test('a verdict cell is marked up, and a sentence that opens on one is not', asy
     const prose = await renderPage(failures!, pages, 0)
     expect(prose).toContain('<td>no route matched')
 })
+
+// A `**` or a `](` reaching the HTML is inline markup the renderer could not represent, and it
+// fails SILENTLY in the one direction nothing else here watches: the markdown download stays
+// correct, so every gate that reads the markdown passes while the page a reader opens shows its
+// asterisks and its brackets. `renderInline` used to apply emphasis and links per backtick
+// SEGMENT, so anything straddling a code span — `**`x`**`, or a link whose TEXT is code — had its
+// opener and its closer in different strings and neither matched. On one page the orphaned `**`
+// then paired with another two sentences later and emboldened the prose between them.
+//
+// Both markers occur legitimately in code, and in two places a reader never sees as prose: a glob
+// (`#server/rpc/**`) inside a span, and `TRANSFORMS[rule.transform](value)` in the driver script
+// an example panel carries. So the check STRIPS rather than exempts a page — an exemption list
+// would have had to name the panel every example embeds.
+//
+// With the code-span lift in `renderInline` reverted: 14 pages — 7 on each marker, none on both.
+test('no page ships inline markup the renderer could not read', async () => {
+    const pages = await readPages()
+    const literal: string[] = []
+    for (let index = 0; index < pages.length; index += 1) {
+        const page = pages[index]
+        if (!page) continue
+        const html = await renderPage(page, pages, index)
+        const prose = html
+            .slice(html.indexOf('<main'), html.indexOf('</main>'))
+            .replace(/<script[\s\S]*?<\/script>/g, '')
+            .replace(/srcdoc="[\s\S]*?"/g, '')
+            .replace(/<pre>[\s\S]*?<\/pre>/g, '')
+            .replace(/<code>[\s\S]*?<\/code>/g, '')
+        if (prose.includes('**')) literal.push(`${page.slug}: emphasis`)
+        if (prose.includes('](')) literal.push(`${page.slug}: link`)
+    }
+    expect(literal).toEqual([])
+})
+
+// A `\\|` is the only way to write a union type in a table cell, and splitting a row on every pipe
+// broke that cell in two and left the backslash in the output — `() => void \\` beside a cell
+// reading `Disposer`, and every cell after it shunted one column right. Silent the usual way: the
+// table renders, the page looks fine, and only a reader who knows the type notices it is wrong.
+//
+// Checked on the RENDERED row rather than on the markdown, because what went wrong was the split:
+// a row whose header declares three columns has to produce three cells.
+//
+// With the escaped-pipe split in `renderTableRow` reverted: 7 pages.
+test('a table row has as many cells as its header declares', async () => {
+    const pages = await readPages()
+    const ragged: string[] = []
+    for (let index = 0; index < pages.length; index += 1) {
+        const page = pages[index]
+        if (!page) continue
+        const html = await renderPage(page, pages, index)
+        for (const table of html.matchAll(/<table>([\s\S]*?)<\/table>/g)) {
+            const body = table[1] ?? ''
+            const columns = (body.match(/<th>/g) ?? []).length
+            if (!columns) continue
+            for (const row of body.matchAll(/<tr>((?:<td>[\s\S]*?<\/td>)+)<\/tr>/g)) {
+                const cells = (row[1]?.match(/<td>/g) ?? []).length
+                if (cells !== columns)
+                    ragged.push(`${page.slug}: ${cells} cells under ${columns} columns`)
+            }
+        }
+    }
+    expect(ragged).toEqual([])
+})
+
+// The backslash itself, which is what a reader actually sees. Escaped anywhere else in prose it
+// would be legitimate, so this looks only where the escape has a meaning the renderer must undo.
+test('no rendered table cell ships the backslash of an escaped pipe', async () => {
+    const pages = await readPages()
+    const stray: string[] = []
+    for (let index = 0; index < pages.length; index += 1) {
+        const page = pages[index]
+        if (!page) continue
+        const html = await renderPage(page, pages, index)
+        for (const table of html.matchAll(/<table>[\s\S]*?<\/table>/g)) {
+            if (/\\(?=\s*<\/(?:td|code)>)/.test(table[0])) stray.push(page.slug)
+        }
+    }
+    expect([...new Set(stray)]).toEqual([])
+})
+
+// A CAPTION HAS TO NAME THE SYNTAX. `browser` says where the code runs and leaves a reader to
+// guess whether they are looking at a name read by name in a `.abide` file or at `s()` in a `.ts`
+// one — which are the two forms this whole design is about, so guessing is not acceptable. Seventy
+// -one fences shipped captioned by seam alone.
+//
+// Asserted on the RENDERED caption rather than on the fence, because the syntax is derived from
+// the language token rather than written into the label: what regresses is the derivation, not the
+// markdown, and the markdown would look unchanged either way.
+//
+// With `captionOf` reverted to `displayPath`: 52 pages.
+test('every code caption names a syntax or a file', async () => {
+    const pages = await readPages()
+    const vague: string[] = []
+    for (let index = 0; index < pages.length; index += 1) {
+        const page = pages[index]
+        if (!page) continue
+        const html = await renderPage(page, pages, index)
+        for (const caption of html.matchAll(/<figcaption>([^<]*)<\/figcaption>/g)) {
+            const text = caption[1] ?? ''
+            if (text.startsWith('.') || text.startsWith('#') || text.startsWith('src/')) continue
+            vague.push(`${page.slug}: "${text}"`)
+        }
+    }
+    expect([...new Set(vague)]).toEqual([])
+})

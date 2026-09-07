@@ -1,6 +1,7 @@
 {
     "title": "Two readers, one request",
     "summary": "A page and a component that both need customer 42, with nothing lifted and nothing threaded down. Switch customers, then switch back and watch the request count refuse to move.",
+    "app": "unconverted",
     "files": [
         "src/ui/pages/customers/[id]/page.abide",
         "src/ui/components/Plan.abide",
@@ -8,50 +9,8 @@
         "src/server/rpc/rates.ts"
     ],
     "route": "/customers/42",
-    "states": [
-        {
-            "id": "loading42",
-            "file": "loading42.html",
-            "hold": 700,
-            "after": "ready42"
-        },
-        {
-            "id": "ready42",
-            "file": "ready42.html",
-            "on": {
-                "click [data-customer='43']": "loading43"
-            }
-        },
-        {
-            "id": "loading43",
-            "file": "loading43.html",
-            "hold": 700,
-            "after": "ready43"
-        },
-        {
-            "id": "ready43",
-            "file": "ready43.html",
-            "on": {
-                "click [data-customer='42']": "cached42"
-            }
-        },
-        {
-            "id": "cached42",
-            "file": "cached42.html",
-            "on": {
-                "click [data-customer='43']": "cached43"
-            }
-        },
-        {
-            "id": "cached43",
-            "file": "cached43.html",
-            "on": {
-                "click [data-customer='42']": "cached42"
-            }
-        }
-    ],
     "bench": {
-        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler.",
+        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete \u2014 markup, client and handler.",
         "rows": [
             {
                 "metric": "Second reader, same key",

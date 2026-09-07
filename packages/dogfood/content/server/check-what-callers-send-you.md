@@ -5,13 +5,15 @@ intent: Reject a malformed body at the boundary, with a type on the other side t
 covers:
   - state › `schema`
   - memo › `schema`
-  - `args`
+  - memo › `args`
+  - channel › `args`
   - `Schema<T>`
   - `JsonValue`
   - `Issues<T>`
   - `Paths<T>`
   - `validateJson`
   - `JsonSchema`
+  - channel › `schema`
 ---
 
 A handler's arguments are a shape written down twice in most stacks: once as a TypeScript type
@@ -264,9 +266,9 @@ const invoice = memo(
 )
 ```
 
-The order is forced rather than chosen. A browser has to compute the same key the server does
-in order to find its seeded value, and it cannot run a schema it was never sent — so the key is
-taken before validation, or every handler with a normalising schema re-issues its call on
+The order is forced rather than chosen. A browser has to compute the same key the server does in
+order to find its seeded value, and it cannot run a schema it was never sent. So the key is
+taken before validation. Otherwise every handler with a normalising schema re-issues its call on
 hydration.
 
 On a `channel` the same cost is sharper: two spellings of a room key are **two rooms**, and a

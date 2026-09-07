@@ -1,6 +1,7 @@
 {
     "title": "A value that outlives the process",
     "summary": "A theme in a cookie, a cache in redis, and one option saying so on each. Toggle it, then reload and watch which frame it comes back on.",
+    "app": "unconverted",
     "files": [
         "src/ui/pages/settings/page.abide",
         "src/shared/cookieStore.ts",
@@ -9,32 +10,8 @@
         "src/server/sockets/presence.ts"
     ],
     "route": "/settings",
-    "states": [
-        {
-            "id": "light",
-            "file": "light.html",
-            "on": {
-                "click [data-theme]": "dark"
-            }
-        },
-        {
-            "id": "dark",
-            "file": "dark.html",
-            "on": {
-                "click [data-theme]": "light",
-                "click [data-reload]": "reloaded"
-            }
-        },
-        {
-            "id": "reloaded",
-            "file": "reloaded.html",
-            "on": {
-                "click [data-theme]": "light"
-            }
-        }
-    ],
     "bench": {
-        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — the theme on both sides, the flags cache, the keyed one, and the roster.",
+        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete \u2014 the theme on both sides, the flags cache, the keyed one, and the roster.",
         "rows": [
             {
                 "metric": "Places the cookie is spelled",

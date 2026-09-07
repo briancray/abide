@@ -1,0 +1,26 @@
+<script>
+import { memo, state } from 'abide'
+
+const SEAT_PRICE = 25
+
+let seats = state(2)
+const total = memo(() => seats * SEAT_PRICE)
+
+function more() {
+    seats += 1
+}
+
+function fewer() {
+    seats = Math.max(0, seats - 1)
+}
+</script>
+
+<ul class="grid">
+    <li><span>seats</span>
+        <div class="stepper">
+            <button onclick={fewer}>−</button>
+            <strong>{seats}</strong>
+            <button onclick={more}>+</button>
+        </div></li>
+    <li><span>deal total</span><strong>${total}</strong></li>
+</ul>

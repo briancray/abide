@@ -11,7 +11,7 @@ const currency = state.share('currency', () => state('USD'))
 <h1>Invoices</h1>
 
 <label>
-    Currency
+    <div>Currency</div>
     <select bind:value={currency}>
         <option value="USD">US dollars</option>
         <option value="EUR">Euros</option>

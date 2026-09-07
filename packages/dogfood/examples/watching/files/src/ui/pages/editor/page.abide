@@ -33,7 +33,7 @@ watch([topic], () => {
 <h1>Draft</h1>
 
 <label>
-    Topic
+    <div>Topic</div>
     <select bind:value={topic}>
         <option value="billing">Billing</option>
         <option value="support">Support</option>

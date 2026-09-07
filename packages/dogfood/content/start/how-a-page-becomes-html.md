@@ -10,7 +10,7 @@ covers:
 ---
 
 A request lands, and bytes start leaving before anything it needs has arrived. That is the one
-decision the rest of this page explains: **the document is not held for the data.** The head
+decision the rest of this page explains. **The document is not held for the data.** The head
 goes out as soon as it is known, the markup follows, and the values that were still in flight
 fill the places they were read.
 

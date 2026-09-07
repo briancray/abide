@@ -38,7 +38,8 @@ function render() {
 }
 
 async function load(key) {
-    const response = await fetch(`/api/stock/${key}`)
+    const [where, sku] = key.split('/')
+    const response = await fetch(`/api/stock?warehouse=${where}&sku=${sku}`)
     const value = await response.json()
     entries.set(key, { value, at: Date.now() })
     return value
@@ -85,7 +86,8 @@ now.addEventListener('click', () => reload(keyOf(warehouse)))
 // the rest are dropped, which is one call there and two arms here.
 book.addEventListener('click', async () => {
     const key = keyOf(warehouse)
-    await fetch(`/api/stock/${key}`, { method: 'POST' })
+    const body = JSON.stringify({ sku: SKU, warehouse })
+    await fetch('/api/stock/bookOut', { method: 'POST', body })
     for (const other of entries.keys()) {
         if (other === key || !other.endsWith(`/${SKU}`)) continue
         entries.delete(other)
@@ -97,6 +99,8 @@ nav.addEventListener('click', (event) => {
     const target = event.target.closest('[data-warehouse]')
     if (!target) return
     event.preventDefault()
+    for (const other of nav.children) other.removeAttribute('aria-current')
+    target.setAttribute('aria-current', 'page')
     warehouse = target.dataset.warehouse
     display(keyOf(warehouse))
 })

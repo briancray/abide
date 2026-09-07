@@ -1,37 +1,15 @@
 {
     "title": "A profile you can edit",
     "summary": "Loaded from the server, edited on the page, normalised on the way back in. One problem, and every local-state feature this page teaches falls out of it.",
+    "app": "unconverted",
     "files": [
         "src/ui/pages/profile/page.abide",
         "src/shared/profile.ts",
         "src/server/rpc/users.ts"
     ],
     "route": "/profile",
-    "states": [
-        {
-            "id": "editing",
-            "file": "editing.html",
-            "mirror": [
-                {
-                    "from": "input[name=handle]",
-                    "to": "[data-echo]",
-                    "transform": "slug"
-                }
-            ],
-            "on": {
-                "click [data-save]": "saved"
-            }
-        },
-        {
-            "id": "saved",
-            "file": "saved.html",
-            "on": {
-                "click [data-edit]": "editing"
-            }
-        }
-    ],
     "bench": {
-        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler.",
+        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete \u2014 markup, client and handler.",
         "rows": [
             {
                 "metric": "First paint",

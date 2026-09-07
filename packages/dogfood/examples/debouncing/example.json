@@ -1,68 +1,15 @@
 {
     "title": "Six keystrokes, one request",
     "summary": "A search box wired straight to a state, with the load capped on the memo that pays for it. Replay to watch the query move six times and the request count move once.",
+    "app": "unconverted",
     "files": [
         "src/ui/pages/search/page.abide",
         "src/server/rpc/search.ts",
         "src/shared/filters.ts"
     ],
     "route": "/search",
-    "states": [
-        {
-            "id": "k1",
-            "file": "k1.html",
-            "hold": 260,
-            "after": "k2"
-        },
-        {
-            "id": "k2",
-            "file": "k2.html",
-            "hold": 260,
-            "after": "k3"
-        },
-        {
-            "id": "k3",
-            "file": "k3.html",
-            "hold": 260,
-            "after": "k4"
-        },
-        {
-            "id": "k4",
-            "file": "k4.html",
-            "hold": 260,
-            "after": "k5"
-        },
-        {
-            "id": "k5",
-            "file": "k5.html",
-            "hold": 260,
-            "after": "k6"
-        },
-        {
-            "id": "k6",
-            "file": "k6.html",
-            "hold": 500,
-            "after": "searching"
-        },
-        {
-            "id": "searching",
-            "file": "searching.html",
-            "hold": 700,
-            "after": "results"
-        },
-        {
-            "id": "results",
-            "file": "results.html",
-            "mirror": [
-                {
-                    "from": "input",
-                    "to": "[data-echo]"
-                }
-            ]
-        }
-    ],
     "bench": {
-        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler.",
+        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete \u2014 markup, client and handler.",
         "rows": [
             {
                 "metric": "Requests over six keystrokes",

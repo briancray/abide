@@ -8,12 +8,7 @@ const byId = new Map()
 const rowFor = new Map()
 
 function cells(order) {
-    return [
-        `#${order.id}`,
-        order.customer,
-        order.status,
-        `$${order.total.toFixed(2)}`,
-    ]
+    return [`#${order.id}`, order.customer, order.status, `$${order.total.toFixed(2)}`]
 }
 
 function paint(order) {
@@ -55,6 +50,27 @@ function apply({ id, order }) {
     paint(order)
 }
 
+// The feed is one response that never finishes rather than one that
+// arrives, so it is read a line at a time. A chunk boundary lands
+// wherever the network put it — mid-line as often as not — so the
+// remainder is held over for the chunk that completes it.
+async function* frames(response) {
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let held = ''
+    for (;;) {
+        const { value, done } = await reader.read()
+        if (done) return
+        held += decoder.decode(value, { stream: true })
+        let at = held.indexOf('\n')
+        while (at !== -1) {
+            yield JSON.parse(held.slice(0, at))
+            held = held.slice(at + 1)
+            at = held.indexOf('\n')
+        }
+    }
+}
+
 const response = await fetch('/api/orders')
 for (const order of await response.json()) {
     byId.set(order.id, order)
@@ -63,14 +79,7 @@ for (const order of await response.json()) {
 loading.remove()
 count.textContent = String(byId.size)
 
-const feed = new EventSource('/api/orders/changes')
-feed.addEventListener('message', (event) => {
-    apply(JSON.parse(event.data))
+for await (const change of frames(await fetch('/api/orders/changed'))) {
+    apply(change)
     count.textContent = String(byId.size)
-})
-feed.addEventListener('error', () => {
-    // A dropped feed has no cursor to resume from, so the whole list
-    // is refetched and every row repainted.
-    feed.close()
-    location.reload()
-})
+}

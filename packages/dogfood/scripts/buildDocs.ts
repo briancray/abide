@@ -12,7 +12,14 @@
 import { rm } from 'node:fs/promises' // bun has no recursive directory remove of its own
 import { NAV } from './NAV.ts'
 import { exampleMarkdown, readExample } from './renderExample.ts'
-import { EXAMPLE, LEAD, SNIPPET, renderInline, renderMarkdown } from './renderMarkdown.ts'
+import {
+    EXAMPLE,
+    groupSections,
+    LEAD,
+    renderInline,
+    renderMarkdown,
+    SNIPPET,
+} from './renderMarkdown.ts'
 import { snippetHtml, snippetMarkdown } from './renderSnippet.ts'
 import { type ZipEntry, zip } from './zip.ts'
 
@@ -30,6 +37,10 @@ type Page = {
     // convention, so an agent reading the markdown alone knows where the files are without
     // being told how `{% example name %}` resolves.
     examples: string[]
+    // The REGISTRY sections a reference page enumerates. `covers:` is the guides' claim and a
+    // reference page is refused one, so this is the parallel claim for the other document type:
+    // a guide claims a capability, a reference page claims a whole section of the surface.
+    enumerates: string[]
     stub: boolean
     body: string
 }
@@ -75,6 +86,7 @@ export async function readPages(): Promise<Page[]> {
                 intent: fields.get('intent')?.[0] ?? '',
                 covers: fields.get('covers') ?? [],
                 examples: fields.get('examples') ?? [],
+                enumerates: fields.get('enumerates') ?? [],
                 stub: fields.get('status')?.[0] === 'stub',
                 body,
             })
@@ -101,15 +113,15 @@ function renderNav(pages: Page[], current: string): string {
         const page = pages[index]
         if (!page) continue
         if (page.section !== section) {
-            if (section) html += '</ul>'
+            if (section) html += '</ul></section>'
             section = page.section
-            html += `<h2>${section}</h2><ul>`
+            html += `<section><h2>${section}</h2><ul>`
         }
         const here = page.slug === current ? ' aria-current="page"' : ''
         const stub = page.stub ? '<span class="stub" title="Stub — not written yet"></span>' : ''
         html += `<li><a href="${linkTo(current, page.slug)}"${here}>${renderInline(page.nav)}</a>${stub}</li>`
     }
-    return section ? `${html}</ul>` : html
+    return section ? `${html}</ul></section>` : html
 }
 
 // The heading list is read off the RENDERED body rather than the markdown, so a heading's
@@ -131,13 +143,13 @@ function renderHeadingList(body: string): string {
 // a page with one heading has no table of contents and still has a download.
 function renderRail(headings: string, markdownName: string, root: string): string {
     const contents = headings
-        ? `<h2 id="toc-title">On this page</h2><ul aria-labelledby="toc-title">${headings}</ul>`
+        ? `<section><h2 id="toc-title">On this page</h2><ul aria-labelledby="toc-title">${headings}</ul></section>`
         : ''
-    return `<aside class="toc">${contents}<h2 id="md-title">Markdown</h2>
+    return `<aside class="toc">${contents}<section><h2 id="md-title">Markdown</h2>
 <ul class="downloads" aria-labelledby="md-title">
 <li><a href="${markdownName}" download>Download this page</a></li>
 <li><a href="${root}abide.md" download>Download full docs</a></li>
-</ul></aside>`
+</ul></section></aside>`
 }
 
 // Scroll-spy. Offsets are MEASURED ONCE — on load, on resize, and after the webfonts
@@ -181,31 +193,17 @@ document.fonts?.ready.then(measure)
 measure()
 `
 
-// Panel tabs and file tabs are the same interaction, so one delegated listener per
-// example serves both rather than a listener per button. The result's REPLAY rides
-// along: opening the Result tab replays from the first state, which is the only way
-// a transient one — `pending()` — is ever visible.
+// Panel tabs and file tabs are the same interaction, so one delegated listener per example serves
+// both rather than a listener per button. RELOAD rides along, and it re-runs the arm from nothing
+// rather than replaying anything: the frame's transient states are the arm's own, so a first load
+// is something to do again rather than a strip to play.
 const EXAMPLE_TABS = `
 for (const example of document.querySelectorAll('.example')) {
   const browser = example.querySelector('.ex-browser')
   const frame = browser?.querySelector('.ex-result')
-  const states = browser ? JSON.parse(browser.querySelector('[data-states]').textContent) : []
-  let timer
+  const source = frame?.getAttribute('srcdoc')
 
-  function play(index) {
-    clearTimeout(timer)
-    const state = states[index]
-    if (!state || !frame) return
-    frame.srcdoc = state.html
-    if (!state.hold) return
-    const next = states.findIndex((candidate) => candidate.id === state.after)
-    if (next !== -1) timer = setTimeout(() => play(next), state.hold)
-  }
-  // NOTHING PLAYS AT LOAD, and an auto-play on scroll-in was tried and removed: Result
-  // leads now, so the frame is already showing the render, and starting the strip blanks
-  // the thing the reader just arrived at. Measured at 210ms of settled before the swap —
-  // a fifth of a second of showing the answer and then taking it away. REPLAY is the
-  // offer instead, which is the button's whole reason for existing.
+
   addEventListener('message', (event) => {
     if (!frame || event.source !== frame.contentWindow) return
     // A measured height, which is the one thing a stylesheet cannot know.
@@ -218,13 +216,18 @@ for (const example of document.querySelectorAll('.example')) {
       scrollBy(event.data.abideWheel.x, event.data.abideWheel.y)
       return
     }
-    const id = event.data && event.data.abide
-    const index = states.findIndex((state) => state.id === id)
-    if (index !== -1) play(index)
   })
 
+  // Registered above, so now ask: the frame has already run and already counted.
+  function ask() { frame?.contentWindow?.postMessage({ abideAsk: 1 }, '*') }
+  frame?.addEventListener('load', ask)
+  ask()
+
   example.addEventListener('click', (event) => {
-    if (event.target.closest('[data-replay]')) { play(0); return }
+    if (event.target.closest('[data-reload]')) {
+      if (frame && source !== null) { show({}); frame.srcdoc = source }
+      return
+    }
     const button = event.target.closest('button[role=tab]')
     if (!button) return
     const panel = button.dataset.panel
@@ -233,7 +236,6 @@ for (const example of document.querySelectorAll('.example')) {
         tab.setAttribute('aria-selected', String(tab === button))
       }
       for (const body of example.querySelectorAll('.ex-panel')) body.hidden = body.dataset.panel !== panel
-      if (panel === 'result' && states.length > 1) play(0)
       return
     }
     const file = button.dataset.file
@@ -315,10 +317,12 @@ export async function renderPage(page: Page, pages: Page[], index: number): Prom
 ${renderNav(pages, page.slug)}
 </nav>
 <main id="content">
+<header>
 ${page.stub ? '<p class="notice">Stub — title and intent decided, prose not written.</p>' : ''}
 <h1>${renderInline(page.title)}</h1>
 ${page.intent ? `<p class="intent">${renderInline(page.intent)}</p>` : ''}
-${body}
+</header>
+${groupSections(body)}
 <footer>${footer}</footer>
 </main>
 ${renderRail(headings, markdownName, root)}

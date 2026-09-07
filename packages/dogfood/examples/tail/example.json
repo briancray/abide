@@ -1,36 +1,15 @@
 {
     "title": "Two hundred retained, fifty replayed",
     "summary": "A log console that replays what it missed and then runs live, with a ring nobody wrote and an undo stack over the filter's own past values.",
+    "app": "unconverted",
     "files": [
         "src/ui/pages/console/page.abide",
         "src/shared/undo.ts",
         "src/server/rpc/logs.ts"
     ],
     "route": "/console",
-    "states": [
-        {
-            "id": "replay",
-            "file": "replay.html",
-            "hold": 900,
-            "after": "live"
-        },
-        {
-            "id": "live",
-            "file": "live.html",
-            "on": {
-                "click [data-filter]": "filtered"
-            }
-        },
-        {
-            "id": "filtered",
-            "file": "filtered.html",
-            "on": {
-                "click [data-undo]": "live"
-            }
-        }
-    ],
     "bench": {
-        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler. The hand-written arm is a ring too, which is the point: the rows below are what writing one costs, not what avoiding one saves.",
+        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete \u2014 markup, client and handler. The hand-written arm is a ring too, which is the point: the rows below are what writing one costs, not what avoiding one saves.",
         "rows": [
             {
                 "metric": "Lines retained",
@@ -65,8 +44,8 @@
             {
                 "metric": "Lines of code",
                 "abide": "49",
-                "vanilla": "89",
-                "ratio": "0.55x"
+                "vanilla": "108",
+                "ratio": "0.45x"
             }
         ]
     },

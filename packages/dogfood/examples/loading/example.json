@@ -1,6 +1,7 @@
 {
     "title": "An invoice that loads, reloads and fails",
     "summary": "One read, no loading branch. Watch the hole fill, press Refresh to see a reload that keeps the row on screen, and break it to see the failure decline to escalate.",
+    "app": "unconverted",
     "files": [
         "src/ui/pages/invoices/[id]/page.abide",
         "src/ui/pages/invoices/[id]/print/page.abide",
@@ -8,37 +9,8 @@
         "src/server/rpc/invoices.ts"
     ],
     "route": "/invoices/42",
-    "states": [
-        {
-            "id": "pending",
-            "file": "pending.html",
-            "hold": 800,
-            "after": "settled"
-        },
-        {
-            "id": "settled",
-            "file": "settled.html",
-            "on": {
-                "click [data-refresh]": "refreshing",
-                "click [data-break]": "failed"
-            }
-        },
-        {
-            "id": "refreshing",
-            "file": "refreshing.html",
-            "hold": 800,
-            "after": "settled"
-        },
-        {
-            "id": "failed",
-            "file": "failed.html",
-            "on": {
-                "click [data-retry]": "pending"
-            }
-        }
-    ],
     "bench": {
-        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler.",
+        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete \u2014 markup, client and handler.",
         "rows": [
             {
                 "metric": "First paint, value in flight",
@@ -73,7 +45,7 @@
         ]
     },
     "tests": {
-        "note": "`bun test examples/loading`. The refresh case asserts that NOTHING unmounted — the output is identical either way, which is why it is counted rather than compared.",
+        "note": "`bun test examples/loading`. The refresh case asserts that NOTHING unmounted \u2014 the output is identical either way, which is why it is counted rather than compared.",
         "rows": [
             {
                 "name": "a read in flight leaves a hole and does not block",

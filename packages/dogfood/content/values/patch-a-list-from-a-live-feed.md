@@ -4,6 +4,7 @@ nav: Patching a list
 intent: A list fetched once and kept current by a feed, without refetching it and without copying it per frame.
 covers:
   - `s.patch`
+  - memo › `transform`
 examples:
   - packages/dogfood/examples/patch-a-list
 ---

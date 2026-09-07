@@ -11,7 +11,7 @@ around.
 | --- | --- |
 | `config()` | typed settings, validated at start — and it throws in a browser |
 | `principal.authenticated` | whether this caller presented something the server accepted |
-| `health` | what a load balancer reads, before your auth runs |
+| `health` | the account of the app this call is in, for whatever is watching it |
 | `log.info(…)` | structured logs, on channels you turn on one at a time |
 
 ```abide abide
@@ -37,7 +37,7 @@ Read on: [Auth & principal](know-who-is-calling.md) ·
 ## Logs, traces and health
 
 Logs arrive on channels you turn on one at a time, a trace id follows one request
-across whatever it calls, and health answers before your auth does.
+across whatever it calls, and health reports the version and uptime under it.
 
 Read on: [Logging](record-what-happened.md) ·
 [Tracing](follow-a-request-across-services.md) ·

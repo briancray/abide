@@ -7,7 +7,8 @@ covers:
   - `s.watch`
   - `Effect`
   - `Disposer`
-  - `watch` effect
+  - `watch` effect, bare
+  - `watch` effect, over sources
   - `Transformer`, `Disposer`, middleware, lifecycle hooks
 examples:
   - packages/dogfood/examples/watching
@@ -34,9 +35,9 @@ same tracking a memo body gets, and the same absence of a dependency list.
 
 {% snippet watching src/ui/session.ts export const stopBeacon %}
 
-It hands back the way to stop it. That matters where the watch has no owner: a watch registered
-inside a component is owned by the component and torn down with it, but one registered from a
-plain `.ts` module has nobody to tear it down, and the returned disposer is what you have.
+It hands back the way to stop it. That matters where the watch has no owner. A watch registered
+inside a component is owned by the component and torn down with it. One registered from a plain
+`.ts` module has nobody to tear it down, and the returned disposer is what you have.
 
 `s.watch(effect)` is the same thing scoped to one value, handing the value to the effect:
 

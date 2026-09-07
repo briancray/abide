@@ -37,7 +37,7 @@ call. What a read gives back depends only on where the value has got to:
 | --- | --- |
 | landed | the value |
 | pending — its own load, or one it derives from | what it has, `undefined` where nothing landed, and a sink opens where it was read |
-| failed with nothing to serve | it throws, to the nearest `{#try}` or to `error.abide` |
+| a producer failed with nothing landed | it throws, to the nearest `{#try}` or to `error.abide` |
 | holding a refusal over a value — a rejected write, a reload that failed | the last accepted value; `error()` carries the refusal |
 
 Member access on a `Reactive` short-circuits, so an in-flight `invoice.total` is `undefined`
@@ -46,11 +46,10 @@ rather than a TypeError, and the whole chain after it goes with it. That makes
 over `undefined` iterates zero times.
 
 The sink is opened by `pending()` rather than by an absent value, and the difference shows on a
-derived memo: it holds a placeholder built from a source still in flight, so keying the hole on
-absence would flush that placeholder as the answer and never correct it.
+derived memo. Such a memo holds a placeholder built from a source still in flight, so keying the
+hole on absence would flush that placeholder as the answer and never correct it.
 
-*By default*, because a read can be made to hold on purpose. `{await invoice}` is that opt-in,
-and it is two sections down.
+*By default*, because a read can be made to hold on purpose. `{await invoice}` is that opt-in.
 
 ## Probes: `pending`, `refreshing`, `done`, `success`, `streaming`, `error`
 
@@ -59,16 +58,18 @@ work**, so it is safe in a branch that runs before anything has arrived.
 
 | Probe | True when |
 | --- | --- |
-| `pending()` | a first load is in flight and there is nothing to show |
-| `refreshing()` | a reload is in flight over a value still being served |
+| `pending()` | a load is in flight and there is nothing trustworthy to show |
+| `refreshing()` | an update is owed over a value still being served |
 | `done()` | it finished, however it finished |
-| `success()` | there is a landed value to serve and nothing is still arriving |
+| `success()` | there is a landed value to serve |
 | `streaming()` | it is currently producing chunks |
 | `error()` | hands back the standing refusal — what the last write or production was refused with |
 
 `pending()` tells `undefined`-because-in-flight from a value that genuinely resolved to
 `undefined`. And `done()` and `success()` **stay true through a `refresh()`** — the load that
-finished still finished — so `refreshing()` is the only one that moves on a reload. A spinner
+finished still finished — so `refreshing()` is the only one that moves on a reload. An
+`invalidate()` is the other story: what follows it is not a reload but a first load over a value
+the app called wrong, so `pending()` goes true and `done()` goes false with it. A spinner
 reads `refreshing()`; a table keeps rendering the rows it already has.
 
 `success()` and `error()` are **orthogonal, not opposite**. One asks whether there is a value to
@@ -98,15 +99,19 @@ runs to completion, returns `[]`, and reports `success()` — a page rendering "
 nothing pending and nothing failed, for the length of the load.
 
 It is the same **any, not all** question a selection asks, over the set the memo already tracks in
-order to recompute — and it costs nothing to keep. `pending()` is monotone: a source leaves it once,
-and when it does its value moves, which wakes the memo through the subscription that reading it
-already took. So the count is taken on the walk the body's reads already make, and the transition
-that could make it stale is the same event that recomputes. Depth is the chain, not the whole graph.
+order to recompute. The answer is taken on the read that asks for it, walking those sources — no
+subscription per source, the list being the one tracking already keeps. Depth is the chain, not
+the whole graph.
 
-`refreshing()` does **not** propagate. A reload can start and finish without the value moving — one
-landing an equal value wakes nobody — so there is nothing to recount on, and following it would mean
-a subscription per source rebuilt on every recompute, to drive a spinner. Read the source's own probe
-instead: `rows.refreshing()` is the truer question anyway, since `rows` is the thing reloading.
+Deriving it at the recompute instead would miss the case it is most wanted for. An `invalidate()`
+drops a source's cache without changing its value and without sending a request, so nothing
+recomputes, and a count taken at the last recompute reads false for the whole reload window.
+
+`refreshing()` and `done()` follow on the same walk. Those three are the probes about whether a
+value is ready, and readiness is downstream of the sources. The other three answer for the memo
+alone: `error()` cannot propagate because `Failures` does not, `streaming()` would be false where
+a memo yields one value per recompute rather than chunks, and `success()` is orthogonal to a load
+in flight by design.
 
 Two ways to ask for the placeholder instead of the wait. Read the **probe** rather than the value —
 `rows.pending()` subscribes to that probe and is not a read of the value, so it never makes its own
@@ -128,7 +133,7 @@ probe rather than to settledness:
 | --- | --- |
 | the body | `pending()` |
 | `{:then}` | `success()` |
-| `{:catch}` | `error()` with nothing to serve |
+| `{:catch}` | a producer that failed with nothing landed |
 | `{:finally}` | `done()` |
 
 Two consequences worth having in front of you. `{:finally}` renders **alongside** whichever of
@@ -184,21 +189,23 @@ one memo, or every entry carrying a tag, or the whole scope when you pass nothin
 {% snippet loading src/ui/pages/layout.abide {#if pending() %}
 
 Bare, that is anything in flight in this scope — which is what an app-wide progress strip wants.
-Only these two probes have a free form: **any, not all** is the one question that aggregates
-without a second rule, where `done()` and `success()` over a set are genuinely ambiguous between
-the two and an aggregate `error()` would have to pick a failure to hand back.
+Only these two probes have a free form, because **any, not all** is the one question that
+aggregates without a second rule. `done()` and `success()` over a set are genuinely ambiguous
+between the two, and an aggregate `error()` would have to pick a failure to hand back.
 
 A selection holds **one signal**, bumped when the count of matching in-flight entries crosses
 zero. Ten entries reloading together wake that strip twice, not twenty times.
 
 Read on: [Reloading](decide-when-a-value-reloads.md)
 
-## A read throws only where there is nothing to serve
+## A read throws where a producer failed
 
 A first load that failed has no value, so the read throws and the failure reaches the nearest
-`{#try}` or `error.abide` without every call site checking. A **refused write** and a **failed
-reload** both leave a value standing, so neither throws and neither unmounts `{:then}` — which is
-why `{:catch}` is bound to a failure with nothing to serve rather than to `error()` alone. The
+`{#try}` or `error.abide` without every call site checking. A **refused write** never throws,
+whatever is standing: the gates refused something going in, and a producer is what a read waits on.
+A **failed reload** leaves the held value being served, so it does not throw either. Neither
+unmounts `{:then}`, which is why `{:catch}` is bound to a producer that failed with nothing landed
+rather than to `error()` alone. The
 cost of that is a failed reload nothing escalates: it fills `error()`, warns on `abide:reactive`,
 and is otherwise invisible until something reads it.
 

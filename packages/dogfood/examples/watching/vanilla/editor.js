@@ -14,7 +14,7 @@ function autosave() {
     clearTimeout(timer)
     const body = draft.value
     timer = setTimeout(async () => {
-        await fetch('/api/drafts', { method: 'POST', body })
+        await fetch('/api/draft', { method: 'POST', body })
         saved.textContent = 'just now'
         document.title = 'Draft — saved just now'
     }, 1000)

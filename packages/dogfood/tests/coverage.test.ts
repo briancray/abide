@@ -4,10 +4,10 @@ import { NAV } from '../scripts/NAV.ts'
 import { EXAMPLE, LEAD, SNIPPET } from '../scripts/renderMarkdown.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
 
-const SPEC = new URL('../../../docs/SPEC.md', import.meta.url)
+const REGISTRY = new URL('../../../docs/REGISTRY.md', import.meta.url)
 const CONTENT_DIR = new URL('../content/', import.meta.url)
 
-type SpecRow = { name: string; signature: string | undefined; section: string }
+type RegistryRow = { name: string; signature: string | undefined; section: string }
 
 function cells(line: string): string[] {
     const out: string[] = []
@@ -21,19 +21,19 @@ function cells(line: string): string[] {
     return out
 }
 
-// Every name in the FIRST column of a SPEC table is a capability or a variant an app
-// author can reach. This reads the SPEC rather than a copied list, so a capability
+// Every name in the FIRST column of a REGISTRY table is a capability or a variant an app
+// author can reach. This reads REGISTRY.md rather than a copied list, so a capability
 // added there fails the tests below until a page claims it.
 //
 // Only a `Name | (Type) Signature | …` table carries a SIGNATURE. The others — file
 // conventions, CLI commands, generated headers — put prose in the second cell, and
 // reading that as a signature is what would make one capability restated in two tables
 // look like two capabilities that disagree.
-async function specRows(): Promise<SpecRow[]> {
-    const rows: SpecRow[] = []
+async function registryRows(): Promise<RegistryRow[]> {
+    const rows: RegistryRow[] = []
     let section = ''
     let signed = false
-    for (const line of (await Bun.file(SPEC).text()).split('\n')) {
+    for (const line of (await Bun.file(REGISTRY).text()).split('\n')) {
         // The QUALIFIER is the nearest `##`, trimmed to its first code span:
         // "## `memo` — the loaded value" is `memo`.
         if (line.startsWith('## ')) {
@@ -65,14 +65,17 @@ async function specRows(): Promise<SpecRow[]> {
 // The exceptions are listed, because they are the short half: one capability written
 // down in two tables, where a qualified claim would be two claims for one thing.
 const RESTATED = new Set([
-    '`onConfig`', '`onHealth`',
-    '`abide openapi [--out <file>] [--url <origin>]`', '`abide mcp [--url <origin>]`',
-    '`src/ui/pages/**/page.abide`', '`src/ui/pages/**/error.abide`',
+    '`onConfig`',
+    '`onHealth`',
+    '`abide openapi [--out <file>] [--url <origin>]`',
+    '`abide mcp [--url <origin>]`',
+    '`src/ui/pages/**/page.abide`',
+    '`src/ui/pages/**/error.abide`',
 ])
 
 async function specSections(): Promise<Map<string, Map<string, string | undefined>>> {
     const sections = new Map<string, Map<string, string | undefined>>()
-    for (const { name, signature, section } of await specRows()) {
+    for (const { name, signature, section } of await registryRows()) {
         const seen = sections.get(name) ?? new Map<string, string | undefined>()
         if (!seen.has(section) || signature !== undefined) seen.set(section, signature)
         sections.set(name, seen)
@@ -102,16 +105,218 @@ test('a restated capability is restated identically', async () => {
     expect(drifted).toEqual([])
 })
 
-test('every SPEC capability is covered by a guide', async () => {
-    const pages = await readPages()
-    const covered = new Set<string>()
-    for (const page of pages) for (const name of page.covers) covered.add(name)
+// THIS GATE USED TO PASS ON AN EMPTY FILE. `covers` is frontmatter, so a stub — title and intent
+// decided, prose not written — satisfied it exactly as a written page did, and 171 of 323 claims
+// were being made by the 43 pages that say "not written yet" at the top. 40.2 asks for a name
+// documented against real `.abide` and `.ts` files, and a list of names in a header is not that.
+// `voice.test.ts` skips stubs on purpose, so a stub was exempt from every prose check AND counted
+// as coverage, which is the worst of both.
+//
+// Making stubs stop counting turns 171 claims red at once, and a permanently red gate is one
+// nobody reads. So this is a RATCHET instead: the debt is written down, the test asserts the
+// uncovered set is EXACTLY that list, and both directions fail. A registry name nobody claims is
+// new debt and fails; a page that stops being a stub covers its names and fails until they leave
+// the list. The list can only shrink, and it is the one number that says how much of the design
+// has been pressure-tested by having to explain it.
+// 171 of 323, which is the number to watch.
+const UNWRITTEN: string[] = [
+    "Generated surfaces › `clients`",
+    "`/__abide/**`",
+    "`/__abide/mcp`",
+    "`/__abide/openapi.json`",
+    "`:global(…)`",
+    "`<Name/>`",
+    "`<Tag>…</Tag>`",
+    "`<head>`",
+    "`<script module>`",
+    "`<script>`",
+    "`<slot/>`",
+    "`<slot>fallback</slot>`",
+    "`<style>`",
+    "`<textarea>{v}</textarea>`",
+    "`<title>{name}</title>`",
+    "`ABIDE_APP_TOKEN`",
+    "`ABIDE_APP_URL`",
+    "`ABIDE_LOGS`",
+    "`ABIDE_LOG_FORMAT`",
+    "`ABIDE_MAX_LOG_BUFFER_COUNT`",
+    "`ABIDE_MCP`",
+    "`ABIDE_OPENAPI`",
+    "`ABIDE_PRINCIPAL_SECRET`",
+    "`ABIDE_PRINCIPAL_TTL`",
+    "`APP_DATA_DIR`",
+    "`APP_NAME`",
+    "`APP_URL`",
+    "`APP_VERSION`",
+    "`Bag`",
+    "`Clients`",
+    "`Component`",
+    "`ConfigDefaults`",
+    "`Config`",
+    "`DEBUG`",
+    "`Env`",
+    "`FORCE_COLOR`",
+    "`HasParams<P>`",
+    "`HasSegments<P>`",
+    "`Health`",
+    "`LogRecord`",
+    "`Logger`",
+    "`NODE_ENV`",
+    "`NO_COLOR`",
+    "`OpenApiDocument`",
+    "`OptionalNames<P>`",
+    "`PORT`",
+    "`ParamsOf<P>`",
+    "`Params`",
+    "`Principal`",
+    "`Query`",
+    "`RequiredNames<P>`",
+    "`RestNames<P>`",
+    "`Shell`",
+    "`[...name]`",
+    "`[[name]]`",
+    "`[name]`",
+    "`abide build`",
+    "`abide bundle`",
+    "`abide call <address> [args]`",
+    "`abide check [dir…]`",
+    "`abide compile [--target] [--out] [--platforms]`",
+    "`abide connect [url]`",
+    "`abide dev [--port <n>]`",
+    "`abide logs`",
+    "`abide lsp`",
+    "`abide mcp [--url <origin>]`",
+    "`abide openapi [--out <file>] [--url <origin>]`",
+    "`abide run <file> [args…]`",
+    "`abide scaffold <name>`",
+    "`abide start [--port <n>]`",
+    "`abide:config`",
+    "`abide:health`",
+    "`abide:hydrate` / `abide:navigate`",
+    "`abide:lifecycle`",
+    "`abide:mcp`",
+    "`abide:openapi`",
+    "`abide:principal`",
+    "`abide:reactive`",
+    "`abide:refuse`",
+    "`abide:render`",
+    "`abide:request`",
+    "`abide:socket`",
+    "`abide:watch`",
+    "`abide`",
+    "`abide` · `-h` · `--help`",
+    "`authenticated`",
+    "`bag`",
+    "`bind:element={Reactive<Element> | ((element: Element) => void | Disposer)}`",
+    "`children`",
+    "`class:`, `style:`, `bind:`",
+    "`class:name={cond}`",
+    "`config.invalidate`",
+    "`config`",
+    "`const x = foo` / `return foo` / a `Reactive<…>`-typed argument",
+    "`cookies`",
+    "`csp.nonce`",
+    "`csp`",
+    "`default`",
+    "`error`",
+    "`expiresAt`",
+    "`foo = bar`",
+    "`foo = bar` where `bar` is a `Reactive`",
+    "`foo()` / `foo.set(v)`",
+    "`foo.bar = v`",
+    "`foo.bar(…)`",
+    "`foo.bar`",
+    "`foo.push(v)`",
+    "`foo` in an operand, text, attribute or value-typed argument",
+    "`health`",
+    "`href={await x}`, any attribute",
+    "`import './app.css'`",
+    "`log.channel`",
+    "`log.enabled`",
+    "`log.info` / `log.warning` / `log.error` / `log.debug`",
+    "`log.records`",
+    "`log`",
+    "`name=\"…{expr}…\"`",
+    "`name={expr}`",
+    "`navigate`",
+    "`on<event>={fn}`",
+    "`onConfig`",
+    "`onError`",
+    "`onHealth`",
+    "`onPrincipal`",
+    "`onStart`",
+    "`onStop`",
+    "`principal.authenticated`",
+    "`principal.caller`",
+    "`principal.clear`",
+    "`principal.error`",
+    "`principal.expiresAt`",
+    "`principal.resolved`",
+    "`principal.set`",
+    "`props`",
+    "`render`",
+    "`request`",
+    "`route.name`",
+    "`route.navigating`",
+    "`route.params`",
+    "`route.url`",
+    "`server`",
+    "`src/server/app.ts`",
+    "`src/ui/app.html`",
+    "`src/ui/pages/**/error.abide`",
+    "`src/ui/pages/**/layout.abide`",
+    "`src/ui/pages/**/page.abide`",
+    "`startedAt`",
+    "`style:prop={value}`",
+    "`trace.headers`",
+    "`trace.sampled`",
+    "`trace.span`",
+    "`trace`",
+    "`traceresponse`",
+    "`url`",
+    "`version`",
+    "`view-transition-name`",
+    "`{#await promise then value}`",
+    "`{#await promise}`",
+    "`{#component Name(pattern)}`",
+    "`{#for await item of source}`",
+    "`{#for item, index of list by key}`",
+    "`{#if cond}`",
+    "`{#switch expr}`",
+    "`{#try}`",
+    "`{...expr}`",
+    "`{await expr}`",
+    "`{expr}`",
+    "`{raw(...)}`",
+    "config › `schema`",
+    "rpc › `clients`",
+    "socket › `clients`",
+]
 
-    const uncovered = (await specCapabilities()).filter((name) => !covered.has(name))
-    expect(uncovered).toEqual([])
+test('every registry capability is covered by a guide that is written', async () => {
+    const covered = new Set<string>()
+    for (const page of await readPages()) {
+        if (page.stub) continue
+        for (const name of page.covers) covered.add(name)
+    }
+
+    const uncovered = (await specCapabilities()).filter((name) => !covered.has(name)).sort()
+    expect(uncovered).toEqual([...UNWRITTEN].sort())
 })
 
-test('nothing claims to cover a capability the SPEC does not have', async () => {
+// The stub half of the same join. A stub still has to CLAIM its names — that is what stops a
+// capability going missing entirely while its page is unwritten — so the two lists together are
+// still every capability, and nothing falls between them.
+test('every unwritten capability is claimed by some stub', async () => {
+    const claimed = new Set<string>()
+    for (const page of await readPages()) {
+        if (!page.stub) continue
+        for (const name of page.covers) claimed.add(name)
+    }
+    expect(UNWRITTEN.filter((name) => !claimed.has(name))).toEqual([])
+})
+
+test('nothing claims to cover a capability the registry does not have', async () => {
     const capabilities = new Set(await specCapabilities())
     const unknown: string[] = []
     for (const page of await readPages()) {
@@ -176,10 +381,10 @@ test('every file an example manifest names is on disk', async () => {
                 if (!(await file.exists())) missing.push(`${name}/${folder}/${entry}`)
             }
         }
-        for (const state of manifest.states as { file: string }[]) {
-            const file = Bun.file(new URL(`${name}/${state.file}`, EXAMPLES_DIR))
-            if (!(await file.exists())) missing.push(`${name}/${state.file}`)
-        }
+        // The arm is not in a manifest list — the frame finds it by convention — so it is checked
+        // by name here rather than by walking one.
+        const page = Bun.file(new URL(`${name}/vanilla/index.html`, EXAMPLES_DIR))
+        if (!(await page.exists())) missing.push(`${name}/vanilla/index.html`)
     }
     expect(missing).toEqual([])
 })
@@ -250,7 +455,7 @@ test('no heading leans on a pronoun for its subject', async () => {
 // inline span, which is honest twice over: a `.ts` file is exactly where an author writes
 // it, and nothing here has to grow an opt-out marker to say so.
 
-// `route` and `principal` are NAMESPACES, not states (SPEC, "Reading and writing by name"),
+// `route` and `principal` are NAMESPACES, not states (RULEBOOK 31.1, 23.1),
 // so `principal.set(…)` is the namespace's own method and never an unsugared write.
 const NAMESPACES = new Set(['route', 'principal'])
 
@@ -321,8 +526,7 @@ test('front matter names exactly the example directories the page embeds', async
     const wrong: string[] = []
     for (const page of await readPages()) {
         const embedded: string[] = []
-        for (const name of embeddedExamples(page.body))
-            embedded.push(`${EXAMPLES_PREFIX}${name}`)
+        for (const name of embeddedExamples(page.body)) embedded.push(`${EXAMPLES_PREFIX}${name}`)
         if (page.examples.join() !== [...new Set(embedded)].join())
             wrong.push(
                 `${page.slug}: front matter ${page.examples.join()}, body ${embedded.join()}`,
@@ -331,19 +535,58 @@ test('front matter names exactly the example directories the page embeds', async
     expect(wrong).toEqual([])
 })
 
-// ONE EXAMPLE PER PAGE. A page's opening example is the full coverage for that page, and
-// every snippet under it is a feature OF that example — so a reader who has watched the
-// thing at the top run has already seen where every line below it comes from. A second
-// example on one page breaks exactly that: the snippet is real, and real somewhere the
-// reader has not been. The repair is to widen the page's own example with another file,
-// which costs a tab rather than a page.
-test('a page embeds at most one example', async () => {
-    const several: string[] = []
+// ONE TEACHING PAGE PER EXAMPLE, which is what is left of "one example per page" (40.4,
+// withdrawn) once a page carries a demo per behaviour. The property that rule was protecting
+// survives the inversion: a reader meets an example where it is taught, so a directory taught
+// from two pages is code one of those readers has never been shown running. RULEBOOK 40.27.
+//
+// `covers` IS THE DISCRIMINANT, and it is the one already in the front matter (40.16): an
+// overview carries a section's opening example and a style experiment re-renders one to
+// compare voices, and neither is teaching the names in it. A page that claims a name is.
+test('an example directory is taught by exactly one page', async () => {
+    const pagesFor = new Map<string, string[]>()
     for (const page of await readPages()) {
-        const names = new Set(embeddedExamples(page.body))
-        if (names.size > 1) several.push(`${page.slug}: ${[...names].join(', ')}`)
+        if (!page.covers.length) continue
+        for (const name of new Set(embeddedExamples(page.body))) {
+            const seen = pagesFor.get(name) ?? []
+            seen.push(page.slug)
+            pagesFor.set(name, seen)
+        }
     }
-    expect(several).toEqual([])
+    const shared: string[] = []
+    for (const [name, pages] of pagesFor) {
+        if (pages.length > 1) shared.push(`${name}: ${pages.join(', ')}`)
+    }
+    expect(shared).toEqual([])
+})
+
+// THE FOUR APPS docs/BRAND.md names, as an example declares them. `unconverted` is the
+// examples written before the catalogue existed, and it is deliberately not one of the four:
+// it reads as the debt it is, and it is what a page mixing worlds gets caught on below.
+const APPS = new Set(['crm', 'chat', 'dashboard', 'player', 'unconverted'])
+
+test('every example declares an app the brand names', async () => {
+    const wrong: string[] = []
+    for (const path of new Bun.Glob('*/example.json').scanSync({ cwd: EXAMPLES_DIR.pathname })) {
+        const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
+        if (!APPS.has(manifest.app)) wrong.push(`${path}: app ${manifest.app}`)
+    }
+    expect(wrong).toEqual([])
+})
+
+// ONE APP PER PAGE (RULEBOOK 40.29). Six cards from four worlds is four worlds to enter, and
+// the reader pays that per card while the thing being taught is one thing throughout.
+test('every example a page embeds is drawn from the same app', async () => {
+    const mixed: string[] = []
+    for (const page of await readPages()) {
+        const apps = new Set<string>()
+        for (const name of new Set(embeddedExamples(page.body))) {
+            const manifest = Bun.file(new URL(`${name}/example.json`, EXAMPLES_DIR))
+            if (await manifest.exists()) apps.add((await manifest.json()).app)
+        }
+        if (apps.size > 1) mixed.push(`${page.slug}: ${[...apps].join(', ')}`)
+    }
+    expect(mixed).toEqual([])
 })
 
 test('every example directory the front matter names is on disk', async () => {
@@ -377,7 +620,7 @@ test('every nav section shows its opening on the main overview', async () => {
 })
 
 // A type signature names other types, and every one has to be declared somewhere or the
-// SPEC carries a name a reader cannot look up. `WireError` was used twice and declared
+// REGISTRY carries a name a reader cannot look up. `WireError` was used twice and declared
 // nowhere, and nothing in the document pointed at it.
 //
 // Three things count as a declaration: a first-column cell, a HEADING (an options bag is
@@ -408,14 +651,14 @@ function binder(signature: string): string {
 
 async function declaredTypes(): Promise<Set<string>> {
     const declared = new Set<string>()
-    for (const line of (await Bun.file(SPEC).text()).split('\n')) {
+    for (const line of (await Bun.file(REGISTRY).text()).split('\n')) {
         const heading = /^#{1,4}\s+`?([A-Za-z_$][\w$]*)/.exec(line)
         if (heading?.[1]) declared.add(heading[1])
         // A fenced `type X = …`, which is where the adoption unwrap is spelled out.
         const alias = /^type\s+([A-Za-z_$][\w$]*)/.exec(line)
         if (alias?.[1]) declared.add(alias[1])
     }
-    for (const { name, signature } of await specRows()) {
+    for (const { name, signature } of await registryRows()) {
         const own = /^`?([A-Za-z_$][\w$]*)/.exec(name)?.[1]
         if (own) declared.add(own)
         // The LEADING `<…>` only, matched to its own closing angle — a default can
@@ -423,7 +666,7 @@ async function declaredTypes(): Promise<Set<string>> {
         // ARGUMENT list, and reading `Reactive<Params>` as DECLARING `Params` is how
         // this test would stop testing.
         for (const part of binder(signature ?? '').split(','))
-            declared.add((/^\s*([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1]) ?? '')
+            declared.add(/^\s*([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1] ?? '')
         // A MAPPED TYPE binds its key where it uses it — `[K in RequiredNames<P>]` is the
         // same declaration a leading `<…>` makes, in the other syntax. `ParamsOf<P>` is
         // three of them, and without this the key reads as a type nothing declares.
@@ -436,7 +679,7 @@ async function declaredTypes(): Promise<Set<string>> {
 test('every type a signature names is declared somewhere', async () => {
     const declared = await declaredTypes()
     const dangling: string[] = []
-    for (const { name, signature } of await specRows()) {
+    for (const { name, signature } of await registryRows()) {
         for (const match of withoutLiterals(signature ?? '').matchAll(/\b([A-Z][A-Za-z0-9]*)\b/g)) {
             const type = match[1] ?? ''
             if (!BUILTIN_TYPES.has(type) && !declared.has(type)) dangling.push(`${name}: ${type}`)
@@ -475,7 +718,7 @@ test('no nav label begins with a preposition', async () => {
     expect(offenders).toEqual([])
 })
 
-// docs/SPEC.md, Documentation: an overview ROUTES and a reference page ENUMERATES, so
+// docs/BRAND.md, Documentation structure: an overview ROUTES and a reference page ENUMERATES, so
 // neither covers. `machines/index` had grown four entries the section's topic pages
 // should have owned, and nothing said so — the coverage tests above are satisfied by a
 // claim from any page, which is exactly what makes the WRONG page's claim invisible.
@@ -575,4 +818,129 @@ test('every source fence carries a caption', async () => {
         }
     }
     expect(bare).toEqual([])
+})
+
+// A REFERENCE PAGE THAT ENUMERATES ITS SECTION EXCEPT FOR ONE NAME reads as complete, which is
+// the whole failure mode of a reference: a reader who does not find `s.peek` concludes there is
+// no such thing rather than that the page is short. `covers:` gates a guide against a capability
+// and this is its counterpart for the other document type, gating a page against a whole section
+// of REGISTRY.md.
+//
+// The UNION is what is checked, not each page: `Reactive` and `state` split one registry section
+// between the interface and the factory that hands it back, which is the split the format asks
+// for and is not a section either page covers alone.
+const REGISTRY_MD = new URL('../../../docs/REGISTRY.md', import.meta.url)
+
+test('every name a reference page enumerates is on one of the pages that claim it', async () => {
+    const registry = await Bun.file(REGISTRY_MD).text()
+    const bySection = new Map<string, string[]>()
+    let section = ''
+    for (const line of registry.split('\n')) {
+        if (line.startsWith('## ')) {
+            const heading = line.slice(3).trim()
+            section = /`([^`]+)`/.exec(heading)?.[1] ?? heading
+            continue
+        }
+        if (line.startsWith('# ')) section = line.slice(2).trim()
+        if (!line.startsWith('| `')) continue
+        const name = /`([^`]+)`/.exec(line)?.[1] ?? ''
+        if (name) bySection.set(section, [...(bySection.get(section) ?? []), name])
+    }
+
+    const claimed = new Map<string, string[]>()
+    for (const page of await readPages()) {
+        for (const name of page.enumerates) {
+            claimed.set(name, [...(claimed.get(name) ?? []), page.body])
+        }
+    }
+
+    const absent: string[] = []
+    for (const [name, bodies] of claimed) {
+        const names = bySection.get(name)
+        if (!names) {
+            absent.push(`no REGISTRY section named ${name}`)
+            continue
+        }
+        for (const row of names) {
+            if (bodies.some((body) => body.includes(`\`${row}\``))) continue
+            absent.push(`${name}: ${row}`)
+        }
+    }
+    expect(absent).toEqual([])
+})
+
+// CLAUDE.md, "performance and measurement": a performance claim is a RATIO against hand-written
+// code in the same substrate, and absolute milliseconds from a DOM emulator describe the emulator.
+// A bench row with a number in the abide column and nothing beside it is exactly that — a figure
+// with no arm to be a ratio against, and it reads as a result.
+//
+// The arm is checked too, and it is now load-bearing twice over: it is the comparison the ratio is
+// made against, and since the runner change it is also what the render RUNS.
+test('every example carries a hand-written arm, and every bench row is a ratio against it', async () => {
+    const missing: string[] = []
+    for (const path of new Bun.Glob('*/example.json').scanSync({ cwd: EXAMPLES_DIR.pathname })) {
+        const name = path.slice(0, path.indexOf('/'))
+        const arm = Bun.file(new URL(`${name}/vanilla/index.html`, EXAMPLES_DIR))
+        if (!(await arm.exists())) missing.push(`${name}: no vanilla arm`)
+        const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
+        for (const row of manifest.bench?.rows ?? []) {
+            if (!row.vanilla) missing.push(`${name}: "${row.metric}" has no arm to compare against`)
+            if (!row.ratio) missing.push(`${name}: "${row.metric}" states no ratio`)
+        }
+    }
+    expect(missing).toEqual([])
+})
+
+// The same rule's other half: a bench is AUTHORED until the harness can produce one, and a table of
+// figures that does not say so reads as measured. Every bench carries a note, and while nothing
+// runs, that note is where "not measured" has to be said out loud.
+test('every bench says whether it was measured', async () => {
+    const silent: string[] = []
+    for (const path of new Bun.Glob('*/example.json').scanSync({ cwd: EXAMPLES_DIR.pathname })) {
+        const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
+        if (!manifest.bench) continue
+        if (!manifest.bench.note?.trim()) silent.push(path.slice(0, path.indexOf('/')))
+    }
+    expect(silent).toEqual([])
+})
+
+// A REFERENCE PAGE THAT RESTATES A SIGNATURE IS A SECOND COPY OF IT, and the check above only
+// asked that the NAME be present — so `Reactive<Stored, Failures>` sat in three reference pages
+// across the whole of D49, which added the slot the two-parameter form was missing. A reader who
+// opens the reference gets the copy, and the copy is what they write code against.
+//
+// Only the SIGNATURE cell is compared. The description is where a reference page earns its keep,
+// and REGISTRY's one-sentence meaning is deliberately not what a page says.
+test('every signature a reference page restates matches REGISTRY', async () => {
+    // An OVERLOAD is a name with two signatures in one section — `memo` has a keyed form and an
+    // unkeyed one, `watch` a narrowed form and a bare one — so what a page restates has to match
+    // ONE of them rather than the first, which is a different rule from the drift being checked.
+    const bySection = new Map<string, Map<string, string[]>>()
+    for (const { name, signature, section } of await registryRows()) {
+        if (signature === undefined || signature === '') continue
+        const names = bySection.get(section) ?? new Map<string, string[]>()
+        names.set(name, [...(names.get(name) ?? []), signature])
+        bySection.set(section, names)
+    }
+
+    const drifted: string[] = []
+    for (const page of await readPages()) {
+        for (const section of page.enumerates) {
+            const names = bySection.get(section)
+            if (!names) continue
+            for (const line of page.body.split('\n')) {
+                if (!line.startsWith('| `')) continue
+                const row = cells(line)
+                const name = row[0] ?? ''
+                const signature = row[1] ?? ''
+                const declared = names.get(name)
+                if (declared === undefined || signature === '') continue
+                if (declared.includes(signature)) continue
+                drifted.push(
+                    `${page.slug}: ${name}\n  page:     ${signature}\n  REGISTRY: ${declared.join('\n            ')}`,
+                )
+            }
+        }
+    }
+    expect(drifted).toEqual([])
 })

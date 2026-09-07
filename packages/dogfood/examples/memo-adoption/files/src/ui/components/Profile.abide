@@ -1,0 +1,35 @@
+<script>
+import { memo, state } from 'abide'
+import { getProfile } from '#server/rpc/profiles'
+
+const TABS = [
+    { id: '1', name: 'Ada' },
+    { id: '2', name: 'Grace' },
+]
+
+let id = state('1')
+
+const profile = memo(() => getProfile({ id }))
+
+const status = memo(() => {
+    if (profile.pending()) return 'loading…'
+    return profile.refreshing() ? 'refreshing…' : ''
+})
+</script>
+
+<div class="tabs">
+{#for tab of TABS}
+    <button aria-selected={id === tab.id}
+        onclick={() => { id = tab.id }}>{tab.name}</button>
+{/for}
+</div>
+
+<ul class="fields">
+    <li><span>name</span>
+        <strong>{profile?.name ?? '—'}</strong>
+        <span class="status">{status}</span></li>
+    <li><span>role</span>
+        <strong>{profile?.role ?? '—'}</strong></li>
+    <li><span>times opened</span>
+        <strong>{profile?.opened ?? '—'}</strong></li>
+</ul>

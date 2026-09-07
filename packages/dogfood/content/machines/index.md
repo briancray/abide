@@ -38,9 +38,9 @@ wants, and it rides onto every surface below.
 
 ## The surfaces
 
-Two of the four are here. The CLI is the third framing of the same client and serves machines as
-readily — a script, a CI job, an agent that can run a command but not open an MCP session — but
-abide's commands belong in one place, so it is written with the rest of them.
+Two of the four are here. The CLI is the third framing of the same client, and it serves
+machines as readily: a script, a CI job, an agent that can run a command but not open an MCP
+session. Abide's commands belong in one place, so it is written with the rest of them.
 
 Read on: [OpenAPI](describe-your-api-without-writing-a-spec.md) ·
 [MCP](let-a-model-call-your-handlers.md) ·

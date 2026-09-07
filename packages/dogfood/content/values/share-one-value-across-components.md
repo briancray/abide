@@ -10,7 +10,7 @@ examples:
 ---
 
 A page owns a currency. Every amount on it is rendered by a `Money` component, and the table
-holding those components has never heard of a currency — so the usual repair is a prop threaded
+holding those components has never heard of a currency. The usual repair is a prop threaded
 through the table that does not want one, or a store module with its own lifetime to reason
 about.
 
@@ -57,16 +57,17 @@ call and pass it in. That fails silently: the local name goes on being read by t
 made it while every other module reads the shared one, and both are correct-looking. The thunk is
 what keeps the loser's value from being built at all.
 
-## A shared value lives in the scope a memo's cache lives in
+## A shared value lives in the component that created it, and below
 
-The scope is the one a memo's default scope is: **request-local on a server, process-local in a
-browser**, where there is one caller and no request. Same callable, same name, same intent; what
-differs is only what a caller is on each side.
+The scope is **the component instance and its descendants**. A key found on the way up is the one
+you get; a key nothing above you holds is created where you asked for it. So two sibling subtrees
+may each write `state.share('id', …)` for the row they are rendering, and neither can see the
+other's.
 
-So caller-specific data is exactly what belongs in one — which is the opposite of a `global`
-memo's warning, and it is bounded by its scope rather than by a policy. On a server that makes it
-what a page render uses to share a value between two components without threading a prop through
-every level between them.
+Which is what makes the key safe to be a short word. A registry keyed process-wide would make
+`'id'` a name two unrelated parts of an app collide on in silence, and neither side could see the
+collision. Where a value really is one thing for the whole app, the language already has that: a
+module exporting it and every reader importing it, typed, with no key at all.
 
 A shared value is **never evicted within its scope**. It goes when the scope does and not before.
 A `global` memo entry may be dropped early because it can be rebuilt — that is a cache miss — but

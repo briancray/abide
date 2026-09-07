@@ -129,9 +129,9 @@ rather than reaching `{#try}`. A schema refusal is a `ValidationError`, and on a
 `data` is the list of messages.
 
 **The field is not clobbered while you type.** A refused write does not move the stored value,
-so nothing wakes the read-back side of the binding and the `f` you just typed stays where it is
-— while `error()` is a separate signal, so the message renders beside it. Two rules you already
-have, doing it between them.
+so nothing wakes the read-back side of the binding and the `f` you just typed stays where it is.
+`error()` is a separate signal, so the message renders beside it. Two rules you already have,
+doing it between them.
 
 `set` returns the refusal too, so a submit handler can act on it at the call site instead of
 reading back.

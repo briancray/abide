@@ -1,6 +1,7 @@
 {
     "title": "A thread anyone can post to",
     "summary": "One channel, one room per thread id, and two components reading it with no prop between them. Post a message, switch rooms, and come back to find it kept.",
+    "app": "unconverted",
     "files": [
         "src/ui/pages/threads/[id]/page.abide",
         "src/ui/components/Unread.abide",
@@ -8,68 +9,8 @@
         "src/shared/failures.ts"
     ],
     "route": "/threads/general",
-    "states": [
-        {
-            "id": "general",
-            "file": "general.html",
-            "mirror": [
-                {
-                    "from": "input[name=text]",
-                    "to": "[data-echo]",
-                    "transform": "count"
-                }
-            ],
-            "on": {
-                "click [data-post]": "general-posted",
-                "click [data-room=design]": "design"
-            }
-        },
-        {
-            "id": "general-posted",
-            "file": "general-posted.html",
-            "mirror": [
-                {
-                    "from": "input[name=text]",
-                    "to": "[data-echo]",
-                    "transform": "count"
-                }
-            ],
-            "on": {
-                "click [data-post]": "general-posted",
-                "click [data-room=design]": "design-after"
-            }
-        },
-        {
-            "id": "design",
-            "file": "design.html",
-            "mirror": [
-                {
-                    "from": "input[name=text]",
-                    "to": "[data-echo]",
-                    "transform": "count"
-                }
-            ],
-            "on": {
-                "click [data-room=general]": "general"
-            }
-        },
-        {
-            "id": "design-after",
-            "file": "design.html",
-            "mirror": [
-                {
-                    "from": "input[name=text]",
-                    "to": "[data-echo]",
-                    "transform": "count"
-                }
-            ],
-            "on": {
-                "click [data-room=general]": "general-posted"
-            }
-        }
-    ],
     "bench": {
-        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler.",
+        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete \u2014 markup, client and handler.",
         "rows": [
             {
                 "metric": "Publish to paint",

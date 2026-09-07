@@ -4,15 +4,20 @@ nav: Overview
 intent: Four ways to declare a value, and the one type all four hand back.
 ---
 
-Four ways to declare a value. **One type back** — every one of them is a `Reactive`,
-so everything below reads the same.
+Four ways to declare a value. **One type back** — every one of them is a `Reactive`, so a
+member learned on one is a member on all four.
 
-| You write | The value comes from |
-| --- | --- |
-| `state(0)` | you |
-| `memo(() => a + b)` | other values |
-| `memo(() => getThing({ id }))` | your server |
-| `channel()` | someone else |
+| You write | The value comes from | What reloads it |
+| --- | --- | --- |
+| `state(0)` | you | nothing — you write it yourself |
+| `memo(() => a + b)` | other values | a value its body read, moving |
+| `memo(() => getThing({ id }))` | your server | `refresh`, `invalidate`, a tag, a `ttl` |
+| `channel()` | someone else | whoever publishes |
+
+**The arrow is what makes the third row reloadable.** `state(getThing({ id }))` compiles and loads
+once, and then every trigger on it does nothing: a value handed in has no producer to re-run, so
+`refresh` and a tag alike are inert on it. Where you want one known thing, loaded once and reloaded
+when you say, the body is an arrow and the name is `memo`.
 
 ```ts shared
 const draft = state('')

@@ -1,80 +1,15 @@
 {
     "title": "One value, two ways to reload it",
     "summary": "A stock level held on the page. One trigger loads now and keeps serving what it has; the other touches nothing at all. Press them in sequence for the one thing that does blank the page.",
+    "app": "unconverted",
     "files": [
         "src/ui/pages/stock/[warehouse]/[sku]/page.abide",
         "src/ui/pages/layout.abide",
         "src/server/rpc/stock.ts"
     ],
     "route": "/stock/east/A-70",
-    "states": [
-        {
-            "id": "ready",
-            "file": "ready.html",
-            "on": {
-                "click [data-refresh]": "revalidating",
-                "click [data-invalidate]": "marked",
-                "click [data-book]": "booking"
-            }
-        },
-        {
-            "id": "revalidating",
-            "file": "revalidating.html",
-            "hold": 800,
-            "after": "settled"
-        },
-        {
-            "id": "settled",
-            "file": "settled.html"
-        },
-        {
-            "id": "marked",
-            "file": "marked.html",
-            "on": {
-                "click [data-refresh]": "blanked",
-                "click [data-warehouse='west']": "west"
-            }
-        },
-        {
-            "id": "blanked",
-            "file": "blanked.html",
-            "hold": 800,
-            "after": "unblanked"
-        },
-        {
-            "id": "unblanked",
-            "file": "unblanked.html"
-        },
-        {
-            "id": "west",
-            "file": "west.html",
-            "on": {
-                "click [data-warehouse='east']": "refetching"
-            }
-        },
-        {
-            "id": "refetching",
-            "file": "refetching.html",
-            "hold": 800,
-            "after": "reloaded"
-        },
-        {
-            "id": "reloaded",
-            "file": "reloaded.html"
-        },
-        {
-            "id": "booking",
-            "file": "booking.html",
-            "hold": 800,
-            "after": "booked"
-        },
-        {
-            "id": "booked",
-            "file": "booked.html"
-        }
-    ],
     "bench": {
-        "note": "AUTHORED, not measured — nothing here runs until the compiler does. THE REQUEST AND NODE COUNTS ARE LEVEL BY DESIGN: the hand-written arm implements the same two triggers, because an arm that reloaded on a mark would not be the same behaviour to price. What it costs to get there is the row under them — the displayed value and the cache behind it are two variables in that arm, and every path has to keep them in step. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler.",
+        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. THE REQUEST AND NODE COUNTS ARE LEVEL BY DESIGN: the hand-written arm implements the same two triggers, because an arm that reloaded on a mark would not be the same behaviour to price. What it costs to get there is the row under them \u2014 the displayed value and the cache behind it are two variables in that arm, and every path has to keep them in step. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete \u2014 markup, client and handler.",
         "rows": [
             {
                 "metric": "Requests, `invalidate()` on the displayed value",
@@ -133,8 +68,8 @@
             {
                 "metric": "Lines of code",
                 "abide": "60",
-                "vanilla": "119",
-                "ratio": "0.50x"
+                "vanilla": "123",
+                "ratio": "0.49x"
             }
         ]
     },
@@ -178,7 +113,7 @@
                 "result": "pass"
             },
             {
-                "name": "a `refresh()` on a server degenerates to an `invalidate()`, having no reader",
+                "name": "a pattern `refresh()` on a server marks rather than reloads, nothing subscribing",
                 "result": "pass"
             }
         ]

@@ -40,6 +40,21 @@ export function escapeHtml(text: string): string {
 // extension — a `#shared/*.ts` is as much both sides as a `.abide` file is.
 export const EXCERPT = / — excerpt$/
 
+// A SIDE IS NOT A SYNTAX, and the caption used to show only the side: a block labelled
+// `browser` told a reader where the code runs and left them to guess whether they were looking
+// at the sugar or at what it is spelled over. Those are the two forms this design is ABOUT — a
+// name read by name in a `.abide` file, and `s()` in a `.ts` one — so the one thing a caption
+// has to say is which of them is on screen.
+//
+// DERIVED from the fence's own language rather than written into the label, because the label
+// already carries it: seventy-one fences say `browser` or `shared`, and every one of them is
+// already tagged `ts` or `abide` a token earlier. A path says both by itself and is left alone.
+export function captionOf(language: string, label: string): string {
+    if (label.includes('/') || label.startsWith('#')) return displayPath(label)
+    if (!language || language === label) return `.${label}`
+    return `.${language} · ${label}`
+}
+
 // A compact highlighter: enough to make a snippet scannable, not a parser. Order in
 // the alternation is the precedence — a keyword inside a string stays a string.
 const TOKEN =
@@ -103,22 +118,34 @@ export function slugify(text: string): string {
         .replace(/^-|-$/g, '')
 }
 
-// Inline markup, backtick spans first so that `**` inside code stays literal.
+// A code span is LIFTED OUT before emphasis runs and put back after, which is what makes
+// `**\`initial\`**` one span rather than three. Emphasis used to run per backtick SEGMENT, so
+// a `**` on one side of a code span and its partner on the other were never in the same
+// string: neither matched, the single-`*` rule then ate one of them, and the page shipped
+// its asterisks. Nothing reported it — the markdown download was right the whole time.
+//
+// A slot is NUL-delimited because the text it sits in is already HTML-escaped, so the one
+// thing that cannot appear around it is a control character.
+const CODE_SLOT = /\0(\d+)\0/g
+
 export function renderInline(text: string): string {
     const parts = text.split('`')
-    let html = ''
+    const codes: string[] = []
+    let markup = ''
     for (let index = 0; index < parts.length; index += 1) {
         const part = parts[index] ?? ''
         if (index % 2 === 1) {
-            html += `<code>${escapeHtml(part)}</code>`
+            markup += `\0${codes.length}\0`
+            codes.push(`<code>${escapeHtml(part)}</code>`)
             continue
         }
-        html += escapeHtml(part)
-            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        markup += escapeHtml(part)
     }
-    return html
+    return markup
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        .replace(CODE_SLOT, (_, slot) => codes[Number(slot)] ?? '')
 }
 
 // A cell opening on `yes` / `no` is a VERDICT and its REASON — the answer is what the
@@ -136,11 +163,53 @@ function renderCell(value: string, cell: 'td' | 'th'): string {
     return `<${cell}><b class="verdict-${verdict[1]}">${verdict[1]}</b>${reason}</${cell}>`
 }
 
+// A `\|` is a pipe INSIDE a cell and never a cell boundary, which is the only way to write a
+// union type in a table — and splitting on every pipe broke the row into extra cells and left the
+// backslash sitting in the output. Silent in the usual way: the table still rendered, with
+// `() => void \` in one cell and `Disposer` in the next, and the row after it shunted right.
 function renderTableRow(line: string, cell: 'td' | 'th'): string {
-    const trimmed = line.replace(/^\|/, '').replace(/\|$/, '')
+    const trimmed = line.replace(/^\|/, '').replace(/(?<!\\)\|$/, '')
     let html = '<tr>'
-    for (const value of trimmed.split('|')) html += renderCell(value.trim(), cell)
+    for (const value of trimmed.split(/(?<!\\)\|/))
+        html += renderCell(value.trim().replaceAll('\\|', '|'), cell)
     return `${html}</tr>`
+}
+
+// THE BOXES THE GAPS HANG ON. A markdown body is a FLAT stream of blocks and the page's
+// spacing is three nested flex columns — region, section, prose — so the boxes have to be
+// folded back in somewhere. Here, off the headings, which are the only structure the source
+// states. Run this AFTER the directives expand: a lead brings its own headings with it.
+//
+// A heading always begins a line of the rendered stream, which is what makes this a scan
+// rather than a parse — a `<h2` inside a code block is `&lt;h2` by the time it lands.
+const SECTION_HEADING = /^<h([23]) id="/gm
+
+function flow(blocks: string): string {
+    return blocks.trim() ? `<div class="flow">${blocks}</div>` : ''
+}
+
+export function groupSections(html: string): string {
+    const headings: { depth: number; at: number }[] = []
+    SECTION_HEADING.lastIndex = 0
+    for (let match = SECTION_HEADING.exec(html); match; match = SECTION_HEADING.exec(html))
+        headings.push({ depth: Number(match[1]) - 1, at: match.index })
+    if (headings.length === 0) return flow(html)
+
+    let grouped = flow(html.slice(0, headings[0]?.at))
+    let open = 0
+    for (let index = 0; index < headings.length; index += 1) {
+        const heading = headings[index]
+        if (!heading) continue
+        // An h2 closes every section standing; an h3 closes only another h3.
+        while (open >= heading.depth) {
+            grouped += '</section>'
+            open -= 1
+        }
+        grouped += '<section>'
+        open += 1
+        grouped += flow(html.slice(heading.at, headings[index + 1]?.at ?? html.length))
+    }
+    return grouped + '</section>'.repeat(open)
 }
 
 export function renderMarkdown(source: string): string {
@@ -171,7 +240,7 @@ export function renderMarkdown(source: string): string {
             const code = `<pre><code${attribute}>${highlight(body.join('\n'))}</code></pre>`
             html += label
                 ? `<figure class="snippet" data-side="${sideOf(label)}">
-<figcaption>${escapeHtml(displayPath(label))}</figcaption>${code}</figure>\n`
+<figcaption>${escapeHtml(captionOf(language, label))}</figcaption>${code}</figure>\n`
                 : `${code}\n`
             continue
         }

@@ -7,10 +7,12 @@ covers:
   - `Channel`
   - `Room`
   - channel › `Message`
+  - channel › `Accepted`
   - channel › `Args`
   - channel › `tail`
   - channel › `ttl`
   - channel › `transform`
+  - channel › `identity`
 examples:
   - packages/dogfood/examples/rooms
 ---
@@ -100,7 +102,7 @@ body declares chunks of one value, so no chunk is a whole anything.
 | | the producer yields | `pending()` until | a bare read | `tail(n)` |
 | --- | --- | --- | --- | --- |
 | room | a complete `Message` | the **first** message | the latest message | the last n messages |
-| stream | a **chunk** of one value | it **closes** | the accumulation, once it closes | the last n chunks |
+| stream | a **chunk** of one value | it **closes** | the accumulation, once it closes | the last n answers |
 
 So `{inbox}` is the latest message and `{await inbox}` blocks until the first one, both meaningful.
 And `done()` stays false while a room is live — a room is not a thing that finishes — so
@@ -148,14 +150,15 @@ Read on: [Failures](../server/refuse-a-request-and-say-why.md) ·
 [Schemas](../server/check-what-callers-send-you.md) ·
 [Local state](show-a-value-that-changes.md)
 
-## A room is discarded once nobody subscribes and nothing is retained
+## A room is discarded once nobody subscribes
 
-Both conditions, and the second falls out of `ttl` rather than being a second use of it: nothing
-is left to keep once the last subscriber has gone and the last retained message has expired, so
-there is no idle window to configure.
+One condition, and there is no idle window to configure. The ring goes with the room, so
+retention bounds what a **live** subscriber can replay rather than how long an empty room is
+kept.
 
-A resubscribe before then finds the room and its tail intact, which makes navigating away
-and back free.
+Navigate away from the last open tab and the transcript is gone. History past the ring was
+always app data behind an ordinary rpc, and `tail()` replays the ring before it goes live, so
+the two overlap rather than leaving a gap.
 
 ## Rooms are process-wide, not per caller
 
@@ -173,9 +176,9 @@ opposites underneath.
 
 | | `state.share` | a room |
 | --- | --- | --- |
-| scope | one caller — request-local on a server | process-wide, every caller |
+| scope | one component and its descendants | process-wide, every caller |
 | before anyone writes | the value you created, `success()` | `undefined`, `pending()` |
-| lifetime | never evicted within its scope | discarded once subscribers hit 0 and retention drains |
+| lifetime | never evicted within its scope | discarded once subscribers hit 0 |
 | typing | a key per name, each its own type | one `Message` across every room |
 
 The short version: `state.share` is **one caller, many components**. A room is **many callers, one

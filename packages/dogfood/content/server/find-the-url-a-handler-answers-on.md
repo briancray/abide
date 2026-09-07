@@ -39,9 +39,9 @@ what makes the same bundle deployable at a sub-path without a rebuild.
 
 ## `rpc.url` takes the args on a read
 
-An address without its arguments is not something a browser can fetch, so on a `GET` or a `DELETE`
-the call takes them — written in the same canonical wire form the request itself uses, rather than
-a query string you assemble and the server parses back differently:
+An address without its arguments is not something a browser can fetch, so on a `GET` or a
+`DELETE` the call takes them. They are written in the same canonical wire form the request
+itself uses, rather than a query string you assemble and the server parses back differently:
 
 ```abide #ui/pages/media/page.abide — excerpt
 <video src={playFile.url({ id: file.id })} controls></video>

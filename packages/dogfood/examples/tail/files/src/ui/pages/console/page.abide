@@ -26,13 +26,15 @@ function copyRecent() {
 <h1>Console</h1>
 
 <label>
-    Filter
+    <div>Filter</div>
     <input bind:value={filter} placeholder="level:error">
 </label>
 
-<button onclick={filters.undo}>Undo</button>
-<button onclick={filters.redo}>Redo</button>
-<button onclick={copyRecent}>Copy last 10</button>
+<div class="row">
+    <button onclick={filters.undo}>Undo</button>
+    <button onclick={filters.redo}>Redo</button>
+    <button onclick={copyRecent}>Copy last 10</button>
+</div>
 
 {#for await line of records.tail(50)}
     {#if line.text.includes(filter)}<pre>{line.text}</pre>{/if}

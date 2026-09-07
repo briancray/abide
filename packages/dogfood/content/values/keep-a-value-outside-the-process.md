@@ -11,13 +11,13 @@ examples:
   - packages/dogfood/examples/persistence
 ---
 
-Every `Reactive` so far has lived and died with its scope. A `store` says where its value lives
-when the process does not — a cookie, `localStorage`, redis, a row somewhere — and it is one
+A `Reactive` lives and dies with its scope unless it is told otherwise. A `store` is how it is
+told: it says where the value lives when the process does not — a cookie, `localStorage`, redis, a row somewhere — and it is one
 option on the value rather than a mechanism beside it.
 
 {% example persistence %}
 
-*1 option, 0 markup changed* — the read and the write are the ones the page already had.
+*1 option, 0 markup changed* — the read and the write are the page's own, untouched.
 
 {% snippet persistence src/ui/pages/settings/page.abide const theme = state %}
 
@@ -108,31 +108,29 @@ silently.
 
 Read on: [Caching](load-once-per-set-of-arguments.md)
 
-## A restore is a write from another source
+## A restore is not a write
 
-A store is over `Accepted` — what goes **in** — not over `Stored`. So what `get` answers with
-passes `schema` and then `transform` exactly as a `set` does, and it mints a production. Nothing
-downstream can tell a restored value from a written one, and a value stored before a deploy that
-tightened the schema is checked on the way back in rather than trusted.
+A store is over `Stored` — what a read returns — not over `Accepted`. So `get` answers with the
+value itself, and it mints a production without passing `schema` or `transform`. Those two gate
+what goes **in**, and a restore is not something going in: a `transform` that stamps a received-at
+would restamp on every restore, and a lossy one has nothing left to re-derive from.
 
-A streaming producer is the one arm where a restore is more than one production. Its `Accepted` is
-`Chunk[]`, which is elementwise its own ring, so the restore seeds the ring with the elements and
-`transform` runs on them at close as it would have live:
+Which puts the check where the knowledge already is. `get` is your function, and it was parsing
+whatever the store handed back anyway — a string out of `localStorage`, bytes out of redis. So a
+shape an older deploy wrote is one `if` away from being a **miss**, and a miss falls back to the
+initial value. No refusal for the value to carry, and no second gate to declare.
+
+A streaming producer is the arm this was written for. It has no `Accepted` at all — nothing was
+ever written in — and what it holds at close is the accumulation, which is what `set` is handed
+and what a restore seeds:
 
 ```abide abide
-<!-- replays the chunks -->
-{#for await token of answer({ messageId })}{token}{/for}
-
-<!-- the joined value -->
 {await answer({ messageId })}
 ```
 
-Both read the same restored or live. Without that the entry would hold a value and an empty ring,
-and one of those two lines would quietly render nothing.
-
-A restored stream **finished**: `done()` and `success()` are true and `streaming()` is false. What
-it costs is that the chunks get persisted rather than the transformed value, so a
-`transform` that shrinks a lot pays for the big shape.
+A restored stream **finished**: `done()` and `success()` are true and `streaming()` is false. It
+is a value that has arrived rather than one arriving, so it is read as one — a `{#for await}` over
+it is watching for tokens that are all already in.
 
 Read on: [History & tail](keep-the-last-few-values.md)
 
@@ -147,7 +145,7 @@ running once at close. So it removes the duplicate work, not the duplicate conne
 
 ## A room's store is its latest message
 
-A channel's `Accepted` is one `Message`, so a store round-trips the standing message and never the
+A room's `Stored` is one `Message`, so a store round-trips the standing message and never the
 tail. For a roster or a status that is exactly right — a restart restores the last one instead of
 showing an empty room until somebody publishes:
 

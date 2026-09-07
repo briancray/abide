@@ -1,0 +1,9 @@
+{
+    "title": "`memo(() => \u2026)` \u2014 an auto-tracked derivation",
+    "summary": "A deal, and the total that follows its seats. Step the seats.",
+    "app": "crm",
+    "files": [
+        "src/ui/components/Deal.abide"
+    ],
+    "route": "/memo/tracked"
+}

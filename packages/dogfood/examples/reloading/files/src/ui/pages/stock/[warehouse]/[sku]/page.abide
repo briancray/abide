@@ -49,6 +49,8 @@ watch(() => {
     <p class="hint">Counted {level.countedOn}</p>
 {/if}
 
-<button onclick={() => level.invalidate()}>Mark stale</button>
-<button onclick={() => level.refresh()}>Reload now</button>
-<button onclick={book}>Book one out</button>
+<div class="row">
+    <button onclick={() => level.invalidate()}>Mark stale</button>
+    <button onclick={() => level.refresh()}>Reload now</button>
+    <button onclick={book}>Book one out</button>
+</div>

@@ -1,0 +1,36 @@
+{
+    "title": "`memo((args) => \u2026)` \u2014 a factory, one entry per key",
+    "summary": "The contact search. Search a word, then search one you have searched before.",
+    "app": "crm",
+    "files": [
+        "src/ui/components/Search.abide",
+        "src/server/rpc/search.ts"
+    ],
+    "route": "/memo/keyed",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/search/searchContacts?query=a",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "[\n    \"Ada Lovelace\",\n    \"Alan Turing\",\n    \"Grace Hopper\"\n]"
+        },
+        {
+            "request": "GET /__abide/rpc/search/searchContacts?query=grace",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "[\n    \"Grace Hopper\"\n]"
+        }
+    ]
+}

@@ -33,7 +33,7 @@ async function load(id, { reload = false } = {}) {
     state.error = null
     render()
     try {
-        const response = await fetch(`/api/invoices/${id}`)
+        const response = await fetch(`/api/invoice?id=${id}`)
         if (!response.ok) throw await response.json()
         state.invoice = await response.json()
     } catch (failure) {

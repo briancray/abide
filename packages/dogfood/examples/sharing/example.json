@@ -1,6 +1,7 @@
 {
     "title": "Three instances, one value",
     "summary": "A page that owns a currency and three instances of one component that read it, with a table in between that has never heard of a currency. Change the select.",
+    "app": "unconverted",
     "files": [
         "src/ui/pages/invoices/page.abide",
         "src/ui/components/Money.abide",
@@ -8,31 +9,8 @@
         "src/shared/shared.ts"
     ],
     "route": "/invoices",
-    "states": [
-        {
-            "id": "usd",
-            "file": "usd.html",
-            "on": {
-                "change [data-currency]": "eur"
-            }
-        },
-        {
-            "id": "eur",
-            "file": "eur.html",
-            "on": {
-                "change [data-currency]": "gbp"
-            }
-        },
-        {
-            "id": "gbp",
-            "file": "gbp.html",
-            "on": {
-                "change [data-currency]": "usd"
-            }
-        }
-    ],
     "bench": {
-        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete. The rows above it are where the difference is, and they scale with the number of instances where the line count does not.",
+        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete. The rows above it are where the difference is, and they scale with the number of instances where the line count does not.",
         "rows": [
             {
                 "metric": "Instances sharing one value",

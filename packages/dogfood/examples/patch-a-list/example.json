@@ -1,34 +1,101 @@
 {
     "title": "A table a live feed keeps current",
-    "summary": "One fetch, then every change after it folded into the list the page already holds — one entry written per frame, and no copy of the list between them.",
+    "summary": "One fetch, then every change after it folded into the list the page already holds \u2014 one entry written per frame, and no copy of the list between them.",
+    "app": "unconverted",
     "files": [
         "src/ui/pages/orders/page.abide",
         "src/shared/orders.ts"
     ],
     "route": "/orders",
-    "states": [
-        { "id": "initial", "file": "initial.html", "hold": 900, "after": "picking" },
-        { "id": "picking", "file": "picking.html", "hold": 900, "after": "shipped" },
-        { "id": "shipped", "file": "shipped.html" }
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/orders/loadOrders",
+            "requestHeaders": {
+                "traceparent": "00-9b3c1f0a7e5d42b8a1c6f0d3e8b47250-0c8f1a4e9b2d7c31-01",
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "[\n    { \"id\": 4021, \"customer\": \"Ada Bell\", \"status\": \"shipped\", \"total\": 82.4 },\n    { \"id\": 4022, \"customer\": \"Bo Ryan\", \"status\": \"picking\", \"total\": 15.0 },\n    { \"id\": 4023, \"customer\": \"Cy Okon\", \"status\": \"placed\", \"total\": 240.75 },\n    { \"id\": 4024, \"customer\": \"Di Marsh\", \"status\": \"placed\", \"total\": 61.2 }\n]"
+        },
+        {
+            "request": "GET /__abide/rpc/orders/orderChanged",
+            "requestHeaders": {
+                "accept": "application/x-ndjson",
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/x-ndjson",
+                "transfer-encoding": "chunked",
+                "cache-control": "private, no-store"
+            },
+            "body": "{ \"id\": 4022, \"order\": { \"id\": 4022, \"customer\": \"Bo Ryan\", \"status\": \"shipped\", \"total\": 15 } }\n{ \"id\": 4023, \"order\": { \"id\": 4023, \"customer\": \"Cy Okon\", \"status\": \"picking\", \"total\": 240.75 } }\n{ \"id\": 4025, \"order\": { \"id\": 4025, \"customer\": \"Eve Nash\", \"status\": \"placed\", \"total\": 33.1 } }\n{ \"id\": 4021, \"order\": null }\n{ \"id\": 4024, \"order\": { \"id\": 4024, \"customer\": \"Di Marsh\", \"status\": \"picking\", \"total\": 61.2 } }"
+        }
     ],
     "bench": {
-        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and fold.",
+        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete \u2014 markup, client and fold.",
         "rows": [
-            { "metric": "Frame to paint", "abide": "16.7 ms", "vanilla": "16.7 ms", "ratio": "1.00x" },
-            { "metric": "DOM nodes moved per frame", "abide": "1", "vanilla": "1", "ratio": "1.00x" },
-            { "metric": "Index entries written per frame", "abide": "1", "vanilla": "1", "ratio": "1.00x" },
-            { "metric": "Index entries written per frame, with `set` instead of `patch`", "abide": "4", "vanilla": "1", "ratio": "4.00x" },
-            { "metric": "Client bytes", "abide": "4.9 kB", "vanilla": "2.4 kB", "ratio": "2.04x" },
-            { "metric": "Lines of code", "abide": "44", "vanilla": "83", "ratio": "0.53x" }
+            {
+                "metric": "Frame to paint",
+                "abide": "16.7 ms",
+                "vanilla": "16.7 ms",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "DOM nodes moved per frame",
+                "abide": "1",
+                "vanilla": "1",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Index entries written per frame",
+                "abide": "1",
+                "vanilla": "1",
+                "ratio": "1.00x"
+            },
+            {
+                "metric": "Index entries written per frame, with `set` instead of `patch`",
+                "abide": "4",
+                "vanilla": "1",
+                "ratio": "4.00x"
+            },
+            {
+                "metric": "Client bytes",
+                "abide": "4.9 kB",
+                "vanilla": "2.4 kB",
+                "ratio": "2.04x"
+            },
+            {
+                "metric": "Lines of code",
+                "abide": "44",
+                "vanilla": "94",
+                "ratio": "0.47x"
+            }
         ]
     },
     "tests": {
         "note": "`bun test examples/patch-a-list`. The fold is asserted on the index rather than on the rendered table, a rebuild and a patch producing the same markup.",
         "rows": [
-            { "name": "a frame replaces one entry and leaves the index identity standing", "result": "pass" },
-            { "name": "a tombstone drops its entry and nothing else", "result": "pass" },
-            { "name": "a patch wakes readers once, and once per frame rather than per entry", "result": "pass" },
-            { "name": "a refetch replaces every entry a patch had written", "result": "pass" }
+            {
+                "name": "a frame replaces one entry and leaves the index identity standing",
+                "result": "pass"
+            },
+            {
+                "name": "a tombstone drops its entry and nothing else",
+                "result": "pass"
+            },
+            {
+                "name": "a patch wakes readers once, and once per frame rather than per entry",
+                "result": "pass"
+            },
+            {
+                "name": "a refetch replaces every entry a patch had written",
+                "result": "pass"
+            }
         ]
     },
     "vanilla": [

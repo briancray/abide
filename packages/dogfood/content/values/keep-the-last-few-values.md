@@ -5,11 +5,12 @@ intent: A log pane, a chat scrollback, the last n readings — bounded, and chea
 covers:
   - state › `tail`
   - `s.tail`
-  - `Tail<Produced>`
+  - `Tail<Stored>`
   - `Produced`
   - `for await (… of s)`
   - `s[Symbol.asyncIterator]`
   - `ABIDE_MAX_STREAM_BUFFER_SIZE`
+  - memo › `tail`
 examples:
   - packages/dogfood/examples/tail
 ---
@@ -33,22 +34,22 @@ gap and no duplicate.
 Every `Reactive` retains **one** production by default — the latest, which is a snapshot and
 nothing more. Set `tail` to keep more. Every reactive value takes one.
 
-Leave it at the default on a room and a subscriber arriving late replays one message. Leave it at
-the default on a `global` memo fanning one stream out and a late reader replays one chunk and goes
-live — a truncated answer rather than an error, which is why `tail: Infinity` is spelled there
-rather than inferred from the body having produced a stream.
+Leave it at the default on a room and a subscriber arriving late replays one message. Leave it
+at the default on a `global` memo fanning one stream out and only the answer in front of you
+survives — the ones before it are gone. That is why `tail: Infinity` is spelled there rather
+than inferred from the body having produced a stream.
 
 Read on: [Caching](load-once-per-set-of-arguments.md)
 
-## The unit is what the producer yielded
+## The unit is the value, not the piece
 
-One rule, reading three ways. `Produced` is the type of it.
+One rule, reading three ways. `Stored` is the type of it.
 
-| The producer | Yields | So `tail(100)` retains |
+| The producer | Holds | So `tail(100)` retains |
 | --- | --- | --- |
 | a state — `set` | a value | the last 100 values |
 | a room — `publish` | a message | the last 100 messages |
-| an async-generator body | a chunk | the last 100 chunks |
+| an async-generator body | the accumulation, at close | the last 100 answers |
 
 Which is why a `tail` on a `Reactive<Row[]>` retains a hundred **arrays**, not a hundred rows.
 Pushing into an array is not a production — it is a mutation of one value — so where a tail over
@@ -56,16 +57,17 @@ items is what you want, **the item has to be produced**:
 
 {% snippet tail src/server/rpc/logs.ts const recent = memo( %}
 
-`Produced` is a third parameter on `Reactive` and defaults to `Stored`, so nothing that is not a
-stream ever writes it. For a streaming producer they come apart: `Stored` is the accumulation and
-`Produced` is the chunk.
+A chunk is a piece of one value rather than a past one, so it is not what history is made of. A
+ring of chunks would replay a fragment of one answer and no answer at all. `Produced` is a fourth
+parameter on `Reactive` and defaults to `Stored`, so nothing that is not a stream ever writes it
+— and where it comes apart, it types the live cursor rather than the ring.
 
 Read on: [Streaming data](../server/send-data-as-it-arrives.md) ·
 [Sockets](../server/keep-a-room-of-callers-in-sync.md)
 
 ## `s.tail(n)` is `Iterable` and `AsyncIterable` both
 
-`s.tail(n)` is always called, and hands back a `Tail<Produced>` — `Iterable` **and**
+`s.tail(n)` is always called, and hands back a `Tail<Stored>` — `Iterable` **and**
 `AsyncIterable`, with nothing allocated until one of the two is pulled. The synchronous face is
 the snapshot, now:
 
@@ -77,12 +79,15 @@ accumulate. `tail(0)` replays nothing and goes live. Those are two different num
 example above has both: `tail: 200` on the value is what may be replayed, `tail(50)` in the block
 is where this reader started.
 
-A bare `for await (… of s)` **is** `s.tail()`: `s[Symbol.asyncIterator]` is defined as it, so the
-live cursor is not a second mechanism and the bare form cannot mean something the spelled-out call
-does not.
+A bare `for await (… of s)` is the **live** cursor. It yields the production in flight from its
+start and then what follows it, and it replays no past value at all. Spell `s.tail(n)` where the
+ring is what you want first.
 
-In a template that is the same pair. `{#for await item of source}` over a bare name replays what
-the value retained; name the depth to say otherwise, and `by` keys it exactly as `{#for}` does —
+The two walk different units. The ring holds past `Stored` values and the bare cursor yields
+`Produced`, which is why `Produced` is a type parameter of its own.
+
+In a template that is the same pair. `{#for await item of source}` over a bare name goes live;
+spell `source.tail(n)` to replay the ring first, and `by` keys it exactly as `{#for}` does —
 a room's default key being the message's own `seq`.
 
 {% snippet tail src/ui/pages/console/page.abide {#for await line of records.tail(50)} … {#if line.text.includes(filter)} … {/for} %}

@@ -11,7 +11,7 @@ const results = memo(() => search({ q: query }), { debounce: 200 })
 </script>
 
 <label>
-    Search
+    <div>Search</div>
     <input bind:value={query} placeholder="Search invoices">
 </label>
 

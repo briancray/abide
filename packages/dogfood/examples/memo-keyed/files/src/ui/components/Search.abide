@@ -1,0 +1,28 @@
+<script>
+import { memo, state } from 'abide'
+import { searchContacts } from '#server/rpc/search'
+
+let typed = state('a')
+let query = state('a')
+
+const matches = memo(() => searchContacts({ query }))
+
+function search() {
+    query = typed
+}
+</script>
+
+<div class="row">
+    <label>search
+        <input bind:value={typed}>
+    </label>
+    <button onclick={search}>search</button>
+</div>
+
+<p class="status">{matches.pending() ? 'searching…' : ''}</p>
+
+<ul>
+{#for one of matches ?? []}
+    <li>{one}</li>
+{/for}
+</ul>

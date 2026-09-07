@@ -70,7 +70,7 @@ export const playFile = GET(async ({ id }: { id: number }) => {
 symptom. Reach it from markup with [`playFile.url({ id })`](find-the-url-a-handler-answers-on.md).
 
 A handler returning a whole `Response` instead — a playlist at `no-store` beside the segments it
-names at `immutable` — is answering the same way, with two consequences worth knowing: a second
+names at `immutable` — is answering the same way. Two consequences are worth knowing. A second
 reader in the same request is teed rather than handed a consumed body, and `clients.mcp` and
 `clients.cli` default to **false**, a `Response` having no output schema to publish. Turn them
 back on where the body is JSON you wanted a header on.
@@ -142,7 +142,7 @@ helper takes a `ResponseInit`, so a handler that knows its answer is shareable o
 | Default | On | Why |
 | --- | --- | --- |
 | `private, no-store` | a page, an rpc answer, any refusal | a page renders per request and a handler answers as whoever called it. Absent is not neutral: it licenses a shared cache to invent a lifetime for an answer that names who asked |
-| `max-age=<the `ttl`>` | a `GET` over a [`global`](../values/load-once-per-set-of-arguments.md) memo | one number, not two — `public` where the handler is reachable unauthenticated, `private` behind a rung, and nothing at all for `ttl: Infinity`, which no cache can be told |
+| `private, max-age=<the `ttl`>` | a `GET` over a [`global`](../values/load-once-per-set-of-arguments.md) memo | one number, not two — `private` because access is not something a rung can be read for, and nothing at all for `ttl: Infinity`, which no cache can be told |
 | `no-store` | `/__abide/health`, `/__abide/principal` | both describe this process or this caller at this moment. A cached health check is a load balancer being told a drained instance is fine |
 | `public, max-age=31536000, immutable` | the built bundle | a chunk is addressed by its own content hash, so it cannot go stale |
 

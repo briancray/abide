@@ -1,5 +1,5 @@
 // An EXAMPLE is a DIRECTORY, not a fence: real files that the build can one day
-// compile, serve, test and bench, per docs/SPEC.md ("Documentation"). This module
+// compile, serve, test and bench, per docs/BRAND.md ("Documentation structure"). This module
 // reads one and renders what a page embeds with `{% example name %}`: the panelled component
 // for the site, and the same files as fences for the markdown bundle.
 //
@@ -17,49 +17,24 @@ const FONTS =
 
 type ExampleFile = { path: string; source: string }
 
-// Runs INSIDE the result frame, which is the only place it can run: `mirror` follows an
-// input as it is typed and a round trip to the parent per keystroke would swap the whole
-// document out from under the caret. A TRANSITION is the opposite — it replaces the
-// document — so that one is posted up and the parent decides.
-//
-// The transforms are a FIXED SET, and deliberately small: they stand in for the code the
-// page is teaching until the compiler can run it, so a demo can only mock what some
-// example's source actually says. Anything needing a sixth is asking for bespoke
-// per-example script, which is the thing this exists instead of.
+// Runs INSIDE the result frame, and it is now two things rather than five: the frame reports
+// its own height, and it declines a wheel it has nowhere to put. The mirror, the transform
+// table and the transition posting all LEFT with the state machine — a `mirror` rule stood in
+// for code the page was teaching, and the arm the frame runs now is that code.
 const DRIVER = `<script>
-const machine = JSON.parse(document.querySelector('[data-machine]').textContent)
-const TRANSFORMS = {
-  trim: (v) => v.trim(),
-  lowercase: (v) => v.toLowerCase(),
-  uppercase: (v) => v.toUpperCase(),
-  slug: (v) => v.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
-  count: (v) => String(v.length),
-}
-function mirror() {
-  for (const rule of machine.mirror) {
-    const from = document.querySelector(rule.from)
-    const to = document.querySelector(rule.to)
-    if (!from || !to) continue
-    const value = from.type === 'checkbox' ? String(from.checked) : from.value
-    to.textContent = rule.transform ? TRANSFORMS[rule.transform](value) : value
-  }
-}
-function fire(kind, event) {
-  for (const key of Object.keys(machine.on)) {
-    const space = key.indexOf(' ')
-    if (key.slice(0, space) !== kind) continue
-    if (!event.target.closest(key.slice(space + 1))) continue
-    event.preventDefault()
-    parent.postMessage({ abide: machine.on[key] }, '*')
-    return
-  }
-}
 // The frame is as tall as its content, and only the frame can know that. It reports
 // rather than the parent measuring, because the parent has no origin to read across.
 function measure() {
   parent.postMessage({ abideHeight: document.documentElement.scrollHeight }, '*')
 }
 new ResizeObserver(measure).observe(document.documentElement)
+// THE FRAME LOADS BEFORE THE PAGE'S OWN SCRIPT DOES, so its first counts are posted into a
+// document with no listener yet and the meter stays empty until something else moves. The parent
+// asks once it is ready and this answers, which is the only ordering that does not depend on a
+// resize happening after.
+addEventListener('message', () => {
+  measure()
+})
 // A WHEEL OVER THE FRAME IS THE PAGE'S, not the example's. A cross-document scroll does
 // not chain to the parent, so a frame sized to its content — which is every one of them —
 // swallows the gesture and the reader stops dead halfway down the page. Forwarded only
@@ -71,13 +46,94 @@ addEventListener('wheel', (event) => {
   event.preventDefault()
   parent.postMessage({ abideWheel: { x: event.deltaX, y: event.deltaY } }, '*')
 }, { passive: false })
-addEventListener('input', mirror)
-addEventListener('input', (event) => fire('input', event))
-addEventListener('change', (event) => fire('change', event))
-addEventListener('click', (event) => fire('click', event))
-addEventListener('submit', (event) => fire('submit', event))
-mirror()
 measure()
+</script>`
+
+// THE TOKEN A FIXTURE COUNTS WITH, substituted at serve time with how many times that exchange
+// has been answered. It exists because a wire fixture is authored and therefore frozen, and some
+// domain data is a COUNT — a record's views, a quota's remainder — so a frozen one cannot say the
+// thing the example is about. Quoted in the fixture and unquoted on the way out, so the authored
+// body is valid JSON and so is the answer.
+//
+// IT IS NOT INSTRUMENTATION. A field here is one the app would ship, and it is now the only
+// count a card carries: a counter kept in the source to be rendered was noise in the code the
+// reader came to read, and the code is what has to be short enough to prove the heading (40.32).
+const HITS = '{{hits}}'
+
+// A LATENCY IS THE POINT, not a nicety: a fixture that answers in the same tick paints the
+// settled value on the first frame, so `pending()` has no moment a reader could see it in.
+const LATENCY = 450
+
+// AND SO IS THE GAP BETWEEN FRAMES. A FEED SETTLED WHOLE IS NOT A FEED: hand an ndjson
+// fixture back as one body and every change lands before the first paint, so the example
+// that is about folding a change into a held list renders a finished table and folds
+// nothing a reader can see. Longer than the latency, so the first frame arrives after the
+// list it changes rather than racing it.
+const FRAME_GAP = 1200
+
+// THE NETWORK THE ARM TALKS TO IS `wire`, which is what makes one artifact of two: the panel
+// under the render used to be a hand-kept screenshot of an exchange nothing performed, and it
+// is now the fixture the exchange is served from. A request is resolved to EXACTLY ONE entry
+// or the build fails, which is the snippet anchor's rule reaching a second mechanism — none
+// means the arm asks for something the page never documented, two means the fixture cannot
+// say which answer it meant.
+//
+// Matched on the ARGS and not the address, because the two arms genuinely disagree there: the
+// hand-written one fetches `/api/customer` and abide's handler answers at
+// `/__abide/rpc/customers/getCustomer`. What they cannot disagree about is the arguments, both
+// being implementations of one call — so the args carry the match and the last path segment
+// only has to be RELATED, which is what keeps two endpoints taking `{ id }` apart.
+const NETWORK = `<script>
+const FIXTURES = JSON.parse(document.querySelector('[data-fixtures]').textContent)
+const SERVED = Object.create(null)
+const BASE = 'http://example.invalid'
+const FRAME_GAP = ${FRAME_GAP}
+function argsOf(url) {
+  const args = {}
+  for (const [key, value] of url.searchParams) args[key] = value
+  return JSON.stringify(Object.entries(args).sort())
+}
+// AN NDJSON FIXTURE IS ONE LINE PER FRAME, and the gap between them is what makes the
+// difference between a feed and a body: enqueued a line at a time so the arm reads them as
+// they land, which is also the only reading under which the wire panel's
+// \`transfer-encoding: chunked\` is true of anything.
+function framed(body) {
+  const lines = body.split('\\n')
+  const encoder = new TextEncoder()
+  let at = 0
+  return new ReadableStream({
+    async pull(controller) {
+      if (at === lines.length) return controller.close()
+      await new Promise((resolve) => setTimeout(resolve, FRAME_GAP))
+      controller.enqueue(encoder.encode(lines[at] + '\\n'))
+      at += 1
+    },
+  })
+}
+globalThis.fetch = async (input, init) => {
+  const url = new URL(typeof input === 'string' ? input : input.url, BASE)
+  const tail = url.pathname.slice(url.pathname.lastIndexOf('/') + 1).toLowerCase()
+  const args = argsOf(url)
+  const match = FIXTURES.find((entry) => entry.args === args && (tail.includes(entry.tail) || entry.tail.includes(tail)))
+  if (!match) {
+    const note = document.createElement('p')
+    note.className = 'tip'
+    note.textContent = 'No fixture answers ' + url.pathname + url.search + '. Add it to this example\\'s wire.'
+    document.body.append(note)
+    measure()
+    throw new Error('unanswered ' + url.pathname)
+  }
+  SERVED[match.key] = (SERVED[match.key] ?? 0) + 1
+  await new Promise((resolve) => setTimeout(resolve, match.latency))
+  // A FIXTURE FIELD THAT COUNTS. The quotes go with the token, so what lands is a JSON number
+  // and the body stays parseable. This is the one thing a static fixture cannot say on its own:
+  // that an answer is different BECAUSE it was asked for again.
+  //
+  // PER EXCHANGE, not per handler: a record's own count belongs to that RECORD, so one handler
+  // asked for two ids would otherwise raise the number on both.
+  const body = match.body.replaceAll('"${HITS}"', String(SERVED[match.key]))
+  return new Response(match.streamed ? framed(body) : body, { status: match.status, headers: match.headers })
+}
 </script>`
 
 // WHICH FILE A READER OPENS FIRST is the one the problem is solved in. That is the
@@ -98,31 +154,25 @@ function orderedFiles(paths: string[], about: 'ui' | 'server'): string[] {
 }
 
 // Only `title`, `summary`, `files`, `result` and `route` are owed. A panel an example
-// has no artifact for is NOT RENDERED — a Wire tab on an example that makes no request
+// has no artifact for is NOT RENDERED — a Requests tab on an example that makes no request
 // would be a claim about work that never happened, so Result is a lone pane there.
 export type Manifest = {
     title: string
     summary: string
     files: string[]
     route: string
-    // A settled snapshot cannot show `pending()`, so a result is never one document.
-    // It is a MACHINE: `hold` waits and then goes to `then`, `on` goes somewhere on
-    // something the reader did, and `mirror` is the one thing that happens WITHOUT a
-    // state change — text following an input as it is typed. A film strip is the case
-    // where only `hold` is used, which is why there is no second shape for it.
+    // WHICH OF THE FOUR APPS the pattern is drawn from, per docs/BRAND.md, "The four apps an
+    // example is drawn from". Declared rather than inferred from the words, because what the
+    // clause governs is a page's examples AGREEING, and prose cannot be compared.
+    app: string
+    // THE ARM IS WHAT RUNS. `vanilla/` is the hand-written implementation every bench ratio is
+    // already against, so the frame has real code to serve rather than a film strip of it: what
+    // the panel claims about a request count is a count the arm made.
     //
-    // `after` NAMES its target rather than meaning the next entry, because a reload
-    // returns to the state it reloaded — array order could express a strip and could
-    // not express that, and an implicit rule that only works for the simple case is
-    // the one that breaks silently on the first case it does not.
-    states: {
-        id: string
-        file: string
-        hold?: number
-        after?: string
-        on?: Record<string, string>
-        mirror?: { from: string; to: string; transform?: string }[]
-    }[]
+    // WHAT IS SHOWN IS STILL THE `.abide` SOURCE. The arm is the substrate until there is a
+    // compiler, and the Files panel is the page's own source — so the equivalence between the two
+    // is a claim NOTHING CHECKS, and it is the one gap this design has. The bench's line counts
+    // are the only place the arm is visible today.
     about?: 'ui' | 'server'
     // What the build emits, and the hand-written arm every bench ratio is against. Neither is
     // a panel: both SHIP, in the download and in the line counts, and a reader who wants the
@@ -148,24 +198,118 @@ export type Manifest = {
     }
 }
 
-// BOTH WAYS A MACHINE CAN BE WRONG ARE SILENT. A duplicate id makes one state
-// unreachable and the other arbitrary; a transition naming no state dead-ends on the
-// click that takes it. Neither shows in the rendered output, because the output of the
-// state you never reach is not rendered at all — so they are refused at build.
-export function checkMachine(name: string, states: Manifest['states']): void {
-    const ids = new Set<string>()
-    for (const state of states) {
-        if (ids.has(state.id)) throw new Error(`example ${name}: two states share id ${state.id}`)
-        ids.add(state.id)
-    }
-    for (const state of states) {
-        for (const [event, target] of Object.entries(state.on ?? {})) {
-            if (ids.has(target)) continue
-            throw new Error(`example ${name}: ${state.id} on "${event}" names no state ${target}`)
+// TWO FIXTURES A REQUEST CANNOT BE TOLD APART BY is the half of this that is checkable without
+// running anything, and it is refused at build. The other half — a request no fixture answers —
+// is NOT statically knowable, the arm building its address at the call (`/api/${path}`), so that
+// one is made loud at runtime instead: the shim paints the unanswered address into the frame
+// rather than falling through to a `fetch` a sandboxed srcdoc cannot make, which would hang.
+export function checkFixtures(name: string, entries: Fixture[]): void {
+    for (let index = 0; index < entries.length; index += 1) {
+        for (let other = index + 1; other < entries.length; other += 1) {
+            const one = entries[index]
+            const two = entries[other]
+            if (!one || !two) continue
+            if (one.args === two.args && relates(one.tail, two.tail))
+                throw new Error(
+                    `example ${name}: ${one.name} and ${two.name} take the same args and no request tells them apart`,
+                )
         }
-        if (state.hold && !ids.has(state.after ?? ''))
-            throw new Error(`example ${name}: ${state.id} holds but names no state to go to`)
     }
+}
+
+// AND A REQUEST NO FIXTURE ANSWERS is the half that was called not statically knowable. For a
+// COMPUTED address it is — `/api/${path}` cannot be resolved without running the arm — but every
+// literal one can be, and a literal is what an arm actually writes. So the same failure is now
+// refused at build for the case a build can reach, and the runtime tip is what is left for the
+// computed address rather than the only line of defence: `patch-a-list` shipped an arm fetching
+// `/api/orders` against an empty wire, and the tip only says so to a reader who opens the page.
+export function checkRequests(name: string, script: string, entries: Fixture[]): void {
+    // AND A TRANSPORT THE FRAME DOES NOT SHIM IS THE WORSE HALF, because it is silent: `fetch`
+    // is replaced and `WebSocket` is not, so an arm opening one inside a srcdoc with no origin
+    // resolves it against the PARENT's and 404s — an example that renders its chrome, none of
+    // its content, and no tip. `tail` shipped that way and read as a console with nothing in it.
+    const unshimmed = UNSHIMMED.exec(script)
+    if (unshimmed)
+        throw new Error(
+            `example ${name}: the arm opens a ${unshimmed[1]}, which the frame has no fixture for`,
+        )
+    for (const [, address] of script.matchAll(FETCHED_ADDRESS)) {
+        if (!address) continue
+        const url = new URL(address, 'http://example.invalid')
+        const tail = url.pathname.slice(url.pathname.lastIndexOf('/') + 1)
+        const args: [string, string][] = []
+        for (const pair of url.searchParams) args.push(pair)
+        const wanted = JSON.stringify(args.sort())
+        const answered = entries.some((one) => one.args === wanted && relates(tail, one.tail))
+        if (!answered)
+            throw new Error(`example ${name}: the arm fetches ${address} and no fixture answers it`)
+    }
+
+    // AND A COMPUTED ADDRESS STILL SAYS MOST OF IT. The interpolation hides the VALUES and leaves
+    // everything around them standing: `?warehouse=${where}` names its arg KEY whatever `where`
+    // turns out to be. That gap shipped in three arms at once — each put an argument in the PATH
+    // where the fixture carries it in the QUERY, so no request any of them ever made could be
+    // answered and the frame's runtime tip was the only thing that said so. Kept apart from the
+    // loop above rather than folded into it, because the two ask different questions: that one
+    // asks whether THIS request is answered, this one whether a request of this SHAPE could be.
+    //
+    // IT REACHES TWO OF THOSE THREE AND NOT THE THIRD, and the third is why the tip stays. A bare
+    // `/api/stock/${key}` names no key either, so its shape is a no-arg request — and a no-arg
+    // fixture existed, the POST beside it. Statically that is `/api/${path}` with `path` a handler
+    // NAME, which is what the arm above this one legitimately writes; the two are the same shape
+    // and only the runtime tail tells them apart. Refusing an interpolated last segment would take
+    // both.
+    for (const [, address] of script.matchAll(INTERPOLATED_ADDRESS)) {
+        if (!address) continue
+        const cut = address.indexOf('?')
+        const path = cut === -1 ? address : address.slice(0, cut)
+        const query = cut === -1 ? '' : address.slice(cut + 1)
+        // A `$` in the path hides the tail, a segment with no literal name hides the keys, and a
+        // half that did not resolve is not checked rather than guessed at — `/api/${path}?${query}`
+        // resolves neither and is skipped whole, which is what the arm above this one writes.
+        const tail = path.includes('$') ? null : path.slice(path.lastIndexOf('/') + 1)
+        const keys: string[] = []
+        let named = true
+        for (const segment of query ? query.split('&') : []) {
+            const at = segment.indexOf('=')
+            const key = at === -1 ? '' : segment.slice(0, at)
+            if (!key || key.includes('$')) named = false
+            else keys.push(key)
+        }
+        if (tail === null && !named) continue
+        const wanted = named ? JSON.stringify(keys.sort()) : ''
+        const answered = entries.some((one) => {
+            if (tail !== null && !relates(tail, one.tail)) return false
+            if (!named) return true
+            const names: string[] = []
+            for (const [key] of JSON.parse(one.args) as [string, string][]) names.push(key)
+            return JSON.stringify(names.sort()) === wanted
+        })
+        if (!answered)
+            throw new Error(
+                `example ${name}: the arm fetches ${address} and no fixture takes those arguments`,
+            )
+    }
+}
+
+// A `$` in the quotes is an interpolation, which is the computed address the first loop cannot
+// resolve — skipped there rather than guessed at, so its refusal never fires on an address it
+// misread, and taken by the second loop for the half of it that does resolve.
+const FETCHED_ADDRESS = /\bfetch\(\s*['"`]([^'"`$]+)['"`]/g
+const INTERPOLATED_ADDRESS = /\bfetch\(\s*`([^`]*\$\{[^`]*)`/g
+
+// The two the wire cannot answer. Kept as a list rather than "anything but fetch" because the
+// refusal has to name what it saw, and a shim for either is the fix if an example ever needs one.
+const UNSHIMMED = /\bnew (WebSocket|EventSource)\b/
+
+// The arm and the handler are two implementations of one call, so their addresses differ by
+// vocabulary rather than by subject: `/api/customer` against `/__abide/rpc/customers/getCustomer`.
+// Containment either way is the whole of the relation, and it is deliberately loose — what makes
+// it safe is the check above, which refuses a fixture set this cannot separate.
+export function relates(one: string, two: string): boolean {
+    const a = one.toLowerCase()
+    const b = two.toLowerCase()
+    return a.includes(b) || b.includes(a)
 }
 
 // Every panel that holds files reads the same way, so they share one loader and one
@@ -221,12 +365,16 @@ function renderWire(entries: NonNullable<Manifest['wire']>): string {
         if (!entry) continue
         const selected = index === 0
         tabs += `<button role="tab" aria-selected="${selected}" data-side="server" data-file="wire:${index}">${escapeHtml(wireLabel(entry.request))}</button>`
+        const counted = entry.body.includes(HITS)
+            ? `<p class="ex-note"><code>${escapeHtml(HITS)}</code> is how many times this exchange has been answered, filled in when it is served.</p>`
+            : ''
         bodies += `<div data-file="wire:${index}"${selected ? '' : ' hidden'}>
 <p class="ex-line ex-request"><code>${escapeHtml(entry.request)}</code></p>
 ${renderHeaders(entry.requestHeaders)}
 <p class="ex-line ex-status"><code>${escapeHtml(entry.status)}</code></p>
 ${renderHeaders(entry.responseHeaders)}
 <pre><code>${highlight(entry.body)}</code></pre>
+${counted}
 </div>`
     }
     return `<div class="ex-files" role="tablist">${tabs}</div>${bodies}`
@@ -274,22 +422,50 @@ function renderBench(bench: NonNullable<Manifest['bench']>): string {
 export const FRAME_RULES = [
     ':root',
     '@media (prefers-color-scheme: dark)',
+    // An arm hides its own pending and error branches with `hidden`, and the frame body is
+    // a flex column now — so this travels with the rest or those branches all render.
+    '\n[hidden] {',
+    // The margin reset comes first and is not optional: the frame is a flex column like the
+    // page is, so a UA margin left standing would be added to the gap rather than replaced
+    // by it — and only one of the two would answer to the scale.
+    '\nh1, h2, h3, h4, p,',
     '\nh1 {',
-    '\np {',
     '\na {',
     '\na[aria-current]',
+    '\nul, ol {',
     '\n.switch {',
     '\n.switch a {',
     '\n.switch a:hover',
     '\n.switch a[aria-current]',
     '\ninput, textarea, select {',
     '\ninput:focus-visible',
+    '\nbutton, label {',
     '\nbutton {',
     '\nbutton:hover',
+    '\n.row {',
+    '\n.row:has(> label)',
     '\nlabel {',
     '\nlabel input, label select',
-    '\nlabel input[type=checkbox]',
     '\nlabel:has(> input[type=checkbox])',
+    // A demo card's stat row, its field rows and the status line, so a card renders the way
+    // the site would rather than only where the site is.
+    '\n.grid {',
+    '\n.grid li {',
+    '\n.grid li span {',
+    '\n.grid li strong {',
+    '\n.fields {',
+    '\n.fields li {',
+    '\n.fields li span {',
+    '\n.fields li strong {',
+    '\n.fields.stacked li {',
+    '\n.fields.stacked li span {',
+    '\n.stepper {',
+    '\n.stepper button {',
+    '\n.status {',
+    '\n.tabs {',
+    '\n.tabs button {',
+    '\n.tabs button:hover',
+    '\n.tabs button[aria-selected=true]',
     '\n.tip {',
     '\n.tip::before',
     '\n.tip button {',
@@ -319,71 +495,53 @@ function ruleAt(css: string, selector: string): string {
 // and a palette change reaches it for free. Only the tokens: the site's chrome is a
 // sidebar grid, and a page that is not the docs would be wrecked by it.
 function renderResult(
-    states: (Manifest['states'][number] & { body: string })[],
+    arm: { markup: string; script: string },
+    fixtures: Fixture[],
     route: string,
     appCss: string,
 ): string {
     // Tokens AND the element defaults, so an example with no `<style>` of its own
     // renders the way an abide page renders. Every rule is lifted from the app
     // stylesheet rather than restated, except `body` — the site's own is a sidebar
-    // grid, which is chrome rather than a default.
+    // grid, which is chrome rather than a default. What the arm's body IS is the same
+    // column the page is: the scale arrives with the tokens, so the distance between two
+    // blocks of a rendered example is the one the docs use for prose.
     const base = FRAME_RULES.map((selector) => ruleAt(appCss, selector)).join('')
-    const document = (state: Manifest['states'][number], body: string) =>
-        `<!doctype html><meta charset="utf-8">
+    // `<` is escaped in the FIXTURES and nowhere else. A `\\u003c` is legal inside a JSON string
+    // and is a SyntaxError in code — `held.at \\u003c TTL` does not parse — so escaping the arm the
+    // same way stopped its bundle dead, and stopped it the quiet way: a script that fails to parse
+    // reports nowhere, the classic scripts beside it still run, and the render looks like a load
+    // that never finished. The arm needs no escape: the whole document goes into `srcdoc` through
+    // `escapeHtml`, so its `</script>` is `&lt;/script&gt;` in the attribute and `</script>` in the
+    // frame.
+    const data = JSON.stringify(fixtures).replaceAll('<', '\\u003c')
+    const html = `<!doctype html><meta charset="utf-8">
 <link rel="stylesheet" href="${FONTS}">
 <style>${base}
 body { margin:0; padding:1.5rem; background:var(--paper); color:var(--ink);
-  font:400 15px/1.6 var(--sans); }
-</style>${body}
-<script type="application/json" data-machine>${JSON.stringify({
-    on: state.on ?? {},
-    mirror: state.mirror ?? [],
-}).replaceAll('<', '\\u003c')}</script>${DRIVER}`
+  font:400 15px/1.6 var(--sans);
+  display:flex; flex-direction:column; gap:var(--gap-flow); }
+</style>${arm.markup}
+<script type="application/json" data-fixtures>${data}</script>${NETWORK}${DRIVER}
+<script>${arm.script}</script>`
 
-    const frames = states.map((state) => ({
-        id: state.id,
-        hold: state.hold ?? 0,
-        after: state.after ?? '',
-        on: state.on ?? {},
-        mirror: state.mirror ?? [],
-        html: document(state, state.body),
-    }))
-    // WHERE A MACHINE RESTS is WHERE THE CLOCK STOPS: follow `hold` from the first state
-    // and settle on the first one that does not have it. A film strip rests on its last
-    // frame, having already finished by the time anyone looks; a driven machine rests on
-    // its first, waiting for the reader; and one that loads and THEN waits — a hold into
-    // an editable form — rests on the form rather than on whatever a click leads to.
-    // Decided here rather than in script, so the frame is right before any JS runs.
-    let home = 0
-    for (let step = 0; step < frames.length && frames[home]?.hold; step += 1) {
-        const next = frames.findIndex((frame) => frame.id === frames[home]?.after)
-        if (next === -1) break
-        home = next
-    }
-    // `<` is escaped so a state's own markup cannot close this script element.
-    const data = JSON.stringify(frames).replaceAll('<', '\\u003c')
-
-    // One button, back to the first state — but not one word for it. REPLAY is what a
-    // clock-driven strip does, and there is nothing to replay on a machine the reader
-    // drives: that one is a RESET, and calling it a replay promises a performance that
-    // never comes.
-    const label = frames.some((frame) => frame.hold) ? 'Replay' : 'Reset'
-    const replay =
-        frames.length > 1
-            ? `<button type="button" class="ex-replay" data-replay>${label}</button>`
-            : ''
-
-    // `allow-scripts` WITHOUT `allow-same-origin`: the driver has to run to answer a
-    // click, and withholding the origin is what keeps it from reaching this document.
-    // The parent hears about a transition by message rather than by reading the frame.
+    // RELOAD, not replay and not reset. The frame re-runs the arm from nothing, which is what
+    // a reader who has spent the cache wants and is the one word that is true of it — where
+    // "replay" promised a performance and "reset" promised a restored state, and the arm has
+    // neither, only a first load it can do again.
+    //
+    // `allow-scripts` WITHOUT `allow-same-origin`: the arm has to run, and withholding the
+    // origin is what keeps it from reaching this document. The parent hears about the request
+    // count by message rather than by reading the frame.
     //
     // `loading="lazy"` was here and did NOTHING, which is worth stating so it does not
     // come back: the attribute defers a FETCH, and a srcdoc frame has no fetch to defer.
     // Measured 2642px below the fold with the attribute set and the frame's own script
     // already run. So a section overview renders every example it carries, at load.
     return `<div class="ex-browser">
-<iframe class="ex-result" title="The rendered output of ${escapeHtml(route)}" sandbox="allow-scripts" srcdoc="${escapeHtml(frames[home]?.html ?? '')}"></iframe>${replay}
-<script type="application/json" data-states>${data}</script>
+<p class="ex-live">Live</p>
+<iframe class="ex-result" title="The rendered output of ${escapeHtml(route)}" sandbox="allow-scripts" srcdoc="${escapeHtml(html)}"></iframe>
+<button type="button" class="ex-replay" data-reload>Reload</button>
 </div>`
 }
 
@@ -393,22 +551,104 @@ function renderDownload(name: string, root: string): string {
 
 export type Example = { name: string; html: string }
 
+// The ARM is one markup file and one entry module, bundled so a cross-file import resolves —
+// `sharing` splits its store across three files, and a srcdoc frame has no origin to fetch a
+// second one from. The `<script src>` the markup names is REMOVED rather than rewritten: the
+// bundle is inlined after it, so leaving the tag would ask the frame for a file that is not
+// there and log a failure per render.
+//
+// EMITTED AS A CLASSIC SCRIPT, WRAPPED. A `type=module` script does not run in a frame sandboxed
+// without `allow-same-origin`, and it fails the quiet way: the tag is in the document, the
+// classic scripts beside it run, and the arm simply never starts — a render that looks like a
+// slow load. The wrapper is `async` rather than bare because `patch-a-list` awaits at the top
+// level, which is legal in a module and is what an IIFE build refuses outright.
+async function readArm(name: string): Promise<{ markup: string; script: string }> {
+    const folder = new URL(`${name}/vanilla/`, EXAMPLES_DIR)
+    const page = Bun.file(new URL('index.html', folder))
+    if (!(await page.exists())) throw new Error(`example ${name}: vanilla/index.html is missing`)
+    const markup = await page.text()
+    const entry = /<script[^>]*src="\.\/([^"]+)"[^>]*><\/script>/.exec(markup)
+    // An arm with no script at all is legitimate: `app-stylesheet` is about what the cascade
+    // does, and its markup is the whole of it.
+    if (!entry?.[1]) return { markup: markup.trimEnd(), script: '' }
+
+    const built = await Bun.build({
+        entrypoints: [new URL(entry[1], folder).pathname],
+        target: 'browser',
+        format: 'esm',
+    })
+    if (!built.success) throw new Error(`example ${name}: vanilla/${entry[1]} did not build`)
+    const [output] = built.outputs
+    if (!output) throw new Error(`example ${name}: vanilla/${entry[1]} produced nothing`)
+    const bundle = await output.text()
+    if (/^\s*(import|export)\b/m.test(bundle))
+        throw new Error(`example ${name}: vanilla/${entry[1]} bundles to a module, not a script`)
+    return {
+        markup: markup.replace(entry[0], '').trimEnd(),
+        script: `;(async () => {\n${bundle}\n})()`,
+    }
+}
+
+// A wire entry, as the frame's shim consumes it. `tail` is the handler name off the address and
+// `args` the canonical form of the query, which are the two halves the match is made on.
+export type Fixture = {
+    name: string
+    // WHAT TELLS TWO EXCHANGES OF ONE HANDLER APART, and the key a counted field counts on.
+    // `name` cannot serve: one handler asked for two ids shares it.
+    key: string
+    tail: string
+    args: string
+    status: number
+    headers: Record<string, string>
+    body: string
+    latency: number
+    // Read off the declared content-type rather than set per entry: a feed and a body differ
+    // in what the wire panel already says they are, so a second place to say it could disagree
+    // with the header a reader is looking at.
+    streamed: boolean
+}
+
+export function tailOf(request: string): string {
+    const address = request.split(' ')[1] ?? request
+    const path = address.split('?')[0] ?? ''
+    return path.slice(path.lastIndexOf('/') + 1)
+}
+
+export function fixturesOf(entries: NonNullable<Manifest['wire']>): Fixture[] {
+    const fixtures: Fixture[] = []
+    for (const entry of entries) {
+        const address = entry.request.split(' ')[1] ?? entry.request
+        const query = new URLSearchParams(address.slice(address.indexOf('?') + 1))
+        const args: [string, string][] = []
+        if (address.includes('?')) for (const pair of query) args.push(pair)
+        fixtures.push({
+            name: tailOf(entry.request),
+            key: `${tailOf(entry.request)} ${JSON.stringify(args.sort())}`,
+            tail: tailOf(entry.request).toLowerCase(),
+            args: JSON.stringify(args.sort()),
+            status: Number.parseInt(entry.status, 10) || 200,
+            headers: entry.responseHeaders,
+            body: entry.body,
+            latency: LATENCY,
+            streamed: (entry.responseHeaders['content-type'] ?? '').includes('ndjson'),
+        })
+    }
+    return fixtures
+}
+
 export async function readExample(name: string, root: string): Promise<Example> {
     const manifest: Manifest = await Bun.file(new URL(`${name}/example.json`, EXAMPLES_DIR)).json()
     const sourcePaths = orderedFiles(manifest.files, manifest.about ?? 'ui')
     const files = await readGroup(name, 'files', sourcePaths)
-    checkMachine(name, manifest.states)
-    const states: (Manifest['states'][number] & { body: string })[] = []
-    for (const state of manifest.states) {
-        const file = Bun.file(new URL(`${name}/${state.file}`, EXAMPLES_DIR))
-        if (!(await file.exists())) throw new Error(`example ${name}: ${state.file} is missing`)
-        states.push({ ...state, body: await file.text() })
-    }
+    const arm = await readArm(name)
+    const fixtures = fixturesOf(manifest.wire ?? [])
+    checkFixtures(name, fixtures)
+    checkRequests(name, arm.script, fixtures)
     const appCss = await Bun.file(APP_STYLESHEET).text()
 
     // THE RENDER IS NOT A PANEL. It is the thing the example IS, so it sits above the
     // tabs and stays there — what the tabs hold is everything you consult ABOUT it.
-    const render = renderResult(states, manifest.route, appCss)
+    const render = renderResult(arm, fixtures, manifest.route, appCss)
     const panels: [string, string, string][] = [['files', 'Files', renderFileGroup(files, 'files')]]
     if (manifest.wire?.length) panels.push(['wire', 'Requests', renderWire(manifest.wire)])
     if (manifest.bench) panels.push(['bench', 'Bench', renderBench(manifest.bench)])
@@ -423,7 +663,7 @@ export async function readExample(name: string, root: string): Promise<Example> 
     }
 
     const html = `<figure class="example">
-<figcaption><span class="ex-title">${escapeHtml(manifest.title)}</span><span class="ex-summary">${escapeHtml(manifest.summary)}</span></figcaption>
+<figcaption><span class="ex-title">${renderInline(manifest.title)}</span><span class="ex-summary">${escapeHtml(manifest.summary)}</span></figcaption>
 ${render}
 <div class="ex-tabs"><div class="ex-tablist" role="tablist">${tabs}</div>${renderDownload(name, root)}</div>
 ${bodies}

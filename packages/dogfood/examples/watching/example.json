@@ -1,34 +1,15 @@
 {
     "title": "An autosave that cancels itself",
     "summary": "A draft saved a second after the typing stops, with the cancel as the effect's return value. Replay to watch nineteen keystrokes become one save, then change the topic.",
+    "app": "unconverted",
     "files": [
         "src/ui/pages/editor/page.abide",
         "src/ui/session.ts",
         "src/server/rpc/drafts.ts"
     ],
     "route": "/editor",
-    "states": [
-        { "id": "typing1", "file": "typing1.html", "hold": 500, "after": "typing2" },
-        { "id": "typing2", "file": "typing2.html", "hold": 500, "after": "typing3" },
-        { "id": "typing3", "file": "typing3.html", "hold": 900, "after": "saving" },
-        { "id": "saving", "file": "saving.html", "hold": 600, "after": "saved" },
-        {
-            "id": "saved",
-            "file": "saved.html",
-            "on": {
-                "change [data-topic]": "switched"
-            }
-        },
-        {
-            "id": "switched",
-            "file": "switched.html",
-            "on": {
-                "change [data-topic]": "saved"
-            }
-        }
-    ],
     "bench": {
-        "note": "AUTHORED, not measured — nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete — markup, client and handler. It comes out LEVEL — slightly against, in fact, this arm carrying a second watch the hand-written one has no place to put. A `clearTimeout` is one line; the rows above it are where the difference is.",
+        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete \u2014 markup, client and handler. It comes out LEVEL \u2014 slightly against, in fact, this arm carrying a second watch the hand-written one has no place to put. A `clearTimeout` is one line; the rows above it are where the difference is.",
         "rows": [
             {
                 "metric": "Saves over nineteen keystrokes",

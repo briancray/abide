@@ -17,6 +17,7 @@ covers:
   - `abide:health`
   - `abide:config`
   - `abide:render`
+  - `abide:refuse`
   - `abide:reactive`
   - `abide:watch`
   - `abide:hydrate` / `abide:navigate`

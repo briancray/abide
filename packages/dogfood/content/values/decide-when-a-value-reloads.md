@@ -12,6 +12,7 @@ covers:
   - `invalidate`
   - state › `ttl`
   - `s.peek`
+  - memo › `ttl`
 examples:
   - packages/dogfood/examples/reloading
 ---
@@ -24,7 +25,7 @@ There are three answers, and they are three because they fail differently.
 | --- | --- | --- |
 | `ttl` | on the next read after it lapses | nothing until somebody reads |
 | `invalidate()` | on the next read | nothing at all, subscribed or not |
-| `refresh()` | now, wherever something subscribes | one load per subscribed entry, a mark for the rest |
+| `refresh()` | now on a named value; under a sweep, wherever something subscribes | one load per entry reloaded, a mark for the rest |
 
 {% example reloading %}
 
@@ -41,8 +42,12 @@ to the next read.
 
 `refresh()` is stale-while-revalidate: what is held **keeps being served**, `refreshing()` is
 true, and the value swaps when the new one lands. Nothing on screen goes blank, and `{:then}`
-stays mounted with the old value. Where nothing subscribes to the entry there is no reader to
-serve and no spinner to show, so it degenerates to the row above it.
+stays mounted with the old value.
+
+Naming one value reloads it whether or not anything is reading it. You named a single thing, so
+the load is the whole of what you asked for — and the alternative was a call that meant two
+things depending on what happened to be mounted. A **sweep** is the other story, and it is the
+one that spares what nobody reads.
 
 What each one touches is the **cache behind the value** rather than the value on screen — and
 the cache is exactly what decides what a reader sees next:
@@ -50,7 +55,7 @@ the cache is exactly what decides what a reader sees next:
 | | subscribed | not subscribed |
 | --- | --- | --- |
 | `invalidate()` | the value on screen stays; the cache behind it is dropped | the cache is dropped |
-| `refresh()` | loads now, and what is held keeps being served | degenerates to `invalidate()`, so nothing loads |
+| `refresh()` | loads now, and what is held keeps being served | loads now; nobody is holding it, so nothing is served meanwhile |
 
 A **subscriber** is anything reading the value into the output — the template showing it, or a
 `memo` that is itself subscribed. On screen is the common case rather than the rule, which
@@ -58,9 +63,10 @@ matters for a derived value nothing renders directly. Either way the next read �
 read by hand — is fetched fresh.
 
 The difference a reader **sees** therefore lands on that next load, and it follows from the row
-above. After an `invalidate()` there is nothing left to serve, so the load renders the pending
-branch — a display, a read by hand and a `refresh()` alike. A `refresh()` on its own never does,
-having kept the held value to serve underneath it.
+above. An `invalidate()` marks what is held **stale**, so the load that follows reads as
+`pending()` — a display, a read by hand and a `refresh()` alike — with the stale value still
+readable underneath until the new one lands. A `refresh()` on its own never does: it says the
+held value is good, where an invalidate says it is wrong.
 
 So `invalidate()` never moves a node and never sends a request, which is what the example above
 shows: press **Mark stale** and neither the number nor the request count moves. Go to West and
@@ -124,8 +130,9 @@ to re-run.
 **A selection is scope-bounded**, as a memo is: this scope's entries plus `global` ones. So one
 request can never invalidate another's. On a server that makes a bare `invalidate()` reach every
 `global` memo in the process — its own request-scoped entries die with the request anyway, so the
-globals are the whole effect. That is what an operator's flush endpoint wants and never what a
-handler being defensive wants:
+globals are the whole effect. A bare `refresh()` reaches the same entries; nothing subscribes on
+a server, so there it marks them and the two are one call. That is what an operator's flush
+endpoint wants and never what a handler being defensive wants:
 
 {% snippet reloading src/server/rpc/stock.ts export const flushStock %}
 
@@ -145,9 +152,8 @@ and nothing to choose among; `getStock` holds every key.
 | `getStock.invalidate({ sku: 'A-70' })` | that shelf in every warehouse |
 | `getStock.refresh({ warehouse: 'east' })` | one warehouse, loaded now |
 
-The argument is a `Partial<Args>`, so it selects a slice rather than one key — the same selection
-the section above takes, narrowed by the one thing a keyed memo has that a lone `Reactive` does
-not. It is also the only place args granularity is spelled, and the place with the `Args` type to
+The argument is a `Partial<Args>`, so it selects a slice rather than one key: a `Selection`
+narrowed by the one thing a keyed memo has that a lone `Reactive` does not. It is also the only place args granularity is spelled, and the place with the `Args` type to
 check it against, which makes it the natural thing to write after a mutation:
 
 {% snippet reloading src/server/rpc/stock.ts export const bookOut %}
@@ -159,9 +165,10 @@ the number on its screen is still the one from before the write. So the page doe
 
 {% snippet reloading src/ui/pages/stock/[warehouse]/[sku]/page.abide async function book() { %}
 
-The verbs differ for the reason the table at the top gives. On the server nothing subscribes to
-the value, so `refresh` there would degenerate to `invalidate` and the shorter word is the honest
-one. In the page it **is** subscribed, so `refresh` reloads it under stale-while-revalidate where
+The verbs differ for the reason the table at the top gives. Both forms here are a **sweep** over
+an args pattern, and a sweep reloads only what something is reading — so on a server, where
+nothing is, `refresh` would come to exactly what `invalidate` does and the shorter word is the
+honest one. In the page it **is** subscribed, so `refresh` reloads it under stale-while-revalidate where
 `invalidate` would have dropped it to the pending branch — a write that blanks the row it just
 changed. Press **Book one out** in the example and watch 128 stay put.
 
@@ -180,8 +187,8 @@ reconnect costs exactly what a reader is holding, and nothing stale is left in f
 
 `invalidate()` at this width is for the case where nothing on screen may move — it reaches the
 same entries and leaves every value standing, so the catch-up happens on the next read. What it
-is not is a cheaper `refresh()` to reach for first: the two in that order blank every reader, per
-the section above.
+is not is a cheaper `refresh()` to reach for first: `invalidate()` and then `refresh()` blanks
+every reader.
 
 Read on: [Offline](../app/know-when-the-browser-goes-offline.md) ·
 [Watching values](do-something-when-a-value-changes.md)

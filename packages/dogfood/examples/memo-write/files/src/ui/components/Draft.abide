@@ -1,0 +1,22 @@
+<script>
+import { memo } from 'abide'
+import { getPerson } from '#server/rpc/people'
+
+const person = memo(() => getPerson({ id: '42' }))
+
+// Bound straight to the field, so typing IS the write.
+const draft = memo(() => person?.name ?? '')
+
+const status = memo(() => {
+    if (person.pending()) return 'loading…'
+    return person.refreshing() ? 'refreshing…' : ''
+})
+</script>
+
+<div class="row">
+    <label>your draft
+        <input bind:value={draft}>
+    </label>
+    <button onclick={person.refresh}>reload from the server</button>
+</div>
+<p class="status">{status}</p>

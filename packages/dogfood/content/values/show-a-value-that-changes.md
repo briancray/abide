@@ -6,7 +6,7 @@ covers:
   - `state`
   - `s`
   - `s.set`
-  - `Accepted`
+  - state › `Accepted`
   - `Stored`
   - `Transformer`
 examples:
@@ -20,7 +20,8 @@ is not something you arrange.
 {% example local-state %}
 
 *2 values, 0 handlers* — no event listener, no setter threaded through the markup, no re-render
-to schedule, and no dependency to list. Everything below is a feature of that one page.
+to schedule, and no dependency to list. Every feature named on this page is a feature of that
+one example.
 
 ## `state(initial)` hands back a `Reactive`
 
@@ -109,3 +110,4 @@ Read on: [Form binding](../templates/bind-a-form-to-state.md) ·
 * [Loading states](show-a-value-that-isnt-there-yet.md) — what a page shows before a value lands
 * [Derived values](derive-a-value-from-other-values.md) — computing from what you already hold
 * [Sharing](share-one-value-across-components.md) — one value read from two components
+

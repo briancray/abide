@@ -90,6 +90,16 @@ Read on: [Reference](reference/index.md) · [Reactive](reference/reactive.md) ·
 [CLI](reference/cli.md)
 
 
+## Writing styles
+
+{% lead styles/index %}
+
+Read on: [Writing styles](styles/index.md) ·
+[Inverted pyramid](styles/inverted-pyramid.md) ·
+[MDN reference](styles/mdn-reference.md) ·
+[Tutorial](styles/tutorial.md)
+
+
 ## Start here
 
 * [Why abide](start/what-abide-is-for.md) — the idea, and who it fits

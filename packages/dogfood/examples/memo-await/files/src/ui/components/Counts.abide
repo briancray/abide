@@ -1,0 +1,37 @@
+<script>
+import { memo, state } from 'abide'
+
+const TOTAL = 12
+const MATCHING: Record<string, number> = { all: 12, customers: 4, leads: 1 }
+
+let filter = state('all')
+
+const count = (of: string) => new Promise<number>((done) =>
+    setTimeout(() => done(MATCHING[of] ?? 0), 200),
+)
+
+const label = memo(async () => {
+    const of = filter // read BEFORE the await
+    return `showing ${await count(of)} of ${TOTAL}`
+})
+
+const stale = memo(async () => {
+    const found = await count(filter) // read AFTER it, and warned
+    return `showing ${found} of ${TOTAL}`
+})
+</script>
+
+<label>filter
+    <select bind:value={filter}>
+        <option value="all">all</option>
+        <option value="customers">customers</option>
+        <option value="leads">leads</option>
+    </select>
+</label>
+
+<ul class="fields stacked">
+    <li><span>filter read before the await</span>
+        <strong>{label ?? '…'}</strong></li>
+    <li><span>filter read after the await</span>
+        <strong>{stale ?? '…'}</strong></li>
+</ul>

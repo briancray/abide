@@ -27,7 +27,7 @@ Read on: [Routes](add-a-page.md) ·
 
 ## Layouts that do not rebuild
 
-A layout wraps everything below it and does not rebuild when the page inside it
+A layout wraps the pages nested under it and does not rebuild when the page inside it
 changes.
 
 Read on: [Layouts](give-pages-the-same-chrome.md)

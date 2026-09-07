@@ -98,14 +98,15 @@ showing: switching customers loads a second customer and never touches the rate.
 
 `global` also decides what the answer says about caching, and the `ttl` above is where it says it.
 An rpc answer is `private, no-store` by default; a `GET` over a global memo answers
-`max-age=<the ttl>` instead, because those are one number and writing it twice in two units is how
-they come apart. Compare the two responses in the Requests panel.
+`private, max-age=<the ttl>` instead, because those are one number and writing it twice in two
+units is how they come apart. Compare the two responses in the Requests panel.
 
-**`public` or `private` is the rung's to decide, not `global`'s.** This handler has no
-authorization on it, so its answer is reachable unauthenticated already and `public` gives a shared
-cache nothing the endpoint would not. Put a rung on it and the same derivation answers `private,
-max-age=60` — a browser may still hold it, and a CDN may not hand it to someone who never signed
-in.
+**The directive stays `private`, and widening it is yours.** `global` guarantees the answer does
+not vary by caller, a global body being unable to read the request scope. Whether a **shared**
+cache may hold it is a different question — about who may reach the endpoint rather than about
+what it returns — and abide cannot read that off a middleware rung. So a browser may hold the
+answer for the `ttl` and a CDN may not. An endpoint that really is open says `public` in its own
+`ResponseInit`.
 
 Read on: [Authorization](../server/decide-who-may-call-what.md) ·
 [Response types](../server/answer-with-something-other-than-json.md)
@@ -114,11 +115,11 @@ Read on: [Authorization](../server/decide-who-may-call-what.md) ·
 
 Two costs, and both are yours rather than abide's.
 
-**A global body may not read the request scope.** `request()`, `principal`, `cookies()`, `csp.nonce()`
-and `route` are a build error inside one, and the error names the ambient. An entry outlives the
-request that built it and is served to every caller after it, so a request ambient in the body
-bakes the first caller's request into everybody's answer — which is why anything caller-specific
-belongs in the `Args`, where it keys an entry instead of hiding in one.
+**A global body may not read the request scope.** `request()`, `principal`, `cookies()`,
+`csp.nonce()` and `route` are a build error inside one, and the error names the ambient. An
+entry outlives the request that built it and is served to every caller after it, so a request
+ambient in the body bakes the first caller's request into everybody's answer. Anything
+caller-specific belongs in the `Args` instead, where it keys an entry rather than hiding in one.
 
 That refusal is also what lets the `cache-control` above be derived rather than trusted: the answer
 is not about who asked because the shape that would make it so does not compile.

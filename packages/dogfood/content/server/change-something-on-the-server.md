@@ -69,11 +69,11 @@ One reminder per invoice per hour, whoever asks and however often.
 
 ## A memo belongs to exactly one handler
 
-Handing the same memo to two handlers is a **build error naming both**. It is not a
-restriction so much as a shape that never worked: `GET(user)` and `POST(user)` over one memo
-either have the `POST` quietly stop the `GET` caching, or share one entry table under two
-freshness rules — where a `POST` populating an entry the `GET`'s 60s keeps fresh serves the
-second click the first click's response and **the write never happens**.
+Handing the same memo to two handlers is a **build error naming both**. It is not a restriction
+so much as a shape that never worked. `GET(user)` and `POST(user)` over one memo either have the
+`POST` quietly stop the `GET` caching, or share one entry table under two freshness rules. Under
+the second, a `POST` populating an entry the `GET`'s 60s keeps fresh serves the second click the
+first click's response, and **the write never happens**.
 
 The repair is what the shapes wanted anyway. A read memo and a write memo have different
 `Args`.
