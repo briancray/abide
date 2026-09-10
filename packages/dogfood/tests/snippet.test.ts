@@ -7,10 +7,11 @@ import { expect, test } from 'bun:test'
 import {
     checkFixtures,
     checkRequests,
-    fixturesOf,
     FRAME_RULES,
+    fixturesOf,
     readExample,
     relates,
+    rulesBySelector,
 } from '../scripts/renderExample.ts'
 import { ELISION, slice } from '../scripts/renderSnippet.ts'
 
@@ -64,7 +65,9 @@ test('a brace in a comment or a template literal does not close the slice', () =
 })
 
 test('an anchor that is not exactly one line is refused', () => {
-    expect(() => slice(SOURCE, 'const gone', 'page')).toThrow(/no line starts with/)
+    expect(() => slice(SOURCE, 'const gone', 'page')).toThrow(
+        /no line starts with/,
+    )
     // Two matches means the anchor stopped identifying anything, which is the failure
     // that would otherwise pick whichever line happened to come first.
     expect(() => slice(SOURCE, 'const ', 'page')).toThrow(/matches 2 lines/)
@@ -74,7 +77,9 @@ test('an anchor that is not exactly one line is refused', () => {
 // reads rather than the way it is indented — and what comes back is dedented to its own
 // shallowest line, since a slice from inside a block would otherwise render adrift.
 test('an anchor ignores indentation, and the slice drops its margin', () => {
-    expect(slice(CODE, 'const label', 'x')).toBe(`const label = \`Clicked \${count()} times\``)
+    expect(slice(CODE, 'const label', 'x')).toBe(
+        `const label = \`Clicked \${count()} times\``,
+    )
     expect(slice(SOURCE, '<label>', 'x').split('\n')[1]).toBe('    Handle')
 })
 
@@ -109,25 +114,35 @@ test('an arm that asks for something the wire cannot answer is refused', () => {
         { name: 'logs', tail: 'logs', args: '[["stream","api"]]' },
     ] as Parameters<typeof checkRequests>[2]
 
-    expect(() => checkRequests('x', `fetch('/api/orders')`, answers)).not.toThrow()
-    expect(() => checkRequests('x', `fetch('/api/logs?stream=api')`, answers)).not.toThrow()
+    expect(() =>
+        checkRequests('x', `fetch('/api/orders')`, answers),
+    ).not.toThrow()
+    expect(() =>
+        checkRequests('x', `fetch('/api/logs?stream=api')`, answers),
+    ).not.toThrow()
 
     // The address relates but the ARGS do not, which is the pair the shim would also miss.
-    expect(() => checkRequests('x', `fetch('/api/logs')`, answers)).toThrow(/no fixture answers/)
-    expect(() => checkRequests('x', `fetch('/api/drafts')`, answers)).toThrow(/no fixture answers/)
+    expect(() => checkRequests('x', `fetch('/api/logs')`, answers)).toThrow(
+        /no fixture answers/,
+    )
+    expect(() => checkRequests('x', `fetch('/api/drafts')`, answers)).toThrow(
+        /no fixture answers/,
+    )
 
     // A COMPUTED address is the case a build genuinely cannot resolve, so it is skipped rather
     // than guessed at — the runtime tip is what covers it, and a false refusal here would make
     // an example unbuildable for an address that is fine.
-    expect(() => checkRequests('x', `fetch(\`/api/\${path}\`)`, answers)).not.toThrow()
+    expect(() =>
+        checkRequests('x', `fetch(\`/api/\${path}\`)`, answers),
+    ).not.toThrow()
 
     // The silent one: no request at all, and nothing in the frame to serve it.
-    expect(() => checkRequests('x', `new WebSocket('/api/logs')`, answers)).toThrow(
-        /opens a WebSocket/,
-    )
-    expect(() => checkRequests('x', `new EventSource('/api/orders/changes')`, answers)).toThrow(
-        /opens an? EventSource/,
-    )
+    expect(() =>
+        checkRequests('x', `new WebSocket('/api/logs')`, answers),
+    ).toThrow(/opens a WebSocket/)
+    expect(() =>
+        checkRequests('x', `new EventSource('/api/orders/changes')`, answers),
+    ).toThrow(/opens an? EventSource/)
 })
 
 // The arm and the handler answer at different addresses by design, so the relation is loose on
@@ -142,14 +157,16 @@ test('an address relates to a handler name either way round', () => {
 // logged nothing, or a Refused tab on one nothing rejected, is a claim about work that
 // never happened. The output looks fine either way, so it is asserted rather than seen.
 test('a panel appears exactly when its artifact does', async () => {
-    const counter = await readExample('local-state', '../')
-    const form = await readExample('form-binding', '../')
+    const counter = await readExample('refuse-narrowed', '../')
+    const form = await readExample('bind-text', '../')
 
     for (const panel of ['files', 'wire']) {
         expect(counter.html).toContain(`data-panel="${panel}"`)
     }
     // The Requests panel is the rpc call the page made, not a summary of it.
-    expect(counter.html).toContain('GET /__abide/rpc/users/getProfile')
+    expect(counter.html).toContain(
+        'GET /__abide/rpc/invoices/getInvoice?id=4310',
+    )
 
     // The same renderer, an example with neither artifact.
     expect(form.html).toContain('data-panel="files"')
@@ -161,7 +178,9 @@ test('a panel appears exactly when its artifact does', async () => {
     for (const example of [counter, form]) {
         expect(example.html).toContain('class="ex-browser"')
         expect(example.html).not.toContain('data-panel="result"')
-        expect(example.html.indexOf('ex-browser')).toBeLessThan(example.html.indexOf('ex-tablist'))
+        expect(example.html.indexOf('ex-browser')).toBeLessThan(
+            example.html.indexOf('ex-tablist'),
+        )
     }
 })
 
@@ -170,8 +189,14 @@ test('a panel appears exactly when its artifact does', async () => {
 // the page still renders, the example just stops looking like an abide page. Nothing
 // about the output says so, which is why it is asserted here.
 test('every rule the result frame lifts still resolves in the stylesheet', async () => {
-    const css = await Bun.file(new URL('../src/ui/app.css', import.meta.url)).text()
-    const missing = FRAME_RULES.filter((selector) => !css.includes(selector))
+    const css = await Bun.file(
+        new URL('../src/ui/app.css', import.meta.url),
+    ).text()
+    // Resolved through the PARSER the frame uses, not by searching the file's text: a
+    // selector list the formatter split one-per-line is the same rule, and six entries
+    // went missing at once the day app.css was reformatted. A rename still trips this.
+    const rules = rulesBySelector(css)
+    const missing = FRAME_RULES.filter((selector) => !rules.get(selector))
     expect(missing).toEqual([])
 })
 
@@ -183,7 +208,9 @@ test('several anchors join into one slice, and a gap is shown', () => {
     // forty lines down, and re-indenting it flat would print a file that does not exist.
     // The elision marker takes the indent of the run it introduces.
     const both = slice(SOURCE, `const count${ELISION}<input`, 'x')
-    expect(both).toBe('const count = state(0)\n    …\n    <input bind:value={handle}>')
+    expect(both).toBe(
+        'const count = state(0)\n    …\n    <input bind:value={handle}>',
+    )
 
     // Asked for backwards, returned in file order.
     expect(slice(SOURCE, `<input${ELISION}const count`, 'x')).toBe(both)
@@ -194,9 +221,9 @@ test('several anchors join into one slice, and a gap is shown', () => {
     )
 
     // A bad anchor is still a bad anchor when it has company.
-    expect(() => slice(SOURCE, `const count${ELISION}const gone`, 'page')).toThrow(
-        /no line starts with/,
-    )
+    expect(() =>
+        slice(SOURCE, `const count${ELISION}const gone`, 'page'),
+    ).toThrow(/no line starts with/)
 })
 
 // THE ARM AND THE `.abide` SOURCE ARE CLAIMED TO BE EQUIVALENT and almost nothing checks it —
@@ -211,7 +238,9 @@ test('several anchors join into one slice, and a gap is shown', () => {
 // was once covered by `type Post` in a sibling `.ts` with the button renamed.
 test('every control the arm renders is one the page source names', async () => {
     const strays: string[] = []
-    for (const path of new Bun.Glob('*/example.json').scanSync({ cwd: EXAMPLES_DIR.pathname })) {
+    for (const path of new Bun.Glob('*/example.json').scanSync({
+        cwd: EXAMPLES_DIR.pathname,
+    })) {
         const name = path.slice(0, path.indexOf('/'))
         let markup = ''
         for (const file of new Bun.Glob(`${name}/files/**/*.abide`).scanSync({
@@ -221,7 +250,9 @@ test('every control the arm renders is one the page source names', async () => {
             const template = await Bun.file(new URL(file, EXAMPLES_DIR)).text()
             markup += template.replaceAll(/<[^>]*>/g, '\n')
         }
-        const arm = await Bun.file(new URL(`${name}/vanilla/index.html`, EXAMPLES_DIR)).text()
+        const arm = await Bun.file(
+            new URL(`${name}/vanilla/index.html`, EXAMPLES_DIR),
+        ).text()
         for (const control of arm.matchAll(/<(?:button|a)\b[^>]*>([^<]+)</g)) {
             const label = (control[1] ?? '').trim()
             if (!label || markup.includes(label)) continue
@@ -257,11 +288,16 @@ const collapse = (text: string): string => text.replace(/\s+/g, ' ').trim()
 // they are read, so the inline pass cannot report a tile's own text a second time.
 function labelsIn(markup: string): string[] {
     const labels: string[] = []
-    const rest = markup.replace(/<li\b[^>]*>([\s\S]*?)<\/li>/g, (whole, inner: string) => {
-        if (!/<strong\b/.test(inner)) return whole
-        labels.push(collapse(/<span[^>]*>([^<]*)<\/span>/.exec(inner)?.[1] ?? ''))
-        return ''
-    })
+    const rest = markup.replace(
+        /<li\b[^>]*>([\s\S]*?)<\/li>/g,
+        (whole, inner: string) => {
+            if (!/<strong\b/.test(inner)) return whole
+            labels.push(
+                collapse(/<span[^>]*>([^<]*)<\/span>/.exec(inner)?.[1] ?? ''),
+            )
+            return ''
+        },
+    )
     for (const inline of rest.matchAll(/>([^<>]+)<strong\b/g)) {
         labels.push(collapse(inline[1] ?? ''))
     }
@@ -270,7 +306,9 @@ function labelsIn(markup: string): string[] {
 
 test('every readout the arm renders is one the page source names', async () => {
     const strays: string[] = []
-    for (const path of new Bun.Glob('*/example.json').scanSync({ cwd: EXAMPLES_DIR.pathname })) {
+    for (const path of new Bun.Glob('*/example.json').scanSync({
+        cwd: EXAMPLES_DIR.pathname,
+    })) {
         const name = path.slice(0, path.indexOf('/'))
         let markup = ''
         for (const file of new Bun.Glob(`${name}/files/**/*.abide`).scanSync({
@@ -281,7 +319,9 @@ test('every readout the arm renders is one the page source names', async () => {
             markup += template.replaceAll(/<[^>]*>/g, '\n')
         }
         const flat = collapse(markup)
-        const arm = await Bun.file(new URL(`${name}/vanilla/index.html`, EXAMPLES_DIR)).text()
+        const arm = await Bun.file(
+            new URL(`${name}/vanilla/index.html`, EXAMPLES_DIR),
+        ).text()
         for (const label of labelsIn(arm)) {
             if (!label || flat.includes(label)) continue
             strays.push(`${name}/vanilla/index.html: "${label}"`)
@@ -296,7 +336,9 @@ test('every readout the arm renders is one the page source names', async () => {
 // number on another. Caught before it shipped, and this is what keeps it caught.
 test('two exchanges of one handler are counted apart', async () => {
     const clashing: string[] = []
-    for (const path of new Bun.Glob('*/example.json').scanSync({ cwd: EXAMPLES_DIR.pathname })) {
+    for (const path of new Bun.Glob('*/example.json').scanSync({
+        cwd: EXAMPLES_DIR.pathname,
+    })) {
         const name = path.slice(0, path.indexOf('/'))
         const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
         const keys = new Set<string>()
@@ -326,7 +368,8 @@ test('a switcher in an arm is a `.switch` with exactly one link current', async 
             if (!/\bclass="[^"]*\bswitch\b[^"]*"/.test(attributes))
                 wrong.push(`${path}: nav is not a .switch`)
             const current = body.match(/aria-current=/g)?.length ?? 0
-            if (current !== 1) wrong.push(`${path}: ${current} links are current, not 1`)
+            if (current !== 1)
+                wrong.push(`${path}: ${current} links are current, not 1`)
         }
     }
     expect(wrong).toEqual([])
@@ -338,7 +381,9 @@ test('a switcher in an arm is a `.switch` with exactly one link current', async 
 // still resolves", pointed the other way — that one asks whether a rule the frame WANTS exists,
 // this asks whether a class the build WRITES does.
 test('every example class the build emits resolves in the stylesheet', async () => {
-    const css = await Bun.file(new URL('../src/ui/app.css', import.meta.url)).text()
+    const css = await Bun.file(
+        new URL('../src/ui/app.css', import.meta.url),
+    ).text()
     const emitted = new Set<string>()
     for (const file of [
         'renderExample.ts',
@@ -346,8 +391,11 @@ test('every example class the build emits resolves in the stylesheet', async () 
         'renderSnippet.ts',
         'buildDocs.ts',
     ]) {
-        const source = await Bun.file(new URL(`../scripts/${file}`, import.meta.url)).text()
-        for (const match of source.matchAll(/class="(ex-[a-z-]+)"/g)) emitted.add(match[1] ?? '')
+        const source = await Bun.file(
+            new URL(`../scripts/${file}`, import.meta.url),
+        ).text()
+        for (const match of source.matchAll(/class="(ex-[a-z-]+)"/g))
+            emitted.add(match[1] ?? '')
     }
     expect(emitted.size).toBeGreaterThan(5)
     const unstyled: string[] = []

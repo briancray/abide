@@ -1,0 +1,18 @@
+<script>
+import { state } from 'abide'
+import NowPlaying from '#ui/components/NowPlaying.abide'
+import TrackRow from '#ui/components/TrackRow.abide'
+
+const LIBRARY = ['Kind of Blue', 'A Love Supreme', 'Blue Train']
+
+// Held HERE, above both readers, so each of them finds it on the way up.
+state.share('nowPlaying', () => state('nothing'))
+</script>
+
+<NowPlaying/>
+
+<div class="row">
+{#for title of LIBRARY}
+    <TrackRow title={title}/>
+{/for}
+</div>

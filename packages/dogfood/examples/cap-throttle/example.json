@@ -1,0 +1,7 @@
+{
+    "title": "`{ throttle }` — the first arrival, then a ceiling",
+    "summary": "A feed arriving twenty times a second beside the tile that shows it. Watch the two figures drift apart.",
+    "app": "dashboard",
+    "files": ["src/ui/components/Live.abide"],
+    "route": "/dashboard"
+}

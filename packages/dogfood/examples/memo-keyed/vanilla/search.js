@@ -1,13 +1,13 @@
-let query = 'a'
-let current = null
-
-const field = document.querySelector('#typed')
+const field = document.querySelector('#query')
 const results = document.querySelector('#results')
+const status = document.querySelector('#status')
+
+let current = null
 
 // THE ENTRY TABLE AND ITS KEY, WRITTEN BY HAND. The key is one
 // string here and the general case is an args object, which is
 // where a hand-written cache starts needing a canonical form.
-// Without the table, a word searched twice is a second request
+// Without the table, a prefix typed twice is a second request
 // and a second spinner.
 const entries = new Map()
 
@@ -21,13 +21,15 @@ function entryFor(word) {
         .then((names) => {
             entry.names = names
             entry.pending = false
-            render()
+            // The entry IS the token: an answer for a word since typed
+            // past lands in its own entry and paints nothing.
+            if (entry === current) render()
         })
     return entry
 }
 
 function render() {
-    document.querySelector('#status').textContent = current.pending ? 'searching…' : ''
+    status.textContent = current.pending ? 'searching…' : ''
     results.replaceChildren(
         ...current.names.map((one) => {
             const item = document.createElement('li')
@@ -37,11 +39,10 @@ function render() {
     )
 }
 
-document.querySelector('#search').addEventListener('click', () => {
-    query = field.value
-    current = entryFor(query)
+field.addEventListener('input', () => {
+    current = entryFor(field.value)
     render()
 })
 
-current = entryFor(query)
+current = entryFor(field.value)
 render()

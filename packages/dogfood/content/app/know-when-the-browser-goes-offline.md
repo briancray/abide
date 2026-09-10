@@ -11,6 +11,17 @@ screen and a form the reader is about to submit, and nothing on it says so.
 
 You need two things: a way to tell them, and a way to catch up when the connection returns.
 
+## The forms of `online`
+
+| You write | What you get |
+| --- | --- |
+| `online` | a `Reactive<boolean>` — whether the caller can reach the app |
+| `online()` | the same value, spelled explicitly |
+
+There is one form and no options, `online` being ambient rather than declared: it is not
+constructed, has no producer to reload and takes nothing to key on. What it is on each side is
+[Ambient values](../reference/ambient-values.md).
+
 ## `online` is a reactive value
 
 Read it by name, like any other.
@@ -63,9 +74,9 @@ hundred catches up the handful a reader is holding and marks the other hundred a
 which is exactly the line above and makes it the reconnect default.
 
 `invalidate()` is the other choice, for where nothing on screen may move: it drops the same
-caches and leaves every value standing, so the catch-up happens on the next read. What it is
-not is a cheaper `refresh()` to reach for first — an invalidated entry has nothing left to
-serve, so a `refresh()` behind one drops every reader to its pending branch.
+caches and leaves every value standing, so the catch-up happens on the next read. It is not a
+cheaper `refresh()` to reach for first — an invalidated entry has nothing left to serve, so a
+`refresh()` behind one drops every reader to its pending branch.
 
 See [Reloading](../values/decide-when-a-value-reloads.md) for the two in full.
 
@@ -75,7 +86,7 @@ See [Reloading](../values/decide-when-a-value-reloads.md) for the two in full.
 guess — it says the interface is up, not that your server answers, so a captive portal, a
 DNS failure and a dead backend all read as online.
 
-That is the shape of what `online` is good for. It is right for telling a reader what to
+That shapes what `online` is good for. It is right for telling a reader what to
 expect and wrong as the gate on a write: the load that failed is the honest signal, and
 `online` explains it. Read the failure, then read `online` to say why.
 

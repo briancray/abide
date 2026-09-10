@@ -1,11 +1,8 @@
 {
-    "title": "`memo(() => call())` \u2014 a load the memo adopts",
+    "title": "`memo(() => call(args))` \u2014 a load the memo adopts",
     "summary": "A profile panel behind two tabs. Open the other person, then come back to the first.",
     "app": "crm",
-    "files": [
-        "src/ui/components/Profile.abide",
-        "src/server/rpc/profiles.ts"
-    ],
+    "files": ["src/ui/components/Profile.abide", "src/server/rpc/profiles.ts"],
     "route": "/memo/adoption",
     "wire": [
         {

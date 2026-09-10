@@ -12,9 +12,15 @@ import { expect, test } from 'bun:test'
 
 const ABIDE = new URL('../', import.meta.url)
 
-async function sources(root: URL, pattern = '**/*.ts'): Promise<{ path: string; text: string }[]> {
+async function sources(
+    root: URL,
+    pattern = '**/*.ts',
+): Promise<{ path: string; text: string }[]> {
     const out: { path: string; text: string }[] = []
-    for (const path of new Bun.Glob(pattern).scanSync({ cwd: root.pathname, onlyFiles: true })) {
+    for (const path of new Bun.Glob(pattern).scanSync({
+        cwd: root.pathname,
+        onlyFiles: true,
+    })) {
         if (path.includes('node_modules')) continue
         out.push({ path, text: await Bun.file(new URL(path, root)).text() })
     }
@@ -59,7 +65,8 @@ test('a constants leaf has no imports of its own', async () => {
     for (const root of [ABIDE, new URL('../../harness/', import.meta.url)]) {
         for (const { path, text } of await sources(root)) {
             const name = path.slice(path.lastIndexOf('/') + 1, -'.ts'.length)
-            if (name !== name.toUpperCase() || !/^[A-Z][A-Z0-9_]*$/.test(name)) continue
+            if (name !== name.toUpperCase() || !/^[A-Z][A-Z0-9_]*$/.test(name))
+                continue
             if (/^import\s/m.test(text)) grown.push(`${path}`)
         }
     }
@@ -69,7 +76,15 @@ test('a constants leaf has no imports of its own', async () => {
 // CLAUDE.md, "writing code": a file is named after what it EXPORTS when it exports one thing, so a
 // reader holding the import line knows which of the three it is without opening it. The framework's
 // own addresses are the stated exception and are listed rather than inferred.
-const ADDRESSES = new Set(['index', 'app', 'page', 'layout', 'error', 'preload', 'abide'])
+const ADDRESSES = new Set([
+    'index',
+    'app',
+    'page',
+    'layout',
+    'error',
+    'preload',
+    'abide',
+])
 
 test('a file exporting one thing is named after what it exports', async () => {
     const misnamed: string[] = []
@@ -79,7 +94,9 @@ test('a file exporting one thing is named after what it exports', async () => {
             const name = path.slice(path.lastIndexOf('/') + 1, -'.ts'.length)
             if (ADDRESSES.has(name)) continue
             const exported = [
-                ...text.matchAll(/^export (?:const|function|class|type|interface) (\w+)/gm),
+                ...text.matchAll(
+                    /^export (?:const|function|class|type|interface) (\w+)/gm,
+                ),
             ]
             if (exported.length !== 1) continue
             const only = exported[0]?.[1] ?? ''

@@ -5,35 +5,30 @@ intent: Show the first of it before the last one exists, from one handler that a
 covers:
   - `jsonl`
   - `sse`
+  - `bytes`
   - `Values<T>`
+examples:
+  - packages/dogfood/examples/stream-rows
 ---
 
 A report of fifty thousand rows takes a while. The caller does not have to wait for the last
 row to see the first — and you should not have to write a second endpoint so they do not.
 
 Yield from the handler. What it produces is streamed as it arrives, and the same handler still
-answers with the whole thing to anything that waits for the whole thing.
+answers with the whole thing to anything that waits for the whole thing — one address, and no
+second endpoint to keep in step with the first.
 
-```ts #server/rpc/reports.ts
-import { GET } from 'abide'
-import { database } from '#server/database'
+## The two framings
 
-export const salesByRegion = GET(
-    async function* ({ year }: { year: number }) {
-        for await (const row of database.sales.byRegion(year)) yield row
-    },
-    { description: 'Sales per region, streamed as each one totals.' },
-)
-```
+| The handler returns | The caller gets |
+| --- | --- |
+| an `AsyncGenerator` | **jsonl** — one JSON value per line, `application/jsonl` |
+| `sse(values)` | `text/event-stream` — the same transcript, `data: ` per line |
 
-```abide #ui/pages/reports/page.abide — excerpt
-{#for await region of salesByRegion({ year: 2026 })}
-    <tr><td>{region.name}</td><td>{region.total}</td></tr>
-{/for}
-```
-
-*2 files, 0 second endpoint* — the same address serves the rows as they land and the
-accumulated result to a caller that waits.
+Both take `Values<T>`, and the second is reachable from the first without declaring it: send
+`Accept: text/event-stream` to a jsonl address and the answer is reframed, which is why it
+carries `vary: accept`. Every signature is in the
+[Transports](../reference/transports.md) reference.
 
 ## An async generator streams as JSON Lines
 
@@ -59,7 +54,7 @@ Or send `Accept: text/event-stream` to the address above and get the jsonl trans
 
 Read on: [Response types](answer-with-something-other-than-json.md)
 
-## `Values<T>` is what every body helper takes
+## Every body helper takes `Values<T>`
 
 ```ts shared
 type Values<T> = Iterable<T> | AsyncIterable<T> | ReadableStream<T>
@@ -70,6 +65,11 @@ One input type across `page`, `json`, `jsonl` and `sse`. A source that is alread
 needs no adapter between the two.
 
 ## The caller gets a `Reactive`, not a stream to manage
+
+{% example stream-rows %}
+
+*1 call, 0 line buffers* — the arm carries the tail of every chunk to the next one, a chunk
+being a read of the socket rather than a row.
 
 `salesByRegion({ year })` hands back the same `Reactive` shape the handler had, chunks
 included. So the cursor walks on the caller's side exactly as it did on the server's:
@@ -90,7 +90,7 @@ Read on: [Loading states](../values/show-a-value-that-isnt-there-yet.md) ·
 ## Retention belongs to the caller's memo
 
 There is no retention option on the transport and none is owed. A call is made inside a memo,
-and that memo's `tail` is what the caller replays:
+and the caller replays that memo's `tail`:
 
 ```ts browser
 const rows = memo(() => salesByRegion({ year: 2026 }), { tail: 500 })
@@ -104,8 +104,8 @@ Read on: [History & tail](../values/keep-the-last-few-values.md)
 
 ## A stream is not a room
 
-Both produce more than once. What separates them is what the producer declared, not something
-a runtime sniffs — a channel declares a `Message`, so every publish is a whole one, where a
+Both produce more than once, and what the producer declared separates them — not something
+a runtime sniffs. A channel declares a `Message`, so every publish is a whole one, where a
 streaming body declares chunks of one value and no chunk is a whole anything.
 
 The practical consequence is keying: a room's chunks carry a `seq`, which `{#for await}` uses

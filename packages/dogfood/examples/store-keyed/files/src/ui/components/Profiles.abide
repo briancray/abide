@@ -1,0 +1,12 @@
+<script>
+import { getSettings } from '#server/rpc/settings'
+import { memo } from 'abide'
+
+const ada = memo(() => getSettings({ profile: 'ada' }))
+const grace = memo(() => getSettings({ profile: 'grace' }))
+</script>
+
+<ul class="fields stacked">
+    <li><span>ada theme</span><strong>{ada.theme}</strong></li>
+    <li><span>grace theme</span><strong>{grace.theme}</strong></li>
+</ul>

@@ -1,0 +1,21 @@
+<script>
+import { state } from 'abide'
+
+const STATUSES = ['draft', 'sent', 'paid', 'overdue']
+
+let status = state('draft')
+</script>
+
+<div class="tabs">
+{#for one of STATUSES}
+    <button aria-selected={status === one}
+        onclick={() => { status = one }}>{one}</button>
+{/for}
+</div>
+
+{#switch status}
+    {:case 'draft'}<p class="status">Not sent yet.</p>
+    {:case 'paid'}<p class="status">Settled — nothing to chase.</p>
+    {:case 'overdue'}<p class="status">Chase this one.</p>
+    {:default}<p class="status">Waiting on the customer.</p>
+{/switch}

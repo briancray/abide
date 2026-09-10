@@ -4,6 +4,8 @@ nav: Why abide
 intent: One type for everything that changes, instead of three that disagree.
 covers:
   - `Reactive`
+examples:
+  - packages/dogfood/examples/one-type
 ---
 
 An interface is mostly waiting. Something is loading, reloading, streaming, stale, or failed.
@@ -20,21 +22,10 @@ abide has one answer.
 
 ## Everything is a reactive value
 
-```abide #ui/pages/editor/page.abide — excerpt
-<script>
-import { state, memo } from 'abide'
-import { getInvoice } from '#server/rpc/invoices'
-import { chat } from '#server/sockets/chat'
-
-const draft   = state('')                           // you own it
-const words   = memo(() => draft.split(' ').length) // derived
-const invoice = memo(() => getInvoice({ id }))      // loaded
-const room    = chat({ id })                        // pushed
-</script>
-```
+{% example one-type %}
 
 *4 declarations, 1 type* — against component state, a query library and a socket client, each
-with its own loading convention.
+with its own loading convention, which is what the hand-written arm has to keep.
 
 Four ways of getting a value, one type back — `state`, `memo` and `channel` are the three
 primitives, and `chat` is a `channel` reached over a socket. Calling it with args hands
@@ -77,8 +68,8 @@ nothing.
 
 ## The handler serving your page already describes itself
 
-The handler serving your page already describes itself: address, method, argument and
-result schemas, description. An agent calling your app calls what your app already does.
+Address, method, argument and result schemas, description — all of it already written down. An
+agent calling your app calls what your app already does.
 
 That is why failures are strict. A refusal is a **named value carrying data**, not a status
 code and a sentence:

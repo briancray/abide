@@ -1,0 +1,9 @@
+{
+    "title": "`timeout` — milliseconds without progress, not since the first byte",
+    "summary": "A sales report streaming a row a second. North takes three seconds under a two-second bound; south has stopped producing.",
+    "app": "dashboard",
+    "about": "server",
+    "files": ["src/server/rpc/reports.ts", "src/ui/components/Report.abide"],
+    "route": "/reports/sales",
+    "served": "server.ts"
+}

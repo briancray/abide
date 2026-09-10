@@ -1,0 +1,21 @@
+<script>
+import { memo, refresh } from 'abide'
+import { salesByRegion } from '#server/rpc/reports'
+
+const rows = memo(() => salesByRegion({ year: 2026 }))
+</script>
+
+<ul class="fields stacked">
+{#for await region of rows}
+    <li><span>{region.name}</span><strong>{region.total}</strong></li>
+{/for}
+</ul>
+
+<ul class="fields">
+    <li><span>regions</span>
+        <strong>{rows.pending() ? '…' : rows.length}</strong></li>
+</ul>
+
+<div class="row">
+    <button onclick={() => refresh(rows)}>Run again</button>
+</div>

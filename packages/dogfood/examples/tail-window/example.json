@@ -1,0 +1,7 @@
+{
+    "title": "`{ tail: n }` — a window onto the recent past",
+    "summary": "A pane over an answer arriving one token at a time. Press Next token a few times and watch the top of the list.",
+    "app": "chat",
+    "files": ["src/shared/tokens.ts", "src/ui/components/Console.abide"],
+    "route": "/chat"
+}

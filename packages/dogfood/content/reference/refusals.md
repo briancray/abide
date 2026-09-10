@@ -22,17 +22,17 @@ refuse.typed(name, status, message, options)
 
 | Name | Signature | Description |
 | --- | --- | --- |
-| `refuse.typed` | `<Name extends string, Data extends JsonValue = undefined>(name: Name, status?: number, message?: string \| ((data: Data) => string), options?: { schema }) => ((data?: Data) => Failed<Name, Data>) & { is: (error: unknown) => error is Failed<Name, Data> }` | Declares a named, narrowable failure. The status defaults to 400. A `message` given as a function runs at construction on the data, a `Failed` being a value rather than a thing with getters. The factory carries `is`, which is the only narrowing available where there is no `Reactive` in scope. |
-| `Failed<Name, Data>` | `Error & { name: Name; status: number; message: string; data: Data }` | The one refusal type, in process and over a wire alike. Structural, because what a caller catches is a shape rather than a class it imported. |
-| `return myError(data)` | `Failed<Name, Data>` | One spelling for every refusal: a handler returns them. Returning is what refuses. |
-| `notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', …>` | Abide's own, returned where no route matched and where no handler is mounted at that address and method. |
+| `refuse.typed` | `<Name extends string, Data extends JsonValue = undefined>(name: Name, status?: number, message?: string \| ((data: Data) => string), options?: { schema?: Schema<Data> }) => ((data?: Data) => Failed<Name, Data>) & { is: (error: unknown) => error is Failed<Name, Data> }` | Declares a named, narrowable failure. The status defaults to 400. A `message` given as a function runs at construction on the data, a `Failed` being a value rather than a thing with getters. The factory carries `is`, which is the only narrowing available where there is no `Reactive` in scope. |
+| `Failed<Name, Data>` | `Error & { name: Name; status: number; message: string; data: Data }` | The one refusal type, in process and over a wire alike. Structural, because a caller catches a shape rather than a class it imported. |
+| `return myError(data)` | `Failed<Name, Data>` | One spelling for every refusal: a handler returns them. Returning refuses. |
+| `notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', { path: string; method: string }>` | abide's own, returned where no route matched and where no handler is mounted at that address and method. |
 | `validationError` | `<T>(data?: Issues<T>) => Failed<'ValidationError', Issues<T>>` | The other one, at 422, returned where a schema refuses. |
 | `myError(data)` discarded | compile error | A `Failed` built and thrown away is a refusal that did not happen, so an expression statement whose type is `Failed` is refused, naming both repairs. |
 
 ## Description
 
-**Construction is inert.** Building a `Failed` does not throw, which is what lets a gate
-return one and what puts the failure in a handler's return type honestly. The cost is that a
+**Construction is inert.** Building a `Failed` does not throw, which lets a gate return one and
+puts the failure in a handler's return type honestly. The cost is that a
 built-and-dropped refusal would fall through silently, which is why discarding one is a
 compile error rather than a lint.
 

@@ -1,0 +1,11 @@
+{
+    "title": "`channel()(args)` — a `Room` anything can reach",
+    "summary": "A conversation's composer, and the line above it that reports who spoke last. Press Send and watch a component the composer never names.",
+    "app": "chat",
+    "files": [
+        "src/shared/conversations.ts",
+        "src/ui/pages/chat/page.abide",
+        "src/ui/components/LastSpoken.abide"
+    ],
+    "route": "/chat"
+}

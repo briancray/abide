@@ -1,0 +1,39 @@
+<script>
+import { memo } from 'abide'
+import { applyOrderCount, type OrderCount } from '#shared/regions'
+import { getRegions } from '#server/rpc/regions'
+
+// The answer is an array and every frame after it names an id, so the
+// reshape happens once here rather than per frame downstream.
+const byId = memo(() => getRegions(), {
+    transform: (rows) => new Map(rows.map((row) => [row.id, row])),
+})
+
+const rows = memo(() => [...byId.values()])
+
+const FEED: OrderCount[] = [
+    { id: 'south', orders: 95 },
+    { id: 'north', orders: 130 },
+    { id: 'west', orders: 88 },
+    { id: 'east', orders: 71 },
+]
+
+// A frame names an id, so the write is a `get` rather than a scan.
+function applyNextFrame() {
+    const frame = FEED.shift()
+    if (!frame) return
+    FEED.push(frame)
+    byId.patch((held) => applyOrderCount(held, frame))
+}
+</script>
+
+<ul class="fields stacked">
+{#for region of rows by region.id}
+    <li><span>{region.name}</span><strong>{region.orders}</strong></li>
+{/for}
+</ul>
+
+<div class="row">
+    <button onclick={applyNextFrame}>Apply next frame</button>
+    <span class="status">{byId.pending() ? 'loading…' : ''}</span>
+</div>

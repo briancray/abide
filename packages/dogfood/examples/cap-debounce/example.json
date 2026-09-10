@@ -1,0 +1,22 @@
+{
+    "title": "`{ debounce }` — one load once the typing stops",
+    "summary": "A figure filtered by a region you type. Clear the box and type north, and watch the figure rather than the field.",
+    "app": "dashboard",
+    "files": ["src/server/rpc/metrics.ts", "src/ui/components/Orders.abide"],
+    "route": "/dashboard",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/metrics/countOrders?region=north",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "128"
+        }
+    ],
+    "served": "server.ts"
+}

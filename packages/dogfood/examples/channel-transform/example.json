@@ -1,0 +1,11 @@
+{
+    "title": "`channel({ transform })` — a publish refused by name",
+    "summary": "The composer holding a message longer than the conversation takes. Press Send, then cut it down and press again.",
+    "app": "chat",
+    "files": [
+        "src/shared/failures.ts",
+        "src/shared/conversations.ts",
+        "src/ui/pages/chat/page.abide"
+    ],
+    "route": "/chat"
+}

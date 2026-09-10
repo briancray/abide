@@ -1,0 +1,35 @@
+<script>
+import { route, state, url } from 'abide'
+import { turns } from '#shared/conversations'
+
+const here = route.params.conversation
+const room = turns({ conversation: here })
+const draft = state('Does the old key keep working?')
+</script>
+
+<nav class="switch">
+    <a href={url('/chat/[conversation]', { conversation: 'onboarding' })}
+        aria-current={here === 'onboarding' ? 'page' : undefined}>
+        onboarding
+    </a>
+    <a href={url('/chat/[conversation]', { conversation: 'billing' })}
+        aria-current={here === 'billing' ? 'page' : undefined}>
+        billing
+    </a>
+</nav>
+
+<ul class="fields stacked">
+    <li><span>conversation</span><strong>{here}</strong></li>
+    <li><span>last turn</span>
+        <strong>{room.pending() ? 'nothing here yet' : room.text}</strong>
+    </li>
+</ul>
+
+<div class="row">
+    <label>message
+        <input bind:value={draft}>
+    </label>
+    <button onclick={() => room.publish({ speaker: 'you', text: draft })}>
+        Send
+    </button>
+</div>

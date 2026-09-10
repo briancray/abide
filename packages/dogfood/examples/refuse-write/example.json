@@ -1,0 +1,7 @@
+{
+    "title": "`s.isError(e, name)` — a refusal the page made itself",
+    "summary": "A contact's phone, normalised on the way in. Take a digit out and press Save.",
+    "app": "crm",
+    "files": ["src/shared/failures.ts", "src/ui/components/Phone.abide"],
+    "route": "/contacts/1/phone"
+}

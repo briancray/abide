@@ -1,0 +1,40 @@
+{
+    "title": "`memo((args) => …)` — identity per set of arguments",
+    "summary": "Two tiles on one dashboard, each on its own range. Put them both on 30d, then send one back to 7d.",
+    "app": "dashboard",
+    "files": [
+        "src/ui/pages/dashboard/page.abide",
+        "src/ui/components/Total.abide",
+        "src/ui/components/Average.abide",
+        "src/server/rpc/metrics.ts"
+    ],
+    "route": "/dashboard",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/metrics/getMetrics?range=7d",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"orders\": 128,\n    \"average\": 42.5,\n    \"computed\": \"{{hits}}\"\n}",
+            "latency": 700
+        },
+        {
+            "request": "GET /__abide/rpc/metrics/getMetrics?range=30d",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"orders\": 512,\n    \"average\": 44.9,\n    \"computed\": \"{{hits}}\"\n}",
+            "latency": 700
+        }
+    ]
+}

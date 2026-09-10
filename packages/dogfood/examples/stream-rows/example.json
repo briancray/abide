@@ -1,0 +1,23 @@
+{
+    "title": "`{#for await row of call()}` — the rows, and the whole of them",
+    "summary": "Sales per region, a row at a time. Watch the list fill while the count still has nothing to say.",
+    "app": "dashboard",
+    "about": "server",
+    "files": ["src/server/rpc/reports.ts", "src/ui/components/Report.abide"],
+    "route": "/reports/sales",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/reports/salesByRegion?year=2026",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/x-ndjson",
+                "transfer-encoding": "chunked",
+                "cache-control": "private, no-store"
+            },
+            "body": "{ \"code\": \"no\", \"name\": \"North\", \"total\": \"$412k\" }\n{ \"code\": \"so\", \"name\": \"South\", \"total\": \"$208k\" }\n{ \"code\": \"ea\", \"name\": \"East\", \"total\": \"$96k\" }"
+        }
+    ]
+}

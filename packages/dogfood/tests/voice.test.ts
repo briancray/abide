@@ -56,7 +56,9 @@ test('no sentence runs past the length a reader can hold', async () => {
         for (const sentence of sentences(page.body)) {
             const words = sentence.split(/\s+/).length
             if (words > LONGEST)
-                overlong.push(`${page.slug}: ${words}w — ${sentence.slice(0, 60)}…`)
+                overlong.push(
+                    `${page.slug}: ${words}w — ${sentence.slice(0, 60)}…`,
+                )
         }
     }
     expect(overlong).toEqual([])
@@ -85,26 +87,42 @@ test('no page points at another part of itself by position', async () => {
 
 // A THIRD RULEBOOK HAD GROWN IN `content/`. RULEBOOK format rule 2 says a rule is stated exactly
 // once, and `rulebook.test.ts` enforces that across the four documents in `docs/` — which is every
-// place anybody thought to look. `styles/normative-spec.md` and `styles/caching-normative-spec.md`
-// were meanwhile carrying 77 RFC-2119 requirements under their OWN clause numbers, and those
-// numbers collide: their 6.3 is about a global body reading an ambient where RULEBOOK 6.3 is the
-// unit of `tail`. One requirement had no clause behind it at all and lived only there, which is
-// 11.60 now.
+// place anybody thought to look. Two pages were meanwhile carrying 77 RFC-2119 requirements under
+// their OWN clause numbers, and those numbers collide: their 6.3 was about a global body reading
+// an ambient where RULEBOOK 6.3 is the unit of `tail`. One requirement had no clause behind it at
+// all and lived only there, which is 11.60 now.
 //
-// Those two pages are the styles section demonstrating RFC 2119 AS A STYLE, so the keywords are
-// the point and deleting them would delete what is being compared. The exemption is therefore
-// listed rather than inferred — a third page reaching for MUST is what this catches, and adding it
-// to this list is an edit a reviewer sees.
-const NORMATIVE_BY_DESIGN = new Set(['styles/normative-spec', 'styles/caching-normative-spec'])
-
-test('no guide states a requirement in the rulebook\'s keywords', async () => {
+// Both were in the writing-styles experiment, demonstrating RFC 2119 AS A STYLE, and they were
+// exempted by name for exactly as long as they existed. The experiment is gone and the exemption
+// went with it rather than staying as a list nothing is in — so this now binds on every page,
+// which is what it was always meant to mean.
+test("no guide states a requirement in the rulebook's keywords", async () => {
     const offenders: string[] = []
     for (const page of await readPages()) {
-        if (NORMATIVE_BY_DESIGN.has(page.slug)) continue
         for (const sentence of sentences(page.body)) {
-            if (/\b(MUST NOT|MUST|SHALL NOT|SHALL|SHOULD NOT|SHOULD|MAY)\b/.test(sentence))
+            if (
+                /\b(MUST NOT|MUST|SHALL NOT|SHALL|SHOULD NOT|SHOULD|MAY)\b/.test(
+                    sentence,
+                )
+            )
                 offenders.push(`${page.slug}: ${sentence.trim().slice(0, 60)}…`)
         }
+    }
+    expect(offenders).toEqual([])
+})
+
+// BRAND, Vocabulary: "abide is lowercase, in prose and in the wordmark, including at the start of a
+// sentence." It was a rule only a reader could enforce, and the corpus obeyed it at zero
+// violations — which is exactly when a gate is cheap, because adding one costs no backlog. A
+// sentence starting with the product's name is where this goes wrong, and autocorrect is patient.
+test('the product name is lowercase everywhere it is written', async () => {
+    const offenders: string[] = []
+    for (const page of await readPages()) {
+        for (const source of [page.body, page.title, page.nav])
+            for (const match of (source ?? '').matchAll(/\bAbide\b/g))
+                offenders.push(
+                    `${page.slug}: ${(source ?? '').slice(Math.max(0, (match.index ?? 0) - 30), (match.index ?? 0) + 30)}`,
+                )
     }
     expect(offenders).toEqual([])
 })

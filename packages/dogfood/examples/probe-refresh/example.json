@@ -1,0 +1,22 @@
+{
+    "title": "`pending()` is the first load; `refreshing()` is every one after",
+    "summary": "An invoice with a Refresh beside it. Wait for the figures, then press Refresh and watch what does not disappear.",
+    "app": "crm",
+    "files": ["src/server/rpc/invoices.ts", "src/ui/components/Invoice.abide"],
+    "route": "/invoices/4021",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/invoices/getInvoice?id=4021",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"total\": \"$82.40\",\n    \"sent\": \"{{hits}}\"\n}",
+            "latency": 900
+        }
+    ]
+}

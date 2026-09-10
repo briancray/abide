@@ -22,5 +22,5 @@ function fewer() {
             <strong>{seats}</strong>
             <button onclick={more}>+</button>
         </div></li>
-    <li><span>deal total</span><strong>${total}</strong></li>
+    <li><span>total</span><strong>${total}</strong></li>
 </ul>

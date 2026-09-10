@@ -71,13 +71,21 @@ RFC 2119 keywords are used as that document defines them: **MUST**, **MUST NOT**
 
 1.1 Every producer in this design MUST hand back a `Reactive`.
 
-1.2 A `Reactive` MUST NOT be thenable.
+1.2 *Withdrawn, superseded by 1.5, 1.6 and 1.7.* It read "A `Reactive` MUST NOT be thenable",
+which reserved thenability across the design as the mark of a load and left `s.settled` the only
+spelling of a gate.
 
 1.3 `Produced` MUST be the unit the producer yielded: `Stored` for a state and for a room, and one
 chunk for a streaming producer.
 
 1.4 `Failures` MUST be the union of the refusals the producer declared, and MUST carry the
 validation refusal wherever a `schema` is declared, without the app declaring it.
+
+1.5 A `Reactive` MUST be thenable. See D95.
+
+1.6 `s.catch` and `s.finally` MUST derive from `s.then`.
+
+1.7 Where a load is told apart from a value, a `Reactive` MUST be taken as a value. See D95.
 
 # 2. Reads
 
@@ -93,7 +101,9 @@ validation refusal wherever a `schema` is declared, without the app declaring it
 
 2.6 `s.peek` MUST read as `s` does, except that it MUST NOT join the flow.
 
-2.7 `s.settled` MUST resolve when `s.pending` becomes false.
+2.7 *Withdrawn, superseded by 2.12 and 2.13.* It read "`s.settled` MUST resolve when `s.pending`
+becomes false", which left the promise face with no answer at all for the one case 2.3 throws for,
+and named a member D95 removed.
 
 2.8 `s.tail` MUST replay the retained snapshot and then continue live from where that snapshot
 ended, with no gap and no repeat.
@@ -107,6 +117,10 @@ streaming producer's history was its chunks.
 2.11 `s[Symbol.asyncIterator]` MUST yield the production in flight from its start, and MUST then
 continue live. See D53.
 
+2.12 `s.then` MUST resolve with the value where `s.pending` becomes false and 2.3 would not throw.
+
+2.13 `s.then` MUST reject with what 2.3 throws, where 2.3 would throw. See D95.
+
 # 3. Probes
 
 3.1 A probe MUST NOT throw.
@@ -119,7 +133,8 @@ continue live. See D53.
 
 3.5 `s.refreshing` MUST NOT open a sink.
 
-3.6 `s.pending` on a streaming producer MUST remain true until the stream closes.
+3.6 `s.pending` on a streaming producer MUST remain true until the stream closes, narrowed by 3.14
+where a value is already landed. See D97.
 
 3.7 `s.pending` on a room MUST remain true only until its first message.
 
@@ -137,6 +152,12 @@ flight, which is the axis `s.pending` and `s.refreshing` already answer.
 
 3.13 `s.success` MUST NOT move for a load in flight.
 
+3.14 A load given to `s.set` over a landed value that is not stale MUST report `s.refreshing`, and
+MUST NOT report `s.pending`. See D84.
+
+3.15 `s.streaming` MUST be true while a stream a producer is on is open, and MUST be false once
+it closes. See D97.
+
 # 4. Writes and gates
 
 4.1 `s.set` MUST accept a settled value or a load, and `state` MUST accept the same two.
@@ -151,7 +172,7 @@ alike.
 4.5 A `schema` MUST refuse by throwing, and the throw MUST be caught and converted rather than
 escape the write.
 
-4.6 A `transform` MUST refuse by returning a `Failed`.
+4.6 A `transform` MUST refuse by returning a `Failed` rather than by throwing, per 15.6.
 
 4.7 A `transform` MUST run untracked, on the settled value, once per materialisation of a `Stored`.
 
@@ -181,7 +202,7 @@ two is a comparator answering directly.
 
 5.4 The default `identity` on a state and on a memo MUST be `structural`.
 
-5.5 The default `identity` on a room MUST be the reference.
+5.5 The default `identity` on a room MUST be the reference. See D87.
 
 5.6 `structural` MUST answer "not equal" wherever it cannot decide.
 
@@ -353,7 +374,8 @@ revoke or a clear. See D8.
 
 9.20 A `Room` MUST NOT be where a removal is enforced.
 
-9.21 A `Room`'s history epoch MUST move only when the process holding it restarts.
+9.21 A `Room`'s history epoch MUST be minted when the `Room` is constructed, and MUST NOT change
+while that `Room` lives. See D100.
 
 # 10. Sharing
 
@@ -395,7 +417,7 @@ eviction MUST be its only ways back.
 
 11.10 A write of a settled value to a `memo` MUST move no probe.
 
-11.11 A write of an unsettled value to a `memo` MUST be a load, per 4.2.
+11.11 A write of an unsettled value to a `memo` MUST be a load, per 4.2 and 1.7.
 
 11.12 A `Reactive` returned from a `memo` body MUST be adopted, and MUST NOT be stored as a value. See D43.
 
@@ -425,7 +447,8 @@ hold a subscription per source for it.
 11.23 *Withdrawn, superseded by 11.20.* It read "`s.refreshing` MUST NOT propagate", which D3
 decided on a cost that deriving at read removes. See D3.
 
-11.24 Reading a probe MUST NOT join the value flow, per 3.3.
+11.24 *Withdrawn, superseded by 3.3.* It read "Reading a probe MUST NOT join the value flow",
+which is what 3.3 requires of every probe read, a memo's included.
 
 11.25 A keyed `memo` MUST propagate nothing.
 
@@ -434,21 +457,21 @@ decided on a cost that deriving at read removes. See D3.
 
 11.27 An `Args` key MUST be structural.
 
-11.28 The key MUST be taken before `schema` runs. See D4.
+11.28 The key MUST be taken before `args` runs. See D4.
 
 11.29 The order over `Args` MUST be coerce, apply syntax defaults, canonicalize, validate, then
 the body.
 
-11.30 A `schema` MUST refuse and MUST NOT decide which entry an `Args` object lands on.
+11.30 An `args` gate MUST refuse and MUST NOT decide which entry an `Args` object lands on.
 
 11.31 A default written in the body's parameter MUST participate in the `Args` key, on both sides.
 See D5.
 
-11.32 The build MUST warn where a `schema` declares a default the parameter does not.
+11.32 The build MUST warn where `args` declares a default the parameter does not.
 
 11.33 A reactive value in an argument position MUST be read, and `Args` MUST be plain args.
 
-11.34 A `memo` without `global` MUST be request-local on a server and process-local in a browser.
+11.34 A `memo` without `global` MUST be request-local on a server and process-local in a browser. See D88.
 
 11.35 `ttl: Infinity` without `global` MUST mean to the end of that scope.
 
@@ -458,8 +481,8 @@ See D5.
 
 11.38 An implementation MUST NOT evict a `global` entry on a size or a count limit. See D6.
 
-11.39 `global: true` MUST be a build error on a body reading `request`, `principal`, `cookies`,
-`csp.nonce` or `route`, and the error MUST name the ambient. See D7.
+11.39 `global: true` MUST be a build error on a body reading `request`, `response`, `principal`,
+`cookies`, `csp.nonce` or `route`, and the error MUST name the ambient. See D7.
 
 11.40 Coalescing of a `memo` load MUST be within a scope: two reads of one key in one scope share
 one load, and two scopes load twice.
@@ -513,6 +536,13 @@ owed inside the window is a reload rather than any change.
 11.60 A reader joining a `global` `memo`'s stream after it began MUST NOT be answered with a
 refusal.
 
+11.61 A `memo` MUST report `s.pending` before its body has run for the value being probed. See D85.
+
+11.62 A probe over a key a keyed `memo` has not computed MUST allocate no entry. See D86.
+
+11.63 An implementation MUST NOT warn where two `Args` keys differ only in the case of a value.
+See D4.
+
 # 12. Effects
 
 12.1 A `Disposer` MUST run before each rerun of its `Effect`, and once more at teardown.
@@ -543,7 +573,8 @@ mechanism.
 
 13.1 A `Selection` MUST be one `Reactive`, one keyed `Memo`, or a set of `tags`.
 
-13.2 `pending` and `refreshing` over a `Selection` MUST answer whether any entry in it matches.
+13.2 `pending` and `refreshing` over a `Selection` MUST answer whether any entry in it is in that
+state.
 
 13.3 An implementation MUST hold one signal per `Selection`, and MUST NOT hold one per entry.
 
@@ -582,7 +613,7 @@ over a `Selection` wider than the scope", which made the bare `refresh` narrower
 14.5 A block body's binding MUST track, and MUST bind the value the block produced rather than a
 `Reactive`.
 
-14.6 A `watch` `Effect` MUST track, unless sources narrow it.
+14.6 A `watch` `Effect` MUST track, narrowed where 12.4 gives it sources.
 
 14.7 A component `<script>` setup body MUST NOT track.
 
@@ -594,8 +625,8 @@ over a `Selection` wider than the scope", which made the bare `refresh` narrower
 
 14.11 A `Reactive` MUST push its own subscriber when it evaluates, whoever reached it.
 
-14.12 On a server a tracked read MUST register no subscriber, and MUST register a sink where what it
-read is still in flight.
+14.12 On a server a tracked read MUST register no subscriber, and MUST register the sink 3.4 opens
+where what it read is still in flight.
 
 14.13 Tracking MUST be synchronous, and a read in a continuation after an `await` MUST register
 against nothing.
@@ -605,6 +636,9 @@ the read. See D11.
 
 14.15 The compiler MUST warn on a reactive read in a condition position inside a tracked body,
 naming the read.
+
+14.16 The compiler MUST warn on a reactive read inside a function a tracked body creates and
+does not call synchronously, naming the read.
 
 # 15. Refusals
 
@@ -619,7 +653,7 @@ back a factory carrying `is`", which is what that row's type says.
 
 15.5 Constructing a `Failed` MUST be inert, and MUST NOT throw.
 
-15.6 Returning a `Failed` MUST refuse.
+15.6 Returning a `Failed` MUST refuse. See D90.
 
 15.7 `Failed` MUST be structural.
 
@@ -629,7 +663,7 @@ address and method.
 15.9 `validationError` MUST be returned where a `schema` refuses, at status 422.
 
 15.10 An implementation MUST declare no refusal names beyond those `notFound` and `validationError`
-carry and the one 17.8 names. See D13.
+carry and the one 17.8 names. See D13, amended by D63.
 
 15.11 An expression statement whose type is `Failed` MUST be a compile error naming both repairs.
 
@@ -681,7 +715,7 @@ absolute one.
 on every call.
 
 16.14 The `Origin` gate on a mutation, `maxBodySize`, the `crossOrigin` preflight, the framing, the
-`cache-control` and the seed buffer write MUST be wire-only.
+`cache-control`, a status written through `response` and the seed buffer write MUST be wire-only.
 
 16.15 The `Middleware` onion MUST be composed once at route-table construction, and MUST NOT be folded per call.
 See D16.
@@ -728,14 +762,18 @@ graph, and MUST NOT be a silent stub.
 
 16.32 An `Rpc` returning a raw `Value` MUST transport as `application/json`.
 
-16.33 An `Rpc` returning `undefined` MUST answer 204.
+16.33 An `Rpc` returning `undefined` MUST answer 204 where no status was written through
+`response`.
 
-16.34 An `Rpc` returning an async generator MUST stream as jsonl by default.
+16.34 An `Rpc` returning an async generator MUST stream in the framing `Accept` names, and MUST
+default to the first framing its chunk type admits. See D91.
 
-16.35 A caller sending `Accept: text/event-stream` MUST get the same address framed as sse, and that
-answer MUST carry `vary: accept`.
+16.35 *Withdrawn, superseded by 16.34.* It read "a caller sending `Accept: text/event-stream`
+MUST get the same address framed as sse, and that answer MUST carry `vary: accept`", which made
+one entry of the framing table a clause of its own, and restated 21.8 for it.
 
-16.36 The seed buffer MUST hold the `jsonl` transcript whichever framing the caller asked for.
+16.36 The seed buffer MUST hold an `Rpc`'s transcript in the chunk type's default framing,
+whichever framing the caller asked for.
 
 16.37 An `Rpc` returning a binary MUST transport as `application/octet-stream`, or as a `Blob`'s own
 type where it has one.
@@ -764,29 +802,60 @@ See D60.
 16.46 `rpc.raw` MUST issue the call the `Rpc` issues, differing only in handing back the
 `Response`. See D76.
 
+16.47 An `Rpc` call MUST evaluate its `Args` at the call, and MUST NOT re-evaluate them.
+
+16.48 A jsonl answer MUST write one JSON value per line, per pull.
+
+16.49 An sse answer MUST frame each value as `data: <json>` followed by a blank line, with
+`text/event-stream`, `no-cache` and `X-Accel-Buffering: no`.
+
+16.50 A stream of value chunks MUST admit jsonl and then sse, and a stream of binary chunks MUST
+admit `application/octet-stream` alone.
+
+16.51 Where no handler fixed the framing, the chunk type MUST be read from the first chunk
+produced.
+
+16.52 An `Rpc` over a `Channel` MUST frame each message with the sequence number and the epoch
+18.10 and 18.11 mint, on the wire and in the seed buffer alike. See D93.
+
+16.53 An sse answer over a `Channel` MUST carry that sequence number as `id:`, and a moved epoch
+as `event: reset`.
+
+16.54 `Last-Event-ID` MUST be read as the last sequence number a reconnect carries, per 18.13.
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.
 
-17.2 `page` MUST answer `text/html`, and MUST take what a render produced rather than perform the
-render.
+17.2 `page` MUST be defined as a write through `response` naming `text/html`, and MUST take what
+a render produced rather than perform the render.
 
-17.3 `json` MUST serialize and tag `application/json`, and MUST send `null` where the value is
-`undefined`.
+17.3 *Withdrawn, superseded by 16.32.* It read "`json` MUST serialize and tag
+`application/json`, and MUST send `null` where the value is `undefined`", which answered one
+value two ways: a returned `undefined` is 204 under 16.33, and the helper made it `null`.
 
-17.4 `jsonl` MUST write one JSON value per line, per pull.
+17.4 *Withdrawn, superseded by 16.48.* It read as 16.48 does, over a helper rather than over
+the answer the return type already framed.
 
-17.5 `sse` MUST frame each value as `data: <json>` followed by a blank line, with `text/event-stream`,
-`no-cache` and `X-Accel-Buffering: no`.
+17.5 *Withdrawn, superseded by 16.49.* It read as 16.49 does, and let a handler hard-code the
+framing 16.34 has the caller negotiate.
 
-17.6 `redirect` MUST carry a `RedirectStatus`, defaulting to 302.
+17.6 `redirect` MUST be defined as a write through `response` carrying a `RedirectStatus`,
+defaulting to 302.
 
-17.7 `refuse` MUST throw, and MUST be declared `never`.
+17.7 *Withdrawn, superseded by 15.6.* It read "`refuse` MUST throw, and MUST be declared
+`never`", which put two opposite disciplines under one prefix — the declared refusal returned,
+the undeclared one thrown.
 
-17.8 `refuse` on a server MUST throw the undeclared `Failed` named `HttpError`, at the given
-status. See D63.
+17.8 `refuse` on a server MUST hand back, per 15.6, the undeclared `Failed` named `HttpError` at
+the given status. See D63.
 
 17.9 `refuse` MUST carry no data, and MUST NOT take an options bag for any. See D18.
+
+17.10 `jsonl`, `sse` and `bytes` MUST each be defined as a write through `response` fixing the
+framing of a streaming answer. See D92.
+
+17.11 An implementation MUST NOT negotiate past a framing a handler fixed.
 
 # 18. Sockets
 
@@ -810,11 +879,12 @@ status. See D63.
 
 18.10 Every `Message` MUST carry a sequence number, monotonic per `Room` and minted at publish.
 
-18.11 A `Room` MUST carry an epoch, and 9.21 MUST be its only cause of movement.
+18.11 A `Room` MUST carry the epoch 9.21 mints, and an implementation MUST compare epochs for
+equality rather than for order.
 
 18.12 The sequence number and the epoch MUST be internal, and an app MUST NOT write either.
 
-18.13 A reconnect to a `Socket` MUST carry the last sequence number rendered and compare epochs.
+18.13 A reconnect to a `Room` MUST carry the last sequence number rendered and compare epochs.
 
 18.14 A moved epoch MUST deliver the ring marked as a reset.
 
@@ -828,7 +898,7 @@ key", which withheld an option from one producer rather than letting it stand in
 
 # 19. Mount paths and schemas
 
-19.1 A handler declared with `GET` or with `socket` MUST be mounted by file path and export name.
+19.1 A handler declared with `socket` MUST be mounted as 16.2 mounts one declared over http.
 
 19.2 A mount path MUST be owned by exactly one handler, and a collision MUST be a build error
 naming both files that declared a `GET` or a `socket` there.
@@ -840,7 +910,8 @@ naming both files that declared a `GET` or a `socket` there.
 19.5 The plain-function `Schema` form MUST throw what it refuses, and that throw MUST be caught where
 the schema runs and become the `''` entry of `Issues<T>`.
 
-19.6 `Issues<T>` MUST be keyed by path on a composite, and MUST be a bare list on a primitive.
+19.6 *Withdrawn, superseded by REGISTRY's `Issues<T>` row.* It read "`Issues<T>` MUST be keyed by
+path on a composite, and MUST be a bare list on a primitive", which is that row's conditional type.
 
 19.7 `Paths<T>` MUST be dot-joined, MUST be depth-limited, and MUST widen to `string` past the limit.
 
@@ -864,14 +935,15 @@ optional.
 19.14 *Withdrawn, superseded by REGISTRY's `Args` rows.* It read "`JsonValue` MUST bound what an
 `Args` may hold", which is what every `Args` row's type says.
 
-19.15 `validateJson` MUST hand back `Issues<T>`, or `null` where the value matches.
+19.15 *Withdrawn, superseded by REGISTRY's `validateJson` row.* It read "`validateJson` MUST hand
+back `Issues<T>`, or `null` where the value matches", which is that row's return type.
 
 # 20. Generated surfaces
 
 20.1 Every surface `Clients` names MUST be derived from the route table, and MUST NOT be authored
 beside it.
 
-20.2 Every key of `Clients` MUST default to true.
+20.2 Every key of `Clients` MUST default to true. See D96.
 
 20.3 `Clients` MUST decide what is generated and listed, and MUST NOT decide who may call. See D23.
 
@@ -906,7 +978,8 @@ one spelling for it, and MUST publish the type-derived `JsonSchema` where it has
 
 21.3 A page, an rpc answer and a refusal MUST default to `cache-control: private, no-store`.
 
-21.4 A handler's own `ResponseInit` MUST override that default.
+21.4 *Withdrawn, superseded by 21.11.* It read "a handler's own `ResponseInit` MUST override that
+default", and a `ResponseInit` on a helper is the write through `response` 21.11 governs.
 
 21.5 `/__abide/health` and `/__abide/principal` MUST answer `cache-control: no-store`.
 
@@ -921,11 +994,25 @@ app MUST NOT be required to state the duration a second time. See D72.
 
 21.10 A `GET` over a `global` `memo` MUST answer `private`.
 
+21.11 A write through `response` MUST override the default 21.3 states.
+
+21.12 The `max-age` 21.9 derives MUST replace 21.3's `no-store`, and 21.3 MUST decide the rest
+of that header. See D72.
+
+21.13 A file under `src/ui/public` MUST answer `cache-control: public, max-age=0, must-revalidate`.
+See D98.
+
+21.14 A file under `src/ui/public` MUST answer an `etag` derived from its bytes.
+
+21.15 A request whose `if-none-match` matches the `etag` 21.14 derives MUST be answered 304.
+
 # 22. Request-scoped ambients
 
-22.1 `bag`, `request` and `server` MUST throw outside a request.
+22.1 `request`, `response` and `server` MUST throw outside a request.
 
-22.2 A key `Bag` declares MUST be typed by it, and an undeclared key MUST be permitted.
+22.2 *Withdrawn, superseded by 11.34.* It read "a key `Bag` declares MUST be typed by it, and
+an undeclared key MUST be permitted", which gave a per-request value a second home: an untyped
+record beside the request-local `memo` that already holds one, carrying no probe and no trigger.
 
 22.3 `cookies` MUST be isomorphic, and on a server writes MUST be collected onto the response.
 
@@ -946,6 +1033,9 @@ of that name.
 22.9 Where the browser does not report them, a change made outside `cookies` MUST wake nothing.
 
 22.10 `cookies` MUST throw outside a request on a server.
+
+22.11 A write through `response` MUST be collected onto the response being built for the request
+being served. See D89.
 
 # 23. Route and connectivity
 
@@ -972,7 +1062,8 @@ composite. See D24.
 
 24.2 `trace.sampled` MUST carry the caller's sampling decision verbatim.
 
-24.3 `trace.span` MUST hand back exactly what its body returned.
+24.3 *Withdrawn, superseded by REGISTRY's `trace.span` row.* It read "`trace.span` MUST hand back
+exactly what its body returned", which is what that row's `<T>(name, body: () => T) => T` says.
 
 24.4 A span MUST be a `LogRecord`, and MUST NOT be a second feed.
 
@@ -990,9 +1081,11 @@ and decided an app's authorization for it.
 
 25.3 An app's own `onHealth` fields MUST win every collision. See D25.
 
-25.4 `Health` MUST carry `version`, `abide` and `startedAt`, and `version` MUST be empty rather than absent.
+25.4 *Withdrawn, superseded by REGISTRY's `Health` row.* It read "`Health` MUST carry `version`,
+`abide` and `startedAt`, and `version` MUST be empty rather than absent", which is that row's three
+required `string` members.
 
-25.5 `health` MUST be seeded like an rpc.
+25.5 `health` MUST be seeded per 41.6.
 
 # 26. Principal
 
@@ -1016,7 +1109,9 @@ and decided an app's authorization for it.
 
 26.10 `Principal` MUST never be null, and an anonymous visitor MUST be `authenticated` false.
 
-26.11 `GET /__abide/principal` MUST be open and MUST answer `no-store`.
+26.11 *Withdrawn, superseded by 20.8.* It read "`GET /__abide/principal` MUST be open and MUST
+answer `no-store`", which decided an app's authorization for one address the way 25.2 did for its
+sibling, and restated 21.5 to do it.
 
 26.12 The `principal` seal MUST be an HMAC over the claims and their expiry, and MUST be signed
 rather than encrypted.
@@ -1032,7 +1127,18 @@ an anonymous caller.
 
 26.17 An implementation MUST keep no server-side principal store and no revocation list. See D26.
 
-26.18 `principal` MUST be seeded like an rpc, and MUST NOT be embedded unconditionally.
+26.18 `principal` MUST be seeded per 41.6.
+
+26.19 The cookie the `principal` seal is carried in MUST be named `abide-principal`.
+
+26.20 The cookie `principal.caller` is read from MUST be named `abide-caller`.
+
+26.21 `principal.set` MUST throw where the sealed cookie would exceed the browser's cookie ceiling,
+naming the byte count.
+
+26.22 `principal.set` MUST throw once the response headers are out.
+
+26.23 `principal.caller` MUST throw in a browser. See D83.
 
 # 27. Configuration
 
@@ -1077,7 +1183,8 @@ will not coerce MUST keep that default.
 28.7 A channel `log.enabled` reports closed MUST NOT run the measurement a gated line would report.
 See D27.
 
-28.8 A `LogRecord` MUST carry the time, the level, the channel, the message and the trace.
+28.8 *Withdrawn, superseded by REGISTRY's `LogRecord` row.* It read "a `LogRecord` MUST carry the
+time, the level, the channel, the message and the trace", which is that row's five members.
 
 28.9 A correctness or a configuration failure MUST report on a channel `abide:` names.
 
@@ -1102,6 +1209,17 @@ MUST NOT override it.
 29.5 The `csp` baseline MUST be `default-src 'self'`, `script-src 'self'`, `style-src 'self'`,
 `img-src 'self' data:`, `font-src 'self'`, `connect-src 'self'`, `style-src-attr 'unsafe-inline'`,
 `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'` and `form-action 'self'`.
+
+29.6 `sources` MUST replace a directive rather than add to it.
+
+29.7 A directive given an empty array in `sources` MUST be dropped.
+
+29.8 A directive name the `csp` baseline lacks MUST be added.
+
+29.9 The inline output `render` emits MUST be permitted by a build-time hash in `script-src`, and
+MUST NOT consume `csp.nonce`. See D81.
+
+29.10 The inline output `render` emits MUST be byte-invariant across responses.
 
 # 30. Addresses and navigation
 
@@ -1149,6 +1267,19 @@ value's method otherwise.
 
 31.11 A write through a member path MUST copy down that path and then write, and the copy MUST NOT
 be optimised away. See D35.
+
+31.12 A property access on a name bound to a `Reactive` MUST short-circuit where nothing has landed,
+and the rest of the chain MUST short-circuit with it. See D78.
+
+31.13 A read inside an `{await expr}` operand that is not definitely evaluated MUST lower in place,
+and MUST NOT join the set 31.10 starts. See D79.
+
+31.14 A mutator lifted per 31.11 MUST be resolved from the type of the `Reactive` rather than from
+the member name. See D80.
+
+31.15 A template-local binding MUST shadow a name bound to a `Reactive` for the body it is bound in.
+
+31.16 A read spelled `foo()` MUST take no arguments, and an argument MUST be a compile error.
 
 # 32. Templating
 
@@ -1209,6 +1340,8 @@ MUST NOT be built as a string. See D36.
 `abide:render`.
 
 32.25 A control block MUST bind each reactive read and probe call in its subject once for the body.
+
+32.26 `{#for}` and `{#for await}` over an absent subject MUST iterate zero times. See D78.
 
 # 33. Props
 
@@ -1273,6 +1406,11 @@ every selector MUST require it on its rightmost compound.
 34.5 A stylesheet imported from any `<script>` in the file, or any `.ts` it reaches, MUST be a
 dependency of that component.
 
+34.6 A component scope the document never linked MUST reach the page through
+`document.adoptedStyleSheets`. See D82.
+
+34.7 An implementation MUST NOT provide a fallback for `document.adoptedStyleSheets`.
+
 # 35. Pages, rendering and sinks
 
 35.1 A `src/ui/pages/**/layout.abide` MUST render its child page through a slot.
@@ -1323,6 +1461,16 @@ read alone it let a browser's stored setting override a document that carries on
 
 36.11 `#server`, `#ui` and `#shared` MUST be the seams the source is split by.
 
+36.12 A file under `src/ui/public` MUST be answered at its path below that directory, rooted at the
+mount rather than at the origin. See D99.
+
+36.13 A file under `src/ui/public` MUST be answered with the bytes as authored.
+
+36.14 A `src/ui/public` path resolving to the address of a page route MUST be a build error naming
+both.
+
+36.15 A file under `src/ui/public` MUST carry a `content-type` derived from its extension.
+
 # 37. Lifecycle hooks
 
 37.1 A lifecycle hook MUST be called rather than exported, and `src/server/app.ts` MUST be optional.
@@ -1331,7 +1479,7 @@ read alone it let a browser's stored setting override a document that carries on
 
 37.3 `middleware` MUST run pre-routing, over the request and the response.
 
-37.4 `onStart` and `onStop` MUST wrap the real boot and teardown.
+37.4 `onStart` MUST wrap `createApp` and `onStop` MUST wrap `App.stop`. See D100.
 
 37.5 `onError` MUST run on an unexpected error in that scope.
 
@@ -1382,6 +1530,11 @@ MUST write nothing to disk.
 
 38.18 A client build that fails under `abide dev` MUST NOT stop the server, and the reload client
 MUST be served by the dev worker rather than out of the bundle.
+
+38.19 `abide build` MUST copy `src/ui/public` into the built output, and each file MUST be listed in
+the manifest 38.5 emits.
+
+38.20 `abide dev` MUST answer a file under `src/ui/public` out of the source tree, per 38.17.
 
 # 39. Head and view transitions
 
@@ -1472,8 +1625,9 @@ page MUST declare none.
 40.19 An `{% example %}` MUST run its hand-written arm, and MUST NOT run a scripted stand-in for
 one. See D40.
 
-40.20 The network an `{% example %}` arm talks to MUST be that example's own wire fixture, and a
-request no fixture answers MUST be reported in the frame rather than left to hang.
+40.20 The network an `{% example %}` arm talks to MUST be that example's own wire fixture or the
+hand-written server its manifest names, and a request neither answers MUST be reported in the frame
+rather than left to hang. See D77.
 
 40.21 Instrumentation the documentation adds to an `{% example %}` MUST sit outside the render.
 
@@ -1529,7 +1683,7 @@ forms, the options they share, and a link to its reference page.
 41.3 `render` MUST NOT be held for an unfinished stream: what the stream produced MUST go out
 inline, and the rest MUST be picked up by the client's own request.
 
-41.4 A value still in flight MUST open a sink and the render MUST continue past it.
+41.4 A render MUST continue past a value still in flight, opening the sink 3.4 opens.
 
 41.5 A flush MUST wait for a sink a template asked to block on, and MUST NOT hold document
 generation for it.
@@ -1555,3 +1709,40 @@ on `abide:hydrate`.
 
 41.13 An `Rpc` call re-execution makes that the seed buffer cannot answer MUST be a hydration
 mismatch, per 41.11. See D73.
+
+41.14 The seed buffer MUST be filled from the production the render already had, and a handler
+MUST NOT be run a second time to fill it. See D94.
+
+# 42. The app object
+
+42.1 `createApp` MUST build the route table and compose every onion, per 16.15.
+
+42.2 `createApp` MUST read `config` where it builds the app, and MUST NOT leave that read to the
+first request.
+
+42.3 `createApp` MUST NOT bind a socket.
+
+42.4 A hook `onStart` wraps MUST NOT observe the port. See D100.
+
+42.5 `App.fetch` MUST answer a `Request` where no socket is bound. See D98.
+
+42.6 `App.fetch` MUST be `App.run` with dispatch over it, and MUST NOT be a second scope
+constructor.
+
+42.7 `App.run` MUST run its function in one scope, and MUST hand back what that function returned.
+
+42.8 A `Request` on `App.run` MUST be optional, and a scope made without one MUST be the scope 22.1
+and 22.10 throw in.
+
+42.9 `App.listen` MUST be where the socket is bound, and MUST be what supplies `server`.
+
+42.10 `App.stop` MUST stop accepting and drain what is in flight before `onStop` runs.
+
+42.11 `App.stop` MUST end every live stream, close every open socket, and clear every timer the app
+holds.
+
+42.12 A second `App` in one process MUST share the first's rooms, `config` and `global` entries, per
+9.18, 27.10 and 11.36.
+
+42.13 A test MUST reach a handler through the same `App` a host holds, and abide MUST NOT generate a
+client of its own for one. See D99.

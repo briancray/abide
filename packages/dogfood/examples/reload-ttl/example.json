@@ -1,0 +1,22 @@
+{
+    "title": "`{ ttl }` — expires with nobody asking",
+    "summary": "A shelf count that keeps for three seconds. Press Read it again straight away, then wait and press it once more.",
+    "app": "dashboard",
+    "files": ["src/server/rpc/stock.ts", "src/ui/components/Shelf.abide"],
+    "route": "/stock/east/A-70",
+    "served": "server.ts",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/stock/getStock?sku=A-70&warehouse=east",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"onHand\": 128,\n    \"loads\": 1\n}"
+        }
+    ]
+}

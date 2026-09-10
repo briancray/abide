@@ -1,0 +1,9 @@
+<script>
+import Overdue from '#ui/components/Overdue.abide'
+import Paid from '#ui/components/Paid.abide'
+</script>
+
+<div class="row">
+    <Overdue/>
+    <Paid/>
+</div>

@@ -1,0 +1,18 @@
+<script>
+import { memo, refresh } from 'abide'
+import { getInvoice } from '#server/rpc/invoices'
+
+// The call hands back the same `Reactive` `state` and `memo` do,
+// so the probes and the triggers are on the RESULT.
+const invoice = memo(() => getInvoice({ id: '4021' }))
+</script>
+
+<ul class="fields stacked">
+    <li><span>total</span><strong>{invoice.total}</strong></li>
+</ul>
+
+<div class="row">
+    <button disabled={invoice.pending()}>Send a reminder</button>
+    <button onclick={() => refresh(invoice)}>Reload</button>
+    <span class="status">{invoice.refreshing() ? 'reloading…' : ''}</span>
+</div>

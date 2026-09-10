@@ -1,0 +1,22 @@
+<script>
+import { state } from 'abide'
+
+let note = state('')
+let field = state()
+let focused = state(false)
+</script>
+
+<label>note
+    <input bind:element={field} bind:value={note}
+        onfocus={() => { focused = true }}
+        onblur={() => { focused = false }}>
+</label>
+
+<div class="row">
+    <button onclick={() => { note = ''; field.focus() }}>New note</button>
+</div>
+
+<ul class="fields">
+    <li><span>field</span>
+        <strong>{focused ? 'focused' : 'idle'}</strong></li>
+</ul>

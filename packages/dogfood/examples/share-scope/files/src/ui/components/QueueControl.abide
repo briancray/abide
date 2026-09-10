@@ -1,0 +1,14 @@
+<script>
+import { props, state } from 'abide'
+
+type Props = { name: string }
+
+const { name } = props<Props>()
+// One shelf above holds this key, so this call finds it rather than building.
+let queued = state.share('queued', () => state('nothing'))
+</script>
+
+<div class="row">
+    <button onclick={() => (queued = `${name} pick`)}>Queue</button>
+    <span class="status">below: {queued}</span>
+</div>

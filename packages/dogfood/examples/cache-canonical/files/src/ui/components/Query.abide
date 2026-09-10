@@ -1,0 +1,43 @@
+<script>
+import { memo, state } from 'abide'
+import { getMetrics } from '#server/rpc/metrics'
+
+const REGIONS = ['north', 'south']
+const SPELLINGS = ['range first', 'region first', 'with compare']
+
+// Three spellings of one query: reordered, then with an option that is
+// absent written out.
+function spelled(name, region) {
+    if (name === 'range first') return { range: '7d', region }
+    if (name === 'region first') return { region, range: '7d' }
+    return { region, range: '7d', compare: undefined }
+}
+
+let spelling = state('range first')
+let region = state('north')
+
+const metrics = memo(() => getMetrics(spelled(spelling, region)))
+</script>
+
+<ul class="fields stacked">
+    <li><span>spelling</span>
+        <div class="tabs">
+        {#for name of SPELLINGS}
+            <button aria-selected={spelling === name}
+                onclick={() => { spelling = name }}>{name}</button>
+        {/for}
+        </div></li>
+    <li><span>region</span>
+        <div class="tabs">
+        {#for one of REGIONS}
+            <button aria-selected={region === one}
+                onclick={() => { region = one }}>{one}</button>
+        {/for}
+        </div></li>
+    <li><span>orders</span>
+        <strong>{metrics.pending() ? '—' : metrics.orders}</strong>
+    </li>
+    <li><span>times computed</span>
+        <strong>{metrics.pending() ? '—' : metrics.computed}</strong>
+    </li>
+</ul>

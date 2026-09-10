@@ -44,9 +44,9 @@ either: the refusal is caught, converted, and returned as a `Failed` that fills 
 
 ## Description
 
-A state has no producer unless it was given one, and a promise or a `store` is what gives it
-one. Without a producer `refresh()` and `invalidate()` do nothing and `ttl` is inert, which is
-what keeps either from discarding a value only the app can supply.
+A state has no producer unless it was given one, and a promise or a `store` gives it one.
+Without a producer `refresh()` and `invalidate()` do nothing and `ttl` is inert, which keeps
+either from discarding a value only the app can supply.
 
 `state.share` is scoped to the component instance and its descendants. A key an ancestor holds
 is the one you get; a key nothing above you holds is created where you asked for it. A shared
@@ -74,7 +74,7 @@ const handle = state('ada')
 
 ```ts shared
 export const handle = state('', {
-    transform: (value) => value.trim().toLowerCase(),
+    transform: (value) => value.trim().toLowerCase().replaceAll(' ', '_'),
 })
 ```
 

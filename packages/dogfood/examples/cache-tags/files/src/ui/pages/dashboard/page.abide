@@ -1,0 +1,6 @@
+<script>
+import Region from '#ui/components/Region.abide'
+</script>
+
+<Region region="north"/>
+<Region region="south"/>

@@ -1,0 +1,35 @@
+{
+    "title": "One entry per canonical args key",
+    "summary": "One panel, and three ways to spell the query behind it. Change the spelling, then change the region.",
+    "app": "dashboard",
+    "files": ["src/ui/components/Query.abide", "src/server/rpc/metrics.ts"],
+    "route": "/dashboard",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/metrics/getMetrics?range=7d&region=north",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"orders\": 128,\n    \"computed\": \"{{hits}}\"\n}",
+            "latency": 700
+        },
+        {
+            "request": "GET /__abide/rpc/metrics/getMetrics?range=7d&region=south",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"orders\": 74,\n    \"computed\": \"{{hits}}\"\n}",
+            "latency": 700
+        }
+    ]
+}

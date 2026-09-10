@@ -1,0 +1,26 @@
+{
+    "title": "`s.error()` hands the failure back rather than throwing",
+    "summary": "An invoice whose billing service is down. The page renders the message instead of letting it reach the error page.",
+    "app": "crm",
+    "files": [
+        "src/shared/failures.ts",
+        "src/server/rpc/invoices.ts",
+        "src/ui/components/Invoice.abide"
+    ],
+    "route": "/invoices/4021",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/invoices/getInvoice?id=4021",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "503 Service Unavailable",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"name\": \"NotReachable\",\n    \"status\": 503,\n    \"message\": \"The billing service did not answer.\",\n    \"data\": { \"id\": \"4021\" }\n}",
+            "latency": 600
+        }
+    ]
+}

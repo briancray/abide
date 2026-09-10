@@ -1,0 +1,11 @@
+<script>
+// The seal is ambient, so this reads it with nothing handed down.
+import { principal } from 'abide'
+</script>
+
+<ul class="fields">
+    <li><span>signed in</span>
+        <strong>{principal.authenticated ? 'yes' : 'no'}</strong></li>
+    <li><span>who</span>
+        <strong>{principal.resolved.name ?? '—'}</strong></li>
+</ul>

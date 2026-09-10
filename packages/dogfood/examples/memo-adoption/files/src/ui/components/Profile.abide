@@ -26,10 +26,10 @@ const status = memo(() => {
 
 <ul class="fields">
     <li><span>name</span>
-        <strong>{profile?.name ?? '—'}</strong>
+        <strong>{profile.name ?? '—'}</strong>
         <span class="status">{status}</span></li>
     <li><span>role</span>
-        <strong>{profile?.role ?? '—'}</strong></li>
+        <strong>{profile.role ?? '—'}</strong></li>
     <li><span>times opened</span>
-        <strong>{profile?.opened ?? '—'}</strong></li>
+        <strong>{profile.opened ?? '—'}</strong></li>
 </ul>

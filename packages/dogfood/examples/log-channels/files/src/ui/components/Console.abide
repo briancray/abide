@@ -1,0 +1,19 @@
+<script>
+import { log } from 'abide'
+
+const billing = log.channel('billing')
+const sync = log.channel('sync')
+</script>
+
+<div class="row">
+    <button onclick={() => billing.info('invoice sent', { id: '4310' })}>
+        Send an invoice
+    </button>
+    <button onclick={() => sync.debug('polled', { rows: 0 })}>Poll</button>
+</div>
+
+<ul class="fields stacked">
+{#for await record of log.records.tail(20)}
+    <li><span>{record.channel}</span><strong>{record.message}</strong></li>
+{/for}
+</ul>

@@ -1,0 +1,25 @@
+<script>
+import { state } from 'abide'
+
+let tier = state('gold')
+let regions = state(['north'])
+</script>
+
+<div class="row">
+    <label><input type="radio" bind:group={tier} value="silver"> Silver</label>
+    <label><input type="radio" bind:group={tier} value="gold"> Gold</label>
+</div>
+
+<div class="row">
+    <label>
+        <input type="checkbox" bind:group={regions} value="north"> North
+    </label>
+    <label>
+        <input type="checkbox" bind:group={regions} value="south"> South
+    </label>
+</div>
+
+<ul class="fields stacked">
+    <li><span>tier</span><strong>{tier}</strong></li>
+    <li><span>regions</span><strong>{regions.join(', ')}</strong></li>
+</ul>

@@ -1,0 +1,24 @@
+<script>
+import { state, watch } from 'abide'
+
+let handle = state('ada')
+let tab = state('')
+
+// The tab title is not the page's to own, so keeping it in step is
+// an effect. It follows the VALUE, not the field.
+watch(() => {
+    document.title = `@${handle} — Contacts`
+    tab = document.title
+})
+</script>
+
+<div class="row">
+    <label>handle
+        <input bind:value={handle}>
+    </label>
+    <button onclick={() => (handle = 'ada')}>Reset</button>
+</div>
+
+<ul class="fields stacked">
+    <li><span>browser tab</span><strong>{tab}</strong></li>
+</ul>

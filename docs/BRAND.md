@@ -88,15 +88,15 @@ it by number, so where the two disagree the rulebook is right and the claim is s
 
 | Claim | Rests on |
 | --- | --- |
-| **Call a server function from a page.** No route, no fetch, no client. | 16.30, 16.31 — the client module is GENERATED rather than shaken out of the server's, and a non-handler import is a compile error. 16.12, 16.27 — a page's render-time read goes through the same handler a browser calls, so there is one call rather than two paths |
+| **Call a server function from a page.** No route, no fetch, no client. | 16.30, 16.31 — the client module is GENERATED rather than shaken out of the server's, and a non-handler import is a compile error. 16.12, 16.4 — a page's render-time read goes through the same handler a browser calls, so there is one call rather than two paths |
 | **One handler, four surfaces.** A page, an OpenAPI operation, an MCP tool, a CLI command. | 20.1 — all four DERIVED from the route table, so none can describe a handler that does not exist. 38.9 — the CLI derives from the same table. 20.2, 20.3, 20.4 — `clients` withholds a surface and is not access control |
 | **One type back.** | 1.1 — every producer hands back `Reactive`. 11.2, 16.4 — the keyed forms hand back a factory you call with its arguments first |
 | **Same name, both sides.** | 16.29, 22.1, 23.7, 23.8 — a name resolves on either side, each answering from what its side has, and where one genuinely cannot it throws rather than no-opping |
-| **Reading loads it.** | 11.4, 11.5 — a body runs on first read, and an unkeyed memo re-runs when what it read moves. 11.6 — `ttl`, `invalidate` and `refresh` are a keyed memo's ways back. 16.36 — the browser's read is answered by what the render already fetched |
+| **Reading loads it.** | 11.4, 11.5 — a body runs on first read, and an unkeyed memo re-runs when what it read moves. 11.6 — `ttl`, `invalidate` and `refresh` are a keyed memo's ways back. 41.8, 41.14 — the browser's read is answered by what the render already fetched |
 | **It does not block.** | 2.1, 2.2 — a read returns what it has. 3.4 — a pending value opens a sink and the hole fills. 11.21 — that reaches a derived value. 32.2 — holding is opt-in |
 | **A refusal is a value.** | 15.1, 15.2, 15.7 — declared, structural, and landing in the `Failures` of the value that produced it. 4.9, 4.10, 4.11 — a refused write keeps the last accepted value on screen beside the message |
 | **The schema is the type.** | 19.11, 19.12 — derived from the annotation and the argument defaults. 19.13 — where inference cannot reach, the schema WIDENS rather than the file being refused. 16.28 — a shape rides on the `Reactive`. 38.3 — `abide check` reports on the `.abide` line |
-| **Bun and web standards, not a wrapper over them.** | 22.3 — `cookies` IS Bun's own. 36.1 — an app reaching for another bind address reaches Bun's options. 17.1, 16.39 — handlers speak `Values`, `Request` and `Response` |
+| **Bun and web standards, not a wrapper over them.** | 22.3 — `cookies` is one name on both sides, over Bun's own `CookieMap`. 36.1 — the port is read from the environment rather than from a config of ours. 17.1, 16.39 — handlers speak `Values`, `Request` and `Response` |
 
 # What we do not say
 
@@ -147,18 +147,17 @@ clause it lands on, and the clause is the page's title rather than the card's.
 | Dashboard | A total that follows its filter · a metric three tiles want and one load answers · a poll that has to be capped · a count that quietly stopped following its filter | `memo` unkeyed, `global`, `throttle`, tracking after `await` |
 | Player | A now-playing bar and a library that agree · a volume that survives the tab · a scrub that fires per frame | `state.share`, `store`, `debounce` |
 
-**A page picks one app and stays in it** (40.29). Six cards drawn from four worlds is six worlds to enter,
-and the reader pays that toll per card while the thing being taught is the same one throughout.
+**Why 40.29 holds a page to one app.** Six cards drawn from four worlds is six worlds to enter, and
+the reader pays that toll per card while the thing being taught is the same one throughout.
 
-**A control sits with the value it changes** (40.30). Held apart from it a button has to name its own
+**Why 40.30 seats a control with its value.** Held apart from it a button has to name its own
 subject — "add one" of what — and that name is longer and vaguer than the arrow it replaced. This
 is the same economy the readouts are under: what the layout can say, the words do not have to.
 
 # What an example has to prove
 
-An example proves the heading it sits under, in as little code as the proof takes, out of a
-situation one of the four apps has (40.31, 40.32, 40.33). The three are one rule rather than three,
-because dropping any one is a distinct way for a card to go wrong: a card that proves nothing is
+40.31, 40.32 and 40.33 are one rule rather than three, because dropping any one is a distinct way
+for a card to go wrong: a card that proves nothing is
 decoration, a card that proves it in forty lines has buried the proof under the setup, and a card
 that proves it in a world nobody has is proving it to nobody.
 
@@ -182,26 +181,18 @@ Three levels, and a reader may stop at any of them.
 | Section overview | that same opening, then what does not fit on a landing page — every part linking to the page that covers it |
 | Topic page | one problem, solved |
 
-The mechanisms — `{% lead %}` and the `covers:` gate — are RULEBOOK 40's, and the build and
-`packages/dogfood/tests/coverage.test.ts` enforce them between them. SOME OF WHAT IS BELOW IS
-ENFORCED THERE TOO: a heading leaning on a pronoun, a heading that enumerates less than the table
-under it, a nav label that is a bare prepositional fragment, a link whose text no longer matches
-the `nav` it points at, an uncaptioned fence, a code sample wider than the column it renders in.
-Two voice rules have since gone the same way and live in `voice.test.ts`: a sentence past the
-length a reader can hold, and a page pointing at another part of itself by position. A rule here
-that turns out to be checkable belongs in a test rather than in this list — what stays is what only
-a reader can decide.
+The three levels are 40.16's, the constraint on a lead is 40.37's and the map section is 40.38's;
+the `{% lead %}` directive is the build's. SOME OF WHAT IS BELOW IS GATED as well, in
+`packages/dogfood/tests/coverage.test.ts` and `voice.test.ts` — the tests are the list, an
+enumeration here being a second copy of them that nothing re-runs. A rule here that turns out to be
+checkable belongs in a test rather than in prose; what stays is what only a reader can decide.
 
-* **A page's LEAD is what the section overview says about it.** Everything before the first
-  heading is pulled into the overview verbatim (40.37), which is the constraint and also the
-  test: it has to read standalone, from a page a reader has not opened. So the lead is about the
-  whole page rather than about whatever the first heading happens to be — an opening that
-  describes the first card advertises the page as that one card. It carries no relative link,
-  having to resolve at two depths, and the build refuses one.
-* **Where a page's subject is a NAME, the first section is the map.** The forms it comes in, the
-  options they share, and a pointer to that name's reference page (40.38). A reader arriving to
-  compare two spellings gets them in the first screen instead of assembling them from six
-  sections; one who came to learn scrolls past a table costing four lines. It fits a page whose
+* **A page's LEAD is what the section overview says about it.** 40.37 is the constraint and also
+  the test: the lead is about the whole page rather than about whatever the first heading happens
+  to be, and an opening that describes the first card advertises the page as that one card.
+* **Where a page's subject is a NAME, the first section is the map 40.38 asks for.** A reader
+  arriving to compare two spellings gets them in the first screen instead of assembling them from
+  six sections; one who came to learn scrolls past a table costing four lines. It fits a page whose
   subject is one name with variants, which is most of the primitives, and it does not fit a page
   about a technique — a schema page has no two forms to lay out, and a map of one thing is
   furniture.
@@ -231,22 +222,22 @@ three pages later.
 | --- | --- | --- |
 | reactive value | container, store, atom, signal, observable | The type is `Reactive` and the prose word is "reactive value" — one word family at two registers, which is why nothing needs a separate noun for the thing as against its current value. Vue's `reactive()` is a transparent proxy rather than something you read with a call; the collision is accepted because every alternative is owned too and none of them is more precise. The ban is on the reader-facing NOUN — `signal` stays available for the internal mechanism a probe or a selection holds |
 | handler (noun), declare (verb) | declaration, hook | `hook` is taken — `onStart`, `onStop`, `onConfig` are abide's lifecycle hooks — and "a declaration" names the one shape these are not, a JavaScript function declaration being `function f() {}` where every handler is a `const` bound to an expression. You DECLARE a handler with `GET` |
-| room | topic, subscription, channel instance | A room is what `channel` and `socket` both hand back, and it is a `Reactive` with `publish` — and with no `revoke` and no `clear`, a removal being an ordinary publish of a tombstone |
+| room | topic, subscription, channel instance | A room is what `channel` and `socket` both hand back; the shape it has, and why it has no `revoke` and no `clear`, is 9.19 and D8 |
 | refusal, failure | error (as the noun for a declared answer) | An error is what went wrong unexpectedly — `onError`'s subject, and what `s.error()` hands back. A refusal is a declared answer with a name and data, and `refuse` / `refuse.typed` are how one is spelled. The API keeps `error` where it means the first thing; prose keeps `refusal` where it means the second |
 | middleware, rung | onion (as a noun for the mechanism) | `middleware` is the API and a rung is one layer of it. "Onion" describes the ORDER and is worth reaching for only where the order is the subject |
 | reactive value | state (for anything but `state()`) | `state()` is one of the four; the by-name rule, the probes and `Reactive` reach all of them. Calling a memo or `route.url` "a state" made the by-name guide read as a `state()` rule |
 | selection | group, set, query, batch | What `pending`, `refresh` and `invalidate` take — one memo, or every entry carrying a tag. A selection names entries; it does not run a query over them |
-| probe | flag, status boolean | `pending()`, `refreshing()`, `done()`, `success()`, `streaming()`, `error()` — a probe never throws and never starts work |
-| sink, hole | placeholder, suspense boundary, slot | An addressable hole in the output a value in flight fills later. TWO REGISTERS OF ONE THING, the way `Reactive` and "reactive value" are: the SINK is the mechanism and the HOLE is what a reader sees, so "opens a sink; the hole fills" is one sentence about one thing. `slot` is `<slot/>` and nothing else — a value's position in text is a text position — and a `<slot/>` takes CHILDREN, never "holes" |
-| adoption, adopt | wrapping, proxying, unwrapping, transparent forwarding | A memo body returning a `Reactive` ADOPTS it: the outer subscribes and MIRRORS its productions into its own ring, so the outer is always its own `Reactive` and every option applies to itself. Mirroring carries PRODUCTIONS and delegation carries MEMBERS, which keeps an adopted room a room — so "forwards" names the half it is not |
-| production | value, message, chunk, item (as the general noun for what is retained) | One materialisation of a `Stored` — what a `set` lands, what a `publish` lands, what a stream leaves at close. `Produced` is the separate word for what a producer YIELDED, which on a stream is a chunk and is not a production. `tail` and `ttl` count productions, so reaching for any of the four as the general noun breaks the unit rule |
+| probe | flag, status boolean | `pending()`, `refreshing()`, `done()`, `success()`, `streaming()`, `error()` — what a probe will not do is 3.1 and 3.2 |
+| sink, hole | placeholder, suspense boundary, slot | What 35.7 defines. TWO REGISTERS OF ONE THING, the way `Reactive` and "reactive value" are: the SINK is the mechanism and the HOLE is what a reader sees, so "opens a sink; the hole fills" is one sentence about one thing. `slot` is `<slot/>` and nothing else — a value's position in text is a text position — and a `<slot/>` takes CHILDREN, never "holes" |
+| adoption, adopt | wrapping, proxying, unwrapping, transparent forwarding | A memo body returning a `Reactive` ADOPTS it, per 11.13 and 11.15, so the outer is always its own `Reactive` and every option applies to itself. What mirroring carries and what delegation carries are different halves, so "forwards" names the one it is not |
+| production | value, message, chunk, item (as the general noun for what is retained) | What the rulebook's Terms table defines. `Produced` is the separate word for what a producer YIELDED, which on a stream is a chunk and is not a production. `tail` and `ttl` count productions, so reaching for any of the four as the general noun breaks the unit rule |
 | seed buffer | sink, hydration data, embedded state | The seed buffer is how DATA reaches the client, by answering the client's own request; a sink is a hole in the MARKUP a late value fills. Two mechanisms, two lifetimes, and a document carries no copy of any answer |
 | claims, principal, session | any one of the three for another | THREE THINGS. CLAIMS are the proof and the only thing in the cookie; the PRINCIPAL is what `onPrincipal` resolved that proof into, and is PUBLIC by definition; SESSION is app data addressed by what the claims identify, behind an ordinary rpc. Collapsing them to "session" puts something that grows into a cookie. `caller` is a fourth and none of them — a handle for WHICH BROWSER, carried whether or not anyone authenticated |
 | surface | client, target, integration | `ui`, `openapi`, `mcp`, `cli` — one handler spoken in another vocabulary, and what `clients` withholds |
 | seam | layer, boundary | `#ui`, `#server`, `#shared` — an import edge the build enforces |
-| both sides | isomorphic (in body copy) | *isomorphic* is the headline word and stays in the statement; every page after it says "both sides", which is what the docs already do. A third spelling is the drift this table exists to stop |
+| both sides | isomorphic (in body copy) | *isomorphic* is the headline word and stays in the statement; every page after it says "both sides". A third spelling is the drift this table exists to stop |
 | by name | auto-tracking, magic reactivity | Reading `count` in a template IS `count()`; the sugar is over the explicit form, never instead of it |
-| tracked / subscriber | either for the other | TWO REGISTERS OF ONE MECHANISM, the way sink and hole are. TRACKED is a property of the POSITION — whether a read there is captured at all, which is what the "Context | Tracks" table answers. A SUBSCRIBER is the edge a tracked read registers. They come apart at exactly one place and it is load-bearing: on a server a render read IS tracked and registers NO subscriber, there being no rerender to feed — which is why a watch runs once there, and why an eager trigger is bounded by subscribers rather than by what is tracked |
+| tracked / subscriber | either for the other | TWO REGISTERS OF ONE MECHANISM, the way sink and hole are. TRACKED is a property of the POSITION — whether a read there is captured at all, which is what REGISTRY's Tracking table answers. A SUBSCRIBER is the edge a tracked read registers. They come apart at exactly one place and it is load-bearing: on a server a render read IS tracked and registers NO subscriber, there being no rerender to feed — which is why a watch runs once there, and why an eager trigger is bounded by subscribers rather than by what is tracked |
 | subscriber | on screen, displayed, visible | What decides whether an EAGER trigger loads: anything reading the value into the output — the template showing it, or a `memo` that is itself subscribed. "On screen" is the common case and therefore reads as the rule, so it is wrong for exactly the case that matters, a derived value nothing renders directly. The distinction is what 7.14 and 13.7 are written over, and it cannot be said in the loose vocabulary |
 | name (verb), for identifying WHICH ONE | name as the general-purpose transitive | A heading names its subject, an anchor names a line, a selection names entries — the verb carries identification, and reaching for it as a catch-all empties it. "Neither button names anything" was trying to say neither button REPEATS a cache key; "naming reaches anything" was trying to say an EXPLICIT ARGUMENT does. Where the sentence means repeats, passes, declares, holds or points at, that is the word, and the sentence gets shorter |
 
@@ -258,17 +249,17 @@ three pages later.
   takes, then go straight into code that solves a real problem with as few concepts as it can.
   A reader who can check a claim in two seconds holds it; one who is asked to follow an
   argument is still deciding. This is the strongest form of "claim, then evidence" and the
-  default — reach for prose evidence only where no example fits. Every example is a real
-  `.abide` or `.ts` file, and owes a bench and a spec, which keeps it evidence rather
-  than illustration. TODAY THOSE ARE AUTHORED, not run — neither can execute until the compiler
+  default — reach for prose evidence only where no example fits. Every example is a real `.abide` or
+  `.ts` file, and 40.3 asks it for a bench and a spec, which is what keeps it evidence rather than
+  illustration. TODAY THOSE ARE AUTHORED, not run — neither can execute until the compiler
   does — and every panel carrying one says so, because a number that reads as measured is worse
   than no number.
 * **Four layers reach a card, and each says a thing the others cannot.** The HEADING is the
-  claim, in the reader's words — what the card has to prove (40.31). The card's TITLE is the
+  claim, in the reader's words, and 40.31 is what binds the card to it. The card's TITLE is the
   signature and a gloss, which is the address in the API the claim is about. The card's SUMMARY
   is the situation and what to do in it, one or two sentences. And the copy AFTER the card is
   everything none of those can carry: the reason, the refusal, the thing the running page cannot
-  show. Nothing sits between a heading and its card (40.34), which is the layer that kept being
+  show. 40.34 is what keeps a fourth voice out from between a heading and its card — the layer that kept being
   written and is always a fourth voice restating one of the other three — a card had a heading
   saying a memo re-runs when what it read changes, then a paragraph saying reading is what
   subscribes, then a title saying auto-tracked derivation, then a summary saying the total
@@ -340,7 +331,8 @@ three pages later.
   add", "simply call" is the construction that makes a reader feel stupid when it does not
   work. "It just works" is a claim about the RESULT and is allowed with an example under it.
 * **Problem-shaped, not capability-shaped.** Not what it can do — what an author uses it to
-  solve. Every documentation page is titled this way, and marketing follows the docs.
+  solve. Every TOPIC page is titled this way, and marketing follows the docs. An overview routes
+  and a reference page enumerates, so each is titled for what it holds instead.
 
 # Visual identity
 
@@ -355,9 +347,19 @@ The full token set is `packages/dogfood/src/ui/app.css`; it is the source, not a
 | Blue | The BROWSER side, the same way — `--cool` |
 | Type | Space Grotesk for headings, IBM Plex Sans for body, IBM Plex Mono for code, captions and status |
 
-A snippet renders in a 44rem column at 13px mono — about 76 characters. Past that a sample is a
-thing to scroll rather than a thing to read, so the width is a property of the SOURCE rather than
-of the block: biome does not reach inside a fence, and the check is `coverage.test.ts`'s.
+A snippet renders in a 44rem column at 12px mono — about 81 characters before it scrolls. Past
+that a sample is a thing to scroll rather than a thing to read, so the width is a property of the
+SOURCE rather than of the block. **The number is the formatter's**: `coverage.test.ts` reads
+`lineWidth` out of `biome.json` rather than restating it, because the copy that restated it drifted
+and broke. What the check is FOR is the files biome does not reach — a markdown fence, a `.abide`
+template — never a second opinion about how wide a line should be.
+
+**Every length is a multiple of .25rem** — padding, gap, margin, width, height, inset, font-size,
+line-height. The exceptions are the three things that draw a LINE rather than occupy space: a
+border, an outline and a shadow, which are hairlines at any type size. Letter-spacing is exempt for
+the same reason in the other direction — tracking is a ratio of the type it tracks, so it is em.
+The type lands on four steps: .5rem for a micro label, .75rem for chrome, code and captions, 1rem
+for prose, and 1.25rem and up for headings and stat values.
 
 **A TIP is the documentation's own voice.** Teal-washed, with a mark on it, and it means the same
 thing wherever it appears: an aside in prose, written `> [!TIP]`, and an annotation the
@@ -367,9 +369,10 @@ OUTSIDE the frame rather than inside it wearing a tip (40.21) — the request me
 is that, and it is the arm's own count rather than a caption about one.
 
 **An example leads with the running page, and the page is really running.** The render sits above
-the tabs and stays there, and what it runs is the hand-written arm (40.19) against the example's own
-wire fixture (40.20) — so Requests is the network the render was served from rather than a
-screenshot of calls somebody transcribed. Files, Bench and Tests are what a reader consults ABOUT
+the tabs and stays there, and what it runs is the hand-written arm (40.19) against the network that
+example names (40.20) — its wire fixture, or a hand-written server of its own where a frozen answer
+cannot cover what a reader types. Requests shows that network rather than a screenshot of calls
+somebody transcribed. Files, Bench and Tests are what a reader consults ABOUT
 it. The thing an example is for is the thing that runs, and a reader who has to find a tab before
 seeing one has been handed source to read instead of something to try.
 

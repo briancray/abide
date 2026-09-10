@@ -1,0 +1,22 @@
+<script>
+import { memo, state } from 'abide'
+import { getStock } from '#server/rpc/stock'
+
+let opened = state(0)
+
+// Re-reading after the ttl has lapsed is what fetches: the lapse
+// itself woke nobody.
+const level = memo(() => {
+    opened
+    return getStock({ warehouse: 'east', sku: 'A-70' })
+})
+</script>
+
+<ul class="fields stacked">
+    <li><span>on hand</span>
+        <strong>{level.pending() ? 'counting…' : level.onHand}</strong>
+    </li>
+    <li><span>loads</span><strong>{level.loads}</strong></li>
+</ul>
+
+<button onclick={() => (opened += 1)}>Read it again</button>

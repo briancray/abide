@@ -1,0 +1,7 @@
+{
+    "title": "`bind:checked` and `bind:open` — a boolean, not a string",
+    "summary": "A reminders checkbox and a disclosure. Tick the box and open the panel, and watch the two lines underneath.",
+    "app": "crm",
+    "files": ["src/ui/components/Advanced.abide"],
+    "route": "/contacts/42/edit"
+}

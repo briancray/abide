@@ -1,0 +1,28 @@
+<script>
+import { memo, principal, state } from 'abide'
+import { searchInvoices } from '#server/rpc/invoices'
+
+let limit = state('2')
+
+const found = memo(() => searchInvoices({ limit: Number(limit) }))
+</script>
+
+<div class="row">
+    <button onclick={() => {
+        if (principal.authenticated) principal.clear()
+        else principal.set({ id: 'ada' })
+    }}>{principal.authenticated ? 'Sign out' : 'Sign in'}</button>
+</div>
+
+<label>limit
+    <input bind:value={limit}>
+</label>
+
+<p class="status">
+    {found.error() ? `${found.error().status} ${found.error().message}` : ''}
+</p>
+
+<ul class="fields">
+    <li><span>invoices</span>
+        <strong>{found.error() ? '—' : (found.length ?? '—')}</strong></li>
+</ul>

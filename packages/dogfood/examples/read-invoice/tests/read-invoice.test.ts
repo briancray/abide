@@ -4,14 +4,14 @@ import { getInvoice } from '../files/src/server/rpc/invoices.ts'
 
 test('the handler answers with the invoice', async () => {
     const invoice = getInvoice({ id: '42' })
-    await expect(invoice.settled()).resolves.toMatchObject({ number: 'INV-0042' })
+    expect(await invoice).toMatchObject({ number: 'INV-0042' })
 })
 
 test('a missing invoice refuses by name, not by status alone', async () => {
     const invoice = getInvoice({ id: 'nope' })
-    // `settled()` REJECTS with what the read would throw, so the refusal is caught
-    // here rather than failing the test — `error()` is the probe that never throws.
-    await invoice.settled().catch(() => {})
+    // Awaiting REJECTS with what the read would throw, so the refusal is caught here
+    // rather than failing the test — `error()` is the probe that never throws.
+    await invoice.catch(() => {})
     expect(invoice.isError(invoice.error(), 'NotFound')).toBe(true)
 })
 
@@ -19,7 +19,10 @@ test('a missing invoice refuses by name, not by status alone', async () => {
 // value: re-rendering with the same invoice must move no nodes. Verified by reverting
 // the identity check, which takes this from 0 to 954.
 test('re-rendering an unchanged invoice moves no nodes', async () => {
-    const page = await measure.render('files/src/ui/pages/invoices/[id]/page.abide', { id: '42' })
+    const page = await measure.render(
+        'files/src/ui/pages/invoices/[id]/page.abide',
+        { id: '42' },
+    )
     page.reset()
     await page.refresh()
     expect(page.nodesMoved).toBe(0)

@@ -6,13 +6,18 @@
         "useIgnoreFile": true
     },
     "files": {
-        "includes": ["**/*.{json,ts,js}", "!**/dist", "!**/node_modules", "!**/.abide"]
+        "includes": [
+            "**/*.{json,ts,js}",
+            "!**/dist",
+            "!**/node_modules",
+            "!**/.abide"
+        ]
     },
     "formatter": {
         "enabled": true,
         "indentStyle": "space",
         "indentWidth": 4,
-        "lineWidth": 100
+        "lineWidth": 80
     },
     "javascript": {
         "formatter": {

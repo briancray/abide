@@ -8,7 +8,13 @@
 // when the compiler and the harness land they replace those artifacts and nothing here
 // changes. Today they are checked-in static content.
 
-import { displayPath, escapeHtml, highlight, renderInline, sideOf } from './renderMarkdown.ts'
+import {
+    displayPath,
+    escapeHtml,
+    highlight,
+    renderInline,
+    sideOf,
+} from './renderMarkdown.ts'
 
 const EXAMPLES_DIR = new URL('../examples/', import.meta.url)
 const APP_STYLESHEET = new URL('../src/ui/app.css', import.meta.url)
@@ -62,6 +68,12 @@ const HITS = '{{hits}}'
 
 // A LATENCY IS THE POINT, not a nicety: a fixture that answers in the same tick paints the
 // settled value on the first frame, so `pending()` has no moment a reader could see it in.
+//
+// AND HOW LONG IS A PROPERTY OF WHAT THE CARD IS SHOWING. 450ms is a spinner a reader sees
+// because the spinner is still there when they arrive. A card whose subject is the FIRST FRAME
+// has the opposite shape: the window shuts on its own, and 450ms of it is gone before the page
+// has finished loading — measured, every sample after `goto` resolved already read the settled
+// state. So an entry may say its own, and the default stands everywhere else.
 const LATENCY = 450
 
 // AND SO IS THE GAP BETWEEN FRAMES. A FEED SETTLED WHOLE IS NOT A FEED: hand an ndjson
@@ -88,6 +100,11 @@ const FIXTURES = JSON.parse(document.querySelector('[data-fixtures]').textConten
 const SERVED = Object.create(null)
 const BASE = 'http://example.invalid'
 const FRAME_GAP = ${FRAME_GAP}
+// THE ARM'S OWN SERVER, for an example whose manifest names one. \`Bun.serve\` is what an app
+// author writes, so the file in \`vanilla/\` stays real Bun code and this stands in for the
+// runtime that would run it: the route map is captured on the call and dispatched into below.
+let ROUTES = null
+globalThis.Bun = { serve: (options) => { ROUTES = options.routes ?? null } }
 function argsOf(url) {
   const args = {}
   for (const [key, value] of url.searchParams) args[key] = value
@@ -112,13 +129,22 @@ function framed(body) {
 }
 globalThis.fetch = async (input, init) => {
   const url = new URL(typeof input === 'string' ? input : input.url, BASE)
+  // A ROUTE ANSWERS FIRST, and it answers a FAMILY where a fixture answers one address — which
+  // is what a field filtering as it types needs. The pathname is the whole of the match: a
+  // \`:param\` route falls through to the fixtures and then to the tip, which names the address
+  // it could not answer rather than failing silently.
+  const route = ROUTES && ROUTES[url.pathname]
+  if (route) {
+    await new Promise((resolve) => setTimeout(resolve, ${LATENCY}))
+    return route(new Request(url, init))
+  }
   const tail = url.pathname.slice(url.pathname.lastIndexOf('/') + 1).toLowerCase()
   const args = argsOf(url)
   const match = FIXTURES.find((entry) => entry.args === args && (tail.includes(entry.tail) || entry.tail.includes(tail)))
   if (!match) {
     const note = document.createElement('p')
     note.className = 'tip'
-    note.textContent = 'No fixture answers ' + url.pathname + url.search + '. Add it to this example\\'s wire.'
+    note.textContent = 'Nothing answers ' + url.pathname + url.search + (ROUTES ? '. Add a route to this example\\'s server arm.' : '. Add it to this example\\'s wire.')
     document.body.append(note)
     measure()
     throw new Error('unanswered ' + url.pathname)
@@ -150,7 +176,9 @@ const SEAM_ORDER = {
 function orderedFiles(paths: string[], about: 'ui' | 'server'): string[] {
     const seams = SEAM_ORDER[about]
     // Stable, so two files on the same seam keep the order the manifest gave them.
-    return [...paths].sort((a, b) => seams.indexOf(sideOf(a)) - seams.indexOf(sideOf(b)))
+    return [...paths].sort(
+        (a, b) => seams.indexOf(sideOf(a)) - seams.indexOf(sideOf(b)),
+    )
 }
 
 // Only `title`, `summary`, `files`, `result` and `route` are owed. A panel an example
@@ -174,6 +202,12 @@ export type Manifest = {
     // is a claim NOTHING CHECKS, and it is the one gap this design has. The bench's line counts
     // are the only place the arm is visible today.
     about?: 'ui' | 'server'
+    // THE FILE IN `vanilla/` WHOSE ROUTES ANSWER THE ARM, for an example whose network cannot be
+    // frozen: a field filtering as it types asks a different address per keystroke, and a wire
+    // fixture answers one. Unset everywhere else, where the wire is the network and the panel and
+    // the answer are one artifact. Every arm's `server.ts` is the file this would name — eight of
+    // them import a `./database.ts` that is not there and so cannot be built or named yet.
+    served?: string
     // What the build emits, and the hand-written arm every bench ratio is against. Neither is
     // a panel: both SHIP, in the download and in the line counts, and a reader who wants the
     // emitted code wants it in a file rather than beside the source it came from.
@@ -191,10 +225,16 @@ export type Manifest = {
         status: string
         responseHeaders: Record<string, string>
         body: string
+        latency?: number
     }[]
     bench?: {
         note: string
-        rows: { metric: string; abide: string; vanilla: string; ratio: string }[]
+        rows: {
+            metric: string
+            abide: string
+            vanilla: string
+            ratio: string
+        }[]
     }
 }
 
@@ -223,7 +263,12 @@ export function checkFixtures(name: string, entries: Fixture[]): void {
 // refused at build for the case a build can reach, and the runtime tip is what is left for the
 // computed address rather than the only line of defence: `patch-a-list` shipped an arm fetching
 // `/api/orders` against an empty wire, and the tip only says so to a reader who opens the page.
-export function checkRequests(name: string, script: string, entries: Fixture[]): void {
+export function checkRequests(
+    name: string,
+    script: string,
+    entries: Fixture[],
+    served?: string,
+): void {
     // AND A TRANSPORT THE FRAME DOES NOT SHIM IS THE WORSE HALF, because it is silent: `fetch`
     // is replaced and `WebSocket` is not, so an arm opening one inside a srcdoc with no origin
     // resolves it against the PARENT's and 404s — an example that renders its chrome, none of
@@ -233,6 +278,11 @@ export function checkRequests(name: string, script: string, entries: Fixture[]):
         throw new Error(
             `example ${name}: the arm opens a ${unshimmed[1]}, which the frame has no fixture for`,
         )
+    // AN ARM THAT SERVES ITSELF IS NOT CHECKED AGAINST THE WIRE, the two loops below asking
+    // whether a fixture answers an address the routes answer instead. What still holds it is
+    // the transport check above and `served-arms.test.ts`, which dispatches every wire entry
+    // through the routes and compares the body — so the panel and the network cannot drift.
+    if (served) return
     for (const [, address] of script.matchAll(FETCHED_ADDRESS)) {
         if (!address) continue
         const url = new URL(address, 'http://example.invalid')
@@ -240,9 +290,13 @@ export function checkRequests(name: string, script: string, entries: Fixture[]):
         const args: [string, string][] = []
         for (const pair of url.searchParams) args.push(pair)
         const wanted = JSON.stringify(args.sort())
-        const answered = entries.some((one) => one.args === wanted && relates(tail, one.tail))
+        const answered = entries.some(
+            (one) => one.args === wanted && relates(tail, one.tail),
+        )
         if (!answered)
-            throw new Error(`example ${name}: the arm fetches ${address} and no fixture answers it`)
+            throw new Error(
+                `example ${name}: the arm fetches ${address} and no fixture answers it`,
+            )
     }
 
     // AND A COMPUTED ADDRESS STILL SAYS MOST OF IT. The interpolation hides the VALUES and leaves
@@ -267,7 +321,9 @@ export function checkRequests(name: string, script: string, entries: Fixture[]):
         // A `$` in the path hides the tail, a segment with no literal name hides the keys, and a
         // half that did not resolve is not checked rather than guessed at — `/api/${path}?${query}`
         // resolves neither and is skipped whole, which is what the arm above this one writes.
-        const tail = path.includes('$') ? null : path.slice(path.lastIndexOf('/') + 1)
+        const tail = path.includes('$')
+            ? null
+            : path.slice(path.lastIndexOf('/') + 1)
         const keys: string[] = []
         let named = true
         for (const segment of query ? query.split('&') : []) {
@@ -282,7 +338,8 @@ export function checkRequests(name: string, script: string, entries: Fixture[]):
             if (tail !== null && !relates(tail, one.tail)) return false
             if (!named) return true
             const names: string[] = []
-            for (const [key] of JSON.parse(one.args) as [string, string][]) names.push(key)
+            for (const [key] of JSON.parse(one.args) as [string, string][])
+                names.push(key)
             return JSON.stringify(names.sort()) === wanted
         })
         if (!answered)
@@ -314,11 +371,18 @@ export function relates(one: string, two: string): boolean {
 
 // Every panel that holds files reads the same way, so they share one loader and one
 // renderer rather than four that drift.
-async function readGroup(name: string, folder: string, paths: string[]): Promise<ExampleFile[]> {
+async function readGroup(
+    name: string,
+    folder: string,
+    paths: string[],
+): Promise<ExampleFile[]> {
     const group: ExampleFile[] = []
     for (const path of paths) {
-        const file = Bun.file(new URL(`${name}/${folder}/${path}`, EXAMPLES_DIR))
-        if (!(await file.exists())) throw new Error(`example ${name}: ${folder}/${path} is missing`)
+        const file = Bun.file(
+            new URL(`${name}/${folder}/${path}`, EXAMPLES_DIR),
+        )
+        if (!(await file.exists()))
+            throw new Error(`example ${name}: ${folder}/${path} is missing`)
         group.push({ path, source: await file.text() })
     }
     return group
@@ -391,7 +455,9 @@ function renderTests(tests: NonNullable<Manifest['tests']>): string {
         // example has one yet and a colour nothing uses is a colour nobody maintains.
         rows += `<tr><td>${escapeHtml(row.name)}</td><td class="ex-status ex-result-${escapeHtml(row.result)}">${escapeHtml(row.result)}</td></tr>`
     }
-    const note = tests.note ? `<p class="ex-note">${renderInline(tests.note)}</p>` : ''
+    const note = tests.note
+        ? `<p class="ex-note">${renderInline(tests.note)}</p>`
+        : ''
     return `<table class="ex-tests"><thead><tr><th>Test</th><th>Result</th></tr></thead><tbody>${rows}</tbody></table>
 ${note}`
 }
@@ -414,77 +480,120 @@ function renderBench(bench: NonNullable<Manifest['bench']>): string {
 <p class="ex-note">${renderInline(bench.note)}</p>`
 }
 
-// WHAT THE RESULT FRAME TAKES FROM THE APP STYLESHEET, by the text each rule starts
-// with. Lifted rather than restated so an example renders the way an abide page renders
-// and the two cannot drift — which is also the failure mode: rename one of these in
-// app.css and the frame quietly loses that rule, with the page still rendering. The
-// check in `snippet.test.ts` is what makes that loud.
+// WHAT THE RESULT FRAME TAKES FROM THE APP STYLESHEET, by SELECTOR. Lifted rather than
+// restated so an example renders the way an abide page renders and the two cannot drift —
+// which is also the failure mode: rename one of these in app.css and the frame quietly
+// loses that rule, with the page still rendering. The check in `snippet.test.ts` is what
+// makes that loud.
+//
+// MATCHED ON THE PARSED SELECTOR, NEVER ON THE FILE'S TEXT. These used to be literal
+// prefixes like `'\nh1, h2, h3, h4, p,'` and a reformat of app.css broke six of them at
+// once — a selector list the formatter had split one-per-line still means the same rule,
+// and a lookup that reads the punctuation cannot know that. Normalised, a reflow is a
+// non-event and a RENAME still trips the gate, which is the half worth catching.
 export const FRAME_RULES = [
     ':root',
     '@media (prefers-color-scheme: dark)',
     // An arm hides its own pending and error branches with `hidden`, and the frame body is
     // a flex column now — so this travels with the rest or those branches all render.
-    '\n[hidden] {',
+    '[hidden]',
     // The margin reset comes first and is not optional: the frame is a flex column like the
     // page is, so a UA margin left standing would be added to the gap rather than replaced
     // by it — and only one of the two would answer to the scale.
-    '\nh1, h2, h3, h4, p,',
-    '\nh1 {',
-    '\na {',
-    '\na[aria-current]',
-    '\nul, ol {',
-    '\n.switch {',
-    '\n.switch a {',
-    '\n.switch a:hover',
-    '\n.switch a[aria-current]',
-    '\ninput, textarea, select {',
-    '\ninput:focus-visible',
-    '\nbutton, label {',
-    '\nbutton {',
-    '\nbutton:hover',
-    '\n.row {',
-    '\n.row:has(> label)',
-    '\nlabel {',
-    '\nlabel input, label select',
-    '\nlabel:has(> input[type=checkbox])',
+    'h1, h2, h3, h4, p, ul, ol, li, pre, figure, table, blockquote, aside',
+    'h1',
+    'a',
+    'a[aria-current]',
+    'ul, ol',
+    '.switch',
+    '.switch a',
+    '.switch a:hover',
+    '.switch a[aria-current]',
+    // The shared control box first, the field's own colours after it — the order they are
+    // in above, and the order the frame needs them concatenated in.
+    'input, textarea, select, button',
+    'input, textarea, select',
+    'select',
+    'input:focus-visible, textarea:focus-visible, select:focus-visible',
+    'button, label',
+    'button',
+    'button:hover:not(:disabled)',
+    'button:disabled',
+    '.row',
+    '.row:has(> label)',
+    'label',
+    'label input, label select, label textarea',
+    'label:has(> input[type=checkbox]), label:has(> input[type=radio])',
     // A demo card's stat row, its field rows and the status line, so a card renders the way
     // the site would rather than only where the site is.
-    '\n.grid {',
-    '\n.grid li {',
-    '\n.grid li span {',
-    '\n.grid li strong {',
-    '\n.fields {',
-    '\n.fields li {',
-    '\n.fields li span {',
-    '\n.fields li strong {',
-    '\n.fields.stacked li {',
-    '\n.fields.stacked li span {',
-    '\n.stepper {',
-    '\n.stepper button {',
-    '\n.status {',
-    '\n.tabs {',
-    '\n.tabs button {',
-    '\n.tabs button:hover',
-    '\n.tabs button[aria-selected=true]',
-    '\n.tip {',
-    '\n.tip::before',
-    '\n.tip button {',
-    '\n.tip button:hover',
-    '\n.tip code',
+    '.grid',
+    '.grid li',
+    '.grid li span',
+    '.grid li strong',
+    '.fields',
+    '.fields li',
+    '.fields li span',
+    '.fields li strong',
+    '.fields.stacked',
+    '.fields.stacked li',
+    '.fields.stacked li span',
+    '.fields.stacked li strong',
+    // A transcript, for the chat app's cards. The speaker attribute selectors travel with
+    // the block or every turn renders on the same side.
+    '.chat',
+    '.chat li',
+    '.chat li span',
+    '.chat li p',
+    '.chat li[data-speaker=you]',
+    '.chat li[data-speaker=you] p',
+    '.stepper',
+    '.stepper button',
+    '.status',
+    '.tabs',
+    '.tabs button',
+    '.tabs button:hover',
+    '.tabs button[aria-selected=true]',
+    '.tip',
+    '.tip::before',
+    '.tip button',
+    '.tip button:hover',
+    '.tip code',
 ]
 
-function ruleAt(css: string, selector: string): string {
-    const at = css.indexOf(selector)
-    if (at === -1) return ''
+// Every TOP-LEVEL rule in a stylesheet, keyed by its selector with comments stripped and
+// whitespace collapsed — so `h1,\n h2 {` and `h1, h2 {` are one key. The VALUE starts at
+// the selector rather than at the doc comment above it, the frame wanting the rule and not
+// the essay. `@media` is a rule like any other here and is lifted whole, its nested rules
+// never reaching this map — which is what keeps a dark-scheme `:root` from shadowing the
+// light one. No comment in this stylesheet carries a brace, and the depth count assumes it.
+export function rulesBySelector(css: string): Map<string, string> {
+    const rules = new Map<string, string>()
     let depth = 0
-    for (let index = at; index < css.length; index += 1) {
-        if (css[index] === '{') depth += 1
-        else if (css[index] === '}') {
+    let from = 0
+    let selector = ''
+    let opensAt = 0
+    for (let index = 0; index < css.length; index += 1) {
+        const character = css[index]
+        if (character === '{') {
+            if (depth === 0) {
+                const raw = css.slice(from, index)
+                const comment = raw.lastIndexOf('*/')
+                let at = comment === -1 ? 0 : comment + 2
+                while (at < raw.length && /\s/.test(raw[at] ?? '')) at += 1
+                opensAt = from + at
+                selector = raw.slice(at).replace(/\s+/g, ' ').trim()
+            }
+            depth += 1
+        } else if (character === '}') {
             depth -= 1
-            if (depth === 0) return css.slice(at, index + 1)
+            if (depth === 0) {
+                if (selector) rules.set(selector, css.slice(opensAt, index + 1))
+                from = index + 1
+                selector = ''
+            }
         }
     }
-    return ''
+    return rules
 }
 
 // The result renders in an IFRAME so the docs' own stylesheet cannot reach it — a
@@ -495,7 +604,7 @@ function ruleAt(css: string, selector: string): string {
 // and a palette change reaches it for free. Only the tokens: the site's chrome is a
 // sidebar grid, and a page that is not the docs would be wrecked by it.
 function renderResult(
-    arm: { markup: string; script: string },
+    arm: { markup: string; script: string; server: string },
     fixtures: Fixture[],
     route: string,
     appCss: string,
@@ -506,7 +615,10 @@ function renderResult(
     // grid, which is chrome rather than a default. What the arm's body IS is the same
     // column the page is: the scale arrives with the tokens, so the distance between two
     // blocks of a rendered example is the one the docs use for prose.
-    const base = FRAME_RULES.map((selector) => ruleAt(appCss, selector)).join('')
+    const rules = rulesBySelector(appCss)
+    const base = FRAME_RULES.map((selector) => rules.get(selector) ?? '').join(
+        '',
+    )
     // `<` is escaped in the FIXTURES and nowhere else. A `\\u003c` is legal inside a JSON string
     // and is a SyntaxError in code — `held.at \\u003c TTL` does not parse — so escaping the arm the
     // same way stopped its bundle dead, and stopped it the quiet way: a script that fails to parse
@@ -515,14 +627,16 @@ function renderResult(
     // `escapeHtml`, so its `</script>` is `&lt;/script&gt;` in the attribute and `</script>` in the
     // frame.
     const data = JSON.stringify(fixtures).replaceAll('<', '\\u003c')
+    // After the shim, which is what defines the `Bun.serve` the routes are captured on.
+    const server = arm.server ? `<script>${arm.server}</script>` : ''
     const html = `<!doctype html><meta charset="utf-8">
 <link rel="stylesheet" href="${FONTS}">
 <style>${base}
 body { margin:0; padding:1.5rem; background:var(--paper); color:var(--ink);
-  font:400 15px/1.6 var(--sans);
+  font:400 1rem/1.5rem var(--sans);
   display:flex; flex-direction:column; gap:var(--gap-flow); }
 </style>${arm.markup}
-<script type="application/json" data-fixtures>${data}</script>${NETWORK}${DRIVER}
+<script type="application/json" data-fixtures>${data}</script>${NETWORK}${server}${DRIVER}
 <script>${arm.script}</script>`
 
     // RELOAD, not replay and not reset. The frame re-runs the arm from nothing, which is what
@@ -537,7 +651,8 @@ body { margin:0; padding:1.5rem; background:var(--paper); color:var(--ink);
     // `loading="lazy"` was here and did NOTHING, which is worth stating so it does not
     // come back: the attribute defers a FETCH, and a srcdoc frame has no fetch to defer.
     // Measured 2642px below the fold with the attribute set and the frame's own script
-    // already run. So a section overview renders every example it carries, at load.
+    // already run. What the page does instead is restart the arm on first intersection,
+    // which is in `buildDocs.ts` because only the parent can see where the frame is.
     return `<div class="ex-browser">
 <p class="ex-live">Live</p>
 <iframe class="ex-result" title="The rendered output of ${escapeHtml(route)}" sandbox="allow-scripts" srcdoc="${escapeHtml(html)}"></iframe>
@@ -562,30 +677,50 @@ export type Example = { name: string; html: string }
 // classic scripts beside it run, and the arm simply never starts — a render that looks like a
 // slow load. The wrapper is `async` rather than bare because `patch-a-list` awaits at the top
 // level, which is legal in a module and is what an IIFE build refuses outright.
-async function readArm(name: string): Promise<{ markup: string; script: string }> {
-    const folder = new URL(`${name}/vanilla/`, EXAMPLES_DIR)
-    const page = Bun.file(new URL('index.html', folder))
-    if (!(await page.exists())) throw new Error(`example ${name}: vanilla/index.html is missing`)
-    const markup = await page.text()
-    const entry = /<script[^>]*src="\.\/([^"]+)"[^>]*><\/script>/.exec(markup)
-    // An arm with no script at all is legitimate: `app-stylesheet` is about what the cascade
-    // does, and its markup is the whole of it.
-    if (!entry?.[1]) return { markup: markup.trimEnd(), script: '' }
-
+async function bundled(
+    name: string,
+    folder: URL,
+    file: string,
+): Promise<string> {
     const built = await Bun.build({
-        entrypoints: [new URL(entry[1], folder).pathname],
+        entrypoints: [new URL(file, folder).pathname],
         target: 'browser',
         format: 'esm',
     })
-    if (!built.success) throw new Error(`example ${name}: vanilla/${entry[1]} did not build`)
+    if (!built.success)
+        throw new Error(`example ${name}: vanilla/${file} did not build`)
     const [output] = built.outputs
-    if (!output) throw new Error(`example ${name}: vanilla/${entry[1]} produced nothing`)
+    if (!output)
+        throw new Error(`example ${name}: vanilla/${file} produced nothing`)
     const bundle = await output.text()
     if (/^\s*(import|export)\b/m.test(bundle))
-        throw new Error(`example ${name}: vanilla/${entry[1]} bundles to a module, not a script`)
+        throw new Error(
+            `example ${name}: vanilla/${file} bundles to a module, not a script`,
+        )
+    return `;(async () => {\n${bundle}\n})()`
+}
+
+async function readArm(
+    name: string,
+    served?: string,
+): Promise<{ markup: string; script: string; server: string }> {
+    const folder = new URL(`${name}/vanilla/`, EXAMPLES_DIR)
+    const page = Bun.file(new URL('index.html', folder))
+    if (!(await page.exists()))
+        throw new Error(`example ${name}: vanilla/index.html is missing`)
+    const markup = await page.text()
+    // Built the same way as the page's own script and emitted before it, so the route map is
+    // captured by the time the arm makes its first request.
+    const server = served ? await bundled(name, folder, served) : ''
+    const entry = /<script[^>]*src="\.\/([^"]+)"[^>]*><\/script>/.exec(markup)
+    // An arm with no script at all is legitimate: `app-stylesheet` is about what the cascade
+    // does, and its markup is the whole of it.
+    if (!entry?.[1]) return { markup: markup.trimEnd(), script: '', server }
+
     return {
         markup: markup.replace(entry[0], '').trimEnd(),
-        script: `;(async () => {\n${bundle}\n})()`,
+        script: await bundled(name, folder, entry[1]),
+        server,
     }
 }
 
@@ -618,7 +753,9 @@ export function fixturesOf(entries: NonNullable<Manifest['wire']>): Fixture[] {
     const fixtures: Fixture[] = []
     for (const entry of entries) {
         const address = entry.request.split(' ')[1] ?? entry.request
-        const query = new URLSearchParams(address.slice(address.indexOf('?') + 1))
+        const query = new URLSearchParams(
+            address.slice(address.indexOf('?') + 1),
+        )
         const args: [string, string][] = []
         if (address.includes('?')) for (const pair of query) args.push(pair)
         fixtures.push({
@@ -629,30 +766,42 @@ export function fixturesOf(entries: NonNullable<Manifest['wire']>): Fixture[] {
             status: Number.parseInt(entry.status, 10) || 200,
             headers: entry.responseHeaders,
             body: entry.body,
-            latency: LATENCY,
-            streamed: (entry.responseHeaders['content-type'] ?? '').includes('ndjson'),
+            latency: entry.latency ?? LATENCY,
+            streamed: (entry.responseHeaders['content-type'] ?? '').includes(
+                'ndjson',
+            ),
         })
     }
     return fixtures
 }
 
-export async function readExample(name: string, root: string): Promise<Example> {
-    const manifest: Manifest = await Bun.file(new URL(`${name}/example.json`, EXAMPLES_DIR)).json()
+export async function readExample(
+    name: string,
+    root: string,
+): Promise<Example> {
+    const manifest: Manifest = await Bun.file(
+        new URL(`${name}/example.json`, EXAMPLES_DIR),
+    ).json()
     const sourcePaths = orderedFiles(manifest.files, manifest.about ?? 'ui')
     const files = await readGroup(name, 'files', sourcePaths)
-    const arm = await readArm(name)
+    const arm = await readArm(name, manifest.served)
     const fixtures = fixturesOf(manifest.wire ?? [])
     checkFixtures(name, fixtures)
-    checkRequests(name, arm.script, fixtures)
+    checkRequests(name, arm.script, fixtures, manifest.served)
     const appCss = await Bun.file(APP_STYLESHEET).text()
 
     // THE RENDER IS NOT A PANEL. It is the thing the example IS, so it sits above the
     // tabs and stays there — what the tabs hold is everything you consult ABOUT it.
     const render = renderResult(arm, fixtures, manifest.route, appCss)
-    const panels: [string, string, string][] = [['files', 'Files', renderFileGroup(files, 'files')]]
-    if (manifest.wire?.length) panels.push(['wire', 'Requests', renderWire(manifest.wire)])
-    if (manifest.bench) panels.push(['bench', 'Bench', renderBench(manifest.bench)])
-    if (manifest.tests) panels.push(['tests', 'Tests', renderTests(manifest.tests)])
+    const panels: [string, string, string][] = [
+        ['files', 'Files', renderFileGroup(files, 'files')],
+    ]
+    if (manifest.wire?.length)
+        panels.push(['wire', 'Requests', renderWire(manifest.wire)])
+    if (manifest.bench)
+        panels.push(['bench', 'Bench', renderBench(manifest.bench)])
+    if (manifest.tests)
+        panels.push(['tests', 'Tests', renderTests(manifest.tests)])
 
     let tabs = ''
     let bodies = ''
@@ -676,8 +825,13 @@ ${bodies}
 // TEXT instead of tabs. Files and wire only: `compiled`, `vanilla`, `bench` and `tests`
 // are claims ABOUT the framework rather than the answer to the page's problem, and they
 // ship in the zip this links to.
-export async function exampleMarkdown(name: string, root: string): Promise<string> {
-    const manifest: Manifest = await Bun.file(new URL(`${name}/example.json`, EXAMPLES_DIR)).json()
+export async function exampleMarkdown(
+    name: string,
+    root: string,
+): Promise<string> {
+    const manifest: Manifest = await Bun.file(
+        new URL(`${name}/example.json`, EXAMPLES_DIR),
+    ).json()
     const files = await readGroup(
         name,
         'files',

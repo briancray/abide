@@ -1,0 +1,22 @@
+{
+    "title": "A call hands back a `Reactive`, not a promise",
+    "summary": "An invoice and the reminder button that must not fire before it lands. Wait for the total, then press Reload.",
+    "app": "crm",
+    "files": ["src/server/rpc/invoices.ts", "src/ui/components/Invoice.abide"],
+    "route": "/invoices/4021",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/invoices/getInvoice?id=4021",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"total\": \"$82.40\"\n}",
+            "latency": 700
+        }
+    ]
+}

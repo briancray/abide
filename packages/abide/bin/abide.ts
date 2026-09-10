@@ -12,12 +12,16 @@ const USAGE = `abide <command>
 `
 
 async function build(root: string): Promise<number> {
-    const sources = [...new Bun.Glob('**/*.abide').scanSync({ cwd: root, absolute: true })]
+    const sources = [
+        ...new Bun.Glob('**/*.abide').scanSync({ cwd: root, absolute: true }),
+    ]
     if (sources.length === 0) {
         console.log(`abide build: no .abide sources under ${root}`)
         return 0
     }
-    throw new Error(`abide build: ${sources.length} source(s) found, compiler not implemented`)
+    throw new Error(
+        `abide build: ${sources.length} source(s) found, compiler not implemented`,
+    )
 }
 
 async function main(argv: string[]): Promise<number> {

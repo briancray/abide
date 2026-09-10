@@ -1,0 +1,7 @@
+{
+    "title": "`bind:group` — one value for radios, an array for checkboxes",
+    "summary": "A contact's tier and the regions they cover. Change the tier, then tick and untick a region.",
+    "app": "crm",
+    "files": ["src/ui/components/Assign.abide"],
+    "route": "/contacts/42/edit"
+}

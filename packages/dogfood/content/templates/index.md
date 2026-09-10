@@ -4,9 +4,9 @@ nav: Overview
 intent: Reading a value by name in markup, and the four spellings you use every day.
 ---
 
-Inside a `.abide` file you read a `Reactive` **by name**. The explicit form is what a `.ts`
-file writes, and it keeps compiling in a `.abide` script too — the sugar is over it rather
-than instead of it.
+Inside a `.abide` file you read a `Reactive` **by name**. A `.ts` file writes the explicit form
+out, and that form keeps compiling in a `.abide` script too — the sugar is over it rather than
+instead of it.
 
 | In markup | In .ts | Gives you |
 | --- | --- | --- |

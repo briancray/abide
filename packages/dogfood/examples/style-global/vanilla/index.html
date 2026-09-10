@@ -1,0 +1,14 @@
+<style>
+/* THE SCOPED RULE AND THE ESCAPE, TOLD APART BY HAND. One carries
+   the component's name and one does not, and which is which is a
+   convention a reader has to already know rather than something
+   the selector says. */
+.legend-badge { color: rgb(163, 58, 58); }
+.invoice-legend { color: rgb(93, 108, 102); }
+</style>
+
+<div class="row">
+    <span class="legend-badge" id="badge">Overdue</span>
+    <p class="invoice-legend" id="legend">past its due date</p>
+</div>
+<script type="module" src="./legend.js"></script>

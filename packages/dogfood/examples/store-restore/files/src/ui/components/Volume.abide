@@ -1,0 +1,16 @@
+<script>
+import { state } from 'abide'
+import { settingsStore } from '#shared/settingsStore'
+
+// One option. The read and the write below are untouched.
+let volume = state(4, { store: settingsStore<number>('volume') })
+</script>
+
+<ul class="grid">
+    <li><span>volume</span>
+        <div class="stepper">
+            <button onclick={() => (volume -= 1)}>−</button>
+            <strong>{volume}</strong>
+            <button onclick={() => (volume += 1)}>+</button>
+        </div></li>
+</ul>

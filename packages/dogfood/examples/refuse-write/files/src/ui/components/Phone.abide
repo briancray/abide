@@ -1,0 +1,31 @@
+<script>
+import { state } from 'abide'
+import { notAPhone } from '#shared/failures'
+
+let draft = state('415 555 0132')
+
+let phone = state('415 555 0132', {
+    transform: (typed) => {
+        const digits = typed.replaceAll(/\D/g, '')
+        if (digits.length !== 10) return notAPhone({ typed })
+        const area = digits.slice(0, 3)
+        return `(${area}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+    },
+})
+</script>
+
+<div class="row">
+    <label>phone
+        <input bind:value={draft}>
+    </label>
+    <button onclick={() => { phone = draft }}>Save</button>
+</div>
+
+{#if phone.isError(phone.error(), 'NotAPhone')}
+    <p class="status">“{phone.error().data.typed}” is not ten digits.</p>
+{/if}
+
+<ul class="fields">
+    <li><span>on the record</span>
+        <strong>{phone}</strong></li>
+</ul>

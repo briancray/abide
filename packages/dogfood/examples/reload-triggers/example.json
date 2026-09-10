@@ -1,0 +1,22 @@
+{
+    "title": "`invalidate()` marks stale; `refresh()` reloads now",
+    "summary": "A shelf count with both triggers under it. Press Mark stale and watch nothing happen, then press Reload now.",
+    "app": "dashboard",
+    "files": ["src/server/rpc/stock.ts", "src/ui/components/Level.abide"],
+    "route": "/stock/east/A-70",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/stock/getStock?sku=A-70&warehouse=east",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"onHand\": 128,\n    \"counted\": \"{{hits}}\"\n}",
+            "latency": 600
+        }
+    ]
+}

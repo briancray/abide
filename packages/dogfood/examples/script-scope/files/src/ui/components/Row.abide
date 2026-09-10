@@ -1,0 +1,18 @@
+<script module>
+// Once for the module, however many rows there are.
+let opened = 0
+</script>
+
+<script>
+import { props, state } from 'abide'
+
+const { name } = props<{ name: string }>()
+
+opened += 1
+
+let calls = state(0)
+</script>
+
+<li><span>{name}</span>
+    <strong>{calls} calls · row {opened}</strong>
+    <button onclick={() => { calls += 1 }}>Log a call</button></li>

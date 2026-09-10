@@ -1,0 +1,7 @@
+{
+    "title": "`{#switch expr}` — one branch, and only one",
+    "summary": "An invoice's status. Move it through the four and watch what the page holds.",
+    "app": "crm",
+    "files": ["src/ui/components/Invoice.abide"],
+    "route": "/invoices/4310"
+}

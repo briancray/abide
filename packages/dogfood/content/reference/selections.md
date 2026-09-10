@@ -41,14 +41,14 @@ to hand back.
 One signal is held per selection, never one per entry, so a page-level spinner over n entries
 reloading together wakes twice rather than 2n times.
 
-**Naming reaches anything; sweeping reaches producers.** A value named by hand is the app
-saying so about that one value, but a bare `invalidate()` matches only entries that have a
-producer — catching a `state(0)` would be silent data loss.
+**An explicit argument reaches anything; a bare sweep reaches producers.** Passing a `Reactive`
+is a deliberate act about that one value, but a bare `invalidate()` matches only entries that
+have a producer — catching a `state(0)` would be silent data loss.
 
 `invalidate` is lazy and `refresh` is eager, and at this width the eager one is bounded by what
 is subscribed. An `invalidate()` over two hundred entries drops two hundred caches and loads
-none, where a `refresh()` reloads only what something is reading and marks the rest. That is
-what makes `refresh()` the reconnect default.
+none, where a `refresh()` reloads only what something is reading and marks the rest. That makes
+`refresh()` the reconnect default.
 
 A selection is scope-bounded as a memo is, and a tag with it, so one request can never
 invalidate another's. The `global` entries are the exception on a server: a bare `invalidate()`

@@ -1,0 +1,7 @@
+{
+    "title": "`log.channel` and `DEBUG` — one channel on, one off",
+    "summary": "A CRM's own log. Send an invoice, then press Poll — only one of them has a channel that is on.",
+    "app": "crm",
+    "files": ["src/ui/components/Console.abide"],
+    "route": "/admin/logs"
+}

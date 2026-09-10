@@ -1,0 +1,7 @@
+{
+    "title": "`() => Disposer` — each rerun tears down the one before it",
+    "summary": "Notes on a contact, saved a beat after you stop typing. Type a few characters quickly and watch the saved line.",
+    "app": "crm",
+    "files": ["src/ui/components/Autosave.abide"],
+    "route": "/contacts/42"
+}

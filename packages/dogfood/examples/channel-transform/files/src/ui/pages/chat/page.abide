@@ -1,0 +1,35 @@
+<script>
+import { state } from 'abide'
+import { turns } from '#shared/conversations'
+import { tooLong } from '#shared/failures'
+
+const room = turns({ conversation: 'onboarding' })
+let refusal = state('')
+let draft = state(
+    'Walk me through rotating an API key, revoking the old one, and ' +
+        'updating each of the three services that still hold it today.',
+)
+
+function send() {
+    const answer = room.publish({ speaker: 'you', text: draft })
+    if (!tooLong.is(answer)) {
+        refusal = ''
+        return
+    }
+    refusal = `${answer.name} at ${answer.data.length} characters`
+}
+</script>
+
+<ul class="fields stacked">
+    <li><span>last sent</span>
+        <strong>{room.pending() ? 'nothing sent yet' : room.text}</strong>
+    </li>
+</ul>
+
+<div class="row">
+    <label>message
+        <input bind:value={draft}>
+    </label>
+    <button onclick={send}>Send</button>
+</div>
+<p class="status">{refusal}</p>

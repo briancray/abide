@@ -14,6 +14,10 @@ covers:
   - `validateJson`
   - `JsonSchema`
   - channel › `schema`
+examples:
+  - packages/dogfood/examples/schema-browser
+  - packages/dogfood/examples/schema-issues
+  - packages/dogfood/examples/schema-key
 ---
 
 A handler's arguments are a shape written down twice in most stacks: once as a TypeScript type
@@ -22,16 +26,8 @@ drift between them is silent.
 
 Here the annotation you already wrote **is** the schema. `GET(({ id }: { id: number }) => …)`
 builds the runtime schema for `{ id: number }`, and a caller sending `{ id: "abc" }` gets a 422
-before the handler runs.
-
-```ts #server/rpc/invoices.ts
-export const searchInvoices = GET(
-    ({ query, limit = 20 }: { query: string; limit?: number }) =>
-        database.invoice.search(query, limit),
-)
-```
-
-*1 file, 0 validators* — `query` is required, `limit` is optional and publishes `default: 20`.
+before the handler runs. Where that derivation is not enough, one option pins the shape, at the
+producer rather than at the address.
 
 ## A derived schema reads `required` off the syntax
 
@@ -79,7 +75,7 @@ that second one has no validation in it at all. So the **option name** is the di
 function in `schema` refuses by throwing, a function in `transform` refuses by returning a
 `Failed`, and neither has to be told from the other.
 
-**What "input" means is what the producer consumes**, which is one rule read three ways. A state
+**"Input" means what the producer consumes**, which is one rule read three ways. A state
 and a channel consume a value, so `schema` checks that value. A memo consumes **args** — its body
 takes them — so `schema` on a memo is the argument shape, re-declared over `Args` in
 `MemoOptions`. An unkeyed memo, consuming nothing, cannot spell it at all: a compile error naming
@@ -97,21 +93,20 @@ Not "on the server" — **where the `Reactive` is declared**. One in `#ui` check
 one in `#server` checks on the server, one in `#shared` checks wherever it was used. That is the
 seams doing their job rather than a rule of validation's own.
 
-```abide #ui/pages/account/page.abide — excerpt
-const email = state('', { schema: z.string().email() })
-```
+{% example schema-browser %}
 
-That one runs in the browser on every keystroke, and a refused write fills `error()` rather than
-throwing:
+*1 option, 0 validators* — the arm spells the shape a second time, in a form nothing compares
+against the annotation it came from.
 
-```abide #ui/pages/account/page.abide — excerpt
-<input bind:value={email}>
-{#if email.error()}<span>{email.error().data[0]}</span>{/if}
-```
+A refused write fills `error()` rather than throwing, and stores nothing — so the field keeps
+what was typed while the record keeps what it had. On a primitive the issues are a bare
+`string[]`, there being no path to key them under.
 
 An rpc's handler is a memo in `#server`, so a browser calling it through the generated wrapper
-cannot pre-check. Not an exception — that is just where the memo is. Want the same shape checked
-on both sides and you put it in `#shared` and declare it twice, deliberately.
+cannot pre-check — the wrapper carries a method, an address and a description, and nothing else.
+Not an exception; that is where the memo is. Want the same shape checked on both sides and you put
+it in `#shared` and declare it twice — the one duplication this design asks for, and it asks for
+it deliberately.
 
 ## There is no `schemas` on `GET` or `POST`
 
@@ -119,8 +114,8 @@ A shape is a fact about the **value**, the way `ttl` and `tail` are, so it rides
 that was passed and `RpcOptions` is left describing an address — `description`, `middleware`,
 `timeout`, `crossOrigin`, `maxBodySize`.
 
-What that buys you: `GET(getInvoice)` and `POST(getInvoice)` state the shape once between them,
-and an in-process caller gets the check a wire caller gets. A schema declared at the transport
+So `GET(getInvoice)` and `POST(getInvoice)` state the shape once between them, and an in-process
+caller gets the check a wire caller gets. A schema declared at the transport
 is one that **skips itself** every other way the handler is reached — composed inside another
 memo, imported by a second server module — so the shape would hold for your untrusted callers
 and not for your own code.
@@ -144,7 +139,7 @@ as the value is the silent version of a refusal.
 | `StandardSchemaV1<T>` | the interop spec zod, valibot and arktype all answer to |
 | `JsonSchema` | a JSON Schema document — the **native** form |
 
-`JsonSchema` is what a handler means, and the only form publishable to a tool definition or an
+A handler means `JsonSchema`, and it is the only form publishable to a tool definition or an
 OpenAPI operation. `validateJson(schema, value)` is the native validator, handing back `null`
 when the value matches and `Issues<T>` when it does not.
 
@@ -157,15 +152,9 @@ type Issues<T> = T extends object
 ```
 
 A record on a composite, a bare list on a primitive — because the reader always has the path in
-hand. A form renders a field's messages with a lookup:
+hand.
 
-```abide #ui/pages/invoices/new/page.abide — excerpt
-{#if created.isError(created.error(), 'ValidationError')}
-    {#for message of created.error().data['lines.0.qty'] ?? []}
-        <li>{message}</li>
-    {/for}
-{/if}
-```
+{% example schema-issues %}
 
 A flat list would cost a `find` **per field per render** — twenty scans on a twenty-field form.
 It is `string[]` and not `string` because one field fails two ways at once, too short *and*
@@ -242,29 +231,12 @@ shape rather than being an untyped string index — a typo in `'lines.0.qty'` is
 
 Read on: [Failures](refuse-a-request-and-say-why.md)
 
-## A handler's schema is server-side because the handler is
+## A schema normalises the value; it does not decide the key
 
-A memo in `#server` may build its `schema` out of server imports, and the browser has no copy to
-run either way — what it gets is a generated wrapper carrying a method, an address and a
-description, and nothing else.
+{% example schema-key %}
 
-That is not a rule about validation. It is where that memo lives. A `schema` on a state you
-declared in `#ui` or `#shared` is already running in the browser on every keystroke. Want a
-handler's shape checked on both sides and you put it in `#shared` and declare it in both places
-— the one duplication this design asks for, and it asks for it deliberately.
-
-## A schema refuses; it does not decide the key
-
-A memo's entry is filed under the arguments **as sent**, and `args` runs after. So a
-normalisation in it changes what the body sees and never which entry it is:
-
-```ts #server/rpc/invoices.ts — excerpt
-// `ABC-123` and `abc-123` are TWO entries and two loads.
-const invoice = memo(
-    (args: { id: string }) => database.invoice.find(args.id),
-    { schema: z.object({ id: z.string().toLowerCase() }) },
-)
-```
+A memo's entry is filed under the arguments **as sent**, and the schema runs after. So a
+normalisation in it changes what the body sees and never which entry it is.
 
 The order is forced rather than chosen. A browser has to compute the same key the server does in
 order to find its seeded value, and it cannot run a schema it was never sent. So the key is
@@ -285,8 +257,8 @@ being `Message` here:
 export const thread = channel({ schema: messageSchema })
 ```
 
-It runs on **every** publish, the app's own included, because what a valid message is is not a
-question about who is asking. So the `socket` declares who may connect and whether a frame may
+It runs on **every** publish, the app's own included, because validity is not a question about who
+is asking. So the `socket` declares who may connect and whether a frame may
 publish at all, and nothing about what a frame contains.
 
 But a channel also has a **room key**, and that is where it parts company with a memo. A memo's
@@ -302,7 +274,7 @@ export const thread = channel<Post, { id: string }>({
 
 Two positions, so two options, and this is the only producer with both. Both are derived from
 the type when not provided, the same way a handler's are, and a room key is checked but never
-normalised — see above.
+normalised: two spellings of one key are two rooms.
 
 Read on: [Sockets](keep-a-room-of-callers-in-sync.md)
 

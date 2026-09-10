@@ -1,0 +1,7 @@
+{
+    "title": "`{expr}` and `{raw(expr)}` — escaped, and not",
+    "summary": "A note imported with markup in it. Type a tag into the field and watch the two rows disagree.",
+    "app": "crm",
+    "files": ["src/ui/components/Note.abide"],
+    "route": "/contacts/1/notes"
+}

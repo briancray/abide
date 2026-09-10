@@ -5,52 +5,51 @@ intent: Write, and have a double-click be one write rather than two.
 covers:
   - `POST` / `PUT` / `PATCH` / `DELETE`
   - `server/rpc/admin/audit.ts`
+examples:
+  - packages/dogfood/examples/write-coalesced
 ---
 
 A read is safe to repeat. A write is not — and a browser repeats one for you: a double-click,
-an impatient tap on a slow connection, a form submitted twice.
+an impatient tap on a slow connection, a form submitted twice. Declare the handler with the
+method that says what it does, and the declaration handles the repeat rather than a flag you
+remember to set.
 
-Declare the handler with the method that says what it does. The repeat is handled by the
-declaration rather than by a flag you remember to set.
+## The four methods
 
-```ts #server/rpc/invoices.ts
-import { POST } from 'abide'
-import { database } from '#server/database'
+| You write | What you get |
+| --- | --- |
+| `POST(handler, options?)` | a mutation, arguments in the request body |
+| `PUT(handler, options?)` | the same, for a replacement |
+| `PATCH(handler, options?)` | the same, for a partial change |
+| `DELETE(handler, options?)` | a mutation whose arguments travel in the URL |
 
-export const payInvoice = POST(
-    ({ id }: { id: string }) => database.invoice.pay(id),
-    { description: 'Mark one invoice paid.' },
-)
-```
+Each takes exactly what [`GET`](read-data-without-writing-an-api.md) takes — a memo, a channel,
+or a plain function that becomes one — mounts at the same file-path address, and accepts the
+same options. The method is the whole per-method difference, and what it changes is retention,
+how the arguments travel, and whether a browser may cache the answer. Every signature is in the
+[Transports](../reference/transports.md) reference.
 
-```abide #ui/pages/invoices/[id]/page.abide — excerpt
-<button onclick={() => payInvoice({ id: route.params.id })}>Pay</button>
-```
+## Two presses inside one flight are one write
 
-*2 files, 0 in-flight flag* — two clicks inside one flight are one write, and the second
-click gets the first one's answer.
+{% example write-coalesced %}
 
-## `POST`, `PUT`, `PATCH` and `DELETE` declare a write
+*2 files, 0 in-flight flag* — the arm keeps one entry because the card has one invoice, and a
+page with a list of them keeps a table keyed by the arguments.
 
-Each takes exactly what [`GET`](read-data-without-writing-an-api.md) takes — a memo, a
-channel, or a plain function that becomes one — and mounts at the same file-path address.
-The method is the whole per-method difference, and what it changes is retention.
-
-## A mutation retains nothing by default
-
-A memo handed to a mutation has its `ttl` **defaulted to 0** unless the memo named one. A
-`ttl` of 0 coalesces until the response closes and no longer:
+A memo handed to a mutation has its `ttl` **defaulted to 0** unless the memo named one. A `ttl`
+of 0 coalesces until the response closes and no longer:
 
 | | Result |
 | --- | --- |
-| two clicks inside one flight | one request, one write, both callers get that answer |
-| two clicks after the first closed | two requests, two writes |
+| two presses inside one flight | one request, one write, both callers get that answer |
+| two presses after the first closed | two requests, two writes |
 | three components calling in one render | one request |
 
-That is the window that wants sharing — the rest of what a `ttl` buys a read is exactly what
-a write must not have.
+That is the window that wants sharing — the rest of what a `ttl` buys a read is exactly what a
+write must not have.
 
-Read on: [Caching](../values/load-once-per-set-of-arguments.md)
+Read on: [Caching](../values/load-once-per-set-of-arguments.md) ·
+[Failures](refuse-a-request-and-say-why.md)
 
 ## A `ttl` on the memo caps a write to once per period
 
@@ -75,8 +74,7 @@ so much as a shape that never worked. `GET(user)` and `POST(user)` over one memo
 the second, a `POST` populating an entry the `GET`'s 60s keeps fresh serves the second click the
 first click's response, and **the write never happens**.
 
-The repair is what the shapes wanted anyway. A read memo and a write memo have different
-`Args`.
+The shapes wanted the repair anyway. A read memo and a write memo have different `Args`.
 
 ## Arguments travel in the body
 
@@ -126,8 +124,8 @@ Read on: [CORS](let-another-origin-call-you.md) · [Authorization](decide-who-ma
 ## A form posts to a handler without script
 
 `<form action={payInvoice.url} method="post">` posts to the address like any other caller.
-Where the request **prefers** `text/html` — which is what a browser form sends and what
-abide's own wrapper never sends — the answer is converted rather than serialized:
+Where the request **prefers** `text/html` — a browser form sends that and abide's own wrapper
+never does — the answer is converted rather than serialized:
 
 | The handler returned | The browser gets |
 | --- | --- |
@@ -147,12 +145,13 @@ Read on: [Form binding](../templates/bind-a-form-to-state.md) ·
 
 ## A `POST` answer is never browser-cached
 
-What the method decides is the **ceiling**. A `GET` answer can be made shareable by the
-handler's own `ResponseInit`; a `POST` answer cannot be, whatever it sets, no browser
-usefully caching one. Its only cache is ever the memo's `ttl`.
+The method decides the **ceiling**. A `GET` answer can be made shareable by the handler's own
+`ResponseInit`; a `POST` answer cannot be, whatever it sets, no browser usefully caching one. Its
+only cache is ever the memo's `ttl`.
 
 So a `POST` is a legitimate read — for a query too big for a URL — and it costs the browser
-cache to use one. Prefer `GET` where the arguments fit a URL, beyond what the methods mean.
+cache to use one. Prefer `GET` where the arguments fit a URL, for the cache on top of what the
+methods mean.
 
 Read on: [Response types](answer-with-something-other-than-json.md)
 

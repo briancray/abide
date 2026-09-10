@@ -1,0 +1,27 @@
+{
+    "title": "`POST(handler)` \u2014 a write the browser cannot repeat",
+    "summary": "An invoice being paid. Press Pay twice, quickly \u2014 one payment lands on the record, not two.",
+    "app": "crm",
+    "about": "server",
+    "files": [
+        "src/server/rpc/invoices.ts",
+        "src/ui/components/PayInvoice.abide"
+    ],
+    "route": "/invoices/4310",
+    "wire": [
+        {
+            "request": "POST /__abide/rpc/invoices/payInvoice",
+            "requestHeaders": {
+                "content-type": "application/json",
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"payments\": \"{{hits}}\"\n}",
+            "latency": 1500
+        }
+    ]
+}

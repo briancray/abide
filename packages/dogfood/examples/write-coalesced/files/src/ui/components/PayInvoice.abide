@@ -1,0 +1,17 @@
+<script>
+import { state } from 'abide'
+import { payInvoice } from '#server/rpc/invoices'
+
+let paid = state()
+</script>
+
+<div class="row">
+    <button onclick={() => { paid = payInvoice({ id: '4310' }) }}>Pay</button>
+</div>
+
+<p class="status">{paid.pending() ? 'paying…' : ''}</p>
+
+<ul class="fields">
+    <li><span>payments</span>
+        <strong>{paid.payments ?? '—'}</strong></li>
+</ul>

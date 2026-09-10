@@ -1,0 +1,61 @@
+{
+    "title": "`tags` — a selection that reaches across memos",
+    "summary": "Two regions, each with revenue and recent orders behind memos that never mention one another. Press one region's button and watch the other stand still.",
+    "app": "dashboard",
+    "files": [
+        "src/ui/pages/dashboard/page.abide",
+        "src/ui/components/Region.abide",
+        "src/server/rpc/metrics.ts"
+    ],
+    "route": "/dashboard",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/metrics/getTotals?region=north",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"revenue\": 48200,\n    \"computed\": \"{{hits}}\"\n}"
+        },
+        {
+            "request": "GET /__abide/rpc/metrics/getTotals?region=south",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"revenue\": 31400,\n    \"computed\": \"{{hits}}\"\n}"
+        },
+        {
+            "request": "GET /__abide/rpc/metrics/getOrders?region=north",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"count\": 37,\n    \"loaded\": \"{{hits}}\"\n}"
+        },
+        {
+            "request": "GET /__abide/rpc/metrics/getOrders?region=south",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"count\": 24,\n    \"loaded\": \"{{hits}}\"\n}"
+        }
+    ]
+}

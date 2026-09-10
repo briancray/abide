@@ -12,7 +12,8 @@ covers:
   - `server/rpc/users.ts`
   - `src/server/rpc/**/*.ts`
 examples:
-  - packages/dogfood/examples/read-invoice
+  - packages/dogfood/examples/rpc-call
+  - packages/dogfood/examples/rpc-reactive
 ---
 
 You have a database and a page that needs a row. Most stacks make that four artifacts: a
@@ -23,12 +24,13 @@ Here you write the handler.
 
 ## Anything under `#server/rpc` is callable
 
-Wrap it in `GET` and export it.
+{% example rpc-call %}
 
-{% example read-invoice %}
+*2 files, 0 API between them* — against a route, a fetch, a client wrapper and a type kept in
+step by hand.
 
-`GET` derives the argument and result schemas from the annotations you already wrote, and the
-address from the file path and export name:
+Wrap it in `GET` and export it. `GET` derives the argument and result schemas from the annotations
+you already wrote, and the address from the file path and export name:
 
 | File | Export | Answers at |
 | --- | --- | --- |
@@ -51,9 +53,6 @@ const invoice = memo(() => getInvoice({ id: route.params.id }))
 <h1>Invoice {invoice.number}</h1>
 <p>{invoice.total} due {invoice.dueOn}</p>
 ```
-
-*2 files, 0 API between them* — against a route, a fetch, a client wrapper and a type kept in
-step by hand.
 
 The import is real — name, argument type and return type are the ones you just wrote. No
 `fetch`, no loading boilerplate, no `await` in the markup.
@@ -79,20 +78,19 @@ that silently does nothing.
 
 ## You get a `Reactive`, not a promise
 
-`getInvoice({ id })` hands back the same `Reactive` that `state`, `memo` and `channel` do.
+{% example rpc-reactive %}
 
-```abide #ui/pages/invoices/[id]/page.abide — excerpt
-{#if invoice.pending()}
-    <p>Loading…</p>
-{:else if invoice.error()}
-    <p>Could not load that invoice.</p>
-{:else}
-    <p>{invoice.total} due {invoice.dueOn}</p>
-{/if}
-```
+`getInvoice({ id })` hands back the same `Reactive` that `state`, `memo` and `channel` do — so
+the probes and the triggers are on the **result** of the call, and a promise's one answer is not
+what a button waiting on it needs.
 
-So `refreshing()` tells a reload from a first load, `invoice.settled()` waits, `invoice.refresh()`
-reloads. See [Loading states](../values/show-a-value-that-isnt-there-yet.md).
+`refreshing()` tells a reload from a first load, `await invoice` waits, and
+`invoice.refresh()` reloads — which is why the reminder button above stays live across the second
+load and only goes back to disabled when there is genuinely nothing held. The hand-written arm
+tracks two variables of its own to say the same thing, because a promise answers once and
+everything after that is the caller's to remember.
+
+See [Loading states](../values/show-a-value-that-isnt-there-yet.md).
 
 ## Two callers asking for one invoice are one request
 
@@ -122,8 +120,8 @@ export const getInvoice = GET(invoiceById, {
 
 So there is no un-memoized endpoint to reason about.
 
-Fill in `description`. It rides onto every surface the handler generates, and it is what an
-agent reads to decide whether this is the call it wants.
+Fill in `description`. It rides onto every surface the handler generates, and an agent reads it to
+decide whether this is the call it wants.
 
 ## A `GET` must not write
 

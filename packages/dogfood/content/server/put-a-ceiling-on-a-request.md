@@ -7,22 +7,27 @@ covers:
   - `maxBodySize`
   - `ABIDE_RPC_TIMEOUT`
   - `ABIDE_MAX_REQUEST_BODY_SIZE`
+examples:
+  - packages/dogfood/examples/timeout-per-chunk
 ---
 
 An upload endpoint with no ceiling will one day be handed a four-gigabyte file. A report that
 usually takes two seconds will one day take four hundred, holding a connection the whole time.
 
-Both are one option each, on the handler that has the exposure.
+Both are one option each, on the handler that has the exposure — `maxBodySize` in bytes and
+`timeout` in milliseconds. The ceiling lives beside the handler it is about, so moving the
+handler moves it, and there is no reverse-proxy rule to keep in step with either.
 
-```ts #server/rpc/imports.ts
-export const importLedger = POST(ingest, {
-    maxBodySize: 8 * 1024 * 1024,
-    timeout: 30_000,
-})
-```
+## The two ceilings
 
-*2 lines, 0 reverse-proxy rules* — and the ceiling lives beside the handler it is about, so
-moving the handler moves it.
+| You write | What it bounds |
+| --- | --- |
+| `maxBodySize: 8 * 1024 * 1024` | bytes of a mutation's body, refused at `413` |
+| `timeout: 30_000` | milliseconds a call may go without progress, refused at `504` |
+
+Both sit in `RpcOptions`, beside `description`, `middleware` and `crossOrigin`, and both are
+about the address rather than the value — which is what keeps them off the memo. Every
+signature is in the [Transports](../reference/transports.md) reference.
 
 ## `maxBodySize` is checked before buffering
 
@@ -38,8 +43,13 @@ Read on: [Mutations](change-something-on-the-server.md)
 
 ## `timeout` is milliseconds without progress
 
-Not wall-clock from the first byte. On a handler that yields, it is **per chunk**, which is what
-makes one number right for both shapes. A report that produces a row every second runs for an
+{% example timeout-per-chunk %}
+
+*1 option, 0 timers* — the arm keeps its own and has to reset it on every chunk, which is the
+line between a bound on progress and a bound on the report.
+
+Not wall-clock from the first byte. On a handler that yields, it is **per chunk**, which makes one
+number right for both shapes. A report that produces a row every second runs for an
 hour under `timeout: 30_000`, and the same number still catches a source that has stopped
 producing.
 
@@ -90,8 +100,8 @@ Read on: [Caching](../values/load-once-per-set-of-arguments.md)
 
 ## Neither ceiling is a rate limit
 
-Neither option is a rate limit, and abide ships none. A caller making ten thousand well-formed,
-fast, small requests passes both ceilings — that is a rung, and middleware is where it goes.
+abide ships none either. A caller making ten thousand well-formed, fast, small requests passes
+both ceilings — that is a rung, and middleware is where it goes.
 
 Read on: [Authorization](decide-who-may-call-what.md)
 

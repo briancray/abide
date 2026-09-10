@@ -1,0 +1,7 @@
+{
+    "title": "`bind:value` — the field and the state are one copy",
+    "summary": "A contact's email and plan, with the line underneath showing what a save would send. Type into the field.",
+    "app": "crm",
+    "files": ["src/ui/components/Contact.abide"],
+    "route": "/contacts/42/edit"
+}

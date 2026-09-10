@@ -1,5 +1,10 @@
 import { expect, test } from 'bun:test'
-import { readPages, renderBundle, renderPage, renderPageMarkdown } from '../scripts/buildDocs.ts'
+import {
+    readPages,
+    renderBundle,
+    renderPage,
+    renderPageMarkdown,
+} from '../scripts/buildDocs.ts'
 
 async function markdownPages() {
     const pages = await readPages()
@@ -18,7 +23,8 @@ test('no page ships an unexpanded directive', async () => {
     const { pages, rendered } = await markdownPages()
     const leftovers: string[] = []
     for (let index = 0; index < pages.length; index += 1) {
-        if (rendered[index]?.includes('{%')) leftovers.push(pages[index]?.slug ?? '')
+        if (rendered[index]?.includes('{%'))
+            leftovers.push(pages[index]?.slug ?? '')
     }
     expect(leftovers).toEqual([])
 })
@@ -54,13 +60,21 @@ test('every internal link names a markdown page that exists', async () => {
     for (let index = 0; index < pages.length; index += 1) {
         const page = pages[index]
         if (!page) continue
-        for (const match of (rendered[index] ?? '').matchAll(/\]\((?!https?:|#)([^)]+)\)/g)) {
+        for (const match of (rendered[index] ?? '').matchAll(
+            /\]\((?!https?:|#)([^)]+)\)/g,
+        )) {
             const target = match[1] ?? ''
             if (target.endsWith('.zip')) continue
             // Resolved against the page's own directory, which is what a reader who
             // downloaded the tree has.
-            const resolved = new URL(target, `file:///${page.slug}`).pathname.slice(1)
-            if (!resolved.endsWith('.md') || !slugs.has(resolved.slice(0, -'.md'.length)))
+            const resolved = new URL(
+                target,
+                `file:///${page.slug}`,
+            ).pathname.slice(1)
+            if (
+                !resolved.endsWith('.md') ||
+                !slugs.has(resolved.slice(0, -'.md'.length))
+            )
                 broken.push(`${page.slug}: ${target}`)
         }
     }
@@ -72,20 +86,24 @@ test('every internal link names a markdown page that exists', async () => {
 test('an embedded example brings its files into the markdown', async () => {
     const pages = await readPages()
     const page = pages.find(
-        (candidate) => candidate.slug === 'server/read-data-without-writing-an-api',
+        (candidate) =>
+            candidate.slug === 'server/read-data-without-writing-an-api',
     )
     const markdown = await renderPageMarkdown(page!, pages)
     expect(markdown).toContain('```ts #server/rpc/invoices.ts')
     expect(markdown).toContain('```abide #ui/pages/invoices/[id]/page.abide')
-    expect(markdown).toContain('[read-invoice.zip](../examples/read-invoice.zip)')
+    expect(markdown).toContain('[rpc-call.zip](../examples/rpc-call.zip)')
 })
 
 test('the bundle carries every page, in nav order', async () => {
     const { pages, rendered } = await markdownPages()
     const bundle = renderBundle(pages, rendered)
-    const markers = [...bundle.matchAll(/^<!-- (.+)\.md -->$/gm)].map((match) => match[1])
+    const markers = [...bundle.matchAll(/^<!-- (.+)\.md -->$/gm)].map(
+        (match) => match[1],
+    )
     expect(markers).toEqual(pages.map((page) => page.slug))
-    for (const page of pages) expect(bundle).toContain(`- ${page.nav} — \`${page.slug}.md\``)
+    for (const page of pages)
+        expect(bundle).toContain(`- ${page.nav} — \`${page.slug}.md\``)
 })
 
 // The rail carries the downloads now, and it used to render only where there were two
@@ -100,10 +118,15 @@ test('every page offers its own markdown and the bundle', async () => {
         const html = await renderPage(page, pages, index)
         const name = page.slug.slice(page.slug.lastIndexOf('/') + 1)
         const root = '../'.repeat(page.slug.split('/').length - 1)
-        if (!html.includes(`<a href="${name}.md" download>`)) missing.push(`${page.slug}: page`)
+        if (!html.includes(`<a href="${name}.md" download>`))
+            missing.push(`${page.slug}: page`)
         if (!html.includes(`<a href="${root}abide.md" download>`))
             missing.push(`${page.slug}: bundle`)
-        if (!html.includes(`<link rel="alternate" type="text/markdown" href="${name}.md"`))
+        if (
+            !html.includes(
+                `<link rel="alternate" type="text/markdown" href="${name}.md"`,
+            )
+        )
             missing.push(`${page.slug}: alternate`)
     }
     expect(missing).toEqual([])
@@ -124,8 +147,14 @@ test('a rendered page links to html, and every link resolves', async () => {
         for (const match of main.matchAll(/href="(?!https?:|#)([^"]+)"/g)) {
             const target = match[1] ?? ''
             if (target.endsWith('.zip')) continue
-            const resolved = new URL(target, `file:///${page.slug}`).pathname.slice(1)
-            if (!resolved.endsWith('.html') || !slugs.has(resolved.slice(0, -'.html'.length)))
+            const resolved = new URL(
+                target,
+                `file:///${page.slug}`,
+            ).pathname.slice(1)
+            if (
+                !resolved.endsWith('.html') ||
+                !slugs.has(resolved.slice(0, -'.html'.length))
+            )
                 broken.push(`${page.slug}: ${target}`)
         }
     }
@@ -139,13 +168,17 @@ test('a rendered page links to html, and every link resolves', async () => {
 // reads. Both directions are asserted, because loosening the pattern breaks only one.
 test('a verdict cell is marked up, and a sentence that opens on one is not', async () => {
     const pages = await readPages()
-    const holds = pages.find((page) => page.slug === 'values/show-a-value-that-isnt-there-yet')
+    const holds = pages.find(
+        (page) => page.slug === 'values/show-a-value-that-isnt-there-yet',
+    )
     const rendered = await renderPage(holds!, pages, 0)
     expect(rendered).toContain('<b class="verdict-no">no</b>')
     expect(rendered).toContain('<b class="verdict-yes">yes</b>')
     expect(rendered).toContain('<span class="verdict-why"> — the pending body')
 
-    const failures = pages.find((page) => page.slug === 'server/refuse-a-request-and-say-why')
+    const failures = pages.find(
+        (page) => page.slug === 'server/refuse-a-request-and-say-why',
+    )
     const prose = await renderPage(failures!, pages, 0)
     expect(prose).toContain('<td>no route matched')
 })
@@ -203,10 +236,14 @@ test('a table row has as many cells as its header declares', async () => {
             const body = table[1] ?? ''
             const columns = (body.match(/<th>/g) ?? []).length
             if (!columns) continue
-            for (const row of body.matchAll(/<tr>((?:<td>[\s\S]*?<\/td>)+)<\/tr>/g)) {
+            for (const row of body.matchAll(
+                /<tr>((?:<td>[\s\S]*?<\/td>)+)<\/tr>/g,
+            )) {
                 const cells = (row[1]?.match(/<td>/g) ?? []).length
                 if (cells !== columns)
-                    ragged.push(`${page.slug}: ${cells} cells under ${columns} columns`)
+                    ragged.push(
+                        `${page.slug}: ${cells} cells under ${columns} columns`,
+                    )
             }
         }
     }
@@ -246,9 +283,16 @@ test('every code caption names a syntax or a file', async () => {
         const page = pages[index]
         if (!page) continue
         const html = await renderPage(page, pages, index)
-        for (const caption of html.matchAll(/<figcaption>([^<]*)<\/figcaption>/g)) {
+        for (const caption of html.matchAll(
+            /<figcaption>([^<]*)<\/figcaption>/g,
+        )) {
             const text = caption[1] ?? ''
-            if (text.startsWith('.') || text.startsWith('#') || text.startsWith('src/')) continue
+            if (
+                text.startsWith('.') ||
+                text.startsWith('#') ||
+                text.startsWith('src/')
+            )
+                continue
             vague.push(`${page.slug}: "${text}"`)
         }
     }

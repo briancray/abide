@@ -1,0 +1,21 @@
+<script>
+import { memo } from 'abide'
+import { bookOut, getStock } from '#server/rpc/stock'
+
+const east = memo(() => getStock({ warehouse: 'east', sku: 'A-70' }))
+const west = memo(() => getStock({ warehouse: 'west', sku: 'A-70' }))
+
+async function book() {
+    await bookOut({ warehouse: 'east', sku: 'A-70' })
+    // A slice of the args space, not a key and not the whole memo.
+    getStock.refresh({ warehouse: 'east' })
+}
+</script>
+
+<ul class="fields stacked">
+    <li><span>east on hand</span><strong>{east.onHand}</strong></li>
+    <li><span>east loads</span><strong>{east.loads}</strong></li>
+    <li><span>west loads</span><strong>{west.loads}</strong></li>
+</ul>
+
+<button onclick={book}>Book one out of east</button>

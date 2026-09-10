@@ -1,0 +1,26 @@
+<script>
+import { state } from 'abide'
+import { turns } from '#shared/conversations'
+
+const room = turns({ conversation: 'onboarding' })
+let draft = state('Resend me the key rotation steps.')
+let cursor = state(0)
+
+function send() {
+    cursor = room.publish({ speaker: 'you', text: draft })
+}
+</script>
+
+<ul class="fields stacked">
+    <li><span>resume from</span><strong>{cursor}</strong></li>
+    <li><span>last turn</span>
+        <strong>{room.pending() ? 'nothing sent yet' : room.text}</strong>
+    </li>
+</ul>
+
+<div class="row">
+    <label>message
+        <input bind:value={draft}>
+    </label>
+    <button onclick={send}>Send</button>
+</div>

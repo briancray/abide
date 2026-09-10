@@ -1,0 +1,7 @@
+{
+    "title": "`{#for row of rows by row.id}` — a reorder moves nodes",
+    "summary": "Three contacts. Swap the top two, then reverse the lot.",
+    "app": "crm",
+    "files": ["src/ui/components/Contacts.abide"],
+    "route": "/contacts"
+}

@@ -4,12 +4,12 @@ nav: Response types
 intent: A document, a redirect, a file — and the caching headers each one gets.
 covers:
   - `page`
-  - `json`
   - `redirect`
   - `RedirectStatus`
   - `x-content-type-options: nosniff`
   - `cache-control: no-store`
   - `cache-control: private, no-store`
+  - `cache-control: private, max-age=<ttl>`
   - `cache-control: public, max-age=31536000, immutable`
 ---
 
@@ -17,25 +17,22 @@ Most handlers return a value and never think about a `Response`. Some have to: a
 sets a cookie and sends the browser somewhere, an export that is a CSV, a preview that is a
 whole document.
 
-Return a `Response` instead of a value. The helpers build one, each taking a `ResponseInit`
-your own headers ride in.
+Return a `Response` instead of a value. The helpers build one, each taking a `ResponseInit` your
+own headers ride in, so a cookie and the navigation that follows it are the same return and
+there is no response middleware between them.
 
-```ts #server/rpc/session.ts
-import { POST, cookies, redirect } from 'abide'
+## The response helpers
 
-export const signIn = POST(
-    async ({ email, password }: { email: string; password: string }) => {
-        const user = await users.authenticate(email, password)
-        if (!user) return refuse(401)
-        cookies().set('abide-principal', await seal(user), {
-            httpOnly: true,
-        })
-        return redirect('/dashboard', 303)
-    },
-)
-```
+| You return | The caller gets |
+| --- | --- |
+| `page(values, init?)` | `text/html`, streamed as the render yields it |
+| `json(data, init?)` | the same serialization a bare return gets, with a status |
+| `redirect(to, status?, init?)` | a navigation, at one of five statuses |
+| `jsonl(values, init?)` / `sse(values, init?)` | a stream, framed two ways |
 
-*1 file, 0 response middleware* — the cookie and the navigation are the same return.
+All five take a `ResponseInit`, which is where a header or a `set-cookie` goes, and none of them
+does the work of producing what it sends — `page` takes what a render produced rather than
+rendering. Every signature is in the [Transports](../reference/transports.md) reference.
 
 ## The return type already decides a content type
 
@@ -103,8 +100,8 @@ export const previewInvoice = GET(async ({ id }: { id: string }) =>
 )
 ```
 
-`text/html`, streamed as the render yields it. `render` takes an optional shell, which is what
-makes an email body or an embed possible from the same component.
+`text/html`, streamed as the render yields it. `render` takes an optional shell, so an email body
+or an embed comes from the same component.
 
 Read on: [Manual rendering](../pages/render-a-document-yourself.md)
 
@@ -118,8 +115,8 @@ The status is restricted to those five, defaulting to `302`, so a typo is a comp
 than a browser quietly ignoring the header. The `init` is where a sign-in's cookie goes, as
 above.
 
-`303` is the one a mutation wants: it turns a `POST` into a `GET` at the destination, which is
-what stops a refresh re-submitting. A `POST` that returns a plain value to a form navigation
+`303` is the one a mutation wants: it turns a `POST` into a `GET` at the destination, which stops
+a refresh re-submitting. A `POST` that returns a plain value to a form navigation
 already gets a `303` back to the `Referer` without you writing one.
 
 Read on: [Mutations](change-something-on-the-server.md) ·
@@ -127,9 +124,8 @@ Read on: [Mutations](change-something-on-the-server.md) ·
 
 ## `nosniff` is on every response, unconditionally
 
-`x-content-type-options: nosniff` is on **everything**, unconditionally. Every abide response
-declares its own content type, so a browser guessing a different one is only ever the
-vulnerability — a JSON refusal sniffed as HTML is script running on your origin.
+Every abide response declares its own content type, so a browser guessing a different one is only
+ever the vulnerability — a JSON refusal sniffed as HTML is script running on your origin.
 
 It is spelled a second time on the asset route, which is served in front of the pipeline and
 never reaches the funnel.
@@ -146,10 +142,11 @@ helper takes a `ResponseInit`, so a handler that knows its answer is shareable o
 | `no-store` | `/__abide/health`, `/__abide/principal` | both describe this process or this caller at this moment. A cached health check is a load balancer being told a drained instance is fine |
 | `public, max-age=31536000, immutable` | the built bundle | a chunk is addressed by its own content hash, so it cannot go stale |
 
-What the method decides is the **ceiling** on that override. A `GET` answer can be made
-shareable; a `POST` answer cannot be, whatever it sets.
+The method decides the **ceiling** on that override: a `GET` answer can be made shareable and a
+`POST` answer cannot be, whatever it sets.
 
-Read on: [Health](../app/tell-a-load-balancer-you-are-healthy.md) ·
+Read on: [Mutations](change-something-on-the-server.md) ·
+[Health](../app/tell-a-load-balancer-you-are-healthy.md) ·
 [Build & start](../ship/build-and-serve-the-app.md)
 
 ## An app route answers with the same helpers

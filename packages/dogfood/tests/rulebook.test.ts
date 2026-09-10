@@ -46,7 +46,10 @@ function clauses(): { id: string; text: string }[] {
         // written before the withdrawal resolves to the withdrawal rather than to silence — but it
         // states no requirement and names nothing, so the checks over live clauses skip it.
         if (clause && !(clause[2] ?? '').startsWith('*Withdrawn'))
-            out.push({ id: clause[1] ?? '', text: (clause[2] ?? '').replace(/\n/g, ' ') })
+            out.push({
+                id: clause[1] ?? '',
+                text: (clause[2] ?? '').replace(/\n/g, ' '),
+            })
     }
     return out
 }
@@ -55,8 +58,14 @@ function clauses(): { id: string; text: string }[] {
 function withdrawn(): { id: string; text: string }[] {
     const out: { id: string; text: string }[] = []
     for (const paragraph of body(rulebook).split('\n\n')) {
-        const clause = /^(\d+\.\d+)\s+(\*Withdrawn[\s\S]*)$/.exec(paragraph.trim())
-        if (clause) out.push({ id: clause[1] ?? '', text: (clause[2] ?? '').replace(/\n/g, ' ') })
+        const clause = /^(\d+\.\d+)\s+(\*Withdrawn[\s\S]*)$/.exec(
+            paragraph.trim(),
+        )
+        if (clause)
+            out.push({
+                id: clause[1] ?? '',
+                text: (clause[2] ?? '').replace(/\n/g, ' '),
+            })
     }
     return out
 }
@@ -90,7 +99,8 @@ test('no registry row states a requirement', async () => {
     const offenders: string[] = []
     for (const { line, cells } of rows(registry)) {
         const meaning = cells[cells.length - 2] ?? ''
-        if (REQUIREMENT.test(meaning)) offenders.push(`REGISTRY.md:${line}: ${cells[0]}`)
+        if (REQUIREMENT.test(meaning))
+            offenders.push(`REGISTRY.md:${line}: ${cells[0]}`)
     }
     expect(offenders).toEqual([])
 })
@@ -101,8 +111,14 @@ test('no registry row states a requirement', async () => {
 test('a registry meaning is one sentence', async () => {
     const offenders: string[] = []
     for (const { line, cells } of rows(registry)) {
-        const meaning = (cells[cells.length - 2] ?? '').replace(/`[^`]*`/g, 'CODE')
-        if (meaning.split(/[.!?](?:\s|$)/).filter((part) => part.trim()).length > 1)
+        const meaning = (cells[cells.length - 2] ?? '').replace(
+            /`[^`]*`/g,
+            'CODE',
+        )
+        if (
+            meaning.split(/[.!?](?:\s|$)/).filter((part) => part.trim())
+                .length > 1
+        )
             offenders.push(`REGISTRY.md:${line}: ${cells[0]}`)
     }
     expect(offenders).toEqual([])
@@ -112,7 +128,8 @@ test('a registry meaning is one sentence', async () => {
 // function arrow is the one mark that cannot be anything else.
 test('no clause carries a signature', async () => {
     const offenders: string[] = []
-    for (const { id, text } of clauses()) if (text.includes('=>')) offenders.push(id)
+    for (const { id, text } of clauses())
+        if (text.includes('=>')) offenders.push(id)
     expect(offenders).toEqual([])
 })
 
@@ -124,7 +141,8 @@ test('every clause names something', async () => {
     const offenders: string[] = []
     for (const { id, text } of clauses()) {
         if (text.includes('`')) continue
-        if (TERMS.some((term) => new RegExp(`\\b${term}\\b`).test(text))) continue
+        if (TERMS.some((term) => new RegExp(`\\b${term}\\b`).test(text)))
+            continue
         offenders.push(id)
     }
     expect(offenders).toEqual([])
@@ -133,7 +151,8 @@ test('every clause names something', async () => {
 // RULEBOOK format rule 5. "because" is the tell for a reason, which belongs in a guide.
 test('no clause explains itself', async () => {
     const offenders: string[] = []
-    for (const { id, text } of clauses()) if (RATIONALE.test(text)) offenders.push(id)
+    for (const { id, text } of clauses())
+        if (RATIONALE.test(text)) offenders.push(id)
     expect(offenders).toEqual([])
 })
 
@@ -141,7 +160,8 @@ test('no clause explains itself', async () => {
 // as one — which is how a rulebook silently becomes prose again.
 test('every clause states a requirement', async () => {
     const offenders: string[] = []
-    for (const { id, text } of clauses()) if (!REQUIREMENT.test(text)) offenders.push(id)
+    for (const { id, text } of clauses())
+        if (!REQUIREMENT.test(text)) offenders.push(id)
     expect(offenders).toEqual([])
 })
 
@@ -164,7 +184,8 @@ test('every rule a registry row cites exists', async () => {
         const cited = cells[cells.length - 1] ?? ''
         if (cited === '—' || !cited) continue
         for (const id of cited.split(',')) {
-            if (!ids.has(id.trim())) dangling.push(`REGISTRY.md:${line}: ${id.trim()}`)
+            if (!ids.has(id.trim()))
+                dangling.push(`REGISTRY.md:${line}: ${id.trim()}`)
         }
     }
     expect(dangling).toEqual([])
@@ -179,7 +200,9 @@ test('every rule a registry row cites exists', async () => {
 // one buried in a test.
 function freeStanding(): Set<string> {
     const groups = new Set<string>()
-    for (const match of body(rulebook).matchAll(/^# (\d+)\.[^\n]*\n\n\*Free-standing:/gm)) {
+    for (const match of body(rulebook).matchAll(
+        /^# (\d+)\.[^\n]*\n\n\*Free-standing:/gm,
+    )) {
         groups.add(match[1] ?? '')
     }
     return groups
@@ -188,7 +211,8 @@ function freeStanding(): Set<string> {
 test('every clause is cited by a registry row', async () => {
     const cited = new Set<string>()
     for (const { cells } of rows(registry)) {
-        for (const id of (cells[cells.length - 1] ?? '').split(',')) cited.add(id.trim())
+        for (const id of (cells[cells.length - 1] ?? '').split(','))
+            cited.add(id.trim())
     }
     const excused = freeStanding()
     expect(excused.size).toBeGreaterThan(0)
@@ -218,7 +242,8 @@ test('every registry section is governed by some clause', async () => {
             continue
         }
         if (line.startsWith('# ')) section = line.slice(2).trim()
-        if (!line.startsWith('| `') && !line.startsWith('| formatting')) continue
+        if (!line.startsWith('| `') && !line.startsWith('| formatting'))
+            continue
         const cells = line
             .replace(/^\|/, '')
             .replace(/(?<!\\)\|$/, '')
@@ -253,7 +278,9 @@ const brand = await Bun.file(new URL('BRAND.md', DOCS)).text()
 
 // As with the other three: the format rules NAME the keywords they refuse, so the checks read the
 // body and the preamble states the contract.
-const brandBody = brand.slice(brand.indexOf('\n# ', brand.indexOf('## Format rules')))
+const brandBody = brand.slice(
+    brand.indexOf('\n# ', brand.indexOf('## Format rules')),
+)
 
 // BRAND format rule 2.
 test('no brand statement carries a requirement keyword', async () => {
@@ -284,14 +311,32 @@ test('every document the brand names exists', async () => {
 
 // BRAND format rule 1. A claim cites a clause, and the citation has to resolve — otherwise the
 // column reads as authority and points at nothing.
+//
+// THIS READ ONE TABLE. `if (!line.startsWith('| **')) continue` meant only the nine Load-bearing
+// claims rows were ever checked, and the fourteen citations everywhere else — the example rules,
+// the documentation structure, the vocabulary cells — were invisible to the check that claims to
+// enforce rule 1 generally. They all resolved, so this closes a gap rather than a break.
 test('every clause the brand cites exists', async () => {
     const ids = new Set(clauses().map((clause) => clause.id))
     const dangling: string[] = []
     for (const line of brandBody.split('\n')) {
-        if (!line.startsWith('| **')) continue
         for (const match of line.matchAll(/\b(\d+\.\d+)\b/g)) {
             if (!ids.has(match[1] ?? '')) dangling.push(match[1] ?? '')
         }
+    }
+    expect([...new Set(dangling)]).toEqual([])
+})
+
+// And the other citation BRAND makes. `every decision a clause cites exists` joins RULEBOOK to
+// DECISIONS and nothing joined BRAND to it, so a `D44` here was checked in neither direction.
+test('every decision the brand cites exists', async () => {
+    const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
+    const declared = new Set(
+        [...decisions.matchAll(/^# (D\d+)\./gm)].map((match) => match[1] ?? ''),
+    )
+    const dangling: string[] = []
+    for (const match of brandBody.matchAll(/\b(D\d+)\b/g)) {
+        if (!declared.has(match[1] ?? '')) dangling.push(match[1] ?? '')
     }
     expect([...new Set(dangling)]).toEqual([])
 })
@@ -301,7 +346,9 @@ test('every clause the brand cites exists', async () => {
 // and `Assumes:` therefore name what it decided and rested on WHEN IT HELD, and those clauses may
 // since have been withdrawn. So the two citation checks below read live entries, the same way
 // `clauses()` reads live clauses, and the reversal is what excuses it.
-function decisionEntries(source: string): { text: string; reversed: boolean }[] {
+function decisionEntries(
+    source: string,
+): { text: string; reversed: boolean }[] {
     const out: { text: string; reversed: boolean }[] = []
     for (const block of source.split(/^# D\d+\./m).slice(1)) {
         out.push({ text: block, reversed: /\*Reversed by D\d+/.test(block) })
@@ -358,11 +405,17 @@ test('every clause a decision assumes is live', async () => {
 // an option a future session reverses precisely because no record says why.
 test('every decision a clause cites exists', async () => {
     const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
-    const declared = new Set([...decisions.matchAll(/^# (D\d+)\./gm)].map((match) => match[1] ?? ''))
+    const declared = new Set(
+        [...decisions.matchAll(/^# (D\d+)\./gm)].map((match) => match[1] ?? ''),
+    )
     // Whitespace-normalised for the same reason the reverse check is: a citation may wrap a line.
     const flat = rulebook.replace(/\s+/g, ' ')
-    const cited = [...flat.matchAll(/\bSee (D\d+)\b/g)].map((match) => match[1] ?? '')
-    expect([...new Set(cited.filter((entry) => !declared.has(entry)))]).toEqual([])
+    const cited = [...flat.matchAll(/\bSee (D\d+)\b/g)].map(
+        (match) => match[1] ?? '',
+    )
+    expect([...new Set(cited.filter((entry) => !declared.has(entry)))]).toEqual(
+        [],
+    )
 })
 
 // DECISIONS format rule 2 says "a check refuses an entry with none", and rule 4 says "a check
@@ -373,7 +426,10 @@ test('every decision cites the clauses it decided', async () => {
     const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
     const uncited: string[] = []
     for (const block of decisions.split(/^# (D\d+)\./m).slice(1)) {
-        if (/^D\d+$/.test(block)) { uncited.push(block); continue }
+        if (/^D\d+$/.test(block)) {
+            uncited.push(block)
+            continue
+        }
         // The id was pushed by the split immediately before this block.
         if (/^\*\*Decides:\*\*/m.test(block)) uncited.pop()
     }
@@ -384,7 +440,10 @@ test('no decision states a requirement', async () => {
     const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
     const offenders: string[] = []
     for (const block of decisions.split(/^# (D\d+)\./m).slice(1)) {
-        if (/^D\d+$/.test(block)) { offenders.push(block); continue }
+        if (/^D\d+$/.test(block)) {
+            offenders.push(block)
+            continue
+        }
         // Format rule 4 names the keywords; a clause QUOTED inside a withdrawal or a `Refused:`
         // line is the entry doing its job, so only unquoted prose counts.
         const prose = block.replace(/`[^`]*`/g, '').replace(/"[^"]*"/g, '')
@@ -396,11 +455,15 @@ test('no decision states a requirement', async () => {
 // And the other way: a decision nobody reaches is a road not taken that no rule records taking.
 test('every decision is cited by a clause', async () => {
     const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
-    const declared = [...decisions.matchAll(/^# (D\d+)\./gm)].map((match) => match[1] ?? '')
+    const declared = [...decisions.matchAll(/^# (D\d+)\./gm)].map(
+        (match) => match[1] ?? '',
+    )
     // Whitespace-normalised: a citation wrapping across two lines is the same citation, and the
     // first version of this check read one as absent.
     const flat = rulebook.replace(/\s+/g, ' ')
-    const cited = new Set([...flat.matchAll(/\bSee (D\d+)\b/g)].map((match) => match[1] ?? ''))
+    const cited = new Set(
+        [...flat.matchAll(/\bSee (D\d+)\b/g)].map((match) => match[1] ?? ''),
+    )
     expect(declared.filter((entry) => !cited.has(entry))).toEqual([])
 })
 
@@ -435,7 +498,9 @@ test('every clause the working notes cite exists', async () => {
     const notes = await Bun.file(new URL('../CLAUDE.md', DOCS)).text()
     const ids = new Set(clauses().map((clause) => clause.id))
     const dangling: string[] = []
-    for (const match of notes.matchAll(/RULEBOOK ((?:\d+\.\d+(?:,? (?:and )?)?)+)/g)) {
+    for (const match of notes.matchAll(
+        /RULEBOOK ((?:\d+\.\d+(?:,? (?:and )?)?)+)/g,
+    )) {
         for (const id of (match[1] ?? '').matchAll(/\d+\.\d+/g)) {
             if (!ids.has(id[0])) dangling.push(id[0])
         }
@@ -450,8 +515,105 @@ test('every document the working notes name exists', async () => {
     const notes = await Bun.file(new URL('../CLAUDE.md', DOCS)).text()
     const missing: string[] = []
     for (const match of notes.matchAll(/`docs\/([A-Z][A-Z_]+\.md)`/g)) {
-        if (!(await Bun.file(new URL(match[1] ?? '', DOCS)).exists())) missing.push(match[1] ?? '')
+        if (!(await Bun.file(new URL(match[1] ?? '', DOCS)).exists()))
+            missing.push(match[1] ?? '')
     }
     expect(missing.length).toBe(0)
     expect([...new Set(missing)]).toEqual([])
+})
+
+// `docs/plans/` was gated by nothing, and CLAUDE.md says so in as many words: "a hit there goes
+// stale in silence". Six real defects had accumulated behind that sentence, and the one that says
+// what the gap is worth is COMPILER.md proposing a `# 42. Type-directed lowering` against a live
+// `# 42. The app object` — six clause numbers that did not DANGLE, they RESOLVED, to somebody
+// else's rules. A plan is not a governed document and these checks do not treat it as one; they
+// ask the two questions a plan can be wrong about mechanically.
+const PLANS = new URL('plans/', DOCS)
+
+// The directory, not a list. A hardcoded list is how a plan arrives ungated: the file that most
+// needs checking is the one nobody has read yet, and that is exactly the one a list written
+// earlier cannot name. `HARNESS.md` landed while the list said five other things.
+async function planFiles(): Promise<{ name: string; text: string }[]> {
+    const out: { name: string; text: string }[] = []
+    const names = new Bun.Glob('*.md').scan({ cwd: PLANS.pathname })
+    for await (const name of names) {
+        out.push({ name, text: await Bun.file(new URL(name, PLANS)).text() })
+    }
+    // An empty plans directory must fail loudly rather than pass vacuously.
+    expect(out.length).toBeGreaterThan(0)
+    return out
+}
+
+// A plan PROPOSES clauses it has not landed, so a bare "every number resolves" would fail on every
+// proposal. The proposals live under `## What this plan would land in the four documents` and
+// `## What the docs owe`; everything before the first such heading is the plan CITING, and that is
+// the half a stale number hides in.
+function citingHalf(text: string): string {
+    const start = text.search(
+        /^## (What this plan would land|What the docs owe)/m,
+    )
+    return start === -1 ? text : text.slice(0, start)
+}
+
+// A citation is `N.M` with no digit or dot on either side and no trailing `%` — which excludes a
+// version (`7.0.2`), a measurement (`1.45 ms`, `0.055`) and a percentage (`1.2%`), all of which
+// the plans are full of. A line that says "withdrawn" is citing the withdrawal ON PURPOSE, which
+// is a legitimate thing for a plan to do and the only escape hatch here.
+function citedClauses(text: string): { id: string; line: number }[] {
+    const out: { id: string; line: number }[] = []
+    const lines = text.split('\n')
+    for (let index = 0; index < lines.length; index += 1) {
+        const line = lines[index] ?? ''
+        if (/withdraw/i.test(line)) continue
+        for (const match of line.matchAll(/(?<![\d.])(\d+\.\d+)(?![\d.%])/g)) {
+            out.push({ id: match[1] ?? '', line: index + 1 })
+        }
+    }
+    return out
+}
+
+test('every clause a plan cites is live', async () => {
+    const live = new Set(clauses().map((clause) => clause.id))
+    const gone = new Set(withdrawn().map((clause) => clause.id))
+    const offenders: string[] = []
+    for (const { name, text } of await planFiles()) {
+        for (const { id, line } of citedClauses(citingHalf(text))) {
+            // A number that is neither live nor withdrawn is not a clause at all — a ratio, an n,
+            // a byte count. Only a WITHDRAWN one is a defect here, because it resolves: the
+            // reader follows it and lands on the withdrawal rather than on the rule they wanted.
+            // This is how `3.10–3.14` and `2.8–2.11` shipped with a dead member in the middle.
+            if (gone.has(id) && !live.has(id))
+                offenders.push(`${name}:${line} cites ${id}`)
+        }
+    }
+    expect(live.size > 0).toBe(true)
+    expect(offenders).toEqual([])
+})
+
+// The collision check. A plan proposing a group number that is already a group is the failure that
+// no existence test can see, because every number in it resolves.
+test('no plan proposes a rulebook group that already exists', async () => {
+    const groups = new Set(
+        [...body(rulebook).matchAll(/^# (\d+)\. /gm)].map(
+            (match) => match[1] ?? '',
+        ),
+    )
+    const offenders: string[] = []
+    for (const { name, text } of await planFiles()) {
+        const lines = text.split('\n')
+        for (let index = 0; index < lines.length; index += 1) {
+            const proposed = /^# (\d+)\. (.+)$/.exec(lines[index] ?? '')
+            if (!proposed) continue
+            const number = proposed[1] ?? ''
+            if (!groups.has(number)) continue
+            const heading = body(rulebook).match(
+                new RegExp(`^# ${number}\\. (.+)$`, 'm'),
+            )
+            offenders.push(
+                `${name}:${index + 1} proposes "# ${number}. ${proposed[2]}" but RULEBOOK has "# ${number}. ${heading?.[1] ?? ''}"`,
+            )
+        }
+    }
+    expect(groups.size > 0).toBe(true)
+    expect(offenders).toEqual([])
 })

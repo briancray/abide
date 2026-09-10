@@ -1,0 +1,17 @@
+<script>
+import { state } from 'abide'
+
+let contact = state({
+    name: 'Ada Lovelace',
+    address: { city: 'London', country: 'UK' },
+})
+</script>
+
+<ul class="fields">
+    <li><span>on the record</span>
+        <strong>{contact.name} — {contact.address.city}</strong></li>
+</ul>
+
+<label>city
+    <input bind:value={contact.address.city}>
+</label>

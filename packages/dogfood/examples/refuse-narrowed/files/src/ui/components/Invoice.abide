@@ -1,0 +1,28 @@
+<script>
+import { memo, state } from 'abide'
+import { getInvoice } from '#server/rpc/invoices'
+
+const ON_ACCOUNT = ['4310', '4311', '4312']
+
+let id = state('4310')
+
+const invoice = memo(() => getInvoice({ id }))
+</script>
+
+<div class="tabs">
+{#for one of ON_ACCOUNT}
+    <button aria-selected={id === one}
+        onclick={() => { id = one }}>{one}</button>
+{/for}
+</div>
+
+{#if invoice.isError(invoice.error(), 'NotYours')}
+    <p class="status">Owned by {invoice.error().data.owner}.</p>
+{:else if invoice.isError(invoice.error(), 'Superseded')}
+    <p class="status">Replaced by #{invoice.error().data.replacedBy}.</p>
+{/if}
+
+<ul class="fields">
+    <li><span>total</span>
+        <strong>{invoice.error() ? '—' : invoice.total}</strong></li>
+</ul>

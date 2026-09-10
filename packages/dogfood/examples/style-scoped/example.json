@@ -1,0 +1,11 @@
+{
+    "title": "`<style>` — the same class name in two components",
+    "summary": "Two badge components that each style `.badge`, rendered side by side. Neither one reaches the other.",
+    "app": "crm",
+    "files": [
+        "src/ui/pages/invoices/page.abide",
+        "src/ui/components/Overdue.abide",
+        "src/ui/components/Paid.abide"
+    ],
+    "route": "/invoices"
+}

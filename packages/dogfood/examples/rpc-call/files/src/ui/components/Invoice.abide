@@ -1,0 +1,12 @@
+<script>
+import { memo } from 'abide'
+import { getInvoice } from '#server/rpc/invoices'
+
+const invoice = memo(() => getInvoice({ id: '4021' }))
+</script>
+
+<ul class="fields stacked">
+    <li><span>number</span><strong>{invoice.number}</strong></li>
+    <li><span>due</span><strong>{invoice.dueOn}</strong></li>
+    <li><span>total</span><strong>{invoice.total}</strong></li>
+</ul>

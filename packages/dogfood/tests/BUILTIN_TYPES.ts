@@ -20,6 +20,7 @@ export const BUILTIN_TYPES = new Set([
     'Omit',
     'Partial',
     'Promise',
+    'PromiseLike',
     'Record',
     'Set',
     'Uint8Array',

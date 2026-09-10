@@ -1,0 +1,33 @@
+<script>
+import { channel, memo, state } from 'abide'
+import { getContact } from '#server/rpc/contacts'
+
+const notes = channel({ tail: 20 })
+
+let draft = state('')
+
+const words = memo(() => (draft ? draft.split(' ').length : 0))
+const contact = memo(() => getContact({ id: '1' }))
+const room = notes()
+</script>
+
+<ul class="fields">
+    <li><span>owned</span>
+        <strong>{draft.pending() ? '…' : (draft || '—')}</strong></li>
+    <li><span>derived</span>
+        <strong>{words.pending() ? '…' : words}</strong></li>
+    <li><span>loaded</span>
+        <strong>{contact.pending() ? '…' : contact.name}</strong></li>
+    <li><span>pushed</span>
+        <strong>{room.pending() ? '…' : room.text}</strong></li>
+</ul>
+
+<div class="row">
+    <label>note
+        <input bind:value={draft}>
+    </label>
+    <button onclick={() => {
+        room.publish({ text: draft })
+        draft = ''
+    }}>Add</button>
+</div>

@@ -1,0 +1,20 @@
+<script>
+import { memo, refresh } from 'abide'
+import { getInvoice } from '#server/rpc/invoices'
+
+const invoice = memo(() => getInvoice({ id: '4021' }))
+</script>
+
+<div class="row">
+    <button onclick={() => refresh(invoice)}>Retry</button>
+</div>
+
+{#if invoice.error()}
+    <p class="status">{invoice.error().message}</p>
+{/if}
+
+<ul class="fields stacked">
+    <li><span>total</span>
+        <strong>{invoice.error() ? 'unavailable' : invoice.total}</strong>
+    </li>
+</ul>

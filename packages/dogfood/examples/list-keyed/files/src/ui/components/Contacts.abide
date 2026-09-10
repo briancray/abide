@@ -1,0 +1,29 @@
+<script>
+import { state } from 'abide'
+
+let rows = state([
+    { id: 'ada', name: 'Ada Lovelace' },
+    { id: 'grace', name: 'Grace Hopper' },
+    { id: 'katherine', name: 'Katherine Johnson' },
+])
+
+function swapTop() {
+    const [first, second, ...rest] = rows
+    rows = [second, first, ...rest]
+}
+
+function reverse() {
+    rows = [...rows].reverse()
+}
+</script>
+
+<ul class="fields stacked">
+{#for row of rows by row.id}
+    <li><span>{row.id}</span><strong>{row.name}</strong></li>
+{/for}
+</ul>
+
+<div class="row">
+    <button onclick={swapTop}>Swap top two</button>
+    <button onclick={reverse}>Reverse</button>
+</div>

@@ -89,9 +89,8 @@ import { database } from '#server/database'
 
 export const getInvoice = GET(
     ({ id }: { id: string }) => database.invoice.find(id),
-    {
-  description: 'One invoice, by id.',
-})
+    { description: 'One invoice, by id.' },
+)
 ```
 
 ```abide #ui/pages/invoices/[id]/page.abide

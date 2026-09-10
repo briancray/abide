@@ -1,0 +1,24 @@
+<script>
+import { memo, state } from 'abide'
+
+let rate = state('1.09')
+
+const converted = memo(() => {
+    const value = Number(rate)
+    if (!(value > 0)) throw new Error('Rate must be a positive number.')
+    return (1240 * value).toFixed(2)
+})
+</script>
+
+<label>rate
+    <input bind:value={rate}>
+</label>
+
+{#try}
+    <ul class="fields">
+        <li><span>invoice</span><strong>#4310</strong></li>
+        <li><span>converted</span><strong>${converted}</strong></li>
+    </ul>
+{:catch problem}
+    <p class="status">{problem.message}</p>
+{/try}

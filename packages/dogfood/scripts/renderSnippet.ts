@@ -60,7 +60,8 @@ function bracketDepthOf(line: string, depth: number): number {
         if (quote) {
             if (char === '\\') index += 1
             else if (char === quote) quote = ''
-            else if (quote === '`' && char === '{' && line[index - 1] === '$') depth += 1
+            else if (quote === '`' && char === '{' && line[index - 1] === '$')
+                depth += 1
             else if (quote === '`' && char === '}') depth -= 1
             continue
         }
@@ -87,12 +88,18 @@ function dedent(lines: string[]): string {
 // EXACTLY ONE match is the contract, and both ways of missing it are errors worth
 // telling apart: none means the code moved, two means the anchor stopped identifying
 // anything. Either way the page is making a claim the file no longer supports.
-function runOf(lines: string[], anchor: string, where: string): [number, number] {
+function runOf(
+    lines: string[],
+    anchor: string,
+    where: string,
+): [number, number] {
     const starts: number[] = []
     for (let index = 0; index < lines.length; index += 1) {
-        if ((lines[index] ?? '').trimStart().startsWith(anchor)) starts.push(index)
+        if ((lines[index] ?? '').trimStart().startsWith(anchor))
+            starts.push(index)
     }
-    if (starts.length === 0) throw new Error(`${where}: no line starts with ${anchor}`)
+    if (starts.length === 0)
+        throw new Error(`${where}: no line starts with ${anchor}`)
     if (starts.length > 1)
         throw new Error(
             `${where}: ${anchor} matches ${starts.length} lines (${starts.map((n) => n + 1).join(', ')}); lengthen it`,
@@ -119,7 +126,8 @@ export const ELISION = ' … '
 export function slice(source: string, anchor: string, where: string): string {
     const lines = source.split('\n')
     const runs: [number, number][] = []
-    for (const one of anchor.split(ELISION)) runs.push(runOf(lines, one.trim(), where))
+    for (const one of anchor.split(ELISION))
+        runs.push(runOf(lines, one.trim(), where))
     runs.sort((a, b) => a[0] - b[0])
 
     const out: string[] = []
@@ -131,7 +139,11 @@ export function slice(source: string, anchor: string, where: string): string {
             const indent = (lines[start] ?? '').search(/\S|$/)
             out.push(`${(lines[start] ?? '').slice(0, indent)}…`)
         }
-        for (let index = Math.max(start, previousEnd + 1); index <= end; index += 1) {
+        for (
+            let index = Math.max(start, previousEnd + 1);
+            index <= end;
+            index += 1
+        ) {
             out.push(lines[index] ?? '')
         }
         previousEnd = Math.max(previousEnd, end)
@@ -153,7 +165,9 @@ async function readSlice(address: SnippetAddress): Promise<string> {
 // names a file and a line, never a colour or a suffix, so a snippet cannot claim a seam
 // its path contradicts. An anchored slice is partial BY CONSTRUCTION, so it says so.
 function captionOf(address: SnippetAddress): string {
-    return displayPath(address.anchor ? `${address.file} — excerpt` : address.file)
+    return displayPath(
+        address.anchor ? `${address.file} — excerpt` : address.file,
+    )
 }
 
 export async function snippetHtml(address: SnippetAddress): Promise<string> {
@@ -162,7 +176,9 @@ export async function snippetHtml(address: SnippetAddress): Promise<string> {
 <figcaption>${escapeHtml(captionOf(address))}</figcaption><pre><code>${highlight(code)}</code></pre></figure>`
 }
 
-export async function snippetMarkdown(address: SnippetAddress): Promise<string> {
+export async function snippetMarkdown(
+    address: SnippetAddress,
+): Promise<string> {
     const code = await readSlice(address)
     const language = address.file.slice(address.file.lastIndexOf('.') + 1)
     return `\`\`\`${language} ${captionOf(address)}\n${code}\n\`\`\``

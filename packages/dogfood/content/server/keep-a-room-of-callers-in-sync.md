@@ -20,42 +20,31 @@ A room is already a subject anything in the process may write and anything may r
 pane, a presence list and a price feed all want that same subject reaching browsers — pushed,
 not polled every two seconds.
 
-`socket` gives a channel an address. Nothing about the room changes.
+`socket` gives a channel an address. Nothing about the room changes, and nothing on the page
+polls: it is the same `Room` the server publishes into, reached from outside the process.
 
-```ts #server/sockets/chat.ts
-import { socket } from 'abide'
-import { thread } from '#shared/rooms'
+## The forms of `socket`
 
-export default socket(thread, { clientPublish: true })
-```
+| You write | What you get |
+| --- | --- |
+| `socket(channel)` | a `Socket` — `(args?) => Room`, serving messages out |
+| `socket(channel, options)` | the same, with `clientPublish`, `crossOrigin` or `middleware` |
 
-```abide #ui/pages/threads/[id]/page.abide — excerpt
-<script>
-import { state } from 'abide'
-import chat from '#server/sockets/chat'
-
-const room = chat({ id: route.params.id })
-const draft = state('')
-</script>
-
-{#for await message of room.tail(50)}<li>{message.text}</li>{/for}
-<input bind:value={draft}/>
-<button onclick={() => room.publish({ text: draft })}>Send</button>
-```
-
-*2 files, 0 polling interval* — and the same `Room` the server publishes into.
+`Message` and `Args` come through from the channel unchanged, so neither is spelled again here.
+What the options gate is the **transport**: who may connect, who may publish inward, and from
+which origin. Every signature is in the [Transports](../reference/transports.md) reference, and
+what a room is before it has an address is [Rooms](../values/let-anything-publish-and-anything-read.md).
 
 ## A socket over a channel is a channel over a socket
 
-`socket(channel)` hands back a `Socket`, which is `(args?) => Room` — the **same `Room`** a
-channel invokes to. So there is nothing about the shape that says which transport carried it:
-a bare read is the latest message, the probes answer, `room.tail(n)` is the cursor, and
-`publish` hands back the `seq` it minted or the `Failed` a `transform` refused it with.
+There is nothing about the shape that says which transport carried it: a bare read is the latest
+message, the probes answer, `room.tail(n)` is the cursor, and `publish` hands back the `seq` it
+minted or the `Failed` a `transform` refused it with. `Args` picks the room, keyed by the same
+canonical wire form a memo's arguments use.
 
-`Message` and `Args` come through from the channel unchanged. `Args` picks the room, keyed by
-the same canonical wire form a memo's arguments use.
-
-Read on: [Rooms](../values/let-anything-publish-and-anything-read.md)
+That is why the examples for all of it are on [Rooms](../values/let-anything-publish-and-anything-read.md):
+a room with an address behaves as a room, so a demonstration here would be showing that the
+address changed nothing.
 
 ## A socket's address is its file path and export name
 
@@ -91,8 +80,8 @@ Read on: [Mutations](change-something-on-the-server.md)
 
 ## `SocketOptions` gates the upgrade and what may be published
 
-`SocketOptions` is the upgrade and what may come up it. The upgrade goes through `middleware`,
-which is the same `Middleware` type the http lane takes, instantiated over a `SocketEvent`:
+The upgrade goes through `middleware`, which is the same `Middleware` type the http lane takes,
+instantiated over a `SocketEvent`:
 
 ```ts shared
 type SocketEvent = {
@@ -187,12 +176,11 @@ would stop it being *served* again — but the ring is already bounded by `tail`
 process restart drops it wholesale. Anything that must genuinely never be served again is durable,
 so it lives in the app's own store behind an rpc, where a delete is a delete.
 
-
 ## The `seq` counter and the epoch are process-local
 
-The `seq` counter and the epoch, as a `global` memo's cache is. More than one instance degrades
-rather than breaks: a reconnect landing on another instance is the announced epoch reset, and
-the client takes the tail. abide supplies no cross-process mechanism for it.
+Both live in the process, as a `global` memo's cache does. More than one instance degrades rather
+than breaks: a reconnect landing on another instance is the announced epoch reset, and the client
+takes the tail. abide supplies no cross-process mechanism for it.
 
 Read on: [Sharing](../values/share-one-value-across-components.md)
 

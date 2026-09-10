@@ -1,0 +1,7 @@
+{
+    "title": "`class:name={cond}` and `style:prop={value}` — one class, one property",
+    "summary": "An invoice's age badge. Press + until it is late, and back down again.",
+    "app": "crm",
+    "files": ["src/ui/components/Invoice.abide"],
+    "route": "/invoices/4310"
+}

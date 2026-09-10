@@ -1,0 +1,10 @@
+<script>
+import { props } from 'abide'
+
+const { amount, currency = 'USD' } = props<{
+    amount: number
+    currency?: string
+}>()
+</script>
+
+<strong>{currency} {amount.toFixed(2)}</strong>

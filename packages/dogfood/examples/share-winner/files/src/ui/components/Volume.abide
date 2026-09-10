@@ -1,0 +1,21 @@
+<script>
+import { state } from 'abide'
+
+let volume = state.share('volume', () => state(4))
+
+// Built out here and handed IN. The call hands back the one that
+// won, and this name is not it.
+const built = state(4)
+const shared = state.share('volume', () => built)
+</script>
+
+<ul class="grid">
+    <li><span>volume</span>
+        <div class="stepper">
+            <button onclick={() => (volume -= 1)}>−</button>
+            <strong>{volume}</strong>
+            <button onclick={() => (volume += 1)}>+</button>
+        </div></li>
+    <li><span>what the second call returned</span><strong>{shared}</strong></li>
+    <li><span>what it handed in</span><strong>{built}</strong></li>
+</ul>

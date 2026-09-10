@@ -1,0 +1,7 @@
+{
+    "title": "`state(v, { schema })` — a check with no server in it",
+    "summary": "A contact's email. Take the dot out of the domain, and watch the record rather than the field.",
+    "app": "crm",
+    "files": ["src/ui/components/Email.abide"],
+    "route": "/contacts/1"
+}

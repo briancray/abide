@@ -1,0 +1,24 @@
+<script>
+import { state, watch } from 'abide'
+
+let notes = state('Called Tuesday.')
+let saved = state('Called Tuesday.')
+
+watch(() => {
+    // Read HERE, not in the callback: a read a second later is
+    // past the tracking pass and subscribes to nothing.
+    const draft = notes
+    const timer = setTimeout(() => {
+        saved = draft
+    }, 600)
+    return () => clearTimeout(timer)
+})
+</script>
+
+<label>notes
+    <input bind:value={notes}>
+</label>
+
+<ul class="fields stacked">
+    <li><span>saved</span><strong>{saved}</strong></li>
+</ul>

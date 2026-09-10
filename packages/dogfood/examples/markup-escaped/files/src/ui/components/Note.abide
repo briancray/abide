@@ -1,0 +1,16 @@
+<script>
+import { state } from 'abide'
+
+let note = state('Chased <b>twice</b> — no answer')
+</script>
+
+<label>note
+    <input bind:value={note}>
+</label>
+
+<ul class="fields stacked">
+    <li><span>as text</span>
+        <strong>{note}</strong></li>
+    <li><span>as markup</span>
+        <strong>{raw(note)}</strong></li>
+</ul>

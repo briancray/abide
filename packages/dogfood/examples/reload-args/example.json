@@ -1,0 +1,22 @@
+{
+    "title": "`m.refresh(Partial<Args>)` — a slice of the args space",
+    "summary": "Two warehouses holding the same shelf. Book one out of east and watch which of the two loads again.",
+    "app": "dashboard",
+    "files": ["src/server/rpc/stock.ts", "src/ui/components/Shelves.abide"],
+    "route": "/stock",
+    "served": "server.ts",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/stock/getStock?sku=A-70&warehouse=east",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"onHand\": 128,\n    \"loads\": 1\n}"
+        }
+    ]
+}

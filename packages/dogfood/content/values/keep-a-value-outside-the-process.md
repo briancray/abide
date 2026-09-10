@@ -8,36 +8,34 @@ covers:
   - channel › `store`
   - `Store`
 examples:
-  - packages/dogfood/examples/persistence
+  - packages/dogfood/examples/store-restore
+  - packages/dogfood/examples/store-keyed
 ---
 
 A `Reactive` lives and dies with its scope unless it is told otherwise. A `store` is how it is
-told: it says where the value lives when the process does not — a cookie, `localStorage`, redis, a row somewhere — and it is one
-option on the value rather than a mechanism beside it.
-
-{% example persistence %}
-
-*1 option, 0 markup changed* — the read and the write are the page's own, untouched.
-
-{% snippet persistence src/ui/pages/settings/page.abide const theme = state %}
+told: it says where the value lives when the process does not — a cookie, `localStorage`, redis,
+a row somewhere — and it is one option on the value rather than a mechanism beside it.
 
 ## A store is two halves and your app writes both
 
+{% example store-restore %}
+
+*1 option, 0 markup changed* — the read and the write are the page's own, untouched. Step the
+volume and press **Reload** on the frame: that re-runs the arm from nothing, which is the restart
+a store exists for.
+
 `Store` is `{ get, set }`, and there is no way to spell either alone. A persister with no restore
 is a `watch` under a longer name; a restore with no persister is the initial value `state` already
-takes. Together they are one option, and what that buys is that the two cannot disagree about
-where the value is.
-
-{% snippet persistence src/shared/cookieStore.ts export function cookieStore %}
+takes. Together they are one option, and the two cannot disagree about where the value is.
 
 abide ships none of these. A store is where your own dependency goes, which is why it is an
 interface and not a registry of backends.
 
 A store runs where the `Reactive` is **constructed**, and in a `.abide` file that is both sides. A
 store reaching something only one side has — `localStorage`, a database driver — is guarded there,
-and what that costs is a first paint from the other side's answer and a correction at hydration.
-A store both sides address renders right the first time, which `cookies()` is
-answering on both sides above.
+and it costs a first paint from the other side's answer and a correction at hydration. A store
+both sides address renders right the first time, which is why the card's goes over an rpc rather
+than to a browser API.
 
 ## `get` is a producer, so the triggers stop being inert
 
@@ -54,16 +52,15 @@ destructive, because dropping it would lose something nothing can rebuild; with 
 somewhere to get it back from.
 
 An unsettled `get` is a load like any other — `pending()` while it is in flight, a sink opened,
-the value served when it lands. A **synchronous** `get`, which `localStorage` and a cookie
-allow, is not a load at all: the value is there at construction, so nothing is pending and there
-is no first paint of the fallback. Reload the example above and watch for it: dark on the first
-frame, with no light one before it.
+the value served when it lands, which is what the card's store does. A **synchronous** `get`,
+which `localStorage` and a cookie allow, is not a load at all: the value is there at construction,
+so nothing is pending and there is no first paint of the fallback.
 
 Read on: [Reloading](decide-when-a-value-reloads.md)
 
 ## A store answers before the initial value
 
-`state('light', { store })` serves what the store had; `'light'` is what a **miss** falls back to.
+`state('light', { store })` serves what the store had, and a **miss** falls back to `'light'`.
 Any other order and the line would not mean what it reads as.
 
 ## `set` runs per production
@@ -83,25 +80,21 @@ that silently stopped is worse than none, so the failure reaches `onError`, warn
 `set` is handed the `Reactive`'s own `ttl`, in ms, so the number lives once on the value and the
 store converts it:
 
-{% snippet persistence src/server/redisStore.ts set: (value, { ttl }) => { %}
-
 ## A store in front of a body is a cache that survives a restart
 
 Where the `Reactive` also has a body, the store sits in front of it: `get` on a cold entry, the
 body on a miss, `set` on every production. That is the persistent form of the cache `ttl` already
 bounds.
 
-{% snippet persistence src/server/cache.ts export const flags = memo( %}
-
 A deploy that restarts every instance no longer stampedes the thing behind it.
 
 ## One store per args key
 
+{% example store-keyed %}
+
 A keyed memo builds one `Reactive` per args key, so a store keyed on anything has to be derived
 **from** that key rather than closed over where the memo was declared. That is the function form,
 and it is the one `tags` already uses:
-
-{% snippet persistence src/server/cache.ts export const user = memo( %}
 
 Closing over one key instead gives every entry the same store, and they clobber each other
 silently.
@@ -115,14 +108,14 @@ value itself, and it mints a production without passing `schema` or `transform`.
 what goes **in**, and a restore is not something going in: a `transform` that stamps a received-at
 would restamp on every restore, and a lossy one has nothing left to re-derive from.
 
-Which puts the check where the knowledge already is. `get` is your function, and it was parsing
+That puts the check where the knowledge already is. `get` is your function, and it was parsing
 whatever the store handed back anyway — a string out of `localStorage`, bytes out of redis. So a
 shape an older deploy wrote is one `if` away from being a **miss**, and a miss falls back to the
 initial value. No refusal for the value to carry, and no second gate to declare.
 
 A streaming producer is the arm this was written for. It has no `Accepted` at all — nothing was
-ever written in — and what it holds at close is the accumulation, which is what `set` is handed
-and what a restore seeds:
+ever written in — and it holds the accumulation at close, which `set` is handed and a restore
+seeds:
 
 ```abide abide
 {await answer({ messageId })}
@@ -139,7 +132,7 @@ Read on: [History & tail](keep-the-last-few-values.md)
 A `store` on a `global` memo is a cache two processes share, and it is the one place anything in
 this design crosses a process boundary. It is your dependency doing that, not abide.
 
-What crosses is a **settled value and never a production**. An answer one instance finished is
+A **settled value** crosses and never a production. An answer one instance finished is
 served to one that never computed it; an in-flight stream's chunks do not reach it at all, `set`
 running once at close. So it removes the duplicate work, not the duplicate connection.
 
@@ -148,8 +141,6 @@ running once at close. So it removes the duplicate work, not the duplicate conne
 A room's `Stored` is one `Message`, so a store round-trips the standing message and never the
 tail. For a roster or a status that is exactly right — a restart restores the last one instead of
 showing an empty room until somebody publishes:
-
-{% snippet persistence src/server/sockets/presence.ts export const roster = channel %}
 
 `identity: structural` and the store read together here: a republished identical roster is not a
 production, so it is not written either.

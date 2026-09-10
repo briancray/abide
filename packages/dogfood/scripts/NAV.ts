@@ -118,6 +118,7 @@ export const NAV = [
             'ship/watch-a-running-app',
             'ship/call-a-handler-from-the-terminal',
             'ship/watch-a-room-from-the-terminal',
+            'ship/call-your-app-from-a-test',
         ],
     },
     {
@@ -142,40 +143,6 @@ export const NAV = [
             'reference/routing',
             'reference/configuration',
             'reference/cli',
-        ],
-    },
-    {
-        // An EXPERIMENT, not a section of the documentation: two guides —
-        // `values/show-a-value-that-changes` and `values/load-once-per-set-of-arguments` — each
-        // rewritten in the same seven documentation styles, to choose the house shape rather than
-        // inherit it. TWO subjects because a style that suits one primitive is not thereby a style:
-        // caching is five mechanisms with no single name, and it is where a reference entry and a
-        // quickstart come apart. These pages deliberately break BRAND's voice, which is the point.
-        //
-        // `wire-copy` is an A/B against `inverted-pyramid` and not an eighth style: same subject,
-        // same section order, journalism PROSE. Structure and voice are independent variables, and
-        // the first pass moved only one of them while claiming the name of both.
-        section: 'Writing styles',
-        pages: [
-            'styles/index',
-            'styles/inverted-pyramid',
-            'styles/wire-copy',
-            'styles/example-as-page',
-            'styles/mdn-reference',
-            'styles/tutorial',
-            'styles/cookbook',
-            'styles/faq',
-            'styles/normative-spec',
-            'styles/readme-quickstart',
-            'styles/caching-inverted-pyramid',
-            'styles/caching-wire-copy',
-            'styles/caching-example-as-page',
-            'styles/caching-mdn-reference',
-            'styles/caching-tutorial',
-            'styles/caching-cookbook',
-            'styles/caching-faq',
-            'styles/caching-normative-spec',
-            'styles/caching-readme-quickstart',
         ],
     },
 ] as const

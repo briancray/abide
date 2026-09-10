@@ -1,0 +1,15 @@
+<script>
+import { turns } from '#shared/conversations'
+
+// The same args reach the same room. No prop, no provider.
+const room = turns({ conversation: 'onboarding' })
+</script>
+
+<ul class="fields stacked">
+    <li><span>last spoken</span>
+        <strong>{room.pending() ? 'nobody' : room.speaker}</strong>
+    </li>
+    <li><span>said</span>
+        <strong>{room.pending() ? 'nothing yet' : room.text}</strong>
+    </li>
+</ul>

@@ -1,0 +1,20 @@
+<script>
+import { memo } from 'abide'
+import { getStock } from '#server/rpc/stock'
+
+const level = memo(() => getStock({ warehouse: 'east', sku: 'A-70' }))
+</script>
+
+{#if level.pending()}
+    <p>Counting the shelf…</p>
+{:else}
+    <ul class="fields stacked">
+        <li><span>on hand</span><strong>{level.onHand}</strong></li>
+        <li><span>counted</span><strong>{level.counted}</strong></li>
+    </ul>
+{/if}
+
+<div class="row">
+    <button onclick={() => level.invalidate()}>Mark stale</button>
+    <button onclick={() => level.refresh()}>Reload now</button>
+</div>

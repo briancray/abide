@@ -1,0 +1,18 @@
+<script>
+import { memo, refresh } from 'abide'
+import { getInvoice } from '#server/rpc/invoices'
+
+const invoice = memo(() => getInvoice({ id: '4021' }))
+</script>
+
+<div class="row">
+    <button onclick={() => refresh(invoice)}>Refresh</button>
+    <span class="status">{invoice.refreshing() ? 'refreshing…' : ''}</span>
+</div>
+
+{#if invoice.pending()}<p>Loading the invoice…</p>{/if}
+
+<ul class="fields stacked">
+    <li><span>total</span><strong>{invoice.total}</strong></li>
+    <li><span>times sent</span><strong>{invoice.sent}</strong></li>
+</ul>

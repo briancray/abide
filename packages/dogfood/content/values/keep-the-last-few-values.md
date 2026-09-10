@@ -12,7 +12,9 @@ covers:
   - `ABIDE_MAX_STREAM_BUFFER_SIZE`
   - memo › `tail`
 examples:
-  - packages/dogfood/examples/tail
+  - packages/dogfood/examples/tail-window
+  - packages/dogfood/examples/tail-cursor
+  - packages/dogfood/examples/tail-undo
 ---
 
 A chat pane wants the last fifty messages. A log viewer wants the last five hundred lines. A
@@ -22,12 +24,12 @@ the page wants a window onto the recent past — not the latest one, and not all
 `tail` is that window, and it is a number on the value rather than an array you maintain beside
 it.
 
-{% example tail %}
+## `tail` decides how far back the value goes
 
-*1 number, 0 arrays* — what was missed replayed, then live from where the replay ended, with no
-gap and no duplicate.
+{% example tail-window %}
 
-{% snippet tail src/ui/pages/console/page.abide const records = memo( %}
+*1 number, 0 arrays* — the ring is appended to and trimmed by the value, and what a reader asks
+for is capped by the value rather than by the reader.
 
 ## `tail` defaults to 1, so retention is asked for
 
@@ -52,10 +54,8 @@ One rule, reading three ways. `Stored` is the type of it.
 | an async-generator body | the accumulation, at close | the last 100 answers |
 
 Which is why a `tail` on a `Reactive<Row[]>` retains a hundred **arrays**, not a hundred rows.
-Pushing into an array is not a production — it is a mutation of one value — so where a tail over
-items is what you want, **the item has to be produced**:
-
-{% snippet tail src/server/rpc/logs.ts const recent = memo( %}
+Pushing into an array is not a production — it is a mutation of one value — so where you want a
+tail over items, **produce the item**:
 
 A chunk is a piece of one value rather than a past one, so it is not what history is made of. A
 ring of chunks would replay a fragment of one answer and no answer at all. `Produced` is a fourth
@@ -65,23 +65,26 @@ parameter on `Reactive` and defaults to `Stored`, so nothing that is not a strea
 Read on: [Streaming data](../server/send-data-as-it-arrives.md) ·
 [Sockets](../server/keep-a-room-of-callers-in-sync.md)
 
-## `s.tail(n)` is `Iterable` and `AsyncIterable` both
+## `s.tail(n)` replays the ring; a bare cursor goes live
+
+{% example tail-cursor %}
 
 `s.tail(n)` is always called, and hands back a `Tail<Stored>` — `Iterable` **and**
 `AsyncIterable`, with nothing allocated until one of the two is pulled. The synchronous face is
-the snapshot, now:
-
-{% snippet tail src/ui/pages/console/page.abide function copyRecent() { %}
+the snapshot, now; the asynchronous one replays that snapshot and then goes live.
 
 `n` is **replay depth and nothing else** — `min(n, retained)`, defaulting to everything retained.
-It says how far back a reader starts and says nothing about what the reader goes on to
-accumulate. `tail(0)` replays nothing and goes live. Those are two different numbers, and the
-example above has both: `tail: 200` on the value is what may be replayed, `tail(50)` in the block
-is where this reader started.
+It says how far back a reader starts and says nothing about what the reader goes on to accumulate.
+`tail(0)` replays nothing and goes live. Those are two different numbers, and the card has both:
+`tail: 200` on the value bounds what may be replayed, `tail(3)` in the block is where that reader
+started.
+
+Both readers on the card see every arrival after they opened, which is the part worth being clear
+about — a bare cursor is not a smaller window onto the past, it is **no** window onto it.
 
 A bare `for await (… of s)` is the **live** cursor. It yields the production in flight from its
-start and then what follows it, and it replays no past value at all. Spell `s.tail(n)` where the
-ring is what you want first.
+start and then what follows it, and it replays no past value at all. Spell `s.tail(n)` where you
+want the ring first.
 
 The two walk different units. The ring holds past `Stored` values and the bare cursor yields
 `Produced`, which is why `Produced` is a type parameter of its own.
@@ -89,8 +92,6 @@ The two walk different units. The ring holds past `Stored` values and the bare c
 In a template that is the same pair. `{#for await item of source}` over a bare name goes live;
 spell `source.tail(n)` to replay the ring first, and `by` keys it exactly as `{#for}` does —
 a room's default key being the message's own `seq`.
-
-{% snippet tail src/ui/pages/console/page.abide {#for await line of records.tail(50)} … {#if line.text.includes(filter)} … {/for} %}
 
 There is no cap on what the **block** then accumulates. A stream painting a hundred thousand rows
 is yours to bound, exactly as a `{#for}` over a hundred thousand items is; conflating the two into
@@ -101,16 +102,17 @@ Read on: [Lists](../templates/repeat-markup-over-a-list.md) ·
 
 ## An undo stack builds on a state's own history
 
+{% example tail-undo %}
+
 A state's productions are its past values, so a `tail` past the default is the history an undo
 stack needs. abide gives you the history and not the stack, because what a stack should coalesce,
 discard and restore differs per app.
 
-{% snippet tail src/shared/undo.ts export function undoStack %}
+Two things decide how you build it.
 
-Two things decide how you build it, and both are on this page already.
-
-The copy-on-write below makes replay work at all: each retained entry has to be a
-distinct object, or every restore hands back the value already on screen.
+A write through a member path copies down that path, and that copy makes replay work at all: each
+retained entry has to be a distinct object, or every restore hands back the value already on
+screen.
 
 And **an undo is itself a write**, so it appends to the same ring — walk backwards through a ring
 you are also appending to and the second step reads the first one back. So the position lives
@@ -122,14 +124,13 @@ Read on: [Values by name](../templates/read-and-write-a-value-by-name.md)
 ## A mutated value replays nothing
 
 A write through a member path copies down that path and then sets, so the reference moves and
-readers wake — and because the copy is a
-distinct object, `structural` sees a change where mutating in place would have shown it none. The copy makes a tail
-worth having: `doc.title = 'Draft'` copies down the path, so
-each of those fifty entries is a distinct object. Mutate in place instead and the ring holds fifty
-references to one value — replaying it replays nothing, with nothing thrown and nothing wrong in
+readers wake. The copy is a distinct object, so `structural` sees a change where mutating in place
+would have shown it none, and a tail becomes worth having. `doc.title = 'Draft'` copies down the
+path, so each of fifty entries is its own object. Mutate in place instead and the ring holds fifty
+references to one value: replaying it replays nothing, with nothing thrown and nothing wrong in
 the markup.
 
-What it costs is a copy per write, so this is the wrong shape for a stream:
+It costs a copy per write, so this is the wrong shape for a stream:
 
 ```ts shared
 for (const row of incoming) rows.push(row)   // O(n²) — a copy per row
@@ -137,8 +138,8 @@ for (const row of incoming) rows.push(row)   // O(n²) — a copy per row
 
 Two escapes, and which one is right depends on what you wanted. `rows().push(row)` is the
 unlifted O(1) form — a read hands back the array, and pushing to it plainly wakes nobody. And
-where the point was a tail over the rows, the row should be produced: a `Reactive` whose
-value is the item, retained by `tail`.
+where you wanted a tail over the rows, produce the row: a `Reactive` whose value is the item,
+retained by `tail`.
 
 Read on: [Values by name](../templates/read-and-write-a-value-by-name.md) ·
 [Patching a list](patch-a-list-from-a-live-feed.md)

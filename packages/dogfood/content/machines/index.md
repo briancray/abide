@@ -34,13 +34,13 @@ definition and an OpenAPI operation need are the pieces `GET` and `POST` already
 | description | `description`, the one thing worth writing by hand |
 
 Fill in `description`. It is the sentence a model reads to decide whether this is the call it
-wants, and it rides onto every surface below.
+wants, and it rides onto every surface.
 
 ## The surfaces
 
 Two of the four are here. The CLI is the third framing of the same client, and it serves
 machines as readily: a script, a CI job, an agent that can run a command but not open an MCP
-session. Abide's commands belong in one place, so it is written with the rest of them.
+session. abide's commands belong in one place, so it is written with the rest of them.
 
 Read on: [OpenAPI](describe-your-api-without-writing-a-spec.md) ·
 [MCP](let-a-model-call-your-handlers.md) ·

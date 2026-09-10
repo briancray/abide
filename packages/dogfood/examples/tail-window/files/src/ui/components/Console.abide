@@ -1,0 +1,20 @@
+<script>
+import { token } from '#shared/tokens'
+
+const WORDS = ['Rotate', 'the', 'key', 'in', 'Settings', 'then', 'Keys.']
+
+let sent = 0
+
+function emit() {
+    sent += 1
+    token = { at: sent, text: WORDS[sent % WORDS.length] ?? '…' }
+}
+</script>
+
+<ul class="chat">
+{#for line of token.tail(50)}
+    <li><span>{line.at}</span><p>{line.text}</p></li>
+{/for}
+</ul>
+
+<button onclick={emit}>Next token</button>

@@ -1,0 +1,7 @@
+{
+    "title": "`watch(effect)` — run something outside the page on change",
+    "summary": "A contact's handle, and the browser tab that names what you are editing. Type into the field, then press Reset.",
+    "app": "crm",
+    "files": ["src/ui/components/Handle.abide"],
+    "route": "/contacts/42"
+}

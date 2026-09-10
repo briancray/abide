@@ -1,0 +1,29 @@
+<script>
+import { state, watch } from 'abide'
+
+let notes = state('Called Tuesday.')
+let owner = state('ada')
+let audited = state('')
+
+// Reads both, wakes on one. `sources` REPLACES the tracking, so
+// reading the notes plainly here subscribes to nothing.
+watch([owner], () => {
+    audited = `${owner} — ${notes.length} characters of notes`
+})
+</script>
+
+<div class="row">
+    <label>notes
+        <input bind:value={notes}>
+    </label>
+    <label>owner
+        <select bind:value={owner}>
+            <option value="ada">ada</option>
+            <option value="grace">grace</option>
+        </select>
+    </label>
+</div>
+
+<ul class="fields stacked">
+    <li><span>last audit line</span><strong>{audited}</strong></li>
+</ul>

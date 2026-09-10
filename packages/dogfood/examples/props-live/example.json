@@ -1,0 +1,10 @@
+{
+    "title": "`props()` — a prop is a live read, not a snapshot",
+    "summary": "An invoice's line count and the total a child component renders. Press + and watch the child.",
+    "app": "crm",
+    "files": [
+        "src/ui/components/Invoice.abide",
+        "src/ui/components/Total.abide"
+    ],
+    "route": "/invoices/4310"
+}

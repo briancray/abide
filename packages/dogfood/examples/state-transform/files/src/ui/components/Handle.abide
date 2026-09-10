@@ -1,0 +1,15 @@
+<script>
+import { state } from 'abide'
+
+// What you type is `Accepted`; what the field shows back is
+// `Stored`, and the transform is where the two come apart.
+let handle = state('', {
+    transform: (typed) => typed.trim().toLowerCase().replaceAll(' ', '_'),
+})
+</script>
+
+<label>handle
+    <input bind:value={handle} placeholder="Ada Lovelace">
+</label>
+
+<p>on the record: <strong>@{handle || '—'}</strong></p>

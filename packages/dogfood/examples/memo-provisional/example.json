@@ -1,0 +1,22 @@
+{
+    "title": "`memo(() => gate ? … : …)` — a branch on a gate that has not landed",
+    "summary": "A contact an auditor may read and not edit. Watch the top Save button, and press Reload to see it again.",
+    "app": "crm",
+    "files": ["src/ui/components/Contact.abide", "src/server/rpc/session.ts"],
+    "route": "/memo/provisional",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/session/getViewer",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"readOnly\": true\n}",
+            "latency": 1600
+        }
+    ]
+}

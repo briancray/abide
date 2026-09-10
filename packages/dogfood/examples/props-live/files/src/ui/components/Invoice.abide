@@ -1,0 +1,16 @@
+<script>
+import { state } from 'abide'
+import Total from '#ui/components/Total.abide'
+
+let lines = state(2)
+</script>
+
+<ul class="fields">
+    <li><span>lines</span><strong>{lines}</strong></li>
+    <li><span>total</span><Total amount={lines * 620}/></li>
+</ul>
+
+<div class="stepper">
+    <button onclick={() => { lines = Math.max(1, lines - 1) }}>−</button>
+    <button onclick={() => { lines = lines + 1 }}>+</button>
+</div>

@@ -1,0 +1,26 @@
+<script>
+import { memo, state } from 'abide'
+import { getMetrics } from '#server/rpc/metrics'
+
+const RANGES = ['7d', '30d']
+
+let range = state('7d')
+
+const metrics = memo(() => getMetrics({ range }))
+</script>
+
+<ul class="grid">
+    <li><span>range</span>
+        <div class="tabs">
+        {#for one of RANGES}
+            <button aria-selected={range === one}
+                onclick={() => { range = one }}>{one}</button>
+        {/for}
+        </div></li>
+    <li><span>orders</span>
+        <strong>{metrics.pending() ? '—' : metrics.orders}</strong>
+    </li>
+    <li><span>times computed</span>
+        <strong>{metrics.pending() ? '—' : metrics.computed}</strong>
+    </li>
+</ul>

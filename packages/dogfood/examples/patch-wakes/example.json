@@ -1,0 +1,7 @@
+{
+    "title": "`s.patch(mutate)` — change in place, and mint the production",
+    "summary": "A regional dashboard whose order counts arrive one region at a time.",
+    "app": "dashboard",
+    "files": ["src/shared/regions.ts", "src/ui/pages/dashboard/page.abide"],
+    "route": "/dashboard"
+}

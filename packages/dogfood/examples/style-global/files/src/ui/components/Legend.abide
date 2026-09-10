@@ -1,0 +1,13 @@
+<span class="badge">Overdue</span>
+
+<style>
+.badge {
+    color: rgb(163, 58, 58);
+}
+
+/* The scope token is not required on this compound, so the rule
+   reaches markup this component did not render. */
+:global(.invoice-legend) {
+    color: rgb(93, 108, 102);
+}
+</style>

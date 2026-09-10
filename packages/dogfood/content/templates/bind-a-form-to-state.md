@@ -11,35 +11,34 @@ covers:
   - `bind:value={{get, set}}`
   - state › `transform`
 examples:
-  - packages/dogfood/examples/form-binding
+  - packages/dogfood/examples/bind-text
+  - packages/dogfood/examples/bind-boolean
+  - packages/dogfood/examples/bind-group
 ---
 
 A form is state you can see. The usual cost of saying so is a handler per field — read the
 event, pull `target.value`, set the state, and remember to seed the input from the state on
 the way back. `bind:` is that pair written once.
 
-{% example form-binding %}
+## A text input binds with `bind:value`
+
+{% example bind-text %}
 
 *2 lines, 1 direction each* — and no handler between them.
 
-## A text input binds with `bind:value`
+`bind:value` reads the property and writes back on `input` or `change`. The state is the single
+copy — there is no separate form model to keep in step with it, and no submit handler needed to
+find out what the fields hold. A `<textarea>` and a `<select>` take the same binding.
 
-`bind:value` reads the property and writes back on `input` or `change`. The state is the
-single copy — there is no separate form model to keep in step with it, and no submit handler
-needed to find out what the fields hold.
-
-```abide abide
-<input bind:value={email}>
-<textarea bind:value={notes}></textarea>
-<select bind:value={plan}>
-    <option value="monthly">Monthly</option>
-    <option value="yearly">Yearly</option>
-</select>
-```
+The hand-written arm is a listener **and** a seeding line per field, and the seeding half is the
+one that gets forgotten: the page looks right until something other than the keyboard writes the
+state.
 
 Read on: [Local state](../values/show-a-value-that-changes.md)
 
 ## A checkbox and a `<details>` bind to a boolean
+
+{% example bind-boolean %}
 
 `bind:checked` is the boolean form. It mirrors a boolean DOM property as a boolean attribute
 and **never stringifies it**, so a `false` is an absent attribute rather than the string
@@ -63,6 +62,8 @@ The `{#if}` reads `showAdvanced` like any other value, which is the point of bin
 disclosure is state, so the rest of the page can branch on it.
 
 ## A radio group binds to one value, a checkbox set to an array
+
+{% example bind-group %}
 
 `bind:group` is membership rather than a value. Each input is compared against **its own
 `value`**, and `group` is never emitted as an attribute — it is a binding, not something that
@@ -131,7 +132,7 @@ rather than reaching `{#try}`. A schema refusal is a `ValidationError`, and on a
 **The field is not clobbered while you type.** A refused write does not move the stored value,
 so nothing wakes the read-back side of the binding and the `f` you just typed stays where it is.
 `error()` is a separate signal, so the message renders beside it. Two rules you already have,
-doing it between them.
+doing the work between them.
 
 `set` returns the refusal too, so a submit handler can act on it at the call site instead of
 reading back.
@@ -212,9 +213,8 @@ the child declaring it lets the compiler check every caller.
 
 Read on: [Components](reuse-a-piece-of-markup.md)
 
-
 ## Next
 
-* [Events](respond-to-a-click.md) — when a handler is what you actually want
+* [Events](respond-to-a-click.md) — when you actually want a handler
 * [Local state](../values/show-a-value-that-changes.md) — the thing being bound
 * [Schemas](../server/check-what-callers-send-you.md) — checking a body at the boundary

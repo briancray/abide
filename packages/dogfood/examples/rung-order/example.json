@@ -1,0 +1,9 @@
+{
+    "title": "`middleware: [rung]` — a check that runs before the parse",
+    "summary": "The recent invoices. Ask for nine while signed out, then sign in and ask again.",
+    "app": "crm",
+    "about": "server",
+    "files": ["src/server/rpc/invoices.ts", "src/ui/components/Recent.abide"],
+    "route": "/invoices",
+    "served": "server.ts"
+}

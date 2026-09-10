@@ -1,0 +1,16 @@
+<script>
+import { state } from 'abide'
+import { undoStack } from '#shared/undo'
+
+// A state's productions ARE its past values, so a tail past the
+// default is the history an undo stack needs.
+let draft = state('How do', { tail: 50 })
+
+const undo = undoStack(draft)
+</script>
+
+<label>message
+    <input bind:value={draft}>
+</label>
+
+<button onclick={() => (draft = undo.back())}>Undo</button>

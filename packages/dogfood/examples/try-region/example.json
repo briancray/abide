@@ -1,0 +1,7 @@
+{
+    "title": "`{#try}` — a boundary over a region, not over a line",
+    "summary": "An invoice converted at a rate you type. Clear the field and watch what goes with it.",
+    "app": "crm",
+    "files": ["src/ui/components/Total.abide"],
+    "route": "/invoices/4310"
+}

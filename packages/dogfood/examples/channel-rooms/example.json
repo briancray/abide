@@ -1,0 +1,10 @@
+{
+    "title": "`channel<Turn, Args>()` — one declaration, a room per key",
+    "summary": "Two conversations behind one address. Send something in onboarding, switch to billing, send there, and come back.",
+    "app": "chat",
+    "files": [
+        "src/shared/conversations.ts",
+        "src/ui/pages/chat/[conversation]/page.abide"
+    ],
+    "route": "/chat/onboarding"
+}

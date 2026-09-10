@@ -70,25 +70,25 @@ since D55, fifty-two entries later.
 
 **Decides:** 11.20, 11.22, 11.23.
 
-# D4. The key is taken before the schema runs
+# D4. The key is taken before the args gate runs
 
 **Refused:** keying on the validated, normalised args.
 
-**Because** a browser holds no copy of `args`, so a key taken after the schema is computed one way
+**Because** a browser holds no copy of `args`, so a key taken after the gate is computed one way
 on a server and another in a browser: every handler with a normalising schema would miss its seed
 buffer and re-issue the call on hydration.
 
-**Consequence:** a normalising schema changes what the body sees and never which entry it is, so
-`{ id: 'ABC' }` and `{ id: 'abc' }` are two entries and nothing warns. Args that must collapse are
-normalised by the caller.
+**Consequence:** a normalising gate changes what the body sees and never which entry it is, so
+`{ id: 'ABC' }` and `{ id: 'abc' }` are two entries, which 11.63 leaves unwarned. Args that must
+collapse are normalised by the caller.
 
-**Decides:** 11.28, 11.29, 11.30.
+**Decides:** 11.28, 11.29, 11.30, 11.63.
 
-# D5. Defaults are syntax, not schema
+# D5. Defaults are syntax, not the args gate
 
-**Refused:** letting `.default(20)` in a schema participate in the key.
+**Refused:** letting `.default(20)` in the `args` gate participate in the key.
 
-**Because** a schema default is post-key normalisation, so `getInvoices()` and
+**Because** a gate's default is post-key normalisation, so `getInvoices()` and
 `getInvoices({ limit: 20 })` would land on two keys and the commonest args pattern there is would
 double-load silently.
 
@@ -98,9 +98,12 @@ double-load silently.
 
 **Refused:** a byte ceiling, and an LRU count.
 
-**Because** measuring an arbitrary `Stored` costs the walk `identity` already declines to pay by
-default, and an LRU would evict an entry a reader is mid-flight on. The bound is a number the app
-knows and abide does not.
+**Because** measuring an arbitrary `Stored` costs a byte walk to the leaves, where the `structural`
+compare 5.4 makes the default short-circuits on reference equality and bails on the exotic types a
+size would still have to price; and an LRU would evict an entry a reader is mid-flight on. The bound
+is a number the app knows and abide does not.
+
+**Assumes:** 5.4, 11.37.
 
 **Decides:** 11.37, 11.38.
 
@@ -108,9 +111,10 @@ knows and abide does not.
 
 **Refused:** stating it as advice.
 
-**Because** advice is remembered per call site, and this is what licenses deriving `cache-control`
-from a global memo's `ttl` — not a promise the app made and might have broken, but a shape the build
-refused to compile.
+**Because** advice is remembered per call site, and this is what licenses deriving the `max-age` in
+`cache-control` from a global memo's `ttl` — not a promise the app made and might have broken, but a
+shape the build refused to compile. The directive beside it is not licensed here and is D72's,
+access being a different axis from variance.
 
 **Decides:** 11.39, 21.9.
 
@@ -163,7 +167,9 @@ model retries instead of re-planning, and a page in front alerting on it.
 
 **Decides:** 15.4.
 
-# D13. Two named refusals and no more
+# D13. Named refusals are few, and the rest stay undeclared
+
+*Amended by D63: the count is three, `HttpError` being the third.*
 
 **Refused:** declaring names for the rest of what abide raises.
 
@@ -318,6 +324,10 @@ read, lifting a subexpression would change what the memo depends on.
 
 **Decides:** 31.3.
 
+*D29 through D33 were never written. Five clauses shipped citing them during the split and were
+repointed; the numbers are burned rather than free, per format rule 5, so an old `See D30` in a
+plan, a commit message or a review comment resolves to this note rather than to silence.*
+
 # D34. One JSON Schema spelling is probed, not a registry of vendors
 
 **Refused:** a table of schema libraries inside the framework.
@@ -394,16 +404,16 @@ equivalent is a claim only the controls are checked against. It stands until the
 
 **Decides:** 40.19, 40.20, 40.21, 40.22.
 
-# D41. A demo per behaviour, counting itself
+# D41. A demo per behaviour
 
 **Refused:** one realistic problem per page, with every section a snippet cut out of it.
 
 **Because** that shape sizes the example by how many names the page claims, and it puts the
 evidence somewhere the render is not. A page teaching six behaviours had to invent a domain
 needing all six, so a reader spent attention on customers and exchange rates to reach a claim
-about caching — and the claim itself lived in an authored bench row rather than on screen. A demo
-that counts its own work makes the number the reader's to check, and the domain shrinks to
-whatever the count needs.
+about caching — and the claim itself lived in an authored bench row rather than in anything that
+ran. A demo scoped to one behaviour shrinks the domain to whatever that behaviour needs, and what
+such a demo then owes a reader is D45's.
 
 **Consequence:** the arm has to hold the invariant the card claims, because the arm is what runs.
 The hand-written cache and the hand-written dependency list are no longer only what the ratio is
@@ -589,7 +599,7 @@ that cache. The bespoke version was a second spelling of 7.2, which is what 13.4
 everywhere else. As a `global` memo it also inherits 11.39, so a config body reaching for the
 request is a build error rather than a convention nobody wrote down.
 
-**Consequence:** `Config` is declaration-merged like `Bag` and `Shared`, which drops the type
+**Consequence:** `Config` is declaration-merged like `Shared`, which drops the type
 parameter every `config()` call site used to carry.
 
 **Decides:** 27.10.
@@ -724,8 +734,8 @@ scroll handler spellable at all.
 
 **Refused also:** letting a window drop what it collapsed. A cursor over a capped room would lose
 messages, and 18.16 keys that block by sequence number, so the gaps would read as reordering rather
-than as loss. A window collapses a batch into one delivery instead, which is 35.10's shape with a
-window where the flush is — and for a scalar read the batch is the latest value, so one rule reads
+than as loss. A window collapses a batch into one delivery instead, narrowed by D68 to what retention
+still holds, which is 35.10's shape with a window where the flush is — and for a scalar read the batch is the latest value, so one rule reads
 as two behaviours.
 
 **Consequence:** `s.refreshing` answers "an update is owed" rather than "a reload is in flight",
@@ -777,8 +787,9 @@ and nothing required one — leaving a process-wide table with a permanent entry
 ever published to, in a design that refuses size-based eviction elsewhere on principle.
 
 **Consequence:** navigating away and back finds an empty room rather than the tail it left. History
-past the ring was already app data behind an ordinary rpc, per 9.13, and the cursor joins the two
-without a gap.
+past the ring was already app data behind an ordinary rpc, per 9.13, and that rpc is what a
+returning reader joins on. What tells the reader which of the two it is looking at is the epoch,
+and D100 is what makes the discard move one.
 
 **Decides:** 9.17.
 
@@ -916,7 +927,8 @@ that branches is out of reach of any syntactic check, and an error that misses t
 teaches a reader that the direct one is the whole hazard.
 
 **Consequence:** the wrong branch's call is still issued, D70 being why it cannot be deferred, and
-what stops that is the author spelling the gate — `{await}` per 32.2, or `s.settled` per 2.7. The
+what stops that is the author spelling the gate — `{await}` per 32.2, or awaiting the value per
+2.12 and D95. The
 framework's half is that nothing a provisional run touched is retained, stored, shaped or served,
 and that no second mechanism is needed for it: every path downstream already runs per production.
 
@@ -944,12 +956,12 @@ already stated once as `ttl`, and a second spelling in a `ResponseInit` is the d
 exists to stop. `private` with a derived `max-age` is a browser cache rather than a shared one,
 which is the half that needed no permission.
 
-**Consequence:** an app whose global answer really is open says `public` itself, per 21.4 — the
+**Consequence:** an app whose global answer really is open says `public` itself, per 21.11 — the
 direction where being wrong is visible on the endpoint that chose it.
 
-**Assumes:** 11.39, 21.4.
+**Assumes:** 11.39, 21.11.
 
-**Decides:** 21.9, 21.10.
+**Decides:** 21.9, 21.10, 21.12.
 
 # D73. A seed-buffer miss is a mismatch
 
@@ -1024,3 +1036,664 @@ that skipped the rungs would be the single call in an app that nothing guards.
 
 **Decides:** 16.46.
 
+# D77. An example may serve itself
+
+**Refused:** a wire fixture per address the arm asks for.
+
+**Because** a field filtering as it types asks a different address per keystroke, and a fixture is
+authored against one. The prefixes a reader plausibly types toward three names are about twenty
+entries, and the Requests panel is a tab per entry — so the set that makes the frame answer is the
+set that makes the panel unreadable. `vanilla/server.ts` is already the hand-written half every
+ratio is against, and running it makes the answer real code rather than a bigger pile of authored
+ones.
+
+**Consequence:** the panel and the network are two artifacts for an example that serves itself,
+where the fixture was both, so an exchange the panel shows is no longer one the frame performed —
+`served.test.ts` dispatches every wire entry through the routes instead.
+
+**Decides:** 40.20.
+
+# D78. A member access on a reactive name short-circuits
+
+**Refused:** lowering `foo.bar` to `foo().bar` and leaving the optional chain to the author.
+
+**Because** the fault is silent in exactly the case it matters and loud nowhere else. 2.2 hands back
+`undefined` before a value lands, so an unguarded access throws a `TypeError` out of a body that is
+correct on every run after the first — and D70 is why there is a first run at all, a body running to
+completion against unlanded sources rather than aborting and retrying. The throw then fails the
+producer, and 2.3 turns every later read of what it fed into a throw of its own, so one absent `?.`
+converts a one-frame absence into a permanent failure. A guard the author writes is a guard the
+author forgets, and 31.7 already commits to the access reaching the value rather than the
+`Reactive`, so there is one lowering to put it in.
+
+**Refused also:** typing the access as `Stored` and treating the absence as a fact only the runtime
+knows. An author writing `?.` against a non-nullable type writes a chain the checker calls
+redundant, and 32.25 loses the thing it narrows FROM — a block binding each read once then reads as
+common-subexpression elimination rather than as the narrowing it is.
+
+**Consequence:** the guard is uniform and unwritten, a whole chain short-circuiting with its
+receiver and a block over an absent list iterating zero times. What it does not do is decide which
+arm is right — the branch still takes its `else`, which is D71's subject, and a gate is still
+spelled with `{await}` or by awaiting the value, per D95.
+
+**Assumes:** 2.2, 2.3, 31.7, 32.25.
+
+**Decides:** 31.12, 32.26.
+
+# D79. Only a definitely-evaluated read is started early
+
+**Refused:** hoisting every read an `{await}` operand mentions into the set 31.10 starts.
+
+**Because** a read the expression would never have performed is a load nothing asked for. The set is
+syntactic, which is what lets it be one parallel start rather than a chain, and syntax cannot tell
+which arm of a conditional runs — so a hoist over `flag ? a.x : b.y` starts both and blocks the hole
+on whichever is slower, having been told to fetch one. The same reaches the right operand of `&&`,
+`||` and `??`, where the left operand exists precisely to decide whether the right one is evaluated,
+and a body nested inside the operand, which may never be called at all.
+
+**Consequence:** those reads lower in place and serialize, which is the correct trade for a read
+that might not happen. The reads that do hoist are the ones the expression performs unconditionally,
+so 41.2's single parallel start covers the common shape and the conditional shape pays for itself.
+
+**Assumes:** 31.10, 41.2.
+
+**Decides:** 31.13.
+
+# D80. The mutator lift is type-directed
+
+**Refused:** lifting a member call by NAME, on a list of the mutators a built-in carries.
+
+**Because** a payload may carry a `push` of its own. A name-directed lift reads that call as a write
+through the path, copies down it per 31.11 and hands the copy to a method that meant to mutate what
+it was given — so the app's own method runs against a copy nothing else holds, and the write it
+performed is discarded silently. The type is what separates the two, and it is available at exactly
+the site that decides.
+
+**Consequence:** where the type does not resolve to a built-in mutator the call falls to 31.8 and
+reaches the value, which is the unlifted `O(1)` escape a stream wants — and it stays available
+deliberately, 31.11's copy per write being `O(n²)` over an accumulating value.
+
+**Assumes:** 31.8, 31.11.
+
+**Decides:** 31.14.
+
+# D81. abide's own inline script is hashed, not nonced
+
+**Refused:** stamping `csp.nonce` on the inline output `render` emits.
+
+**Because** the nonce is minted per response and the head is not. A nonce in abide's own output puts
+a per-request byte inside the one region of the document that is otherwise identical for every
+caller, so the shell head stops being a buffer cut once at boot and becomes a string rebuilt per
+render. What abide emits inline is its own code rather than the app's, it is fixed at build time,
+and a hash is the mechanism that fits a constant — 29.10 is what makes it available, and D39 is why
+there is no third inline string to hash, an answer never reaching the document at all.
+
+**Refused also:** widening the baseline to `'unsafe-inline'` and dropping the question. That
+disables the hash and the nonce together for every script on the page, so an app's own inline script
+loses the protection `csp.nonce` exists to give it, in exchange for abide not having to build two
+constants.
+
+**Consequence:** nothing in the head consumes a nonce, which is what lets the head be cut once at
+boot. `csp.nonce` is left to the app's own inline `<script>`, which renders in the body and is
+per-request anyway.
+
+**Assumes:** 29.5, 29.10, 41.6.
+
+**Decides:** 29.9.
+
+# D82. A lazily reached scope is adopted, not injected
+
+**Refused:** injecting a `<style>` element for a route's scope when navigation reaches it.
+
+**Because** a `<style>` element is inline output and `style-src` governs it, so every lazily
+navigated route would need a nonce or a hash for a stylesheet the build already content-hashed. A
+constructed sheet is not an element, `style-src` does not reach it, and the scope arrives by the
+same content-hashed artifact 34.5 already made it a dependency of.
+
+**Refused also:** a fallback for engines without the mutable-array form. It is Chrome 99, Firefox
+101 and Safari 16.4, so the newest engine lacking it predates anything abide targets — and a
+fallback path for no live engine is a second style transport that every later change has to keep
+working, tested by nothing.
+
+**Consequence:** a branch that mounts later on a route already linked needs none of this, its scope
+having been in the sheet before the branch existed. Nothing an app writes differs between the two
+cases.
+
+**Assumes:** 34.3, 34.5.
+
+**Decides:** 34.6, 34.7.
+
+# D83. The caller handle stays on the server
+
+**Refused:** exposing `principal.caller` to a browser as the other members of `principal` are.
+
+**Because** the one client-side use for a stable per-visitor id is the fingerprinting the handle
+must not become. Server-side it is a key for what an app stored against this browser, and the app
+already holds both ends. Handed to a browser it is a durable identifier any script on the page can
+read and forward, surviving a sign-out only until 26.7 rotates it — and abide would have shipped the
+identifier rather than the app having chosen to.
+
+**Consequence:** it is not a field of `Principal`, so nothing carries it over the wire, and reading
+it in a browser is a throw rather than a silent `undefined` — a value that reads as absent invites a
+fallback, where a throw names the side it belongs to.
+
+**Assumes:** 26.5, 26.7, 26.10.
+
+**Decides:** 26.23.
+
+# D84. A load a write supplies over a served value refreshes rather than pends
+
+**Refused:** reporting `s.pending` for every load, on the reading that 4.2 makes a load one thing
+wherever it arrives.
+
+**Because** the two probes answer different questions, and 4.2 asks neither: it says the value is
+loaded, where `s.pending` says there is nothing trustworthy to show. Over a landed value there is,
+and a uniform `pending` would blank a rendered value on every reload — 3.4 opens a sink on it, so a
+second write of a load would pull a filled hole back open. That is the flash 7.4 and 7.5 exist to
+avoid, and it would have arrived through the write path instead of the trigger path, with no option
+naming it and nothing in the design saying the two paths differ.
+
+**Consequence:** `s.set` and `s.refresh` land on one probe over a value being served, which is what
+a reader watching a spinner already assumed, and the difference between them stays where it is
+observable — what `s.refresh` reloads from, and what a write supplies.
+
+**Consequence:** the entry is what has landed, rather than the `memo` that holds it, so the two
+places a value changes identity underneath a reader keep pending. A fresh `Args` key is a different
+`Reactive` with nothing on it, and 11.16 and 11.19 have a re-adoption take the newly adopted
+`Reactive`'s report rather than the outgoing one's. Neither is a write, and this entry decides
+nothing about either.
+
+**Assumes:** 7.9, which is the one case where a landed value is not being served: an
+`s.invalidate` marked it stale, and a load over it pends.
+
+**Decides:** 3.14.
+
+# D85. An unrun memo is pending, not empty
+
+**Refused:** reporting every probe false until the body has run.
+
+**Because** false everywhere is a value that has finished with nothing, and it is indistinguishable
+from one — a template reads `s.success` false, `s.pending` false, and renders the empty branch for a
+computation that has not started. The report was an artefact rather than a position: a propagated
+probe derived from the source list (11.22) has no sources to walk before the first run, and reading
+zero of them as "nothing in flight" answers about a walk instead of about the value.
+
+**Consequence:** 3.2 still holds — the probe reports the work owed rather than starting it, so a
+`memo` nothing has read is pending until something reads it, and the first read is what runs the
+body. The keyed form is in it for the same reason and not a case beside it: 11.4 computes an entry
+on the first read of that key, a probe is not a read, and a key nothing has read yet is therefore
+the same unrun body under a different name. What 11.25 withholds from a keyed `memo` is
+propagation, which is a report about the values a body read rather than about the body.
+
+**Assumes:** 11.5, 11.21, 11.22.
+
+**Decides:** 11.61.
+
+# D86. A probe over an uncomputed key allocates nothing
+
+**Refused:** one get-or-create serving both paths, so that a probe reaches an entry the way a read
+does.
+
+**Because** the shared lookup is the simpler implementation and it is the one 13.2 cannot survive.
+Only a read runs a body, per 11.4, and 11.61 has an unrun body report pending — so a slot a probe
+created is pending with nothing left that can move it, and a `Selection` over the `memo` answers
+true forever after one probe of a key nobody reads. The rest of the cost lands where nothing is
+looking: 11.38 refuses size and count eviction on a `global` `memo`, so the slot stays for its
+`ttl`, and 11.55's single timer is armed at the oldest entry, which is the one that will never
+produce.
+
+**Consequence:** the probe path reads the map and the read path is what writes it, which is the
+split 9.16 already made for a room — a subscribe allocates nothing and reads as pending, and a
+publish is what brings the room into existence. A key is a question until something reads it, on
+both mechanisms, and the face `m` hands back for an uncomputed key is a way to ask rather than the
+entry itself.
+
+**Assumes:** 11.4, 11.38, 11.55, 11.61, 13.2.
+
+**Decides:** 11.62.
+
+# D87. Structural for a value, the reference for a message
+
+**Refused:** one default `identity` across every producer.
+
+**Because** the two disagree about what a repeat is. A state and a memo RE-MATERIALISE: a reload
+that fetched an equal payload built a fresh object for a value that did not change, and comparing
+by reference there never fires — every reader wakes on every reload, which is the silent failure
+the invariant is written against. A publish is the opposite. Two identical messages are two events
+somebody sent on purpose, and structural comparison delivers one: the second collapses under 5.2
+and 9.8 hands the publisher back the standing sequence number, so a chat sending `ok` twice reports
+a delivery that did not happen. Comparing by reference collapses a literal republish of one object,
+which is a re-send rather than a second message.
+
+**Consequence:** the divergence belongs to the producer and not to the option — `identity` is one
+name with one meaning wherever it is declared, and a room that wants de-duplication declares it as
+anywhere else would. What the split costs is that which default is in force is decided by which
+factory was called, and a reader carries that.
+
+**Assumes:** 5.2, 9.8.
+
+**Decides:** 5.4, 5.5.
+
+# D88. A per-request value is a memo, not a record of its own
+
+**Refused:** `bag`, an untyped record carried for the life of one request with its own
+declaration-merged interface for the keys.
+
+**Because** it was the third thing D52 found already had every part of a `memo` and the one that
+escaped the finding. 11.34 makes an unkeyed `memo` request-local on a server without an option
+saying so, 11.40 coalesces two reads in one scope into one load, and the body's return type is the
+declaration — where `Bag` was a second artifact an app edited to teach the record what it already
+held. The record also carried none of the surface the value has anyway: a rung resolving a user
+had nowhere to put the load, so `pending`, `error` and `invalidate` were absent from the one
+per-request value most likely to want all three.
+
+**Consequence:** where a rung awaited the value so every handler could read it synchronously, the
+await stays in the rung and fills the memo rather than the record — a memo is what a rung writes
+to under 11.7, and 26.15 already has `principal` in exactly this shape. What changes for a handler
+that did not want the rung is that the await becomes visible at the read, which is 2.1 and 2.2
+being true of this value the way they are of every other.
+
+**Assumes:** 11.7, 11.40.
+
+**Decides:** 11.34.
+
+# D89. The response is an ambient, not a helper per framing
+
+**Refused:** a body helper that CONSTRUCTS a `Response` — `json`, `jsonl` and `sse` as they were,
+each taking a `ResponseInit` so a handler could set a header.
+
+**Because** the helper bundled the header with the framing, and only the header was the handler's
+to decide. 16.32 and 16.34 already derive the framing from what the handler returned and what the
+caller asked for, so reaching for `sse` to set one header hard-coded the negotiation — and 16.36
+holds the seed transcript in the chunk type's own framing whichever framing went out, which a
+hard-coded one has no answer for. The escape hatch was worse than the helpers: a bare `Response` costs the MCP and CLI
+surfaces outright under 16.40, so the price of one header was two of the four surfaces.
+
+`cookies` is the same mechanism over one header and was already in the design, request-scoped and
+collecting its writes onto the response under 22.3 — so the general form is the one name that was
+missing rather than a new idea.
+
+**Consequence:** `json` goes and does not come back, a settled value having nothing to be early
+about — 16.32 frames it the moment the handler returns. What D92 restores is `jsonl` and `sse`, with
+`bytes` beside them, as writes through `response` rather than as constructors, which is the half of
+them this entry was never against.
+
+**Consequence:** a status does not compose the way a header does. A handler read in process during
+a render is answering into the page's response, where a cookie it sets belongs and a 201 does not,
+so a status written through `response` joins the wire-only list in 16.14 and is inert in process.
+That is the inert-variant shape rather than an exception: one name everywhere, doing nothing on the
+call that has no wire.
+
+**Assumes:** 16.32, 16.34, 16.36, 16.40, 22.3.
+
+**Decides:** 21.11, 22.11.
+
+# D90. A refusal is returned, and the throw is the exception
+
+**Refused:** `refuse` throwing while every declared refusal is returned.
+
+**Because** the two disciplines shared a prefix and nothing but the documentation kept them apart.
+15.6 has a declared refusal refuse by being returned and 15.11 makes a discarded one a compile
+error, so the gate that catches the mistake was already written over the returning form and could
+not see the throwing one. Returning also puts the undeclared refusal inside the check: `refuse(404)`
+written as a statement is now the compile error 15.11 states, where a throw made the same line
+correct and the reader could not tell which they had written.
+
+**Refused also:** the reverse — one verb that throws, taking a declared refusal, as
+`refuse(overdrawn({ amount }))`. A thrown value carries no type, so `Failures` could no longer be
+computed the way 1.4, 15.2 and 16.9 compute it. Inferring it from the call sites reaches direct
+calls and not a handler that refuses through a helper, which reports a union NARROWER than the
+truth — and a caller's `rpc.isError` exhaustiveness is then wrong in the direction nothing catches.
+D71 refused a syntactic check on the same ground.
+
+**Consequence:** the throw survives where there is no return channel, and 18.4 is the one place —
+a `SocketEvent` rung answers `void`, so a socket refuses with `throw refuse(403)` and 15.11 does
+not reach a throw statement. The other cost is a helper refusing three frames deep inside a handler
+body, which returns up rather than unwinding; 16.17 already has a rung short-circuit by returning,
+so the onion needed nothing.
+
+**Assumes:** 15.6, 15.11, 16.17, 18.4.
+
+**Decides:** 17.8.
+
+# D91. The framing is a table the chunk type indexes, not a clause per framing
+
+**Refused:** naming each framing in its own clause — jsonl as the default, and sse as the one
+`Accept` value that overrides it.
+
+**Because** the second framing was written as an exception to the first, so a third could only
+arrive as a second exception. `Accept` is already a negotiation the protocol defines over a set,
+and abide was answering it with one hard-coded comparison — which also restated 21.8, the `vary`
+that every header-dependent answer carries anyway. As a table indexed by the chunk type, adding a
+framing is a row, and the default falls out of the order rather than needing a clause to say which
+one it is.
+
+**Refused also:** letting `Accept` choose across chunk types. A stream of bytes asked for as jsonl
+would frame each chunk as an array of numbers, which is the shape a caller least wants and the one
+16.34 produced before the chunk type bounded the set. What a caller negotiates is the framing among
+those its chunks admit, and a byte stream admits one.
+
+**Consequence:** the seed buffer's unit follows the chunk type rather than being jsonl by name, so a
+byte stream's transcript is bytes and 41.8 answers a re-executed read of one without a transcoding
+step in the middle. A `Blob` returned whole keeps 16.38's range support and a stream does not, which
+is the trade between the two spellings rather than a gap in either.
+
+**Assumes:** 16.37, 16.48, 16.49, 21.8, 41.8.
+
+**Decides:** 16.34, 16.36, 16.50.
+
+# D92. A helper exists where the derivation would otherwise be late
+
+**Refused:** deriving every framing from the first chunk, with no way for a handler to name one.
+
+**Because** response headers precede the body, so a framing read off the first chunk holds every
+header until that chunk exists — and the streams most worth streaming are the ones whose first
+chunk is slowest. A token stream waiting on a model, or a report whose first row is a cold query,
+would send nothing at all until it arrived, so time to first byte became time to first chunk. It is
+worse than a latency figure for one framing: a browser's `EventSource` reports an open connection
+off the headers, so a reader could not learn the stream had been established.
+
+Only the CHUNK TYPE was ever late. `Accept` arrives with the request, so the negotiation 16.34 makes
+could always have run at once, and 16.51 is what is left of the wait — value against binary, read
+off the first chunk rather than off a type, which is what keeps a server free of a compile step.
+
+**Refused also:** a fourth name declaring the chunk type without fixing the framing, which would
+keep the negotiation alive for a handler that only wanted its headers out. It is the more precise
+tool and it is a fourth concept for a cost nobody has measured yet; the three that fix are a
+superset in effect, and the narrower one can arrive later without moving any of them.
+
+**Consequence:** a handler reaching for `sse` to flush its headers has also declined to serve jsonl
+to a caller that asked for it, per 17.11. That coupling is the price of three names rather than
+four, and it is visible at the call site, which is where a reader can undo it.
+
+**Assumes:** 16.34, 16.50, 16.51.
+
+**Decides:** 17.10, 17.11.
+
+# D93. A room's envelope is the room's, not the socket's
+
+**Refused:** framing a room over http as bare messages, the sequence number and the epoch being
+things the socket lane carried.
+
+**Because** 18.16 makes the sequence number the DEFAULT KEY of a `{#for await}` block over a `Room`,
+and 41.9 has a block the server already painted reconciled against the replayed productions BY THAT
+KEY rather than appended to. So a room declared as a `GET` over a `Channel` had a key its own wire
+did not carry, and hydration could only append — which is the duplicate paint 41.9 exists to refuse.
+It was not a missing feature but a clause that could not run on one of the two transports its
+producer is reachable through.
+
+The epoch travels for the same reason one level up: 18.14 delivers the ring marked as a reset and
+18.15 has a block clear and repaint, and a client that cannot see the epoch move cannot tell a reset
+from a gap.
+
+**Refused also:** building abide's own client on `EventSource`, which would have brought reconnect,
+backoff and the resume free. It takes a url and `withCredentials` and nothing else, so it cannot set
+a request header — and 24.6 has `trace.headers` carry `traceparent` on an outbound request, with
+21.2's `traceresponse` correlating the answer against it. A room read that way is a hole in the
+trace, and every argument for it was an argument for machinery the constraint puts out of reach.
+
+**Consequence:** the client reads a room over `fetch` on both lanes and reconnects itself, so 18.13
+is one mechanism rather than two spellings of one, and jsonl's byte of framing per chunk is what a
+room costs rather than sse's eight. sse keeps `id:` and `event: reset` under 16.53 and 16.54, which
+is a courtesy to a hand-written `EventSource` outside our client rather than the path we take.
+
+**Assumes:** 18.10, 18.11, 18.13, 18.14, 18.16, 24.6, 41.9.
+
+**Decides:** 16.52, 16.53, 16.54.
+
+# D94. The seed is the render's own production, not a second call
+
+**Refused:** filling the seed buffer by issuing the call again once the render has finished with it.
+
+**Because** 16.12 runs a rung on every call, so the second one runs the authorization, the rate limit
+and the logging a second time to record an answer that already existed. 11.40 does not cover it:
+coalescing is over the LOAD, and an entry already cached in the scope is still reached through the
+rungs — and a mutation carries `ttl` 0 under 16.7, so there is no entry to reach.
+
+The refill also records something the page never showed. A value that moved between the render and
+the refill leaves a document and a seed that disagree, and the disagreement surfaces at the client
+as the hydration mismatch 41.13 names — against a page that was correct when it was written.
+
+**Consequence:** the buffer can hold only what the render read, which is what makes 41.13 legible:
+a miss means the client took a path the server did not, rather than meaning the buffer was filled
+from somewhere else and came up short. D39's account of what is saved — the handler's work, not the
+round trip — is now a requirement rather than an assumption it was resting on.
+
+**Assumes:** 11.40, 16.7, 16.12, 41.13.
+
+**Decides:** 41.14.
+
+# D95. A `Reactive` is thenable, and `s.settled` goes
+
+**Refused:** the ban 1.2 carried — a `Reactive` with no promise face at all, and every gate spelled
+`s.settled`.
+
+**Because** the ban was paying for a discrimination rather than for a semantics. Thenability was
+reserved across the design as the mark of a load — 4.1 and 4.2 for a write, 8.4 for a store's
+synchronous `get`, 11.11 for a `memo`, 31.5 for an assignment — and nothing ever had to state the
+reservation while one type was exempt from it. What the exemption bought was a value with no
+`await`, and the server is where that costs: 16.4 has an `Rpc` callable in both arms, and the
+in-process arm is an async function whose natural spelling for a read is the one the ban removed.
+
+**Refused also:** `then` alone, with `catch` and `finally` withheld. Three members over one settling
+is a single concept; the member plus two exceptions is two, and the exception is the half a reader
+has to be taught. Withholding `finally` also reads as a claim about 3.9 — a room whose `s.done`
+never turns true — and 1.6 makes no such claim, what ends being the settling rather than the value.
+
+**Refused also:** keeping `s.settled` beside the promise face. Once `s.then` answers, the method is
+a second spelling of one concept and every call it could serve is a call `await` serves — the
+replaced path that CLAUDE.md has leaving in the same change. Dropping it is also what makes 2.12
+and 2.13 land on one member, `catch` and `finally` following from it by 1.6 rather than three
+delegations standing side by side. It is a public name, so the removal is the discussion that rule
+asks for rather than an assumption inside it.
+
+**Consequence:** the reservation stops being a coincidence and becomes 1.7, and the collision it
+settles is 11.11 against 11.12. Adjacent clauses, disjoint only while 1.2 held, and both now answer
+to a `memo` body returning a `Reactive`. Resolved the other way the returned value is awaited to one
+settled `Stored` and kept, which is what D43 refused and diagnosed in advance: 11.13's mirroring
+goes, and 11.19's forwarded `pending` reads false for the whole of the load it wraps. 14.7 makes
+`memo(() => call(args))` the compulsory spelling, so the wrong branch would be the common one rather
+than an edge.
+
+16.43 needs no exception. An async handler returning a `Reactive` types as its `Stored` once the
+value is thenable, so the return type no longer carries one and the check never fires there; the
+same value nested in a returned object is untouched by `await`, still carries it, and stays the
+compile error D60 is about. The split falls out of the type rather than being written.
+
+The price is one branch order in a per-interaction path — the load test reads for the brand before
+it reads for `then` — and D71's and D78's gate is now `{await}` in a template and `await` on the
+value everywhere else, the third spelling those entries named having gone with the method.
+
+What the removal does not buy back is a cached promise. `s.then` observes the settling in flight
+when it is called, so a re-await re-reads and an assimilated `Promise.resolve` freezes one
+settling — which is what `s.settled` did too, and is a fact about the value rather than about
+either spelling.
+
+**Assumes:** 2.3, 3.9, 4.1, 4.2, 8.4, 11.11, 11.12, 11.13, 11.19, 14.7, 16.4, 16.43, 31.5.
+
+**Decides:** 1.5, 1.6, 1.7, 2.12, 2.13.
+
+# D96. An option is uniform, and stands inert where it does nothing
+
+**Refused:** withholding an option from the one producer it cannot mean anything on, and typing the
+withholding.
+
+**Because** the withheld option is two concepts where the uniform one is a single concept: the
+option, and the exception to it. 18.17 was the worked case — `clients` on a `socket` omitted the
+`openapi` key, and paying for the omission meant `Clients` became two types, one per producer, so
+every reader of either had to know which it had. An option that exists everywhere and does nothing
+on one producer is understood from the invariant it already carries; the same option withheld there
+has to be taught, is a branch in the implementation, and is a case in every debugging session after
+that. 20.2 replaces it: the key is there, it defaults on, and a `socket` generating no OpenAPI
+operation is the answer rather than a rule about it.
+
+**Refused also:** treating this as a preference to be weighed per option. It was already written
+down in `CLAUDE.md` as a working bias and reached for as authority by two plans and by D89's
+inert-status argument, with no entry to cite — which is a product decision living in the working
+notes, where the four documents are the product's and `CLAUDE.md` answers how to work here.
+
+**Consequence:** an inert variant is a shape a reader meets more than once, so the cost of the
+uniformity is a name that reads as available and does nothing. That is paid at the call site, where
+it is visible, rather than in the type, where the withholding was.
+
+**Assumes:** 20.1, 20.3.
+
+**Decides:** 20.2.
+
+# D97. `s.streaming` gets its own clause, and 3.6 is narrowed rather than mirrored
+
+**Refused:** resolving the 3.6/3.14 collision by making a streaming producer pend only until its
+first chunk, the way 3.7 has a room pend only until its first message.
+
+**Because** the two producers are not the same shape and the symmetry is a trap. A room's value IS
+the latest message, so the first message is something to show and `s.pending` has done its job. A
+streaming producer's value is the ACCUMULATION, which is not complete until close — and 2.12
+resolves `s.then` at the moment `s.pending` becomes false, so a stream pending only to its first
+chunk makes `await` hand back one chunk where every other clause about a stream's value expects the
+whole of it: 8.9 has a store write once at close on the accumulation, and 8.6 seeds the ring with
+it on restore. The mirror would have been a silent change to what awaiting a stream returns.
+
+**Refused also:** leaving `s.streaming` with no clause of its own. It had none — its REGISTRY row
+cited 3.1, 3.2 and 3.3, which is every probe — so the only clause saying anything about a stream
+being in flight was 3.6, on `s.pending`. That is why the collision was on `pending` at all: the
+answer was being carried by the wrong probe for want of one on the right probe, and 8.7 already
+read `s.streaming` false on a restored stream with nothing to be consistent with.
+
+**Consequence:** the collision at `s.set` is a NARROWING rather than a contradiction. 3.14 is the
+more specific clause — a load given to `s.set` over a landed value that is not stale — and a stream
+is a load, so D84's reason applies to it unchanged: there is something trustworthy on screen and
+blanking it is the flash. 3.6 keeps governing the case it was written for, where nothing has landed,
+which is also the case 2.12 needs it for.
+
+**Assumes:** 2.12, 3.7, 3.14, 8.6, 8.7, 8.9.
+
+**Decides:** 3.6, 3.15.
+
+# D98. A public file is addressed by its name, never by its hash
+
+**Refused:** content-hashing a file under `src/ui/public` and answering it the way 21.6 answers a
+chunk.
+
+**Because** the fixed address is the entire reason the directory exists. A browser asks for
+`/favicon.ico` and a crawler for `/robots.txt` — names nobody gets to choose — and a hashed name is
+a name the build chose. The year 21.6 grants is safe only where a change to the bytes is a change to
+the address; at a fixed address the same year is a deploy nobody sees, held in every cache that
+believed it, with no way to reach in and correct it.
+
+**Refused also:** an option letting an app lengthen the life of one file. It buys the year back for
+whoever is certain, and certainty about a file at a fixed address is the thing that turns out to be
+wrong on the deploy after next — a favicon is the canonical case of a file that changes once, years
+later, and has to change everywhere at once.
+
+**Consequence:** a warm browser spends a conditional request per public file per page load, and the
+common answer is a 304 rather than a hit taken without asking. That is the price of the fixed
+address, and it is paid on files that are few and small; anything neither of those belongs in the
+bundle, where 21.6 applies and the hash is what makes it safe.
+
+**Assumes:** 21.6.
+
+**Decides:** 21.13, 21.14, 21.15, 36.13.
+
+# D99. A directory the build knows, not a route the app writes
+
+**Refused:** leaving every static file to 37.2's route, which is where a `robots.txt` was answered
+before this.
+
+**Because** it puts the file on the wrong side of dispatch. 37.2 runs inside the app lane, ahead of
+everything, so each path it compares is compared on every request that will never match one — and
+what it produces is a `Response` assembled in a `fetch` handler rather than an entry in the static
+table `Bun.serve` answers before a handler runs. The version each app writes is also the same six
+lines every time, and those six lines have no `etag`, no `content-type` off the extension and no
+304, because none of the three is what the author was thinking about.
+
+**Refused also:** rooting the directory at the origin rather than at the mount, on the reading that
+a crawler asks for `/robots.txt` at the origin and nowhere else. An app under `/docs` does not own
+that origin's root — whatever put it there does — and an app answering for it would be answering on
+behalf of a site it is one part of. 37.2 is still the escape hatch where an app genuinely owns the
+origin, and it still runs first.
+
+**Consequence:** a file joins and leaves the served surface by being added to or removed from a
+directory, which is the shape 23.3 already gives a page and 19.1 a handler.
+
+**Assumes:** 37.2, 23.3.
+
+**Decides:** 36.12, 36.14, 36.15, 38.19, 38.20.
+
+# D100. A room's epoch identifies the instance, not the process
+
+**Refused:** making 9.17's discard a second cause of epoch movement, beside the process restart
+9.21 named.
+
+**Because** the epoch would then have to SURVIVE the discard to be moved past, and the only way to
+survive it is a table of last-seen epochs keyed by room — which is the permanent process-wide entry
+per key that D64 discarded rooms to be rid of. The repair would have reinstated the thing the rule
+it repairs exists to remove. Resuming 18.10's sequence number across the discard fails the same way
+and for the same reason.
+
+Minting at construction costs no retention at all: a discarded room's epoch goes with it, and the
+next construction mints one that cannot collide. 18.13 only ever compares epochs, never orders
+them, so the value needs no arithmetic and no continuity — which is what 18.11 now says outright.
+
+**Refused also:** leaving the collision as it stood. 9.17 discards a room at zero subscribers and
+9.21 held the epoch still inside one process, so a discard-and-republish rewound 18.10's sequence
+number under an unmoved epoch. 18.16 makes that number the default key of a `{#for await}` block and
+41.9 reconciles a painted block against it BY THAT KEY, so the rewound keys collide with rows the
+server already painted — and D93 names the reading a client is left with, unable to tell a reset
+from a gap. Nothing contradicted anything: 9.21 was true, 18.11 was true, and the case fell between
+them.
+
+**Consequence:** the process restart stops being a rule and becomes an instance of one, a restart
+constructing new rooms and so minting new epochs. 18.11 loses its "only cause" clause rather than
+gaining a second cause, which is D96's shape — the epoch moves exactly when a room is constructed,
+with no case to teach. 18.13 becomes correct for the discard for the first time: a returning reader
+finds a different epoch, 18.14 delivers the ring marked as a reset, and 18.15 repaints from it.
+
+**Assumes:** 9.17, 18.10, 18.13, 18.14, 18.16, 41.9.
+
+**Decides:** 9.21, 18.11.
+
+# D98. The request path answers with nothing bound
+
+**Refused:** reaching the request path only through a listener.
+
+**Because** a test that has to bind a socket to ask a question needs a port, and the suite runs its
+files in worker processes: two files holding an app then contend for one, and a port something else
+on the machine already took fails a test about routing. `App.listen` supplies the socket and
+nothing else, and dispatch never reads it. The tests that genuinely want `server` or a real
+`WebSocket` ask for `port: 0`, and two concurrent servers were measured taking distinct ephemeral
+ports.
+
+**Assumes:** 42.9.
+
+**Decides:** 42.3, 42.5.
+
+# D99. A test holds the app, not a client of its own
+
+**Refused:** a test client generated off the app, beside the app object.
+
+**Because** an `Rpc` is already the same callable on both sides and a rung already runs on the
+in-process call, so what a test lacks is a scope and an entry into the request path rather than a
+caller. A generated one would be a second spelling of the things that cannot differ — the address,
+the rungs, the coercion — and the only caller in the app that nothing in production exercises, which
+is the drift a wire-shaped test exists to catch. What a test reaches for a client *for* is the steps
+a wire adds, and `App.fetch` runs those steps rather than standing in for them.
+
+**Assumes:** 16.4, 16.12, 16.14.
+
+**Decides:** 42.6, 42.13.
+
+# D100. Boot is the app, not the port
+
+**Refused:** `onStart` wrapping the listener.
+
+**Because** boot is the app becoming able to answer, and a bound socket is the host's business:
+`abide dev` keeps the listener on the main thread and replaces the worker under it, so a hook tied
+to the bind would run on a schedule belonging to the reload rather than to the app, and would report
+a port the host owns and the app never chose. `createApp` is where the tables, the onions and
+`config` land, and it is what a test and a host both hold.
+
+**Consequence:** a hook cannot observe the port, and a hook that wants one takes it from the host.
+
+**Assumes:** 38.15, 38.16, 42.5.
+
+**Decides:** 37.4, 42.4.

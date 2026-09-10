@@ -2,10 +2,7 @@
     "title": "A write to a memo stands until the next recompute",
     "summary": "An edit box seeded from a person the server sent. Type into it, then reload.",
     "app": "crm",
-    "files": [
-        "src/ui/components/Draft.abide",
-        "src/server/rpc/people.ts"
-    ],
+    "files": ["src/ui/components/Draft.abide", "src/server/rpc/people.ts"],
     "route": "/memo/write",
     "wire": [
         {

@@ -1,0 +1,7 @@
+{
+    "title": "`s.tail(n)` replays; a bare cursor goes live",
+    "summary": "Two readers over one answer that already has three tokens behind it. Press Next token and watch what each one shows.",
+    "app": "chat",
+    "files": ["src/shared/tokens.ts", "src/ui/components/Panes.abide"],
+    "route": "/chat"
+}

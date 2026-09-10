@@ -40,9 +40,9 @@ middleware(csp(), requireAuth())
 onStart(async (start) => { await database.migrate(); await start() })
 
 export default (request: Request) =>
-  new URL(request.url).pathname === '/robots.txt'
-    ? new Response('User-agent: *')
-    : undefined
+    new URL(request.url).pathname === '/robots.txt'
+        ? new Response('User-agent: *')
+        : undefined
 ```
 
 *1 file, 3 declarations* — a rung stack, a startup hook and a route, in the one place an app
@@ -103,9 +103,8 @@ them.
 
 ## 4. The first bytes leave
 
-The head goes first, then the markup. A read of a value still in flight renders nothing and
-opens a **sink**: an addressable slot the value fills when it lands. The markup after it keeps
-going out.
+The head goes first, then the markup. A read of a value still in flight renders nothing and opens
+a **sink**, and the hole fills when the value lands. The markup after it keeps going out.
 
 ```abide #ui/pages/invoices/[id]/page.abide
 <script>
@@ -121,7 +120,7 @@ const invoice = memo(() => getInvoice({ id: route.params.id }))
 
 Three sinks, one document, no loading branch.
 
-Waiting is the opt-in, and `await` is how it is asked for:
+Waiting is the opt-in, and `await` asks for it:
 
 | You write | The document |
 | --- | --- |
@@ -169,10 +168,10 @@ re-sent. Appending the fill at the tail rather than at the hole is also what fre
 arriving somewhere it would be illegal — inside a `<title>`, between two `<tr>`s.
 
 **The document closes on the last blocking sink, not on the last value.** A row still in flight
-at that point is simply never filled, and the browser's own request picks it up instead.
+at that point is never filled at all, and the browser's own request picks it up instead.
 
 **The cost is a client with no script.** Nothing filled after the first flush reaches it, because
-filling is what the script does — so a page that must work without one uses `{await}` from step 4
+the script does the filling — so a page that must work without one uses `{await}` from step 4
 and pays the delay to first byte deliberately.
 
 ## 6. The browser takes over
@@ -186,8 +185,8 @@ second time in the browser and makes the same call — one the browser already i
 bundle loaded. The render **buffered what it fetched**, so that call is answered from the buffer
 rather than from the database. One code path on both sides.
 
-What that saves is the **handler's work**, not the request — the bootstrap issues real fetches, and
-what the buffer answers instead of is the database hit. They go out of the head ahead of the bundle,
+That saves the **handler's work**, not the request — the bootstrap issues real fetches, and the
+buffer answers instead of the database. They go out of the head ahead of the bundle,
 so on a first visit the bundle load covers them and they cost nothing. On a repeat visit the bundle
 is cached and arrives at once, so the fetches are exposed — which is why a handler that answers
 `public, max-age` is worth declaring: the second visit is served from the browser cache and costs
@@ -196,9 +195,9 @@ nothing again.
 Binding happens against the nodes that are already there. A marker whose content does not match
 rebuilds its own block, not the page.
 
-**What is genuinely paid twice** is a `memo` body that is expensive and is not a load — there is
-nothing to seed for a pure computation. That is the case that belongs behind a handler, where it
-runs on the server and arrives as data.
+**A `memo` body that is expensive and is not a load is genuinely paid twice** — there is nothing
+to seed for a pure computation. That is the case that belongs behind a handler, where it runs on
+the server and arrives as data.
 
 Read on: [Reading data](../server/read-data-without-writing-an-api.md) ·
 [Sockets](../server/keep-a-room-of-callers-in-sync.md)
@@ -238,7 +237,7 @@ has the request in flight before the bundle exists, and before the body it will 
 written.
 
 **Step 4, the markup.** The row has not landed, so each read leaves a sink: a `<template>`
-holding the slot's id, and the filler script beside it.
+holding the hole's id, and the filler script beside it.
 
 ```html browser
 <h1>Invoice
@@ -249,9 +248,8 @@ due <template data-abide-sink="5"></template><script>/* fill 5 */</script>
 ```
 
 Those filler scripts are **byte-identical** — every one of them, in every document abide serves.
-Each reads the `<template>` next to it, which is where everything specific to the slot lives.
-That lets one build-time hash cover them all, and what keeps a per-request nonce out of
-the head.
+Each reads the `<template>` next to it, which is where everything specific to that hole lives.
+That lets one build-time hash cover them all, and keeps a per-request nonce out of the head.
 
 **Step 5, a fill.** Written at the current end of the document, finding the hole by id. Where an
 element genuinely cannot go, the id rides on the owning element instead and the filler writes one

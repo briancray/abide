@@ -1,0 +1,25 @@
+<script>
+import { state } from 'abide'
+import { turns } from '#shared/conversations'
+
+const room = turns({ conversation: 'onboarding' })
+const draft = state('Can I revoke the old one early?')
+</script>
+
+<ul class="chat">
+{#for await turn of room.tail(50)}
+    <li data-speaker={turn.speaker}>
+        <span>{turn.speaker}</span>
+        <p>{turn.text}</p>
+    </li>
+{/for}
+</ul>
+
+<div class="row">
+    <label>message
+        <input bind:value={draft}>
+    </label>
+    <button onclick={() => room.publish({ speaker: 'you', text: draft })}>
+        Send
+    </button>
+</div>

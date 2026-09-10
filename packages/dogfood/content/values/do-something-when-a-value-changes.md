@@ -11,39 +11,55 @@ covers:
   - `watch` effect, over sources
   - `Transformer`, `Disposer`, middleware, lifecycle hooks
 examples:
-  - packages/dogfood/examples/watching
+  - packages/dogfood/examples/watch-tracked
+  - packages/dogfood/examples/watch-disposer
+  - packages/dogfood/examples/watch-sources
 ---
 
-Most of what looks like an effect is a value. A title derived from a row, a filtered list, a
-count — those are `memo`, and reaching for an effect to assign them builds a graph you
-have to run in your head.
+Most of what looks like an effect is a value. A heading derived from a row, a filtered list, a
+count — those are `memo`, and reaching for an effect to assign them builds a graph you have to run
+in your head. `watch` is for the rest: the things that happen **outside** the page — a timer, the
+browser tab, a subscription to something that is not a reactive value, an analytics call.
 
-`watch` is for the rest: the things that happen **outside** the page. A timer, a subscription to
-something that is not a `Reactive`, a write to `localStorage`, an analytics call.
+## The forms of `watch`
 
-{% example watching %}
+`watch` is two overloads discriminated by the first argument, so nothing has to be spelled to get
+the ordinary form.
 
-*5 lines, cancel included* — the teardown is the return value rather than a second argument you
-might forget.
+| You write | What wakes it |
+| --- | --- |
+| `watch(effect)` | anything the effect **read** on its last run |
+| `watch(sources, effect)` | only the values in `sources` |
+| `s.watch(effect)` | that one value, handed to the effect |
 
-{% snippet watching src/ui/pages/editor/page.abide watch(() => { %}
+The effect is an `Effect`, and what it may return is a `Disposer`. Both calls hand back a function
+that stops the watch. Every signature is in the [`watch` reference](../reference/watch.md).
 
-## `watch` runs an effect on change
+## An effect runs again when what it read changes
+
+{% example watch-tracked %}
+
+*5 lines, 0 listeners* — against a call the arm has to make from every place that writes.
 
 `watch(effect)` runs the effect immediately and again whenever anything it **read** changes — the
 same tracking a memo body gets, and the same absence of a dependency list.
 
-{% snippet watching src/ui/session.ts export const stopBeacon %}
+The Reset button is the difference on screen. It writes the value and never touches the title, so
+anything keeping the two in step is keeping up with the **value** rather than with the field. In
+the hand-written arm that is a `persist()` call at each writer — one line per writer, and one line
+for a third writer to forget.
 
-It hands back the way to stop it. That matters where the watch has no owner. A watch registered
-inside a component is owned by the component and torn down with it. One registered from a plain
-`.ts` module has nobody to tear it down, and the returned disposer is what you have.
+It hands back the way to stop it, and that matters where the watch has no owner. A watch
+registered inside a component is owned by the component and torn down with it. One registered from
+a plain `.ts` module has nobody to tear it down, so you stop it with the returned disposer.
+`s.watch(effect)` is the same thing scoped to one value, handing the value to the effect.
 
-`s.watch(effect)` is the same thing scoped to one value, handing the value to the effect:
+Read on: [Derived values](derive-a-value-from-other-values.md) ·
+[Scripts](../templates/run-code-when-a-component-loads.md)
 
-{% snippet watching src/ui/session.ts export const stopTitle %}
+## Each rerun tears down the previous run
 
-## `watch` hands back a disposer
+{% example watch-disposer %}
 
 An effect may return a `Disposer`, and abide runs it in two places:
 
@@ -55,31 +71,31 @@ An effect may return a `Disposer`, and abide runs it in two places:
 Teardown means what the watch was registered in: component unmount for a `<script>` watch, item
 removal for one in a `{#for}` body, process end for a `<script module>` one.
 
-That is why the timer above is correct without a guard. Every rerun cancels the timer the
-previous run started, and the unmount cancels the last one — nineteen keystrokes in the example
-start nineteen timers and leave one standing.
+That is why the timer is correct with no guard around it. Every rerun cancels the timer the
+previous run started, and the unmount cancels the last one — six keystrokes start six timers and
+leave one standing. **Nothing on screen would show you the other five**, because the last one to
+land holds the newest draft either way, which is why that count is asserted in the card's spec
+rather than rendered.
 
-The other half of that snippet is where the value is read. `draft` is read in the effect body and
-not inside the `setTimeout` callback, because the callback runs a second after the tracking pass
-has finished: a read from in there subscribes to nothing, and the watch never runs again.
+The other half is where the value is read. The draft is read in the effect body and not inside the
+`setTimeout` callback, because the callback runs a beat after the tracking pass has finished: a
+read from in there subscribes to nothing, and the watch never runs again.
+
+Read on: [Throttle & debounce](slow-down-a-value-that-changes-too-fast.md)
 
 ## A `sources` list narrows what wakes an effect
 
+{% example watch-sources %}
+
 The tracked form subscribes to everything the body read, which is usually what you want and
-occasionally more than you want — a body that reads five values to build one log line wakes on
-all five.
-
-{% snippet watching src/ui/pages/editor/page.abide watch([topic], () => { %}
-
-With `sources` as the first argument it runs only when those change. It is two overloads rather
-than a union, discriminated by that argument, so nothing has to be spelled to get the ordinary
-form.
+occasionally more than you want — a body that reads five values to build one log line wakes on all
+five. With `sources` as the first argument it runs only when those change, and the effect above
+reads the notes plainly and still wakes only on the owner.
 
 `peek()` is the other way to the same place, and the two differ in what they do to the tracking:
-`sources` **replaces** it with a list you write, and `peek` leaves it on and takes **one read**
-out of it. So they are alternatives rather than partners — inside a `sources` list there is no
-tracking left for a `peek` to opt out of. The effect above reads the draft plainly and still wakes
-only on the topic, which is why nineteen keystrokes move no analytics count.
+`sources` **replaces** it with a list you write, and `peek` leaves it on and takes **one read** out
+of it. So they are alternatives rather than partners — inside a `sources` list there is no
+tracking left for a `peek` to opt out of.
 
 Read on: [Reloading](decide-when-a-value-reloads.md)
 
@@ -101,27 +117,27 @@ response to a person, after the output exists, so a subscription taken there has
 The last row is one rule seen four ways. A transform normalises a value on the way in; a disposer
 tears a run down; middleware and `onStart` / `onStop` / `onConfig` run around the app rather than
 in it. None of them is a thing that gets rebuilt, so a read inside one takes no subscription — and
-that is a guarantee rather than an accident, because a transform that subscribed would re-run on
-a value it is in the middle of producing.
+that is a guarantee rather than an accident, because a transform that subscribed would re-run on a
+value it is in the middle of producing.
 
 Read on: [Values by name](../templates/read-and-write-a-value-by-name.md) ·
 [Lifecycle](../app/run-code-at-start-and-stop.md)
 
 ## A watch runs once on a server
 
-There is no rerender, so a tracked read registers no subscriber and there is nothing to wake it
-a second time. The disposer still runs at scope teardown.
+There is no rerender, so a tracked read registers no subscriber and there is nothing to wake it a
+second time. The disposer still runs at scope teardown.
 
-That is isomorphism of intent rather than of schedule — same callable, same name, same meaning,
-and what differs is that one side has a flow to feed and the other does not. It is worth saying
-out loud because an effect written for its side effects reads as though it will run again.
+Both sides mean the same thing and only the schedule differs — same callable, same name, and one
+side has a flow to feed where the other does not. It is worth saying out loud because an effect
+written for its side effects reads as though it will run again.
 
 ## An effect that throws stops its watch
 
 An error in an effect is never silent. A throwing effect, a throwing disposer, and a read of a
 **failed** value inside one — which throws, as every read of a failure does — all reach `onError`
-with the trace attached and warn on `abide:watch`. In a browser it is additionally re-thrown as
-an unhandled rejection, so an error reporter sees it.
+with the trace attached and warn on `abide:watch`. In a browser it is additionally re-thrown as an
+unhandled rejection, so an error reporter sees it.
 
 Then the watch stops. An effect that throws once usually throws every run, and a watch that
 re-runs into the same throw is a loop with a log line per iteration. The warning names the watch,

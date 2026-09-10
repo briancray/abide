@@ -1,0 +1,26 @@
+{
+    "title": "`{ store }` — where the value lives when the process does not",
+    "summary": "A volume the player keeps between visits. Step it up, then press Reload on this frame.",
+    "app": "player",
+    "files": [
+        "src/shared/settingsStore.ts",
+        "src/server/rpc/settings.ts",
+        "src/ui/components/Volume.abide"
+    ],
+    "route": "/settings",
+    "served": "server.ts",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/settings/readSetting?name=volume",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "null"
+        }
+    ]
+}

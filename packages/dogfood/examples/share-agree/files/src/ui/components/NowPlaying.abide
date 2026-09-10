@@ -1,0 +1,10 @@
+<script>
+import { state } from 'abide'
+
+// Found above, so this build never runs.
+const playing = state.share('nowPlaying', () => state('nothing'))
+</script>
+
+<ul class="fields stacked">
+    <li><span>now playing</span><strong>{playing}</strong></li>
+</ul>

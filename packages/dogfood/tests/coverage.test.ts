@@ -7,14 +7,19 @@ import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
 const REGISTRY = new URL('../../../docs/REGISTRY.md', import.meta.url)
 const CONTENT_DIR = new URL('../content/', import.meta.url)
 
-type RegistryRow = { name: string; signature: string | undefined; section: string }
+type RegistryRow = {
+    name: string
+    signature: string | undefined
+    section: string
+}
 
 function cells(line: string): string[] {
     const out: string[] = []
     // A cell ends at the first UNESCAPED pipe — a type signature carries `\|`.
     let start = 1
     for (let at = 1; at <= line.length; at += 1) {
-        if (at < line.length && !(line[at] === '|' && line[at - 1] !== '\\')) continue
+        if (at < line.length && !(line[at] === '|' && line[at - 1] !== '\\'))
+            continue
         out.push(line.slice(start, at).trim().replaceAll('\\|', '|'))
         start = at + 1
     }
@@ -44,14 +49,22 @@ async function registryRows(): Promise<RegistryRow[]> {
         if (line.startsWith('# ')) section = line.slice(2).trim()
         // A header row, never the `| --- |` separator under it — which would reset this
         // to false before the table's own rows are read.
-        if (line.startsWith('| ') && !line.startsWith('| `') && !line.startsWith('| ---')) {
+        if (
+            line.startsWith('| ') &&
+            !line.startsWith('| `') &&
+            !line.startsWith('| ---')
+        ) {
             signed = /^(Type )?Signature$/.test(cells(line)[1] ?? '')
             continue
         }
         if (!line.startsWith('| `')) continue
         const row = cells(line)
         if (row[0] === undefined) continue
-        rows.push({ name: row[0], signature: signed ? (row[1] ?? '') : undefined, section })
+        rows.push({
+            name: row[0],
+            signature: signed ? (row[1] ?? '') : undefined,
+            section,
+        })
     }
     return rows
 }
@@ -69,15 +82,20 @@ const RESTATED = new Set([
     '`onHealth`',
     '`abide openapi [--out <file>] [--url <origin>]`',
     '`abide mcp [--url <origin>]`',
-    '`src/ui/pages/**/page.abide`',
     '`src/ui/pages/**/error.abide`',
+    // The reactive primitives carry `Produced` as one of the four type parameters, and `Rpc`
+    // carries it again as what a handler yields. One name, one meaning, written where each is read.
+    '`Produced`',
 ])
 
-async function specSections(): Promise<Map<string, Map<string, string | undefined>>> {
+async function specSections(): Promise<
+    Map<string, Map<string, string | undefined>>
+> {
     const sections = new Map<string, Map<string, string | undefined>>()
     for (const { name, signature, section } of await registryRows()) {
         const seen = sections.get(name) ?? new Map<string, string | undefined>()
-        if (!seen.has(section) || signature !== undefined) seen.set(section, signature)
+        if (!seen.has(section) || signature !== undefined)
+            seen.set(section, signature)
         sections.set(name, seen)
     }
     return sections
@@ -119,179 +137,7 @@ test('a restated capability is restated identically', async () => {
 // the list. The list can only shrink, and it is the one number that says how much of the design
 // has been pressure-tested by having to explain it.
 // 171 of 323, which is the number to watch.
-const UNWRITTEN: string[] = [
-    "Generated surfaces › `clients`",
-    "`/__abide/**`",
-    "`/__abide/mcp`",
-    "`/__abide/openapi.json`",
-    "`:global(…)`",
-    "`<Name/>`",
-    "`<Tag>…</Tag>`",
-    "`<head>`",
-    "`<script module>`",
-    "`<script>`",
-    "`<slot/>`",
-    "`<slot>fallback</slot>`",
-    "`<style>`",
-    "`<textarea>{v}</textarea>`",
-    "`<title>{name}</title>`",
-    "`ABIDE_APP_TOKEN`",
-    "`ABIDE_APP_URL`",
-    "`ABIDE_LOGS`",
-    "`ABIDE_LOG_FORMAT`",
-    "`ABIDE_MAX_LOG_BUFFER_COUNT`",
-    "`ABIDE_MCP`",
-    "`ABIDE_OPENAPI`",
-    "`ABIDE_PRINCIPAL_SECRET`",
-    "`ABIDE_PRINCIPAL_TTL`",
-    "`APP_DATA_DIR`",
-    "`APP_NAME`",
-    "`APP_URL`",
-    "`APP_VERSION`",
-    "`Bag`",
-    "`Clients`",
-    "`Component`",
-    "`ConfigDefaults`",
-    "`Config`",
-    "`DEBUG`",
-    "`Env`",
-    "`FORCE_COLOR`",
-    "`HasParams<P>`",
-    "`HasSegments<P>`",
-    "`Health`",
-    "`LogRecord`",
-    "`Logger`",
-    "`NODE_ENV`",
-    "`NO_COLOR`",
-    "`OpenApiDocument`",
-    "`OptionalNames<P>`",
-    "`PORT`",
-    "`ParamsOf<P>`",
-    "`Params`",
-    "`Principal`",
-    "`Query`",
-    "`RequiredNames<P>`",
-    "`RestNames<P>`",
-    "`Shell`",
-    "`[...name]`",
-    "`[[name]]`",
-    "`[name]`",
-    "`abide build`",
-    "`abide bundle`",
-    "`abide call <address> [args]`",
-    "`abide check [dir…]`",
-    "`abide compile [--target] [--out] [--platforms]`",
-    "`abide connect [url]`",
-    "`abide dev [--port <n>]`",
-    "`abide logs`",
-    "`abide lsp`",
-    "`abide mcp [--url <origin>]`",
-    "`abide openapi [--out <file>] [--url <origin>]`",
-    "`abide run <file> [args…]`",
-    "`abide scaffold <name>`",
-    "`abide start [--port <n>]`",
-    "`abide:config`",
-    "`abide:health`",
-    "`abide:hydrate` / `abide:navigate`",
-    "`abide:lifecycle`",
-    "`abide:mcp`",
-    "`abide:openapi`",
-    "`abide:principal`",
-    "`abide:reactive`",
-    "`abide:refuse`",
-    "`abide:render`",
-    "`abide:request`",
-    "`abide:socket`",
-    "`abide:watch`",
-    "`abide`",
-    "`abide` · `-h` · `--help`",
-    "`authenticated`",
-    "`bag`",
-    "`bind:element={Reactive<Element> | ((element: Element) => void | Disposer)}`",
-    "`children`",
-    "`class:`, `style:`, `bind:`",
-    "`class:name={cond}`",
-    "`config.invalidate`",
-    "`config`",
-    "`const x = foo` / `return foo` / a `Reactive<…>`-typed argument",
-    "`cookies`",
-    "`csp.nonce`",
-    "`csp`",
-    "`default`",
-    "`error`",
-    "`expiresAt`",
-    "`foo = bar`",
-    "`foo = bar` where `bar` is a `Reactive`",
-    "`foo()` / `foo.set(v)`",
-    "`foo.bar = v`",
-    "`foo.bar(…)`",
-    "`foo.bar`",
-    "`foo.push(v)`",
-    "`foo` in an operand, text, attribute or value-typed argument",
-    "`health`",
-    "`href={await x}`, any attribute",
-    "`import './app.css'`",
-    "`log.channel`",
-    "`log.enabled`",
-    "`log.info` / `log.warning` / `log.error` / `log.debug`",
-    "`log.records`",
-    "`log`",
-    "`name=\"…{expr}…\"`",
-    "`name={expr}`",
-    "`navigate`",
-    "`on<event>={fn}`",
-    "`onConfig`",
-    "`onError`",
-    "`onHealth`",
-    "`onPrincipal`",
-    "`onStart`",
-    "`onStop`",
-    "`principal.authenticated`",
-    "`principal.caller`",
-    "`principal.clear`",
-    "`principal.error`",
-    "`principal.expiresAt`",
-    "`principal.resolved`",
-    "`principal.set`",
-    "`props`",
-    "`render`",
-    "`request`",
-    "`route.name`",
-    "`route.navigating`",
-    "`route.params`",
-    "`route.url`",
-    "`server`",
-    "`src/server/app.ts`",
-    "`src/ui/app.html`",
-    "`src/ui/pages/**/error.abide`",
-    "`src/ui/pages/**/layout.abide`",
-    "`src/ui/pages/**/page.abide`",
-    "`startedAt`",
-    "`style:prop={value}`",
-    "`trace.headers`",
-    "`trace.sampled`",
-    "`trace.span`",
-    "`trace`",
-    "`traceresponse`",
-    "`url`",
-    "`version`",
-    "`view-transition-name`",
-    "`{#await promise then value}`",
-    "`{#await promise}`",
-    "`{#component Name(pattern)}`",
-    "`{#for await item of source}`",
-    "`{#for item, index of list by key}`",
-    "`{#if cond}`",
-    "`{#switch expr}`",
-    "`{#try}`",
-    "`{...expr}`",
-    "`{await expr}`",
-    "`{expr}`",
-    "`{raw(...)}`",
-    "config › `schema`",
-    "rpc › `clients`",
-    "socket › `clients`",
-]
+const UNWRITTEN: string[] = []
 
 test('every registry capability is covered by a guide that is written', async () => {
     const covered = new Set<string>()
@@ -300,7 +146,9 @@ test('every registry capability is covered by a guide that is written', async ()
         for (const name of page.covers) covered.add(name)
     }
 
-    const uncovered = (await specCapabilities()).filter((name) => !covered.has(name)).sort()
+    const uncovered = (await specCapabilities())
+        .filter((name) => !covered.has(name))
+        .sort()
     expect(uncovered).toEqual([...UNWRITTEN].sort())
 })
 
@@ -331,7 +179,9 @@ test('every content page is reachable from the nav', async () => {
     for (const group of NAV) for (const slug of group.pages) listed.add(slug)
 
     const orphans: string[] = []
-    for (const path of new Bun.Glob('**/*.md').scanSync({ cwd: CONTENT_DIR.pathname })) {
+    for (const path of new Bun.Glob('**/*.md').scanSync({
+        cwd: CONTENT_DIR.pathname,
+    })) {
         const slug = path.slice(0, -'.md'.length)
         if (!listed.has(slug)) orphans.push(slug)
     }
@@ -347,20 +197,26 @@ const EXAMPLES_DIR = new URL('../examples/', import.meta.url)
 // page's code that directory's code, which is the property every check below is about.
 function embeddedExamples(body: string): string[] {
     const names: string[] = []
-    for (const match of body.matchAll(new RegExp(EXAMPLE.source, 'gm'))) names.push(match[1] ?? '')
-    for (const match of body.matchAll(new RegExp(SNIPPET.source, 'gm'))) names.push(match[1] ?? '')
+    for (const match of body.matchAll(new RegExp(EXAMPLE.source, 'gm')))
+        names.push(match[1] ?? '')
+    for (const match of body.matchAll(new RegExp(SNIPPET.source, 'gm')))
+        names.push(match[1] ?? '')
     return names
 }
 
 test('every embedded example exists, and every example is embedded', async () => {
     const embedded = new Set<string>()
-    for (const path of new Bun.Glob('**/*.md').scanSync({ cwd: CONTENT_DIR.pathname })) {
+    for (const path of new Bun.Glob('**/*.md').scanSync({
+        cwd: CONTENT_DIR.pathname,
+    })) {
         const source = await Bun.file(new URL(path, CONTENT_DIR)).text()
         for (const name of embeddedExamples(source)) embedded.add(name)
     }
 
     const onDisk = new Set<string>()
-    for (const path of new Bun.Glob('*/example.json').scanSync({ cwd: EXAMPLES_DIR.pathname })) {
+    for (const path of new Bun.Glob('*/example.json').scanSync({
+        cwd: EXAMPLES_DIR.pathname,
+    })) {
         onDisk.add(path.slice(0, path.indexOf('/')))
     }
 
@@ -371,19 +227,26 @@ test('every embedded example exists, and every example is embedded', async () =>
 // Every path an example's manifest names has to resolve, or a panel renders empty.
 test('every file an example manifest names is on disk', async () => {
     const missing: string[] = []
-    for (const path of new Bun.Glob('*/example.json').scanSync({ cwd: EXAMPLES_DIR.pathname })) {
+    for (const path of new Bun.Glob('*/example.json').scanSync({
+        cwd: EXAMPLES_DIR.pathname,
+    })) {
         const name = path.slice(0, path.indexOf('/'))
         const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
         // `tests` is results rather than paths now, so it is not a file group.
         for (const folder of ['files', 'compiled', 'vanilla'] as const) {
             for (const entry of (manifest[folder] ?? []) as string[]) {
-                const file = Bun.file(new URL(`${name}/${folder}/${entry}`, EXAMPLES_DIR))
-                if (!(await file.exists())) missing.push(`${name}/${folder}/${entry}`)
+                const file = Bun.file(
+                    new URL(`${name}/${folder}/${entry}`, EXAMPLES_DIR),
+                )
+                if (!(await file.exists()))
+                    missing.push(`${name}/${folder}/${entry}`)
             }
         }
         // The arm is not in a manifest list — the frame finds it by convention — so it is checked
         // by name here rather than by walking one.
-        const page = Bun.file(new URL(`${name}/vanilla/index.html`, EXAMPLES_DIR))
+        const page = Bun.file(
+            new URL(`${name}/vanilla/index.html`, EXAMPLES_DIR),
+        )
         if (!(await page.exists())) missing.push(`${name}/vanilla/index.html`)
     }
     expect(missing).toEqual([])
@@ -410,7 +273,9 @@ test('a heading that enumerates names everything its table lists', async () => {
         for (let at = 0; at < lines.length; at += 1) {
             const named = ENUMERATING.exec(lines[at] ?? '')
             if (!named?.[1]) continue
-            const heading = named[1].split(',').map((one) => bare(one.trim().slice(1, -1)))
+            const heading = named[1]
+                .split(',')
+                .map((one) => bare(one.trim().slice(1, -1)))
 
             const listed: string[] = []
             for (let scan = at + 1; scan < lines.length; scan += 1) {
@@ -424,7 +289,9 @@ test('a heading that enumerates names everything its table lists', async () => {
             }
             if (listed.length === 0) continue
             if (heading.join() !== listed.join())
-                partial.push(`${page.slug}: "${heading.join(', ')}" vs table ${listed.join(', ')}`)
+                partial.push(
+                    `${page.slug}: "${heading.join(', ')}" vs table ${listed.join(', ')}`,
+                )
         }
     }
     expect(partial).toEqual([])
@@ -434,7 +301,8 @@ test('a heading that enumerates names everything its table lists', async () => {
 // on-this-page list or a search result has no previous section, so a bare pronoun in a
 // heading refers to nothing. Written after "Declare it" and "Call it" shipped — a check
 // that only looked for a LEADING pronoun had passed over both.
-const BARE_PRONOUN = /(^(it|they|this|these|those|its|their)\b|\b(it|them|this|these|those|one)$)/i
+const BARE_PRONOUN =
+    /(^(it|they|this|these|those|its|their)\b|\b(it|them|this|these|those|one)$)/i
 
 test('no heading leans on a pronoun for its subject', async () => {
     const offenders: string[] = []
@@ -462,16 +330,26 @@ const NAMESPACES = new Set(['route', 'principal'])
 // Every `.abide` source the docs SHIP: each `abide` fence, plus the example files on disk.
 async function abideSources(): Promise<{ where: string; code: string }[]> {
     const sources: { where: string; code: string }[] = []
-    for (const path of new Bun.Glob('**/*.md').scanSync({ cwd: CONTENT_DIR.pathname })) {
+    for (const path of new Bun.Glob('**/*.md').scanSync({
+        cwd: CONTENT_DIR.pathname,
+    })) {
         const text = await Bun.file(new URL(path, CONTENT_DIR)).text()
         let ordinal = 0
         for (const match of text.matchAll(/```abide[^\n]*\n([\s\S]*?)```/g)) {
             ordinal += 1
-            sources.push({ where: `${path} block ${ordinal}`, code: match[1] ?? '' })
+            sources.push({
+                where: `${path} block ${ordinal}`,
+                code: match[1] ?? '',
+            })
         }
     }
-    for (const path of new Bun.Glob('**/*.abide').scanSync({ cwd: EXAMPLES_DIR.pathname })) {
-        sources.push({ where: path, code: await Bun.file(new URL(path, EXAMPLES_DIR)).text() })
+    for (const path of new Bun.Glob('**/*.abide').scanSync({
+        cwd: EXAMPLES_DIR.pathname,
+    })) {
+        sources.push({
+            where: path,
+            code: await Bun.file(new URL(path, EXAMPLES_DIR)).text(),
+        })
     }
     return sources
 }
@@ -498,19 +376,46 @@ function stateNames(code: string): Set<string> {
     return names
 }
 
+// THE SAME GATE, POINTED AT THE OTHER PIECE OF CEREMONY THE SUGAR REMOVES. 31.12 short-circuits
+// a property access on a name bound to a `Reactive`, and the rest of the chain with it — so
+// `contact?.name` is a guard the compiler already wrote, and printing it teaches a reader to
+// write it. A `?.` after a CALL is untouched: `level.peek()?.onHand` chains off a result rather
+// than off a name, and 31.12 does not reach it.
+test('an abide snippet does not guard a read the compiler already short-circuits', async () => {
+    const offenders: string[] = []
+    for (const { where, code } of await abideSources()) {
+        const states = stateNames(code)
+        for (const match of code.matchAll(
+            /(?<![.\w$)])([A-Za-z_$][\w$]*)\?\./g,
+        )) {
+            const name = match[1] ?? ''
+            if (states.has(name))
+                offenders.push(`${where}: ${name}?. — write \`${name}.\``)
+        }
+    }
+    expect(offenders).toEqual([])
+})
+
 test('an abide snippet reads and writes state by name, not through the explicit forms', async () => {
     const offenders: string[] = []
     for (const { where, code } of await abideSources()) {
         const states = stateNames(code)
         // A MEMBER call is a `Reactive` probe — `invoice.pending()` — so only a bare name.
-        for (const match of code.matchAll(/(?<![.\w$])([A-Za-z_$][\w$]*)\.set\(/g)) {
+        for (const match of code.matchAll(
+            /(?<![.\w$])([A-Za-z_$][\w$]*)\.set\(/g,
+        )) {
             const name = match[1] ?? ''
             if (!NAMESPACES.has(name))
-                offenders.push(`${where}: ${name}.set(v) — write \`${name} = v\``)
+                offenders.push(
+                    `${where}: ${name}.set(v) — write \`${name} = v\``,
+                )
         }
-        for (const match of code.matchAll(/(?<![.\w$])([A-Za-z_$][\w$]*)\(\)/g)) {
+        for (const match of code.matchAll(
+            /(?<![.\w$])([A-Za-z_$][\w$]*)\(\)/g,
+        )) {
             const name = match[1] ?? ''
-            if (states.has(name)) offenders.push(`${where}: ${name}() — read \`${name}\``)
+            if (states.has(name))
+                offenders.push(`${where}: ${name}() — read \`${name}\``)
         }
     }
     expect(offenders).toEqual([])
@@ -526,7 +431,8 @@ test('front matter names exactly the example directories the page embeds', async
     const wrong: string[] = []
     for (const page of await readPages()) {
         const embedded: string[] = []
-        for (const name of embeddedExamples(page.body)) embedded.push(`${EXAMPLES_PREFIX}${name}`)
+        for (const name of embeddedExamples(page.body))
+            embedded.push(`${EXAMPLES_PREFIX}${name}`)
         if (page.examples.join() !== [...new Set(embedded)].join())
             wrong.push(
                 `${page.slug}: front matter ${page.examples.join()}, body ${embedded.join()}`,
@@ -567,7 +473,9 @@ const APPS = new Set(['crm', 'chat', 'dashboard', 'player', 'unconverted'])
 
 test('every example declares an app the brand names', async () => {
     const wrong: string[] = []
-    for (const path of new Bun.Glob('*/example.json').scanSync({ cwd: EXAMPLES_DIR.pathname })) {
+    for (const path of new Bun.Glob('*/example.json').scanSync({
+        cwd: EXAMPLES_DIR.pathname,
+    })) {
         const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
         if (!APPS.has(manifest.app)) wrong.push(`${path}: app ${manifest.app}`)
     }
@@ -581,7 +489,9 @@ test('every example a page embeds is drawn from the same app', async () => {
     for (const page of await readPages()) {
         const apps = new Set<string>()
         for (const name of new Set(embeddedExamples(page.body))) {
-            const manifest = Bun.file(new URL(`${name}/example.json`, EXAMPLES_DIR))
+            const manifest = Bun.file(
+                new URL(`${name}/example.json`, EXAMPLES_DIR),
+            )
             if (await manifest.exists()) apps.add((await manifest.json()).app)
         }
         if (apps.size > 1) mixed.push(`${page.slug}: ${[...apps].join(', ')}`)
@@ -589,12 +499,50 @@ test('every example a page embeds is drawn from the same app', async () => {
     expect(mixed).toEqual([])
 })
 
+// THE OLD SHAPE, LISTED SO IT IS A NUMBER RATHER THAN A READING. A page in the shape 40.4 and
+// 40.6 were withdrawn for — one example in the lead and every section hanging a snippet off it —
+// passes every check there is: 40.23 and 40.24 are judgement, and the example it embeds declares
+// `unconverted`, which the app check waves through. So an agent asked to convert a section can
+// polish its prose, leave the structure untouched, and go green.
+//
+// A RATCHET, not a report. Converting a page means deleting its line; a page that arrives in the
+// old shape has to add one, which is the moment somebody notices. The list only shrinks.
+//
+// IT IS EMPTY, and that is the state worth defending rather than the end of the mechanism.
+// Both assertions still bind: a page embedding an `unconverted` example fails until somebody
+// writes its slug in here, and a slug in here with no such page fails too. So the next page
+// to arrive in the old shape cannot land quietly.
+const OLD_SHAPE = new Set<string>([])
+
+test('no teaching page is in the old shape but the ones already counted', async () => {
+    const apps = new Map<string, string>()
+    for (const path of new Bun.Glob('*/example.json').scanSync({
+        cwd: EXAMPLES_DIR.pathname,
+    })) {
+        const name = path.slice(0, path.indexOf('/'))
+        apps.set(name, (await Bun.file(new URL(path, EXAMPLES_DIR)).json()).app)
+    }
+    // A style experiment re-renders one example in another voice and teaches no name, so it
+    // declares no `covers` and is not a page this is about.
+    const found: string[] = []
+    for (const page of await readPages()) {
+        if (!page.covers.length) continue
+        const old = [...new Set(embeddedExamples(page.body))].filter(
+            (name) => apps.get(name) === 'unconverted',
+        )
+        if (old.length) found.push(page.slug)
+    }
+    expect(found.filter((slug) => !OLD_SHAPE.has(slug))).toEqual([])
+    expect([...OLD_SHAPE].filter((slug) => !found.includes(slug))).toEqual([])
+})
+
 test('every example directory the front matter names is on disk', async () => {
     const missing: string[] = []
     for (const page of await readPages()) {
         for (const path of page.examples) {
             const manifest = Bun.file(new URL(`${path}/example.json`, REPO))
-            if (!(await manifest.exists())) missing.push(`${page.slug}: ${path}`)
+            if (!(await manifest.exists()))
+                missing.push(`${page.slug}: ${path}`)
         }
     }
     expect(missing).toEqual([])
@@ -609,12 +557,14 @@ test('every example directory the front matter names is on disk', async () => {
 test('every nav section shows its opening on the main overview', async () => {
     const overview = await Bun.file(new URL('index.md', CONTENT_DIR)).text()
     const shown = new Set<string>()
-    for (const match of overview.matchAll(new RegExp(LEAD.source, 'gm'))) shown.add(match[1] ?? '')
+    for (const match of overview.matchAll(new RegExp(LEAD.source, 'gm')))
+        shown.add(match[1] ?? '')
 
     const missing: string[] = []
     for (const group of NAV) {
         const first = group.pages[0] ?? ''
-        if (first !== 'index' && !shown.has(first)) missing.push(`${group.section} (${first})`)
+        if (first !== 'index' && !shown.has(first))
+            missing.push(`${group.section} (${first})`)
     }
     expect(missing).toEqual([])
 })
@@ -670,7 +620,9 @@ async function declaredTypes(): Promise<Set<string>> {
         // A MAPPED TYPE binds its key where it uses it — `[K in RequiredNames<P>]` is the
         // same declaration a leading `<…>` makes, in the other syntax. `ParamsOf<P>` is
         // three of them, and without this the key reads as a type nothing declares.
-        for (const match of (signature ?? '').matchAll(/\[\s*([A-Z][A-Za-z0-9]*)\s+in\b/g))
+        for (const match of (signature ?? '').matchAll(
+            /\[\s*([A-Z][A-Za-z0-9]*)\s+in\b/g,
+        ))
             declared.add(match[1] ?? '')
     }
     return declared
@@ -680,9 +632,12 @@ test('every type a signature names is declared somewhere', async () => {
     const declared = await declaredTypes()
     const dangling: string[] = []
     for (const { name, signature } of await registryRows()) {
-        for (const match of withoutLiterals(signature ?? '').matchAll(/\b([A-Z][A-Za-z0-9]*)\b/g)) {
+        for (const match of withoutLiterals(signature ?? '').matchAll(
+            /\b([A-Z][A-Za-z0-9]*)\b/g,
+        )) {
             const type = match[1] ?? ''
-            if (!BUILTIN_TYPES.has(type) && !declared.has(type)) dangling.push(`${name}: ${type}`)
+            if (!BUILTIN_TYPES.has(type) && !declared.has(type))
+                dangling.push(`${name}: ${type}`)
         }
     }
     expect([...new Set(dangling)]).toEqual([])
@@ -694,7 +649,8 @@ test('every type a signature names is declared somewhere', async () => {
 test('each capability is claimed by exactly one page', async () => {
     const claims = new Map<string, string[]>()
     for (const page of await readPages())
-        for (const name of page.covers) claims.set(name, [...(claims.get(name) ?? []), page.slug])
+        for (const name of page.covers)
+            claims.set(name, [...(claims.get(name) ?? []), page.slug])
     const shared = [...claims]
         .filter(([, pages]) => pages.length > 1)
         .map(([name, pages]) => `${name}: ${pages.join(', ')}`)
@@ -709,23 +665,26 @@ test('each capability is claimed by exactly one page', async () => {
 // value change" is the repair BRAND names, so a check that banned the preposition would
 // have failed the label it recommends. Narrow on purpose — "stands alone" is not
 // checkable, and a fragment built another way is still a review question.
-const BARE_PREPOSITIONAL = /^(on|by|in|with|for|from|at|to|of|about|after|before)\s+\S+$/i
+const BARE_PREPOSITIONAL =
+    /^(on|by|in|with|for|from|at|to|of|about|after|before)\s+\S+$/i
 
 test('no nav label begins with a preposition', async () => {
     const offenders: string[] = []
     for (const page of await readPages())
-        if (BARE_PREPOSITIONAL.test(page.nav)) offenders.push(`${page.slug}: ${page.nav}`)
+        if (BARE_PREPOSITIONAL.test(page.nav))
+            offenders.push(`${page.slug}: ${page.nav}`)
     expect(offenders).toEqual([])
 })
 
-// docs/BRAND.md, Documentation structure: an overview ROUTES and a reference page ENUMERATES, so
-// neither covers. `machines/index` had grown four entries the section's topic pages
+// RULEBOOK 40.16: a page declares in `covers` which REGISTRY names it covers, and an overview or
+// a reference page declares none. `machines/index` had grown four entries the section's topic pages
 // should have owned, and nothing said so — the coverage tests above are satisfied by a
 // claim from any page, which is exactly what makes the WRONG page's claim invisible.
 test('no overview or reference page declares covers', async () => {
     const offenders: string[] = []
     for (const page of await readPages()) {
-        const routes = page.slug.endsWith('/index') || page.slug.startsWith('reference/')
+        const routes =
+            page.slug.endsWith('/index') || page.slug.startsWith('reference/')
         if (routes && page.covers.length > 0) offenders.push(page.slug)
     }
     expect(offenders).toEqual([])
@@ -746,25 +705,51 @@ test('a link is labelled with the nav of the page it points at', async () => {
     const stale: string[] = []
     for (const page of pages) {
         const from = page.slug.slice(0, page.slug.lastIndexOf('/') + 1)
-        for (const [, label, target] of page.body.matchAll(/\[([^\]]+)\]\(([^)]+)\.md\)/g)) {
-            const slug = new URL(`${target}`, `abide:/${from}`).pathname.slice(1)
+        for (const [, label, target] of page.body.matchAll(
+            /\[([^\]]+)\]\(([^)]+)\.md\)/g,
+        )) {
+            const slug = new URL(`${target}`, `abide:/${from}`).pathname.slice(
+                1,
+            )
             const nav = navOf.get(slug)
-            if (nav === undefined || label === undefined || label.startsWith('`')) continue
-            const overview = slug.endsWith('/index') ? sectionOf.get(slug) : undefined
+            if (
+                nav === undefined ||
+                label === undefined ||
+                label.startsWith('`')
+            )
+                continue
+            const overview = slug.endsWith('/index')
+                ? sectionOf.get(slug)
+                : undefined
             if (label !== nav && label !== overview)
-                stale.push(`${page.slug}: "${label}" -> ${slug}, whose nav is "${nav}"`)
+                stale.push(
+                    `${page.slug}: "${label}" -> ${slug}, whose nav is "${nav}"`,
+                )
         }
     }
     expect(stale).toEqual([])
 })
 
-// A fence renders in `main`'s 44rem column at `font: 400 13px/1.6 var(--mono)` — about 76
-// characters before `pre`'s own `overflow-x:auto` takes over. Past that the sample is a
-// thing to scroll rather than a thing to read, and the ONE line that overflows is usually
-// the line the section is about: 50 of 545 did, worst at 107. Nothing else checks this —
-// biome's `files.includes` is `**/*.{json,ts,js}`, so a fence is formatted by nobody, and
-// the example FILES are here for the same reason: they render in the same column.
-const COLUMN = 76
+// A fence renders in `main`'s 44rem column at `font: 400 .75rem/1.25rem
+// var(--mono)`, which measures 589px of content against a 7.2px advance — 81
+// characters before `pre`'s own `overflow-x:auto` takes over. Past that the
+// sample is a thing to scroll rather than a thing to read, and the ONE line
+// that overflows is usually the line the section is about: 50 of 545 did,
+// worst at 107.
+//
+// THE WIDTH IS READ FROM THE FORMATTER RATHER THAN RESTATED, because a second
+// copy of it drifts and only one of the two gets fixed: this said 76 against a
+// `lineWidth` of 100, so a format run reflowed two example sources to 90-odd
+// characters and turned this red — a formatter and a test fighting over one
+// file with no way for either to win. Read, they cannot disagree, and this
+// gate stops being a width opinion and becomes what it is for: covering the
+// files biome does not reach. Its `files.includes` is `**/*.{json,ts,js}`, so
+// a markdown fence, a `.abide` template and a comment are all formatted by
+// nobody — and the example FILES are here because they render in that same
+// column whatever their extension.
+const COLUMN: number = (
+    await Bun.file(new URL('../../../biome.json', import.meta.url)).json()
+).formatter.lineWidth
 
 function overlongLines(source: string, fencedOnly: boolean): number[] {
     const over: number[] = []
@@ -783,9 +768,12 @@ function overlongLines(source: string, fencedOnly: boolean): number[] {
 
 test('no code sample is wider than the column it renders in', async () => {
     const wide: string[] = []
-    for (const path of new Bun.Glob('**/*.md').scanSync({ cwd: CONTENT_DIR.pathname })) {
+    for (const path of new Bun.Glob('**/*.md').scanSync({
+        cwd: CONTENT_DIR.pathname,
+    })) {
         const source = await Bun.file(new URL(path, CONTENT_DIR)).text()
-        for (const line of overlongLines(source, true)) wide.push(`content/${path}:${line}`)
+        for (const line of overlongLines(source, true))
+            wide.push(`content/${path}:${line}`)
     }
     // An example's own files, which the panel renders at the same width.
     for (const path of new Bun.Glob('*/{files,compiled}/**/*').scanSync({
@@ -793,7 +781,8 @@ test('no code sample is wider than the column it renders in', async () => {
         onlyFiles: true,
     })) {
         const source = await Bun.file(new URL(path, EXAMPLES_DIR)).text()
-        for (const line of overlongLines(source, false)) wide.push(`examples/${path}:${line}`)
+        for (const line of overlongLines(source, false))
+            wide.push(`examples/${path}:${line}`)
     }
     expect(wide).toEqual([])
 })
@@ -844,7 +833,8 @@ test('every name a reference page enumerates is on one of the pages that claim i
         if (line.startsWith('# ')) section = line.slice(2).trim()
         if (!line.startsWith('| `')) continue
         const name = /`([^`]+)`/.exec(line)?.[1] ?? ''
-        if (name) bySection.set(section, [...(bySection.get(section) ?? []), name])
+        if (name)
+            bySection.set(section, [...(bySection.get(section) ?? []), name])
     }
 
     const claimed = new Map<string, string[]>()
@@ -878,14 +868,22 @@ test('every name a reference page enumerates is on one of the pages that claim i
 // made against, and since the runner change it is also what the render RUNS.
 test('every example carries a hand-written arm, and every bench row is a ratio against it', async () => {
     const missing: string[] = []
-    for (const path of new Bun.Glob('*/example.json').scanSync({ cwd: EXAMPLES_DIR.pathname })) {
+    for (const path of new Bun.Glob('*/example.json').scanSync({
+        cwd: EXAMPLES_DIR.pathname,
+    })) {
         const name = path.slice(0, path.indexOf('/'))
-        const arm = Bun.file(new URL(`${name}/vanilla/index.html`, EXAMPLES_DIR))
+        const arm = Bun.file(
+            new URL(`${name}/vanilla/index.html`, EXAMPLES_DIR),
+        )
         if (!(await arm.exists())) missing.push(`${name}: no vanilla arm`)
         const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
         for (const row of manifest.bench?.rows ?? []) {
-            if (!row.vanilla) missing.push(`${name}: "${row.metric}" has no arm to compare against`)
-            if (!row.ratio) missing.push(`${name}: "${row.metric}" states no ratio`)
+            if (!row.vanilla)
+                missing.push(
+                    `${name}: "${row.metric}" has no arm to compare against`,
+                )
+            if (!row.ratio)
+                missing.push(`${name}: "${row.metric}" states no ratio`)
         }
     }
     expect(missing).toEqual([])
@@ -896,10 +894,13 @@ test('every example carries a hand-written arm, and every bench row is a ratio a
 // runs, that note is where "not measured" has to be said out loud.
 test('every bench says whether it was measured', async () => {
     const silent: string[] = []
-    for (const path of new Bun.Glob('*/example.json').scanSync({ cwd: EXAMPLES_DIR.pathname })) {
+    for (const path of new Bun.Glob('*/example.json').scanSync({
+        cwd: EXAMPLES_DIR.pathname,
+    })) {
         const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
         if (!manifest.bench) continue
-        if (!manifest.bench.note?.trim()) silent.push(path.slice(0, path.indexOf('/')))
+        if (!manifest.bench.note?.trim())
+            silent.push(path.slice(0, path.indexOf('/')))
     }
     expect(silent).toEqual([])
 })

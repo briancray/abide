@@ -1,0 +1,35 @@
+{
+    "title": "`Issues<T>` — a message under the field it belongs to",
+    "summary": "The invoice search. Empty the query, or ask for four — each message lands under its own field.",
+    "app": "crm",
+    "about": "server",
+    "files": ["src/server/rpc/invoices.ts", "src/ui/components/Search.abide"],
+    "route": "/invoices",
+    "served": "server.ts",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/invoices/searchInvoices?query=inv&limit=2",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "[\n    \"INV-4310\",\n    \"INV-4311\"\n]"
+        },
+        {
+            "request": "GET /__abide/rpc/invoices/searchInvoices?query=i&limit=4",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "422 Unprocessable Content",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"name\": \"ValidationError\",\n    \"status\": 422,\n    \"message\": \"Those arguments were refused.\",\n    \"data\": {\n        \"query\": [\"Type at least two characters.\"],\n        \"limit\": [\"Between 1 and 3.\"]\n    }\n}"
+        }
+    ]
+}

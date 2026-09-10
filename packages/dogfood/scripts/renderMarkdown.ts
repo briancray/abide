@@ -103,9 +103,17 @@ export function displayPath(path: string): string {
 export function sideOf(label: string): 'server' | 'abide' | 'browser' {
     const address = label.replace(EXCERPT, '')
     if (address.endsWith('.abide') || address === 'abide') return 'abide'
-    if (address.startsWith('#shared/') || address.startsWith('src/shared/') || address === 'shared')
+    if (
+        address.startsWith('#shared/') ||
+        address.startsWith('src/shared/') ||
+        address === 'shared'
+    )
         return 'abide'
-    if (address.startsWith('#server/') || address.startsWith('src/server/') || address === 'server')
+    if (
+        address.startsWith('#server/') ||
+        address.startsWith('src/server/') ||
+        address === 'server'
+    )
         return 'server'
     return 'browser'
 }
@@ -159,7 +167,9 @@ function renderCell(value: string, cell: 'td' | 'th'): string {
     const verdict = cell === 'td' ? VERDICT.exec(value) : null
     if (!verdict?.[1]) return `<${cell}>${renderInline(value)}</${cell}>`
     const why = verdict[2] ?? ''
-    const reason = why ? `<span class="verdict-why">${renderInline(why)}</span>` : ''
+    const reason = why
+        ? `<span class="verdict-why">${renderInline(why)}</span>`
+        : ''
     return `<${cell}><b class="verdict-${verdict[1]}">${verdict[1]}</b>${reason}</${cell}>`
 }
 
@@ -191,7 +201,11 @@ function flow(blocks: string): string {
 export function groupSections(html: string): string {
     const headings: { depth: number; at: number }[] = []
     SECTION_HEADING.lastIndex = 0
-    for (let match = SECTION_HEADING.exec(html); match; match = SECTION_HEADING.exec(html))
+    for (
+        let match = SECTION_HEADING.exec(html);
+        match;
+        match = SECTION_HEADING.exec(html)
+    )
         headings.push({ depth: Number(match[1]) - 1, at: match.index })
     if (headings.length === 0) return flow(html)
 
@@ -207,7 +221,9 @@ export function groupSections(html: string): string {
         }
         grouped += '<section>'
         open += 1
-        grouped += flow(html.slice(heading.at, headings[index + 1]?.at ?? html.length))
+        grouped += flow(
+            html.slice(heading.at, headings[index + 1]?.at ?? html.length),
+        )
     }
     return grouped + '</section>'.repeat(open)
 }
@@ -236,7 +252,9 @@ export function renderMarkdown(source: string): string {
                 index += 1
             }
             index += 1 // the closing fence
-            const attribute = language ? ` class="language-${escapeHtml(language)}"` : ''
+            const attribute = language
+                ? ` class="language-${escapeHtml(language)}"`
+                : ''
             const code = `<pre><code${attribute}>${highlight(body.join('\n'))}</code></pre>`
             html += label
                 ? `<figure class="snippet" data-side="${sideOf(label)}">
@@ -284,10 +302,16 @@ export function renderMarkdown(source: string): string {
 
         // A table is a header row whose NEXT line is the divider — the divider is what
         // tells a table from a paragraph that happens to contain pipes.
-        if (line.startsWith('|') && TABLE_DIVIDER.test(lines[index + 1] ?? '')) {
+        if (
+            line.startsWith('|') &&
+            TABLE_DIVIDER.test(lines[index + 1] ?? '')
+        ) {
             html += `<table><thead>${renderTableRow(line, 'th')}</thead><tbody>`
             index += 2
-            while (index < lines.length && (lines[index] ?? '').startsWith('|')) {
+            while (
+                index < lines.length &&
+                (lines[index] ?? '').startsWith('|')
+            ) {
                 html += renderTableRow(lines[index] ?? '', 'td')
                 index += 1
             }
@@ -356,9 +380,11 @@ export function renderMarkdown(source: string): string {
         while (index < lines.length) {
             const next = lines[index] ?? ''
             if (next.trim() === '') break
-            if (HEADING.test(next) || FENCE.test(next) || BULLET.test(next)) break
+            if (HEADING.test(next) || FENCE.test(next) || BULLET.test(next))
+                break
             if (EXAMPLE.test(next.trim()) || LEAD.test(next.trim())) break
-            if (ORDERED.test(next) || QUOTE.test(next) || next.startsWith('|')) break
+            if (ORDERED.test(next) || QUOTE.test(next) || next.startsWith('|'))
+                break
             paragraph.push(next)
             index += 1
         }

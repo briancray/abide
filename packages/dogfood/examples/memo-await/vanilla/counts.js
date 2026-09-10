@@ -5,8 +5,8 @@ let filter = 'all'
 let label = '…'
 let stale = '…'
 
-const count = (of) =>
-    new Promise((done) => setTimeout(() => done(MATCHING[of] ?? 0), 200))
+const loadCounts = () =>
+    new Promise((done) => setTimeout(() => done(MATCHING), 200))
 
 // NOTHING HERE IS TRACKED EITHER WAY, so the two arms differ in
 // the one thing this card is about: which of them is re-run. The
@@ -14,13 +14,15 @@ const count = (of) =>
 // it by hand is exactly why the second one gets forgotten.
 async function runLabel() {
     const of = filter
-    label = `showing ${await count(of)} of ${TOTAL}`
+    const counts = await loadCounts()
+    label = `showing ${counts[of]} of ${TOTAL} for ${of}`
     render()
 }
 
 async function runStale() {
-    const found = await count(filter)
-    stale = `showing ${found} of ${TOTAL}`
+    const counts = await loadCounts()
+    const of = filter
+    stale = `showing ${counts[of]} of ${TOTAL} for ${of}`
     render()
 }
 

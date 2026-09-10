@@ -1,0 +1,32 @@
+<script>
+import { invalidate, memo, props } from 'abide'
+import { getOrders, getTotals } from '#server/rpc/metrics'
+
+type Props = { region: string }
+
+const { region } = props<Props>()
+
+const totals = memo(() => getTotals({ region }))
+const orders = memo(() => getOrders({ region }))
+</script>
+
+<ul class="fields">
+    <li><span>region</span><strong>{region}</strong></li>
+    <li><span>revenue</span>
+        <strong>{totals.pending() ? '—' : totals.revenue}</strong>
+    </li>
+    <li><span>recent orders</span>
+        <strong>{orders.pending() ? '—' : orders.count}</strong>
+    </li>
+    <li><span>revenue computed</span>
+        <strong>{totals.pending() ? '—' : totals.computed}</strong>
+    </li>
+    <li><span>orders loaded</span>
+        <strong>{orders.pending() ? '—' : orders.loaded}</strong>
+    </li>
+    <li><span>late figures</span>
+        <button onclick={() => invalidate({ tags: [`region:${region}`] })}>
+            Reload
+        </button>
+    </li>
+</ul>

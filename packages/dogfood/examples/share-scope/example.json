@@ -1,0 +1,11 @@
+{
+    "title": "A shared value lives where it was created, and below",
+    "summary": "Two shelves rendered from one component, each with a control below it asking for the same key. Queue on one shelf and watch the other.",
+    "app": "player",
+    "files": [
+        "src/ui/pages/library/page.abide",
+        "src/ui/components/Shelf.abide",
+        "src/ui/components/QueueControl.abide"
+    ],
+    "route": "/library"
+}

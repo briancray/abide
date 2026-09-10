@@ -1,0 +1,28 @@
+<script>
+import { memo, state } from 'abide'
+
+let daysLate = state(0)
+
+const dim = memo(() => (daysLate > 0 ? 1 : 0.45))
+</script>
+
+<p class="badge" class:overdue={daysLate > 0} style:opacity={dim}>
+    {daysLate > 0 ? `${daysLate} days late` : 'on time'}
+</p>
+
+<div class="stepper">
+    <button onclick={() => { daysLate = Math.max(0, daysLate - 3) }}>−</button>
+    <button onclick={() => { daysLate = daysLate + 3 }}>+</button>
+</div>
+
+<style>
+.badge {
+    padding: .25rem .5rem;
+    border-radius: 999px;
+    color: rgb(93, 108, 102);
+}
+
+.badge.overdue {
+    color: rgb(163, 58, 58);
+}
+</style>

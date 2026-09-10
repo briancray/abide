@@ -1,0 +1,20 @@
+<script>
+import { memo, state, watch } from 'abide'
+
+let received = state(0)
+
+// Fires on the first arrival, then at most once per window.
+const shown = memo(() => received, { throttle: 500 })
+
+watch(() => {
+    const feed = setInterval(() => {
+        received += 1
+    }, 50)
+    return () => clearInterval(feed)
+})
+</script>
+
+<ul class="grid">
+    <li><span>feed</span><strong>{received}</strong></li>
+    <li><span>tile</span><strong>{shown}</strong></li>
+</ul>

@@ -38,11 +38,11 @@ A function that stops the watch.
 ## Description
 
 A watch registered inside a component is owned by it, and its disposer runs at unmount. One
-registered from a plain `.ts` module has no owner, which is what the returned function is for.
+registered from a plain `.ts` module has no owner, so you stop it with the returned function.
 
 **On a server a watch runs once.** There is no rerender, so a tracked read registers no
-subscriber and nothing wakes it a second time; the disposer still runs at scope teardown. That
-is isomorphism of intent rather than of schedule.
+subscriber and nothing wakes it a second time; the disposer still runs at scope teardown. Both
+sides mean the same thing and only the schedule differs.
 
 An error in an effect is never silent. A throw from the effect, a throw from the disposer, and
 a read of a failed value inside one all reach `onError` with the trace attached and warn on

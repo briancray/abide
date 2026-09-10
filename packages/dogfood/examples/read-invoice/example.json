@@ -6,9 +6,7 @@
         "src/server/rpc/invoices.ts",
         "src/ui/pages/invoices/[id]/page.abide"
     ],
-    "compiled": [
-        "client/rpc/invoices.js"
-    ],
+    "compiled": ["client/rpc/invoices.js"],
     "wire": [
         {
             "request": "GET /__abide/rpc/invoices/getInvoice?id=42",
@@ -77,10 +75,5 @@
         ]
     },
     "route": "/invoices/42",
-    "vanilla": [
-        "index.html",
-        "invoice.js",
-        "server.ts",
-        "database.ts"
-    ]
+    "vanilla": ["index.html", "invoice.js", "server.ts", "database.ts"]
 }

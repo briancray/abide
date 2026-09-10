@@ -13,16 +13,22 @@ Inside the app you never write an address down: you import the handler and call 
 outside the app cannot — a payment provider that needs a webhook URL, a `<form action>`, a
 colleague who wants a `curl` line.
 
-The handler carries the address, so the string is derived rather than typed:
+The handler carries the address, so the string is derived rather than typed. Rename the export
+and every place that reached for it follows, there being no path written down to miss.
 
-```abide #ui/pages/settings/page.abide — excerpt
-<form action={payInvoice.url()} method={payInvoice.method}>
-    <input name="id" value={route.params.id}/>
-    <button>Pay</button>
-</form>
-```
+## The four members an `Rpc` carries
 
-*0 hardcoded paths* — rename the export and the form follows.
+| You read | What you get |
+| --- | --- |
+| `rpc.url(args?)` | the address, resolved against the mount at read time |
+| `rpc.method` | the verb it was declared with |
+| `rpc.raw(args?, init?)` | the `Response` itself, unparsed |
+| `rpc.description` | the sentence the declaration gave it |
+
+None of the four is a call to the handler. They describe the address rather than reaching it,
+which is what makes them the surface for everything outside the app — a `<form action>`, an
+`<img src>`, a webhook registration, a `curl` line. Every signature is in the
+[Transports](../reference/transports.md) reference.
 
 ## `rpc.url` is derived, not baked
 
@@ -34,8 +40,8 @@ The generated wrapper carries a **mount-relative** address. `url` resolves it at
 | a server | `config().APP_URL` |
 
 A mount is chosen after the build — `APP_URL` of `https://abide.com/v2` serves every page,
-endpoint and asset under `/v2` — so a build artifact cannot hold the absolute form. That is
-what makes the same bundle deployable at a sub-path without a rebuild.
+endpoint and asset under `/v2` — so a build artifact cannot hold the absolute form. That is why
+the same bundle deploys at a sub-path without a rebuild.
 
 ## `rpc.url` takes the args on a read
 
@@ -72,8 +78,8 @@ Read on: [Mutations](change-something-on-the-server.md)
 | `#server/rpc/admin/audit.ts` | `recent` | `/__abide/rpc/admin/audit/recent` |
 
 So the address is readable from the source tree, which is what a log line or a network panel is
-for. What it is not is a thing to write out: the route table is a build artifact, and a
-collision between two files that mount at one address is a build error naming both.
+for. It is not a thing to write out: the route table is a build artifact, and a collision between
+two files that mount at one address is a build error naming both.
 
 ## `rpc.raw` hands back the `Response`
 
@@ -91,9 +97,8 @@ const disposition = response.headers.get('content-disposition')
 It takes a `RequestInit`, so it is also how a caller sends an `Accept` a streaming handler
 answers differently — jsonl or SSE at the same address.
 
-What you give up is everything the `Reactive` was doing: no coalescing, no `ttl`, no probes, no
-seeding. Reach for it when the response **is** the thing you want, and for the ordinary call
-otherwise.
+You give up everything the `Reactive` was doing: no coalescing, no `ttl`, no probes, no seeding.
+Reach for it when the response **is** the thing you want, and for the ordinary call otherwise.
 
 Read on: [Streaming data](send-data-as-it-arrives.md) · [Reading data](read-data-without-writing-an-api.md)
 

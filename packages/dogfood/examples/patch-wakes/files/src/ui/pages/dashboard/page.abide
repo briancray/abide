@@ -1,0 +1,40 @@
+<script>
+import { memo, state } from 'abide'
+import { applyOrderCount, type OrderCount, type Region } from '#shared/regions'
+
+const byId = state(
+    new Map<string, Region>([
+        ['north', { id: 'north', name: 'North', orders: 120 }],
+        ['south', { id: 'south', name: 'South', orders: 80 }],
+        ['east', { id: 'east', name: 'East', orders: 64 }],
+        ['west', { id: 'west', name: 'West', orders: 91 }],
+    ]),
+)
+
+const rows = memo(() => [...byId.values()])
+
+// Each frame names one region and one figure.
+const FEED: OrderCount[] = [
+    { id: 'south', orders: 95 },
+    { id: 'north', orders: 130 },
+    { id: 'west', orders: 88 },
+    { id: 'east', orders: 71 },
+]
+
+function applyNextFrame() {
+    const frame = FEED.shift()
+    if (!frame) return
+    FEED.push(frame)
+    byId.patch((held) => applyOrderCount(held, frame))
+}
+</script>
+
+<ul class="fields stacked">
+{#for region of rows by region.id}
+    <li><span>{region.name}</span><strong>{region.orders}</strong></li>
+{/for}
+</ul>
+
+<div class="row">
+    <button onclick={applyNextFrame}>Apply next frame</button>
+</div>

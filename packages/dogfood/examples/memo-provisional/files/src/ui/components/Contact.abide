@@ -1,0 +1,21 @@
+<script>
+import { memo } from 'abide'
+import { getViewer } from '#server/rpc/session'
+
+const viewer = memo(() => getViewer())
+
+// The gate has not landed on the first run, so this takes the else.
+const mode = memo(() => (viewer.readOnly ? 'locked' : 'editable'))
+
+// Settled first, so 'editable' is only ever an answer.
+const guarded = memo(async () =>
+    (await viewer).readOnly ? 'locked' : 'editable',
+)
+</script>
+
+<ul class="fields stacked">
+    <li><span>branched on the gate</span>
+        <button disabled={mode === 'locked'}>Save</button></li>
+    <li><span>branched after it settled</span>
+        <button disabled={guarded !== 'editable'}>Save</button></li>
+</ul>

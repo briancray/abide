@@ -1,0 +1,26 @@
+<script>
+import { memo, state } from 'abide'
+import { salesByRegion } from '#server/rpc/reports'
+
+const REGIONS = ['north', 'south']
+
+let region = state('north')
+
+const rows = memo(() => salesByRegion({ region }))
+</script>
+
+<div class="tabs">
+{#for one of REGIONS}
+    <button aria-selected={region === one}
+        onclick={() => { region = one }}>{one}</button>
+{/for}
+</div>
+
+<p class="status">
+    {rows.error() ? `${rows.error().status} ${rows.error().message}` : ''}
+</p>
+
+<ul class="fields">
+    <li><span>rows</span>
+        <strong>{rows.error() ? '—' : (rows.length ?? 0)}</strong></li>
+</ul>

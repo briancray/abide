@@ -48,7 +48,10 @@ type Page = {
 // Front matter is `key: value` lines between two `---` rules, plus a `- item` list
 // form. The list form is not decoration: a capability name may contain a comma, a
 // colon or a pipe, so no single-line delimiter is safe for `covers`.
-function readFrontMatter(source: string): { fields: Map<string, string[]>; body: string } {
+function readFrontMatter(source: string): {
+    fields: Map<string, string[]>
+    body: string
+} {
     const fields = new Map<string, string[]>()
     if (!source.startsWith('---\n')) return { fields, body: source }
     const end = source.indexOf('\n---', 4)
@@ -76,7 +79,9 @@ export async function readPages(): Promise<Page[]> {
         for (const slug of group.pages) {
             const file = Bun.file(new URL(`${slug}.md`, CONTENT_DIR))
             if (!(await file.exists()))
-                throw new Error(`buildDocs: NAV names ${slug}, content/${slug}.md is missing`)
+                throw new Error(
+                    `buildDocs: NAV names ${slug}, content/${slug}.md is missing`,
+                )
             const { fields, body } = readFrontMatter(await file.text())
             pages.push({
                 slug,
@@ -118,7 +123,9 @@ function renderNav(pages: Page[], current: string): string {
             html += `<section><h2>${section}</h2><ul>`
         }
         const here = page.slug === current ? ' aria-current="page"' : ''
-        const stub = page.stub ? '<span class="stub" title="Stub — not written yet"></span>' : ''
+        const stub = page.stub
+            ? '<span class="stub" title="Stub — not written yet"></span>'
+            : ''
         html += `<li><a href="${linkTo(current, page.slug)}"${here}>${renderInline(page.nav)}</a>${stub}</li>`
     }
     return section ? `${html}</ul></section>` : html
@@ -141,7 +148,11 @@ function renderHeadingList(body: string): string {
 // The rail is where a reader is already looking for "what else is here", so the markdown
 // downloads sit under the heading list rather than in the nav. It renders on EVERY page:
 // a page with one heading has no table of contents and still has a download.
-function renderRail(headings: string, markdownName: string, root: string): string {
+function renderRail(
+    headings: string,
+    markdownName: string,
+    root: string,
+): string {
     const contents = headings
         ? `<section><h2 id="toc-title">On this page</h2><ul aria-labelledby="toc-title">${headings}</ul></section>`
         : ''
@@ -223,9 +234,27 @@ for (const example of document.querySelectorAll('.example')) {
   frame?.addEventListener('load', ask)
   ask()
 
+  // AN ARM THAT RAN BEFORE THE READER ARRIVED HAS ALREADY FINISHED, and a card whose subject is
+  // the FIRST FRAME then has nothing left to show: a srcdoc frame starts at parse, so one 2600px
+  // down spends its whole first load off every screen. Measured on the provisional card, where
+  // both arms read settled however early the sample was taken. Restarted on first intersection,
+  // so what a reader scrolls into is a load BEGINNING rather than one that ended while they were
+  // somewhere else — and uniformly, because a card already on screen restarts on the same tick it
+  // would have run anyway. This is what lazy loading promised and could not do: that attribute
+  // defers a FETCH, and a srcdoc frame has none.
+  if (frame && source !== null) {
+    let started = false
+    new IntersectionObserver((entries, watcher) => {
+      if (started || !entries.some((entry) => entry.isIntersecting)) return
+      started = true
+      watcher.disconnect()
+      frame.srcdoc = source
+    }).observe(frame)
+  }
+
   example.addEventListener('click', (event) => {
     if (event.target.closest('[data-reload]')) {
-      if (frame && source !== null) { show({}); frame.srcdoc = source }
+      if (frame && source !== null) frame.srcdoc = source
       return
     }
     const button = event.target.closest('button[role=tab]')
@@ -256,9 +285,15 @@ for (const example of document.querySelectorAll('.example')) {
 // the section page's first `##`.
 function leadOf(pages: Page[], slug: string): string {
     const source = pages.find((candidate) => candidate.slug === slug)
-    if (!source) throw new Error(`buildDocs: {% lead ${slug} %} names a page NAV does not list`)
+    if (!source)
+        throw new Error(
+            `buildDocs: {% lead ${slug} %} names a page NAV does not list`,
+        )
     const lead = source.body.split(/^## /m)[0]?.trim() ?? ''
-    if (!lead) throw new Error(`buildDocs: ${slug} has no lead — its body opens on a heading`)
+    if (!lead)
+        throw new Error(
+            `buildDocs: ${slug} has no lead — its body opens on a heading`,
+        )
     // It renders on pages at other depths, so a relative link would resolve wrong.
     if (/]\((?!https?:|#)/.test(lead))
         throw new Error(
@@ -267,7 +302,11 @@ function leadOf(pages: Page[], slug: string): string {
     return lead
 }
 
-export async function renderPage(page: Page, pages: Page[], index: number): Promise<string> {
+export async function renderPage(
+    page: Page,
+    pages: Page[],
+    index: number,
+): Promise<string> {
     const previous = pages[index - 1]
     const next = pages[index + 1]
     const root = '../'.repeat(page.slug.split('/').length - 1)
@@ -344,7 +383,10 @@ function linksToHtml(html: string): string {
 // The page EXPANDED — front matter as a heading, directives as fences — which is what every
 // markdown reader gets, the per-page download and the bundle alike. `content/<slug>.md` is the
 // source and keeps its hints; a reader who wants those has the repo.
-export async function renderPageMarkdown(page: Page, pages: Page[]): Promise<string> {
+export async function renderPageMarkdown(
+    page: Page,
+    pages: Page[],
+): Promise<string> {
     const root = '../'.repeat(page.slug.split('/').length - 1)
     let body = page.body.trim()
     // The directives expand into FENCES rather than panels — same source, same order,
@@ -374,7 +416,8 @@ export async function renderPageMarkdown(page: Page, pages: Page[]): Promise<str
 
     let head = `# ${page.title}\n`
     if (page.intent) head += `\n*${page.intent}*\n`
-    if (page.stub) head += `\n> Stub — title and intent decided, prose not written.\n`
+    if (page.stub)
+        head += `\n> Stub — title and intent decided, prose not written.\n`
     return `${head}\n${body}\n`
 }
 
@@ -439,24 +482,38 @@ export async function buildDocs(): Promise<Page[]> {
         // "Download this page" means by the page.
         await Bun.write(new URL(`${page.slug}.md`, OUTPUT_DIR), rendered)
     }
-    await Bun.write(new URL('abide.md', OUTPUT_DIR), renderBundle(pages, markdown))
-    await Bun.write(new URL('docs.css', OUTPUT_DIR), Bun.file(STYLESHEET_SOURCE))
+    await Bun.write(
+        new URL('abide.md', OUTPUT_DIR),
+        renderBundle(pages, markdown),
+    )
+    await Bun.write(
+        new URL('docs.css', OUTPUT_DIR),
+        Bun.file(STYLESHEET_SOURCE),
+    )
 
     // ONE ZIP PER EXAMPLE, so Download is a button rather than a menu. Entries carry
     // the example name as their first segment, so unzipping makes a folder.
     const examplesDir = new URL('../examples/', import.meta.url)
     const archives = new Map<string, ZipEntry[]>()
-    for (const path of new Bun.Glob('*/{files,compiled,vanilla,tests}/**').scanSync({
+    for (const path of new Bun.Glob(
+        '*/{files,compiled,vanilla,tests}/**',
+    ).scanSync({
         cwd: examplesDir.pathname,
     })) {
         const name = path.slice(0, path.indexOf('/'))
         const entries = archives.get(name) ?? []
-        entries.push({ path, source: await Bun.file(new URL(path, examplesDir)).text() })
+        entries.push({
+            path,
+            source: await Bun.file(new URL(path, examplesDir)).text(),
+        })
         archives.set(name, entries)
     }
     for (const [name, entries] of archives) {
         entries.sort((a, b) => (a.path < b.path ? -1 : 1))
-        await Bun.write(new URL(`examples/${name}.zip`, OUTPUT_DIR), zip(entries))
+        await Bun.write(
+            new URL(`examples/${name}.zip`, OUTPUT_DIR),
+            zip(entries),
+        )
     }
     return pages
 }

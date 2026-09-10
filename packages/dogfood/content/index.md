@@ -15,6 +15,8 @@ reading it loads it — there is nothing in between for you to write.
 
 {% example read-invoice %}
 
+*2 files, 0 API between them* — one of those seven is left standing, and it is the handler.
+
 ## Reactive values
 
 {% lead values/index %}
@@ -33,7 +35,6 @@ Read on: [Templates](templates/index.md) ·
 [Conditionals](templates/show-markup-conditionally.md) ·
 [Lists](templates/repeat-markup-over-a-list.md)
 
-
 ## Data from the server
 
 {% lead server/index %}
@@ -43,7 +44,6 @@ Read on: [Data from the server](server/index.md) ·
 [Mutations](server/change-something-on-the-server.md) ·
 [Sockets](server/keep-a-room-of-callers-in-sync.md)
 
-
 ## Pages and navigation
 
 {% lead pages/index %}
@@ -51,7 +51,6 @@ Read on: [Data from the server](server/index.md) ·
 Read on: [Pages and navigation](pages/index.md) ·
 [Routes](pages/add-a-page.md) · [Layouts](pages/give-pages-the-same-chrome.md) ·
 [Links & navigation](pages/link-to-another-page.md)
-
 
 ## The running app
 
@@ -61,7 +60,6 @@ Read on: [The running app](app/index.md) ·
 [Config](app/configure-the-app.md) ·
 [Auth & principal](app/know-who-is-calling.md) · [Logging](app/record-what-happened.md)
 
-
 ## For machines
 
 {% lead machines/index %}
@@ -69,7 +67,6 @@ Read on: [The running app](app/index.md) ·
 Read on: [For machines](machines/index.md) ·
 [OpenAPI](machines/describe-your-api-without-writing-a-spec.md) ·
 [MCP](machines/let-a-model-call-your-handlers.md)
-
 
 ## Shipping
 
@@ -80,7 +77,6 @@ Read on: [Shipping](ship/index.md) ·
 [Build & start](ship/build-and-serve-the-app.md) ·
 [Call a handler](ship/call-a-handler-from-the-terminal.md)
 
-
 ## Reference
 
 {% lead reference/index %}
@@ -88,17 +84,6 @@ Read on: [Shipping](ship/index.md) ·
 Read on: [Reference](reference/index.md) · [Reactive](reference/reactive.md) ·
 [Transports](reference/transports.md) · [`.abide` files](reference/abide-files.md) ·
 [CLI](reference/cli.md)
-
-
-## Writing styles
-
-{% lead styles/index %}
-
-Read on: [Writing styles](styles/index.md) ·
-[Inverted pyramid](styles/inverted-pyramid.md) ·
-[MDN reference](styles/mdn-reference.md) ·
-[Tutorial](styles/tutorial.md)
-
 
 ## Start here
 

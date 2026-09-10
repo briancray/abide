@@ -14,6 +14,14 @@ number rather than restating it, because a second copy drifts and only one of th
 decided. a reason a MAINTAINER needs; a reason a USER needs is a guide's.
 * `docs/BRAND.md` — positioning, voice, vocabulary, visual identity.
 
+CONVERTING A PAGE TO THE CARD SHAPE has a skill — `.claude/skills/convert-docs-page` — and
+`OLD_SHAPE` in `packages/dogfood/tests/coverage.test.ts` is what was the backlog. IT IS EMPTY: the
+conversion is done and the set is now a RATCHET, so a page arriving in the old shape has to add its
+own slug and that is the moment somebody notices. A new page is matched against a CONVERTED one —
+any of them, `derive-a-value-from-other-values` being the worked case the skill carries. The
+clauses say what must hold and a worked page says what it looks like, which is the part sixteen
+clauses across three documents do not carry.
+
 BEFORE WRITING A DOCUMENTATION PAGE, read RULEBOOK 40 and BRAND. 40 is the docs system — one
 example per BEHAVIOUR TAUGHT (40.23, 40.24), what a `{% snippet %}` guarantees (40.8-40.12), and
 what a panel earns (40.13, 40.14) —
@@ -22,12 +30,16 @@ today, where most of the rulebook describes a design nothing can run yet.
 
 BEFORE DECIDING BEHAVIOUR, grep RULEBOOK for a clause rather than inventing one. deciding new
 behaviour means writing three things: the clause, the registry row it hangs off, and the DECISIONS
-entry wherever an alternative was refused. AMENDING a clause means one more: grep `Assumes:` for
-its number. a decision resting on a premise the amendment removes goes on reading as valid in both
-documents, nothing contradicting it and only its REASON having stopped being true — which is how D3
-outlived the monotonicity it was built on for fifty-two entries. the framework is not written, so a clause is not
-something to check code against — what it stops is one rule being decided twice, differently, by
-two sessions that never met.
+entry wherever an alternative was refused. AMENDING a clause means one more: grep its number across
+`docs/` AND this file, and re-read every hit rather than only the `Assumes:` lines. the gate catches
+a citation that DANGLES — registry, decisions, brand and these working notes each have a test that
+the number still exists — and no test can catch a citation that still RESOLVES while what it meant
+moved, which is the whole of an amendment. a decision resting on a premise the amendment removes
+goes on reading as valid in both documents, nothing contradicting it and only its REASON having
+stopped being true — which is how D3 outlived the monotonicity it was built on for fifty-two
+entries. `docs/plans/` holds citations too and is gated by nothing, so a hit there goes stale in
+silence. the framework is not written, so a clause is not something to check code against — what it
+stops is one rule being decided twice, differently, by two sessions that never met.
 
 each of the four states its own format rules at the top and `packages/dogfood/tests/rulebook.test.ts`
 gates them, in both directions: a rule with no name to hang off, and a name with no rule. a rule
@@ -36,7 +48,9 @@ that turns out to be checkable belongs in a test rather than in prose — here a
 SOME OF THIS FILE IS GATED TOO, and where it is, the test is the rule and this is the reason:
 `packages/abide/tests/conventions.test.ts` holds the self-import ban, the `node:` justification, the
 constants leaf and the file-naming rule; `packages/harness/tests/lanes.test.ts` holds the measure
-lane's isolation, resolved through the built graph rather than the source text; and
+lane's isolation, walked by RESOLUTION rather than by bundling — two earlier spellings each passed
+with an abide edge planted one module deep, so the test now carries a second test that the walk
+finds abide when abide is there; and
 `packages/dogfood/tests/coverage.test.ts` holds the ratio rule — a bench row with no arm beside it
 is a figure, not a claim. WHAT IS NOT GATED IS JUDGEMENT, and it is most of the file: whether a name
 is descriptive, whether a comment is load-bearing, whether the share was named before the layer was
@@ -61,7 +75,8 @@ and D28 is why a binding holds rather than reads
 option that exists everywhere and does nothing on one producer is one concept; the same option
 withheld from that producer is two — the option, and the exception. an inert variant is
 understood from the invariant it already carries, where an exception has to be taught, is a
-branch in the implementation, and is a case in every debugging session
+branch in the implementation, and is a case in every debugging session. this is a working bias
+here and a decided one there: D96 is the entry, 18.17 the worked case it withdrew
 * value performance when all other conditions are met
 
 # seams and imports
@@ -101,7 +116,7 @@ a hot path is anything walked per row, per frame, per node or per chunk. the rul
 
 * an object's shape is FIXED at construction: initialize every field the type declares, `undefined` included, rather than adding one on a later path, and keep an array to one element type. a shape that grows a field conditionally is two hidden classes, and every read downstream of it deoptimizes
 * prefer a class or a plain record to a closure that captures its enclosing scope — a long-lived object built from a closure keeps that whole scope alive for the object's lifetime, so copy the fields it actually needs. no `delete`, no shape mutation, no dynamic property access in a path walked per row
-* never `await` a value that is usually already settled — guard it (`isThenable(v) ? await v : v`); an unconditional await costs a promise wrap and a microtask tick at every call site, and a template slot pays it per row
+* never `await` a value that is usually already settled — guard it (`isThenable(v) ? await v : v`); an unconditional await costs a promise wrap and a microtask tick at every call site, and a template slot pays it per row. but a `Reactive` is THENABLE (RULEBOOK 1.5), so wherever one can arrive the guard reads the BRAND first — `isReactive(v)` ahead of `isThenable(v)`, RULEBOOK 1.7 — or the guard written to skip a microtask silently settles a live value to one snapshot instead. the template slot is exactly where both are true at once
 * a DOM mutation costs more than the JS that decides it — when a path can compare, key or skip instead of touching a node, that is the cheaper arm even when it adds branches. the claim still needs the ratio: assert NODES MOVED against the vanilla arm, not just ms
 * but NODES MOVED IS A COUNT, NOT A COST, and the two part company at exactly one place: a node with no layout box. moving a COMMENT is 0.11 µs and moving an ELEMENT with its subtree is 2.8 µs — 25x — because only the element is in the reflow, and on a 500-row reorder the reflow is 52% of the op and identical however many markers moved with it. so a marker-elision change worth 998 fewer records measured at +0.053 ms on one run and −0.033 on the next — under the noise floor — and was dropped. when a COUNT is what motivates a change, convert it to a cost before writing any of it: time the mutation APART from the forced reflow, say which kind of node the count is counting, and run it twice — one run cannot tell 0.4% from zero, and the arms swapping places between runs is the answer
 * a layout read (`offsetWidth`, `getBoundingClientRect`, `scrollTop`) after a write in the same path forces the layout the write invalidated — batch the reads before the writes, or hoist the measurement out of the loop entirely. one such read per row is the whole frame
@@ -141,7 +156,7 @@ these fail SILENTLY — the output stays right while the work goes wrong, so a c
 a check produces CANDIDATES, not violations — it names the lines worth reading, and the rule above decides.
 
 * `bun run typecheck && bun run test` — the gate. green before a change and green after; run it from `~/Code` casing or typecheck fails on TS1149 for reasons that have nothing to do with the change, and from the REPO ROOT or `bunfig.toml`'s DOM preload is not found and the harness's own tests measure a different code path while still passing
-* the gate is `abide build && bun test --parallel`, and both halves are load-bearing. `--parallel` runs the FILES in worker processes and what that costs is every assumption a file was making about another one having run first: the routing suite drove the address bar through a document some EARLIER file had moved off `about:blank`, and `build.test.ts` and `start.test.ts` shared one `.abide/client` that a build begins by deleting. neither was a parallel bug. both were latent, both had been green for as long as they had existed, and the way to find the next one is `bun test <one-file.test.ts>` — a file that fails ALONE is the honest reading. the build is up front because the two files that SERVE the app now read that artifact rather than each making one; `build.test.ts` builds in a copy of its own, which is why nothing rewrites it under them
+* the gate is `bun run test` — `bun run build && bun test … --parallel` — and both halves are load-bearing. `--parallel` runs the FILES in worker processes and what that costs is every assumption a file was making about another one having run first: the routing suite drove the address bar through a document some EARLIER file had moved off `about:blank`, and `build.test.ts` and `start.test.ts` shared one `.abide/client` that a build begins by deleting. neither was a parallel bug. both were latent, both had been green for as long as they had existed, and the way to find the next one is `bun test <one-file.test.ts>` — a file that fails ALONE is the honest reading. the build is up front because the two files that SERVE the app now read that artifact rather than each making one; `build.test.ts` builds in a copy of its own, which is why nothing rewrites it under them
 * the worker COUNT is not a lever — `--parallel=4` against `--parallel=8` swapped places between runs, which is the answer. what is left is timing: two cases price a ratio and a loaded machine can tie two chunk arrivals that a quiet one separates. so a TIMING failure under `--parallel` is re-run with `bun run test:serial` before it is believed, the same way a contended e2e spec is; anything else red means red
 * `bun run test:changed` for the inner loop — only the files git says a change reaches. `bun run e2e:changed` and `bun run e2e:failed` are playwright's end of the same thing, and one spec with its two servers is ~3.5s against the full 40s
 * a suite that HANGS reports nothing at all — no failed test, no summary — so when `bun test` stops rather than fails, bisect by file and then by test with `-t`. it has happened twice: a hook with no timeout around a build that grew past 5s

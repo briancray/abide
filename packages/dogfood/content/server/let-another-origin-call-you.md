@@ -12,15 +12,8 @@ A partner's dashboard needs one endpoint of yours. The usual answer is a CORS la
 the whole app and a list of paths beside it, which is a second place to be wrong about which
 handler is public.
 
-Declare it on the handler:
-
-```ts #server/rpc/status.ts
-export const serviceStatus = GET(() => ({ up: true, since: startedAt }), {
-    crossOrigin: ['https://partner.example'],
-})
-```
-
-*1 line, 0 proxy config* — every other address in the app stays closed.
+Declare it on the handler instead — one option, no proxy config, and every other address in the
+app stays closed because nothing widened them.
 
 ## `crossOrigin` is per handler, and closed by default
 

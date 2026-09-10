@@ -1,0 +1,35 @@
+{
+    "title": "One store per args key, derived from the key",
+    "summary": "Two profiles whose settings live at two addresses. Both are read at once, and neither reads back the other's.",
+    "app": "player",
+    "files": [
+        "src/server/cache.ts",
+        "src/server/rpc/settings.ts",
+        "src/ui/components/Profiles.abide"
+    ],
+    "route": "/settings",
+    "wire": [
+        {
+            "request": "GET /store?at=settings:ada",
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json"
+            },
+            "body": "{\n    \"theme\": \"dark\"\n}",
+            "requestHeaders": {
+                "accept": "application/json"
+            }
+        },
+        {
+            "request": "GET /store?at=settings:grace",
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json"
+            },
+            "body": "{\n    \"theme\": \"light\"\n}",
+            "requestHeaders": {
+                "accept": "application/json"
+            }
+        }
+    ]
+}

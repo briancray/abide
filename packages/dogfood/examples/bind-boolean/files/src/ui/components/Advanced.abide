@@ -1,0 +1,20 @@
+<script>
+import { state } from 'abide'
+
+let subscribed = state(true)
+let showAdvanced = state(false)
+</script>
+
+<label><input type="checkbox" bind:checked={subscribed}> Email me</label>
+
+<details bind:open={showAdvanced}>
+    <summary>Advanced</summary>
+    <p>These apply on save.</p>
+</details>
+
+<ul class="fields stacked">
+    <li><span>reminders</span><strong>{subscribed ? 'on' : 'off'}</strong></li>
+    <li><span>advanced</span>
+        <strong>{showAdvanced ? 'open' : 'shut'}</strong>
+    </li>
+</ul>

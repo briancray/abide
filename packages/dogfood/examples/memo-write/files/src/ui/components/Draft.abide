@@ -5,7 +5,7 @@ import { getPerson } from '#server/rpc/people'
 const person = memo(() => getPerson({ id: '42' }))
 
 // Bound straight to the field, so typing IS the write.
-const draft = memo(() => person?.name ?? '')
+const draft = memo(() => person.name ?? '')
 
 const status = memo(() => {
     if (person.pending()) return 'loading…'
@@ -18,5 +18,5 @@ const status = memo(() => {
         <input bind:value={draft}>
     </label>
     <button onclick={person.refresh}>reload from the server</button>
+    <span class="status">{status}</span>
 </div>
-<p class="status">{status}</p>

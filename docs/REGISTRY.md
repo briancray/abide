@@ -34,8 +34,8 @@ The one-sentence rule is what keeps the two documents apart. A second sentence i
 
 ## Type parameter order
 
-Slots one and two are the two ends of the arrow the name is, the end whoever reads that signature
-came for written first. `Reactive<Stored, Accepted>` is a value read and then written,
+Slots one and two are the two ends of the arrow the name is, the end a reader came for written
+first. `Reactive<Stored, Accepted>` is a value read and then written,
 `Rpc<Value, Args>` is a call answered and then made, `state<Accepted, Stored>` is a factory taking
 and then holding, and `memo<Computed, Args>` is a body returning and then taking. Slot three is the
 second value type wherever the first two did not already carry it, which on `Memo<Stored, Args,
@@ -50,10 +50,12 @@ Accepted, Failures>` and on `Channel` is the inner value's own `Accepted`. Then 
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Reactive` | `Reactive<Stored = undefined, Accepted = Stored, Failures = never, Produced = Stored>` | The value type every producer in this design hands back. | 1.1, 1.2, 1.3, 1.4, 9.3, 9.4, 9.5 |
+| `Reactive` | `Reactive<Stored = undefined, Accepted = Stored, Failures = never, Produced = Stored>` | The value type every producer in this design hands back. | 1.1, 1.3, 1.4, 1.5, 1.7, 9.3 |
 | `Accepted` | `unknown` | What a factory and a write take, before the gates run. | 4.1, 4.2 |
 | `Stored` | `unknown` | What is held, and what a read returns. | 4.7, 5.2 |
-| `state` | `<Accepted, Stored = Accepted, Failures = never>(initial: Accepted \| Promise<Accepted>, options?: ReactiveOptions<Accepted, Stored, Failures>) => Reactive<Stored, Accepted, Failures>` | The factory for a value the scope owns. | 4.1, 4.2, 3.11 |
+| `Failures` | union of `Failed` | What a read hands back in place of a value. | 1.4 |
+| `Produced` | `unknown` | What a production carries, where that differs from what is stored. | 1.3 |
+| `state` | `<Accepted, Stored = Accepted, Failures = never>(initial: Accepted \| Promise<Accepted>, options?: ReactiveOptions<Accepted, Stored, Failures>) => Reactive<Stored, Accepted, Failures>` | The factory for a value the scope owns. | 4.1, 4.2, 3.11, 41.7 |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | The shape of a `transform`. | 4.6, 4.7, 4.8 |
 | `Store` | `{ get: () => Stored \| Promise<Stored>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void> }` | Where a value lives when this process does not. | 1.3, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15 |
 | `Shared` | `interface Shared {}` | The app's declaration-merged registry of shared keys. | 10.3 |
@@ -67,6 +69,7 @@ Accepted, Failures>` and on `Channel` is the inner value's own `Accepted`. Then 
 | `transform` | `Transformer<Accepted, Stored, Failures>` | The shaping on the way to storage. | 4.6, 4.7, 4.8, 4.9 |
 | `store` | `Store<Stored>` | Where the value lives when the process does not. | 8.1, 8.2, 8.3, 8.14 |
 | `identity` | `((value: Stored) => unknown) \| ((next: Stored, previous: Stored) => boolean)` | What makes it the same value. | 5.1, 5.2, 5.3, 5.4, 5.6 |
+| `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator `identity` defaults to. | 5.4, 5.6 |
 | `tail` | `number` | How many past productions are retained. | 6.1, 6.2, 6.3 |
 | `ttl` | `number` | The life of a retained production. | 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10 |
 | `throttle` | `number` | A ceiling on how often the value changes. | 5.11, 5.12, 5.14, 5.15, 5.17, 5.18 |
@@ -80,7 +83,9 @@ Accepted, Failures>` and on `Channel` is the inner value's own `Accepted`. Then 
 | `s.peek` | `() => Stored` | Read without joining the flow. | 2.6 |
 | `Tail<Stored>` | `Iterable<Stored> & AsyncIterable<Stored>` | What `s.tail` hands back. | — |
 | `s.tail` | `(n?: number) => Tail<Stored>` | A cursor over the values held before this one. | 2.8, 2.9, 5.13, 6.3 |
-| `s.settled` | `() => Promise<Stored>` | The settled value. | 2.7, 1.2 |
+| `s.then` | `<Result>(onSettled?: (value: Stored) => Result \| PromiseLike<Result>, onFailed?: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Result>` | The settling, as a promise. | 1.5, 2.12, 2.13 |
+| `s.catch` | `<Result>(onFailed: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Stored \| Result>` | The settling's refusal path. | 1.5, 1.6 |
+| `s.finally` | `(onSettled: () => void) => Promise<Stored>` | The settling's end, whichever way it went. | 1.5, 1.6 |
 | `for await (… of s)` | `AsyncIterable<Produced>` | The live cursor face of a read. | 2.11 |
 | `s[Symbol.asyncIterator]` | `() => AsyncIterator<Produced>` | The production in flight, and then what follows it. | 2.11 |
 
@@ -88,7 +93,7 @@ Accepted, Failures>` and on `Channel` is the inner value's own `Accepted`. Then 
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `s.set` | `(value: Accepted \| Promise<Accepted>) => void \| Failures` | Write the current value. | 4.1, 4.2, 4.9, 4.13, 5.7, 5.8 |
+| `s.set` | `(value: Accepted \| Promise<Accepted>) => void \| Failures` | Write the current value. | 3.14, 4.1, 4.2, 4.9, 4.13, 5.7, 5.8 |
 | `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutate in place and mint a production for it. | 5.9, 5.10 |
 
 ### Probes
@@ -96,10 +101,10 @@ Accepted, Failures>` and on `Channel` is the inner value's own `Accepted`. Then 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `s.pending` | `() => boolean` | A load is in flight and there is nothing trustworthy to show. | 3.1, 3.2, 3.3, 3.4, 3.6, 3.7, 7.9, 11.20, 11.22 |
-| `s.refreshing` | `() => boolean` | An update is owed over a value still being served. | 3.1, 3.2, 3.3, 3.5, 5.18, 7.5, 11.20 |
+| `s.refreshing` | `() => boolean` | An update is owed over a value still being served. | 3.1, 3.2, 3.3, 3.5, 3.14, 5.18, 7.5, 11.20 |
 | `s.done` | `() => boolean` | It has finished, however it finished. | 3.1, 3.2, 3.3, 3.8, 3.9, 7.12, 11.20 |
 | `s.success` | `() => boolean` | There is a landed value to serve. | 3.1, 3.2, 3.3, 3.10, 3.11, 3.13 |
-| `s.streaming` | `() => boolean` | It is currently producing chunks. | 3.1, 3.2, 3.3 |
+| `s.streaming` | `() => boolean` | It is currently producing chunks. | 3.1, 3.2, 3.3, 3.15, 8.7 |
 | `s.error` | `() => unknown` | The standing refusal. | 3.1, 3.2, 3.3, 3.10, 4.10, 4.11, 4.12 |
 | `s.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | Whether a caught failure is the one named. | 3.1 |
 
@@ -124,16 +129,16 @@ Accepted, Failures>` and on `Channel` is the inner value's own `Accepted`. Then 
 | --- | --- | --- | --- |
 | `Memo` | `<Stored, Args, Accepted = Stored, Failures = never, Produced = Stored>((args: Args) => Reactive<Stored, Accepted, Failures, Produced>) & { invalidate(pattern?: Partial<Args>): void; refresh(pattern?: Partial<Args>): void }` | What a keyed memo is: a factory carrying the two triggers. | 4.13, 11.2, 11.4 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The key. | 11.26, 11.27, 11.28, 11.29, 11.31, 11.33 |
-| `memo` | `<Computed, Stored = AdoptedValue<Computed>, Failures = never>(body: () => Computed, options?: MemoOptions<AdoptedValue<Computed>, Stored, Failures>) => Reactive<Stored, AdoptedValue<Computed>, AdoptedFailures<Computed> \| Failures, AdoptedProduced<Computed>>` | The unkeyed factory. | 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.21, 11.24, 11.34, 11.35, 11.57, 11.58, 11.59, 11.60 |
-| `memo` | `<Computed, Args, Stored = AdoptedValue<Computed>, Failures = never>(body: (args: Args) => Computed, options?: MemoOptions<AdoptedValue<Computed>, Stored, Failures, Args>) => Memo<Stored, Args, AdoptedValue<Computed>, AdoptedFailures<Computed> \| Failures, AdoptedProduced<Computed>>` | The keyed factory. | 11.2, 11.3, 11.4, 11.6, 11.7, 11.8, 11.25, 11.34, 11.35, 11.59 |
+| `memo` | `<Computed, Stored = AdoptedValue<Computed>, Failures = never>(body: () => Computed, options?: MemoOptions<AdoptedValue<Computed>, Stored, Failures>) => Reactive<Stored, AdoptedValue<Computed>, AdoptedFailures<Computed> \| Failures, AdoptedProduced<Computed>>` | The unkeyed factory. | 41.7, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.21, 11.34, 11.35, 11.57, 11.58, 11.59, 11.60, 11.61 |
+| `memo` | `<Computed, Args, Stored = AdoptedValue<Computed>, Failures = never>(body: (args: Args) => Computed, options?: MemoOptions<AdoptedValue<Computed>, Stored, Failures, Args>) => Memo<Stored, Args, AdoptedValue<Computed>, AdoptedFailures<Computed> \| Failures, AdoptedProduced<Computed>>` | The keyed factory. | 41.7, 11.2, 11.3, 11.4, 11.6, 11.7, 11.8, 11.25, 11.34, 11.35, 11.59, 11.61, 11.62 |
 
 The three aliases a `memo` body's return type is unwrapped through are declared rather than listed,
 none of them being a name an app writes:
 
 ```ts
-type AdoptedValue<T> = never
-type AdoptedProduced<T> = never
-type AdoptedFailures<T> = never
+type AdoptedValue<T> = T extends Reactive<infer Stored, any, any, any> ? Stored : T
+type AdoptedProduced<T> = T extends Reactive<any, any, any, infer Produced> ? Produced : T
+type AdoptedFailures<T> = T extends Reactive<any, any, infer Failures, any> ? Failures : never
 ```
 
 ### Triggers
@@ -147,7 +152,7 @@ type AdoptedFailures<T> = never
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `args` | `Schema<Args>` | The gate on a memo's args. | 11.30, 11.32, 11.43, 11.44 |
+| `args` | `Schema<Args>` | The gate on a memo's args. | 11.30, 11.32, 11.43, 11.44, 11.63 |
 | `schema` | `Schema<Accepted>` | The gate on the way in. | 1.4, 4.3, 4.4, 4.5, 11.53, 11.54 |
 | `transform` | `Transformer<Accepted, Stored, Failures>` | The shaping on the way to storage. | 11.14, 4.6, 4.7, 4.8 |
 | `identity` | `((value: Stored) => unknown) \| ((next: Stored, previous: Stored) => boolean)` | What makes it the same value. | 5.1, 5.2, 5.3, 5.4, 5.6, 11.17 |
@@ -165,8 +170,8 @@ type AdoptedFailures<T> = never
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Channel` | `<Message, Args, Accepted = Message, Failures = never>(args?: Args) => Room<Message, Accepted, Failures>` | A room keyed by `args`, that anyone may publish to and anyone may read. | 9.15, 9.16, 9.18 |
-| `Room` | `Reactive<Message, Accepted, Failures> & { publish: (message: Accepted) => number \| Failures }` | A `Reactive` whose value is the latest message, plus `publish`. | 9.7, 9.8, 9.17, 9.19, 9.20, 9.21 |
+| `Channel` | `<Message, Args, Accepted = Message, Failures = never>(args?: Args) => Room<Message, Accepted, Failures>` | The factory for a room keyed by `args`, open to every publisher and every reader. | 9.15, 9.16, 9.18 |
+| `Room` | `Reactive<Message, Accepted, Failures> & { publish: (message: Accepted) => number \| Failures }` | A `Reactive` whose value is the latest message, plus `publish`. | 9.4, 9.5, 9.7, 9.8, 9.17, 9.19, 9.20, 9.21 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The room. | 9.11, 11.26 |
 | `Message` | `unknown` | The message type. | 9.1, 9.9 |
 | `Accepted` | `unknown` | What a publish takes, before the gates run. | 9.10 |
@@ -209,27 +214,27 @@ type AdoptedFailures<T> = never
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `refuse.typed` | `<Name extends string, Data extends JsonValue = undefined>(name: Name, status?: number, message?: string \| ((data: Data) => string), options?: { schema }) => ((data?: Data) => Failed<Name, Data>) & { is: (error: unknown) => error is Failed<Name, Data> }` | A reusable factory for a named, narrowable failure. | 15.4, 15.12, 15.13, 15.14, 15.15, 15.16 |
+| `refuse.typed` | `<Name extends string, Data extends JsonValue = undefined>(name: Name, status?: number, message?: string \| ((data: Data) => string), options?: { schema?: Schema<Data> }) => ((data?: Data) => Failed<Name, Data>) & { is: (error: unknown) => error is Failed<Name, Data> }` | A reusable factory for a named, narrowable failure. | 15.4, 15.12, 15.13, 15.14, 15.15, 15.16 |
 | `Failed<Name, Data>` | `Error & { name: Name; status: number; message: string; data: Data }` | The one refusal type, in-process and over a wire alike. | 15.1, 15.2, 15.7, 16.44, 16.45 |
 | `return myError(data)` | `Failed<Name, Data>` | The one spelling for every refusal. | 15.5, 15.6 |
-| `notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', …>` | Abide's own refusal for an address nothing answers. | 15.8, 15.10 |
+| `notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', { path: string; method: string }>` | Abide's own refusal for an address nothing answers. | 15.8, 15.10 |
 | `validationError` | `<T>(data?: Issues<T>) => Failed<'ValidationError', Issues<T>>` | Abide's own refusal for a schema that refused. | 15.9, 15.10 |
 | `myError(data)` DISCARDED | compile error | A `Failed` built and thrown away. | 15.11 |
 
 ## Tracking
 
-| Context | Tracks | Meaning | Rules |
-| --- | --- | --- | --- |
-| template expression | yes | The flow itself. | 14.1, 14.2, 14.11 |
-| branch-local `<script>` | no | Setup, once per item. | 14.8 |
-| `memo` body, unkeyed | yes | Pushes its own subscriber. | 14.3, 14.11, 14.15 |
-| `memo` body, keyed | no | Untracked by handler. | 14.4 |
-| block body binding | yes | A live read, like a prop. | 14.5 |
-| `watch` effect, bare | yes | Pushes its own subscriber. | 14.6, 14.14 |
-| `watch` effect, over sources | no | The sources decide the reruns. | 12.4, 14.6 |
-| component `<script>` setup | no | Runs once. | 14.7, 14.12, 14.13 |
-| event handler | no | Not the flow. | 14.9 |
-| `Transformer`, `Disposer`, middleware, lifecycle hooks | no | Not the flow. | 14.10 |
+| Context | Meaning | Rules |
+| --- | --- | --- |
+| template expression | The flow itself. | 14.1, 14.2, 14.11 |
+| branch-local `<script>` | An item's own setup scope. | 14.8 |
+| `memo` body, unkeyed | The unkeyed body's own scope. | 14.3, 14.11, 14.15, 14.16 |
+| `memo` body, keyed | The keyed body's own scope. | 14.4 |
+| block body binding | A live read, like a prop. | 14.5 |
+| `watch` effect, bare | The effect's own scope. | 14.6, 14.14, 14.16 |
+| `watch` effect, over sources | The scope its sources narrow. | 12.4, 14.6 |
+| component `<script>` setup | The component's own setup scope. | 14.7, 14.12, 14.13 |
+| event handler | Not the flow. | 14.9 |
+| `Transformer`, `Disposer`, middleware, lifecycle hooks | Not the flow. | 14.10 |
 
 # Transports
 
@@ -239,12 +244,12 @@ type AdoptedFailures<T> = never
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.9, 16.12, 16.27, 16.28, 16.29, 16.30, 16.31, 41.6, 41.7, 41.8, 41.13 |
+| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.9, 16.12, 16.27, 16.28, 16.29, 16.30, 16.31, 16.36, 16.47, 41.6, 41.8, 41.13 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.32 |
 | `Produced` | `unknown` | What it yields, per the unit rule. | 1.3, 16.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.26, 16.19 |
 | `Middleware` | `<Ctx, Result>(next: (ctx?: Ctx) => Promise<Result>, ctx: Ctx) => Result \| Promise<Result>` | One rung of an onion. | 16.15, 16.16, 16.17, 16.22 |
-| `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Memo<Value, Args, Value, Failures, Produced> \| Channel<Value, Args, Value, Failures> \| ((args?: Args) => Value), options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. | 16.1, 16.2, 16.5, 16.6, 16.32, 16.33, 16.34, 16.35, 16.36, 16.37, 16.38, 16.39, 16.40, 16.41, 16.43 |
+| `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Memo<Value, Args, Value, Failures, Produced> \| Channel<Value, Args, Value, Failures> \| ((args?: Args) => Value), options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. | 16.1, 16.2, 16.5, 16.6, 16.32, 16.33, 16.34, 16.37, 16.38, 16.39, 16.40, 16.41, 16.43, 16.48, 16.49, 16.50, 16.51, 16.52, 16.53, 16.54 |
 | `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declares a mutation. | 16.2, 16.7, 16.8, 16.42 |
 | `rpc.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | Whether a caught failure is the one named. | 16.9 |
 | `rpc.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The same call handed back as the raw response. | 16.12, 16.46 |
@@ -268,13 +273,13 @@ type AdoptedFailures<T> = never
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Values<T>` | `Iterable<T> \| AsyncIterable<T> \| ReadableStream<T>` | What every body helper takes. | 17.1 |
-| `page` | `(body: string \| Values<Uint8Array \| string>, init?: ResponseInit) => Response` | A rendered document as `text/html`. | 17.2 |
-| `json` | `(data: unknown, init?: ResponseInit) => Response` | A value serialized and tagged `application/json`. | 17.3 |
-| `jsonl` | `<T>(values: Values<T>, init?: ResponseInit) => Response` | One JSON value per line. | 17.4 |
-| `sse` | `<T>(values: Values<T>, init?: ResponseInit) => Response` | The same machine framed as server-sent events. | 17.5 |
-| `redirect` | `(to: string, status?: RedirectStatus, init?: ResponseInit) => Response` | A navigation. | 17.6 |
+| `page` | `<Body extends string \| Values<Uint8Array \| string>>(body: Body) => Body` | A rendered document as `text/html`. | 17.2 |
+| `redirect` | `(to: string, status?: RedirectStatus) => undefined` | A navigation. | 17.6 |
+| `jsonl` | `<T>(values: Values<T>) => Values<T>` | One JSON value per line, fixed. | 16.48, 17.10, 17.11 |
+| `sse` | `<T>(values: Values<T>) => Values<T>` | The same machine framed as server-sent events, fixed. | 16.49, 17.10, 17.11 |
+| `bytes` | `(values: Values<Uint8Array>) => Values<Uint8Array>` | A stream of binary chunks, fixed. | 16.37, 17.10, 17.11 |
 | `RedirectStatus` | `301 \| 302 \| 303 \| 307 \| 308` | The statuses a `redirect` may carry. | 17.6 |
-| `refuse` | `(status: number, message?: string) => never` | An undeclared refusal at a status. | 16.44, 17.7, 17.8, 17.9 |
+| `refuse` | `(status: number, message?: string) => Failed<'HttpError', undefined>` | An undeclared refusal at a status. | 15.6, 15.10, 15.11, 16.44, 17.8, 17.9 |
 
 ## `socket` — `channel` + transport
 
@@ -311,20 +316,23 @@ type AdoptedFailures<T> = never
 | --- | --- | --- | --- |
 | `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T> \| JsonSchema` | The three forms a shape may be declared in. | 19.3, 19.4, 19.5, 19.8, 19.10, 19.11, 19.12, 19.13 |
 | `JsonValue` | `null \| boolean \| number \| string \| JsonValue[] \| { [k: string]: JsonValue }` | What an `Args` may hold. | — |
-| `Issues<T>` | `T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. | 19.6 |
+| `Issues<T>` | `T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. | — |
 | `Paths<T>` | `string` | The dot-joined leaf paths of a type. | 19.7 |
 | `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. | 19.9 |
-| `validateJson` | `<T>(schema: JsonSchema, value: unknown) => Issues<T> \| null` | The native validator. | 19.15 |
+| `validateJson` | `<T>(schema: JsonSchema, value: unknown) => Issues<T> \| null` | The native validator. | — |
 
 ## Headers abide generates
 
 | Header | On | Meaning | Rules |
 | --- | --- | --- | --- |
-| `x-content-type-options: nosniff` | everything | Refuses a browser's guess at a type the response already declared. | 21.1 |
+| `x-content-type-options: nosniff` | everything | The declared content type, held against a browser's guess. | 21.1 |
 | `traceresponse` | everything | Correlates the answer, a failure included. | 21.2 |
-| `cache-control: private, no-store` | a page, an rpc answer, any refusal | The default a handler's own `ResponseInit` overrides. | 21.3, 21.4, 21.9, 21.10 |
+| `cache-control: private, no-store` | a page, an rpc answer, any refusal | The default a write through `response` overrides. | 21.3, 21.11 |
+| `cache-control: private, max-age=<ttl>` | a `GET` over a `global` `memo` | The memo's own duration, answered rather than restated. | 21.9, 21.10, 21.12 |
 | `cache-control: no-store` | `/__abide/health`, `/__abide/principal` | Refuses caching for an answer about this process or this caller. | 21.5 |
 | `cache-control: public, max-age=31536000, immutable` | the built bundle | A chunk addressed by its own content hash. | 21.6 |
+| `cache-control: public, max-age=0, must-revalidate` | a file under `src/ui/public` | A file at an address the build never chose. | 21.13 |
+| `etag` | a file under `src/ui/public` | The answered bytes, addressed by their content. | 21.14, 21.15 |
 | `referrer-policy: strict-origin-when-cross-origin` | a page | The browsers' own default, written down. | 21.7 |
 | `vary` | wherever an answer depends on a request header | Names the header the answer varied on. | 21.8 |
 
@@ -350,13 +358,6 @@ type AdoptedFailures<T> = never
 
 # Ambient values
 
-## `bag`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `bag` | `() => Bag & Record<string, unknown>` | Values carried for the life of one request. | 22.1, 22.2 |
-| `Bag` | `interface Bag {}` | The app's declaration-merged types for a bag's keys. | 22.2 |
-
 ## `cookies`
 
 | Name | Signature | Meaning | Rules |
@@ -368,6 +369,12 @@ type AdoptedFailures<T> = never
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `request` | `() => Request` | The request being served. | 22.1 |
+
+## `response`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `response` | `() => { status: number; headers: Headers }` | The response being built for the request being served. | 16.14, 21.11, 22.1, 22.11 |
 
 ## `route`
 
@@ -391,7 +398,7 @@ type AdoptedFailures<T> = never
 | --- | --- | --- | --- |
 | `trace` | `() => string` | The trace id of the operation this work belongs to. | 24.1 |
 | `trace.sampled` | `() => boolean` | The caller's sampling decision, carried through verbatim. | 24.2 |
-| `trace.span` | `<T>(name: string, body: () => T) => T` | Opens a child span around a body. | 24.3, 24.4, 24.5 |
+| `trace.span` | `<T>(name: string, body: () => T) => T` | Opens a child span around a body. | 24.4, 24.5 |
 | `trace.headers` | `() => Record<string, string>` | What an outbound request carries. | 24.6 |
 
 ## `server`
@@ -405,11 +412,11 @@ type AdoptedFailures<T> = never
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `health` | `Reactive<Health>` | The account of the app this call is in. | 25.1, 25.3, 25.5 |
-| `Health` | `{ version: string; abide: string; startedAt: string }` | The account itself. | 25.4 |
+| `Health` | `{ version: string; abide: string; startedAt: string }` | The account itself. | — |
 | `onHealth` | `(report: () => unknown \| Promise<unknown>) => () => void` | The app's reporter, merged over the baseline. | 25.3 |
-| `version` | `string` | The app's version. | 25.4 |
-| `abide` | `string` | The framework's version. | 25.4 |
-| `startedAt` | `string` | When the process started, ISO-8601. | 25.4 |
+| `version` | `string` | The app's version. | — |
+| `abide` | `string` | The framework's version. | — |
+| `startedAt` | `string` | When the process started, ISO-8601. | — |
 
 ## `principal`
 
@@ -417,15 +424,15 @@ type AdoptedFailures<T> = never
 | --- | --- | --- | --- |
 | `principal.authenticated` | `Reactive<boolean>` | Whether this caller presented something the server accepted. | 26.1, 26.2 |
 | `principal.expiresAt` | `Reactive<string \| undefined>` | When the seal lapses. | 26.1, 26.2 |
-| `principal.error` | `Reactive<Failed \| undefined>` | The app's resolver having failed. | 26.1, 26.3 |
+| `principal.error` | `Reactive<Failed<string, unknown> \| undefined>` | The app's resolver having failed. | 26.1, 26.3 |
 | `principal.resolved` | `Reactive<unknown>` | What `onPrincipal` returned, merged over the baseline. | 26.1, 26.4 |
-| `principal.caller` | `Reactive<string>` | Which browser, as against who they are. | 26.5, 26.6, 26.7 |
-| `principal.set` | `(claims: unknown) => Promise<void>` | Authenticates this caller. | 26.8, 26.13, 26.17, 26.18 |
+| `principal.caller` | `Reactive<string>` | Which browser, as against who they are. | 26.5, 26.6, 26.7, 26.20, 26.23 |
+| `principal.set` | `(claims: unknown) => Promise<void>` | Authenticates this caller. | 26.8, 26.13, 26.17, 26.18, 26.19, 26.21, 26.22 |
 | `principal.clear` | `() => void` | Signs this caller out. | 26.7, 26.9 |
-| `Principal` | `{ authenticated, expiresAt?, error?, …claims }` | The wire document. | 26.4, 26.10, 26.11, 26.14, 26.15, 26.16 |
+| `Principal` | `{ authenticated, expiresAt?, error?, …claims }` | The wire document. | 26.4, 26.10, 26.14, 26.15, 26.16 |
 | `authenticated` | `boolean` | Whether this caller presented a seal the server accepted. | 26.10 |
 | `expiresAt` | `string \| undefined` | When the seal lapses. | 26.12 |
-| `error` | `Failed \| undefined` | The app's resolver having failed. | 26.3 |
+| `error` | `Failed<string, unknown> \| undefined` | The app's resolver having failed. | 26.3 |
 
 ## `config`
 
@@ -434,14 +441,15 @@ type AdoptedFailures<T> = never
 | `config` | `Reactive<Config>` | The resolved configuration document. | 27.2, 27.10 |
 | `Config` | `interface Config { …Env }` | Every field of `Env`, plus what `onConfig` defaulted and the schema normalised. | — |
 | `Env` | `Record<string, string \| undefined>` | The process environment as read, before coercion. | 27.3, 27.9 |
-| `config.invalidate` | `() => void` | Re-reads the environment and re-runs `onConfig`. | 7.2, 27.6 |
+| `config.invalidate` | `() => void` | The trigger over the resolved configuration. | 7.2, 27.6 |
 | `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's defaults and its schema. | 27.4, 27.5, 27.7 |
 | `ConfigDefaults` | `(env: Env) => unknown` | The defaults function, synchronous by contract. | 27.5 |
-| `schema` | `Schema<Config>` | The gate over the whole configuration document. | 27.8 |
 
 ### `ConfigOptions`
 
-`ConfigOptions` is what `onConfig` takes beside its defaults, and `schema` is its one member.
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `schema` | `Schema<Config>` | The gate over the whole configuration document. | 27.8 |
 
 # Helpers
 
@@ -454,8 +462,8 @@ type AdoptedFailures<T> = never
 | `log.channel` | `(name: string) => Logger` | A named channel. | 28.4, 28.5 |
 | `Logger` | `typeof log` | What `log.channel` hands back. | 28.5 |
 | `log.enabled` | `() => boolean` | Whether a gated line on this channel would be written. | 28.6, 28.7 |
-| `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; channel: string; message: string; trace: string }` | One line, as a value. | 24.4, 28.8 |
-| `log.records` | `Room<LogRecord>` | The room every line is published to. | 28.1, 28.8 |
+| `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; channel: string; message: string; trace: string }` | One line, as a value. | 24.4 |
+| `log.records` | `Room<LogRecord>` | The room every line is published to. | 28.1 |
 | `abide:request` | `debug` | One line per request. | 28.9 |
 | `abide:socket` | `debug` | One line per socket event. | 28.9 |
 | `abide:lifecycle` | `debug` `error` | A lifecycle that ran. | 28.9 |
@@ -474,8 +482,8 @@ type AdoptedFailures<T> = never
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `csp` | `(sources?: Record<string, string[]>) => Middleware` | The rung that sets `content-security-policy`. | 29.1, 29.2, 29.5 |
-| `csp.nonce` | `() => string` | This response's nonce. | 29.3, 29.4 |
+| `csp` | `(sources?: Record<string, string[]>) => Middleware` | The rung that sets `content-security-policy`. | 29.1, 29.2, 29.5, 29.6, 29.7, 29.8 |
+| `csp.nonce` | `() => string` | This response's nonce, for the app's own inline script. | 29.3, 29.4, 29.9 |
 
 ## `url`
 
@@ -500,17 +508,17 @@ type AdoptedFailures<T> = never
 
 ## Reading and writing by name
 
-| Spelling | Means | Meaning | Rules |
-| --- | --- | --- | --- |
-| `foo` in an operand, text, attribute or value-typed argument | a live read | The name in an expression is the read. | 31.1, 31.2, 31.10 |
-| `const x = foo` / `return foo` / a `Reactive<…>`-typed argument | the `Reactive` | A binding, a return and a `Reactive`-typed argument hold. | 31.3 |
-| `foo = bar` where `bar` is a `Reactive` | a compile error | Assigning a `Reactive` to a name is refused, naming both repairs. | 31.4 |
-| `foo = bar` | a write | Assignment is the write, and the value may be settled or a load. | 31.5 |
-| `foo.bar = v` | a write through a path | Copy-on-write down the path, then the write. | 31.11 |
-| `foo.push(v)` | the same | A resolved mutator writes through the same path. | 31.11 |
-| `foo.bar` | the value's `bar` | A property access reaches the value, never the `Reactive`. | 31.7 |
-| `foo.bar(…)` | the `Reactive` API where `bar` is a member | A call reaches the `Reactive` where the name is one of its members. | 31.8 |
-| `foo()` / `foo.set(v)` | the explicit forms | The two members, which keep compiling. | 31.9 |
+| Spelling | Means | Rules |
+| --- | --- | --- |
+| `foo` in an operand, text, attribute or value-typed argument | a live read | 31.1, 31.2, 31.10, 31.15 |
+| `const x = foo` / `return foo` / a `Reactive<…>`-typed argument | the `Reactive` | 31.3 |
+| `foo = bar` where `bar` is a `Reactive` | a compile error | 31.4 |
+| `foo = bar` | a write | 31.5 |
+| `foo.bar = v` | a write through a path | 31.11 |
+| `foo.push(v)` | the same | 31.11, 31.14 |
+| `foo.bar` | the value's `bar`, or `undefined` | 31.7, 31.12 |
+| `foo.bar(…)` | the `Reactive` API where `bar` is a member | 31.8 |
+| `foo()` / `foo.set(v)` | the explicit forms | 31.9, 31.16 |
 
 ## Templating
 
@@ -520,7 +528,7 @@ type AdoptedFailures<T> = never
 | --- | --- | --- |
 | `{expr}` | Reactive text, escaped. | 32.1 |
 | formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
-| `{await expr}` | Blocks rendering until the expression resolves. | 32.2 |
+| `{await expr}` | A blocking read of the expression. | 31.13, 32.2 |
 | `{raw(...)}` | Raw HTML. | 32.3 |
 | `name={expr}` | A reactive attribute or property. | 32.4, 32.24 |
 | `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.5 |
@@ -541,10 +549,10 @@ type AdoptedFailures<T> = never
 | Spelling | Branches | Meaning | Rules |
 | --- | --- | --- | --- |
 | `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 32.13, 32.25 |
-| `{#await promise}` | `{:then}`, `{:catch e}`, `{:finally}` | Renders the body while pending. | 32.14 |
-| `{#await promise then value}` | `{:catch e}`, `{:finally}` | Awaits before rendering. | 32.15 |
-| `{#for item, index of list by key}` | - | Repeats markup over a list. | 32.16, 32.17 |
-| `{#for await item of source}` | `{:catch}` | Repeats markup over a cursor. | 18.16, 32.18, 41.9 |
+| `{#await promise}` | `{:then}`, `{:catch e}`, `{:finally}` | The body as the pending branch. | 32.14 |
+| `{#await promise then value}` | `{:catch e}`, `{:finally}` | The resolved value, with no pending branch. | 32.15 |
+| `{#for item, index of list by key}` | - | Repeats markup over a list. | 32.16, 32.17, 32.26 |
+| `{#for await item of source}` | `{:catch}` | Repeats markup over a cursor. | 18.16, 32.18, 32.26, 41.9 |
 | `{#switch expr}` | `{:case v}` `{:default}` | Multi-way markup. | 32.13 |
 | `{#try}` | `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.19 |
 
@@ -554,7 +562,7 @@ type AdoptedFailures<T> = never
 | --- | --- | --- |
 | `{#component Name(pattern)}` | An inline component. | 32.20 |
 | `<Name/>` | A component invocation. | 32.21 |
-| `<slot/>` | Renders children. | 32.22 |
+| `<slot/>` | The position children render into. | 32.22 |
 | `<slot>fallback</slot>` | Renders children, or a fallback. | 32.22 |
 | `<Tag>…</Tag>` | Children passed to a component's slot. | 32.22 |
 
@@ -571,7 +579,7 @@ type AdoptedFailures<T> = never
 | --- | --- | --- |
 | `<script>` | Per-instance component setup. | 14.7, 34.1 |
 | `<script module>` | Module scope. | 34.2 |
-| `<style>` | Component-scoped styles. | 34.3, 34.4 |
+| `<style>` | Component-scoped styles. | 34.3, 34.4, 34.6, 34.7 |
 | `import './app.css'` | A stylesheet the component depends on. | 34.5 |
 | `:global(…)` | The per-selector escape from scoping. | 34.4 |
 
@@ -593,7 +601,7 @@ type AdoptedFailures<T> = never
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Component` | `interface Component {}` | A component bound to its props. | 32.21, 35.4 |
-| `render` | `(component: Component, shell?: Shell) => AsyncGenerator<Uint8Array>` | What produces a document. | 35.4, 35.5, 41.1, 41.2, 41.3, 41.4, 41.5, 41.10 |
+| `render` | `(component: Component, shell?: Shell) => AsyncGenerator<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 41.1, 41.2, 41.3, 41.4, 41.5, 41.10, 41.14 |
 | `Shell` | `string \| URL \| undefined` | The document a render renders into. | 35.6 |
 
 ## Sinks
@@ -615,7 +623,7 @@ type AdoptedFailures<T> = never
 | `APP_URL` | `string \| null` | The app's public URL. | 36.2 |
 | `NODE_ENV` | `string` | The environment name, verbatim. | 36.3 |
 | `APP_NAME` | `string` | The app's name, and `log`'s default channel. | 27.4, 28.4 |
-| `APP_VERSION` | `string` | The version beside that name. | 25.4, 27.4 |
+| `APP_VERSION` | `string` | The version beside that name. | 27.4 |
 | `APP_DATA_DIR` | `string` | The platform's per-user data directory. | 27.4, 36.4 |
 | `ABIDE_PRINCIPAL_SECRET` | `string \| null` | What seals the principal cookie. | 26.12, 36.5 |
 | `ABIDE_PRINCIPAL_TTL` | `number` | The principal cookie's life, in ms. | 26.16, 26.17 |
@@ -643,6 +651,9 @@ type AdoptedFailures<T> = never
 | `src/shared/**` | Source shared by both. | 36.11 |
 | `src/server/app.ts` | The lifecycle hooks. | 37.1 |
 | `src/ui/app.html` | The document its pages are served in. | 35.6 |
+| `src/ui/public/**` | The files answered as authored, at their path below that directory. | 36.12, 36.13, 36.14, 36.15, 21.13, 21.14, 21.15, 38.19, 38.20 |
+| `src/ui/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.12 |
+| `src/ui/public/robots.txt` | The file answered at `/robots.txt`. | 36.12 |
 | `src/ui/pages/**/page.abide` | A route. | 23.3, 23.4 |
 | `src/ui/pages/**/layout.abide` | A layout, rendering its child page through a slot. | 35.1, 41.12 |
 | `src/ui/pages/**/error.abide` | The page a refusal renders in. | 35.2, 35.3 |
@@ -662,6 +673,17 @@ type AdoptedFailures<T> = never
 | `onHealth` | `(report: () => unknown \| Promise<unknown>) => () => void` | The app's health reporter. | 25.3 |
 | `onPrincipal` | `(resolve: (claims: unknown) => unknown \| Promise<unknown>) => () => void` | Turns claims into the app's half of a principal. | 26.4, 37.7 |
 
+# The app object
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `createApp` | `() => Promise<App>` | The app built and booted, with no socket bound. | 42.1, 42.2, 42.3, 42.4, 37.4, 37.6 |
+| `App` | `interface App` | What a host, a test or a script holds the app as. | 42.12, 42.13 |
+| `App.fetch` | `(request: Request) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6 |
+| `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 11.40 |
+| `App.listen` | `(options?: { port?: number; unix?: string }) => Promise<void>` | The socket, bound. | 42.9 |
+| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 37.4 |
+
 # CLI
 
 ## Commands
@@ -670,9 +692,9 @@ type AdoptedFailures<T> = never
 | --- | --- | --- |
 | `abide scaffold <name>` | Writes a starter project. | 38.1 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2 |
-| `abide check [dir…]` | Type-checks `.abide`, on the `.abide` line. | 38.3 |
-| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 38.4, 38.15, 38.16, 38.17, 38.18 |
-| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.5 |
+| `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3 |
+| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 38.4, 38.15, 38.16, 38.17, 38.18, 38.20 |
+| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.5, 38.19 |
 | `abide start [--port <n>]` | Boots the built app. | 38.6 |
 | `abide connect [url]` | The interactive shell against a running app. | 38.7 |
 | `abide call <address> [args]` | One call to one handler. | 38.8 |

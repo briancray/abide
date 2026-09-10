@@ -55,3 +55,10 @@ handler called once — the same route table your pages read, framed for a termi
 
 Read on: [Call a handler](call-a-handler-from-the-terminal.md) ·
 [Watch a room](watch-a-room-from-the-terminal.md)
+
+## Calling the app from a test
+
+`createApp` hands back the app itself, tables and hooks and all, with no socket bound. A test
+holds what `abide start` holds and asks it the same way.
+
+Read on: [Tests](call-your-app-from-a-test.md)

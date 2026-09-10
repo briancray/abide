@@ -6,18 +6,20 @@ const MATCHING: Record<string, number> = { all: 12, customers: 4, leads: 1 }
 
 let filter = state('all')
 
-const count = (of: string) => new Promise<number>((done) =>
-    setTimeout(() => done(MATCHING[of] ?? 0), 200),
+const loadCounts = () => new Promise<Record<string, number>>((done) =>
+    setTimeout(() => done(MATCHING), 200),
 )
 
 const label = memo(async () => {
     const of = filter // read BEFORE the await
-    return `showing ${await count(of)} of ${TOTAL}`
+    const counts = await loadCounts()
+    return `showing ${counts[of]} of ${TOTAL} for ${of}`
 })
 
 const stale = memo(async () => {
-    const found = await count(filter) // read AFTER it, and warned
-    return `showing ${found} of ${TOTAL}`
+    const counts = await loadCounts()
+    const of = filter // read AFTER it, and warned
+    return `showing ${counts[of]} of ${TOTAL} for ${of}`
 })
 </script>
 

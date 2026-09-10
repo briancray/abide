@@ -1,0 +1,22 @@
+{
+    "title": "`Reactive` — four producers, one way to ask",
+    "summary": "A contact and its notes. Watch which rows say “…” on arrival, then type a note and add it.",
+    "app": "crm",
+    "files": ["src/ui/components/Contact.abide", "src/server/rpc/contacts.ts"],
+    "route": "/contacts/1",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/contacts/getContact?id=1",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"name\": \"Ada Lovelace\"\n}",
+            "latency": 900
+        }
+    ]
+}

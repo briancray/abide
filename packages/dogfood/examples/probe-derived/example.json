@@ -1,0 +1,22 @@
+{
+    "title": "A derived value is pending while what it reads is",
+    "summary": "A count of unpaid invoices, derived from a list still loading. Press Reload and watch the figure before the list lands.",
+    "app": "crm",
+    "files": ["src/server/rpc/invoices.ts", "src/ui/components/Unpaid.abide"],
+    "route": "/invoices",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/invoices/listInvoices",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "[\n    { \"id\": 4021, \"paid\": true },\n    { \"id\": 4022, \"paid\": false },\n    { \"id\": 4023, \"paid\": false }\n]",
+            "latency": 900
+        }
+    ]
+}

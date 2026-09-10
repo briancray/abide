@@ -1,0 +1,7 @@
+{
+    "title": "`bind:element` and `on<event>` — the node, and what happens on it",
+    "summary": "A contact's notes. Press New note and the field is cleared and waiting for you.",
+    "app": "crm",
+    "files": ["src/ui/components/Note.abide"],
+    "route": "/contacts/1/notes"
+}

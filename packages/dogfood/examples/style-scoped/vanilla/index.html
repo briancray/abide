@@ -1,0 +1,18 @@
+<style>
+/* TWO RULES FOR ONE NAME, KEPT APART BY HAND. The component name
+   is in the selector because nothing else will put it there, and
+   a third component reusing `badge` has to know both of these
+   already exist. */
+.overdue-badge, .paid-badge {
+    padding: .25rem .5rem;
+    border-radius: 999px;
+}
+.overdue-badge { color: rgb(163, 58, 58); }
+.paid-badge { color: rgb(47, 107, 68); }
+</style>
+
+<div class="row">
+    <span class="overdue-badge" id="overdue">Overdue</span>
+    <span class="paid-badge" id="paid">Paid</span>
+</div>
+<script type="module" src="./badges.js"></script>

@@ -14,88 +14,146 @@ covers:
   - channel › `transform`
   - channel › `identity`
 examples:
-  - packages/dogfood/examples/rooms
+  - packages/dogfood/examples/channel-shared
+  - packages/dogfood/examples/channel-rooms
+  - packages/dogfood/examples/channel-tail
+  - packages/dogfood/examples/channel-transform
+  - packages/dogfood/examples/channel-identity
 ---
 
 A state has one owner and a memo has a body. The third kind of value has neither: a **room** is a
 subject anything may write to and anything may read, and nobody holds it.
 
-{% example rooms %}
+## The forms of `channel`
 
-*2 components, 0 props threaded* — a list on the page and a badge in the heading, with neither
-one owning the value and nothing passed between them.
+`channel` is one name that hands back another, and the second call is what picks a room.
 
-## A room is a `Reactive` with `publish`
+| You write | What you get |
+| --- | --- |
+| `channel()` | a `Channel` — one declaration standing for a space of rooms |
+| `channel(options)` | the same, with a gate, a retention or a reshape on the way in |
+| `channel(…)(args)` | a `Room` — a `Reactive` whose value is the latest message, plus `publish` |
 
-`channel()` hands back a factory; calling it hands back a `Room`, which is a `Reactive` whose value
-is **the latest message**, plus `publish`.
-
-So there is no second type to learn. A bare read is the latest message, the probes answer, `await`
-waits, and `room.tail(n)` is the cursor:
-
-{% snippet rooms src/ui/pages/threads/[id]/page.abide {#if room.pending()} … {#for await post %}
-
-The badge in the heading is the bare read — `{room.author}` is the latest message's author,
-reached with no probe and no cursor:
-
-{% snippet rooms src/ui/components/Unread.abide <p class="hint"> %}
-
-`publish` hands back the message's `seq` — monotonic per room — which is what a reconnect resumes
-from.
-
-`set` is not a second spelling of it. It is `Reactive`'s own write meaning here what it means
-everywhere: it **replaces the newest message in place** and mints no `seq`, so `inbox = message`
-edits the latest rather than appending after it. Publishing is how a room grows; `set` is how the
-thing it is currently showing is corrected.
-
-Read on: [Loading states](show-a-value-that-isnt-there-yet.md) ·
-[History & tail](keep-the-last-few-values.md)
+`Message` is what the room holds, `Accepted` is what a publish takes before the gates run, and
+`Args` is the room key. The options are `args`, `schema`, `transform`, `identity`, `tail`, `ttl`,
+`store`, `throttle` and `debounce` — six of them shared with `state` and `memo`. Every signature
+is in the [`channel` reference](../reference/channel.md).
 
 ## Anyone publishes, anyone reads
 
-That symmetry is the whole difference from the other two. A state is written by whoever owns it; a
-memo is computed by its body; a room is written by **anything that can reach it**, and read the
-same way.
+{% example channel-shared %}
 
-The page publishes and the badge reads, and neither knows the other exists:
+*2 components, 0 props threaded* — against the subscriber list the hand-written arm keeps, and
+the wiring it takes per reader.
 
-{% snippet rooms src/ui/pages/threads/[id]/page.abide <button onclick %}
+That symmetry is the whole difference from the other two. A state is written by whoever owns it;
+a memo is computed by its body; a room is written by **anything that can reach it**, and read the
+same way. The composer names the room and not the readout, the readout names the room and not the
+composer, and the room is the whole of what is between them.
 
-{% snippet rooms src/ui/components/Unread.abide const room = thread %}
+So there is no second type to learn either. A bare read is the latest message — `room.speaker` is
+the last speaker, reached with no probe and no cursor — the probes answer, and `await` waits.
+
+`publish` hands back the message's `seq`, monotonic per room, and a reconnect resumes from it.
+`set` is not a second spelling of it: it is `Reactive`'s own write meaning here what it means
+everywhere, and it **replaces the newest message in place** and mints no `seq`. Publishing grows a
+room; `set` corrects the message it is showing.
 
 In-process nothing is gated — the page publishes because it is your code. Whether a caller
 **outside** the process may publish is a separate question with a separate answer, defaulting to
 no, and it belongs to the transport rather than here.
 
-Read on: [Sockets](../server/keep-a-room-of-callers-in-sync.md)
+Read on: [Sockets](../server/keep-a-room-of-callers-in-sync.md) ·
+[Loading states](show-a-value-that-isnt-there-yet.md)
 
 ## A channel is a space of rooms
 
-`Channel` is `(args?) => Room`, so a channel is a **space of rooms** and `args` picks one:
+{% example channel-rooms %}
 
-{% snippet rooms src/ui/pages/threads/[id]/page.abide const room = thread %}
-
-That one line is a different room per `id` in the address bar, from a single declaration —
-which is why changing rooms is changing the URL and nothing else:
-
-{% snippet rooms src/ui/pages/threads/[id]/page.abide <nav class="switch"> %}
-
-Switch between them in the example above. Each room has its own messages, its own tail and
-its own `seq`, and coming back to one finds it as you left it.
+`Channel` is `(args?) => Room`, so a channel is a **space of rooms** and `args` picks one. That
+one declaration is a different room per conversation in the address bar, which is why changing
+rooms is changing the URL and nothing else. Each has its own messages, its own tail and its own
+`seq`, and coming back to one finds it as you left it.
 
 Args are keyed by the same canonical wire form a memo's args use — sorted, `undefined` dropped,
-`Date` written ISO — so a fresh object built each run lands on the same room.
+`Date` written ISO — so a fresh object built each run lands on the same room. The `args` option is
+a schema that **refuses** a key rather than normalising one, two spellings that both pass being
+two rooms.
 
 **A room is created by a publish, never by a subscribe.** Subscribing to one nothing has published
-to is legal, allocates no entry, and reads as `pending()`. That bounds the number of rooms
-by *publish authority* rather than by how many argument keys a caller can invent, and it is why
-there is no room-count ceiling to configure.
+to is legal, allocates no entry, and reads as `pending()` — which is the empty conversation on the
+card. That bounds the number of rooms by *publish authority* rather than by how many argument keys
+a caller can invent, and it is why there is no room-count ceiling to configure.
 
-Read on: [Caching](load-once-per-set-of-arguments.md)
+Read on: [Caching](load-once-per-set-of-arguments.md) ·
+[Schemas](../server/check-what-callers-send-you.md)
+
+## `tail` decides how far back a room goes
+
+{% example channel-tail %}
+
+`tail` is how many past messages the room retains, and it defaults to **1** — latest only, like
+every other `Reactive`. A chat pane asks for more, and fifty is the ordinary figure where three is
+what makes the cap visible in a single press.
+
+The reader's `tail(50)` is a **cursor**, not a second retention. It asks for as much as the room
+has, and the room is what decides how much that is.
+
+The retention is also how far back a **reconnect** can resume: a cursor older than the tail is
+answered with the whole ring, never with a gap. `tail: 0` is passthrough and drop.
+
+`ttl` is the sibling option, and it is the life of one retained message rather than of the room —
+each on its own clock.
+
+Read on: [History & tail](keep-the-last-few-values.md)
+
+## `transform` refuses a message under a name you declared
+
+{% example channel-transform %}
+
+`transform` is the same option `state` and `memo` take, on the third `Reactive`. It may rewrite
+the message or **refuse** it by returning a `Failed`, and that is its job here. You declare what
+it refuses with once, and the name and its data are the type on both sides — so `publish` hands
+back a `number` or that `Failed`, and `tooLong.is` narrows between them.
+
+`Accepted` and `Message` are what the two ends of a transform are called. With no reshape they are
+one type, which is why the channel above reads as one parameter.
+
+It runs on **every** publish, the app's own included — normalising is not a question about who is
+asking.
+
+A message's **shape** is the sibling option, `schema`, and it is the channel's rather than the
+socket's for this same reason: one declared at the transport would have skipped itself in-process
+exactly the way a trim did. So `channel({ schema: messageSchema })` is where a message's shape is
+stated, `transform` is there for the rarer case of storing something other than what was
+published, and the `socket` is left declaring who may connect and whether a frame may publish at
+all.
+
+Read on: [Failures](../server/refuse-a-request-and-say-why.md) ·
+[Schemas](../server/check-what-callers-send-you.md) ·
+[Local state](show-a-value-that-changes.md)
+
+## `identity` decides what counts as the same message
+
+{% example channel-identity %}
+
+A publish `identity` deems a consecutive duplicate mints no production: nothing enters the ring,
+no reader wakes, and the **standing** sequence number is what comes back. A retry after a dropped
+connection is that case, and it is the one a screen cannot show you — the room reads identically
+either way, which is why the card puts the cursor on screen and the spec asserts it.
+
+It compares against the **previous message alone** and never scans the ring. A phrase said again
+ten turns later is a new message rather than a duplicate, which is the cheap reading and also the
+right one: a room is a subject over time, not a set.
+
+The option is the one every `Reactive` takes, in either of its two forms — a key function, or a
+comparator over the previous value and the next.
+
+Read on: [Local state](show-a-value-that-changes.md)
 
 ## A room is not a stream
 
-Both produce more than once, and the difference is what the producer declared — not something a
+Both produce more than once, and what the producer declared separates them — not something a
 runtime sniffs. A channel declares a `Message`, so **every publish is a whole one**. A streaming
 body declares chunks of one value, so no chunk is a whole anything.
 
@@ -109,46 +167,6 @@ And `done()` stays false while a room is live — a room is not a thing that fin
 `{:finally}` never mounts on one.
 
 Read on: [Streaming data](../server/send-data-as-it-arrives.md)
-
-## `tail` decides how many past messages a room keeps
-
-`tail` is how many past messages the room retains, and it defaults to **1** — latest only, like
-every other `Reactive`. A chat pane asks for more:
-
-{% snippet rooms src/shared/threads.ts export const thread %}
-
-Fifty is also how far back a **reconnect** can resume: a cursor older than the tail is answered
-with the whole tail, never with a gap. `tail: 0` is passthrough and drop.
-
-`ttl` is the life of one retained message, each on its own clock.
-
-Read on: [History & tail](keep-the-last-few-values.md)
-
-## `transform` refuses a message under a name you declared
-
-`transform` is the same option `state` and `memo` take, on the third `Reactive`. It may rewrite the
-message or **refuse** it by returning a `Failed` — and that is what it is for here, `schema` being
-where a message's *shape* goes. Both gates refuse; what you refuse **with** picks between them, and
-only this one carries a name and data of your own:
-
-It is the last option on the channel above. What it refuses with is declared once, and the
-name and its data are the type on both sides:
-
-{% snippet rooms src/shared/failures.ts export const tooLong %}
-
-It runs on **every** publish, the app's own included — normalising is not a question about who is
-asking.
-
-A message's **shape** is the sibling option, `schema`, and it is the channel's rather than the
-socket's for this same reason — one declared at the transport would have skipped itself
-in-process exactly the way a trim did. So `channel({ schema: messageSchema })` is where a
-message's shape is stated, `transform` is there for the rarer case of storing something other
-than what was published, and the `socket` is left declaring who may connect and whether a frame
-may publish at all.
-
-Read on: [Failures](../server/refuse-a-request-and-say-why.md) ·
-[Schemas](../server/check-what-callers-send-you.md) ·
-[Local state](show-a-value-that-changes.md)
 
 ## A room is discarded once nobody subscribes
 

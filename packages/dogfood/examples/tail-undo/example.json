@@ -1,0 +1,7 @@
+{
+    "title": "An undo stack builds on a state's own history",
+    "summary": "A composer draft with an Undo beside it. Type a few edits, then press Undo more than once.",
+    "app": "chat",
+    "files": ["src/shared/undo.ts", "src/ui/components/Draft.abide"],
+    "route": "/chat"
+}

@@ -1,0 +1,11 @@
+<script>
+import { state } from 'abide'
+
+let handle = state('ada')
+</script>
+
+<h1>@{handle}</h1>
+
+<label>handle
+    <input bind:value={handle}>
+</label>

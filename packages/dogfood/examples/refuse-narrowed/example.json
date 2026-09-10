@@ -1,0 +1,49 @@
+{
+    "title": "`rpc.isError(e, name)` — the refusal, matched by name",
+    "summary": "Three invoices on one account. Open the second and the third — each is refused for a different reason.",
+    "app": "crm",
+    "files": [
+        "src/shared/failures.ts",
+        "src/server/rpc/invoices.ts",
+        "src/ui/components/Invoice.abide"
+    ],
+    "route": "/invoices",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/invoices/getInvoice?id=4310",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"total\": \"$1,240.00\"\n}"
+        },
+        {
+            "request": "GET /__abide/rpc/invoices/getInvoice?id=4311",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "403 Forbidden",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"name\": \"NotYours\",\n    \"status\": 403,\n    \"message\": \"That invoice belongs to someone else.\",\n    \"data\": { \"owner\": \"Grace Hopper\" }\n}"
+        },
+        {
+            "request": "GET /__abide/rpc/invoices/getInvoice?id=4312",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "409 Conflict",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"name\": \"Superseded\",\n    \"status\": 409,\n    \"message\": \"That invoice was replaced.\",\n    \"data\": { \"replacedBy\": \"4408\" }\n}"
+        }
+    ]
+}

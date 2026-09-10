@@ -1,0 +1,22 @@
+<script>
+import { state } from 'abide'
+
+let email = state('ada@example.com')
+let plan = state('monthly')
+</script>
+
+<div class="row">
+    <label>email
+        <input bind:value={email}>
+    </label>
+    <label>plan
+        <select bind:value={plan}>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+        </select>
+    </label>
+</div>
+
+<ul class="fields stacked">
+    <li><span>what will be saved</span><strong>{email} on {plan}</strong></li>
+</ul>

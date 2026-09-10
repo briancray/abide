@@ -1,0 +1,11 @@
+<script>
+import { props, state } from 'abide'
+
+type Props = { title: string }
+
+const { title } = props<Props>()
+// The same key from the other side of the page, and no prop between them.
+let playing = state.share('nowPlaying', () => state('nothing'))
+</script>
+
+<button onclick={() => (playing = title)}>{title}</button>

@@ -1,0 +1,7 @@
+{
+    "title": "`contact.address.city = v` — a write through a path",
+    "summary": "A contact's city, two levels down. Type into the field and watch the line above it.",
+    "app": "crm",
+    "files": ["src/ui/components/Contact.abide"],
+    "route": "/contacts/1"
+}

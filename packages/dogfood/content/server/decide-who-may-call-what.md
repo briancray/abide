@@ -6,27 +6,16 @@ covers:
   - `Middleware`
   - rpc › `middleware`
   - Lifecycle hooks › `middleware`
+examples:
+  - packages/dogfood/examples/rung-order
 ---
 
 Auth is middleware. Not a decorator, not a config file mapping routes to roles, and not a
 check at the top of every handler that one handler will eventually be missing.
 
-A rung sits in front of the operation, decides, and either calls the next one or does not.
-
-```ts #server/rpc/invoices.ts
-export const getInvoice = GET(invoiceById, {
-    middleware: [
-        async (next, ctx) => {
-            const { id } = await ctx.args()
-            if (!(await mayRead(principal.id, id))) return notYours({ id })
-            return next(ctx)
-        },
-    ],
-})
-```
-
-*1 file, 0 route tables* — the rung is on the handler it guards, so neither can be moved
-without the other.
+A rung sits in front of the operation, decides, and either calls the next one or does not. It is
+declared on the handler it guards, so neither can be moved without the other, and there is no
+route table to keep in step with either.
 
 ## `Middleware` is one type, in three lanes
 
@@ -106,8 +95,10 @@ Read on: [Lifecycle](../app/run-code-at-start-and-stop.md) · [CSP](../app/lock-
 
 ## `ctx.args()` parses lazily, and that orders the checks
 
+{% example rung-order %}
+
 A rung that never asks for the arguments pays nothing. The first one that asks triggers the
-parse, and what comes back is **parsed, coerced and validated**:
+parse, and it comes back **parsed, coerced and validated**:
 
 * An unauthenticated caller gets `401` from a rung that never looked at the body — so they
   never read your schema back out of a `422`.
@@ -144,8 +135,8 @@ Read on: [CORS](let-another-origin-call-you.md) · [Health](../app/tell-a-load-b
 ## `clients` withholds a surface, never access
 
 `clients` withholds a handler from a **surface** — an OpenAPI listing, an MCP tool list. It is
-not access control: the http address answers exactly as it did. Who **may** call is this rung,
-the same one that decides it for a browser.
+not access control: the http address answers exactly as it did. This rung decides who **may**
+call, the same one that decides it for a browser.
 
 Read on: [Withholding a surface](../machines/keep-a-handler-off-a-surface.md) ·
 [Auth & principal](../app/know-who-is-calling.md)

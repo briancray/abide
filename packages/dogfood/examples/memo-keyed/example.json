@@ -1,11 +1,8 @@
 {
     "title": "`memo((args) => \u2026)` \u2014 a factory, one entry per key",
-    "summary": "The contact search. Search a word, then search one you have searched before.",
+    "summary": "The contact search, filtering as you type. Type toward Ada, then backspace over what you typed.",
     "app": "crm",
-    "files": [
-        "src/ui/components/Search.abide",
-        "src/server/rpc/search.ts"
-    ],
+    "files": ["src/ui/components/Search.abide", "src/server/rpc/search.ts"],
     "route": "/memo/keyed",
     "wire": [
         {
@@ -21,7 +18,7 @@
             "body": "[\n    \"Ada Lovelace\",\n    \"Alan Turing\",\n    \"Grace Hopper\"\n]"
         },
         {
-            "request": "GET /__abide/rpc/search/searchContacts?query=grace",
+            "request": "GET /__abide/rpc/search/searchContacts?query=ada",
             "requestHeaders": {
                 "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
             },
@@ -30,7 +27,8 @@
                 "content-type": "application/json",
                 "cache-control": "private, no-store"
             },
-            "body": "[\n    \"Grace Hopper\"\n]"
+            "body": "[\n    \"Ada Lovelace\"\n]"
         }
-    ]
+    ],
+    "served": "server.ts"
 }

@@ -84,14 +84,13 @@ build error naming the ambient.
 
 A `Reactive` returned from a body is adopted rather than stored: the outer subscribes to the
 inner, mirrors its productions, runs its own `transform`, and forwards its probes and
-triggers. That is what makes `memo(() => chat({ id }))` a room rather than a value holding
-one.
+triggers. So `memo(() => chat({ id }))` is a room rather than a value holding one.
 
 ### Propagation
 
 Three probes propagate: `pending()`, `refreshing()` and `done()`. An unkeyed memo answers each
-for its own load or for any value its body read, which is what stops a derived memo reporting
-success over a value it built out of `undefined`. They are the three about whether the value is
+for its own load or for any value its body read, which stops a derived memo reporting success
+over a value it built out of `undefined`. They are the three about whether the value is
 ready, and readiness is downstream of the sources.
 
 The other three answer for the memo alone. `error()` cannot propagate because `Failures` does

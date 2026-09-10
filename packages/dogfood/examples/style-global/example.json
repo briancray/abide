@@ -1,0 +1,10 @@
+{
+    "title": "`:global(…)` — the per-selector escape from scoping",
+    "summary": "A badge component whose stylesheet also colours a paragraph the page rendered, not the component.",
+    "app": "crm",
+    "files": [
+        "src/ui/pages/invoices/page.abide",
+        "src/ui/components/Legend.abide"
+    ],
+    "route": "/invoices"
+}

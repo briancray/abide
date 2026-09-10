@@ -33,7 +33,7 @@ A `Channel`: call it with the room key to get that room.
 | `Channel` | `<Message, Args, Accepted = Message, Failures = never>(args?: Args) => Room<Message, Accepted, Failures>` | A room keyed by `args`. |
 | `Room` | `Reactive<Message, Accepted, Failures> & { publish: (message: Accepted) => number \| Failures }` | The room itself. `publish` hands back the sequence number it minted, or the refusal a `transform` gave it. |
 | `Args` | `Record<string, JsonValue> \| undefined` | The room, keyed by the same canonical wire form a memo's args are. |
-| `Message` | `unknown` | The message type, which is what a reader holds. |
+| `Message` | `unknown` | The message type, and what a reader holds. |
 | `Accepted` | `unknown` | What a publish takes, which a `transform` may reshape into the `Message`. |
 
 ## Options

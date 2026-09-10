@@ -1,0 +1,22 @@
+{
+    "title": "`state(load)` \u2014 the settled value, never the promise",
+    "summary": "A contact fetched when the page is built. Press Reload to watch it land again.",
+    "app": "crm",
+    "files": ["src/ui/components/Record.abide", "src/server/rpc/contacts.ts"],
+    "route": "/state/loaded",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/contacts/getContact?id=42",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"name\": \"Ada Lovelace\",\n    \"role\": \"Engineer\"\n}",
+            "latency": 900
+        }
+    ]
+}

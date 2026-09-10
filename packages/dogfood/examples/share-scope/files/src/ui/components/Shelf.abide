@@ -1,0 +1,16 @@
+<script>
+import { props, state } from 'abide'
+import QueueControl from '#ui/components/QueueControl.abide'
+
+type Props = { name: string }
+
+const { name } = props<Props>()
+// Nothing above holds this key, so it is created right here.
+let queued = state.share('queued', () => state('nothing'))
+</script>
+
+<ul class="fields stacked">
+    <li><span>shelf</span><strong>{name}</strong></li>
+    <li><span>queued</span><strong>{queued}</strong></li>
+</ul>
+<QueueControl name={name}/>

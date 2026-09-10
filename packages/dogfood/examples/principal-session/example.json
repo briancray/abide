@@ -1,0 +1,28 @@
+{
+    "title": "`principal.set` — one seal, read everywhere",
+    "summary": "A sign-in on a CRM, and the header above it. Sign in, then sign out, and watch a component the form never names.",
+    "app": "crm",
+    "about": "server",
+    "files": [
+        "src/server/rpc/session.ts",
+        "src/ui/components/Session.abide",
+        "src/ui/components/Header.abide",
+        "src/ui/pages/sign-in/page.abide"
+    ],
+    "route": "/sign-in",
+    "wire": [
+        {
+            "request": "POST /__abide/rpc/session/signIn",
+            "requestHeaders": {
+                "content-type": "application/json"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "set-cookie": "abide-principal=…; HttpOnly; SameSite=Lax",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"authenticated\": true,\n    \"id\": \"u_1\",\n    \"name\": \"Ada Lovelace\"\n}"
+        }
+    ]
+}

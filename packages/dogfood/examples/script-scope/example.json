@@ -1,0 +1,10 @@
+{
+    "title": "`<script>` and `<script module>` — per instance, and once",
+    "summary": "Two contact rows from one component. Log a call on the first and read both rows.",
+    "app": "crm",
+    "files": [
+        "src/ui/components/Contacts.abide",
+        "src/ui/components/Row.abide"
+    ],
+    "route": "/contacts"
+}

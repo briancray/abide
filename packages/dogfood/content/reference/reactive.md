@@ -6,8 +6,8 @@ enumerates:
   - state
 ---
 
-The **`Reactive`** interface is what [`state`](state.md), [`memo`](memo.md),
-[`channel`](channel.md) and every rpc handler hand back. There is no second reactive type: a
+Every producer hands back the **`Reactive`** interface — [`state`](state.md), [`memo`](memo.md),
+[`channel`](channel.md) and every rpc handler. There is no second reactive type: a
 value a page owns, a value it computed, a room it subscribed to and a call it made are all
 this one interface, so a member learned once is a member everywhere.
 
@@ -39,6 +39,7 @@ Every `Reactive` takes these. A `memo` and a `channel` add their own, and narrow
 | `transform` | `Transformer<Accepted, Stored, Failures>` | The shaping on the way to storage. Runs untracked, on the settled value, once per stored value. |
 | `store` | `Store<Stored>` | Where the value lives when the process does not. |
 | `identity` | `((value: Stored) => unknown) \| ((next: Stored, previous: Stored) => boolean)` | What makes it the same value. A projection compared by `!==`, or a comparator answering directly. |
+| `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator `identity` defaults to. Answers "not equal" wherever it cannot decide. |
 | `tail` | `number` | How many past values are retained. Default 1. |
 | `ttl` | `number` | The life of a retained production, in ms. Default infinity, and inert on a value with no producer. |
 | `throttle` | `number` | A change lands immediately, then at most once per window. What a window collapses depends on what moves the value — a write, a publish, a chunk, a reload. |
@@ -59,7 +60,9 @@ Every `Reactive` takes these. A `memo` and a `channel` add their own, and narrow
 | `s` | `() => Stored` | Reads the current value. Returns what it has and never awaits, so `undefined` where none has landed. |
 | `s.peek` | `() => Stored` | Reads without joining the flow. Otherwise identical to `s`. |
 | `s.tail` | `(n?: number) => Tail<Stored>` | A cursor over the values held before this one. Replays the snapshot, then goes live from where it ended. |
-| `s.settled` | `() => Promise<Stored>` | The settled value, and the only way to wait on one. A `Reactive` is deliberately not thenable. |
+| `s.then` | `<Result>(onSettled?: (value: Stored) => Result \| PromiseLike<Result>, onFailed?: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Result>` | The settling, as a promise. Resolves when `pending()` goes false, and rejects with what a read would throw. |
+| `s.catch` | `<Result>(onFailed: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Stored \| Result>` | The settling's refusal path, derived from `then`. Fires for a producer that failed with nothing landed, and for nothing else. |
+| `s.finally` | `(onSettled: () => void) => Promise<Stored>` | The settling's end, whichever way it went. What ends is the settling, not the value — a room settles at its first message and goes on. |
 | `for await (… of s)` | `AsyncIterable<Produced>` | The live cursor face of a read. |
 | `s[Symbol.asyncIterator]` | `() => AsyncIterator<Produced>` | The production in flight from its start, and then what follows it. A chunk is a piece of one value, where the ring holds past ones. |
 

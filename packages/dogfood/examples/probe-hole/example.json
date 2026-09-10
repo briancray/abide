@@ -1,0 +1,22 @@
+{
+    "title": "A read starts the load and leaves a hole",
+    "summary": "An invoice with no loading branch anywhere in it. Press Reload and watch the three fields fill.",
+    "app": "crm",
+    "files": ["src/server/rpc/invoices.ts", "src/ui/components/Invoice.abide"],
+    "route": "/invoices/4021",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/invoices/getInvoice?id=4021",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"number\": \"INV-4021\",\n    \"customer\": \"Ada Bell\",\n    \"total\": \"$82.40\"\n}",
+            "latency": 900
+        }
+    ]
+}

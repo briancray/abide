@@ -1,0 +1,24 @@
+<script>
+import { memo, state } from 'abide'
+import { getInvoice } from '#server/rpc/invoices'
+
+const SPELLINGS = ['ABC-123', 'abc-123']
+
+let id = state('ABC-123')
+
+const invoice = memo(() => getInvoice({ id }))
+</script>
+
+<div class="tabs">
+{#for one of SPELLINGS}
+    <button aria-selected={id === one}
+        onclick={() => { id = one }}>{one}</button>
+{/for}
+</div>
+
+<p class="status">{invoice.pending() ? 'loading…' : ''}</p>
+
+<ul class="fields">
+    <li><span>invoice</span>
+        <strong>{invoice.ref ?? '—'}</strong></li>
+</ul>

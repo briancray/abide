@@ -1,0 +1,7 @@
+{
+    "title": "`state.share` hands back the one that won",
+    "summary": "One key asked for twice, once properly and once with the value built outside the call. Step the volume and watch the third tile.",
+    "app": "player",
+    "files": ["src/ui/components/Volume.abide"],
+    "route": "/settings"
+}

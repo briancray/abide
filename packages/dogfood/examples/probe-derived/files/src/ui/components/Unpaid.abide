@@ -1,0 +1,16 @@
+<script>
+import { memo } from 'abide'
+import { listInvoices } from '#server/rpc/invoices'
+
+const rows = memo(() => listInvoices())
+
+// Reads a value still in flight, so it is pending too rather than
+// confidently answering over the nothing it got.
+const unpaid = memo(() => (rows ?? []).filter((row) => !row.paid))
+</script>
+
+<ul class="fields stacked">
+    <li><span>unpaid</span>
+        <strong>{unpaid.pending() ? 'counting…' : unpaid.length}</strong>
+    </li>
+</ul>

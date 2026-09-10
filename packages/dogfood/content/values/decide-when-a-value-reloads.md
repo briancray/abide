@@ -14,7 +14,9 @@ covers:
   - `s.peek`
   - memo › `ttl`
 examples:
-  - packages/dogfood/examples/reloading
+  - packages/dogfood/examples/reload-triggers
+  - packages/dogfood/examples/reload-args
+  - packages/dogfood/examples/reload-ttl
 ---
 
 Reading loads a value. So what decides when a loaded value is stale?
@@ -27,14 +29,12 @@ There are three answers, and they are three because they fail differently.
 | `invalidate()` | on the next read | nothing at all, subscribed or not |
 | `refresh()` | now on a named value; under a sweep, wherever something subscribes | one load per entry reloaded, a mark for the rest |
 
-{% example reloading %}
+## `invalidate` marks stale; `refresh` reloads now
+
+{% example reload-triggers %}
 
 *2 triggers, 0 cache keys* — the value already holds its own args and its own loader, so
 neither button repeats them.
-
-## `invalidate` marks stale; `refresh` reloads now
-
-{% snippet reloading src/ui/pages/stock/[warehouse]/[sku]/page.abide <button onclick={() => level.invalidate()} … <button onclick={() => level.refresh()} %}
 
 `invalidate()` marks the value stale and loads nothing. It is the cache behind the value that
 goes, not the value — so nothing happens whether or not anybody is looking, and the fetch belongs
@@ -49,8 +49,8 @@ the load is the whole of what you asked for — and the alternative was a call t
 things depending on what happened to be mounted. A **sweep** is the other story, and it is the
 one that spares what nobody reads.
 
-What each one touches is the **cache behind the value** rather than the value on screen — and
-the cache is exactly what decides what a reader sees next:
+Each one touches the **cache behind the value** rather than the value on screen — and the cache
+is exactly what decides what a reader sees next:
 
 | | subscribed | not subscribed |
 | --- | --- | --- |
@@ -68,21 +68,21 @@ above. An `invalidate()` marks what is held **stale**, so the load that follows 
 readable underneath until the new one lands. A `refresh()` on its own never does: it says the
 held value is good, where an invalidate says it is wrong.
 
-So `invalidate()` never moves a node and never sends a request, which is what the example above
-shows: press **Mark stale** and neither the number nor the request count moves. Go to West and
-back and the count moves there, on the display that had no cache left to serve it — and what
-makes that attributable is that returning to a key which was *never* marked costs no request at
-all. **Reload now** is the other column: the request goes out on the click and 128 is on screen
-the whole way across.
+So `invalidate()` never moves a node and never sends a request. Press **Mark stale** on the card
+and neither the count nor the number of loads moves; the fetch belongs to whatever reads next.
+**Reload now** is the other column: the request goes out on the click and 128 is on screen the
+whole way across.
+
+The hand-written arm is where that costs something. **Stale is a third state**, and it is the one
+a hand-written cache usually does not have: one variable says what can be served and another says
+whether it may be. Collapse the two and marking something stale either blanks the page or does
+nothing at all.
 
 **Which makes the two dangerous in that order.** `invalidate()` throws away exactly what
 stale-while-revalidate would have served, so the `refresh()` behind it is a load with nothing
-underneath — the one way the eager trigger blanks a page:
-
-{% snippet reloading src/ui/pages/stock/[warehouse]/[sku]/page.abide {#if level.pending()} … <p>Counting the shelf … {:else} … <p>On hand … <p class="hint">Counted … {/if} %}
-
-Press **Mark stale** and then **Reload now** in the example and that is what you get — same two
-requests as the eager path, same value at the end, and the page blank in between.
+underneath — the one way the eager trigger blanks a page. Press **Mark stale** and then
+**Reload now** and that is what you get: same two requests as the eager path, same value at the
+end, and the page blank in between.
 `invalidate(); refresh()` over a scope is how an app blanks itself, and either one alone is fine.
 
 Neither one holds rendering by itself. Whether a template waits is the template's own choice of
@@ -97,7 +97,7 @@ Read on: [Loading states](show-a-value-that-isnt-there-yet.md) ·
 
 ## A selection is the set a trigger acts on
 
-The members above are conveniences over four free functions, and a `Selection` is what those take:
+The members above are conveniences over four free functions, and those four take a `Selection`:
 
 | A `Selection` is | Means |
 | --- | --- |
@@ -131,20 +131,20 @@ to re-run.
 request can never invalidate another's. On a server that makes a bare `invalidate()` reach every
 `global` memo in the process — its own request-scoped entries die with the request anyway, so the
 globals are the whole effect. A bare `refresh()` reaches the same entries; nothing subscribes on
-a server, so there it marks them and the two are one call. That is what an operator's flush
-endpoint wants and never what a handler being defensive wants:
-
-{% snippet reloading src/server/rpc/stock.ts export const flushStock %}
+a server, so there it marks them and the two are one call. An operator's flush endpoint wants
+that; a handler being defensive never does:
 
 There is no bare form wider than the scope. A probe reports and a trigger acts, so the widest
 read is free and the widest write is one an app should have to mean.
 
 ## Reload a keyed memo by `Partial<Args>`
 
+{% example reload-args %}
+
 A keyed memo is a factory: `getStock({ warehouse, sku })` hands back the `Reactive` for one key,
 and that value carries the triggers like any other — `getStock({ warehouse, sku }).invalidate()`
-reloads that one entry. What the factory adds is the **narrowing**, because one entry has one key
-and nothing to choose among; `getStock` holds every key.
+reloads that one entry. The factory adds the **narrowing**, because one entry has one key and
+nothing to choose among; `getStock` holds every key.
 
 | Written | Reaches |
 | --- | --- |
@@ -153,24 +153,25 @@ and nothing to choose among; `getStock` holds every key.
 | `getStock.refresh({ warehouse: 'east' })` | one warehouse, loaded now |
 
 The argument is a `Partial<Args>`, so it selects a slice rather than one key: a `Selection`
-narrowed by the one thing a keyed memo has that a lone `Reactive` does not. It is also the only place args granularity is spelled, and the place with the `Args` type to
-check it against, which makes it the natural thing to write after a mutation:
-
-{% snippet reloading src/server/rpc/stock.ts export const bookOut %}
+narrowed by the one thing a keyed memo has that a lone `Reactive` does not. It is also the only
+place args granularity is spelled, and the place with the `Args` type to check it against, which
+makes it the natural thing to write after a mutation:
 
 **A write needs a trigger on each side that holds the value**, because a selection is
 scope-bounded and the two scopes are different caches. The handler above reaches the process-wide
 entry, so the next caller loads fresh; the browser that made the call is a scope of its own, and
 the number on its screen is still the one from before the write. So the page does its own:
 
-{% snippet reloading src/ui/pages/stock/[warehouse]/[sku]/page.abide async function book() { %}
-
 The verbs differ for the reason the table at the top gives. Both forms here are a **sweep** over
 an args pattern, and a sweep reloads only what something is reading — so on a server, where
 nothing is, `refresh` would come to exactly what `invalidate` does and the shorter word is the
-honest one. In the page it **is** subscribed, so `refresh` reloads it under stale-while-revalidate where
-`invalidate` would have dropped it to the pending branch — a write that blanks the row it just
-changed. Press **Book one out** in the example and watch 128 stay put.
+honest one. In the page it **is** subscribed, so `refresh` reloads it under stale-while-revalidate
+where `invalidate` would have dropped it to the pending branch — a write that blanks the row it
+just changed.
+
+The pattern is also what keeps the sweep narrow. Press **Book one out of east** and east loads
+again while west, holding the same shelf under a different key, does not — which a refresh over
+the whole memo would not have managed.
 
 Read on: [Caching](load-once-per-set-of-arguments.md) ·
 [Mutations](../server/change-something-on-the-server.md)
@@ -179,27 +180,24 @@ Read on: [Caching](load-once-per-set-of-arguments.md) ·
 
 At this width the lazy/eager difference stops being a nuance:
 
-{% snippet reloading src/ui/pages/layout.abide watch(() => { %}
-
 The eager form is **bounded by what is subscribed**, not by the scope: it reloads the handful
 something is reading and degenerates to a mark for the other hundred and ninety-odd. So a
 reconnect costs exactly what a reader is holding, and nothing stale is left in front of them.
 
 `invalidate()` at this width is for the case where nothing on screen may move — it reaches the
-same entries and leaves every value standing, so the catch-up happens on the next read. What it
-is not is a cheaper `refresh()` to reach for first: `invalidate()` and then `refresh()` blanks
-every reader.
+same entries and leaves every value standing, so the catch-up happens on the next read. It is not
+a cheaper `refresh()` to reach for first: `invalidate()` and then `refresh()` blanks every reader.
 
 Read on: [Offline](../app/know-when-the-browser-goes-offline.md) ·
 [Watching values](do-something-when-a-value-changes.md)
 
 ## `ttl` expires a value with nobody asking
 
+{% example reload-ttl %}
+
 `ttl` is the life of a **retained production** — one definition reaching all three producers. At
 the default retention a value holds one production, so past its `ttl` the producer recomputes on
 the next read. A room retaining a hundred messages has a hundred, each on its own clock.
-
-{% snippet reloading src/server/rpc/stock.ts const stockForShelf = memo( %}
 
 Expiry **wakes nobody**. Entries past it are dropped on the read that follows — no timer per
 entry, no version bump — because a timer that moved the version would put the cost of retention
@@ -231,8 +229,6 @@ Since reading loads, a read from somewhere that only wants to look is a subscrip
 did not want. `peek` is the read that does not join the flow — same value, same load, no
 subscription — and "held, but do not load" is the probe in front of it, a probe never starting
 work:
-
-{% snippet reloading src/ui/pages/stock/[warehouse]/[sku]/page.abide watch(() => { %}
 
 It is otherwise identical to a read: it starts work if there is work to start, and it throws what
 a read throws. That effect is tracked, so the route wakes it; the level is read through `peek`, so

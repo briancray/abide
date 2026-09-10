@@ -1,0 +1,19 @@
+<script>
+import { state } from 'abide'
+import { z } from 'zod'
+
+let email = state('ada@example.com', {
+    schema: z.string().email('That is not an email address.'),
+})
+</script>
+
+<label>email
+    <input bind:value={email}>
+</label>
+
+<p class="status">{email.error() ? email.error().data[0] : ''}</p>
+
+<ul class="fields">
+    <li><span>on the record</span>
+        <strong>{email}</strong></li>
+</ul>

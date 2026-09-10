@@ -1,0 +1,7 @@
+{
+    "title": "`state(v, { transform })` \u2014 what is stored is not what you typed",
+    "summary": "A contact's handle, normalised on the way in. Type a name with capitals and a space.",
+    "app": "crm",
+    "files": ["src/ui/components/Handle.abide"],
+    "route": "/state/transform"
+}

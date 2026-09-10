@@ -1,0 +1,36 @@
+{
+    "title": "`memo(fn, { schema })` — the schema refuses, the arguments key",
+    "summary": "One invoice, spelled two ways. Open the second spelling, then go back to the first.",
+    "app": "crm",
+    "about": "server",
+    "files": ["src/server/rpc/invoices.ts", "src/ui/components/Invoice.abide"],
+    "route": "/invoices/abc-123",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/invoices/getInvoice?id=ABC-123",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"ref\": \"abc-123\"\n}",
+            "latency": 900
+        },
+        {
+            "request": "GET /__abide/rpc/invoices/getInvoice?id=abc-123",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "{\n    \"ref\": \"abc-123\"\n}",
+            "latency": 900
+        }
+    ]
+}

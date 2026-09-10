@@ -1,0 +1,21 @@
+<script>
+import { token } from '#shared/tokens'
+
+let sent = 0
+
+function emit() {
+    sent += 1
+    token = { at: sent, text: `token ${sent}` }
+}
+</script>
+
+<ul class="fields stacked">
+    <li><span>replayed then live</span><strong id="replay">
+        {#for await line of token.tail(3)}{line.at} {/for}
+    </strong></li>
+    <li><span>live only</span><strong>
+        {#for await line of token}{line.at} {/for}
+    </strong></li>
+</ul>
+
+<button onclick={emit}>Next token</button>

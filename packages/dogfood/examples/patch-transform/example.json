@@ -1,0 +1,26 @@
+{
+    "title": "`memo(load, { transform })` — an array in, an index held",
+    "summary": "The regions table arriving from the server as a list, on a dashboard whose feed names ids.",
+    "app": "dashboard",
+    "files": [
+        "src/shared/regions.ts",
+        "src/server/rpc/regions.ts",
+        "src/ui/pages/dashboard/page.abide"
+    ],
+    "route": "/dashboard",
+    "wire": [
+        {
+            "request": "GET /__abide/rpc/regions/getRegions",
+            "requestHeaders": {
+                "cookie": "abide-caller=Vd3kPq1sLm9xR2tAj7Nc4Q"
+            },
+            "status": "200 OK",
+            "responseHeaders": {
+                "content-type": "application/json",
+                "cache-control": "private, no-store"
+            },
+            "body": "[\n    {\n        \"id\": \"north\",\n        \"name\": \"North\",\n        \"orders\": 120\n    },\n    {\n        \"id\": \"south\",\n        \"name\": \"South\",\n        \"orders\": 80\n    },\n    {\n        \"id\": \"east\",\n        \"name\": \"East\",\n        \"orders\": 64\n    },\n    {\n        \"id\": \"west\",\n        \"name\": \"West\",\n        \"orders\": 91\n    }\n]"
+        }
+    ],
+    "served": "server.ts"
+}

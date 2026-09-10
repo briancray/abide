@@ -1,0 +1,7 @@
+{
+    "title": "`state(v)` \u2014 a value the page owns",
+    "summary": "A contact's handle. Type into the field and watch the heading.",
+    "app": "crm",
+    "files": ["src/ui/components/Handle.abide"],
+    "route": "/state/owned"
+}

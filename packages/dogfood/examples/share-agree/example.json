@@ -1,0 +1,11 @@
+{
+    "title": "`state.share(key, build)` — get-or-create in this scope",
+    "summary": "A now-playing bar over a library of tracks. Press a title and watch the bar, which the library never speaks to.",
+    "app": "player",
+    "files": [
+        "src/ui/pages/library/page.abide",
+        "src/ui/components/NowPlaying.abide",
+        "src/ui/components/TrackRow.abide"
+    ],
+    "route": "/library"
+}

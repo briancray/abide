@@ -1,0 +1,7 @@
+{
+    "title": "`channel({ identity })` — a resend that mints nothing",
+    "summary": "A composer that can be pressed twice, and the cursor a reconnect would resume from. Press Send twice, then change a word and press again.",
+    "app": "chat",
+    "files": ["src/shared/conversations.ts", "src/ui/pages/chat/page.abide"],
+    "route": "/chat"
+}
