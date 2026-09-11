@@ -20,7 +20,11 @@
         "e2e": "playwright test",
         "e2e:changed": "playwright test --only-changed",
         "e2e:failed": "playwright test --last-failed",
-        "verify": "bun run lint && bun run typecheck && bun run test"
+        "e2e:harness": "playwright test -c playwright.harness.config.ts",
+        "verify": "bun run lint && bun run typecheck && bun run test",
+        "bench": "bun packages/harness/scripts/bench.ts",
+        "status": "bun packages/harness/scripts/serveStatus.ts",
+        "test:gates": "HARNESS_VERIFY_GATES=1 bun test packages/abide packages/harness/tests packages/dogfood/tests"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.5.11",

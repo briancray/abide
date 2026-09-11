@@ -1037,8 +1037,11 @@ label:has(> input[type=radio]) {
     flex-direction: column;
 }
 
-.ex-panel[data-panel=bench],
-.ex-panel[data-panel=tests] {
+/* A panel whose body is a TABLE sits in the panel's own rhythm; `files` and `wire`
+   bring their own and stay flush. Written as an EXCLUSION rather than a list of the
+   three that want it — the list is what left `measure` jammed against the tab bar on
+   the day it arrived, with nothing saying so. */
+.ex-panel:not([data-panel=files]):not([data-panel=wire]) {
     gap: var(--gap-snug);
     padding-block: var(--gap-snug);
 }
@@ -1295,6 +1298,66 @@ label:has(> input[type=radio]) {
 .ex-note {
     font-size: .75rem;
     color: var(--muted);
+}
+
+
+/* A tag is not a number and carries no direction — two frame-quantised figures do not
+   divide, and the cell says so instead of dividing them. */
+.ex-tag {
+    font-size: .75rem;
+    color: var(--muted);
+}
+
+/* The reading's own small print. Deliberately NOT uppercased: the chip class it was
+   first written against was, and uppercasing a unit turns 1.16 µs into 1.16 ΜS. */
+.ex-reading-detail {
+    font: 400 .6875rem/1 var(--mono);
+    color: var(--muted);
+}
+
+/* The live panel. It opens EMPTY and says so: nothing here was measured on our
+   machine, and the button is the whole offer.
+
+   The gap is the PANEL's, not this one's own: a reading renders the same tables the
+   Bench tab does, one tab away, and two rhythms on one card read as a mistake. */
+.ex-measure {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-snug);
+    align-items: flex-start;
+}
+
+.ex-measure-idle {
+    font-size: .75rem;
+    color: var(--muted);
+    margin: 0;
+}
+
+.ex-measure-refused {
+    font: 400 .8125rem/1.4 var(--mono);
+    color: var(--bad);
+    margin: 0;
+}
+
+/* NOT `width: 100%` on the tables. `.ex-bench` states its inset AS its width —
+   `calc(100% - 2rem)`, centred — so overriding the width here is what pulled the
+   reading's tables a full rem left of the Bench table beside them. Only the button
+   needs anything, and only because the flex container is `align-items: flex-start`. */
+
+/* The same register as Reload — it is the same offer, one step further: run the arm
+   again, and this time count. */
+.ex-measure-run {
+    padding: .25rem .5rem;
+    border-radius: 999px;
+    border: 1px solid var(--rule);
+    background: var(--raised);
+    color: var(--muted);
+    font: 500 .75rem/.75rem var(--mono);
+}
+
+.ex-measure-run:hover {
+    color: var(--ink);
+    border-color: var(--muted);
 }
 
 table {

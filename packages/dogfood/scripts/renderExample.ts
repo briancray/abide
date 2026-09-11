@@ -227,13 +227,31 @@ export type Manifest = {
         body: string
         latency?: number
     }[]
+    // THE REPEATABLE OP, where the example has one. Without it the panel reports
+    // counts, paint and size — a page load happens once and cannot be batched. With
+    // it the panel also prices the op, which means firing the event a few thousand
+    // times, so an example declares one only where doing that is harmless: no
+    // request, no growth, no state the arm cannot get back to.
+    measure?: {
+        op: string
+        selector: string
+        event: string
+    }
     bench?: {
         note: string
+        // A file BOTH arms use, and therefore part of neither arm's line count.
+        // `bun run bench` reads it; nothing else does.
+        shared?: string[]
         rows: {
             metric: string
             abide: string
             vanilla: string
+            // A ratio spelling, or one of the harness's tags — two frame-quantised
+            // figures do not divide, and `1.01x` was that division written by hand.
             ratio: string
+            // What produced this row. Per ROW rather than per table: a row is
+            // measured only when both arms produced a number.
+            note?: string
         }[]
     }
 }
@@ -464,20 +482,61 @@ ${note}`
 
 // Every metric a bench carries is LOWER-IS-BETTER — milliseconds, nodes, bytes, lines —
 // so the direction is read off the number rather than declared per row. A metric where
-// more is better would be the first one that needs the row to say so.
+// more is better would be the first one that needs the row to say so. A TAG carries no
+// direction at all, which is the point of it.
 function ratioDirection(ratio: string): string {
     const value = Number.parseFloat(ratio)
     if (!Number.isFinite(value) || value === 1) return ''
     return value < 1 ? ' class="ex-good"' : ' class="ex-bad"'
 }
 
-function renderBench(bench: NonNullable<Manifest['bench']>): string {
-    let rows = ''
-    for (const row of bench.rows) {
-        rows += `<tr><td>${escapeHtml(row.metric)}</td><td><code>${escapeHtml(row.abide)}</code></td><td><code>${escapeHtml(row.vanilla)}</code></td><td class="ex-ratio"><code${ratioDirection(row.ratio)}>${escapeHtml(row.ratio)}</code></td></tr>`
+// THE `Ratio` KINDS `harness/report` HANDS BACK, spelled for a reader. Exported
+// because the docs gate refuses a ratio cell that is neither a spelling nor one of
+// these, and a second copy of the list there is one edit away from a gate rejecting a
+// tag the renderer already displays.
+export const RATIO_TAGS: Record<string, string> = {
+    underOneFrame: 'under one frame',
+    underTheFloor: 'under the floor',
+}
+
+function renderRatio(ratio: string): string {
+    const tag = RATIO_TAGS[ratio]
+    if (tag) return `<span class="ex-tag">${escapeHtml(tag)}</span>`
+    return `<code${ratioDirection(ratio)}>${escapeHtml(ratio)}</code>`
+}
+
+// ONE PANEL, TWO HALVES, and the split is by what a browser can see rather than by
+// what was convenient to author. Above: a count over the SOURCE, which no page can
+// take — lines of code, and whatever else `bun run bench` learns to count. Below: the
+// live reading, which is everything else on this card and is taken in the reader's
+// own browser when they ask.
+//
+// There is no authored half any more. A hand-typed 16.8 ms in a results table reads
+// as a result, and four of the five rows here were exactly that. See D118.
+//
+// 40.21 — the instrumentation sits outside the render, which is what this panel IS.
+// 40.13 wants an artifact behind every panel; the artifact is the running arm, which
+// `coverage.test.ts` already requires every example to have.
+function renderBench(manifest: Manifest): string {
+    let counted = ''
+    if (manifest.bench?.rows.length) {
+        let rows = ''
+        for (const row of manifest.bench.rows) {
+            rows += `<tr><td>${escapeHtml(row.metric)}</td><td><code>${escapeHtml(row.abide)}</code></td><td><code>${escapeHtml(row.vanilla)}</code></td><td class="ex-ratio">${renderRatio(row.ratio)}</td></tr>`
+        }
+        counted = `<table class="ex-bench"><thead><tr><th>Counted over the source</th><th>abide</th><th>Hand-written</th><th class="ex-ratio">Ratio</th></tr></thead><tbody>${rows}</tbody></table>
+<p class="ex-note">${renderInline(manifest.bench.note)}</p>`
     }
-    return `<table class="ex-bench"><thead><tr><th>Metric</th><th>abide</th><th>Hand-written</th><th class="ex-ratio">Ratio</th></tr></thead><tbody>${rows}</tbody></table>
-<p class="ex-note">${renderInline(bench.note)}</p>`
+
+    const measure = manifest.measure
+    const op = measure
+        ? `<p class="ex-note">Also prices <strong>${escapeHtml(measure.op)}</strong>, batched until the sample clears a hundred times your browser's clock.</p>`
+        : `<p class="ex-note">This example names no repeatable op, so there is no duration to batch — a page load happens once.</p>`
+    return `${counted}<div class="ex-measure" data-measure${measure ? ` data-op="${escapeHtml(measure.op)}" data-selector="${escapeHtml(measure.selector)}" data-event="${escapeHtml(measure.event)}"` : ''}>
+<p class="ex-measure-idle">Nothing below this line was measured on our machine. Run the arm again with the counters armed and it fills with what it cost in <em>your</em> browser.</p>
+<button type="button" class="ex-measure-run" data-measure-run>Measure in this browser</button>
+${op}
+</div>`
 }
 
 // WHAT THE RESULT FRAME TAKES FROM THE APP STYLESHEET, by SELECTOR. Lifted rather than
@@ -798,8 +857,8 @@ export async function readExample(
     ]
     if (manifest.wire?.length)
         panels.push(['wire', 'Requests', renderWire(manifest.wire)])
-    if (manifest.bench)
-        panels.push(['bench', 'Bench', renderBench(manifest.bench)])
+    // EVERY example, because every example has a running arm to measure.
+    panels.push(['bench', 'Bench', renderBench(manifest)])
     if (manifest.tests)
         panels.push(['tests', 'Tests', renderTests(manifest.tests)])
 

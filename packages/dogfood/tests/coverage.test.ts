@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { readPages } from '../scripts/buildDocs.ts'
 import { NAV } from '../scripts/NAV.ts'
+import { RATIO_TAGS } from '../scripts/renderExample.ts'
 import { EXAMPLE, LEAD, SNIPPET } from '../scripts/renderMarkdown.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
 
@@ -859,13 +860,23 @@ test('every name a reference page enumerates is on one of the pages that claim i
     expect(absent).toEqual([])
 })
 
-// CLAUDE.md, "performance and measurement": a performance claim is a RATIO against hand-written
-// code in the same substrate, and absolute milliseconds from a DOM emulator describe the emulator.
-// A bench row with a number in the abide column and nothing beside it is exactly that — a figure
-// with no arm to be a ratio against, and it reads as a result.
+// CLAUDE.md, "performance and measurement": a performance claim is a RATIO against
+// hand-written code in the same substrate, and absolute milliseconds from a DOM
+// emulator describe the emulator. A bench row with a number in the abide column and
+// nothing beside it is exactly that — a figure with no arm to be a ratio against, and
+// it reads as a result.
 //
-// The arm is checked too, and it is now load-bearing twice over: it is the comparison the ratio is
-// made against, and since the runner change it is also what the render RUNS.
+// The arm is checked too, and it is now load-bearing twice over: it is the comparison
+// the ratio is made against, and since the runner change it is also what the render
+// RUNS.
+//
+// THE RATIO CELL USED TO ACCEPT ANY TRUTHY STRING, and that is what let
+// `read-invoice`'s hand-typed "1.01x" through — two frame-quantised figures divided
+// into a claim. It is now either a ratio SPELLING or one of the harness's tags, and
+// the tags exist because `ratio()` returns a discriminated result: two `underOneFrame`
+// samples do not divide.
+const RATIO_SPELLING = /^\d+(?:\.\d+)?x$/
+
 test('every example carries a hand-written arm, and every bench row is a ratio against it', async () => {
     const missing: string[] = []
     for (const path of new Bun.Glob('*/example.json').scanSync({
@@ -882,27 +893,67 @@ test('every example carries a hand-written arm, and every bench row is a ratio a
                 missing.push(
                     `${name}: "${row.metric}" has no arm to compare against`,
                 )
-            if (!row.ratio)
+            if (!row.ratio) {
                 missing.push(`${name}: "${row.metric}" states no ratio`)
+                continue
+            }
+            if (row.ratio in RATIO_TAGS || RATIO_SPELLING.test(row.ratio))
+                continue
+            missing.push(
+                `${name}: "${row.metric}" states "${row.ratio}", which is neither a ratio nor a tag the harness produces`,
+            )
         }
     }
     expect(missing).toEqual([])
 })
 
-// The same rule's other half: a bench is AUTHORED until the harness can produce one, and a table of
-// figures that does not say so reads as measured. Every bench carries a note, and while nothing
-// runs, that note is where "not measured" has to be said out loud.
-test('every bench says whether it was measured', async () => {
+// NO ROW IS AUTHORED ANY MORE, and that is what this now checks. The card used to
+// carry four hand-typed figures beside one counted one, and a hand-typed 16.8 ms in a
+// results table reads as a result. Everything a browser can measure is measured in the
+// reader's browser; what is left here is counted over the SOURCE, and `bun run bench`
+// DROPS a row it cannot produce rather than leaving figures standing in it.
+test('every bench row says what counted it, and none is authored', async () => {
     const silent: string[] = []
     for (const path of new Bun.Glob('*/example.json').scanSync({
         cwd: EXAMPLES_DIR.pathname,
     })) {
+        const name = path.slice(0, path.indexOf('/'))
         const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
         if (!manifest.bench) continue
-        if (!manifest.bench.note?.trim())
-            silent.push(path.slice(0, path.indexOf('/')))
+        if (!manifest.bench.note?.trim()) silent.push(name)
+        for (const row of manifest.bench.rows ?? []) {
+            const note = (row.note ?? '').trim()
+            if (note.startsWith('measured:')) continue
+            silent.push(
+                `${name}: "${row.metric}" is not counted — ${note || 'it says nothing about what produced it'}`,
+            )
+        }
     }
     expect(silent).toEqual([])
+})
+
+// A COUNTED ROW'S RATIO IS DERIVED, so a hand edit to any one of the three cells is
+// visible. Every row is counted now, so nothing is exempt.
+test('a counted bench row states the ratio its own two figures make', async () => {
+    const drifted: string[] = []
+    for (const path of new Bun.Glob('*/example.json').scanSync({
+        cwd: EXAMPLES_DIR.pathname,
+    })) {
+        const name = path.slice(0, path.indexOf('/'))
+        const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
+        for (const row of manifest.bench?.rows ?? []) {
+            if (!(row.note ?? '').startsWith('measured:')) continue
+            const abide = Number.parseFloat(row.abide)
+            const vanilla = Number.parseFloat(row.vanilla)
+            if (!Number.isFinite(abide) || !Number.isFinite(vanilla)) continue
+            const stated = `${(abide / vanilla).toFixed(2)}x`
+            if (stated !== row.ratio)
+                drifted.push(
+                    `${name}: "${row.metric}" states ${row.ratio}, and ${row.abide}/${row.vanilla} is ${stated}`,
+                )
+        }
+    }
+    expect(drifted).toEqual([])
 })
 
 // A REFERENCE PAGE THAT RESTATES A SIGNATURE IS A SECOND COPY OF IT, and the check above only

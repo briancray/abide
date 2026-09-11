@@ -1652,7 +1652,210 @@ finds a different epoch, 18.14 delivers the ring marked as a reset, and 18.15 re
 
 **Decides:** 9.21, 18.11.
 
-# D98. The request path answers with nothing bound
+# D101. A fourth entry that is not a fourth lane
+
+**Refused:** parking the record, the clock, the batcher and `ratio` in `harness/measure`, which is
+already dependency-free and would have satisfied the strictest constraint automatically.
+
+**Because** it makes the playwright side import a lane it is not in to get a clock, and a lane is a
+DEPENDENCY partition rather than a subject-matter one — `harness/report` depends on nothing, so it
+answers no fourth question and is not a fourth lane. An import edge is priced by the module it
+lands on, and the first draft's six-member leaf carried a line counter that would have dragged a
+`Bun.Glob` into the module the browser injectable is built from; that member left instead. The
+`bun:test` half went the same way and became a fifth entry rather than a sixth member of the leaf.
+
+**Consequence:** the source comments read "Lane N of 3" against five entries, and each entry says
+which of the five it is.
+
+**Decides:** 44.1.
+
+# D102. Nodes moved are partitioned, with no total
+
+**Refused:** one `nodesMoved` figure, with the kinds available underneath it.
+
+**Because** the two part company at exactly one place — a node with no layout box. Moving a comment
+is 0.11 µs and moving an element with its subtree is 2.8 µs, and only the element is in the
+reflow; on a 500-row reorder the reflow is 52% of the op and identical however many markers moved
+with it. A single total is the number that made a marker-elision change worth 998 fewer records
+look worth writing, and it measured +0.053 ms on one run and −0.033 on the next.
+
+**Consequence:** a caller wanting a total writes the addition itself, at a site that says which
+kinds it is adding.
+
+**Decides:** 44.2.
+
+# D103. A floor that was measured, not guessed
+
+**Refused:** two runs, with the verdict "if the arms swap places it is noise".
+
+**Because** that is a sign test at n=2 and misses noise half the time by construction — a 50%
+false-negative rate on the verdict standing in front of every published card. Running one arm
+twice under its own name produces a spread that IS the floor for that case on that machine that
+day, so `underTheFloor` names a number with a provenance rather than a word.
+
+**Consequence:** every timing run costs one more arm than the comparison needs.
+
+**Assumes:** 44.8, 44.11.
+
+**Decides:** 44.7.
+
+# D104. A gate wrapper rather than a lint over test names
+
+**Refused:** a `// revert:` comment convention above every `test(` in a `*.gates.test.ts`, checked
+by a lint.
+
+**Because** a comment cannot be EXECUTED. The first draft refused the lint on a claim that is
+false — "a comment is not a field and no test can require one" — where `rulebook.test.ts` and
+`coverage.test.ts` are two thousand lines of tests requiring things of prose. The honest argument
+is the other one: a lint can require the revert to be DESCRIBED and only a wrapper can require it
+to WORK, which also answers whether a case distinguishes two implementations at all.
+
+**Consequence:** an engine assertion cannot be wrapped — an engine number is not available inside a
+case body — so `RENDERER.md` and `SERVER.md`'s engine measurements stay a playwright-side
+convention with no revert field. What would withdraw this entry is a year of green revert runs: a
+mechanism that has never caught anything is a lint with extra machinery.
+
+**Decides:** 44.9.
+
+# D105. A ratio across two substrates throws
+
+**Refused:** carrying both arms and reporting them tagged with the engine each came from.
+
+**Because** the same graph reads 1.67x a hand-written signal under JSC and 0.21x under V8 —
+inverted, not scaled — and a reader offered two tagged numbers takes the one that agrees with them.
+There is no average, no interpolation and no ordering between them, so the pair is not a result.
+
+**Assumes:** 44.12.
+
+**Decides:** 44.10.
+
+# D106. A sample under the clock throws rather than warns
+
+**Refused:** returning the sample with a warning beside it.
+
+**Because** a warning beside a number is a number somebody quotes, and every arm reading 0.000 or
+0.100 is the tell for a sample that reported the clock. The resolution is measured per substrate
+rather than assumed: 41 ns under bun here against the 100 µs quoted for browsers, which would
+over-batch by ~2400x, and 5 µs on a cross-origin-isolated page, a 20x error the other way.
+
+**Consequence:** an op that cannot clear the bar at a hundred million reps is one this batcher does
+not price, and it says so instead of looping.
+
+**Decides:** 44.11.
+
+# D107. Refusal at construction rather than at reporting
+
+*Contested.*
+
+**Refused:** letting the number exist and refusing it at the moment it is published.
+
+**Because** a number that exists gets read, pasted and remembered, and the publishing step is the
+one a session under time pressure works around. Constructing it and then refusing it also means the
+refusal has to be re-implemented at every reporting site, where construction has one.
+
+**Consequence:** a duration whose op touched an emulated DOM cannot be obtained at all, even to look
+at while developing. That is the contested half, and the alternative is one flag away for anyone who
+decides otherwise.
+
+**Decides:** 44.12.
+
+# D108. `shares` composes down one nesting chain, and `within` is withdrawn
+
+**Refused:** a `within` naming a second op, multiplying two fractions into one ceiling.
+
+**Because** there are two chains and they never meet. First load is navigation → paint ⊃ request →
+last byte ⊃ the server's layers; interaction is click → paint ⊃ the reconcile ⊃ the graph walk. The
+reconcile does not run inside navigation → paint — hydration does — so multiplying a fraction of an
+interaction op by a fraction of a first-load op produces a number describing no op at all.
+
+**Consequence:** a first-load ceiling and an interaction ceiling are separate numbers, neither
+bounds the other, and the four plans' budgets do not add up to one figure by construction.
+
+**Assumes:** 44.14.
+
+**Decides:** 44.13.
+
+# D109. Call counting stays `spyOn`
+
+**Refused:** a `calls()` export on `harness/server`.
+
+**Because** it was homed all along: `spyOn(checker, 'check').mock.calls.length` is the compiler's
+wave gate exactly, with `mockRestore` for the teardown. A second spelling would be a rename with a
+worse restore story, and its justification was topological — "it is bun-side" — rather than
+functional. Withdrawing it settles the open question about a worker identically: a counter in the
+wrong process counts nothing, whichever name it has.
+
+**Decides:** 44.15.
+
+# D110. The bench producer is a workspace script
+
+**Refused:** an `abide bench` subcommand.
+
+**Because** `abide <cmd>` is governed surface, so a subcommand owes a clause, a registry row and an
+entry here, for a tool no app author runs. A workspace script owes none of that and reaches the
+filesystem, the line counter and the built graph without any of it crossing a seam an app resolves
+through.
+
+**Assumes:** 38.1.
+
+**Decides:** 44.19.
+
+# D111. The harness is budgeted against not having it
+
+**Refused:** a hand-written arm for the harness itself, which is the standing bias everywhere else
+in this repo.
+
+**Because** the thing a harness is compared against is asserting thirty-two work gates by reading —
+there is no second implementation of "count the DOM calls this op made" to be a ratio against, and
+writing one would be writing the harness twice. The budget it does answer to is the machinery
+triple, and two of the three are counted rather than claimed.
+
+**Consequence:** the one figure in this repo with no arm beside it is the harness's own cost, and
+that is stated where the cost is.
+
+**Decides:** 44.22.
+
+# D112. A bench note per row, not per table
+
+**Refused:** one note under the table, and a producer that refuses to write anything until every
+row can be written.
+
+**Because** a table with one row measured and four authored is the state the producer creates on its
+first run — four of the five rows compare an abide arm against a hand-written one, and no abide arm
+runs until the compiler lands — so a single note describes neither half of it. Refusing the partial
+flip instead would mean the one row that CAN be produced from static artifacts stays hand-typed
+indefinitely.
+
+**Consequence:** the table-level note now says what the table as a whole is and the rows carry their
+own provenance, which is one more field per row for every example that ever grows a bench.
+
+**Assumes:** 44.21.
+
+**Decides:** 44.20.
+
+# D113. An unpublished reactive counter reads as absent, not as zero
+
+**Refused:** reporting `0` for `wakes`, `bindingRuns` and `descents` where nothing has been
+published — and, on the other side, throwing where the record is absent.
+
+**Because** those three rows are the one part of a `Work` record this lane does not count: a
+prototype patch cannot see an effect re-run and 44.1 forbids importing abide to count one, so they
+are read off a global the framework writes, and the two halves agree by two documents rather than by
+one type. Zero is the answer that reads correctly and is wrong in the direction nothing notices —
+eleven of `REACTIVE.md`'s gates would assert against a counter that was never wired and pass, which
+is the silent zero the refused patch list exists to prevent one layer down. Throwing fails in the
+other direction: every DOM-only case body and the whole hand-written arm publish nothing by
+construction, and they are what every ratio in the repo is against.
+
+**Consequence:** three rows of `Work` are `number | null` where the other ten are `number`, and a
+reader of one narrows. An INCOMPLETE record — a field misnamed, or not added yet — is a third case
+neither answer covers, and it gets 44.24 rather than falling out of this one.
+
+**Assumes:** 44.1.
+
+**Decides:** 44.23, 44.24, 44.25.
+
+# D114. The request path answers with nothing bound
 
 **Refused:** reaching the request path only through a listener.
 
@@ -1667,7 +1870,7 @@ ports.
 
 **Decides:** 42.3, 42.5.
 
-# D99. A test holds the app, not a client of its own
+# D115. A test holds the app, not a client of its own
 
 **Refused:** a test client generated off the app, beside the app object.
 
@@ -1682,7 +1885,7 @@ a wire adds, and `App.fetch` runs those steps rather than standing in for them.
 
 **Decides:** 42.6, 42.13.
 
-# D100. Boot is the app, not the port
+# D116. Boot is the app, not the port
 
 **Refused:** `onStart` wrapping the listener.
 
@@ -1697,3 +1900,95 @@ a port the host owns and the app never chose. `createApp` is where the tables, t
 **Assumes:** 38.15, 38.16, 42.5.
 
 **Decides:** 37.4, 42.4.
+
+# D117. The live panel is a reading, not a bench row
+
+*Reversed by D118.*
+
+**Refused:** filling the `bench` table from the reader's own browser, which is the shape the
+numbers already had and needed no second panel.
+
+**Because** those two answer different questions and one of them cannot be answered on a stranger's
+machine. A `bench` row is a CLAIM — taken on a known machine, against a hand-written arm, and
+quotable. A reading is what this laptop did in the last two seconds, with whatever else it was
+running, in whichever of three engines the reader brought. The same graph reads 1.67x a
+hand-written signal under JavaScriptCore and 0.21x under V8, so a claim assembled from readings
+says a different thing to every reader while being right for each.
+
+What survives the move is the half that is machine-independent: a two-row swap moves two elements
+on a phone and on a workstation, and a count is therefore the same fact everywhere. The counts are
+the panel's spine and the timings are reported beside them with the engine, the batch size and the
+floor this machine measured — the floor being what turns "it is fast here" into a number the reader
+can see is unresolvable.
+
+What the panel DOES compare is two arms measured in one run, in one document, on one clock — which
+is the only comparison a stranger's machine can support. `batch` takes both arms together and
+interleaves them, so the sample size and the floor are shared by construction, and the division
+goes through `ratio` rather than through an operator: a value inside the measured floor comes back
+as a tag, and so does a frame-quantised pair. Two arms measured in two runs are refused on unequal
+`n`, which is the mechanism rather than a convention.
+
+**Consequence:** an engine number and a heap number are absent from the panel and always will be —
+the first is CDP and the second is `bun:jsc`, and neither exists in a page. So the panel is not a
+superset of the bench table and the two stay side by side. And the abide column stays empty until
+the compiler emits a page that can be loaded beside the hand-written one.
+
+**Assumes:** 44.8, 44.10, 44.11.
+
+**Decides:** 40.39, 40.40, 40.42.
+
+# D118. One results panel, and nothing in it is authored
+
+**Refused:** two panels — a `bench` table of committed figures beside a live reading — which is
+what D117 decided and is what shipped for an afternoon.
+
+**Because** the split asked a reader to hold a distinction that was doing them no good. D117's
+argument still stands on its own terms and that is exactly the problem: it is a true statement
+about provenance and a bad one about a card. What the reader saw was two tables of the same shape,
+two tabs apart, one of them carrying four hand-typed figures that no longer described anything and
+never would — `16.8 ms` against `16.7 ms`, decided by a person, sitting in a results table.
+
+The merged panel splits by what can be OBSERVED instead. A count over the source — lines of code —
+is a fact no page can take, so it is counted at build and rendered immediately. Everything a page
+can see about itself is taken in the reader's own browser when they ask. Nothing is left over, and
+the thing D117 was protecting is still protected: the reading says which engine took it, over what
+window, and against a floor measured on that machine, so it is never mistaken for a claim about
+the framework.
+
+**Consequence:** a card can no longer state a figure that nothing produced, so a metric this
+repo cannot yet measure simply does not appear — style recalcs left the card and stayed in
+`bun run bench`, where CDP is available. The producer DROPS a row it cannot fill rather than
+leaving one standing.
+
+**Assumes:** 40.13, 44.21.
+
+**Decides:** 40.39, 40.40, 40.42, 40.43.
+
+# D119. The status page is beside the docs, not in them
+
+**Refused:** a section in the documentation nav carrying the build's own numbers.
+
+**Because** a page in `content/` is governed as documentation and would have to earn all of it —
+an opening the main overview pulls, a `covers` line, the voice rules, the heading rules, the
+one-behaviour-per-example rule — none of which is true of an instrument a maintainer reads while
+building. Worse, it would put the repo's red suites in front of a reader who came to learn what a
+value is.
+
+It is SERVED rather than generated, and that was the second thing to get right. A page written
+into the output could not survive its neighbours: the docs build starts from an empty directory,
+so every build deleted the status page, including the one the serve command runs on its way to
+serving it. A page the server owns has no ordering to get wrong — and it gains the property a
+generated one could not have, which is that a reader leaves it open and asks it for a number
+while they work.
+
+It holds no results and caches nothing. Every figure arrives from an endpoint somebody triggered,
+the slow one arrives a row at a time, and the site it reports on is served from the same address.
+It shares the docs stylesheet, so a number on it looks like the numbers a card shows.
+
+**Consequence:** it is reachable only by knowing the address, which is the cost of keeping it out
+of the way. `bun run status` prints it. And nothing is available offline — there is no artifact,
+so a run cannot be filed or compared against a later one.
+
+**Assumes:** 40.16.
+
+**Decides:** 40.44.

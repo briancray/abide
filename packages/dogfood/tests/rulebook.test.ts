@@ -452,6 +452,23 @@ test('no decision states a requirement', async () => {
     expect(offenders).toEqual([])
 })
 
+// DECISIONS format rule 5. EVERY OTHER CHECK HERE BUILDS A `Set` OF DECLARED IDS, and a duplicate
+// collapses into one member of it — so `See D98` resolved, `D98` was cited, and both entries passed
+// every gate while a reader following the citation landed on whichever came first. Three numbers
+// shipped twice that way in one commit, the plans' entries having been appended without reading the
+// counter, and what found it was a grep for something else.
+test('no decision number is used twice', async () => {
+    const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
+    const seen = new Set<string>()
+    const twice: string[] = []
+    for (const match of decisions.matchAll(/^# (D\d+)\./gm)) {
+        const id = match[1] ?? ''
+        if (seen.has(id)) twice.push(id)
+        seen.add(id)
+    }
+    expect(twice).toEqual([])
+})
+
 // And the other way: a decision nobody reaches is a road not taken that no rule records taking.
 test('every decision is cited by a clause', async () => {
     const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()

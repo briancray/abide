@@ -1,6 +1,6 @@
 {
     "title": "Read an invoice",
-    "summary": "A row from your database on the page, with nothing between them. Two files, 16 lines \u2014 one is the handler you would have written anyway.",
+    "summary": "A row from your database on the page, with nothing between them. Two files, 16 lines — one is the handler you would have written anyway.",
     "app": "unconverted",
     "files": [
         "src/server/rpc/invoices.ts",
@@ -40,39 +40,17 @@
         ]
     },
     "bench": {
-        "note": "AUTHORED, not measured \u2014 nothing here runs until the compiler does. LINES OF CODE IS THE EXCEPTION: counted from the two arms in this download, code lines only, both arms complete \u2014 markup, client and handler.",
+        "note": "Counted over the source, which is the half a browser cannot see. Everything else on this card is measured in your own browser, below.",
         "rows": [
-            {
-                "metric": "First paint",
-                "abide": "16.8 ms",
-                "vanilla": "16.7 ms",
-                "ratio": "1.01x"
-            },
-            {
-                "metric": "DOM nodes moved",
-                "abide": "954",
-                "vanilla": "954",
-                "ratio": "1.00x"
-            },
-            {
-                "metric": "Style recalcs",
-                "abide": "2",
-                "vanilla": "2",
-                "ratio": "1.00x"
-            },
-            {
-                "metric": "Client bytes",
-                "abide": "4.1 kB",
-                "vanilla": "1.9 kB",
-                "ratio": "2.16x"
-            },
             {
                 "metric": "Lines of code",
                 "abide": "13",
-                "vanilla": "26",
-                "ratio": "0.50x"
+                "vanilla": "27",
+                "ratio": "0.48x",
+                "note": "measured: static line count, code lines only, bun 1.4.2 on darwin arm64, 2026-09-11"
             }
-        ]
+        ],
+        "shared": ["database.ts"]
     },
     "route": "/invoices/42",
     "vanilla": ["index.html", "invoice.js", "server.ts", "database.ts"]

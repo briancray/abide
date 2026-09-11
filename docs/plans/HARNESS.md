@@ -33,14 +33,20 @@ moment somebody adds it, exactly as `OLD_SHAPE` works for a docs page. Verified 
 citation of the withdrawn 40.4, planted in the citing half of this file, reported it by name and
 took the offender count from 0 to 1. This sentence names the number and survives only because it
 also says *withdrawn*, which is the check's one escape hatch and is being used as designed.
-(CLAUDE.md still says `docs/plans/` is "gated by nothing"; that sentence is stale and the test's own
-comment says so.)
+(CLAUDE.md said `docs/plans/` was "gated by nothing"; that sentence has been corrected, and now
+says what the two checks cover and what they do not.)
 
-The state today: `packages/harness/src/{measure,engine,server}/index.ts` are twenty-four lines
-between them, of which three are `export {}` and the rest are comments describing what each lane
-will hold. `preload.ts` is the only code in the package. `tests/lanes.test.ts` asserts that the
-three entries resolve and that the measure lane has no abide in its resolved graph — which is a
-real gate and the one thing here that already works.
+The state today: **all six stages have landed.** Five entries exist —
+`harness/{measure,engine,server,report,gate}` — and 25 exported names, which is the
+machinery number this package answers to and is up from 17: five went to the live reading the panel
+renders, and three to the published-counter wire (`PUBLISHED_WORK_KEY`, `PUBLISHED_WORK_FIELDS`) and
+to `inAFreshProcess`, which moved out of this package's own tests once it became the invocation every
+allocation gate in the framework needs. What has NOT happened is the thing stage 5 was written for: four of
+`read-invoice`'s five rows compare an abide arm against a hand-written one, and no abide arm RUNS,
+`compiled/` being one emitted module rather than a served page. So one row of one bench flipped to
+measured and the producer names the other four every run. **That is why this file is still here.**
+The deletion condition at the top is unchanged and is now the only thing between this plan and the
+bin: the last stage has landed, and "one example of sixty-nine is measured" has not.
 
 ## The decision everything else falls out of
 
@@ -309,6 +315,18 @@ split between them is clean rather than a toss-up:
 The second buys the first for free and works in both substrates through the same injected bytes, so
 it is the one specified. **Gate: `lanes.test.ts` still resolves `measure` with no abide in its
 graph — reverted to an import of `graph.ts`, the existing gate fails, which is what it is for.**
+
+**AND THE WIRE NEEDED TWO REFUSALS OF ITS OWN, which the sketch above does not have because it reads
+as one mechanism rather than as a protocol between two packages that cannot share a type.** The
+address and the field list are now a leaf — `measure/PUBLISHED_WORK.ts`, read by the lane and by the
+lane's own tests, where the shape had been transcribed twice and abide would have made a third — and
+D113 decides the two ways it can go quiet. ABSENT is `null` on those three rows of `Work` rather than
+`0` (44.23): every DOM-only case and the whole hand-written arm publish nothing by construction, so a
+throw was not available, and `0` read as "the op woke nobody" about a counter never wired. INCOMPLETE
+is a throw naming the field (44.24), and it is the worse of the two rather than the milder — `armCase`
+ZEROES all three fields on whatever was published, so a field abide never declared is created there
+at 0 and read back at 0. Measured with the check out: a record carrying only `wakes` and
+`bindingRuns` reports `descents: 0`, and the k=8 gate of 16 against 256 passes on it.
 
 `REACTIVE.md`'s phase 0 arm lives here too, under `measure/vanilla/`: `let value; const subscribers
 = []`, hand-written, no abide, and the one thing every reactive ratio is against.
@@ -626,19 +644,32 @@ hand-typed "1.01x" through in the first place.
 **PROJECTED, not measured.** Nothing below has been run. A row with a measured number replaces its
 projection and says which lane produced it.
 
-| | Projected |
-| --- | --- |
-| LOC, `report` | ~110 — record, clock, batcher, ratio, the A/A floor |
-| LOC, `measure` | ~210 — the patches, the re-entrancy guard, the record, the built injectable, the vanilla signal arm |
-| LOC, `engine` | ~150 — the CDP session, the four counters, `shares()` |
-| LOC, `server` | ~40 for everything `SERVER.md` quotes, per its own estimate; ~75 with `bytes` |
-| LOC, `bun run bench` | ~70 — the LOC counter, the exported-name counter, the `example.json` writer |
-| exported names, whole package | **~11** across four entries |
-| exported names, first draft | ~17 enumerated, stated as ~14 — `calls` withdrawn, the leaf down two, the wake counter added |
-| overhead per counted DOM call | irrelevant by construction — see below |
+**MEASURED, by `bun run bench`, 2026-09-10.** Code lines only, which is the same rule the bench
+table's own Lines of code row is counted by.
+
+| | Projected | Measured |
+| --- | --- | --- |
+| LOC, `report` | ~110 | **261** — record, clock, batcher, ratio, the A/A floor |
+| LOC, `measure` | ~210 | **441** — the patches, the re-entrancy guard, the record, the injectable, the vanilla signal arm |
+| LOC, `engine` | ~150 | **184** — the CDP session, the four counters, `shares()` |
+| LOC, `server` | ~75 with `bytes` | **120** |
+| LOC, `gate` | not projected — it had no home | **42** |
+| LOC, `bun run bench` | ~70 | **165** — the LOC counter, the exported-name counter, the writer |
+| exported names, whole package | **~11** across four entries | **17** across five |
+| overhead per counted DOM call | irrelevant by construction | unchanged — there is no duration field |
+
+Every projection is low, `report` and `measure` by more than 2x, and the two reasons are worth
+separating. `report` grew because the refusals are five throws with the reason in the message
+rather than five predicates. `measure` grew because the patch declaration is 56 rows and the
+resolution rule is not one line: happy-dom puts own `textContent` descriptors on `Element` and
+`CharacterData` as well as `Node`, and its `Document` prototype is not `globalThis.Document`'s at
+all, so a member is resolved from a live INSTANCE by interface name rather than off the global.
+The fifth entry is the honest overrun: `gate()` needed `bun:test` and the leaf is justified by
+having no dependency, so it could not go there.
 
 There is no vanilla arm for the harness itself and there should not be one. The thing it is
 budgeted against is the alternative of not having it, which is thirty-two gates asserted by reading.
+That is D111 now.
 
 ## The harness's own work gates
 
@@ -679,11 +710,16 @@ it is measured above, and the revert reproduces it.
    not a threshold but the interlock in `harness/measure`: no duration field, and `time()` throws
    while the counters are armed. A module-level `ARMED` flag makes it checkable in one line and it
    gets its own revert row.
-2. **Whether happy-dom's prototypes are patchable the same way as a browser's** — and the sharper
-   question behind it, whether an identical case COUNTS the same in both. Patchability is the weaker
-   half and is close to answered; the counting half is already known to fail without the
-   outermost-only rule, and `innerHTML`, `replaceChildren`, `cloneNode` and fragment inserts each
-   want the same check. The both-substrates claim is the lane's whole reason for existing.
+2. **~~Whether happy-dom's prototypes are patchable the same way as a browser's.~~ ANSWERED, and
+   the answer is that they are not, which changed the design.** happy-dom's `Document` prototype is
+   not `globalThis.Document.prototype` — `document`'s chain is HTMLDocument → HTMLDocument →
+   Document → Node → EventTarget, and `createElement` is own on the third of those — while
+   `Element.prototype` and `Text.prototype` ARE the globals. `Element.setHTMLUnsafe`,
+   `Document.writeln` and a global `DOMTokenList` do not exist there at all. So a member is
+   resolved from a live INSTANCE by walking to the prototype whose constructor carries the declared
+   interface name, and a member the substrate does not have is a throw at install rather than a
+   skip. The counting half is gated: three shared case bodies, `replaceChildren`, `append`,
+   `cloneNode` and the `textContent` write among them, compared count-for-count.
 3. **~~`objectTypeCounts` stability across `fullGC`.~~ ANSWERED, and it was not variance.** The
    fractional `Object:3.09` is reachability, not noise — see `retained()` and `allocated()` above,
    where the probe is. What remains is narrower and worth doing: a non-integer per-rep count means
@@ -700,131 +736,128 @@ it is measured above, and the revert reproduces it.
 
 ## What the docs owe
 
-**RULEBOOK: nothing, deliberately — and that is in tension with the DECISIONS entries below.**
-Format rule 2 refuses an entry citing no clause (`docs/DECISIONS.md:26`, gated by
-`rulebook.test.ts:425`; all hundred live entries comply), so an entry here needs something on its
-`Decides:` line and this section offers none. Either a small RULEBOOK group exists for these to hang
-off, or they are tests plus source comments and there is nothing to file. **THAT IS THE DECISION TO
-TAKE FIRST**, because it decides whether this paragraph is right, and it is not taken here. The rest
-of the paragraph is the argument for *nothing*: the harness is not the framework's surface and not
-the documentation system, and CLAUDE.md is explicit that a rule which turns out to be checkable
-belongs in a test rather than in prose — the lane isolation is already a test rather than a clause,
-and that is the precedent. One candidate amendment exists and is not this plan's to make: **40.3**
-has an example *SHOULD* carry a bench, and the SHOULD is there because nothing can produce one. Once
-the producer runs, whether it becomes MUST is a real question. It is cited in two places —
-`docs/BRAND.md:253` and the clause itself — so the grep is cheap, and per CLAUDE.md an amendment
-means re-reading both hits rather than only the `Assumes:` line.
+**PAID.** Every item below has landed, and the first paragraph of this section was wrong about the
+one that mattered.
 
-**REGISTRY: nothing.** No name here is one an app author writes, which is also why the bench
-producer is not an `abide` command.
+**RULEBOOK: a free-standing group, not nothing.** The argument for *nothing* rested on the harness
+not being the framework's surface and on a checkable rule belonging in a test — both true, and
+neither settles it, because DECISIONS format rule 2 refuses an entry citing no clause and that
+check is gated at `rulebook.test.ts`. Eleven refusals with nowhere to hang meant either eleven
+entries that cannot be filed or eleven refusals that evaporate when this file is deleted. Format
+rule 6 already carries the escape hatch the documentation system uses, so **44. The measurement
+harness** declares itself FREE-STANDING and twenty-two clauses hang off it. It took 44 rather than
+43: `COMPILER.md` proposes `# 43. Type-directed lowering`, and the collision check exists for
+exactly that.
 
-**DECISIONS**, one entry each, each naming the alternative it refused, and each owing an
-`**Assumes:**` line per format rule 6 where it rests on a premise — the 25x case, the count of tests
-green against a live bug, and the retention rule are all premises, and none of them is written as
-one. Read off the BODY rather than off "What the harness refuses": the two lists were four against
-four sharing a single member, which is the second-copy drift this file opens by warning about.
+The candidate amendment named here is **untouched**: 40.3 still has an example *SHOULD* carry a
+bench, and whether that becomes MUST is a real question the producer does not settle — one row of
+one bench is measured.
 
-* **the fourth entry that is not a lane**, refused against parking the clock and the batcher in
-  `measure`; the cost is that the source comments say "1 of 3" and there are four exports;
-* **the partitioned move counter**, refused against a single `nodesMoved`, on the 25x case and the
-  998-record change that measured under the floor;
-* **two runs minimum and `underTheFloor`**, refused against reporting a single-run ratio;
-* **`gate()` as a wrapper**, refused against a lint over `test()` names — and the entry says what
-  evidence would withdraw it, because this is the one piece of machinery here that guards a habit
-  rather than a mechanism;
-* **`ratio()` throwing across substrates**, refused against carrying both arms and reporting them
-  tagged;
-* **the batcher throwing under 100x the clock**, refused against returning the sample with a warning
-  beside it;
-* **refusal at construction rather than at reporting time**, which is the contested one and is named
-  as contested at the end of that section;
-* **`within` withdrawn from `shares()`**, refused against composing a ceiling across two nesting
-  chains that never meet;
-* **`calls()` on `server`**, refused against a fourth lane for a call counter;
-* **the bench producer as a workspace script**, refused against an `abide` subcommand — the entry is
-  owed even though the clause and the registry row are not, because the alternative was named;
-* **no vanilla arm for the harness itself**, refused against CLAUDE.md's standing bias that
-  machinery is justified against a hand-written arm. Two lines in "What it costs" today, and the
-  most DECISIONS-worthy sentence in the file.
+**REGISTRY: nothing, as written.** No name here is one an app author writes.
 
-**CLAUDE.md**, which is the fifth document and is partly gated, and which this plan moves three
-statements in. It is owed a heading here because the alternative is a correction filed only in a
-file whose first instruction is to delete itself:
+**DECISIONS: D101 through D112.** Eleven were owed and a twelfth arrived with stage 5 — the bench
+note going per row, which this plan manufactured rather than inherited. Each names its refused
+alternative; four carry an `Assumes:`; D107 is marked *contested* in place, which is what that
+section asked for.
 
-* `docs/plans/` is no longer "gated by nothing" — `rulebook.test.ts` covers a plan's citations, and
-  the test's own comment says the CLAUDE.md sentence is stale;
-* "THREE LANES ANSWER THREE DIFFERENT QUESTIONS" needs a line saying the leaf is not a lane, once
-  `harness/report` exists;
-* `packages/harness/package.json`'s `description` is "The three measurement lanes abide is tested
-  and measured with", and the `Lane N of 3` comments in each entry head the same way.
+**CLAUDE.md.** Three statements moved, and two more were added rather than moved. `docs/plans/` no
+longer reads as gated by nothing and now says what the two checks cover and what they do not; the
+THREE LANES bullet says the leaf is not a lane and neither is `harness/gate`; the seams bullet says
+five entries, three lanes. Added: the count/time split — counts in `bun test`, anything with a
+clock in `bun run bench` — and the runnable revert. `packages/harness/package.json`'s description
+names the leaf, and each entry's header says which of five it is.
 
 ## Stages
 
-Each is gated by the one before it, and the ordering is the sibling plans' rather than this one's.
+**All six have landed.** Each was gated by the one before it, and the ordering was the sibling
+plans' rather than this one's. What each turned out to cost, and what it turned out to be, is
+below — the projection each was written against is in "What it costs".
 
-0. **`report`.** The `Sample` record, the clock with its measured resolution, the batcher, the A/A
-   floor, `ratio()`, and the five refusals. No lane depends on a lane, so this is the only thing
-   that can go first. Gate: refusals 2, 3, 4 and 5, each with its revert.
-1. **`engine`, moved up from stage 4** — because "name the share before changing the layer" is a
-   rule about ORDER, and the first draft built the only producer of a share last, after four stages
-   had committed the layout. It does not need a served abide page: the share is taken on the
-   **vanilla arm's page**, which exists today at
-   `packages/dogfood/examples/patch-transform/vanilla/` and needs no abide, no compiler and no
-   dogfood server — a static server and playwright. That is also what the existence-proof rule wants
-   for a denominator. Unblocks `RENDERER.md` measurement 1 and `REACTIVE.md` phase 0's share half,
-   both of which are ordered BEFORE the code they govern. Gate: `shares()` refuses a `within` naming
-   an op the `of` is not inside.
-2. **`server`.** `retained`, `allocated`, `closures`, `ticks`, `bytes`. Unblocks `SERVER.md` stage
-   0's allocation half; the share half came from stage 1. ~40 lines of already-specified work. Gate:
-   the `objectTypeCounts.Scope`-reads-zero trap, asserted as a trap, and the DOM-free process
-   assertion — reverted to the preloaded process, the totals move with happy-dom's own objects.
-3. **`measure`.** The patches, the arm/disarm, the outermost-only guard, the built injectable, the
-   partitioned record, the wake counter's read side, and `REACTIVE.md`'s vanilla signal arm.
-   Unblocks `REACTIVE.md` phase 0 and `RENDERER.md` measurements 2 and 3. Gate: the `textContent`
-   divergence, counted identically in both substrates.
-4. **`gate()`**, and the coverage test that every gate carries a `worth` and a runnable `revert`.
-   Deliberately after two lanes exist, so it is written against real gates rather than a guess at
-   their shape — and it is retrofitted onto the gates stages 2 and 3 already shipped, which is the
-   cost of putting it here and is smaller than the cost of guessing.
-5. **The bench producer** — `bun run bench`, with the LOC and exported-name counters — the
-   `coverage.test.ts` ratio check taught the two tags, and the first example flipped from AUTHORED
-   to measured.
+0. **`report`.** Landed. The `Sample` record, the clock with its measured resolution (41 ns under
+   bun), the batcher, the A/A floor, `ratio()`, and the five refusals. Every refusal has a test
+   and every test was verified by reverting: with the sample bar out, an empty body at n=1 comes
+   back as 0 ns and n never grows; with the `underOneFrame` tag dropped at the division, 16.8 ms
+   against 16.7 ms comes back as 1.01x, which is `read-invoice`'s hand-typed row reproduced by the
+   producer that exists to refuse it.
+1. **`engine`.** Landed. `shares()` is a PURE function of a `Trace` and is gated in `bun test`;
+   the CDP driver is gated in `packages/harness/e2e/engine.spec.ts`, against chromium, on a page
+   that carries a rule the class it toggles actually matches. Two findings from building it:
+   `Performance.getMetrics` gives `RecalcStyleCount` and `LayoutCount` directly, and forced layout
+   needs the `disabled-by-default-devtools.timeline.stack` category — without it the counter reads
+   0 against four forced layouts in the trace and is green forever. Measured that way first.
+2. **`server`.** Landed. `retained`, `allocated`, `closures`, `ticks`, `bytes`. `retained()` roots
+   what the body handed back in a module-level slot rather than a local, which is the 2002/2000/
+   2000/0 instability removed rather than documented. The `objectTypeCounts.Scope` trap is
+   asserted AS a trap: 500 class instances land in `Object` and `Scope` is never a key.
+3. **`measure`.** Landed, and the largest overrun. The patch declaration is 56 rows across eight
+   interfaces, and the resolution rule is the part no sketch predicted — happy-dom's `Document`
+   prototype is not `globalThis.Document.prototype`, and it puts own `textContent` descriptors on
+   `Element` and `CharacterData` as well as `Node` — so a member is resolved from a live INSTANCE
+   by interface name. The both-substrates gate compares the two installed lists and the counts for
+   three shared case bodies, and the bun half is taken by spawning bun from the playwright side
+   rather than transcribed. Reverted: with the re-entrancy guard out, happy-dom's own
+   `textContent` implementation reaches `createElementNS`, which the refused list throws on — the
+   bun arm cannot even complete the case, let alone report chromium's number.
+4. **`gate()`.** Landed as a fifth entry, `harness/gate`, because it needs `bun:test` and the leaf
+   is justified by having no dependency. `bun run test:gates` runs the reverts. Its own tests are
+   the ones that matter: a gate whose revert leaves it passing is reported, and so is a gate that
+   fails with a number other than the one its revert is worth.
+5. **The bench producer.** Landed as `bun run bench <example>`, with the LOC and exported-name
+   counters. The LOC counter reproduces `read-invoice`'s hand-typed 13/26/0.50x exactly, which is
+   the closest thing to a validation a static counter gets. `coverage.test.ts` learned the tags,
+   stopped accepting any truthy ratio string, and gained a third check that a MEASURED row states
+   the ratio its own two figures make.
+
+**What did NOT land, and it is the point of the deletion condition.** Four of `read-invoice`'s five
+rows need a served abide arm and there is none, so they stay authored and the producer names them
+every run. The harness's own browser gates now run: `webServer` is whole-run rather than
+per-project in playwright, so registering them beside the dogfood projects made them wait on
+`abide start` — which throws "not implemented" — and they moved to `playwright.harness.config.ts`
+under `bun run e2e:harness`, which needs no server at all because `page.setContent` is the page.
+`bun run e2e` itself still cannot run, for that same unrelated reason.
 
 ## Still undecided
 
 Four bullets that stood here have been decided and are gone: **whether `measure` can be one lane**
 (yes — the split is counting against timing, which is two functions with identical dependencies and
 therefore not a lane split); **where `calls()` lives in a worker** (nowhere, it is withdrawn for
-`spyOn`); **what a `Sample` from a build is** (a permitted bun-substrate duration, once refusal 4
-is predicated on an emulated DOM rather than on the runtime); and **whether the retention ratio is
-exempt from refusal 1** (it never trips it — `tail: 4` against `tail: 4096` is one structure against
-itself in ONE substrate, so the two arms agree and there is nothing to exempt; CLAUDE.md's "the one
-timing claim that stays honest across substrates" is a claim about replicability, run it in both and
-expect ≤1.05x in both). What is left:
+`spyOn`, D109); **what a `Sample` from a build is** (a permitted bun-substrate duration, refusal 4
+being predicated on an emulated DOM rather than on the runtime); and **whether the retention ratio
+is exempt from refusal 1** (it never trips it).
 
-* **How a bench row that has never been measured is spelled once some are.** Today every note says
-  AUTHORED and the reader knows where they stand. A table with three measured rows and two authored
-  ones is the state stage 5 creates, and `coverage.test.ts` gates the note per bench rather than per
-  row. This is not an open question inherited from anywhere — this plan MANUFACTURES it, in the same
-  change, by design. Decide it in stage 5: the note goes per row, or the producer refuses a partial
-  flip.
-* **Whether the bench note's format becomes a clause under RULEBOOK 40.** Stage 5 has the producer
-  writing a note that names the substrate, the run count, the machine and the date. That is a
-  checkable requirement about a docs artifact, which is 40's territory, and a format with nothing
-  asserting it drifts on the first hand edit. It is the same question as the one at the top of "What
-  the docs owe" and gets the same answer.
-* **Whether `gate()`'s runnable `revert` runs in CI or on demand.** Running every revert on every
-  gate doubles the gate count and some reverts are not cheap. An env flag and a nightly is the
-  obvious answer and is not obviously right.
-* **How the reactive read/write ratio gets measured.** CLAUDE.md says which of the three retention
-  variants is correct is decided by the read/write ratio — version and lazy snapshot where writes
-  dominate, structural compare keeping the old identity where reads dominate, a cursor where the
-  reader consumes in order. `REACTIVE.md` carries the same trichotomy and names no producer, and
-  nothing here measures a read/write ratio on a real workload, so the decision has no evidence path.
-  It is the same global-counter mechanism as the wake counter and should probably just be two more
-  fields on it.
-* **An identity-stability counter.** CLAUDE.md leads its reactive invariants with two traps that are
-  mirror images — a freshly built wrapper defeats an identity check, and rebuilding a value is how a
-  change gets signalled. Distinct identities produced per N writes catches both directions and is
-  three lines. It is not in any plan's gate table, including this one's.
+Two more closed while stage 5 landed. **How a bench row that has never been measured is spelled**
+— the note goes PER ROW and the producer writes a row only when both arms produced a number, which
+is D112 and 44.20/44.21; refusing the partial flip would have left the one row that CAN be produced
+hand-typed indefinitely. **Whether the bench note's format becomes a clause** — it did, 44.20, and
+`coverage.test.ts` checks the two spellings.
 
+What is left:
+
+* **Whether `gate()`'s runnable `revert` runs in CI or on demand.** Implemented as opt-in —
+  `HARNESS_VERIFY_GATES=1`, wired to `bun run test:gates` — which is the obvious answer and is
+  still not obviously right. There is one gate carrying a runnable revert today and the rest are
+  structural, so the cost of running them all is currently nothing; the question re-opens the first
+  time a revert is expensive.
+* **Whether the harness's own structural reverts can be made runnable.** `gate()` wants a broken
+  arm the test can INSTALL, and most of this package's mechanisms are module-level: a depth guard,
+  a record shape fixed at construction, a patch installed once for the process. Their reverts are
+  comments with the number each reports, verified by hand once. Adding a switch to make them
+  installable is a flag with one live value in production, which this repo bans — so either
+  `gate()` is for the framework's gates and this is fine, or something else is needed here.
+* **How the reactive read/write ratio gets measured.** Still unmeasured, but it is now a one-line
+  edit in a named place rather than a design question. CLAUDE.md says which of the three retention
+  variants is correct is decided by the read/write ratio, `REACTIVE.md` carries the same trichotomy
+  and names no producer, and nothing here measures one. It is the same global-counter mechanism as
+  the wake counter, and the counter is now a leaf: two more entries in
+  `PUBLISHED_WORK_FIELDS` and two more rows on `Work`, and 44.24 makes abide failing to publish them
+  a throw rather than a pair of zeroes.
+* **What the dev flag publishing the counter is called.** Undecided, and it is abide's to name rather
+  than this document's — 44.25 pins the ADDRESS and the shape, and says nothing about what turns
+  publication on. The framework has no flags yet, so there is nothing to be uniform with; the first
+  one to land decides it.
+* **An identity-stability counter.** Unchanged, and still in no plan's gate table. Distinct
+  identities produced per N writes catches both directions of CLAUDE.md's mirror-image reactive
+  traps and is three lines.
+* **CDP trace volume on a 500-row op.** Still the one instrument-perturbation question that stays
+  open, and it did not get any easier: the engine lane's whole product is a duration, so there is
+  no counting-only pass to fall back to. Nothing here has been run at 500 rows.

@@ -1479,7 +1479,7 @@ both.
 
 37.3 `middleware` MUST run pre-routing, over the request and the response.
 
-37.4 `onStart` MUST wrap `createApp` and `onStop` MUST wrap `App.stop`. See D100.
+37.4 `onStart` MUST wrap `createApp` and `onStop` MUST wrap `App.stop`. See D116.
 
 37.5 `onError` MUST run on an unexpected error in that scope.
 
@@ -1722,9 +1722,9 @@ first request.
 
 42.3 `createApp` MUST NOT bind a socket.
 
-42.4 A hook `onStart` wraps MUST NOT observe the port. See D100.
+42.4 A hook `onStart` wraps MUST NOT observe the port. See D116.
 
-42.5 `App.fetch` MUST answer a `Request` where no socket is bound. See D98.
+42.5 `App.fetch` MUST answer a `Request` where no socket is bound. See D114.
 
 42.6 `App.fetch` MUST be `App.run` with dispatch over it, and MUST NOT be a second scope
 constructor.
@@ -1745,4 +1745,93 @@ holds.
 9.18, 27.10 and 11.36.
 
 42.13 A test MUST reach a handler through the same `App` a host holds, and abide MUST NOT generate a
-client of its own for one. See D99.
+client of its own for one. See D115.
+
+# 44. The measurement harness
+
+*Free-standing: these clauses govern the measurement harness, which REGISTRY does not name — a
+`Sample` is not something an app writes.*
+
+44.1 `harness/measure`, `harness/engine` and `harness/server` MUST each be reachable through only
+the dependency each is named for, and `harness/report` MUST have none. See D101.
+
+44.2 A `Work` record MUST partition nodes moved by node kind, and MUST NOT carry a total across
+those kinds. See D102.
+
+44.3 A DOM member `harness/measure` does not count MUST throw naming that member while a case is
+armed.
+
+44.4 A patched member MUST tally only where no patched member is already tallying, and
+`harness/measure` MUST install its patches once for the process.
+
+44.5 The patch set `harness/measure` installs MUST be the same list of interfaces and members in
+both substrates.
+
+44.6 A `Work` record MUST NOT carry a duration, and `time` MUST throw while the counters are armed.
+
+44.7 A floor MUST be measured by running one arm twice under its own name, and `ratio` MUST report
+a value inside that floor as a tag rather than as a number. See D103.
+
+44.8 `batch` MUST interleave its arms, and MUST NOT run one arm in a block.
+
+44.9 A `gate` MUST carry a revert installing the broken arm and what that arm reports, and a revert
+leaving the gate passing MUST be reported as a failure. See D104.
+
+44.10 `ratio` MUST throw where two samples disagree on substrate, on case or on batch size, and
+where one arm is given twice. See D105.
+
+44.11 A `Sample` MUST be at least 100 times the clock's measured resolution, and `batch` MUST throw
+rather than report a smaller one. See D106.
+
+44.12 A refusal MUST be taken where the `Sample` is constructed, and MUST NOT be deferred to where
+it is reported. See D107.
+
+44.13 `shares` MUST take the trace, the layer, the denominator and a threshold, and MUST throw
+where the layer runs outside the denominator. See D108.
+
+44.14 `shares` MUST report an observed ceiling of zero for an op under one frame.
+
+44.15 A count of calls MUST be taken with `spyOn`. See D109.
+
+44.16 `retained` MUST throw in a process with a DOM.
+
+44.17 `allocated` MUST report a batch mean, and MUST NOT report a count an exact integer can be
+compared against.
+
+44.18 `batch` MUST throw in a parallel worker.
+
+44.19 The producer of a `bench` row MUST be a workspace script, and MUST NOT be a command. See
+D110.
+
+44.20 A `bench` row MUST say what produced it. See D112.
+
+44.21 A `bench` row MUST be written only where both arms produced a number.
+
+44.22 `harness` MUST NOT carry a hand-written arm of its own. See D111.
+
+44.23 `measure` MUST report `wakes`, `bindingRuns` and `descents` as absent where no record has been
+published, and MUST NOT report zero for one. See D113.
+
+44.24 A published record MUST carry every field `measure` reads off it as a number, and `measure`
+MUST throw naming each field that is absent. See D113.
+
+44.25 A counter `measure` reads rather than counts MUST be published as a fixed-shape record
+reached through `globalThis.__ABIDE_WORK__`. See D113.
+
+40.39 An `{% example %}` MUST carry one results panel, and the measurement that fills it MUST NOT
+run until the reader asks. See D118.
+
+40.40 A reading an `{% example %}` panel renders MUST name the engine it was taken on and the
+window it covers.
+
+40.41 *Withdrawn, superseded by 40.42.* It read "a reading an `{% example %}` panel renders MUST
+NOT be presented as a ratio against abide", which refused the comparison rather than the thing that
+makes a comparison unsound. It and 40.39's first form were decided together; See D117, which D118
+reverses.
+
+40.42 A ratio an `{% example %}` panel renders MUST be between arms batched in one run.
+
+40.43 A figure an `{% example %}` panel shows MUST be counted or measured, and MUST NOT be
+authored. See D118.
+
+40.44 A page reporting the build's own results MUST NOT be listed in `NAV`. See D119.

@@ -1,5 +1,5 @@
 {
-    "title": "`memo(load, { transform })` — an array in, an index held",
+    "title": "`memo(load, { transform })` \u2014 an array in, an index held",
     "summary": "The regions table arriving from the server as a list, on a dashboard whose feed names ids.",
     "app": "dashboard",
     "files": [
@@ -22,5 +22,10 @@
             "body": "[\n    {\n        \"id\": \"north\",\n        \"name\": \"North\",\n        \"orders\": 120\n    },\n    {\n        \"id\": \"south\",\n        \"name\": \"South\",\n        \"orders\": 80\n    },\n    {\n        \"id\": \"east\",\n        \"name\": \"East\",\n        \"orders\": 64\n    },\n    {\n        \"id\": \"west\",\n        \"name\": \"West\",\n        \"orders\": 91\n    }\n]"
         }
     ],
-    "served": "server.ts"
+    "served": "server.ts",
+    "measure": {
+        "op": "apply one frame from the feed",
+        "selector": "#apply",
+        "event": "click"
+    }
 }

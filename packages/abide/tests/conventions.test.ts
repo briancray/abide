@@ -95,7 +95,11 @@ test('a file exporting one thing is named after what it exports', async () => {
             if (ADDRESSES.has(name)) continue
             const exported = [
                 ...text.matchAll(
-                    /^export (?:const|function|class|type|interface) (\w+)/gm,
+                    // `async` was missing and the check had been blind to every
+                    // `export async function` in the repo — a file exporting one of
+                    // those beside a type read as exporting only the type, and the
+                    // rule asked for the file to be named after it.
+                    /^export (?:async )?(?:const|function|class|type|interface) (\w+)/gm,
                 ),
             ]
             if (exported.length !== 1) continue

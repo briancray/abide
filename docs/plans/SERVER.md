@@ -536,13 +536,13 @@ docs/` returns five citing sites outside this file, not four:
 * three REGISTRY rows — `maxBodySize`, `response`, `ABIDE_MAX_REQUEST_BODY_SIZE` — none about the
   seed;
 * one sentence of D89, not on D89's `Assumes:` line;
-* **`docs/DECISIONS.md:1681` — D99's `Assumes: 16.4, 16.12, 16.14`.** This one is not fine. D99 is
+* **`docs/DECISIONS.md:1884` — D115's `Assumes: 16.4, 16.12, 16.14`.** This one is not fine. D115 is
   "A test holds the app, not a client of its own", and its argument is that *what a test reaches
   for a client for is the steps a wire adds, and `App.fetch` runs those steps rather than standing
-  in for them*. "The steps a wire adds" IS 16.14's list. Strike a member and D99 goes on reading as
+  in for them*. "The steps a wire adds" IS 16.14's list. Strike a member and D115 goes on reading as
   valid with its reason quietly one member smaller — nothing contradicts it, and only its premise
   moved. That is D3's shape exactly, and the earlier draft of this paragraph checked D89's
-  `Assumes:` line and inferred the rest, which is how it was missed. D99 needs re-reading, and its
+  `Assumes:` line and inferred the rest, which is how it was missed. D115 needs re-reading, and its
   entry amended to name the scope condition, in the same change.
 
 **But one member is not the whole repair, and this plan previously said it was.** Two further
@@ -750,7 +750,7 @@ does not exist.
 observe the port. Boot is the app becoming able to answer; binding a socket is `listen`'s. 37.4 says
 the hooks wrap "the real boot", and this decides what that is — so it is a clause, not an aside.
 
-This survives the worker's withdrawal but its ARGUMENT does not, and D100 is where that has to be
+This survives the worker's withdrawal but its ARGUMENT does not, and D116 is where that has to be
 repaired rather than here — see the amendment ledger. The reason as written leans on the dev host
 owning a port the app never chose; with one process there is no such host, and what is left is that
 `createApp` is where the tables, the onions and `config` land, and that 42.5 has `App.fetch` answer
@@ -1118,16 +1118,16 @@ RULEBOOK, amended:
   38.18, 38.20` and loses 38.15. The gate builds its id set from live clauses, so this row is forced
   by the withdrawal, not optional.
 
-  **`docs/DECISIONS.md:1697` — D100, and this is the one that matters.** Its `Assumes:` line reads
+  **`docs/DECISIONS.md:1900` — D116, and this is the one that matters.** Its `Assumes:` line reads
   `38.15, 38.16, 42.5`, and its **Because** opens *"`abide dev` keeps the listener on the main
   thread and replaces the worker under it, so a hook tied to the bind would run on a schedule
   belonging to the reload rather than to the app, and would report a port the host owns and the app
-  never chose."* Withdraw the worker and that entire first leg is gone — while D100 goes on reading
+  never chose."* Withdraw the worker and that entire first leg is gone — while D116 goes on reading
   as valid, nothing contradicting it, only its reason having stopped being true. **That is D3's
   shape, produced by this plan, on a decision that landed two commits ago.** The conclusion is
   probably safe: `createApp` is still where the tables, the onions and `config` land, and 42.5 still
   has `App.fetch` answer where no socket is bound, so 37.4 and 42.4 survive on the second leg. But
-  "probably safe" is what D3 was for fifty-two entries. D100's `Because` is rewritten to rest on the
+  "probably safe" is what D3 was for fifty-two entries. D116's `Because` is rewritten to rest on the
   leg that survives, and its `Assumes:` drops 38.15 and 38.16, in the same change as the withdrawal.
 
 * **27.6 widened** — what `config.invalidate` means where there is no environment to re-read.
@@ -1138,7 +1138,7 @@ RULEBOOK, amended:
   have it deciding the mount every address resolves against. **Must not move 18.5's `Host` fallback
   while widening.** *Falsifies:* "Addresses and the mount" if the widening lands differently.
 * ~~**37.4 — `onStart` wraps `createApp`, not `listen`**, so a hook cannot observe the port.~~
-  *Landed:* 37.4 amended, 42.4, D100.
+  *Landed:* 37.4 amended, 42.4, D116.
 
 RULEBOOK, new clauses:
 
@@ -1209,7 +1209,7 @@ DECISIONS, one entry per refusal, each naming what it assumes and what it decide
   unreclaimed — measured, 20 → 179 MiB over 40 graphs — and for a dirty slate across reloads. The
   entry carries the boot-to-bound number that makes restart the cheaper failure;
 * ~~**`app.fetch` reachable only through a listener**, refused for the test that then needs a
-  port.~~ *Landed:* D98, on the no-port argument alone. D99 landed beside it, refusing a generated
+  port.~~ *Landed:* D114, on the no-port argument alone. D115 landed beside it, refusing a generated
   test client — the surface a reader reaches for before they reach for `App.fetch`.
 
 ## Stages
@@ -1251,7 +1251,7 @@ Each is gated by the one before it.
    stage 1's gate reachable.
 6. **The page path.** The layout chain, the `Shell`, head merging, `route` and `online`. Gate: a
    page served under both e2e projects.
-7. The seed buffer. **16.14's amendment, the render-scope clause, D99's re-reading, and the seed-id
+7. The seed buffer. **16.14's amendment, the render-scope clause, D115's re-reading, and the seed-id
    capability clause all land first** — the last of which is not drafted yet, per "The seed id is a
    bearer capability". Stage 3 already left the struck member out, so nothing here replaces a path
    that shipped.

@@ -8,3 +8,6 @@ bun.lockb
 test-results
 playwright-report
 blob-report
+
+# bun run status, if a run is interrupted before it cleans up
+.status-*.xml
