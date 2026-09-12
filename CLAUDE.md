@@ -14,11 +14,11 @@ number rather than restating it, because a second copy drifts and only one of th
 decided. a reason a MAINTAINER needs; a reason a USER needs is a guide's.
 * `docs/BRAND.md` — positioning, voice, vocabulary, visual identity.
 
-CONVERTING A PAGE TO THE CARD SHAPE has a skill — `.claude/skills/convert-docs-page` — and
+CONVERTING A PAGE TO THE CARD SHAPE is taught by a CONVERTED page, never by a description of one.
 `OLD_SHAPE` in `packages/dogfood/tests/coverage.test.ts` is what was the backlog. IT IS EMPTY: the
 conversion is done and the set is now a RATCHET, so a page arriving in the old shape has to add its
 own slug and that is the moment somebody notices. A new page is matched against a CONVERTED one —
-any of them, `derive-a-value-from-other-values` being the worked case the skill carries. The
+any of them, `derive-a-value-from-other-values` being the worked case. The
 clauses say what must hold and a worked page says what it looks like, which is the part sixteen
 clauses across three documents do not carry.
 
@@ -37,10 +37,7 @@ the number still exists — and no test can catch a citation that still RESOLVES
 moved, which is the whole of an amendment. a decision resting on a premise the amendment removes
 goes on reading as valid in both documents, nothing contradicting it and only its REASON having
 stopped being true — which is how D3 outlived the monotonicity it was built on for fifty-two
-entries. `docs/plans/` holds citations too, and `rulebook.test.ts` now gates the two things a plan
-can be mechanically wrong about — a citation resolving to a WITHDRAWN clause, and a proposed
-RULEBOOK group that already exists. it does not gate a plan's CLAIMS, so a stale sentence in one
-still goes stale in silence. the framework is not written, so a clause is not something to check code against — what it
+entries. the framework is not written, so a clause is not something to check code against — what it
 stops is one rule being decided twice, differently, by two sessions that never met.
 
 each of the four states its own format rules at the top and `packages/dogfood/tests/rulebook.test.ts`
