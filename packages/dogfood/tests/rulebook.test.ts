@@ -572,10 +572,17 @@ function citingHalf(text: string): string {
     return start === -1 ? text : text.slice(0, start)
 }
 
-// A citation is `N.M` with no digit or dot on either side and no trailing `%` — which excludes a
-// version (`7.0.2`), a measurement (`1.45 ms`, `0.055`) and a percentage (`1.2%`), all of which
-// the plans are full of. A line that says "withdrawn" is citing the withdrawal ON PURPOSE, which
-// is a legitimate thing for a plan to do and the only escape hatch here.
+// A citation is `N.M` with no digit or dot on either side, no trailing `%`, and NO UNIT AFTER IT —
+// which excludes a version (`7.0.2`), a percentage (`1.2%`) and a measurement (`1.45 ms`, `2.7 ns`,
+// `4.60x`). The comment here claimed to exclude a measurement before the check did: `2.7 ns` in a
+// bench table read as a citation of 2.7, which is WITHDRAWN, so a plan reporting a nanosecond
+// failed the gate that looks for a dead citation. `1.45 ms` had been in `REACTIVE.md` the whole
+// time and got away with it only because 1.45 is not a clause.
+//
+// A line that says "withdrawn" is citing the withdrawal ON PURPOSE, which is a legitimate thing
+// for a plan to do and the only escape hatch here.
+const MEASUREMENT_UNIT = /^\s*(?:ns|µs|us|ms|s|x|%|MB|KB|kB|B)\b/
+
 function citedClauses(text: string): { id: string; line: number }[] {
     const out: { id: string; line: number }[] = []
     const lines = text.split('\n')
@@ -583,6 +590,8 @@ function citedClauses(text: string): { id: string; line: number }[] {
         const line = lines[index] ?? ''
         if (/withdraw/i.test(line)) continue
         for (const match of line.matchAll(/(?<![\d.])(\d+\.\d+)(?![\d.%])/g)) {
+            const after = line.slice((match.index ?? 0) + match[0].length)
+            if (MEASUREMENT_UNIT.test(after)) continue
             out.push({ id: match[1] ?? '', line: index + 1 })
         }
     }

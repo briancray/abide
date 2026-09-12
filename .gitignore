@@ -9,5 +9,5 @@ test-results
 playwright-report
 blob-report
 
-# bun run status, if a run is interrupted before it cleans up
-.status-*.xml
+# The status page's JUnit reports. Under node_modules, which is already ignored, so
+# this line is a note rather than a rule: node_modules/.cache/abide-status/

@@ -39,7 +39,7 @@ Every `Reactive` takes these. A `memo` and a `channel` add their own, and narrow
 | `transform` | `Transformer<Accepted, Stored, Failures>` | The shaping on the way to storage. Runs untracked, on the settled value, once per stored value. |
 | `store` | `Store<Stored>` | Where the value lives when the process does not. |
 | `identity` | `((value: Stored) => unknown) \| ((next: Stored, previous: Stored) => boolean)` | What makes it the same value. A projection compared by `!==`, or a comparator answering directly. |
-| `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator `identity` defaults to. Answers "not equal" wherever it cannot decide. |
+| `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator `identity` defaults to. Answers "not equal" wherever it cannot decide, and past a few thousand elements and fields it declines to decide — so a very large value wakes its readers on every write unless `identity` names what makes it the same one. |
 | `tail` | `number` | How many past values are retained. Default 1. |
 | `ttl` | `number` | The life of a retained production, in ms. Default infinity, and inert on a value with no producer. |
 | `throttle` | `number` | A change lands immediately, then at most once per window. What a window collapses depends on what moves the value — a write, a publish, a chunk, a reload. |

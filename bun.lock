@@ -17,6 +17,9 @@
       "bin": {
         "abide": "./bin/abide.ts",
       },
+      "devDependencies": {
+        "harness": "workspace:*",
+      },
     },
     "packages/dogfood": {
       "name": "dogfood",

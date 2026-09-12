@@ -22,12 +22,15 @@ import {
     SNIPPET,
 } from './renderMarkdown.ts'
 import { snippetHtml, snippetMarkdown } from './renderSnippet.ts'
+import { STATUS_PAGE } from './STATUS_PAGE.ts'
+import { STATUS_SCRIPT } from './STATUS_SCRIPT.ts'
+import { statusRoute } from './statusApi.ts'
 import { type ZipEntry, zip } from './zip.ts'
 
 const CONTENT_DIR = new URL('../content/', import.meta.url)
 const OUTPUT_DIR = new URL('../dist/', import.meta.url)
 
-type Page = {
+export type Page = {
     slug: string
     section: string
     title: string
@@ -129,8 +132,20 @@ function renderNav(pages: Page[], current: string): string {
             : ''
         html += `<li><a href="${linkTo(current, page.slug)}"${here}>${renderInline(page.nav)}</a>${stub}</li>`
     }
-    return section ? `${html}</ul></section>` : html
+    const closed = section ? `${html}</ul></section>` : html
+    // 40.45 — THE ONE SIDEBAR ENTRY THAT IS NOT DOCUMENTATION. It is rendered here
+    // rather than listed in `NAV`, and the distinction is load-bearing: `NAV` is what
+    // the coverage gates are written over — every content page reachable from it,
+    // every section showing its opening on the overview, every label held to the
+    // voice rules — and a slug in it with no `content/` file behind it would make all
+    // of them lie. Last, under its own heading, so a reader learning what a value is
+    // reaches every page of the documentation before they reach the build's suites.
+    // See docs/DECISIONS.md D127.
+    const here = current === STATUS_SLUG ? ' aria-current="page"' : ''
+    return `${closed}<section><h2>Build</h2><ul><li><a href="${linkTo(current, STATUS_SLUG)}"${here}>Status</a></li></ul></section>`
 }
+
+const STATUS_SLUG = 'status'
 
 // The heading list is read off the RENDERED body rather than the markdown, so a heading's
 // link text is the same inline HTML the heading itself got — a `code` span included.
@@ -670,6 +685,39 @@ ${hasExample ? `<script>${EXAMPLE_TABS}</script>` : ''}
 `
 }
 
+// THE DASHBOARD, THROUGH THE SAME SHELL. It gets the brand, the sidebar and the
+// reading column every other page gets, and it is the one page in the output with no
+// `content/` file behind it — 40.45 puts it in the navigation and keeps it out of
+// `NAV`, which is what the rest of this file reads pages from.
+//
+// No rail and no footer: there is no "on this page" for a page whose sections are
+// empty until somebody presses a button, and no previous or next for a page that is
+// not in the reading order.
+export function renderStatusPage(pages: Page[]): string {
+    return `<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status — abide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&family=Space+Grotesk:wght@600;700&display=swap">
+<link rel="stylesheet" href="docs.css">
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<nav>
+<a class="brand" href="index.html">abide<span>docs</span></a>
+${renderNav(pages, STATUS_SLUG)}
+</nav>
+<main id="content">
+${STATUS_PAGE}
+</main>
+<script src="status.js"></script>
+</body>
+</html>
+`
+}
+
 // MARKDOWN IS THE PAGE and HTML is derived from it, so `content/` links name the `.md`
 // — which is what makes a content file correct when it is read where it lies, on GitHub
 // or as a download, rather than only after a build. This is the derivation. An absolute
@@ -757,33 +805,45 @@ ${contents}${body}`
 // never used decoratively, so its presence always means the same thing.
 const STYLESHEET_SOURCE = new URL('../src/ui/app.css', import.meta.url)
 
-// THE SAME SERVER FOR BOTH CALLERS. `docs:serve` builds and then serves; `bun run
-// status` builds, writes its own page into the output and then serves. Handing the
-// second to the first would not work — the build starts from an empty `dist`, so
-// `docs:serve` deletes the status page on its way to serving it.
+// ONE SERVER, ONE OUTPUT. Every page including the dashboard is a file out of `dist`;
+// what this adds over a static host is `/api/*`, which is where the dashboard's
+// numbers come from.
+//
+// It used to be a SECOND server, in `harness/scripts`, on the same port, answering a
+// superset of these routes and importing `buildDocs` to get there. That is a
+// measurement package depending on the app it measures, and two servers that cannot
+// both be up. The routes live here now and the harness keeps the producers.
+//
+// The dashboard is in the sidebar and not in `NAV` — 40.45, and D127 for why.
 export function serveDocs(): void {
     const server = Bun.serve({
         port: Number(process.env.DOCS_PORT ?? 4000),
+        // BUN'S DEFAULT IS TEN SECONDS and a status run is not a page load. The unit
+        // panel streams for sixteen and the bench panel for minutes; at the default
+        // the connection was cut at eleven seconds with 22 of 23 rows delivered, and
+        // the page rendered "TypeError: network error" over a table that had just
+        // filled. 255 is Bun's ceiling, and `statusApi.ts` sends a heartbeat for the
+        // runs that outlast even that.
+        idleTimeout: 255,
         async fetch(request) {
             const path = new URL(request.url).pathname
-            const name = path === '/' ? 'index.html' : path.slice(1)
+            const answered = statusRoute(request)
+            if (answered) return answered
+            // `/status` without the extension, which is the address the server
+            // prints and the one a reader types.
+            const name =
+                path === '/'
+                    ? 'index.html'
+                    : path === '/status'
+                      ? 'status.html'
+                      : path.slice(1)
             const file = Bun.file(new URL(name, OUTPUT_DIR))
             if (await file.exists()) return new Response(file)
-            // The status page is GENERATED and this build starts from an empty
-            // `dist`, so the honest 404 is an instruction rather than a word.
-            if (name === 'status.html')
-                return new Response(
-                    '<!doctype html><meta charset="utf-8"><title>No status yet</title>' +
-                        '<p style="font:400 1rem/1.5 system-ui;max-width:34rem;margin:4rem auto">' +
-                        'No status page has been generated. Run <code>bun run status --serve</code> ' +
-                        '— it rebuilds these docs and writes this page from a real run. ' +
-                        'Add <code>--measure</code> to drive a browser over every example card.',
-                    { status: 404, headers: { 'content-type': 'text/html' } },
-                )
             return new Response('not found', { status: 404 })
         },
     })
-    console.log(`docs: serving ${server.url}`)
+    console.log(`docs:   ${server.url}`)
+    console.log(`status: ${server.url}status`)
 }
 
 export async function buildDocs(): Promise<Page[]> {
@@ -843,6 +903,11 @@ export async function buildDocs(): Promise<Page[]> {
         })
         archives.set(name, entries)
     }
+    // The dashboard's shell and its script, written by the BUILD that empties this
+    // directory rather than by a run that the next build would delete — which is the
+    // ordering D119 refused and D127 can accept, the shell carrying no results.
+    await Bun.write(new URL('status.html', OUTPUT_DIR), renderStatusPage(pages))
+    await Bun.write(new URL('status.js', OUTPUT_DIR), STATUS_SCRIPT)
     for (const [name, entries] of archives) {
         entries.sort((a, b) => (a.path < b.path ? -1 : 1))
         await Bun.write(

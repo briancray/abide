@@ -55,7 +55,16 @@ export type Work = {
     // Effect re-runs. A reader that woke when nothing it reads changed still reads
     // the right value, which is why this is asserted and the value is not.
     wakes: number | null
-    // Nodes visited per propagation. `REACTIVE.md`'s 16-against-256, module-local
+    // Nodes visited per propagation. `REACTIVE.md`'s diamond gate, module-local
     // inside `propagated` and reachable no other way.
     descents: number | null
+    // Edges CONSTRUCTED. A read with a stable dependency claims the link it already
+    // has and allocates nothing, so this row is 0 on the steady state and 1 on the
+    // read that adds a dependency — the budget row, not a total held.
+    links: number | null
+    // Probe subscriptions a MEMO holds of its own. 11.22 derives a propagated probe
+    // on the read that asks and holds none, so this row is 0 while `m.pending()` is
+    // still answering true — which is why the gate needs the positive assertion
+    // beside it: zero also passes against a memo that derives nothing.
+    subscriptions: number | null
 }

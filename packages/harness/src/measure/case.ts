@@ -59,10 +59,13 @@ let openCase: Work | null = null
 export function armCase(): void {
     const record = blankWork()
     const reactive = published()
+    // OVER THE FIELD LIST, not three named lines. The list and the zeroing pass were
+    // two copies of the same fact and only one of them was edited when the reactive
+    // core added `links` and `subscriptions`: a field named in the list and missed
+    // here is never zeroed, so case 2 inherits case 1's count — the exact defect this
+    // pass exists to prevent, with nothing saying so.
     if (reactive) {
-        reactive.wakes = 0
-        reactive.bindingRuns = 0
-        reactive.descents = 0
+        for (const field of PUBLISHED_WORK_FIELDS) reactive[field] = 0
     }
     openCase = record
     arm(record)
@@ -75,9 +78,8 @@ export function disarmCase(): Work {
     openCase = null
     const reactive = published()
     if (reactive) {
-        record.wakes = reactive.wakes
-        record.bindingRuns = reactive.bindingRuns
-        record.descents = reactive.descents
+        for (const field of PUBLISHED_WORK_FIELDS)
+            record[field] = reactive[field]
     }
     return record
 }

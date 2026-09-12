@@ -157,6 +157,8 @@ export function blankWork(): Work {
         bindingRuns: null,
         wakes: null,
         descents: null,
+        links: null,
+        subscriptions: null,
     }
 }
 

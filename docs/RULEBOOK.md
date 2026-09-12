@@ -87,6 +87,8 @@ validation refusal wherever a `schema` is declared, without the app declaring it
 
 1.7 Where a load is told apart from a value, a `Reactive` MUST be taken as a value. See D95.
 
+1.8 The members a `Reactive` carries MUST be the ones this design names. See D126.
+
 # 2. Reads
 
 2.1 A read MUST return what is held, and MUST NOT await.
@@ -190,6 +192,14 @@ escape the write.
 4.13 `s.set` MUST take the `Accepted` its factory declared, and a `Reactive` MUST carry that
 `Accepted` wherever it is passed. See D49.
 
+4.14 A producer that failed MUST fill `s.error`. See D123.
+
+4.15 A settle MUST clear `s.pending` and `s.refreshing`, however it settled. See D122.
+
+4.16 A refusal arriving over a standing one MUST wake a reader of `s.error`. See D123.
+
+4.17 A load a later write superseded MUST mint no production. See D124.
+
 # 5. Productions and identity
 
 5.1 A reader MUST be woken only when read identity changes.
@@ -233,6 +243,14 @@ head production.
 be true.
 
 5.19 A `bind:` read MUST NOT be capped.
+
+5.20 A production `identity` deemed a duplicate MUST wake a reader of a probe the settle moved.
+See D120.
+
+5.21 `s.patch` MUST NOT be gated by `identity`. See D121.
+
+5.22 `structural` MUST answer "not equal" past a bounded number of elements and fields
+visited. See D128.
 
 # 6. Retention
 
@@ -543,11 +561,15 @@ refusal.
 11.63 An implementation MUST NOT warn where two `Args` keys differ only in the case of a value.
 See D4.
 
+11.64 A `memo` recompute that read a source it had not read MUST move its propagated probes.
+See D125.
+
 # 12. Effects
 
 12.1 A `Disposer` MUST run before each rerun of its `Effect`, and once more at teardown.
 
-12.2 An `Effect` MUST run immediately, and again whenever a reactive value it read changes.
+12.2 An `Effect` MUST run immediately when its `watch` is registered. *Amended by D129, which
+moved the rerun half of this clause to 12.11 and 12.12.*
 
 12.3 *Withdrawn, superseded by REGISTRY's `watch` row.* It read "`watch` MUST hand back the way
 to stop it", which is what that row's return type says.
@@ -568,6 +590,10 @@ rejection.
 
 12.10 `s.watch` MUST be defined as `watch` narrowed to that `Reactive`, and MUST NOT be a second
 mechanism.
+
+12.11 An `Effect` MUST rerun when a reactive value it read changes.
+
+12.12 Changes to what an `Effect` read within one microtask MUST rerun it exactly once. See D129.
 
 # 13. Selections
 
@@ -1834,4 +1860,9 @@ reverses.
 40.43 A figure an `{% example %}` panel shows MUST be counted or measured, and MUST NOT be
 authored. See D118.
 
-40.44 A page reporting the build's own results MUST NOT be listed in `NAV`. See D119.
+40.44 *Withdrawn, superseded by 40.45.* It read "a page reporting the build's own results MUST NOT
+be listed in `NAV`", which kept the instrument out of the reader's way by making it reachable only
+by knowing its address. See D119, which D127 reverses.
+
+40.45 A page reporting the build's own results MUST be reachable from the documentation's own
+navigation, and MUST NOT be listed in `NAV`. See D127.

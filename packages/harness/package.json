@@ -6,7 +6,7 @@
     "description": "The three measurement lanes abide is tested and measured with, and the report leaf they share",
     "exports": {
         "./measure": "./src/measure/index.ts",
-        "./measure/vanilla": "./src/measure/vanilla/signal.ts",
+        "./measure/vanilla": "./src/measure/vanilla/index.ts",
         "./engine": "./src/engine/index.ts",
         "./server": "./src/server/index.ts",
         "./report": "./src/report/index.ts",

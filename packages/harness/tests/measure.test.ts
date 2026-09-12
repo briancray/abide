@@ -6,6 +6,7 @@ import { expect, test } from 'bun:test'
 import { gate } from 'harness/gate'
 import {
     measure,
+    PUBLISHED_WORK_FIELDS,
     PUBLISHED_WORK_KEY,
     type PublishedWork,
     patchSet,
@@ -203,6 +204,16 @@ function publish(record: Partial<PublishedWork> | undefined): void {
     else global[PUBLISHED_WORK_KEY] = record
 }
 
+// Built FROM the field list rather than spelled out. A fixture that names the three
+// fields the list happened to hold when it was written starts failing for the wrong
+// reason the moment abide publishes a fourth — which is what happened when `links`
+// and `subscriptions` landed, and the failure read as the wire being broken.
+function fullRecord(): PublishedWork {
+    const record = {} as PublishedWork
+    for (const field of PUBLISHED_WORK_FIELDS) record[field] = 0
+    return record
+}
+
 gate(
     'the wake counter is read off the published record and zeroed per case',
     {
@@ -210,24 +221,21 @@ gate(
         // which is the same defect as a single always-live DOM record one level up.
         revert: () => {
             let wakes = 0
-            publish({
-                get wakes() {
-                    return wakes
-                },
-                set wakes(next: number) {
-                    if (next !== 0) wakes = next
-                },
-                bindingRuns: 0,
-                descents: 0,
-            } as PublishedWork)
+            publish(
+                Object.defineProperty(fullRecord(), 'wakes', {
+                    get: () => wakes,
+                    set: (next: number) => {
+                        if (next !== 0) wakes = next
+                    },
+                }) as PublishedWork,
+            )
             return () => publish(undefined)
         },
         worth: { wakes: 3 },
     },
     () => {
         const global = globalThis as Record<string, unknown>
-        if (!global[PUBLISHED_WORK_KEY])
-            publish({ wakes: 0, bindingRuns: 0, descents: 0 })
+        if (!global[PUBLISHED_WORK_KEY]) publish(fullRecord())
         try {
             const first = measure(() => {
                 ;(global[PUBLISHED_WORK_KEY] as PublishedWork).wakes += 3
@@ -257,6 +265,8 @@ test('the rows this lane does not count read as absent, not as zero', () => {
     expect(work.wakes).toBeNull()
     expect(work.bindingRuns).toBeNull()
     expect(work.descents).toBeNull()
+    expect(work.links).toBeNull()
+    expect(work.subscriptions).toBeNull()
 })
 
 // THE THIRD CASE, and it is the worst of the three rather than the mildest. A record
@@ -270,9 +280,11 @@ test('the rows this lane does not count read as absent, not as zero', () => {
 // 16 nodes visited against 256 — passes on that 0. Nothing anywhere says a word.
 test('a published record missing a field throws naming it', () => {
     try {
-        publish({ wakes: 0, bindingRuns: 0 })
+        const missing = fullRecord() as Partial<PublishedWork>
+        delete missing.descents
+        publish(missing)
         expect(() => measure(() => {})).toThrow(/numeric descents/)
-        publish({ wakes: 0, descents: 0, bindingRuns: 'many' } as never)
+        publish({ ...fullRecord(), bindingRuns: 'many' } as never)
         expect(() => measure(() => {})).toThrow(/numeric bindingRuns/)
     } finally {
         publish(undefined)

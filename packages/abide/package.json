@@ -21,6 +21,9 @@
         "#server": "./src/server/index.ts",
         "#server/*": "./src/server/*"
     },
+    "devDependencies": {
+        "harness": "workspace:*"
+    },
     "scripts": {
         "typecheck": "tsc -p tsconfig.json"
     },

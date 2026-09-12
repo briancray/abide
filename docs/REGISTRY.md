@@ -50,7 +50,7 @@ Accepted, Failures>` and on `Channel` is the inner value's own `Accepted`. Then 
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Reactive` | `Reactive<Stored = undefined, Accepted = Stored, Failures = never, Produced = Stored>` | The value type every producer in this design hands back. | 1.1, 1.3, 1.4, 1.5, 1.7, 9.3 |
+| `Reactive` | `Reactive<Stored = undefined, Accepted = Stored, Failures = never, Produced = Stored>` | The value type every producer in this design hands back. | 1.1, 1.3, 1.4, 1.5, 1.7, 1.8, 9.3 |
 | `Accepted` | `unknown` | What a factory and a write take, before the gates run. | 4.1, 4.2 |
 | `Stored` | `unknown` | What is held, and what a read returns. | 4.7, 5.2 |
 | `Failures` | union of `Failed` | What a read hands back in place of a value. | 1.4 |
@@ -68,8 +68,8 @@ Accepted, Failures>` and on `Channel` is the inner value's own `Accepted`. Then 
 | `schema` | `Schema<Accepted>` | The gate on the way in. | 4.3, 4.4, 4.5, 1.4 |
 | `transform` | `Transformer<Accepted, Stored, Failures>` | The shaping on the way to storage. | 4.6, 4.7, 4.8, 4.9 |
 | `store` | `Store<Stored>` | Where the value lives when the process does not. | 8.1, 8.2, 8.3, 8.14 |
-| `identity` | `((value: Stored) => unknown) \| ((next: Stored, previous: Stored) => boolean)` | What makes it the same value. | 5.1, 5.2, 5.3, 5.4, 5.6 |
-| `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator `identity` defaults to. | 5.4, 5.6 |
+| `identity` | `((value: Stored) => unknown) \| ((next: Stored, previous: Stored) => boolean)` | What makes it the same value. | 5.1, 5.2, 5.3, 5.4, 5.6, 5.20, 5.21 |
+| `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator `identity` defaults to. | 5.4, 5.6, 5.22 |
 | `tail` | `number` | How many past productions are retained. | 6.1, 6.2, 6.3 |
 | `ttl` | `number` | The life of a retained production. | 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10 |
 | `throttle` | `number` | A ceiling on how often the value changes. | 5.11, 5.12, 5.14, 5.15, 5.17, 5.18 |
@@ -93,19 +93,19 @@ Accepted, Failures>` and on `Channel` is the inner value's own `Accepted`. Then 
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `s.set` | `(value: Accepted \| Promise<Accepted>) => void \| Failures` | Write the current value. | 3.14, 4.1, 4.2, 4.9, 4.13, 5.7, 5.8 |
-| `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutate in place and mint a production for it. | 5.9, 5.10 |
+| `s.set` | `(value: Accepted \| Promise<Accepted>) => void \| Failures` | Write the current value. | 3.14, 4.1, 4.2, 4.9, 4.13, 4.17, 5.7, 5.8 |
+| `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutate in place and mint a production for it. | 5.9, 5.10, 5.21 |
 
 ### Probes
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `s.pending` | `() => boolean` | A load is in flight and there is nothing trustworthy to show. | 3.1, 3.2, 3.3, 3.4, 3.6, 3.7, 7.9, 11.20, 11.22 |
-| `s.refreshing` | `() => boolean` | An update is owed over a value still being served. | 3.1, 3.2, 3.3, 3.5, 3.14, 5.18, 7.5, 11.20 |
+| `s.pending` | `() => boolean` | A load is in flight and there is nothing trustworthy to show. | 3.1, 3.2, 3.3, 3.4, 3.6, 3.7, 4.15, 7.9, 11.20, 11.22, 11.64 |
+| `s.refreshing` | `() => boolean` | An update is owed over a value still being served. | 3.1, 3.2, 3.3, 3.5, 3.14, 4.15, 5.18, 7.5, 11.20 |
 | `s.done` | `() => boolean` | It has finished, however it finished. | 3.1, 3.2, 3.3, 3.8, 3.9, 7.12, 11.20 |
 | `s.success` | `() => boolean` | There is a landed value to serve. | 3.1, 3.2, 3.3, 3.10, 3.11, 3.13 |
 | `s.streaming` | `() => boolean` | It is currently producing chunks. | 3.1, 3.2, 3.3, 3.15, 8.7 |
-| `s.error` | `() => unknown` | The standing refusal. | 3.1, 3.2, 3.3, 3.10, 4.10, 4.11, 4.12 |
+| `s.error` | `() => unknown` | The standing refusal. | 3.1, 3.2, 3.3, 3.10, 4.10, 4.11, 4.12, 4.14, 4.16 |
 | `s.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | Whether a caught failure is the one named. | 3.1 |
 
 ### Triggers
@@ -129,7 +129,7 @@ Accepted, Failures>` and on `Channel` is the inner value's own `Accepted`. Then 
 | --- | --- | --- | --- |
 | `Memo` | `<Stored, Args, Accepted = Stored, Failures = never, Produced = Stored>((args: Args) => Reactive<Stored, Accepted, Failures, Produced>) & { invalidate(pattern?: Partial<Args>): void; refresh(pattern?: Partial<Args>): void }` | What a keyed memo is: a factory carrying the two triggers. | 4.13, 11.2, 11.4 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The key. | 11.26, 11.27, 11.28, 11.29, 11.31, 11.33 |
-| `memo` | `<Computed, Stored = AdoptedValue<Computed>, Failures = never>(body: () => Computed, options?: MemoOptions<AdoptedValue<Computed>, Stored, Failures>) => Reactive<Stored, AdoptedValue<Computed>, AdoptedFailures<Computed> \| Failures, AdoptedProduced<Computed>>` | The unkeyed factory. | 41.7, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.21, 11.34, 11.35, 11.57, 11.58, 11.59, 11.60, 11.61 |
+| `memo` | `<Computed, Stored = AdoptedValue<Computed>, Failures = never>(body: () => Computed, options?: MemoOptions<AdoptedValue<Computed>, Stored, Failures>) => Reactive<Stored, AdoptedValue<Computed>, AdoptedFailures<Computed> \| Failures, AdoptedProduced<Computed>>` | The unkeyed factory. | 41.7, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.21, 11.34, 11.35, 11.57, 11.58, 11.59, 11.60, 11.61, 11.64 |
 | `memo` | `<Computed, Args, Stored = AdoptedValue<Computed>, Failures = never>(body: (args: Args) => Computed, options?: MemoOptions<AdoptedValue<Computed>, Stored, Failures, Args>) => Memo<Stored, Args, AdoptedValue<Computed>, AdoptedFailures<Computed> \| Failures, AdoptedProduced<Computed>>` | The keyed factory. | 41.7, 11.2, 11.3, 11.4, 11.6, 11.7, 11.8, 11.25, 11.34, 11.35, 11.59, 11.61, 11.62 |
 
 The three aliases a `memo` body's return type is unwrapped through are declared rather than listed,
@@ -196,7 +196,7 @@ type AdoptedFailures<T> = T extends Reactive<any, any, infer Failures, any> ? Fa
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Disposer` | `() => void` | What tears down the previous run. | 12.1 |
-| `Effect` | `() => void \| Disposer` | What runs on change. | 12.2, 12.9, 14.6 |
+| `Effect` | `() => void \| Disposer` | What runs on change. | 12.2, 12.9, 12.11, 12.12, 14.6 |
 | `watch` | `(effect: Effect) => () => void` | Begins a watch over whatever the effect reads. | 12.2, 12.5, 12.6, 12.7, 12.8 |
 | `watch` | `<Stored>(sources: Reactive<Stored> \| Reactive<Stored>[], effect: Effect) => () => void` | The narrowed form, over named sources. | 12.4 |
 

@@ -450,6 +450,67 @@ paid on every page. That number is the one to defend or shrink.
    `nextSibling !== before` guard and watch the swap go from 2 moves to 500. The number the gate
    reports with the fix out is what the gate is worth.
 
+6. **A ROW BINDING OVER A SHARED VALUE HAS TO INTERPOSE A MEMO, and the number is already taken.**
+   `packages/abide/tests/reactive/usecases.test.ts` measures the same 500-row selection two ways
+   with nothing between them but the binding shape: an effect per row reading the shared `selected`
+   state is **500 class writes**, and a `memo` per row with the effect reading the memo is **2** —
+   the hand-written arm's count. Both wake 500 times in the cheap layer; what collapses is the DOM
+   write, because 498 of those memos produce the value they already had and 5.2 stops the
+   propagation there. So a compiled `class:` or attribute slot whose expression reads a value the
+   whole list shares is not free to bind the state directly, and "bindings per row" is the wrong
+   number to gate alone — it is bindings per row AND writes per row, which part company at exactly
+   this. The scheduler cannot help here and D129 does not: coalescing is per tick, and these 500
+   writes are one tick.
+
+7. **A WINDOW SLOT CANNOT SUBSCRIBE THROUGH `s.tail` ALONE, and the failure is silent.** 2.8 makes
+   `s.tail` a cursor — replay the retained snapshot, then continue live — and the Terms table has a
+   READ as a call to `s` or `s.peek` and nothing else. So a compiled `{#for line of
+   transcript.tail(64)}` whose binding calls `tail` synchronously joins no flow: measured, an effect
+   written that way woke **zero times over two hundred chunks** while rendering the first window
+   forever. The emitted form has to read the value for the subscription and materialise the window
+   from the tail, which is what the chat scrollback case in `usecases.test.ts` does — and with it, the
+   arm is at exact parity with the hand-written one, 12,800 writes over 200 ticks and nothing
+   created. The alternative the clause actually points at is the ASYNC cursor (`for await`), which is
+   a different emitted shape and owes its own case.
+
+8. **THE TARGET FOR THE RECONCILE IS ALREADY MEASURED, and the hand-written arm is not it.**
+   `usecases.test.ts` drives the minimal insert-into-place reconcile from the graph, which is what a
+   person writes and is the floor this document's item 2 prices against. Its cost is the DISTANCE, not
+   the change: a two-row swap is **2 elements moved at n=500 and 2 at n=10,000**, and a swap across
+   8,990 positions is **8,990** — the node displaced stands in the cursor's way for everything
+   between. A reconcile that tracked positions moves two. So item 2's ratio has a number to beat
+   rather than a direction, and it is the long-range swap that distinguishes the two designs, not the
+   adjacent one.
+
+   What is already at parity is the part that is abide's: every one of those counts is identical
+   between the graph-driven arm and the same reconcile called by hand, so driving it reactively adds
+   no DOM work. And a re-sort that produces the SAME order costs **0 moves and 0 wakes** — 5.2's
+   cutoff reaching the DOM, the same way the per-row memo turns 500 class writes into 2. Those are
+   the two places the graph does the renderer's work for it, and both are counts a compiled slot
+   inherits rather than earns.
+
+   The full reverse (**499 moves**) and a rotation (**493**) are there for correctness, not cost:
+   each asserts the WHOLE resulting key order, which is what catches a transposition that leaves
+   both ends right.
+
+9. **A KEYED BLOCK CANNOT BE COMPILED AS PER-ROW POSITION BINDINGS, and the swap case alone would
+   have sold it.** The design is the obvious one after items 6 and 8 — derive each row's index from
+   the order, let the row's own effect place itself, and let 5.2's cutoff mean only the rows that
+   moved wake. Measured at n = 2,000, a swap across 1,890 positions: **2 elements moved, 2 wakes,
+   2,000 place-memo body runs — and the resulting order WRONG.** A rotation by seven: **2,000 moves,
+   2,000 wakes, and wrong again.**
+
+   Two independent refusals, and each is enough. **It is not correct:** a row placing itself at index
+   *i* computes *i* against the WANTED order while the document is mid-flight, so the second insert's
+   index no longer means what it meant — placement is relative to nodes that are themselves moving,
+   which is what makes a reconcile a whole-list operation rather than a per-row one. **And the saving
+   is not there:** a re-sort moves every row, so the rotation wakes all n and moves all n, which is
+   what the whole-list walk already costs without being wrong.
+
+   The 2-against-8,990 on the swap is exactly the trap this document's item 4 is about. A
+   one-change-per-step fuzz and a swap-only cost case would both have passed it, at 4,495x fewer
+   moves, with the list corrupted on every other reorder.
+
 ## What the docs owe
 
 RULEBOOK, as clauses under a group that declares itself FREE-STANDING — none of these is a name an

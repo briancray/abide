@@ -844,17 +844,17 @@ What is left:
   comments with the number each reports, verified by hand once. Adding a switch to make them
   installable is a flag with one live value in production, which this repo bans — so either
   `gate()` is for the framework's gates and this is fine, or something else is needed here.
-* **How the reactive read/write ratio gets measured.** Still unmeasured, but it is now a one-line
-  edit in a named place rather than a design question. CLAUDE.md says which of the three retention
-  variants is correct is decided by the read/write ratio, `REACTIVE.md` carries the same trichotomy
-  and names no producer, and nothing here measures one. It is the same global-counter mechanism as
-  the wake counter, and the counter is now a leaf: two more entries in
-  `PUBLISHED_WORK_FIELDS` and two more rows on `Work`, and 44.24 makes abide failing to publish them
-  a throw rather than a pair of zeroes.
-* **What the dev flag publishing the counter is called.** Undecided, and it is abide's to name rather
-  than this document's — 44.25 pins the ADDRESS and the shape, and says nothing about what turns
-  publication on. The framework has no flags yet, so there is nothing to be uniform with; the first
-  one to land decides it.
+* **How the reactive read/write ratio gets measured.** Still unmeasured, and the mechanism is now
+  half built rather than proposed: `PUBLISHED_WORK_FIELDS` gained `links` and `subscriptions` when
+  `REACTIVE.md`'s phases 0a–3 landed, and 44.24 made the fixtures in `measure.test.ts` fail the
+  moment abide published a record without them — which is the refusal working, and the reason those
+  fixtures are built FROM the field list now instead of naming three fields each. A read counter and
+  a write counter are two more entries and two more rows. `entries` is deliberately NOT among them:
+  the keyed `memo` is phase 6 and a published field nothing increments is D113's silent zero.
+* **What the dev flag publishing the counter is called** is DECIDED, by abide, as 44.25 left it:
+  `ABIDE_WORK`, read off `process.env` on a server and off `globalThis` in a browser. See
+  `REACTIVE.md`'s "Still undecided", where it is now recorded as closed, and
+  `packages/abide/src/shared/reactive/counters.ts`, which is the publisher.
 * **An identity-stability counter.** Unchanged, and still in no plan's gate table. Distinct
   identities produced per N writes catches both directions of CLAUDE.md's mirror-image reactive
   traps and is three lines.

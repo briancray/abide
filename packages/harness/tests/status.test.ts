@@ -20,6 +20,9 @@ const REPORT = `<?xml version="1.0" encoding="UTF-8"?>
   <testsuite name="b.test.ts" file="b.test.ts" tests="1" failures="0" skipped="1" time="0.02">
     <testcase name="skips &amp; waits" time="0" />
   </testsuite>
+  <testsuite name="c.spec.ts" hostname="harness-webkit" tests="1" failures="0" skipped="1" time="0">
+    <testcase name="not on this engine" classname="c.spec.ts"><skipped/></testcase>
+  </testsuite>
 </testsuites>`
 
 test('a failure comes back with the number it reported', () => {
@@ -27,6 +30,7 @@ test('a failure comes back with the number it reported', () => {
     expect(suites.map((suite) => suite.file)).toEqual([
         'a.test.ts',
         'b.test.ts',
+        'c.spec.ts',
     ])
     expect(suites[0]).toMatchObject({ tests: 2, failures: 1, skipped: 0 })
     expect(suites[1]).toMatchObject({ tests: 1, failures: 0, skipped: 1 })
@@ -57,4 +61,27 @@ test('each runner is pointed at its report the way it accepts', () => {
         args: ['--reporter=junit'],
         environment: { PLAYWRIGHT_JUNIT_OUTPUT_NAME: '/tmp/r.xml' },
     })
+})
+
+// NaN DOES NOT SURVIVE JSON, and that is the whole of this. A skipped playwright case
+// carries no `time`, so the parse was `NaN`; `JSON.stringify` writes `NaN` as `null`,
+// and the status page — on the other side of a wire these two cannot share a type
+// across — received a null where this type says `number` and threw on the first
+// `.toFixed`. One suite's two skipped cases took the whole browser panel down and
+// reported a TypeError over a run that had passed.
+//
+// Reverted — drop the `|| 0` — and the round trip below comes back null.
+test('a case with no duration survives a round trip as a number', () => {
+    const skipped = parseJUnit(REPORT).at(-1)?.cases[0]
+    expect(skipped?.milliseconds).toBe(0)
+    expect(skipped?.skipped).toBe(true)
+    expect(JSON.parse(JSON.stringify(skipped)).milliseconds).toBe(0)
+})
+
+// Two projects over one spec file produce two `<testsuite>` entries with the same
+// `name`, and a reader keyed on the file alone shows one and drops the other.
+test('a suite carries the project that ran it', () => {
+    const suites = parseJUnit(REPORT)
+    expect(suites.at(-1)?.project).toBe('harness-webkit')
+    expect(suites[0]?.project).toBe('')
 })

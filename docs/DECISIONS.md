@@ -1966,6 +1966,9 @@ leaving one standing.
 
 # D119. The status page is beside the docs, not in them
 
+*Reversed by D127, on the half about reachability. What it decided about `content/` and the voice
+rules still holds and D127 restates none of it.*
+
 **Refused:** a section in the documentation nav carrying the build's own numbers.
 
 **Because** a page in `content/` is governed as documentation and would have to earn all of it —
@@ -1982,13 +1985,233 @@ generated one could not have, which is that a reader leaves it open and asks it 
 while they work.
 
 It holds no results and caches nothing. Every figure arrives from an endpoint somebody triggered,
-the slow one arrives a row at a time, and the site it reports on is served from the same address.
-It shares the docs stylesheet, so a number on it looks like the numbers a card shows.
+every one of them arrives a row at a time, and the site it reports on is served from the same
+address. It shares the docs stylesheet, so a number on it looks like the numbers a card shows.
+
+It is the DOGFOOD APP'S server that owns it, not a second one. The first spelling put the page in
+the measurement package and had it import the docs build to get there, which is the package that
+measures depending on the app it measures — and two servers claiming one port, only one of which
+could be up. "Beside the docs" is about the NAV and about `content/`; it was never about which
+package holds the file.
 
 **Consequence:** it is reachable only by knowing the address, which is the cost of keeping it out
-of the way. `bun run status` prints it. And nothing is available offline — there is no artifact,
-so a run cannot be filed or compared against a later one.
+of the way. `bun run status` prints it, and so does `bun run docs:serve` — they are one command
+now, and the second name is an alias kept because it is the one a maintainer types. And nothing is
+available offline — there is no artifact, so a run cannot be filed or compared against a later one.
 
 **Assumes:** 40.16.
 
 **Decides:** 40.44.
+
+# D120. A duplicate production still moves the probes
+
+**Refused:** returning from the write path the moment `identity` answers "same value", so a matching
+production changes nothing at all.
+
+**Because** 5.2 is about what a READER is woken for, and a probe reader is not a reader under the
+Terms table. Read as a gate on the whole transition, `s.set(fetchSameThing())` left the load it
+settled still in flight: the spinner spun forever over a value that had already arrived and been
+recognised.
+
+**Decides:** 5.20.
+
+**Assumes:** 5.2 scopes its refusal to retention and to waking, and 4.15 is what ends the load.
+
+# D121. A patch is never a duplicate
+
+**Refused:** routing `s.patch` through the same duplicate gate `s.set` goes through.
+
+**Because** REGISTRY has `s.patch` mutate IN PLACE, so what would be compared is the held value
+against itself — one reference, already mutated. Under 5.4's structural default that answers "equal"
+for every patch there has ever been, so every `s.patch` changed the value and woke nobody.
+
+**Decides:** 5.21.
+
+**Assumes:** 5.4 makes `structural` the default, and 5.9 has the patch replace the head production
+rather than mint one to compare.
+
+# D122. A settle ends the in-flight probes however it settled
+
+**Refused:** clearing them on an accepted production alone, which is the one path 7.11 names.
+
+**Because** a load can end three other ways — a schema refusal, a transform refusal, a rejection —
+and each of those returns before it would reach an accepted production's own clearing. Measured on
+the sketch this replaced: a load whose payload the schema rejected kept `s.pending` true for the
+life of the value, with the refusal already standing in `s.error`.
+
+**Decides:** 4.15.
+
+**Assumes:** 7.11 covers the accepted arm and says nothing about the other three, and 7.5 is scoped
+to `s.refresh` rather than to the load `s.set` starts.
+
+# D123. The error is a channel with a token, not a bit
+
+**Refused:** waking a reader of `s.error` from the status transition alone.
+
+**Because** a transition is an XOR and a second refusal arriving over a standing one is the same bit
+set twice, whose XOR is zero — the reader went on rendering the first refusal while the second sat
+in `s.error`. The value channel has the same shape and answers it with a version counter; the error
+channel needs its own. Filling `s.error` from a failed producer is what makes the two questions 2.3
+and 2.4 ask separable at all.
+
+**Decides:** 4.14, 4.16.
+
+**Assumes:** 4.10 fills `s.error` for a refused write and names no other filler, and 2.3, 2.4 and
+2.5 disagree about which failure makes a read throw.
+
+# D124. Every write supersedes a load in flight
+
+**Refused:** an epoch bumped only where a second load starts.
+
+**Because** the races that matter are not load-against-load. `s.set(slowFetch())` followed by
+`s.set(5)` landed the stale asynchronous value over the newer synchronous one eight hundred
+milliseconds later, and the same hole let a rejection fill `s.error` on a value a write had already
+made good.
+
+**Decides:** 4.17.
+
+**Assumes:** 4.1 lets a write take a settled value or a load, so the two arrive on one path.
+
+# D125. A propagated probe is re-derived when the source set moves
+
+**Refused:** resolving a probe subscription against the value's own token, the way a read is
+resolved.
+
+**Because** 11.22 derives a propagated probe from the sources a body READ, and a recompute can reach
+a different source without changing either the value or the status of the `memo` itself.
+`memo(() => which() ? settled() : loading())` flipping to the second arm moves neither, so a reader
+of that memo's `s.pending` resolved every token as unmoved, stayed clean, and never showed the
+spinner.
+
+**Decides:** 11.64.
+
+**Assumes:** 11.22 forbids holding a subscription per source for a propagated probe, which is what
+makes the source set the only thing the probe is derived from.
+
+# D126. The member set is closed, so the face is a shared prototype
+
+**Refused:** a `Proxy` with an `apply` trap, and a per-node prototype, both of which serve an
+open-ended member set.
+
+**Because** 11.15 reads as one — "members the adopted `Reactive` declares beyond the common face" —
+and against an open set a shared prototype loses. The set is not open: REGISTRY types `Room` as the
+common face plus one name, the keyed memo's forms are common-face names with a widened signature,
+and only `state`, `memo` and `channel` mint a `Reactive`. What is dynamic is the delegation TARGET,
+and a target is a field read. A `Proxy` would put a trap on `s()` — the per-row read from a template
+slot, the hottest call in the design — to serve one name on one producer kind, and a per-node
+prototype gives every adopting face its own map, which makes `s.pending()` megamorphic.
+
+**Assumes:** 11.15's open-ended reading is closed by the producers REGISTRY names, and 31.8's
+value-method half stays a question the compiler answers inside a `.abide` file rather than one the
+runtime answers. **If either premise moves, the face design moves with it.**
+
+**Decides:** 1.8.
+
+# D127. The status page is in the sidebar, and still not in `NAV`
+
+**Refused:** leaving the build's dashboard reachable only by typing its address, which is what D119
+settled for.
+
+**Because** the cost D119 accepted turned out to be the whole of it: an instrument nobody can click
+is an instrument nobody opens, and the one it was protecting the reader from — a wall of red suites
+in front of somebody learning what a value is — is answered by WHERE the link sits rather than by
+whether one exists. It is one line at the foot of the sidebar, under its own heading, after every
+section of the documentation.
+
+`NAV` stays untouched, and that is the part of D119 this keeps. `NAV` is what the coverage gates are
+written over — every content page reachable from it, every section showing its opening, every label
+held to the voice rules — and a slug in it with no `content/` file behind it would make all of them
+lie. The link is rendered beside the navigation rather than listed in it, so the two questions
+"what documentation is there" and "how do I reach the dashboard" keep separate answers.
+
+It is GENERATED again, which D119 refused and could not have accepted: the page it refused carried
+RESULTS, so a build that emptied the output destroyed a run somebody had taken. What is generated
+now is the shell, the numbers still arrive from endpoints somebody triggered, and the build that
+writes it is the same build that empties the directory first.
+
+**Assumes:** 40.1 keeps the documentation site one package, so the dashboard and the docs are served
+by one server and a relative link between them resolves.
+
+**Decides:** 40.45.
+
+# D128. The structural walk is bounded, and a scalar leaf is answered in place
+
+**Refused:** the unbounded recursive walk this replaced — one call per field, and no ceiling on the
+size of the value being compared.
+
+**Because** 5.2 gates every production on this walk, so it runs per write over the whole value: a
+20,000-row array compared 20,000 rows before deciding whether to wake anybody, at 663 µs, where the
+graph walk the gate exists to protect is 40 ns. The gate had become the work it was there to
+prevent, and no clause bounded it — 5.6's `DEPTH_LIMIT` bounds DEPTH, and a wide value is not a deep
+one.
+
+Two measurements decided the shape rather than one, and the first was a wrong guess worth recording.
+**The allocation is not the cost.** Taking `Object.keys` out of the object arm — a `for…in` pass and
+a count in place of two arrays per object — came back at 0.97-1.08x over four sizes, level, and JSC
+does not charge for them. **The recursive CALL is the cost:** answering a primitive in the loop that
+found it, without descending, is 1.6-1.7x — 33.4 ns per three-field row down to 20.0 at n = 10,000.
+
+The ceiling is what turns what is left into a constant. 663 µs at 20,000 rows becomes 46, and the
+answer past the ceiling is the one 5.6 already gives wherever the walk cannot decide. What that
+degrades to is a reader woken when it need not have been, which is what a reference comparison does
+on every re-wrapped value — so the floor this falls back to at 20,000 rows is the floor the previous
+design sat on at every size. `identity` as a projection (22 ns against 18,477 for the same write)
+and `s.patch` (14 ns, and 5.21 keeps it off this path) are the two spellings that opt out of the
+walk entirely.
+
+**Refused also:** holding the visit counter in a module binding, and holding it in a record
+allocated per call. Both cost more than the walk they bound — the module-level arm measured 35 µs
+where the unbounded walk of the same value was 26, and the per-call record was slower than no
+ceiling at all at n = 500. The budget is a parameter in and a number out, which keeps it a local in
+every frame and allocates nothing.
+
+**Assumes:** 5.6 is what licenses the answer given past the ceiling, 5.2 is what makes the walk
+per-write, and 5.21 keeps `s.patch` off it.
+
+**Decides:** 5.22.
+
+# D129. An effect's reruns are coalesced per microtask, not taken by the writer
+
+**Refused:** the eager flush this replaced — every write draining the effect queue before `s.set`
+returned, which is what "and again whenever a reactive value it read changes" was implemented as.
+
+**Because** it made a tick of writes quadratic in the reader's own cost. Every write reaches every
+reader of it, so N writes into one shared reader ran that reader N times, and a reader over N values
+costs N: at 10,000 row states with one aggregate over them, one tick of writes took **1,203 ms and ran
+the reader 10,000 times**, where the same graph with the reruns coalesced takes **1.07 ms and runs it
+once**. The hand-written arm runs it once too, which is what says the 10,000 was not work — it was the
+same answer computed 9,999 times and thrown away.
+
+**The cost it removes is a DOM cost, and that is why the case bodies are DOM cases.** Two hundred
+dashboard metrics landing in one tick wrote the total tile 200 times and now write it once; a
+thousand chat tokens arriving together painted the transcript 1,000 times and now paint it once. Both
+are in `usecases.test.ts` as counts rather than durations, because a count is what carries from
+happy-dom to a browser.
+
+**What it does not touch, and both are gated beside it.** A read still PULLS, so a memo read after a
+write in the same statement is the fresh value and no clause about reading moved. And a fan-OUT is
+unchanged: one write with 200 readers is still 200 reruns, because each of those readers is owed one
+— a scheduler coalescing per reader rather than per tick would report one and be wrong. The control
+for that is the chat case's second shape, a thousand tokens one tick apart, which still paints a
+thousand times.
+
+**Refused also:** coalescing per animation frame. A frame is the right grain for a paint and the
+wrong one for everything else — a server has no frames, an `await` on a value is not a paint, and a
+test would have to drive a clock to observe anything. A microtask is available in both substrates and
+is strictly fewer runs than per write; what a frame would add belongs to whatever owns the paint.
+
+**What it costs, stated rather than buried:** a settled write is no longer zero microtask ticks. It
+is one tick per TICK rather than one per write, so the ceiling is unchanged and the amortised cost
+falls with every write in the burst, but the budget row that read 0 now reads 1 and
+`plans/REACTIVE.md` says so. The synchronous drain stays reachable for the two callers that cannot
+wait: 12.6's server reader, where a render has to finish inside the request, and a test asserting what
+a write did.
+
+**A rerun cancelled by a teardown in the same tick is not a rerun lost.** A `watch` stopped before
+the drain is skipped by it, which is 12.1 holding — the disposer ran, and an effect that no longer
+exists has nothing owed to it.
+
+**Assumes:** 12.6 keeps the server reader synchronous and off the effect queue, 12.11 is what owes a
+rerun at all, and 2.1 keeps a read a pull so that deferring a rerun defers no value.
+
+**Decides:** 12.12.

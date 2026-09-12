@@ -17,6 +17,8 @@ export const PUBLISHED_WORK_FIELDS = [
     'wakes',
     'bindingRuns',
     'descents',
+    'links',
+    'subscriptions',
 ] as const
 
 export type PublishedWork = Record<

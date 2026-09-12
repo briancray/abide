@@ -23,7 +23,9 @@
         "e2e:harness": "playwright test -c playwright.harness.config.ts",
         "verify": "bun run lint && bun run typecheck && bun run test",
         "bench": "bun packages/harness/scripts/bench.ts",
-        "status": "bun packages/harness/scripts/serveStatus.ts",
+        "bench:retention": "bun packages/abide/bench/retention.ts",
+        "bench:reactive": "bun packages/abide/bench/reactive.ts",
+        "status": "bun run --filter dogfood docs:serve",
         "test:gates": "HARNESS_VERIFY_GATES=1 bun test packages/abide packages/harness/tests packages/dogfood/tests"
     },
     "devDependencies": {
