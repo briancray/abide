@@ -12,7 +12,7 @@ around.
 | `config()` | typed settings, validated at start — and it throws in a browser |
 | `principal.authenticated` | whether this caller presented something the server accepted |
 | `health` | the account of the app this call is in, for whatever is watching it |
-| `log.info(…)` | structured logs, on channels you turn on one at a time |
+| `log.info(…)` | structured logs, under namespaces you turn on one at a time |
 
 ```abide abide
 {#if principal.authenticated}<a href="/account">Account</a>{/if}
@@ -36,7 +36,7 @@ Read on: [Auth & principal](know-who-is-calling.md) ·
 
 ## Logs, traces and health
 
-Logs arrive on channels you turn on one at a time, a trace id follows one request
+Logs go under namespaces you turn on one at a time, a trace id follows one request
 across whatever it calls, and health reports the version and uptime under it.
 
 Read on: [Logging](record-what-happened.md) ·

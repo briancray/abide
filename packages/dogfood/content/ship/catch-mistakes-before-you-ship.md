@@ -17,17 +17,16 @@ abide check src/ui src/shared
 
 ## The errors it finds that `tsc` cannot
 
-Every one of these is detectable in syntax, which is why the ergonomic spelling does not have
-to be given up to make the strict one safe:
+Every one of these is caught before the code runs, which is why the ergonomic spelling does not
+have to be given up to make the strict one safe:
 
 | | |
 | --- | --- |
-| assigning a `Reactive` to a name that holds one | names both repairs |
 | a read spelled `foo()` with an argument | `foo` is not a function you call |
 | `props()` from a `<script module>` block | there is no instance to read props of |
 | a prop passed to a component that never calls `props()` | it accepts none |
 | a `Failed` built and discarded | the refusal did not happen |
-| a memo handed to two handlers | names both |
+| a `reactive` handed to two handlers | names both |
 | a nested object argument on a `GET` or `DELETE` | names the method, and says a `POST` is the fix |
 | two files mounting at one address | names both files |
 
@@ -65,7 +64,7 @@ abide check && abide build && bun test
 ```
 
 `check` first, because a type error is the cheapest failure to report and the fastest to get.
-`build` next, because it catches the mount collisions and the memo-shared-between-handlers
+`build` next, because it catches the mount collisions and the value-shared-between-handlers
 errors that only a whole route table can see.
 
 Read on: [Build & start](build-and-serve-the-app.md)

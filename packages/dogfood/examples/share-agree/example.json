@@ -1,5 +1,5 @@
 {
-    "title": "`state.share(key, build)` — get-or-create in this scope",
+    "title": "`reactive.share(key, build)` — get-or-create in this scope",
     "summary": "A now-playing bar over a library of tracks. Press a title and watch the bar, which the library never speaks to.",
     "app": "player",
     "files": [

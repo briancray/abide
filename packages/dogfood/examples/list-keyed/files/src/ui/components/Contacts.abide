@@ -1,7 +1,7 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 
-let rows = state([
+let rows = reactive([
     { id: 'ada', name: 'Ada Lovelace' },
     { id: 'grace', name: 'Grace Hopper' },
     { id: 'katherine', name: 'Katherine Johnson' },

@@ -1,8 +1,8 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 
 // Found above, so this build never runs.
-const playing = state.share('nowPlaying', () => state('nothing'))
+const playing = reactive.share('nowPlaying', () => reactive('nothing'))
 </script>
 
 <ul class="fields stacked">

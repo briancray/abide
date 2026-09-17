@@ -1,9 +1,9 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 
 // What you type is `Accepted`; what the field shows back is
 // `Stored`, and the transform is where the two come apart.
-let handle = state('', {
+let handle = reactive('', {
     transform: (typed) => typed.trim().toLowerCase().replaceAll(' ', '_'),
 })
 </script>

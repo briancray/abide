@@ -4,7 +4,7 @@ nav: Patching a list
 intent: A list fetched once and kept current by a feed, without refetching it and without copying it per frame.
 covers:
   - `s.patch`
-  - memo › `transform`
+  - `transform`
 examples:
   - packages/dogfood/examples/patch-wakes
   - packages/dogfood/examples/patch-unseen
@@ -56,7 +56,7 @@ press you had written off. A production repaints from the whole map, so the writ
 arrives now — attached to an interaction that had nothing to do with it. That is what makes this
 expensive to find later rather than merely wrong.
 
-Read on: [Rooms](let-anything-publish-and-anything-read.md) ·
+Read on: [Channels](let-anything-publish-and-anything-read.md) ·
 [Watching values](do-something-when-a-value-changes.md)
 
 ## A `Map` is the shape a per-row feed wants
@@ -71,31 +71,35 @@ Doing it here is also what keeps it done once. A reshape written at the call sit
 every caller has to remember, and the one that forgets is holding a different shape from everybody
 else.
 
-The reshaped value is still a **loaded** value — `refresh()` reloads it and the fold runs again
-over what the server said. A patch is the app catching a held value up between loads, never a
-second source of truth beside it, and where the two disagree the load wins.
+The index reads the rows rather than adopting the call, and that is deliberate. A write to a value
+that adopts another reaches the value it adopted (11.60), so a `patch` on
+`reactive(() => getRegions(), { transform })` would be handed the array and not the index.
+
+The index is still **loaded**: `regions.refresh()` reloads the rows, and the fold runs again over
+what the server said (11.5). A patch is the app catching a held value up between loads, never a
+second source of truth beside it, and where the two disagree the load wins (11.8).
 
 Read on: [Derived values](derive-a-value-from-other-values.md) ·
 [Reloading](decide-when-a-value-reloads.md) ·
 [Loading states](show-a-value-that-isnt-there-yet.md)
 
-## `patch` replaces the head production, so `tail` stays honest
+## `patch` replaces the head production, so `history` stays honest
 
 `set` pushes a production; `patch` replaces the newest. That keeps
-[`tail`](keep-the-last-few-values.md) honest under it: n mutations of one object are one entry's
+[`history`](keep-the-last-few-values.md) honest under it: n mutations of one object are one entry's
 worth of information, so no two entries in the ring are ever the same object, and a value only
-ever patched retains one however deep its `tail` is.
+ever patched retains one however deep its `history` is.
 
 It is also the limit. A reader on the cursor face receives the same object identity every time, so
 this is for a value read whole — a table, an index, a roster — and never for one streamed row by
-row. A stream of items wants a value that IS the item, which is what a room already is.
+row. A stream of items wants a value that IS the item, which is what a channel already is.
 
-Read on: [History & tail](keep-the-last-few-values.md) ·
-[Rooms](let-anything-publish-and-anything-read.md)
+Read on: [History](keep-the-last-few-values.md) ·
+[Channels](let-anything-publish-and-anything-read.md)
 
 ## Next
 
-* [History & tail](keep-the-last-few-values.md) — what the ring keeps under a patch
-* [Rooms](let-anything-publish-and-anything-read.md) — where the feed itself comes from
+* [History](keep-the-last-few-values.md) — what the ring keeps under a patch
+* [Channels](let-anything-publish-and-anything-read.md) — where the feed itself comes from
 * [Throttle & debounce](slow-down-a-value-that-changes-too-fast.md) — when the frames arrive faster
   than a paint

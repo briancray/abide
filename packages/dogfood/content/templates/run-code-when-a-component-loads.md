@@ -42,7 +42,7 @@ to read props of, so calling it there is a compile error rather than an undefine
 
 Whatever a `<script>` body reads while it runs subscribes to nothing. A call written bare in
 one registers nothing and never follows its arguments, which is why a load that has to follow
-something is wrapped in a `memo` — that wrapper is compulsory rather than a matter of taste.
+something is wrapped in a `reactive` body — that wrapper is compulsory rather than a matter of taste.
 
 The same is true of a **branch-local** `<script>` in a block body: it is setup for that item,
 run once per item, and it tracks nothing either.

@@ -1,12 +1,12 @@
 <script>
-import { memo, state } from 'abide'
+import { reactive } from 'abide'
 import { salesByRegion } from '#server/rpc/reports'
 
 const REGIONS = ['north', 'south']
 
-let region = state('north')
+let region = reactive('north')
 
-const rows = memo(() => salesByRegion({ region }))
+const rows = reactive(() => salesByRegion({ region }))
 </script>
 
 <div class="tabs">
@@ -22,5 +22,7 @@ const rows = memo(() => salesByRegion({ region }))
 
 <ul class="fields">
     <li><span>rows</span>
-        <strong>{rows.error() ? '—' : (rows.length ?? 0)}</strong></li>
+        <strong>
+            {rows.error() ? '—' : rows.ready() ? rows.length : 0}
+        </strong></li>
 </ul>

@@ -1,11 +1,11 @@
 <script>
-import { memo } from 'abide'
+import { reactive } from 'abide'
 import { getStock } from '#server/rpc/stock'
 
-const level = memo(() => getStock({ warehouse: 'east', sku: 'A-70' }))
+const level = reactive(() => getStock({ warehouse: 'east', sku: 'A-70' }))
 </script>
 
-{#if level.pending()}
+{#if level.busy() && !level.ready()}
     <p>Counting the shelf…</p>
 {:else}
     <ul class="fields stacked">

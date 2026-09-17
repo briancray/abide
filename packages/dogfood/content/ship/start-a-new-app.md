@@ -46,7 +46,7 @@ Read on: [CLI](../reference/cli.md)
 
 ## Where to go from the scaffold
 
-The scaffolded page holds a `state` and shows it. That is the whole of the first thing to
+The scaffolded page holds a reactive value and shows it. That is the whole of the first thing to
 learn — a value, and markup that follows it — and everything else on this site is a name for
 something you will want once that is boring.
 

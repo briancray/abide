@@ -1,8 +1,8 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 import { z } from 'zod'
 
-let email = state('ada@example.com', {
+let email = reactive('ada@example.com', {
     schema: z.string().email('That is not an email address.'),
 })
 </script>

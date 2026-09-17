@@ -3,9 +3,7 @@ title: Keep a value outside the process
 nav: Persistence
 intent: A value that survives a restart, a new tab, or a second instance.
 covers:
-  - state › `store`
-  - memo › `store`
-  - channel › `store`
+  - `store`
   - `Store`
 examples:
   - packages/dogfood/examples/store-restore
@@ -24,8 +22,8 @@ a row somewhere — and it is one option on the value rather than a mechanism be
 volume and press **Reload** on the frame: that re-runs the arm from nothing, which is the restart
 a store exists for.
 
-`Store` is `{ get, set }`, and there is no way to spell either alone. A persister with no restore
-is a `watch` under a longer name; a restore with no persister is the initial value `state` already
+`Store` is `{ get, set }`, and there is no way to spell either alone. A persister with no restore is
+a `watch` under a longer name; a restore with no persister is the initial value `reactive` already
 takes. Together they are one option, and the two cannot disagree about where the value is.
 
 abide ships none of these. A store is where your own dependency goes, which is why it is an
@@ -47,11 +45,11 @@ everywhere else:
 theme.refresh()      // re-reads the store — another tab may have written it
 ```
 
-`ttl` reaches it for the same reason. On a plain owned value `ttl` is inert rather than
-destructive, because dropping it would lose something nothing can rebuild; with a store there is
+`ttl` reaches it for the same reason. On a plain owned value `ttl` expires past productions
+and keeps the standing one (6.8), because dropping it would lose something nothing can rebuild; with a store there is
 somewhere to get it back from.
 
-An unsettled `get` is a load like any other — `pending()` while it is in flight, a sink opened,
+An unsettled `get` is a load like any other — busy with nothing to serve, a sink opened,
 the value served when it lands, which is what the card's store does. A **synchronous** `get`,
 which `localStorage` and a cookie allow, is not a load at all: the value is there at construction,
 so nothing is pending and there is no first paint of the fallback.
@@ -60,8 +58,12 @@ Read on: [Reloading](decide-when-a-value-reloads.md)
 
 ## A store answers before the initial value
 
-`state('light', { store })` serves what the store had, and a **miss** falls back to `'light'`.
+`reactive('light', { store })` serves what the store had, and a **miss** falls back to `'light'`.
 Any other order and the line would not mean what it reads as.
+
+A `get` answering `undefined` is a miss (8.17), and so is a `get` that throws (8.15). `null` is
+a value, so the card's `get` turns the `null` its rpc answers for an unwritten setting into
+`undefined`.
 
 ## `set` runs per production
 
@@ -75,16 +77,18 @@ value is already held, and `set` is only how it leaves.
 
 A `set` that fails does not tear the store off, unlike a `watch` effect that throws. A persister
 that silently stopped is worse than none, so the failure reaches `onError`, warns on
-`abide:reactive`, and the next production is written like any other.
+`abide:reactive`, and the store stays attached — the next production is written like any other
+(8.12).
 
 `set` is handed the `Reactive`'s own `ttl`, in ms, so the number lives once on the value and the
-store converts it:
+store converts it (8.13).
 
 ## A store in front of a body is a cache that survives a restart
 
 Where the `Reactive` also has a body, the store sits in front of it: `get` on a cold entry, the
 body on a miss, `set` on every production. That is the persistent form of the cache `ttl` already
-bounds.
+bounds. A `refresh()` or an `invalidate()` on it runs the body rather than re-reading the store
+(8.16), so a reload reaches the source instead of the copy.
 
 A deploy that restarts every instance no longer stampedes the thing behind it.
 
@@ -92,9 +96,9 @@ A deploy that restarts every instance no longer stampedes the thing behind it.
 
 {% example store-keyed %}
 
-A keyed memo builds one `Reactive` per args key, so a store keyed on anything has to be derived
-**from** that key rather than closed over where the memo was declared. That is the function form,
-and it is the one `tags` already uses:
+A keyed value builds one `Reactive` per args key, so a store keyed on anything has to be derived
+**from** that key rather than closed over where the keyed value was declared. That is the function
+form, and it is the one `tags` already uses.
 
 Closing over one key instead gives every entry the same store, and they clobber each other
 silently.
@@ -121,38 +125,39 @@ seeds:
 {await answer({ messageId })}
 ```
 
-A restored stream **finished**: `done()` and `success()` are true and `streaming()` is false. It
-is a value that has arrived rather than one arriving, so it is read as one — a `{#for await}` over
-it is watching for tokens that are all already in.
+A restored stream **finished**: `ready()` is true and `busy()` is false (8.7). It is a value that
+has arrived rather than one arriving, so it is read as one — a `{#for}` over a cursor on it is watching
+for tokens that are all already in.
 
-Read on: [History & tail](keep-the-last-few-values.md)
+Read on: [History](keep-the-last-few-values.md)
 
 ## Two processes, one cache — and what does not cross
 
-A `store` on a `global` memo is a cache two processes share, and it is the one place anything in
-this design crosses a process boundary. It is your dependency doing that, not abide.
+A `store` on a `global` keyed value is a cache two processes share, and it is the one place anything
+in this design crosses a process boundary. It is your dependency doing that, not abide.
 
 A **settled value** crosses and never a production. An answer one instance finished is
 served to one that never computed it; an in-flight stream's chunks do not reach it at all, `set`
 running once at close. So it removes the duplicate work, not the duplicate connection.
 
-## A room's store is its latest message
+## A channel's store is its latest message
 
-A room's `Stored` is one `Message`, so a store round-trips the standing message and never the
-tail. For a roster or a status that is exactly right — a restart restores the last one instead of
-showing an empty room until somebody publishes:
+A channel's `Stored` is one `Message`, so a store round-trips the latest message and never the
+ring (9.11). For a roster or a status that is exactly right — a restart restores the last one instead of
+showing an empty channel until somebody publishes.
 
-`identity: structural` and the store read together here: a republished identical roster is not a
-production, so it is not written either.
+`identity: structural` and the store read together where the roster is `set`: an identical roster
+set again is not a production, so it is not written either (5.2, 8.8). A `publish` is a production
+whatever `identity` says (9.6), so it is written every time.
 
 A transcript is the case this is **not** for. Putting a store on a chat channel persists one
 message. History past the ring is app data behind an ordinary rpc, and the cursor joins
-the two without a gap — `tail()` replays the ring before it goes live, so the two overlap.
+the two without a gap — `history()` replays the ring before it goes live, so the two overlap.
 
-Read on: [Rooms](let-anything-publish-and-anything-read.md)
+Read on: [Channels](let-anything-publish-and-anything-read.md)
 
 ## Next
 
 * [Reloading](decide-when-a-value-reloads.md) — the triggers a store makes live
 * [Caching](load-once-per-set-of-arguments.md) — the entries a store sits in front of
-* [Rooms](let-anything-publish-and-anything-read.md) — why a transcript is not a stored value
+* [Channels](let-anything-publish-and-anything-read.md) — why a transcript is not a stored value

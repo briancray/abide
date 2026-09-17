@@ -1,10 +1,10 @@
 <script>
-import { memo, state } from 'abide'
+import { reactive } from 'abide'
 
 const SEAT_PRICE = 25
 
-let seats = state(2)
-const total = memo(() => seats * SEAT_PRICE)
+let seats = reactive(2)
+const total = reactive(() => seats * SEAT_PRICE)
 
 function more() {
     seats += 1

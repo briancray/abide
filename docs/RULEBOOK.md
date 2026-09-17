@@ -34,8 +34,8 @@ These are immutable. A change to them is a change to what this document is.
    part of the framework's surface — and one of those declares itself FREE-STANDING on the line
    under its heading. The declaration is the exemption, so an uncited clause is either cited or
    visibly excused, and never merely missed.
-7. **Clause numbers are stable.** A withdrawn clause is marked withdrawn in place. A number is
-   never reused and never renumbered, because a guide, a test or a review comment may cite it.
+7. **A clause states what holds today.** A rule that stops holding is deleted, and the clauses
+   after it close the gap — every citation of a number is swept in the same change.
 
 ## Terms
 
@@ -46,19 +46,23 @@ REGISTRY.md because none of them is a name an app author writes.
 | --- | --- |
 | read | A call to `s` or to `s.peek`. |
 | write | A call to `s.set` or to `s.patch`. |
-| probe | Any of `s.pending`, `s.refreshing`, `s.done`, `s.success`, `s.streaming`, `s.error`. |
+| gated | A production the `identity` comparison may collapse: one `s.set` or a body mints, and not one `publish` does. |
+| probe | Any of `s.busy`, `s.ready`, `s.error`. |
 | trigger | `s.refresh` or `s.invalidate`. |
-| producer | A source that supplies a value without a write. |
+| producer | A source a value can ask for a value: a body, a `store`, or the connection a subscriber's copy is carried over. A `publish` is not one. |
 | materialisation | The making of a `Stored` from what a producer has yielded. |
 | production | One materialisation of a `Stored` that a reader may observe. |
 | provisional | A body run that read a value which had not landed. |
 | reader | An expression or effect that performed a read. |
 | revalidation | A load started by `s.refresh` over a value still being served. |
 | refusal | A `Failed` answered in place of a value. |
-| ring | The productions retained under `tail`. |
-| entry | One key's slot in a keyed `memo`. |
+| wired | A `Reactive` a `socket` or an `Rpc` carries, at either end of the connection. |
+| subscriber | A far end of a connection a wired `Reactive` is carried to. |
+| namespace | The name a log line is written under, and what `DEBUG` selects. |
+| ring | The productions retained under `history`. |
+| entry | One key's slot in a `Keyed`. |
 | scope | The lifetime a value is filed under and dropped with. |
-| adoption | What a `memo` does with a `Reactive` its body returned. |
+| adoption | What a `reactive` body does with a `Reactive` it returned. |
 | forwarding | The delegation between an adopting `Reactive` and the one it adopted. |
 | propagation | The derivation of a probe from the values a body read. |
 | sink | What 35.7 defines. |
@@ -71,55 +75,56 @@ RFC 2119 keywords are used as that document defines them: **MUST**, **MUST NOT**
 
 1.1 Every producer in this design MUST hand back a `Reactive`.
 
-1.2 *Withdrawn, superseded by 1.5, 1.6 and 1.7.* It read "A `Reactive` MUST NOT be thenable",
-which reserved thenability across the design as the mark of a load and left `s.settled` the only
-spelling of a gate.
+1.2 `Produced` MUST be the unit the producer yielded: `Stored` for every producer but a streaming one,
+and one chunk for a streaming producer.
 
-1.3 `Produced` MUST be the unit the producer yielded: `Stored` for a state and for a room, and one
-chunk for a streaming producer.
-
-1.4 `Failures` MUST be the union of the refusals the producer declared, and MUST carry the
+1.3 `Failures` MUST be the union of the refusals the producer declared, and MUST carry the
 validation refusal wherever a `schema` is declared, without the app declaring it.
 
-1.5 A `Reactive` MUST be thenable. See D95.
+1.4 A `Reactive` MUST be thenable.
 
-1.6 `s.catch` and `s.finally` MUST derive from `s.then`.
+1.5 `s.catch` and `s.finally` MUST derive from `s.then`.
 
-1.7 Where a load is told apart from a value, a `Reactive` MUST be taken as a value. See D95.
+1.6 Where a load is told apart from a value, a `Reactive` MUST be taken as a value.
+
+1.7 Reaching a `Reactive` MUST start the work it is for, unless a window holds it back per 5.20.
+
+1.8 Reaching a `Reactive` that already exists MUST join the standing work rather than start a
+second.
 
 # 2. Reads
 
 2.1 A read MUST return what is held, and MUST NOT await.
 
-2.2 A read MUST return `undefined` where no value has landed and no producer has failed.
+2.2 A read MUST throw where a producer failed and no value has landed.
 
-2.3 A read MUST throw where a producer failed and no value has landed. See D67.
+2.3 A rejected write MUST NOT cause a read to throw.
 
-2.4 A rejected write MUST NOT cause a read to throw.
+2.4 A failed revalidation MUST NOT cause a read to throw.
 
-2.5 A failed revalidation MUST NOT cause a read to throw.
-
-2.6 `s.peek` MUST read as `s` does, except that it MUST NOT join the flow.
-
-2.7 *Withdrawn, superseded by 2.12 and 2.13.* It read "`s.settled` MUST resolve when `s.pending`
-becomes false", which left the promise face with no answer at all for the one case 2.3 throws for,
-and named a member D95 removed.
-
-2.8 `s.tail` MUST replay the retained snapshot and then continue live from where that snapshot
+2.5 `s.history` MUST replay the retained snapshot and then continue live from where that snapshot
 ended, with no gap and no repeat.
 
-2.9 The argument to `s.tail` MUST be replay depth alone, bounded above by what is retained.
+2.6 The argument to `s.history` MUST be replay depth alone, bounded above by what is retained.
 
-2.10 *Withdrawn, superseded by 2.11.* It read "`s[Symbol.asyncIterator]` MUST be defined as
-`s.tail` called with no argument", which made the ring and the live cursor one sequence, so a
-streaming producer's history was its chunks.
+2.7 `s[Symbol.asyncIterator]` MUST yield the production in flight from its start, and MUST then
+continue live.
 
-2.11 `s[Symbol.asyncIterator]` MUST yield the production in flight from its start, and MUST then
-continue live. See D53.
+2.8 `s.then` MUST resolve with the value where `s.busy` becomes false and 2.2 would not throw.
 
-2.12 `s.then` MUST resolve with the value where `s.pending` becomes false and 2.3 would not throw.
+2.9 `s.then` MUST reject with what 2.2 throws, where 2.2 would throw.
 
-2.13 `s.then` MUST reject with what 2.3 throws, where 2.3 would throw. See D95.
+2.10 A read MUST throw `NotLanded` where nothing has landed and no producer has failed.
+
+2.11 `s.peek` MUST return `undefined` where 2.10 would throw.
+
+2.12 `s.peek` MUST NOT join the flow.
+
+2.13 A `NotLanded` thrown into a tracked body MUST abort that body.
+
+2.14 A body a `NotLanded` aborted MUST re-run when the value it names lands.
+
+2.15 A `NotLanded` and a `Failed` MUST be distinguishable by brand.
 
 # 3. Probes
 
@@ -129,38 +134,21 @@ continue live. See D53.
 
 3.3 Reading a probe MUST subscribe to that probe alone.
 
-3.4 A sink MUST be opened by `s.pending`, and MUST NOT be opened by an absent value.
+3.4 A sink MUST be opened where `s.busy` is true and `s.ready` is false.
 
-3.5 `s.refreshing` MUST NOT open a sink.
+3.5 `s.ready` and `s.error` MUST be orthogonal: either MAY be true while the other is.
 
-3.6 `s.pending` on a streaming producer MUST remain true until the stream closes, narrowed by 3.14
-where a value is already landed. See D97.
+3.6 `s.ready` MUST NOT move for a load in flight.
 
-3.7 `s.pending` on a room MUST remain true only until its first message.
+3.7 A streaming producer MUST report `s.busy` true until the stream closes.
 
-3.8 `s.done` MUST stay true through `s.refresh`.
+3.8 A streaming producer MUST report `s.ready` true from its first chunk.
 
-3.9 `s.done` MUST remain false while a room is live.
-
-3.10 `s.success` and `s.error` MUST be orthogonal: either MAY be true while the other is.
-
-3.11 A value with no producer MUST report `s.success` true from construction.
-
-3.12 *Withdrawn, superseded by 3.13.* It read "`s.success` MUST be false while a load is in
-flight or a stream is open", which made a probe about what has completed move for something in
-flight, which is the axis `s.pending` and `s.refreshing` already answer.
-
-3.13 `s.success` MUST NOT move for a load in flight.
-
-3.14 A load given to `s.set` over a landed value that is not stale MUST report `s.refreshing`, and
-MUST NOT report `s.pending`. See D84.
-
-3.15 `s.streaming` MUST be true while a stream a producer is on is open, and MUST be false once
-it closes. See D97.
+3.9 A value with no producer MUST report `s.busy` false.
 
 # 4. Writes and gates
 
-4.1 `s.set` MUST accept a settled value or a load, and `state` MUST accept the same two.
+4.1 `s.set` MUST accept a settled value or a load, and `reactive` MUST accept the same two.
 
 4.2 A load given to either MUST make the `Reactive` loaded, at construction and at every write
 alike.
@@ -172,7 +160,7 @@ alike.
 4.5 A `schema` MUST refuse by throwing, and the throw MUST be caught and converted rather than
 escape the write.
 
-4.6 A `transform` MUST refuse by returning a `Failed` rather than by throwing, per 15.6.
+4.6 A `transform` MUST refuse by returning a `Failed` rather than by throwing, per 15.5.
 
 4.7 A `transform` MUST run untracked, on the settled value, once per materialisation of a `Stored`.
 
@@ -188,59 +176,73 @@ escape the write.
 `abide:reactive` naming the value.
 
 4.13 `s.set` MUST take the `Accepted` its factory declared, and a `Reactive` MUST carry that
-`Accepted` wherever it is passed. See D49.
+`Accepted` wherever it is passed.
+
+4.14 `reactive` called with no argument MUST land nothing.
+
+4.15 `reactive` called with `undefined` MUST land `undefined`.
+
+4.16 An opening `undefined`, the value form's or a body's first answer, MUST land without passing a
+`schema`, a `transform`, a window or a `store`.
 
 # 5. Productions and identity
 
 5.1 A reader MUST be woken only when read identity changes.
 
-5.2 A production whose identity matches the previous `Stored` MUST NOT be retained, and MUST wake
-no reader.
+5.2 A gated production whose identity matches the previous `Stored` MUST NOT be retained, and MUST
+wake no reader.
 
 5.3 `identity` MUST be discriminated by arity: one parameter is a projection compared by `!==`, and
 two is a comparator answering directly.
 
-5.4 The default `identity` on a state and on a memo MUST be `structural`.
+5.4 The default `identity` MUST be the reference.
 
-5.5 The default `identity` on a room MUST be the reference. See D87.
+5.5 `structural` MUST answer "not equal" wherever it cannot decide.
 
-5.6 `structural` MUST answer "not equal" wherever it cannot decide.
+5.6 A production MUST be pushed rather than replace the head production.
 
-5.7 A production `s.set` mints on a state and on a memo MUST be pushed rather than replace the
-head production.
+5.7 `s.patch` MUST replace the head production rather than append one.
 
-5.8 `s.set` MUST replace the head production on a room, and MUST NOT mint a sequence number there.
+5.8 A callback given to `s.patch` MUST return nothing.
 
-5.9 `s.patch` MUST replace the head production rather than append one.
+5.9 `throttle` and `debounce` MUST cap how often a value changes for a reader.
 
-5.10 A callback given to `s.patch` MUST return nothing.
+5.10 A capped window MUST cap the wake, and MUST NOT itself drop a production.
 
-5.11 `throttle` and `debounce` MUST cap how often a value changes for a reader. See D61.
+5.11 A cursor MUST deliver every production a window collapsed that retention still holds.
 
-5.12 A capped window MUST cap the wake, and MUST NOT itself drop a production. See D68.
+5.12 An implementation MUST NOT start work a window would discard.
 
-5.13 A cursor MUST deliver every production a window collapsed that retention still holds.
+5.13 `throttle` MUST allow a change immediately and then at most once per window.
 
-5.14 An implementation MUST NOT start work a window would discard.
+5.14 `debounce` MUST delay a change until the changes stop.
 
-5.15 `throttle` MUST allow a change immediately and then at most once per window.
+5.15 Declaring both `throttle` and `debounce` MUST be a build error naming the value.
 
-5.16 `debounce` MUST delay a change until the changes stop.
+5.16 Where a `throttle` or a `debounce` window is holding a production back, the held value MUST
+be served and `s.busy` MUST be true.
 
-5.17 Declaring both `throttle` and `debounce` MUST be a build error naming the value.
+5.17 A `bind:` read MUST NOT be capped.
 
-5.18 Inside a `throttle` or `debounce` window the held value MUST be served and `s.refreshing` MUST
-be true.
+5.18 `throttle` and `debounce` on a streaming producer MUST cap how often its readers are woken.
 
-5.19 A `bind:` read MUST NOT be capped.
+5.19 A read of a capped streaming producer MUST serve the accumulation as the last release left it.
+
+5.20 `throttle` and `debounce` on a `Keyed` MUST hold back starting a newly reached entry until the
+window allows it.
+
+5.21 An entry a `Keyed` window replaced with a later key before it started MUST NOT be started, and
+MUST NOT be held.
+
+5.22 An entry a `Keyed` window is holding back MUST report `s.busy` true.
 
 # 6. Retention
 
-6.1 Retention of `tail` entries MUST be append-only.
+6.1 Retention of `history` entries MUST be append-only.
 
-6.2 Raising `tail` MUST NOT make a write dearer.
+6.2 Raising `history` MUST NOT make a write dearer.
 
-6.3 The unit of `tail` MUST be `Stored`.
+6.3 The unit of `history` MUST be `Stored`.
 
 6.4 A `ttl` expiry MUST wake no reader.
 
@@ -248,13 +250,39 @@ be true.
 
 6.6 An implementation MUST NOT hold a timer per retained production.
 
-6.7 A live cursor over `s.tail` MUST NOT observe an expiry.
+6.7 A live cursor over `s.history` MUST NOT observe an expiry.
 
-6.8 `ttl` MUST be inert on a value with no producer, and MUST NOT drop what the app put there.
+6.8 `ttl` on a value with no producer MUST reach its past productions alone.
 
-6.9 An implementation MUST hold one expiry timer per ring, armed at the head's expiry. See D54.
+6.9 An implementation MUST hold one expiry timer per value declaring `ttl`, armed at the nearest deadline that value holds.
 
 6.10 A `ttl` expiry timer MUST NOT hold the process open.
+
+6.11 A read finding the standing production past its `ttl` MUST NOT serve it.
+
+6.12 A read finding the standing production past its `ttl` MUST run the producer.
+
+6.13 A standing production past its `ttl` MUST be released.
+
+6.14 A value whose standing production is past its `ttl` MUST report `s.ready` false.
+
+6.15 An expiry MUST NOT report `s.busy` true.
+
+6.16 A `history` of 0 MUST retain the standing production alone.
+
+6.17 A streaming producer's production MUST enter the ring when its run closes, as the
+accumulation at close.
+
+6.18 An `undefined` production MUST NOT enter the ring.
+
+6.19 A cursor MUST NOT be handed an `undefined` production.
+
+6.20 A streaming run that failed, or that a trigger replaced before it closed, MUST enter nothing.
+
+6.21 A cursor's replay over a streaming producer MUST end at the last run that closed.
+
+6.22 A streaming producer's `ttl` MUST run from its run's close, and MUST NOT reach the run in
+flight.
 
 # 7. Triggers
 
@@ -266,26 +294,34 @@ be true.
 
 7.4 `s.refresh` MUST keep serving what is held until the new value lands.
 
-7.5 `s.refresh` MUST report `s.refreshing` true while the reload is in flight.
+7.5 `s.refresh` MUST report `s.busy` true while the reload is in flight.
 
-7.6 *Withdrawn, superseded by 13.7.* It read "where nothing subscribes to it, `s.refresh` MUST
-behave as `s.invalidate`", which made one call mean two things by a condition nothing can observe.
+7.6 `s.refresh` and `s.invalidate` MUST be inert on a value with no producer, beside what 7.10 and
+7.18 send its subscribers.
 
-7.7 `s.refresh` and `s.invalidate` MUST be inert on a value with no producer.
+7.7 `s.invalidate` MUST mark the held value stale.
 
-7.8 `s.invalidate` MUST mark the held value stale. See D55.
+7.8 A load over a value marked stale MUST report `s.ready` false.
 
-7.9 A load over a value marked stale MUST report `s.pending`.
+7.9 An accepted production MUST clear the stale mark.
 
-7.10 A value `s.invalidate` marked stale MUST continue to be served until the load lands.
+7.10 `s.invalidate` on a wired `Reactive` MUST invalidate every subscriber's copy.
 
-7.11 An accepted production MUST clear the stale mark.
+7.11 `s.refresh` MUST reload whether or not anything subscribes.
 
-7.12 A load over a value marked stale MUST report `s.done` false.
+7.12 The first read of a value `s.invalidate` marked MUST run its producer.
 
-7.13 `s.refresh` and `s.invalidate` MUST be inert on a room.
+7.13 A read of a value built from one `s.invalidate` marked MUST run that producer first.
 
-7.14 `s.refresh` MUST reload whether or not anything subscribes. See D74.
+7.14 `s.invalidate` MUST NOT wake a reader.
+
+7.15 `s.invalidate` MUST discard the load or the stream it finds in flight.
+
+7.16 A value `s.invalidate` marked MUST NOT report `s.busy` true until a read runs its producer.
+
+7.17 A value `s.invalidate` marked MUST go on being served until a read runs its producer.
+
+7.18 `s.refresh` on a wired `Reactive` MUST refresh every subscriber's copy.
 
 # 8. Stores
 
@@ -298,11 +334,11 @@ miss falls back to.
 
 8.4 A synchronous `get` MUST NOT make the value loaded.
 
-8.5 A restore MUST mint a production without running `schema` or `transform`. See D59.
+8.5 A restore MUST mint a production without running `schema` or `transform`.
 
 8.6 A restore of a streaming producer MUST seed the ring with the accumulation.
 
-8.7 A restored stream MUST report `s.done` and `s.success` true and `s.streaming` false.
+8.7 A restored stream MUST report `s.ready` true and `s.busy` false.
 
 8.8 A `Store`'s `set` MUST run once per production, per 5.2.
 
@@ -321,227 +357,243 @@ miss falls back to.
 
 8.15 A value a `Store`'s `get` cannot read MUST be a miss, per 8.3.
 
-# 9. Rooms and streams
+8.16 A trigger on a `Reactive` with both a body and a `store` MUST run the body.
 
-9.1 A room's production MUST be one complete `Message`.
+8.17 A `Store`'s `get` answering `undefined` MUST be a miss.
 
-9.2 *Withdrawn, superseded by 1.3.* It read "a streaming producer's production MUST be one
-chunk", which contradicted what a production is: a chunk is a `Produced`, and the `Stored` it is
-a piece of is materialised once.
+# 9. History and streams
 
-9.3 A streaming producer's `Stored` MUST be the accumulated chunks, materialised once on close.
+9.1 `s.publish` on a wired `Reactive` MUST send the production to every subscriber.
 
-9.4 An implementation MUST NOT accumulate chunks by copying the accumulation per chunk.
+9.2 A streaming producer's `Stored` MUST be the chunks accumulated so far, materialised on the
+read that asks for it.
 
-9.5 Whether a producer is a room or a stream MUST be decided by what the producer declared, and MUST
-NOT be inferred at run time.
+9.3 An implementation MUST NOT accumulate chunks by copying the accumulation per chunk.
 
-9.6 *Withdrawn, superseded by REGISTRY's `Room` row.* It read "a `Room` MUST be a `Reactive`
-whose value is the latest `Message`, carrying `publish`", which is what that row's type says.
+9.4 `s.set` on a wired `Reactive` MUST NOT be sent to a subscriber as it lands.
 
-9.7 `publish` MUST hand back the sequence number it minted, or the `Failed` a `transform` refused it
-with.
+9.5 `s.publish` MUST hand back the sequence number it minted, or the `Failed` a `transform` refused
+it with.
 
-9.8 A publish that `identity` deems a consecutive duplicate MUST mint no production, and MUST hand
-back the standing sequence number.
+9.6 A publish MUST mint a production whatever `identity` says.
 
-9.9 A room's `identity` MUST compare against the previous `Message` alone, and MUST NOT scan the
-ring.
+9.7 `identity` MUST compare against the previous production alone, and MUST NOT scan the ring.
 
-9.10 A `schema` on a `channel` MUST gate what a publish takes. See D51.
+9.8 A `schema` MUST gate what `s.publish` takes.
 
-9.11 `args` on a `channel` MUST refuse only, and MUST NOT normalise the room key.
+9.9 A production arriving over a connection MUST replace a write standing on the subscriber's copy.
 
-9.12 A room's `tail` MUST be how far back a reconnect resumes, and a cursor older than it MUST be
-answered with the whole ring rather than with a gap.
+9.10 `history` MUST be how far back a reconnect resumes, and a cursor older than it MUST be answered
+with the whole ring rather than with a gap.
 
-9.13 A `store` on a `channel` MUST round-trip the latest `Message`, and MUST NOT persist the ring.
+9.11 A `store` MUST round-trip the latest production, and MUST NOT persist the ring.
 
-9.14 A `transform` and a `schema` on a `channel` MUST run on every publish, the server's own
-included.
+9.12 A `transform` and a `schema` MUST run on every publish, the server's own included.
 
-9.15 A `Room` MUST be created by a publish, and MUST NOT be created by a subscribe.
+9.13 `s.publish` on a `Reactive` nothing carries MUST reach its own readers alone.
 
-9.16 Subscribing to a room nothing has published to MUST allocate no entry, and MUST read as
-`s.pending`.
+9.14 A production arriving over a connection MUST carry the sequence number its owner minted, and the
+subscriber MUST NOT renumber it.
 
-9.17 A `Room` MUST be discarded when its subscriber count reaches zero. See D64.
+9.15 `s.history` on an adopting `Reactive` MUST forward to the adopted `Reactive`.
 
-9.18 A `Room` MUST be process-wide.
+9.16 A `Reactive` a `socket` carries MUST be process-wide.
 
-9.19 `publish` MUST be the only way a `Room` changes, and an implementation MUST NOT provide a
-revoke or a clear. See D8.
+9.17 An implementation MUST NOT provide a revoke or a clear over what a `Reactive` retains.
 
-9.20 A `Room` MUST NOT be where a removal is enforced.
+9.18 A ring MUST NOT be where a removal is enforced.
 
-9.21 A `Room`'s history epoch MUST be minted when the `Room` is constructed, and MUST NOT change
-while that `Room` lives. See D100.
+9.19 A `Reactive`'s history epoch MUST be minted when that `Reactive` is constructed, and MUST NOT
+change while it lives.
+
+9.20 A `reactive` body declared as an async generator function MUST be a streaming producer, and
+the declaration MUST be read once, at construction.
+
+9.21 `s.refresh` on a streaming producer MUST serve the held accumulation until the new stream's
+first chunk, and that stream's accumulation from then on.
+
+9.22 A `schema` and a `transform` on a streaming producer MUST run on the accumulation a read
+materialises, at most once per chunk the accumulation holds.
+
+9.23 A streaming producer MUST wake its readers at most once per task.
+
+9.24 `flushSync` MUST deliver the wakes a streaming producer is holding.
+
+9.25 A write to a streaming producer MUST stand until its accumulation next changes.
+
+9.26 A write to a streaming producer MUST NOT move a cursor over it.
+
+9.27 `s.patch` on a streaming producer MUST mutate its accumulation in place.
+
+9.28 A keyed `reactive`'s `history` MUST be retained per entry.
+
+9.29 A subscriber's copy of a wired `Reactive` MUST report `s.busy` true until the first production
+arrives.
 
 # 10. Sharing
 
-10.1 `state.share` MUST get or create in one call.
+10.1 `reactive.share` MUST get or create in one call.
 
-10.2 A key given to `state.share` MUST be a literal, and a non-literal MUST be a build error.
+10.2 A key given to `reactive.share` MUST be a literal, and a non-literal MUST be a build error.
 
 10.3 A key `Shared` declares MUST be checked against it, and a key it does not declare MUST be
 inferred from the thunk.
 
-10.4 A value created by `state.share` MUST NOT be evicted within its scope.
+10.4 A value created by `reactive.share` MUST NOT be evicted within its scope.
 
-10.5 The scope of `state.share` MUST be the component instance and its descendants.
+10.5 The scope of `reactive.share` MUST be the component instance and its descendants.
 
-10.6 `state.share` MUST create in the calling scope where no ancestor holds that key.
+10.6 `reactive.share` MUST create in the calling scope where no ancestor holds that key.
 
-10.7 An implementation MUST NOT provide a process-wide `state.share`. See D56.
+10.7 An implementation MUST NOT provide a process-wide `reactive.share`.
 
-# 11. Memoized values
+# 11. Derived and keyed values
 
-11.1 A `memo` body declaring no parameter MUST produce an unkeyed, tracked `Reactive`.
+11.1 A `reactive` body declaring no parameter MUST produce an unkeyed, tracked `Reactive`.
 
-11.2 A `memo` body declaring one parameter MUST produce a keyed, untracked `Memo`.
+11.2 A `reactive` body declaring one parameter MUST produce a keyed, untracked `Keyed`.
 
-11.3 An implementation MUST NOT provide an option converting one `memo` form into the other.
+11.3 An implementation MUST NOT provide an option converting one `reactive` form into the other.
 
-11.4 A keyed `memo` MUST hold one entry per `Args` key, computed on the first read of that key.
+11.4 A `Keyed` MUST hold one entry per `Args` key, computed when that key is reached.
 
-11.5 An unkeyed `memo` MUST recompute when a value its body read changes.
+11.5 An unkeyed `reactive` MUST recompute on the first read that follows a change to a value its
+body read.
 
-11.6 A keyed `memo` MUST NOT recompute for that reason, and `ttl`, `invalidate`, `refresh` and
+11.6 A `Keyed` MUST NOT recompute for that reason, and `ttl`, `invalidate`, `refresh` and
 eviction MUST be its only ways back.
 
-11.7 Both `memo` forms MUST accept a write.
+11.7 Both `reactive` body forms MUST accept a write.
 
-11.8 A write to a `memo` MUST stand until the next recompute replaces it.
+11.8 A write to a `reactive` that is not adopting MUST stand until the next recompute replaces it.
 
-11.9 An implementation MUST NOT warn on a write to a `memo`. See D2.
+11.9 An implementation MUST NOT warn on a write to a `reactive`.
 
-11.10 A write of a settled value to a `memo` MUST move no probe.
+11.10 A write of a settled value to a `reactive` MUST move no probe.
 
-11.11 A write of an unsettled value to a `memo` MUST be a load, per 4.2 and 1.7.
+11.11 A write of an unsettled value to a `reactive` MUST be a load, per 4.2 and 1.6.
 
-11.12 A `Reactive` returned from a `memo` body MUST be adopted, and MUST NOT be stored as a value. See D43.
+11.12 A `Reactive` returned from a `reactive` body MUST be adopted, and MUST NOT be stored as a
+value.
 
-11.13 Adoption MUST mirror the adopted productions into the outer ring.
+11.13 Adoption MUST mirror the adopted productions into the adopting `Reactive`.
 
-11.14 An adopting `memo` MUST run its own `transform` on the way in.
+11.14 An adopting `reactive` MUST run its own `transform` on the way in.
 
 11.15 Adoption MUST forward members the adopted `Reactive` declares beyond the common face, by
 delegation to whatever is currently adopted.
 
-11.16 On re-adoption a `memo` MUST clear where the newly adopted `Reactive` has nothing to serve.
+11.16 On re-adoption a `reactive` MUST clear where the newly adopted `Reactive` has nothing to serve.
 
 11.17 Adoption MUST inherit the adopted `Reactive`'s `identity` where the outer declared none.
 
 11.18 A recompute landing on the same adopted `Reactive` MUST wake no reader.
 
-11.19 An adopting `memo` MUST report `s.pending` only where the newly adopted `Reactive` reports
+11.19 An adopting `reactive` MUST report `s.busy` only where the newly adopted `Reactive` reports
 it.
 
-11.20 `s.pending`, `s.refreshing` and `s.done` MUST be the probes that propagate. See D69.
+11.20 `s.busy` and `s.ready` MUST be the probes that propagate.
 
-11.21 An unkeyed `memo` MUST report `s.pending` for its own load, or for any value its body read.
+11.21 An unkeyed `reactive` MUST report `s.busy` for its own load, or for any value its body read.
 
 11.22 An implementation MUST derive a propagated probe on the read that asks for it, and MUST NOT
 hold a subscription per source for it.
 
-11.23 *Withdrawn, superseded by 11.20.* It read "`s.refreshing` MUST NOT propagate", which D3
-decided on a cost that deriving at read removes. See D3.
+11.23 A `Keyed` MUST propagate nothing.
 
-11.24 *Withdrawn, superseded by 3.3.* It read "Reading a probe MUST NOT join the value flow",
-which is what 3.3 requires of every probe read, a memo's included.
-
-11.25 A keyed `memo` MUST propagate nothing.
-
-11.26 An `Args` object MUST become a key by its canonical wire form: members sorted by name,
+11.24 An `Args` object MUST become a key by its canonical wire form: members sorted by name,
 `undefined` members dropped, and `Date` written ISO.
 
-11.27 An `Args` key MUST be structural.
+11.25 An `Args` key MUST be structural.
 
-11.28 The key MUST be taken before `args` runs. See D4.
+11.26 The key MUST be taken before `args` runs.
 
-11.29 The order over `Args` MUST be coerce, apply syntax defaults, canonicalize, validate, then
+11.27 The order over `Args` MUST be coerce, apply syntax defaults, canonicalize, validate, then
 the body.
 
-11.30 An `args` gate MUST refuse and MUST NOT decide which entry an `Args` object lands on.
+11.28 An `args` gate MUST refuse and MUST NOT decide which entry an `Args` object lands on.
 
-11.31 A default written in the body's parameter MUST participate in the `Args` key, on both sides.
-See D5.
+11.29 A default written in the body's parameter MUST participate in the `Args` key, on both sides.
 
-11.32 The build MUST warn where `args` declares a default the parameter does not.
+11.30 The build MUST warn where `args` declares a default the parameter does not.
 
-11.33 A reactive value in an argument position MUST be read, and `Args` MUST be plain args.
+11.31 A reactive value in an argument position MUST be read, and `Args` MUST be plain args.
 
-11.34 A `memo` without `global` MUST be request-local on a server and process-local in a browser. See D88.
+11.32 A `reactive` without `global` MUST be request-local on a server and process-local in a browser.
 
-11.35 `ttl: Infinity` without `global` MUST mean to the end of that scope.
+11.33 `ttl: Infinity` without `global` MUST mean to the end of that scope.
 
-11.36 `global: true` MUST place entries in a process-wide cache that outlives every request.
+11.34 `global: true` MUST place entries in a process-wide cache that outlives every request.
 
-11.37 A `global` `memo` MUST be bounded by its own `ttl` and by `invalidate`, and by nothing else.
+11.35 A `global` `reactive` MUST be bounded by its own `ttl` and by `invalidate`, and by nothing else.
 
-11.38 An implementation MUST NOT evict a `global` entry on a size or a count limit. See D6.
+11.36 An implementation MUST NOT evict a `global` entry on a size or a count limit.
 
-11.39 `global: true` MUST be a build error on a body reading `request`, `response`, `principal`,
-`cookies`, `csp.nonce` or `route`, and the error MUST name the ambient. See D7.
+11.37 `global: true` MUST be a build error on a body reading `request`, `response`, `principal`,
+`cookies`, `csp.nonce` or `route`, and the error MUST name the ambient.
 
-11.40 Coalescing of a `memo` load MUST be within a scope: two reads of one key in one scope share
+11.38 Coalescing of a `reactive` load MUST be within a scope: two reads of one key in one scope share
 one load, and two scopes load twice.
 
-11.41 A `global` `memo` over a streaming body SHOULD declare `tail: Infinity`.
+11.39 `history` MUST be accepted by every `reactive` form.
 
-11.42 A reader detaching from a `global` streaming `memo` MUST NOT cancel the producer for the
+11.40 A reader detaching from a `global` streaming `reactive` MUST NOT cancel the producer for the
 readers that remain.
 
-11.43 `args` on a `memo` MUST check `Args`. See D48.
+11.41 `args` on a `reactive` MUST check `Args`.
 
-11.44 `args` MUST be unspellable on the unkeyed `memo` overload, and spelling it MUST be a compile
-error naming the overload. See D1.
+11.42 `args` MUST be unspellable on the unkeyed `reactive` overload, and spelling it MUST be a compile
+error naming the overload.
 
-11.45 `store` on a keyed `memo` MUST accept a function of the `Args`.
+11.43 `store` on a `Keyed` MUST accept a function of the `Args`.
 
-11.46 `tags` MUST be what a `Selection` matches on, and MUST be the only selector reaching across
-memos.
+11.44 `tags` MUST be what a `Selection` matches on, and MUST be the only selector reaching across
+values.
 
-11.47 The function form of `tags` MUST receive the memo's `Args`.
+11.45 The function form of `tags` MUST receive the value's `Args`.
 
-11.48 *Withdrawn, superseded by 5.15.* It read "`throttle` MUST fire a revalidation immediately
-and then at most once per window", which filed a cap on every reactive value under the memo.
+11.46 A `Keyed`'s `ttl` MUST be the life of the entry, and the ring MUST be discarded with it.
 
-11.49 *Withdrawn, superseded by 5.16.* It read "`debounce` MUST delay a revalidation until the
-triggers stop", and moves with 11.48.
+11.47 A `reactive` MUST accept a `schema`, gating what its body produced.
 
-11.50 *Withdrawn, superseded by 5.17.* It read "declaring both `throttle` and `debounce` MUST be
-a build error naming the `memo`", and moves with 11.48.
-
-11.51 *Withdrawn, superseded by 5.18.* It read as 5.18 does over a `memo` alone, where what is
-owed inside the window is a reload rather than any change.
-
-11.52 A keyed `memo`'s `ttl` MUST be the life of the entry, and the ring MUST be discarded with it.
-
-11.53 A `memo` MUST accept a `schema`, gating what its body produced. See D50.
-
-11.54 An adopting `memo` MUST run its own `schema` on the way in, as 11.14 has it run its
+11.48 An adopting `reactive` MUST run its own `schema` on the way in, as 11.14 has it run its
 `transform`.
 
-11.55 A keyed `memo` MUST hold one expiry timer, armed at its oldest entry.
+11.49 A `Keyed` MUST hold one expiry timer, armed at its oldest entry.
 
-11.56 An entry MUST take the newest position on every production.
+11.50 An entry MUST take the newest position on every production.
 
-11.57 Every probe MUST forward from the adopted `Reactive` to the adopting one. See D66.
+11.51 Every probe MUST forward from the adopted `Reactive` to the adopting one.
 
-11.58 Every trigger on an adopting `Reactive` MUST reach the adopted one.
+11.52 Every trigger on an adopting `Reactive` MUST reach the adopted one.
 
-11.59 A provisional run MUST mint no production. See D71.
+11.53 A provisional run MUST mint no production.
 
-11.60 A reader joining a `global` `memo`'s stream after it began MUST NOT be answered with a
+11.54 A reader joining a `global` `reactive`'s stream after it began MUST NOT be answered with a
 refusal.
 
-11.61 A `memo` MUST report `s.pending` before its body has run for the value being probed. See D85.
+11.55 A `reactive` MUST NOT report `s.ready` before its body has run for the value being probed.
 
-11.62 A probe over a key a keyed `memo` has not computed MUST allocate no entry. See D86.
+11.56 A probe over a key a `Keyed` has not computed MUST allocate no entry.
 
-11.63 An implementation MUST NOT warn where two `Args` keys differ only in the case of a value.
-See D4.
+11.57 An implementation MUST NOT warn where two `Args` keys differ only in the case of a value.
+
+11.58 An unkeyed `reactive` MUST NOT recompute before a read or an `Effect` asks for its value.
+
+11.59 An unkeyed `reactive` MUST report `s.ready` only where every value its body read reports it.
+
+11.60 `s.set`, `s.publish` and `s.patch` on an adopting `Reactive`, given anything but a `Reactive`, MUST
+reach the adopted `Reactive`.
+
+11.61 `args` spelled on a `reactive` whose body declares no parameter MUST refuse at construction,
+naming the value.
+
+11.62 `s.set` given a `Reactive` MUST adopt it per 11.12, and MUST NOT store it as a value.
+
+11.63 A body answering `undefined` MUST land `undefined`.
+
+11.64 A body a `NotLanded` aborted that something probes MUST re-run in the turn that lands the
+value it named.
 
 # 12. Effects
 
@@ -549,40 +601,42 @@ See D4.
 
 12.2 An `Effect` MUST run immediately, and again whenever a reactive value it read changes.
 
-12.3 *Withdrawn, superseded by REGISTRY's `watch` row.* It read "`watch` MUST hand back the way
-to stop it", which is what that row's return type says.
+12.3 Where sources are given to `watch`, the `Effect` MUST run only when those sources change.
 
-12.4 Where sources are given to `watch`, the `Effect` MUST run only when those sources change.
+12.4 A `watch` registered inside a component MUST be owned by that component.
 
-12.5 A `watch` registered inside a component MUST be owned by that component.
+12.5 On a server a `watch` MUST run once, and its `Disposer` MUST still run at scope teardown.
 
-12.6 On a server a `watch` MUST run once, and its `Disposer` MUST still run at scope teardown.
-
-12.7 A throw from an `Effect` or a `Disposer`, and a read of a failed `Reactive` inside one, MUST
+12.6 A throw from an `Effect` or a `Disposer`, and a read of a failed `Reactive` inside one, MUST
 reach `onError` with the trace attached and MUST warn on `abide:watch`.
 
-12.8 In a browser a throw from an `Effect` MUST additionally be re-thrown as an unhandled
+12.7 In a browser a throw from an `Effect` MUST additionally be re-thrown as an unhandled
 rejection.
 
-12.9 An `Effect` that threw MUST stop its `watch`. See D9.
+12.8 An `Effect` that threw MUST stop its `watch`.
 
-12.10 `s.watch` MUST be defined as `watch` narrowed to that `Reactive`, and MUST NOT be a second
-mechanism.
+12.9 `s.watch` MUST be `watch` narrowed to that `Reactive`, and MUST NOT diverge from it on 12.1,
+12.2 or 12.8.
+
+12.10 An `Effect` a write woke MUST run at the end of that turn, and MUST NOT run once per write.
+
+12.11 `flushSync` MUST end the turn where it is called.
+
+12.12 A read MUST answer what the writes in its turn left, whether or not the `Effect` values they
+woke have run.
 
 # 13. Selections
 
-13.1 A `Selection` MUST be one `Reactive`, one keyed `Memo`, or a set of `tags`.
+13.1 A `Selection` MUST be one `Reactive`, one `Keyed`, or a set of `tags`.
 
-13.2 `pending` and `refreshing` over a `Selection` MUST answer whether any entry in it is in that
-state.
+13.2 `busy` over a `Selection` MUST answer whether ANY entry in it is busy.
 
 13.3 An implementation MUST hold one signal per `Selection`, and MUST NOT hold one per entry.
 
-13.4 `s.refresh`, `s.invalidate`, `m.refresh` and `m.invalidate` MUST be defined as `refresh` and
+13.4 `s.refresh`, `s.invalidate`, `k.refresh` and `k.invalidate` MUST be defined as `refresh` and
 `invalidate` over a `Selection`, and MUST NOT be a second mechanism.
 
 13.5 An implementation MUST NOT provide a free `done`, `success` or `error` over a `Selection`.
-See D10.
 
 13.6 A bare `invalidate` MUST match only entries that have a producer.
 
@@ -593,12 +647,10 @@ only entries something subscribes to and MUST mark the rest.
 
 13.9 A `Selection`'s signal MUST be keyed by the canonical form of its `tags`.
 
-13.10 On a server a bare `invalidate` and a bare `refresh` MUST each reach every `global` `memo`
-in the process. See D65.
+13.10 On a server a bare `invalidate` and a bare `refresh` MUST each reach every `global` `reactive`
+in the process.
 
-13.11 *Withdrawn, superseded by 13.10.* It read "an implementation MUST NOT provide a `refresh`
-over a `Selection` wider than the scope", which made the bare `refresh` narrower than the bare
-`invalidate` beside it.
+13.11 `ready` over a `Selection` MUST answer whether EVERY entry in it is ready.
 
 # 14. Tracking
 
@@ -606,14 +658,14 @@ over a `Selection` wider than the scope", which made the bare `refresh` narrower
 
 14.2 A template expression MUST track the `Reactive` values it reads.
 
-14.3 An unkeyed `memo` body MUST track.
+14.3 An unkeyed `reactive` body MUST track.
 
-14.4 A keyed `memo` body MUST NOT track.
+14.4 A keyed `reactive` body MUST NOT track.
 
 14.5 A block body's binding MUST track, and MUST bind the value the block produced rather than a
 `Reactive`.
 
-14.6 A `watch` `Effect` MUST track, narrowed where 12.4 gives it sources.
+14.6 A `watch` `Effect` MUST track, narrowed where 12.3 gives it sources.
 
 14.7 A component `<script>` setup body MUST NOT track.
 
@@ -632,13 +684,16 @@ where what it read is still in flight.
 against nothing.
 
 14.14 The compiler MUST warn on a reactive read an `await` dominates inside a tracked body, naming
-the read. See D11.
+the read.
 
-14.15 The compiler MUST warn on a reactive read in a condition position inside a tracked body,
-naming the read.
+14.15 The compiler MUST warn on a reactive read in a condition position inside an unkeyed
+`reactive` body, naming the read.
 
 14.16 The compiler MUST warn on a reactive read inside a function a tracked body creates and
 does not call synchronously, naming the read.
+
+14.17 The compiler MUST warn on a reactive read left of `??` where the type the read yields
+excludes `null` and `undefined`, naming `s.ready`.
 
 # 15. Refusals
 
@@ -646,43 +701,39 @@ does not call synchronously, naming the read.
 
 15.2 A refusal MUST fill the `Failures` of the `Reactive` that produced it.
 
-15.3 *Withdrawn, superseded by REGISTRY's `refuse.typed` row.* It read "`refuse.typed` MUST hand
-back a factory carrying `is`", which is what that row's type says.
+15.3 A refusal declared through `refuse.typed` MUST default to status 400.
 
-15.4 A refusal declared through `refuse.typed` MUST default to status 400. See D12.
+15.4 Constructing a `Failed` MUST be inert, and MUST NOT throw.
 
-15.5 Constructing a `Failed` MUST be inert, and MUST NOT throw.
+15.5 Returning a `Failed` MUST refuse.
 
-15.6 Returning a `Failed` MUST refuse. See D90.
+15.6 `Failed` MUST be structural.
 
-15.7 `Failed` MUST be structural.
-
-15.8 `notFound` MUST be returned where no route matched, and where no handler is mounted at that
+15.7 `notFound` MUST be returned where no route matched, and where no handler is mounted at that
 address and method.
 
-15.9 `validationError` MUST be returned where a `schema` refuses, at status 422.
+15.8 `validationError` MUST be returned where a `schema` or an `args` gate refuses, at status 422.
 
-15.10 An implementation MUST declare no refusal names beyond those `notFound` and `validationError`
-carry and the one 17.8 names. See D13, amended by D63.
+15.9 An implementation MUST declare no refusal names beyond those `notFound` and `validationError`
+carry and the one 17.4 names.
 
-15.11 An expression statement whose type is `Failed` MUST be a compile error naming both repairs.
+15.10 An expression statement whose type is `Failed` MUST be a compile error naming both repairs.
 
-15.12 Where `refuse.typed` is given a `schema`, the data MUST be checked synchronously at
-construction.
+15.11 Where `refuse.typed` is given a `schema`, the data MUST be checked at construction.
 
-15.13 A `message` given as a function MUST run at construction, on the data. See D57.
+15.12 A `message` given as a function MUST run at construction, on the data.
 
-15.14 A throw from that function MUST be caught, the `message` falling back to the name, and MUST
+15.13 A throw from that function MUST be caught, the `message` falling back to the name, and MUST
 warn on `abide:refuse`.
 
-15.15 The `schema` MUST run before the `message` function.
+15.14 The `schema` MUST run before the `message` function.
 
-15.16 A `schema` refusal at construction MUST warn on `abide:refuse` rather than stop the `Failed`
+15.15 A `schema` refusal at construction MUST warn on `abide:refuse` rather than stop the `Failed`
 being built.
 
 # 16. Handlers and transports
 
-16.1 A handler MUST be a `memo`, a `channel`, or a plain function.
+16.1 A handler MUST be a `reactive`, or a plain function.
 
 16.2 `GET`, `POST`, `PUT`, `PATCH` and `DELETE` MUST give a handler an address over http, mounted by
 file path and export name.
@@ -692,14 +743,14 @@ file path and export name.
 16.4 An `Rpc` MUST be callable in both arms, the call being what issues the request.
 
 16.5 Which arm `GET` takes MUST be read off a brand the factory stamped, and MUST NOT be inferred
-from the shape. See D14.
+from the shape.
 
-16.6 `GET` over a plain function MUST behave as `GET` over a `memo` of that function.
+16.6 `GET` over a plain function MUST behave as `GET` over a `reactive` of that function.
 
-16.7 A `memo` handed to a mutation MUST have its `ttl` default to 0 unless it declared one.
+16.7 A `reactive` handed to a mutation MUST have its `ttl` default to 0 unless it declared one.
 
-16.8 A `POST` over a `channel` MUST publish into the room, and declaring that handler MUST be the
-authorisation for it.
+16.8 A mutation over a `Reactive` with no producer MUST publish into it, and declaring that handler
+MUST be the authorisation for it.
 
 16.9 `Failures` on an `Rpc` MUST be the union of what the handler declared and what its rungs
 declared.
@@ -709,7 +760,7 @@ declared.
 16.11 `rpc.url` MUST resolve a mount-relative address at run time, and the build MUST NOT bake an
 absolute one.
 
-16.12 A `Middleware` rung MUST run on every call, in process as much as over the wire. See D15.
+16.12 A `Middleware` rung MUST run on every call, in process as much as over the wire.
 
 16.13 The rungs in registration order, the `ctx.args()` coerce-then-validate, and `timeout` MUST run
 on every call.
@@ -718,7 +769,6 @@ on every call.
 `cache-control`, a status written through `response` and the seed buffer write MUST be wire-only.
 
 16.15 The `Middleware` onion MUST be composed once at route-table construction, and MUST NOT be folded per call.
-See D16.
 
 16.16 A composed `Middleware` chain MUST capture the rung and the next link, and MUST NOT capture anything
 per-request.
@@ -727,7 +777,7 @@ per-request.
 
 16.18 `ctx.args()` MUST parse on first call and cache for the request.
 
-16.19 `ctx.args()` MUST hand back `Args` coerced and validated against the `schema` the memo
+16.19 `ctx.args()` MUST hand back `Args` coerced and validated against the `args` the value
 declared.
 
 16.20 Validation MUST be lazy, on that first `ctx.args()` call.
@@ -740,88 +790,80 @@ declared.
 
 16.24 A request's `timeout` floor MUST be the maximum over every handler that ran in it.
 
-16.25 *Withdrawn, superseded by 20.3.* It stated 20.3's requirement a second time, spelled over
-the option rather than the type.
-
-16.26 `crossOrigin` MUST default to false, and where it is declared abide MUST answer the `OPTIONS`
+16.25 `crossOrigin` MUST default to false, and where it is declared abide MUST answer the `OPTIONS`
 preflight itself.
 
-16.27 A handler MUST be request-bound where its rungs or its body read the request scope, and
-calling one from a scope that has none MUST be a build error, per 11.39.
+16.26 A handler MUST be request-bound where its rungs or its body read the request scope, and
+calling one from a scope that has none MUST be a build error, per 11.37.
 
-16.28 Shape MUST belong to the `Reactive` and MUST NOT be declared at the transport; a transport MUST
+16.27 Shape MUST belong to the `Reactive` and MUST NOT be declared at the transport; a transport MUST
 read it.
 
-16.29 A `schema` MUST run where its `Reactive` lives.
+16.28 A `schema` MUST run where its `Reactive` lives.
 
-16.30 A browser MUST receive a generated `Rpc` wrapper carrying the method, the mount-relative address and
-the description, and MUST NOT receive the server module. See D17.
+16.29 A browser MUST receive a generated `Rpc` wrapper carrying the method, the mount-relative address and
+the description, and MUST NOT receive the server module.
 
-16.31 Importing a name from `#server` that is not a handler MUST be a compile error from the client
+16.30 Importing a name from `#server` that is not a handler MUST be a compile error from the client
 graph, and MUST NOT be a silent stub.
 
-16.32 An `Rpc` returning a raw `Value` MUST transport as `application/json`.
+16.31 An `Rpc` returning a raw `Value` MUST transport as `application/json`.
 
-16.33 An `Rpc` returning `undefined` MUST answer 204 where no status was written through
+16.32 An `Rpc` returning `undefined` MUST answer 204 where no status was written through
 `response`.
 
-16.34 An `Rpc` returning an async generator MUST stream in the framing `Accept` names, and MUST
-default to the first framing its chunk type admits. See D91.
+16.33 An `Rpc` returning an async generator MUST stream in the framing `Accept` names, and MUST
+default to the first framing its chunk type admits.
 
-16.35 *Withdrawn, superseded by 16.34.* It read "a caller sending `Accept: text/event-stream`
-MUST get the same address framed as sse, and that answer MUST carry `vary: accept`", which made
-one entry of the framing table a clause of its own, and restated 21.8 for it.
-
-16.36 The seed buffer MUST hold an `Rpc`'s transcript in the chunk type's default framing,
+16.34 The seed buffer MUST hold an `Rpc`'s transcript in the chunk type's default framing,
 whichever framing the caller asked for.
 
-16.37 An `Rpc` returning a binary MUST transport as `application/octet-stream`, or as a `Blob`'s own
+16.35 An `Rpc` returning a binary MUST transport as `application/octet-stream`, or as a `Blob`'s own
 type where it has one.
 
-16.38 A returned `Blob` MUST be range-aware: abide MUST read `Range`, honour `If-Range` against the
+16.36 A returned `Blob` MUST be range-aware: abide MUST read `Range`, honour `If-Range` against the
 ETag it derives, and answer 206, 416 and 304 as the protocol requires.
 
-16.39 A handler MAY return a `Response`, and an in-process caller MUST receive it unconverted.
+16.37 A handler MAY return a `Response`, and an in-process caller MUST receive it unconverted.
 
-16.40 Where a handler returns a `Response`, `clients.mcp` and `clients.cli` MUST default to false.
+16.38 Where a handler returns a `Response`, `clients.mcp` and `clients.cli` MUST default to false.
 
-16.41 A second reader of a returned `Response` in one scope MUST be teed, bounded by
+16.39 A second reader of a returned `Response` in one scope MUST be teed, bounded by
 `ABIDE_MAX_STREAM_BUFFER_SIZE`.
 
-16.42 A mutation MUST answer a request preferring `text/html` as a navigation: a returned
+16.40 A mutation MUST answer a request preferring `text/html` as a navigation: a returned
 `redirect` passes through, a returned value becomes 303 back to the referrer, and a failure renders
 `error.abide` at its own status.
 
-16.43 A handler whose return type carries a `Reactive` MUST be a compile error naming the read.
-See D60.
+16.41 A handler whose return type carries a `Reactive` MUST be a compile error naming the read.
 
-16.44 A `Failed` escaping a handler MUST be answered at its own `status`.
+16.42 A `Failed` escaping a handler MUST be answered at its own `status`.
 
-16.45 A throw that is not a `Failed` MUST be answered 500. See D75.
+16.43 A throw that is not a `Failed` MUST be answered 500.
 
-16.46 `rpc.raw` MUST issue the call the `Rpc` issues, differing only in handing back the
-`Response`. See D76.
+16.44 `rpc.raw` MUST issue the call the `Rpc` issues, differing only in handing back the
+`Response`.
 
-16.47 An `Rpc` call MUST evaluate its `Args` at the call, and MUST NOT re-evaluate them.
+16.45 An `Rpc` call MUST evaluate its `Args` at the call, and MUST NOT re-evaluate them.
 
-16.48 A jsonl answer MUST write one JSON value per line, per pull.
+16.46 A jsonl answer MUST write one JSON value per line, per pull.
 
-16.49 An sse answer MUST frame each value as `data: <json>` followed by a blank line, with
+16.47 An sse answer MUST frame each value as `data: <json>` followed by a blank line, with
 `text/event-stream`, `no-cache` and `X-Accel-Buffering: no`.
 
-16.50 A stream of value chunks MUST admit jsonl and then sse, and a stream of binary chunks MUST
+16.48 A stream of value chunks MUST admit jsonl and then sse, and a stream of binary chunks MUST
 admit `application/octet-stream` alone.
 
-16.51 Where no handler fixed the framing, the chunk type MUST be read from the first chunk
+16.49 Where no handler fixed the framing, the chunk type MUST be read from the first chunk
 produced.
 
-16.52 An `Rpc` over a `Channel` MUST frame each message with the sequence number and the epoch
-18.10 and 18.11 mint, on the wire and in the seed buffer alike. See D93.
+16.50 An `Rpc` over a `Reactive` declaring `history` MUST frame each production with the sequence
+number and the epoch 18.10 and 18.11 mint, on the wire and in the seed buffer alike.
 
-16.53 An sse answer over a `Channel` MUST carry that sequence number as `id:`, and a moved epoch
-as `event: reset`.
+16.51 An sse answer over a `Reactive` declaring `history` MUST carry that sequence number as `id:`, and
+a moved epoch as `event: reset`.
 
-16.54 `Last-Event-ID` MUST be read as the last sequence number a reconnect carries, per 18.13.
+16.52 `Last-Event-ID` MUST be read as the last sequence number a reconnect carries, per 18.13.
 
 # 17. Response helpers
 
@@ -830,38 +872,25 @@ as `event: reset`.
 17.2 `page` MUST be defined as a write through `response` naming `text/html`, and MUST take what
 a render produced rather than perform the render.
 
-17.3 *Withdrawn, superseded by 16.32.* It read "`json` MUST serialize and tag
-`application/json`, and MUST send `null` where the value is `undefined`", which answered one
-value two ways: a returned `undefined` is 204 under 16.33, and the helper made it `null`.
-
-17.4 *Withdrawn, superseded by 16.48.* It read as 16.48 does, over a helper rather than over
-the answer the return type already framed.
-
-17.5 *Withdrawn, superseded by 16.49.* It read as 16.49 does, and let a handler hard-code the
-framing 16.34 has the caller negotiate.
-
-17.6 `redirect` MUST be defined as a write through `response` carrying a `RedirectStatus`,
+17.3 `redirect` MUST be defined as a write through `response` carrying a `RedirectStatus`,
 defaulting to 302.
 
-17.7 *Withdrawn, superseded by 15.6.* It read "`refuse` MUST throw, and MUST be declared
-`never`", which put two opposite disciplines under one prefix — the declared refusal returned,
-the undeclared one thrown.
+17.4 `refuse` on a server MUST hand back, per 15.5, the undeclared `Failed` named `HttpError` at
+the given status.
 
-17.8 `refuse` on a server MUST hand back, per 15.6, the undeclared `Failed` named `HttpError` at
-the given status. See D63.
+17.5 `refuse` MUST carry no data, and MUST NOT take an options bag for any.
 
-17.9 `refuse` MUST carry no data, and MUST NOT take an options bag for any. See D18.
+17.6 `jsonl`, `sse` and `bytes` MUST each be defined as a write through `response` fixing the
+framing of a streaming answer.
 
-17.10 `jsonl`, `sse` and `bytes` MUST each be defined as a write through `response` fixing the
-framing of a streaming answer. See D92.
-
-17.11 An implementation MUST NOT negotiate past a framing a handler fixed.
+17.7 An implementation MUST NOT negotiate past a framing a handler fixed.
 
 # 18. Sockets
 
-18.1 A `Socket` MUST hand back the same `Room` a `channel` invokes to.
+18.1 A `Socket` called with `Args` MUST hand back the same `Reactive` the `Keyed` it wraps hands back
+for those `Args`.
 
-18.2 Every `Socket` MUST be carried over a single web socket mux.
+18.2 Every `socket` MUST be carried over a single web socket mux.
 
 18.3 An upgrade MUST pass the `socket` lane's `middleware`.
 
@@ -871,30 +900,31 @@ framing of a streaming answer. See D92.
 
 18.6 `clientPublish` MUST default to false.
 
-18.7 `clientPublish` MUST gate this transport alone. See D19.
+18.7 `clientPublish` MUST gate this transport alone.
 
 18.8 A `transform` MUST still run on a publish `clientPublish` admits.
 
-18.9 `SocketOptions` MUST carry no schema, per 16.28.
+18.9 `SocketOptions` MUST carry no schema, per 16.27.
 
-18.10 Every `Message` MUST carry a sequence number, monotonic per `Room` and minted at publish.
+18.10 Every production of a wired `Reactive` MUST carry a sequence number, monotonic per `Reactive` and
+minted with the production.
 
-18.11 A `Room` MUST carry the epoch 9.21 mints, and an implementation MUST compare epochs for
+18.11 A wired `Reactive` MUST carry the epoch 9.19 mints, and an implementation MUST compare epochs for
 equality rather than for order.
 
 18.12 The sequence number and the epoch MUST be internal, and an app MUST NOT write either.
 
-18.13 A reconnect to a `Room` MUST carry the last sequence number rendered and compare epochs.
+18.13 A reconnect to a wired `Reactive` MUST carry the last sequence number rendered and compare epochs.
 
 18.14 A moved epoch MUST deliver the ring marked as a reset.
 
 18.15 A block receiving a reset MUST clear its accumulated rows and repaint from the ring.
 
-18.16 The sequence number MUST be the default key of a `{#for await}` block whose source is a `Room`.
+18.16 The sequence number MUST be the default key of a `{#for}` block over a cursor of a wired
+`Reactive`.
 
-18.17 *Withdrawn, superseded by 20.2.* It read "`clients` on a `socket` MUST omit the `openapi`
-key", which withheld an option from one producer rather than letting it stand inert there, and made
-`Clients` two types to do it.
+18.17 A client reading a `GET` MUST be subscribed over the socket mux to that handler's productions
+for those `Args`.
 
 # 19. Mount paths and schemas
 
@@ -905,52 +935,45 @@ naming both files that declared a `GET` or a `socket` there.
 
 19.3 A `Schema` MUST return what it accepts.
 
-19.4 An implementation MUST NOT accept a predicate as a `Schema`. See D20.
+19.4 An implementation MUST NOT accept a predicate as a `Schema`.
 
 19.5 The plain-function `Schema` form MUST throw what it refuses, and that throw MUST be caught where
 the schema runs and become the `''` entry of `Issues<T>`.
 
-19.6 *Withdrawn, superseded by REGISTRY's `Issues<T>` row.* It read "`Issues<T>` MUST be keyed by
-path on a composite, and MUST be a bare list on a primitive", which is that row's conditional type.
+19.6 `Paths<T>` MUST be dot-joined, MUST be depth-limited, and MUST widen to `string` past the limit.
 
-19.7 `Paths<T>` MUST be dot-joined, MUST be depth-limited, and MUST widen to `string` past the limit.
+19.7 Coercion MUST belong to the pipeline, and MUST NOT be asked of a `Schema`.
 
-19.8 Coercion MUST belong to the pipeline, and MUST NOT be asked of a `Schema`. See D21.
-
-19.9 A `GET` or `DELETE`'s text args MUST be coerced from the type the `JsonSchema` declares, before
+19.8 A `GET` or `DELETE`'s text args MUST be coerced from the type the `JsonSchema` declares, before
 validation.
 
-19.10 Coercion MUST happen at the `ctx.args()` that first asks, and every rung after it MUST see the
+19.9 Coercion MUST happen at the `ctx.args()` that first asks, and every rung after it MUST see the
 coerced value.
 
-19.11 Where no `schema` is given it MUST be derived from the type annotation and the argument
+19.10 Where no `schema` is given it MUST be derived from the type annotation and the argument
 defaults.
 
-19.12 A default MUST make a member optional, and a defaulted parameter MUST make `Args` itself
+19.11 A default MUST make a member optional, and a defaulted parameter MUST make `Args` itself
 optional.
 
-19.13 Where inference fails the compiler MUST read rather than refuse the file, and the derived
-`Schema` MUST widen. See D22.
+19.12 Where inference fails the compiler MUST read rather than refuse the file, and the derived
+`Schema` MUST widen.
 
-19.14 *Withdrawn, superseded by REGISTRY's `Args` rows.* It read "`JsonValue` MUST bound what an
-`Args` may hold", which is what every `Args` row's type says.
-
-19.15 *Withdrawn, superseded by REGISTRY's `validateJson` row.* It read "`validateJson` MUST hand
-back `Issues<T>`, or `null` where the value matches", which is that row's return type.
+19.13 A `Schema` that answers asynchronously MUST be refused.
 
 # 20. Generated surfaces
 
 20.1 Every surface `Clients` names MUST be derived from the route table, and MUST NOT be authored
 beside it.
 
-20.2 Every key of `Clients` MUST default to true. See D96.
+20.2 Every key of `Clients` MUST default to true.
 
-20.3 `Clients` MUST decide what is generated and listed, and MUST NOT decide who may call. See D23.
+20.3 `Clients` MUST decide what is generated and listed, and MUST NOT decide who may call.
 
 20.4 `ui: false` MUST generate no client wrapper, and importing that handler from `#ui` or a `.abide`
-file MUST then be the compile error 16.31 states.
+file MUST then be the compile error 16.30 states.
 
-20.5 `/__abide/openapi.json` and `/__abide/mcp` MUST be served from a `memo` over the route table,
+20.5 `/__abide/openapi.json` and `/__abide/mcp` MUST be served from a `reactive` over the route table,
 and MUST take no `ttl`.
 
 20.6 `/__abide/openapi.json` MUST publish OpenAPI 3.1, and MUST publish a handler's `JsonSchema`
@@ -959,7 +982,7 @@ with no translation.
 20.7 `/__abide/openapi.json` MUST be gated by `ABIDE_OPENAPI` and `/__abide/mcp` by `ABIDE_MCP`.
 What a closed one answers is 36.7.
 
-20.8 Every `/__abide/**` address MUST run inside the app's own middleware. See D62.
+20.8 Every `/__abide/**` address MUST run inside the app's own middleware.
 
 20.9 `/__abide/mcp` MUST publish a handler that reads as a tool and a resource according to which
 arm `GET` took, and MUST NOT require a flag to tell them apart.
@@ -968,7 +991,7 @@ arm `GET` took, and MUST NOT require a flag to tell them apart.
 still be refused on the call.
 
 20.11 `/__abide/openapi.json` MUST publish a `Schema`'s own JSON Schema where it has one, probing
-one spelling for it, and MUST publish the type-derived `JsonSchema` where it has none. See D34.
+one spelling for it, and MUST publish the type-derived `JsonSchema` where it has none.
 
 # 21. Generated headers
 
@@ -978,69 +1001,56 @@ one spelling for it, and MUST publish the type-derived `JsonSchema` where it has
 
 21.3 A page, an rpc answer and a refusal MUST default to `cache-control: private, no-store`.
 
-21.4 *Withdrawn, superseded by 21.11.* It read "a handler's own `ResponseInit` MUST override that
-default", and a `ResponseInit` on a helper is the write through `response` 21.11 governs.
+21.4 `/__abide/health` and `/__abide/principal` MUST answer `cache-control: no-store`.
 
-21.5 `/__abide/health` and `/__abide/principal` MUST answer `cache-control: no-store`.
+21.5 The built bundle MUST answer `cache-control: public, max-age=31536000, immutable`.
 
-21.6 The built bundle MUST answer `cache-control: public, max-age=31536000, immutable`.
+21.6 A page MUST carry `referrer-policy: strict-origin-when-cross-origin`.
 
-21.7 A page MUST carry `referrer-policy: strict-origin-when-cross-origin`.
+21.7 An answer that depends on a request header MUST carry `vary` naming it.
 
-21.8 An answer that depends on a request header MUST carry `vary` naming it.
+21.8 A `GET` over a `global` `reactive` MUST answer a `max-age` derived from that value's `ttl`, and an
+app MUST NOT be required to state the duration a second time.
 
-21.9 A `GET` over a `global` `memo` MUST answer a `max-age` derived from that memo's `ttl`, and an
-app MUST NOT be required to state the duration a second time. See D72.
+21.9 A `GET` over a `global` `reactive` MUST answer `private`.
 
-21.10 A `GET` over a `global` `memo` MUST answer `private`.
+21.10 A write through `response` MUST override the default 21.3 states.
 
-21.11 A write through `response` MUST override the default 21.3 states.
+21.11 The `max-age` 21.8 derives MUST replace 21.3's `no-store`, and 21.3 MUST decide the rest
+of that header.
 
-21.12 The `max-age` 21.9 derives MUST replace 21.3's `no-store`, and 21.3 MUST decide the rest
-of that header. See D72.
+21.12 A file under `src/ui/public` MUST answer `cache-control: public, max-age=0, must-revalidate`.
 
-21.13 A file under `src/ui/public` MUST answer `cache-control: public, max-age=0, must-revalidate`.
-See D98.
+21.13 A file under `src/ui/public` MUST answer an `etag` derived from its bytes.
 
-21.14 A file under `src/ui/public` MUST answer an `etag` derived from its bytes.
-
-21.15 A request whose `if-none-match` matches the `etag` 21.14 derives MUST be answered 304.
+21.14 A request whose `if-none-match` matches the `etag` 21.13 derives MUST be answered 304.
 
 # 22. Request-scoped ambients
 
 22.1 `request`, `response` and `server` MUST throw outside a request.
 
-22.2 *Withdrawn, superseded by 11.34.* It read "a key `Bag` declares MUST be typed by it, and
-an undeclared key MUST be permitted", which gave a per-request value a second home: an untyped
-record beside the request-local `memo` that already holds one, carrying no probe and no trigger.
+22.2 `cookies` MUST be isomorphic, and on a server writes MUST be collected onto the response.
 
-22.3 `cookies` MUST be isomorphic, and on a server writes MUST be collected onto the response.
+22.3 A cookie's `secure` MUST default from `NODE_ENV`.
 
-22.4 A cookie's `secure` MUST default from `NODE_ENV`.
+22.4 A read of a cookie by name MUST track that name.
 
-22.5 *Withdrawn, superseded by 22.3.* It read "`cookies` MUST state its asymmetries between the two
-sides rather than smooth them over", which named no observable and no side, so two implementations
-could satisfy it and disagree. The asymmetries themselves are 22.3, 22.8, 22.9 and 22.10, and the
-writing rule is BRAND's "Name the cost".
+22.5 A write through `cookies` MUST wake the readers of that name alone.
 
-22.6 A read of a cookie by name MUST track that name. See D58.
-
-22.7 A write through `cookies` MUST wake the readers of that name alone.
-
-22.8 Where the browser reports cookie changes, a change made outside `cookies` MUST wake the readers
+22.6 Where the browser reports cookie changes, a change made outside `cookies` MUST wake the readers
 of that name.
 
-22.9 Where the browser does not report them, a change made outside `cookies` MUST wake nothing.
+22.7 Where the browser does not report them, a change made outside `cookies` MUST wake nothing.
 
-22.10 `cookies` MUST throw outside a request on a server.
+22.8 `cookies` MUST throw outside a request on a server.
 
-22.11 A write through `response` MUST be collected onto the response being built for the request
-being served. See D89.
+22.9 A write through `response` MUST be collected onto the response being built for the request
+being served.
 
 # 23. Route and connectivity
 
 23.1 Each member of `route` MUST be its own `Reactive`, and `route` MUST NOT be one `Reactive` over a
-composite. See D24.
+composite.
 
 23.2 `route.url` MUST be one `URL` instance per navigation, built when the route resolves.
 
@@ -1062,30 +1072,19 @@ composite. See D24.
 
 24.2 `trace.sampled` MUST carry the caller's sampling decision verbatim.
 
-24.3 *Withdrawn, superseded by REGISTRY's `trace.span` row.* It read "`trace.span` MUST hand back
-exactly what its body returned", which is what that row's `<T>(name, body: () => T) => T` says.
+24.3 A span MUST be a `LogRecord`, and MUST NOT be a second feed.
 
-24.4 A span MUST be a `LogRecord`, and MUST NOT be a second feed.
+24.4 A span MUST carry `startedAt` as ISO-8601 and its duration as a monotonic measurement.
 
-24.5 A span MUST carry `startedAt` as ISO-8601 and its duration as a monotonic measurement.
-
-24.6 `trace.headers` MUST carry `traceparent` naming the current span as parent.
+24.5 `trace.headers` MUST carry `traceparent` naming the current span as parent.
 
 # 25. Health
 
 25.1 `GET /__abide/health` MUST answer `Health` over http.
 
-25.2 *Withdrawn, superseded by 20.8.* It read "`GET /__abide/health` MUST be answered outside
-the middleware, and MUST therefore be unauthenticated", which made one address a lane of its own
-and decided an app's authorization for it.
+25.2 An app's own `onHealth` fields MUST win every collision.
 
-25.3 An app's own `onHealth` fields MUST win every collision. See D25.
-
-25.4 *Withdrawn, superseded by REGISTRY's `Health` row.* It read "`Health` MUST carry `version`,
-`abide` and `startedAt`, and `version` MUST be empty rather than absent", which is that row's three
-required `string` members.
-
-25.5 `health` MUST be seeded per 41.6.
+25.3 `health` MUST be seeded per 41.6.
 
 # 26. Principal
 
@@ -1095,7 +1094,7 @@ required `string` members.
 
 26.3 A caller carrying `principal.error` MUST NOT be authenticated.
 
-26.4 The baseline MUST win every collision in `Principal`. See D25.
+26.4 The baseline MUST win every collision in `Principal`.
 
 26.5 `principal.caller` MUST be read off its own cookie or minted, and MUST need no resolution.
 
@@ -1109,91 +1108,81 @@ required `string` members.
 
 26.10 `Principal` MUST never be null, and an anonymous visitor MUST be `authenticated` false.
 
-26.11 *Withdrawn, superseded by 20.8.* It read "`GET /__abide/principal` MUST be open and MUST
-answer `no-store`", which decided an app's authorization for one address the way 25.2 did for its
-sibling, and restated 21.5 to do it.
-
-26.12 The `principal` seal MUST be an HMAC over the claims and their expiry, and MUST be signed
+26.11 The `principal` seal MUST be an HMAC over the claims and their expiry, and MUST be signed
 rather than encrypted.
 
-26.13 The principal cookie MUST be set `HttpOnly` and `SameSite=Lax`, and `Secure` in production.
+26.12 The principal cookie MUST be set `HttpOnly` and `SameSite=Lax`, and `Secure` in production.
 
-26.14 A bad signature, a lapsed seal and a malformed cookie MUST be one answer: `principal` reports
+26.13 A bad signature, a lapsed seal and a malformed cookie MUST be one answer: `principal` reports
 an anonymous caller.
 
-26.15 A `principal` MUST be resolved at most once per request.
+26.14 A `principal` MUST be resolved at most once per request.
 
-26.16 A `principal` seal MUST be refreshed once half spent.
+26.15 A `principal` seal MUST be refreshed once half spent.
 
-26.17 An implementation MUST keep no server-side principal store and no revocation list. See D26.
+26.16 An implementation MUST keep no server-side principal store and no revocation list.
 
-26.18 `principal` MUST be seeded per 41.6.
+26.17 `principal` MUST be seeded per 41.6.
 
-26.19 The cookie the `principal` seal is carried in MUST be named `abide-principal`.
+26.18 The cookie the `principal` seal is carried in MUST be named `abide-principal`.
 
-26.20 The cookie `principal.caller` is read from MUST be named `abide-caller`.
+26.19 The cookie `principal.caller` is read from MUST be named `abide-caller`.
 
-26.21 `principal.set` MUST throw where the sealed cookie would exceed the browser's cookie ceiling,
+26.20 `principal.set` MUST throw where the sealed cookie would exceed the browser's cookie ceiling,
 naming the byte count.
 
-26.22 `principal.set` MUST throw once the response headers are out.
+26.21 `principal.set` MUST throw once the response headers are out.
 
-26.23 `principal.caller` MUST throw in a browser. See D83.
+26.22 `principal.caller` MUST throw in a browser.
 
 # 27. Configuration
 
-27.1 *Withdrawn, superseded by REGISTRY's `Config` row.* It read "every field of `Env` MUST be
-present in `Config`", which is what that row's type says.
+27.1 `config` MUST throw what `onConfig` threw.
 
-27.2 `config` MUST throw what `onConfig` threw.
+27.2 Precedence MUST be derived, then `config` from the app, then the environment.
 
-27.3 Precedence MUST be derived, then `config` from the app, then the environment.
-
-27.4 `APP_NAME`, `APP_VERSION` and `APP_DATA_DIR` MUST be derived where the config does not carry
+27.3 `APP_NAME`, `APP_VERSION` and `APP_DATA_DIR` MUST be derived where the config does not carry
 them.
 
-27.5 `ConfigDefaults` MUST be synchronous by contract.
+27.4 `ConfigDefaults` MUST be synchronous by contract.
 
-27.6 `config.invalidate` MUST re-read the environment and re-run `onConfig`.
+27.5 `config.invalidate` MUST re-read the environment and re-run `onConfig`.
 
-27.7 A second `onConfig` MUST replace the first, its schema included, and MUST warn on
+27.6 A second `onConfig` MUST replace the first, its schema included, and MUST warn on
 `abide:config`.
 
-27.8 The `config` `schema` MUST be checked last, over the whole document.
+27.7 The `config` `schema` MUST be checked last, over the whole document.
 
-27.9 A value out of `Env` MUST be coerced to the type of the default it overrides, and a value that
+27.8 A value out of `Env` MUST be coerced to the type of the default it overrides, and a value that
 will not coerce MUST keep that default.
 
-27.10 `config` MUST be an unkeyed `global` `memo` over the precedence 27.3 states. See D52.
+27.9 `config` MUST be an unkeyed `global` `reactive` over the precedence 27.2 states.
 
 # 28. Logging
 
-28.1 Every line MUST be published to `log.records`, which MUST be an ordinary `Room`.
+28.1 Every line MUST be published to `log.records`, which MUST be an ordinary `reactive` declaring
+`history`.
 
 28.2 `log` MUST always write.
 
 28.3 `log.warning` and `log.error` MUST always write.
 
-28.4 `log.channel` MUST prefix the app name, and calling it again MUST append another segment.
+28.4 `log.named` MUST prefix the app name, and calling it again MUST append another segment.
 
 28.5 A `Logger` MUST carry the same levels and the same `log.enabled` as `log`.
 
-28.6 `log.enabled` MUST answer whether a gated line on that channel would be written.
+28.6 `log.enabled` MUST answer whether a gated line on that namespace would be written.
 
-28.7 A channel `log.enabled` reports closed MUST NOT run the measurement a gated line would report.
-See D27.
+28.7 A namespace `log.enabled` reports closed MUST NOT run the measurement a gated line would report.
 
-28.8 *Withdrawn, superseded by REGISTRY's `LogRecord` row.* It read "a `LogRecord` MUST carry the
-time, the level, the channel, the message and the trace", which is that row's five members.
+28.8 A correctness or a configuration failure MUST report on a namespace `abide:` names.
 
-28.9 A correctness or a configuration failure MUST report on a channel `abide:` names.
-
-28.10 `DEBUG` MUST gate named channels in debug-npm grammar, and MUST be read from the environment
+28.9 `DEBUG` MUST gate namespaces in debug-npm grammar, and MUST be read from the environment
 on a server.
 
-28.11 `DEBUG` MUST reach a browser through the document rather than through the bundle.
+28.10 `DEBUG` MUST reach a browser through the document rather than through the bundle.
 
-28.12 A browser's own stored `DEBUG` setting MUST answer only where the document carries none, and
+28.11 A browser's own stored `DEBUG` setting MUST answer only where the document carries none, and
 MUST NOT override it.
 
 # 29. Content security policy
@@ -1204,7 +1193,7 @@ MUST NOT override it.
 
 29.3 `csp.nonce` MUST be this response's nonce.
 
-29.4 `csp.nonce` MUST be readable only inside a request scope, per 11.39.
+29.4 `csp.nonce` MUST be readable only inside a request scope, per 11.37.
 
 29.5 The `csp` baseline MUST be `default-src 'self'`, `script-src 'self'`, `style-src 'self'`,
 `img-src 'self' data:`, `font-src 'self'`, `connect-src 'self'`, `style-src-attr 'unsafe-inline'`,
@@ -1217,7 +1206,7 @@ MUST NOT override it.
 29.8 A directive name the `csp` baseline lacks MUST be added.
 
 29.9 The inline output `render` emits MUST be permitted by a build-time hash in `script-src`, and
-MUST NOT consume `csp.nonce`. See D81.
+MUST NOT consume `csp.nonce`.
 
 29.10 The inline output `render` emits MUST be byte-invariant across responses.
 
@@ -1241,45 +1230,44 @@ segment.
 
 # 31. Reading and writing by name
 
-31.1 Inside a `.abide` file a name bound to a `Reactive` MUST be read where it appears in an operand,
-in text, in an attribute, or in a value-typed argument.
+31.1 Inside a `.abide` file a name bound to a `Reactive` MUST be read wherever 31.3 does not hold it.
 
 31.2 A read by name MUST be live.
 
-31.3 A name MUST hold the `Reactive` in a binding, in a return, and in a `Reactive`-typed argument
-position. See D28.
+31.3 A name MUST hold the `Reactive` only where the declared type of its position is a `Reactive`: an
+annotated binding, an annotated return, a `Reactive`-typed parameter, a `bind:` operand, or a prop
+declared as one.
 
-31.4 Assigning a `Reactive` to such a name MUST be a compile error naming both repairs.
+31.4 Assignment to such a name MUST be a write, and the assigned value MAY be settled, a load, or a
+`Reactive`.
 
-31.5 Assignment to such a name MUST be a write, and the assigned value MAY be settled or a load.
+31.5 A property access on such a name MUST reach the value, except a member declared on the
+`Reactive` type, which MUST reach that member bound to the `Reactive`.
 
-31.6 *Withdrawn, superseded by 31.11.* It required the copy-on-write 31.11 requires, over "a path"
-rather than a member path, and without the no-elision half.
+31.6 A call on such a name MUST reach the `Reactive` API where the member is declared on the
+`Reactive` type, and the value's method otherwise.
 
-31.7 A property access on such a name MUST reach the value, and MUST NOT reach the `Reactive` API.
+31.7 `s` and `s.set` MUST keep compiling inside a `.abide` file.
 
-31.8 A call on such a name MUST reach the `Reactive` API where the member is one of its own, and the
-value's method otherwise.
+31.8 Reads inside one `{await expr}` MUST be started before they are awaited.
 
-31.9 `s` and `s.set` MUST keep compiling inside a `.abide` file.
+31.9 A write through a member path MUST copy down that path and then write, and the copy MUST NOT
+be optimised away.
 
-31.10 Reads inside one `{await expr}` MUST be started before they are awaited.
+31.10 A read inside an `{await expr}` operand that is not definitely evaluated MUST lower in place,
+and MUST NOT join the set 31.8 starts.
 
-31.11 A write through a member path MUST copy down that path and then write, and the copy MUST NOT
-be optimised away. See D35.
+31.11 A mutator lifted per 31.9 MUST be resolved from the type of the `Reactive` rather than from
+the member name.
 
-31.12 A property access on a name bound to a `Reactive` MUST short-circuit where nothing has landed,
-and the rest of the chain MUST short-circuit with it. See D78.
+31.12 A template-local binding MUST shadow a name bound to a `Reactive` for the body it is bound in.
 
-31.13 A read inside an `{await expr}` operand that is not definitely evaluated MUST lower in place,
-and MUST NOT join the set 31.10 starts. See D79.
+31.13 A read spelled `foo()` MUST take no arguments, and an argument MUST be a compile error.
 
-31.14 A mutator lifted per 31.11 MUST be resolved from the type of the `Reactive` rather than from
-the member name. See D80.
+31.14 A destructuring pattern or a spread over such a name MUST read it once.
 
-31.15 A template-local binding MUST shadow a name bound to a `Reactive` for the body it is bound in.
-
-31.16 A read spelled `foo()` MUST take no arguments, and an argument MUST be a compile error.
+31.15 The compiler MUST warn where 31.5 reaches a `Reactive` member the value's type also declares,
+naming the explicit read.
 
 # 32. Templating
 
@@ -1313,35 +1301,34 @@ string.
 
 32.13 `{#if}` and `{#switch}` MUST render one branch.
 
-32.14 `{#await}` without `then` MUST render its body while pending, and its binding MUST be live.
+32.14 `{#for}` without a key MUST be positional.
 
-32.15 `{#await ... then value}` MUST await before rendering, and over a stream MUST await the close.
+32.15 `{#for}` without a key over a stateful body MUST warn in development.
 
-32.16 `{#for}` without a key MUST be positional.
+32.16 `{#for}` over an async iterable MUST render each item as it arrives, and MUST append rather
+than reconcile.
 
-32.17 `{#for}` without a key over a stateful body MUST warn in development.
-
-32.18 `{#for await}` MUST accept a source that names its own replay depth.
-
-32.19 `{#try}` MUST be a render-time boundary over a region, and a failure MUST replace the whole
+32.17 `{#try}` MUST be a render-time boundary over a region, and a failure MUST replace the whole
 body.
 
-32.20 An inline `{#component Name(pattern)}` MUST be TitleCase.
+32.18 An inline `{#component Name(pattern)}` MUST be TitleCase.
 
-32.21 A capitalised tag `<Name/>` MUST be a component invocation.
+32.19 A capitalised tag `<Name/>` MUST be a component invocation.
 
-32.22 `<slot/>` MUST render children, and a fallback MUST render where none were passed.
+32.20 `<slot/>` MUST render children, and a fallback MUST render where none were passed.
 
-32.23 An interpolated `style` attribute MUST lower to `style:prop` under a static property name, and
-MUST NOT be built as a string. See D36.
+32.21 An interpolated `style` attribute MUST lower to `style:prop` under a static property name, and
+MUST NOT be built as a string.
 
-32.24 An interpolation in a URL-typed attribute MUST be scheme-checked, and a scheme outside
+32.22 An interpolation in a URL-typed attribute MUST be scheme-checked, and a scheme outside
 `http:`, `https:`, `mailto:`, `tel:` or a relative reference MUST be dropped and warned on
 `abide:render`.
 
-32.25 A control block MUST bind each reactive read and probe call in its subject once for the body.
+32.23 A control block MUST bind each reactive read and probe call in its subject once for the body.
 
-32.26 `{#for}` and `{#for await}` over an absent subject MUST iterate zero times. See D78.
+32.24 `{#for}` over an absent subject MUST iterate zero times.
+
+32.25 A template expression a `NotLanded` aborted MUST leave what it last rendered in place.
 
 # 33. Props
 
@@ -1407,7 +1394,7 @@ every selector MUST require it on its rightmost compound.
 dependency of that component.
 
 34.6 A component scope the document never linked MUST reach the page through
-`document.adoptedStyleSheets`. See D82.
+`document.adoptedStyleSheets`.
 
 34.7 An implementation MUST NOT provide a fallback for `document.adoptedStyleSheets`.
 
@@ -1433,7 +1420,7 @@ later.
 
 35.9 A sink inside RCDATA MUST fill through the element's own property rather than through markup.
 
-35.10 The batching unit of a sink fill MUST be the flush and MUST NOT be the production. See D37.
+35.10 The batching unit of a sink fill MUST be the flush and MUST NOT be the production.
 
 # 36. Environment and files
 
@@ -1454,22 +1441,19 @@ MUST answer 404.
 
 36.8 `ABIDE_LOG_FORMAT` unset MUST follow the TTY.
 
-36.9 *Withdrawn, superseded by 28.10 and 28.12.* It restated both, and omitted 28.12's precedence:
-read alone it let a browser's stored setting override a document that carries one.
+36.9 `NO_COLOR` MUST beat `FORCE_COLOR`.
 
-36.10 `NO_COLOR` MUST beat `FORCE_COLOR`.
+36.10 `#server`, `#ui` and `#shared` MUST be the seams the source is split by.
 
-36.11 `#server`, `#ui` and `#shared` MUST be the seams the source is split by.
+36.11 A file under `src/ui/public` MUST be answered at its path below that directory, rooted at the
+mount rather than at the origin.
 
-36.12 A file under `src/ui/public` MUST be answered at its path below that directory, rooted at the
-mount rather than at the origin. See D99.
+36.12 A file under `src/ui/public` MUST be answered with the bytes as authored.
 
-36.13 A file under `src/ui/public` MUST be answered with the bytes as authored.
-
-36.14 A `src/ui/public` path resolving to the address of a page route MUST be a build error naming
+36.13 A `src/ui/public` path resolving to the address of a page route MUST be a build error naming
 both.
 
-36.15 A file under `src/ui/public` MUST carry a `content-type` derived from its extension.
+36.14 A file under `src/ui/public` MUST carry a `content-type` derived from its extension.
 
 # 37. Lifecycle hooks
 
@@ -1479,7 +1463,7 @@ both.
 
 37.3 `middleware` MUST run pre-routing, over the request and the response.
 
-37.4 `onStart` MUST wrap `createApp` and `onStop` MUST wrap `App.stop`. See D116.
+37.4 `onStart` MUST wrap `createApp` and `onStop` MUST wrap `App.stop`.
 
 37.5 `onError` MUST run on an unexpected error in that scope.
 
@@ -1509,7 +1493,7 @@ start.
 38.9 `abide openapi` and `abide mcp` MUST derive from the same route table the served surfaces do,
 per 20.1.
 
-38.10 `abide logs` MUST be `abide call` over `log.records`.
+38.10 `abide logs` MUST be a live subscription to `log.records`, as `abide connect` makes one.
 
 38.11 `abide compile` and `abide bundle` MUST produce a standalone artifact.
 
@@ -1518,7 +1502,7 @@ per 20.1.
 38.13 Asking `abide` for help MUST be a success, and an unknown command MUST NOT be.
 
 38.14 `abide mcp` MUST be a bridge a model client spawns and kills, and `abide start` MUST NOT be
-put in that position. See D38.
+put in that position.
 
 38.15 `abide dev` MUST hold the app in a worker and keep the listener on the main thread.
 
@@ -1577,108 +1561,90 @@ app MUST NOT be required to feature-detect.
 
 40.3 Every `{% example %}` directory SHOULD carry a bench and an end-to-end spec.
 
-40.4 *Withdrawn, superseded by 40.23 and 40.24.* It read "a page MUST embed at most one
-`{% example %}`, and that example MUST be one problem needing everything the page teaches", which
-made the size of an example a function of how many names the page claimed rather than of what the
-example demonstrates.
-
-40.5 A file in an `{% example %}` directory that is not part of the problem its summary names MUST
+40.4 A file in an `{% example %}` directory that is not part of the problem its summary names MUST
 NOT be there.
 
-40.6 *Withdrawn, superseded by 40.23.* It read "where a subheading needs code the `{% example %}`
-does not have, the repair MUST be another file in that directory and MUST NOT be a second
-example", which is the repair 40.4 forced and leaves with it.
-
-40.7 `{% example %}` MUST render the example directory as the running page above a tab per artifact
+40.5 `{% example %}` MUST render the example directory as the running page above a tab per artifact
 it has, and the render MUST NOT be one of those tabs.
 
-40.8 `{% snippet %}` MUST be how a page shows code from an example, in place of pasting it into a
+40.6 `{% snippet %}` MUST be how a page shows code from an example, in place of pasting it into a
 fence.
 
-40.9 A `{% snippet %}` anchor MUST be a line prefix matching exactly once, and the slice MUST run to the end
+40.7 A `{% snippet %}` anchor MUST be a line prefix matching exactly once, and the slice MUST run to the end
 of the construct it opens.
 
-40.10 Several `{% snippet %}` anchors separated by an elision MUST render as one fence in file
+40.8 Several `{% snippet %}` anchors separated by an elision MUST render as one fence in file
 order, with the gap marked rather than closed.
 
-40.11 A `{% snippet %}`'s caption, language and spine MUST be derived from its address.
+40.9 A `{% snippet %}`'s caption, language and spine MUST be derived from its address.
 
-40.12 A `{% snippet %}` anchor matching none or matching two MUST be a build failure.
+40.10 A `{% snippet %}` anchor matching none or matching two MUST be a build failure.
 
-40.13 A panel an `{% example %}` has no artifact for MUST NOT be rendered.
+40.11 A panel an `{% example %}` has no artifact for MUST NOT be rendered.
 
-40.14 The hand-written arm an `{% example %}` carries MUST NOT be a panel.
+40.12 The hand-written arm an `{% example %}` carries MUST NOT be a panel.
 
-40.15 *Withdrawn, superseded by 40.21.* It read "anything an example renders that its own files do
-not produce MUST be inside a tip", which stopped being sayable when the frame began running the
-hand-written arm: the arm is not the `files/` the panel shows, and the instrumentation moved out of
-the frame rather than into a tip.
-
-40.16 A page MUST declare in `covers` which REGISTRY names it covers, and an overview or a reference
+40.13 A page MUST declare in `covers` which REGISTRY names it covers, and an overview or a reference
 page MUST declare none.
 
-40.17 Every name `covers` may claim MUST be claimed by exactly one page.
+40.14 Every name `covers` may claim MUST be claimed by exactly one page.
 
-40.18 The voice, the vocabulary and the register of a title against a nav label MUST be
+40.15 The voice, the vocabulary and the register of a title against a nav label MUST be
 `docs/BRAND.md`'s, and MUST NOT be stated here.
 
-40.19 An `{% example %}` MUST run its hand-written arm, and MUST NOT run a scripted stand-in for
-one. See D40.
+40.16 An `{% example %}` MUST run its hand-written arm, and MUST NOT run a scripted stand-in for
+one.
 
-40.20 The network an `{% example %}` arm talks to MUST be that example's own wire fixture or the
+40.17 The network an `{% example %}` arm talks to MUST be that example's own wire fixture or the
 hand-written server its manifest names, and a request neither answers MUST be reported in the frame
-rather than left to hang. See D77.
+rather than left to hang.
 
-40.21 Instrumentation the documentation adds to an `{% example %}` MUST sit outside the render.
+40.18 Instrumentation the documentation adds to an `{% example %}` MUST sit outside the render.
 
-40.22 Two wire fixtures an `{% example %}` arm's request cannot be told apart by MUST be a build
+40.19 Two wire fixtures an `{% example %}` arm's request cannot be told apart by MUST be a build
 failure.
 
-40.23 A page MUST embed one `{% example %}` per behaviour it teaches.
+40.20 A page MUST embed one `{% example %}` per behaviour it teaches.
 
-40.24 An `{% example %}` MUST demonstrate exactly one behaviour.
+40.21 An `{% example %}` MUST demonstrate exactly one behaviour.
 
-40.25 *Withdrawn, superseded by 40.32.* It read "an `{% example %}` whose behaviour is a claim
-about work MUST render the count of that work", and what it required was bookkeeping in the source
-a reader came to read — a counter per claim, declared, incremented and rendered. See D45.
+40.22 A readout an `{% example %}` arm renders MUST be one that example's own source names.
 
-40.26 A readout an `{% example %}` arm renders MUST be one that example's own source names.
+40.23 An `{% example %}` directory MUST be embedded by exactly one page declaring `covers`.
 
-40.27 An `{% example %}` directory MUST be embedded by exactly one page declaring `covers`. See D41.
+40.24 An `{% example %}` MUST model a pattern from an app `docs/BRAND.md` names.
 
-40.28 An `{% example %}` MUST model a pattern from an app `docs/BRAND.md` names. See D42.
+40.25 Every `{% example %}` a page embeds MUST be drawn from the same app.
 
-40.29 Every `{% example %}` a page embeds MUST be drawn from the same app.
+40.26 A control an `{% example %}` renders MUST sit with the value it changes.
 
-40.30 A control an `{% example %}` renders MUST sit with the value it changes.
+40.27 An `{% example %}` MUST prove the heading it sits under.
 
-40.31 An `{% example %}` MUST prove the heading it sits under. See D44.
+40.28 An `{% example %}` MUST NOT carry code its proof does not need.
 
-40.32 An `{% example %}` MUST NOT carry code its proof does not need. See D45.
-
-40.33 The capability an `{% example %}` proves MUST be one the app it is drawn from would reach
+40.29 The capability an `{% example %}` proves MUST be one the app it is drawn from would reach
 for.
 
-40.34 A heading that carries an `{% example %}` MUST be followed by it, with nothing between
-them. See D46.
+40.30 A heading that carries an `{% example %}` MUST be followed by it, with nothing between
+them.
 
-40.35 An `{% example %}`'s summary MUST state the situation it is in, and MUST NOT restate the
+40.31 An `{% example %}`'s summary MUST state the situation it is in, and MUST NOT restate the
 heading.
 
-40.36 A comment in an `{% example %}`'s own source MUST fit on one line, and a reason longer than
-that MUST go in the copy after the card. See D47.
+40.32 A comment in an `{% example %}`'s own source MUST fit on one line, and a reason longer than
+that MUST go in the copy after the card.
 
-40.37 A page's lead MUST read standalone, being what a section overview shows for that page, and
+40.33 A page's lead MUST read standalone, being what a section overview shows for that page, and
 MUST NOT carry a relative link.
 
-40.38 A page whose `covers` names one REGISTRY entry SHOULD open on a section giving that entry's
+40.34 A page whose `covers` names one REGISTRY entry SHOULD open on a section giving that entry's
 forms, the options they share, and a link to its reference page.
 
 # 41. Rendering and hydration
 
 41.1 `render` MUST flush the `<head>` as soon as it is known.
 
-41.2 A render MUST start every asynchronous read up front and in parallel. See D70.
+41.2 A render MUST start every asynchronous read up front and in parallel.
 
 41.3 `render` MUST NOT be held for an unfinished stream: what the stream produced MUST go out
 inline, and the rest MUST be picked up by the client's own request.
@@ -1689,14 +1655,14 @@ inline, and the rest MUST be picked up by the client's own request.
 generation for it.
 
 41.6 Data MUST reach a browser by answering that browser's own `Rpc` call from the seed buffer, and
-a document MUST NOT carry a copy of an answer. See D39.
+a document MUST NOT carry a copy of an answer.
 
-41.7 Hydration MUST re-execute setup: every `<script>`, every `state` and every `memo` body runs
+41.7 Hydration MUST re-execute setup: every `<script>` and every `reactive` body runs
 again, and a serialized setup result MUST NOT be adopted.
 
 41.8 The `Rpc` calls that re-execution makes MUST be answered from the seed buffer.
 
-41.9 A `{#for await}` block the server already painted MUST be reconciled against the replayed
+41.9 A `{#for}` block over a cursor the server already painted MUST be reconciled against the replayed
 productions by the block's key, and MUST NOT be appended to.
 
 41.10 `render` MUST emit markers rather than a tree to diff, and the client MUST walk the marker
@@ -1708,10 +1674,10 @@ on `abide:hydrate`.
 41.12 A shared `layout.abide` MUST NOT be rebuilt between navigations.
 
 41.13 An `Rpc` call re-execution makes that the seed buffer cannot answer MUST be a hydration
-mismatch, per 41.11. See D73.
+mismatch, per 41.11.
 
 41.14 The seed buffer MUST be filled from the production the render already had, and a handler
-MUST NOT be run a second time to fill it. See D94.
+MUST NOT be run a second time to fill it.
 
 # 42. The app object
 
@@ -1722,9 +1688,9 @@ first request.
 
 42.3 `createApp` MUST NOT bind a socket.
 
-42.4 A hook `onStart` wraps MUST NOT observe the port. See D116.
+42.4 A hook `onStart` wraps MUST NOT observe the port.
 
-42.5 `App.fetch` MUST answer a `Request` where no socket is bound. See D114.
+42.5 `App.fetch` MUST answer a `Request` where no socket is bound.
 
 42.6 `App.fetch` MUST be `App.run` with dispatch over it, and MUST NOT be a second scope
 constructor.
@@ -1732,7 +1698,7 @@ constructor.
 42.7 `App.run` MUST run its function in one scope, and MUST hand back what that function returned.
 
 42.8 A `Request` on `App.run` MUST be optional, and a scope made without one MUST be the scope 22.1
-and 22.10 throw in.
+and 22.8 throw in.
 
 42.9 `App.listen` MUST be where the socket is bound, and MUST be what supplies `server`.
 
@@ -1741,11 +1707,11 @@ and 22.10 throw in.
 42.11 `App.stop` MUST end every live stream, close every open socket, and clear every timer the app
 holds.
 
-42.12 A second `App` in one process MUST share the first's rooms, `config` and `global` entries, per
-9.18, 27.10 and 11.36.
+42.12 A second `App` in one process MUST share the first's socket-carried values, `config` and `global`
+entries, per 9.16, 27.9 and 11.34.
 
 42.13 A test MUST reach a handler through the same `App` a host holds, and abide MUST NOT generate a
-client of its own for one. See D115.
+client of its own for one.
 
 # 44. The measurement harness
 
@@ -1753,10 +1719,10 @@ client of its own for one. See D115.
 `Sample` is not something an app writes.*
 
 44.1 `harness/measure`, `harness/engine` and `harness/server` MUST each be reachable through only
-the dependency each is named for, and `harness/report` MUST have none. See D101.
+the dependency each is named for, and `harness/report` MUST have none.
 
 44.2 A `Work` record MUST partition nodes moved by node kind, and MUST NOT carry a total across
-those kinds. See D102.
+those kinds.
 
 44.3 A DOM member `harness/measure` does not count MUST throw naming that member while a case is
 armed.
@@ -1770,28 +1736,28 @@ both substrates.
 44.6 A `Work` record MUST NOT carry a duration, and `time` MUST throw while the counters are armed.
 
 44.7 A floor MUST be measured by running one arm twice under its own name, and `ratio` MUST report
-a value inside that floor as a tag rather than as a number. See D103.
+a value inside that floor as a tag rather than as a number.
 
 44.8 `batch` MUST interleave its arms, and MUST NOT run one arm in a block.
 
 44.9 A `gate` MUST carry a revert installing the broken arm and what that arm reports, and a revert
-leaving the gate passing MUST be reported as a failure. See D104.
+leaving the gate passing MUST be reported as a failure.
 
 44.10 `ratio` MUST throw where two samples disagree on substrate, on case or on batch size, and
-where one arm is given twice. See D105.
+where one arm is given twice.
 
 44.11 A `Sample` MUST be at least 100 times the clock's measured resolution, and `batch` MUST throw
-rather than report a smaller one. See D106.
+rather than report a smaller one.
 
 44.12 A refusal MUST be taken where the `Sample` is constructed, and MUST NOT be deferred to where
-it is reported. See D107.
+it is reported.
 
 44.13 `shares` MUST take the trace, the layer, the denominator and a threshold, and MUST throw
-where the layer runs outside the denominator. See D108.
+where the layer runs outside the denominator.
 
 44.14 `shares` MUST report an observed ceiling of zero for an op under one frame.
 
-44.15 A count of calls MUST be taken with `spyOn`. See D109.
+44.15 A count of calls MUST be taken with `spyOn`.
 
 44.16 `retained` MUST throw in a process with a DOM.
 
@@ -1800,38 +1766,32 @@ compared against.
 
 44.18 `batch` MUST throw in a parallel worker.
 
-44.19 The producer of a `bench` row MUST be a workspace script, and MUST NOT be a command. See
-D110.
+44.19 The producer of a `bench` row MUST be a workspace script, and MUST NOT be a command.
 
-44.20 A `bench` row MUST say what produced it. See D112.
+44.20 A `bench` row MUST say what produced it.
 
 44.21 A `bench` row MUST be written only where both arms produced a number.
 
-44.22 `harness` MUST NOT carry a hand-written arm of its own. See D111.
+44.22 `harness` MUST NOT carry a hand-written arm of its own.
 
 44.23 `measure` MUST report `wakes`, `bindingRuns` and `descents` as absent where no record has been
-published, and MUST NOT report zero for one. See D113.
+published, and MUST NOT report zero for one.
 
 44.24 A published record MUST carry every field `measure` reads off it as a number, and `measure`
-MUST throw naming each field that is absent. See D113.
+MUST throw naming each field that is absent.
 
 44.25 A counter `measure` reads rather than counts MUST be published as a fixed-shape record
-reached through `globalThis.__ABIDE_WORK__`. See D113.
+reached through `globalThis.__ABIDE_WORK__`.
 
-40.39 An `{% example %}` MUST carry one results panel, and the measurement that fills it MUST NOT
-run until the reader asks. See D118.
+40.35 An `{% example %}` MUST carry one results panel, and the measurement that fills it MUST NOT
+run until the reader asks.
 
-40.40 A reading an `{% example %}` panel renders MUST name the engine it was taken on and the
+40.36 A reading an `{% example %}` panel renders MUST name the engine it was taken on and the
 window it covers.
 
-40.41 *Withdrawn, superseded by 40.42.* It read "a reading an `{% example %}` panel renders MUST
-NOT be presented as a ratio against abide", which refused the comparison rather than the thing that
-makes a comparison unsound. It and 40.39's first form were decided together; See D117, which D118
-reverses.
+40.37 A ratio an `{% example %}` panel renders MUST be between arms batched in one run.
 
-40.42 A ratio an `{% example %}` panel renders MUST be between arms batched in one run.
+40.38 A figure an `{% example %}` panel shows MUST be counted or measured, and MUST NOT be
+authored.
 
-40.43 A figure an `{% example %}` panel shows MUST be counted or measured, and MUST NOT be
-authored. See D118.
-
-40.44 A page reporting the build's own results MUST NOT be listed in `NAV`. See D119.
+40.39 A page reporting the build's own results MUST NOT be listed in `NAV`.

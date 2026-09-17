@@ -1,7 +1,7 @@
 ---
 title: Watch a running app
 nav: Tail a deployed app
-intent: Tail a deployed app's log channels from your terminal.
+intent: Tail a deployed app's logs from your terminal.
 covers:
   - `abide logs`
   - `ABIDE_APP_TOKEN`
@@ -12,17 +12,19 @@ covers:
 abide logs
 ```
 
-Tails the app's log records. It is `abide call` on `log.records`, which is worth stating first
-because it explains everything else about it: the room is a room, the tail is that room's tail,
-and there is no separate log API for this to be a client of.
+Tails the app's log records. It reads the `GET` over `log.records`, and a client reading a `GET` is
+subscribed to what it produces (18.17), so this is a live subscription — the one `abide connect`
+makes to any channel (38.10). That is worth stating first because it explains everything else
+about it: the channel is a channel, the ring is that channel's `history`, and there is no separate
+log API for this to be a client of.
 
 ## `DEBUG` is read where the app runs
 
-Which channels emit is decided by the **app's** `DEBUG`, not by a flag here. That is the right
-place for it — a line nothing selected is never built, so a channel switched on at the terminal
+Which namespaces emit is decided by the **app's** `DEBUG`, not by a flag here. That is the right
+place for it — a line nothing selected is never built, so a namespace switched on at the terminal
 would be asking for records that were never made.
 
-Turning a channel on is therefore a deployment change, and that is honest about what it costs.
+Turning a namespace on is therefore a deployment change, and that is honest about what it costs.
 
 Read on: [Logging](../app/record-what-happened.md)
 
@@ -40,7 +42,7 @@ Read on: [Config](../app/configure-the-app.md) ·
 
 ## The tail is a memory ring
 
-`ABIDE_MAX_LOG_BUFFER_COUNT` is how many records the room retains, and it is bounded and
+`ABIDE_MAX_LOG_BUFFER_COUNT` is how many records the channel retains, and it is bounded and
 process-local like any other ring. What this command shows is what that process still holds —
 so it is the tool for **what is happening now**, and a collector is the tool for what happened
 last Tuesday.
@@ -48,7 +50,7 @@ last Tuesday.
 `ABIDE_LOG_FORMAT` picks the machine form for that collector. Unset, the output is the readable
 one, and `NO_COLOR` and `FORCE_COLOR` decide the ansi.
 
-Read on: [History & tail](../values/keep-the-last-few-values.md)
+Read on: [History](../values/keep-the-last-few-values.md)
 
 ## Next
 

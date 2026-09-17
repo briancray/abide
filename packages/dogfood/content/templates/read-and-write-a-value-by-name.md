@@ -3,9 +3,9 @@ title: Read and write a value by name
 nav: Values by name
 intent: What `count` means in a template, and the explicit spelling it is sugar over.
 covers:
-  - `foo` in an operand, text, attribute or value-typed argument
-  - `const x = foo` / `return foo` / a `Reactive<…>`-typed argument
-  - `foo = bar` where `bar` is a `Reactive`
+  - `foo` wherever the declared type of its position is not a `Reactive`
+  - `const x: Reactive<…> = foo` / a `Reactive<…>`-typed parameter, return or `bind:` operand
+  - `const [a, b] = foo` / `...foo`
   - `foo = bar`
   - `foo.bar = v`
   - `foo.push(v)`
@@ -25,16 +25,16 @@ both of those keep compiling in the same file.
 
 | You write | You get |
 | --- | --- |
-| `foo` in an operand, text, attribute or value-typed argument | a live read |
-| `const x = foo` / `return foo` / a `Reactive<…>`-typed argument | the `Reactive` itself |
-| `foo = bar` | a write, of a settled value or a load |
-| `foo.bar` | the value's `bar`, or `undefined` before it lands |
-| `foo.bar(…)` | the `Reactive` API where `bar` is one of its members |
+| `foo` anywhere its position is not typed as a `Reactive` | a live read |
+| `const x: Reactive<…> = foo` / a `Reactive<…>`-typed parameter or `bind:` | the `Reactive` itself |
+| `foo = bar` | a write, of a settled value, a load or a `Reactive` to adopt |
+| `foo.bar` | the value's `bar` |
+| `foo.bar` / `foo.bar(…)` where `bar` is one of its members | the `Reactive` API |
 | `foo()` / `foo.set(v)` | the two explicit forms |
 
 The rule is **position**, not decoration. An operand is a place a value belongs, so the name
-reads; a binding, a return and a `Reactive`-typed parameter are places the `Reactive` belongs,
-so the name holds. That split is why a value can be passed to a component without being read
+reads; a position whose declared type is a `Reactive` — an annotated binding, a parameter, a
+`bind:` operand — is a place the `Reactive` belongs, so the name holds. That split is why a value can be passed to a component without being read
 first, and why reading one never needs a sigil to mark it.
 
 A `.ts` file has no sugar and writes the members out. The same explicit form inside a `.abide`
@@ -43,13 +43,17 @@ it does.
 
 ## Reading is live, holding is not
 
-`{total}` re-reads whenever `total` produces. `const held = total` does not read at all — it
-takes the `Reactive`, which is what a prop typed as one wants, and what `bind:` needs on both
-sides of the arrow.
+`{total}` re-reads whenever `total` produces. `const held = total` reads too, like any other
+position with no type to say otherwise. **Holding is declared in the type**:
+`const held: Reactive<number> = total` takes the `Reactive`, which is what a prop typed as one
+wants, and what `bind:` needs on both sides of the arrow. Destructuring and spreading read once:
+`const [first, second] = rows` takes two rows, not two pieces of a `Reactive`.
 
-Assigning a `Reactive` to a name that already holds one is a **compile error naming both
-repairs**: write `foo = bar()` to move the value, or pass `bar` where the `Reactive` is wanted.
-The two are different intentions and neither is what `foo = bar` looks like.
+A name on the right of `=` is read like any operand. A `Reactive` that arrives any other way is
+**adopted**: `paid = payInvoice({ id })` makes `paid` serve what the call serves, and go on
+following it as it produces — the same thing a body returning a `Reactive` does. From then on a
+settled value written to `paid` goes through to what it adopted (11.60), and only another
+`Reactive` re-points it (11.62).
 
 Read on: [Local state](../values/show-a-value-that-changes.md) ·
 [Components](reuse-a-piece-of-markup.md)
@@ -72,27 +76,29 @@ your own object with a `push` of its own is your method and not a write.
 
 Read on: [Patching a list](../values/patch-a-list-from-a-live-feed.md)
 
-## A property access short-circuits before the value lands
+## A property access is a read
 
-`{contact.address.city}` on a value still loading renders nothing rather than throwing, and the
-**rest of the chain short-circuits with it** — there is no depth at which a half-landed read
-becomes an error. That is what lets a template name a field of a record it is still waiting for
-without a guard around every mention of it.
+`{contact.address.city}` is exactly `contact().address.city`. On a value still loading it throws
+`NotLanded` like any read, so the hole **renders nothing until the value lands** and then fills
+— and where it has rendered before, it keeps what it showed rather than blanking. A fallback for
+the wait belongs to the probe, not to `??`: `{contact.ready() ? contact.name : '—'}`. The
+compiler warns on a `??` whose left side could only be missing because nothing has landed yet.
 
-A call on the name reaches the `Reactive` API where the name is one of its members —
-`contact.pending()`, `contact.error()` — and the value's own method otherwise. The members are
-few and documented, so the collision is a question you can answer by looking rather than by
-running.
+A member of the `Reactive` itself reaches the `Reactive` rather than the value —
+`contact.busy()`, `contact.error()`, and `onclick={person.refresh}` without the call, which
+hands over `refresh` bound to `person`. Anything else is the value's own. Where the value
+declares a member by the same name the compiler warns, and `contact().error` is how to reach
+the value's.
 
 A read spelled `foo()` takes no arguments, and passing one is a compile error. `foo` is not a
 function you call; `foo()` is the explicit spelling of a read, and an argument in it is
 somebody meaning something else.
 
 Read on: [Loading states](../values/show-a-value-that-isnt-there-yet.md) ·
-[Reactive](../reference/reactive.md)
+[`reactive`](../reference/reactive.md)
 
 ## Next
 
 * [Expressions](put-a-value-in-the-markup.md) — where a read can go in the markup
 * [Form binding](bind-a-form-to-state.md) — the binding that reads and writes in one place
-* [Local state](../values/show-a-value-that-changes.md) — what `state` hands back to name
+* [Local state](../values/show-a-value-that-changes.md) — what `reactive` hands back to name

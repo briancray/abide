@@ -1,5 +1,5 @@
 <script>
-import { memo, state } from 'abide'
+import { reactive } from 'abide'
 import { getProfile } from '#server/rpc/profiles'
 
 const TABS = [
@@ -7,13 +7,13 @@ const TABS = [
     { id: '2', name: 'Grace' },
 ]
 
-let id = state('1')
+let id = reactive('1')
 
-const profile = memo(() => getProfile({ id }))
+const profile = reactive(() => getProfile({ id }))
 
-const status = memo(() => {
-    if (profile.pending()) return 'loading…'
-    return profile.refreshing() ? 'refreshing…' : ''
+const status = reactive(() => {
+    if (!profile.ready()) return 'loading…'
+    return profile.busy() ? 'refreshing…' : ''
 })
 </script>
 
@@ -26,10 +26,10 @@ const status = memo(() => {
 
 <ul class="fields">
     <li><span>name</span>
-        <strong>{profile.name ?? '—'}</strong>
+        <strong>{profile.ready() ? profile.name : '—'}</strong>
         <span class="status">{status}</span></li>
     <li><span>role</span>
-        <strong>{profile.role ?? '—'}</strong></li>
+        <strong>{profile.ready() ? profile.role : '—'}</strong></li>
     <li><span>times opened</span>
-        <strong>{profile.opened ?? '—'}</strong></li>
+        <strong>{profile.ready() ? profile.opened : '—'}</strong></li>
 </ul>

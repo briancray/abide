@@ -1,9 +1,9 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 import { settingsStore } from '#shared/settingsStore'
 
 // One option. The read and the write below are untouched.
-let volume = state(4, { store: settingsStore<number>('volume') })
+let volume = reactive(4, { store: settingsStore<number>('volume') })
 </script>
 
 <ul class="grid">

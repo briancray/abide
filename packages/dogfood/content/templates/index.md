@@ -12,12 +12,12 @@ instead of it.
 | --- | --- | --- |
 | `{invoice}` | `invoice()` | the value |
 | `{await invoice}` | `await invoice` | the value, once it lands |
-| `{#for await item of source}` | `for await (…of source)` | each value as it arrives |
-| `{#if invoice.pending()}` | `invoice.pending()` | a load, nothing trustworthy to show yet |
+| `{#for item of items}` | `for (… of items())` | each item, kept in step with the list |
+| `{#if !invoice.ready()}` | `invoice.ready()` | whether there is a value to show yet |
 
 ```abide abide
 <h1>{invoice.number}</h1>
-{#if invoice.pending()}
+{#if !invoice.ready()}
     <p>Loading…</p>
 {/if}
 ```

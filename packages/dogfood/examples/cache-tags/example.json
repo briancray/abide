@@ -1,6 +1,6 @@
 {
-    "title": "`tags` — a selection that reaches across memos",
-    "summary": "Two regions, each with revenue and recent orders behind memos that never mention one another. Press one region's button and watch the other stand still.",
+    "title": "`tags` — a selection that reaches across keyed values",
+    "summary": "Two regions, each with revenue and recent orders behind keyed values that never mention one another. Press one region's button and watch the other stand still.",
     "app": "dashboard",
     "files": [
         "src/ui/pages/dashboard/page.abide",

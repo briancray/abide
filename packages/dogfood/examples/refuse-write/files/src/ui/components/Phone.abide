@@ -1,10 +1,10 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 import { notAPhone } from '#shared/failures'
 
-let draft = state('415 555 0132')
+let draft = reactive('415 555 0132')
 
-let phone = state('415 555 0132', {
+let phone = reactive('415 555 0132', {
     transform: (typed) => {
         const digits = typed.replaceAll(/\D/g, '')
         if (digits.length !== 10) return notAPhone({ typed })

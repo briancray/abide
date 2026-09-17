@@ -28,7 +28,7 @@ and data**: declared once, returned from the handler, narrowed by name wherever 
 | You write | What you get |
 | --- | --- |
 | `refuse.typed(name, status?, message?, options?)` | a factory for a refusal a caller can name and narrow |
-| `refuse(status, message?)` | an undeclared refusal at a status, thrown |
+| `refuse(status, message?)` | an undeclared refusal at a status |
 
 `refuse.typed` hands back a factory, and the factory carries the type, so there is no registry
 to consult and nothing to keep in step. Its status defaults to **400** rather than 500, a
@@ -37,10 +37,9 @@ synchronously at construction, and a `message` given as a function runs there to
 in `#shared` lets a page and a handler use the same names.
 
 `refuse(status)` is for where the status *is* the answer. It carries no data and has no options
-bag to put any in, data undeclared having no type on the other side. It throws and is declared
-`never`, so a bare `refuse(404)` stands as a guard and the returned form costs the type
-nothing. The message defaults to the status registry's phrase, which makes `refuse(404)` a
-whole refusal on its own. Every signature is in the
+bag to put any in, data undeclared having no type on the other side. You return it like any other
+refusal (17.4), so `return refuse(404)` stands as a guard. The message defaults to the status
+registry's phrase, which makes `refuse(404)` a whole refusal on its own. Every signature is in the
 [Refusals](../reference/refusals.md) reference.
 
 ## A refusal is narrowed by name, where the value is read
@@ -126,7 +125,7 @@ Both built with `refuse.typed` like any other:
 carries `Issues<Args>`, keyed by path, and `rpc.isError(e, 'ValidationError')` narrows `e.data` to it with
 nothing declared.
 
-`HttpError` is the third name and the last. It is what `refuse(status)` raises: undeclared,
+`HttpError` is the third name and the last. It is what `refuse(status)` hands back: undeclared,
 entering no `Failures` union, and nothing can narrow to it. It is still a name a caller reads,
 in a wire body, an OpenAPI default response and an MCP error entry, and that name is
 http-shaped because those are the only places it surfaces. In a browser `refuse` throws the way

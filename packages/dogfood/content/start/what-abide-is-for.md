@@ -27,9 +27,11 @@ abide has one answer.
 *4 declarations, 1 type* — against component state, a query library and a socket client, each
 with its own loading convention, which is what the hand-written arm has to keep.
 
-Four ways of getting a value, one type back — `state`, `memo` and `channel` are the three
-primitives, and `chat` is a `channel` reached over a socket. Calling it with args hands
-back that room. See [Sockets](../server/keep-a-room-of-callers-in-sync.md).
+Four ways of getting a value, one type back — every one of them is `reactive`: a value the
+scope owns, a value with a body, a body that loads, and a value that waits for a publish. Declare
+`history` on that last kind and it is a channel, state the system keeps sending to everyone
+connected — still a `Reactive` like the other three, carried over a socket or not. See
+[Sockets](../server/keep-a-room-of-callers-in-sync.md).
 
 That is not a naming convenience:
 
@@ -41,14 +43,14 @@ That is not a naming convenience:
 
 No `useEffect`. No `load()`. No mount hook to put the fetch in.
 
-A `memo` runs its body the first time something reads it, and re-runs when what the body read
-changes. The page reads it because you put it in the markup. That is the whole subscription.
+A value with a body runs it as soon as you reach it, and runs it again on the next read after
+something the body read changes. The page reads it because you put it in the markup. That is the whole subscription.
 
 The consequence worth internalising:
 
 > [!TIP]
-> A read of a value that has not arrived returns `undefined` and leaves a hole in the output.
-> It does not block. The document goes out; the hole fills when the value lands.
+> A read of a value that has not arrived throws `NotLanded`, and the output keeps a hole where it
+> was. It does not block. The document goes out; the hole fills when the value lands.
 
 Want to wait instead? Say so — `{await invoice}`. Holding is a decision you make in one place,
 not something the position in the file decides for you.

@@ -4,7 +4,6 @@ nav: Lists
 intent: Render a list so that reordering it moves nodes instead of rebuilding them.
 covers:
   - `{#for item, index of list by key}`
-  - `{#for await item of source}`
 examples:
   - packages/dogfood/examples/list-keyed
 ---
@@ -13,18 +12,20 @@ A list block renders its body once per item. What separates one implementation f
 not the first render — every one of them produces the same markup — but the second: whether a
 reorder moves the nodes that were already there, or builds new ones that look the same.
 
-## The two list blocks
+## One list block
 
 | You write | Over |
 | --- | --- |
 | `{#for item, index of list by key}` | a collection you hold |
-| `{#for await item of source}` | a cursor that produces over time |
+| `{#for item of source.history(n) by key}` | a cursor that produces over time |
 
-`index` and `by` are both optional, and the second is the one worth spelling. `{#for await}`
-appends rather than replaces, so what it is reading decides its own replay depth — a room's
-tail, a stream's chunks — and the block does not have to be told.
+`index` and `by` are both optional, and the second is the one worth spelling. The subject is
+read like any other name, so `{#for row of rows}` walks the value `rows` holds. Walking what a
+value **produces** is spelled with a cursor, and over one the block appends rather than
+reconciles, so the cursor decides its own replay depth — `history(50)`, `history(0)` — and the block
+does not have to be told.
 
-Both iterate **zero times** over an absent subject. A list still loading is not an error and
+It iterates **zero times** over an absent subject. A list still loading is not an error and
 not a special case; it is a block with nothing in it yet.
 
 ## A key is what makes a reorder a reorder
@@ -59,14 +60,14 @@ the one that catches the bug. Both, or neither is worth running.
 
 Read on: [Loading states](../values/show-a-value-that-isnt-there-yet.md)
 
-## `{#for await}` is the same block over a cursor
+## Over a cursor, the same block appends
 
-It reads a source that produces over time — a streamed handler, a room's tail — and appends as
-each one lands rather than waiting for the last. A `{:catch}` on it **appends** after the rows
+A cursor — `chat.history(50)`, `log.records.history(20)` — produces over time, and the block appends as
+each item lands rather than waiting for the last. A `{:catch}` on it **appends** after the rows
 already painted, the block having accumulated rather than rendered as a unit.
 
 Read on: [Streaming data](../server/send-data-as-it-arrives.md) ·
-[Rooms](../values/let-anything-publish-and-anything-read.md)
+[Channels](../values/let-anything-publish-and-anything-read.md)
 
 ## Next
 

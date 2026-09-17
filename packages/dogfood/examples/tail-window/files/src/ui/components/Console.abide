@@ -7,12 +7,12 @@ let sent = 0
 
 function emit() {
     sent += 1
-    token = { at: sent, text: WORDS[sent % WORDS.length] ?? '…' }
+    token.publish({ at: sent, text: WORDS[sent % WORDS.length] ?? '…' })
 }
 </script>
 
 <ul class="chat">
-{#for line of token.tail(50)}
+{#for line of token.history(50)}
     <li><span>{line.at}</span><p>{line.text}</p></li>
 {/for}
 </ul>

@@ -5,3 +5,5 @@ export const tooLong = refuse.typed<'TooLong', { length: number }>(
     422,
     'That message is longer than the conversation takes.',
 )
+
+export type TooLong = ReturnType<typeof tooLong>

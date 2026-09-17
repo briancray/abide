@@ -1,5 +1,5 @@
 {
-    "title": "`state(load)` \u2014 the settled value, never the promise",
+    "title": "`reactive(load)` \u2014 the settled value, never the promise",
     "summary": "A contact fetched when the page is built. Press Reload to watch it land again.",
     "app": "crm",
     "files": ["src/ui/components/Record.abide", "src/server/rpc/contacts.ts"],

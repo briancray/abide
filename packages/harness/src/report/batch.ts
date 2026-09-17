@@ -18,13 +18,29 @@ import { THRESHOLDS } from './THRESHOLDS.ts'
 // reports the clock rather than the code.
 const MIN_CLOCK_MULTIPLE = 100
 
+// CLEARING THE CLOCK IS NOT THE SAME AS BEING WARM, and the bar only knows about the
+// clock. Bun's is ~41 ns, so the bar is ~4 µs a sample and a 40 ns op clears it at
+// n in the hundreds — which is below where JSC promotes the body out of its baseline
+// tier. Measured on one publish into a capped ring: 85.5 ns a call at n=488 and 4.4 at
+// n=2,000,000, the SAME code, a 19x spread chosen by the sample size.
+//
+// IT IS NOT A UNIFORM BIAS, so it cannot be divided out. Swept across n, a write with one
+// watcher moved 2.12x -> 3.15x while a publish into a capped ring moved 1.93x -> 0.55x —
+// the second INVERTING, so the bench reported abide slower at a job it does twice as fast.
+//
+// So each arm is run on its own before anything is timed, bounded by a call count and by
+// a wall clock: an op cheap enough to need the warming is cheap enough to get it inside
+// the time bound, and an op too dear for the bound was never at risk.
+const WARM_CALLS = 200_000
+const WARM_NANOSECONDS = 25_000_000
+
 // Growth is multiplicative and capped: an op that cannot clear the bar at a hundred
 // million reps is not an op this batcher can price, and looping forever hides that.
 const GROWTH_FACTOR = 8
 
 // How far above the bar a refined n aims. A sample sitting exactly on the bar fails
 // the check it was chosen to pass as soon as the code warms up.
-const BAR_MARGIN = 1.5
+const BAR_MARGIN = 1.4
 const MAX_N = 100_000_000
 
 const DEFAULT_REPS = 7
@@ -100,6 +116,22 @@ function percentile95(sorted: number[]): number {
     return sorted[Math.min(Math.max(index, 0), sorted.length - 1)] as number
 }
 
+// Runs an arm until it is warm, or until the wall clock says it is dear enough not to
+// need it. Batched rather than checked per call — the check is a clock read — but the
+// batch is what decides whether the BOUND means anything: at 1,024 calls, and with the
+// first check only after the 1,024th, a millisecond-scale op ran for a second before
+// anything looked, which is 40x the bound and can spend the whole batch budget before a
+// sample is taken. `& 63` checks after the FIRST call and then every 64, so the overrun
+// is bounded by what the bound is for.
+function warm(body: () => void): void {
+    const startedAt = nanoseconds()
+    for (let call = 0; call < WARM_CALLS; call += 1) {
+        body()
+        if ((call & 63) === 0 && nanoseconds() - startedAt > WARM_NANOSECONDS)
+            return
+    }
+}
+
 export function batch(spec: BatchSpec): Batched {
     // Refusal 5. Eight workers competing for cores measures the scheduler, and with a
     // MEASURED floor the floor goes so wide under contention that every real
@@ -153,6 +185,10 @@ export function batch(spec: BatchSpec): Batched {
     // a COLD probe alone undershoots, because the timed reps come back faster than
     // the probe that chose n. So: probe cheaply, run fully, and grow again if the run
     // misses the bar.
+    // BEFORE THE GROWTH PROBE, so the probe chooses n against warm code too — a probe
+    // taken cold picks an n the warm run then comes in under.
+    for (const lane of lanes) warm(lane.body)
+
     let n = spec.n ?? 1
     if (spec.n === undefined) {
         while (n < MAX_N) {

@@ -1,8 +1,8 @@
 <script>
-import { memo, state } from 'abide'
+import { reactive } from 'abide'
 import { applyOrderCount, type OrderCount, type Region } from '#shared/regions'
 
-const byId = state(
+const byId = reactive(
     new Map<string, Region>([
         ['north', { id: 'north', name: 'North', orders: 120 }],
         ['south', { id: 'south', name: 'South', orders: 80 }],
@@ -11,7 +11,7 @@ const byId = state(
     ]),
 )
 
-const rows = memo(() => [...byId.values()])
+const rows = reactive(() => [...byId.values()])
 
 const FEED: OrderCount[] = [
     { id: 'south', orders: 95 },

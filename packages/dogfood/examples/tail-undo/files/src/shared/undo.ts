@@ -1,22 +1,23 @@
-import type { Reactive } from 'abide'
-
-// AN UNDO IS ITSELF A WRITE, so it appends to the same ring. Walk
-// backwards over the live ring and the second step reads the first
-// one back — so the position lives out here, over a snapshot.
-export function undoStack<T>(value: Reactive<T>) {
-    let history: T[] = []
+// An undo is itself a write, so the position lives out here, over a snapshot.
+export function undoStack<T>(limit: number) {
+    const held: T[] = []
+    let run: T[] = []
     let at = 0
     let handed: T | undefined
 
     return {
-        back: (): T => {
+        record: (value: T) => {
+            held.push(value)
+            if (held.length > limit) held.shift()
+        },
+        back: (current: T): T => {
             // A write that was not ours ends the run and retakes it.
-            if (value.peek() !== handed) {
-                history = [...value.tail(50)]
-                at = history.length - 1
+            if (current !== handed) {
+                run = held.slice()
+                at = run.length - 1
             }
             if (at > 0) at -= 1
-            handed = history[at] as T
+            handed = run[at] as T
             return handed
         },
     }

@@ -1,7 +1,7 @@
 // THE TAG INDEX, WRITTEN BY HAND. An entry table alone cannot answer
 // "everything about north", so the tags are a second index beside it —
 // and every entry has to be added to both, in both directions, or a
-// later invalidate quietly misses it.
+// later reload quietly misses it.
 const entries = new Map()
 const tagged = new Map()
 
@@ -21,7 +21,7 @@ function fetchInto(entry) {
         .then(entry.render)
 }
 
-function invalidate(tag) {
+function refresh(tag) {
     for (const name of tagged.get(tag) ?? []) fetchInto(entries.get(name))
 }
 
@@ -52,6 +52,6 @@ for (const region of ['north', 'south']) {
     )
 
     shown('reload').addEventListener('click', () => {
-        invalidate(`region:${region}`)
+        refresh(`region:${region}`)
     })
 }

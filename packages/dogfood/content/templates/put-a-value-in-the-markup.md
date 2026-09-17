@@ -74,7 +74,7 @@ Read on: [Handler URLs](../server/find-the-url-a-handler-answers-on.md)
 {% example markup-class-style %}
 
 The condition decides whether the class is there. Everything else in `class=` stays where it
-was, which is what makes a component's own class and a state-driven one able to live on the
+was, which is what makes a component's own class and a value-driven one able to live on the
 same element without either knowing about the other.
 
 `style:prop` is the same bargain for one CSS property. A measured width, a transform from a
@@ -98,9 +98,9 @@ Read on: [Components](reuse-a-piece-of-markup.md)
 **whole** expression rather than the nearest operand. Reads inside one are started before they
 are awaited, so two of them in a single hole are one round trip and not two.
 
-It is the blunt instrument, and most pages want the other one: `{#await}` gives you a branch to
-render while the value is still coming, which is a page a reader can look at rather than a page
-that is not there yet.
+It is the blunt instrument, and most pages want the other one. A plain `{invoice.total}` renders
+nothing and fills when the value lands, and `{#if invoice.ready()}` gives you a branch to render
+in the meantime — a page a reader can look at rather than a page that is not there yet.
 
 Read on: [Conditionals](show-markup-conditionally.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md)

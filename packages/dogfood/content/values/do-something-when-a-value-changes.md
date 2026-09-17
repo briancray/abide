@@ -9,6 +9,7 @@ covers:
   - `Disposer`
   - `watch` effect, bare
   - `watch` effect, over sources
+  - `flushSync`
   - `Transformer`, `Disposer`, middleware, lifecycle hooks
 examples:
   - packages/dogfood/examples/watch-tracked
@@ -16,10 +17,11 @@ examples:
   - packages/dogfood/examples/watch-sources
 ---
 
-Most of what looks like an effect is a value. A heading derived from a row, a filtered list, a
-count — those are `memo`, and reaching for an effect to assign them builds a graph you have to run
-in your head. `watch` is for the rest: the things that happen **outside** the page — a timer, the
-browser tab, a subscription to something that is not a reactive value, an analytics call.
+Most of what looks like an effect is a value. A heading derived from a row, a filtered list, a count
+— those are derived values, a `reactive` body, and reaching for an effect to assign them builds a
+graph you have to run in your head. `watch` is for the rest: the things that happen **outside** the
+page — a timer, the browser tab, a subscription to something that is not a reactive value, an
+analytics call.
 
 ## The forms of `watch`
 
@@ -42,7 +44,7 @@ that stops the watch. Every signature is in the [`watch` reference](../reference
 *5 lines, 0 listeners* — against a call the arm has to make from every place that writes.
 
 `watch(effect)` runs the effect immediately and again whenever anything it **read** changes — the
-same tracking a memo body gets, and the same absence of a dependency list.
+same tracking an unkeyed `reactive` body gets, and the same absence of a dependency list.
 
 The Reset button is the difference on screen. It writes the value and never touches the title, so
 anything keeping the two in step is keeping up with the **value** rather than with the field. In
@@ -108,7 +110,7 @@ response to a person, after the output exists, so a subscription taken there has
 | Context | Tracks |
 | --- | --- |
 | template expression | yes |
-| unkeyed `memo` body | yes |
+| unkeyed `reactive` body | yes |
 | `watch` effect | yes, unless `sources` narrows it |
 | component `<script>` setup | no — runs once, there is no rerun to feed |
 | event handler, `bind:` write-back | no |
@@ -132,10 +134,39 @@ Both sides mean the same thing and only the schedule differs — same callable, 
 side has a flow to feed where the other does not. It is worth saying out loud because an effect
 written for its side effects reads as though it will run again.
 
+## Effects run at the end of the turn
+
+A handler that writes the same value ten times reaches the page **once**. Effects are batched to
+the end of the turn that woke them, so the nine values in between — a loop, a reducer applying ten
+actions, three fields of a form set together — never reach a node.
+
+A write still takes effect immediately. What waits is the running, not the writing:
+
+```ts browser
+count.set(2)
+count() // 2, now — the read does not wait for the turn to end
+```
+
+That is worth being precise about, because it is the part that decides whether batching is safe.
+A write marks the graph; a read walks it and computes what it finds marked. So a read taken
+between two writes is already the new answer, and only the effects — the part that touches the
+page — are held.
+
+`flushSync()` ends the turn where you call it. Reach for it where something has to see the page as
+the writes left it: a test asserting on a node, a measurement, a render to a string.
+
+```ts browser
+count.set(2)
+flushSync()
+// every effect the write woke has now run
+```
+
+Read on: [Derived values](derive-a-value-from-other-values.md)
+
 ## An effect that throws stops its watch
 
 An error in an effect is never silent. A throwing effect, a throwing disposer, and a read of a
-**failed** value inside one — which throws, as every read of a failure does — all reach `onError`
+**failed** value inside one — which throws where nothing has landed (2.2) — all reach `onError`
 with the trace attached and warn on `abide:watch`. In a browser it is additionally re-thrown as an
 unhandled rejection, so an error reporter sees it.
 

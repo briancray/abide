@@ -174,7 +174,7 @@ test('a verdict cell is marked up, and a sentence that opens on one is not', asy
     const rendered = await renderPage(holds!, pages, 0)
     expect(rendered).toContain('<b class="verdict-no">no</b>')
     expect(rendered).toContain('<b class="verdict-yes">yes</b>')
-    expect(rendered).toContain('<span class="verdict-why"> — the pending body')
+    expect(rendered).toContain('<span class="verdict-why"> — the read renders nothing')
 
     const failures = pages.find(
         (page) => page.slug === 'server/refuse-a-request-and-say-why',

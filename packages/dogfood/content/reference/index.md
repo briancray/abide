@@ -18,12 +18,9 @@ description and examples. A page you have read is a page you can navigate.
 
 | Page | Holds |
 | --- | --- |
-| [Reactive](reactive.md) | The one type every producer hands back — every read, probe, trigger and option on it |
-| [`state`](state.md) | The factory for a value a scope owns, and `state.share` |
-| [`memo`](memo.md) | The factory for a computed value: tracked without arguments, cached with them |
-| [`channel`](channel.md) | The factory for a room, and what a publish does |
+| [`reactive`](reactive.md) | The one factory and the one type every producer hands back — every overload, read, probe, trigger and option on it |
 | [`watch`](watch.md) | The effect, its disposer, and what a server does with one |
-| [Selections](selections.md) | `pending`, `refreshing`, `refresh` and `invalidate` over many entries |
+| [Selections](selections.md) | `busy`, `ready`, `refresh` and `invalidate` over many entries |
 | [Refusals](refusals.md) | `refuse.typed`, `Failed`, and the two abide declares |
 | [Transports](transports.md) | `rpc`, `socket`, response helpers, and the headers abide sends |
 | [Ambient values](ambient-values.md) | `request`, `route`, `cookies`, `principal`, `config`, `trace`, `health` |

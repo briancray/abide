@@ -11,7 +11,7 @@ difference between a read and a write.
 | --- | --- |
 | `GET(…)` | a read any surface may call, addressed by its arguments |
 | `POST` / `PUT` / `PATCH` / `DELETE` | a mutation, retaining nothing by default |
-| `channel()` behind a `socket(…)` | a room many callers share |
+| a channel behind a `socket(…)` | live state many callers share |
 
 ```ts #server/rpc/invoices.ts — excerpt
 export const listInvoices = GET(() => database.invoice.all())

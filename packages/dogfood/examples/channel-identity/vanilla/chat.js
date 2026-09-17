@@ -1,7 +1,3 @@
-function identity(turn) {
-    return `${turn.speaker}: ${turn.text}`
-}
-
 const rooms = new Map()
 
 function roomFor(conversation) {
@@ -13,13 +9,10 @@ function roomFor(conversation) {
     return held
 }
 
-// A REPEAT IS THE PREVIOUS MESSAGE'S BUSINESS ALONE. Scanning what
-// the room still holds would make a resend of anything ever said a
-// duplicate, and a retry is not that.
+// A PUBLISH IS A MESSAGE, SO NOTHING HERE ASKS WHETHER IT REPEATS.
+// A comparison against the latest would swallow a turn said twice.
 function publish(conversation, turn) {
     const room = roomFor(conversation)
-    const same = room.latest && identity(room.latest) === identity(turn)
-    if (same) return room.seq
     room.seq += 1
     room.latest = turn
     for (const reader of room.readers) reader(room)

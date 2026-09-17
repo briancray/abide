@@ -1,10 +1,8 @@
 import { expect, test } from 'bun:test'
 
-// REGISTRY.md and RULEBOOK.md were split out of SPEC.md because one table cell was carrying five
-// kinds of statement at once: `identity` held a signature, fifteen rules, the rationale for a
-// default, three measurements and an unpaid TODO. The split is only worth having if it STAYS split,
-// and prose at the top of a document does not make it stay — a rule written into a registry cell
-// reads perfectly, and so does a signature in a clause.
+// REGISTRY.md holds signatures and RULEBOOK.md holds requirements, and the split is only worth
+// having if it STAYS split. Prose at the top of a document does not make it stay — a rule written
+// into a registry cell reads perfectly, and so does a signature in a clause.
 //
 // So the format rules each document states are checked here, in both directions: a requirement
 // leaking into the registry, and a type leaking into the rulebook.
@@ -42,25 +40,6 @@ function clauses(): { id: string; text: string }[] {
     const out: { id: string; text: string }[] = []
     for (const paragraph of body(rulebook).split('\n\n')) {
         const clause = /^(\d+\.\d+)\s+([\s\S]*)$/.exec(paragraph.trim())
-        // A WITHDRAWN clause is still a number — format rule 7 keeps it in place so a citation
-        // written before the withdrawal resolves to the withdrawal rather than to silence — but it
-        // states no requirement and names nothing, so the checks over live clauses skip it.
-        if (clause && !(clause[2] ?? '').startsWith('*Withdrawn'))
-            out.push({
-                id: clause[1] ?? '',
-                text: (clause[2] ?? '').replace(/\n/g, ' '),
-            })
-    }
-    return out
-}
-
-// A withdrawal has to SAY what replaced it, or a reader following an old citation lands on a hole.
-function withdrawn(): { id: string; text: string }[] {
-    const out: { id: string; text: string }[] = []
-    for (const paragraph of body(rulebook).split('\n\n')) {
-        const clause = /^(\d+\.\d+)\s+(\*Withdrawn[\s\S]*)$/.exec(
-            paragraph.trim(),
-        )
         if (clause)
             out.push({
                 id: clause[1] ?? '',
@@ -165,6 +144,49 @@ test('every clause states a requirement', async () => {
     expect(offenders).toEqual([])
 })
 
+// RULEBOOK format rule 7, and the half of it a reader can see. A rule that stops holding is
+// DELETED — a stub left in its place reading "Withdrawn, superseded by 5.4" still parses as a
+// clause, so `clauses()` counts it, "every clause states a requirement" passes on the MUST inside
+// the sentence it quotes, and a citation of the dead number resolves through every gate in this
+// file. Two of them sat that way through a renumber.
+//
+// THE REVERT: putting either stub back reports its number against an empty list.
+const RETIRED = /\bWithdrawn\b|\bsupersede[ds]\b/i
+
+test('no clause is a stub for a deleted rule', async () => {
+    const offenders: string[] = []
+    for (const { id, text } of clauses())
+        if (RETIRED.test(text)) offenders.push(id)
+    expect(offenders).toEqual([])
+})
+
+// The other half of format rule 7: the clauses after a deleted one CLOSE THE GAP. A deletion that
+// renumbers nothing is invisible here — every remaining clause is still valid, still cited, still
+// unique — and the hole it leaves is where the next rule gets numbered, which is how one number
+// comes to mean two things across two sessions.
+//
+// THE REVERT: deleting 5.4 without renumbering reports the whole tail of group 5, from
+// `5: 5 after 5.3` down — one deletion is every later number, which is the point.
+test('a clause group is numbered from 1 with no gap', async () => {
+    const groups = new Map<number, number[]>()
+    for (const { id } of clauses()) {
+        const [group, ordinal] = id.split('.').map(Number)
+        if (group === undefined || ordinal === undefined) continue
+        groups.set(group, [...(groups.get(group) ?? []), ordinal])
+    }
+    expect(groups.size).toBeGreaterThan(10)
+    const gaps: string[] = []
+    for (const [group, ordinals] of groups) {
+        for (let index = 0; index < ordinals.length; index += 1) {
+            if (ordinals[index] !== index + 1)
+                gaps.push(
+                    `${group}: ${ordinals[index]} after ${group}.${index}`,
+                )
+        }
+    }
+    expect(gaps).toEqual([])
+})
+
 test('no clause number is used twice', async () => {
     const seen = new Set<string>()
     const doubled: string[] = []
@@ -224,14 +246,9 @@ test('every clause is cited by a registry row', async () => {
     expect(orphans).toEqual([])
 })
 
-// THE MIGRATION PROOF HAD A BLIND SPOT AND THIS IS IT. `SPEC.md` was converted under a row-for-row
-// count — 310 rows in, 310 out — and a section with no table rows passed that count without being
-// read: 389 lines across ten sections, of which Props, `<head>`, view transitions and the whole
-// Documentation section were never converted at all, and were deleted with the file.
-//
-// A count cannot come back, `SPEC.md` being gone. What replaces it is the property the count was
-// standing in for: a rulebook GROUP that states no requirement, or a REGISTRY section no group
-// governs, is a place where a rule can go missing without anything saying so.
+// A rulebook GROUP that states no requirement, or a REGISTRY section no group governs, is a place
+// where a rule can go missing without anything saying so. A row-for-row count cannot see it: a
+// section with no table rows passes a count without being read.
 test('every registry section is governed by some clause', async () => {
     const registry = await Bun.file(new URL('REGISTRY.md', DOCS)).text()
     const sections = new Map<string, string[]>()
@@ -269,11 +286,9 @@ test('every clause group states a requirement', async () => {
     expect(empty).toEqual([])
 })
 
-// BRAND.md is the fourth document and the one with no contract until now, which is how it ended up
-// holding a PARAPHRASE of the rulebook: its claims column restated mechanism at length instead of
-// citing it, and two of its sentences had gone stale without anything noticing — one naming
-// `SPEC.md` after that file was deleted, and one asserting that `{% lead %}` is RULEBOOK's, which a
-// mechanical rename had made false. A document with nowhere to send a statement keeps it.
+// BRAND.md cites the rulebook rather than paraphrasing it. A claims column that restates mechanism
+// is a second copy that goes stale silently, and a document with nowhere to send a statement keeps
+// it — so the checks below hold BRAND to citing, and hold its citations to resolving.
 const brand = await Bun.file(new URL('BRAND.md', DOCS)).text()
 
 // As with the other three: the format rules NAME the keywords they refuse, so the checks read the
@@ -293,8 +308,7 @@ test('no brand statement carries a requirement keyword', async () => {
 })
 
 // BRAND format rule 3. A brand citing a deleted file makes a claim about a source nobody can read,
-// and the bare word is what a path check misses — `SPEC.md` survived as "SPEC" in a sentence after
-// every `docs/SPEC.md` had been renamed.
+// and the bare word is what a path check misses.
 test('every document the brand names exists', async () => {
     const missing: string[] = []
     for (const match of brand.matchAll(/\b(?:docs\/)?([A-Z][A-Z_]+)\.md\b/g)) {
@@ -303,19 +317,16 @@ test('every document the brand names exists', async () => {
         const root = await Bun.file(new URL(`../${name}`, DOCS)).exists()
         if (!beside && !root) missing.push(name)
     }
-    // The bare word a path check cannot see: every `docs/SPEC.md` was renamed and "SPEC" survived
-    // in a sentence, still asserting which document wins a disagreement.
-    if (/\bSPEC\b/.test(brand)) missing.push('SPEC')
+    // The bare word a path check cannot see: a deletion leaves the word behind in a
+    // sentence, still asserting which document wins a disagreement.
+    for (const gone of ['SPEC', 'DECISIONS'])
+        if (new RegExp(`\\b${gone}\\b`).test(brand)) missing.push(gone)
     expect([...new Set(missing)]).toEqual([])
 })
 
 // BRAND format rule 1. A claim cites a clause, and the citation has to resolve — otherwise the
-// column reads as authority and points at nothing.
-//
-// THIS READ ONE TABLE. `if (!line.startsWith('| **')) continue` meant only the nine Load-bearing
-// claims rows were ever checked, and the fourteen citations everywhere else — the example rules,
-// the documentation structure, the vocabulary cells — were invisible to the check that claims to
-// enforce rule 1 generally. They all resolved, so this closes a gap rather than a break.
+// column reads as authority and points at nothing. Every citation in the document is read, not
+// just the load-bearing claims table.
 test('every clause the brand cites exists', async () => {
     const ids = new Set(clauses().map((clause) => clause.id))
     const dangling: string[] = []
@@ -325,186 +336,6 @@ test('every clause the brand cites exists', async () => {
         }
     }
     expect([...new Set(dangling)]).toEqual([])
-})
-
-// And the other citation BRAND makes. `every decision a clause cites exists` joins RULEBOOK to
-// DECISIONS and nothing joined BRAND to it, so a `D44` here was checked in neither direction.
-test('every decision the brand cites exists', async () => {
-    const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
-    const declared = new Set(
-        [...decisions.matchAll(/^# (D\d+)\./gm)].map((match) => match[1] ?? ''),
-    )
-    const dangling: string[] = []
-    for (const match of brandBody.matchAll(/\b(D\d+)\b/g)) {
-        if (!declared.has(match[1] ?? '')) dangling.push(match[1] ?? '')
-    }
-    expect([...new Set(dangling)]).toEqual([])
-})
-
-// A REVERSED entry is a historical record, exactly as a withdrawn clause is — format rule 5 keeps
-// it in place so an old `See D3` resolves to the reversal rather than to silence. Its `Decides:`
-// and `Assumes:` therefore name what it decided and rested on WHEN IT HELD, and those clauses may
-// since have been withdrawn. So the two citation checks below read live entries, the same way
-// `clauses()` reads live clauses, and the reversal is what excuses it.
-function decisionEntries(
-    source: string,
-): { text: string; reversed: boolean }[] {
-    const out: { text: string; reversed: boolean }[] = []
-    for (const block of source.split(/^# D\d+\./m).slice(1)) {
-        out.push({ text: block, reversed: /\*Reversed by D\d+/.test(block) })
-    }
-    return out
-}
-
-// A DECISION CITING A CLAUSE THAT WAS NEVER WRITTEN is the shape the recovery audit ended on: D7
-// said it was "what licenses deriving `cache-control` from a global memo's ttl", and no clause said
-// the derivation happened. The decision read as authority over a rule that did not exist, and the
-// citation check only ran the other way — registry to clause — so nothing looked at this direction.
-test('every clause a decision cites exists', async () => {
-    const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
-    const ids = new Set(clauses().map((clause) => clause.id))
-    const dangling: string[] = []
-    const live = decisionEntries(decisions).filter((entry) => !entry.reversed)
-    for (const line of live.flatMap((entry) => entry.text.split('\n'))) {
-        if (!line.startsWith('**Decides:**')) continue
-        for (const match of line.matchAll(/\b(\d+\.\d+)\b/g)) {
-            if (!ids.has(match[1] ?? '')) dangling.push(match[1] ?? '')
-        }
-    }
-    expect([...new Set(dangling)]).toEqual([])
-})
-
-// DECISIONS format rule 6. A DECISION OUTLIVING ITS PREMISE is the failure `Decides:` cannot see.
-// D3 refused propagating `refreshing` because `pending` was monotone and so derivable on the walk
-// the body's reads already make. D55 then decided that an invalidated value reads as pending, which
-// re-arms it — and nothing failed, because the two entries never contradicted each other. One
-// stated a rule and the other stated a reason, and only the reason stopped being true.
-//
-// So an entry says what it rested on, and the citation is what a later amendment gets grepped
-// against. The mechanical half is here: an assumed clause has to be LIVE, so withdrawing one
-// surfaces every decision standing on it. The half no check can do is reading the amended clause
-// against the entry, and rule 6 plus this citation is what puts a name in front of whoever does.
-test('every clause a decision assumes is live', async () => {
-    const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
-    const ids = new Set(clauses().map((clause) => clause.id))
-    const dangling: string[] = []
-    const live = decisionEntries(decisions).filter((entry) => !entry.reversed)
-    for (const line of live.flatMap((entry) => entry.text.split('\n'))) {
-        if (!line.startsWith('**Assumes:**')) continue
-        for (const match of line.matchAll(/\b(\d+\.\d+)\b/g)) {
-            if (!ids.has(match[1] ?? '')) dangling.push(match[1] ?? '')
-        }
-    }
-    expect([...new Set(dangling)]).toEqual([])
-})
-
-// THE CITATION CHECKS RAN ONE WAY AND THIS IS THE HOLE THAT LEFT. `every decision is cited by a
-// clause` reads DECISIONS and asks the rulebook; nothing read the rulebook and asked DECISIONS, so
-// five clauses shipped citing D29 through D33 — entries the split never wrote. Each said "a reason
-// exists for this" and sent a maintainer nowhere, which is worse than saying nothing: 39.8 refuses
-// an option a future session reverses precisely because no record says why.
-test('every decision a clause cites exists', async () => {
-    const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
-    const declared = new Set(
-        [...decisions.matchAll(/^# (D\d+)\./gm)].map((match) => match[1] ?? ''),
-    )
-    // Whitespace-normalised for the same reason the reverse check is: a citation may wrap a line.
-    const flat = rulebook.replace(/\s+/g, ' ')
-    const cited = [...flat.matchAll(/\bSee (D\d+)\b/g)].map(
-        (match) => match[1] ?? '',
-    )
-    expect([...new Set(cited.filter((entry) => !declared.has(entry)))]).toEqual(
-        [],
-    )
-})
-
-// DECISIONS format rule 2 says "a check refuses an entry with none", and rule 4 says "a check
-// refuses them here" of the requirement keywords. Neither check existed. The identical sentence in
-// REGISTRY rule 3 and BRAND rule 2 IS backed, which is exactly why a reader believes these two —
-// a gate that has never been shown to test anything is the one thing the discipline rules out.
-test('every decision cites the clauses it decided', async () => {
-    const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
-    const uncited: string[] = []
-    for (const block of decisions.split(/^# (D\d+)\./m).slice(1)) {
-        if (/^D\d+$/.test(block)) {
-            uncited.push(block)
-            continue
-        }
-        // The id was pushed by the split immediately before this block.
-        if (/^\*\*Decides:\*\*/m.test(block)) uncited.pop()
-    }
-    expect(uncited).toEqual([])
-})
-
-test('no decision states a requirement', async () => {
-    const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
-    const offenders: string[] = []
-    for (const block of decisions.split(/^# (D\d+)\./m).slice(1)) {
-        if (/^D\d+$/.test(block)) {
-            offenders.push(block)
-            continue
-        }
-        // Format rule 4 names the keywords; a clause QUOTED inside a withdrawal or a `Refused:`
-        // line is the entry doing its job, so only unquoted prose counts.
-        const prose = block.replace(/`[^`]*`/g, '').replace(/"[^"]*"/g, '')
-        if (!REQUIREMENT.test(prose)) offenders.pop()
-    }
-    expect(offenders).toEqual([])
-})
-
-// DECISIONS format rule 5. EVERY OTHER CHECK HERE BUILDS A `Set` OF DECLARED IDS, and a duplicate
-// collapses into one member of it — so `See D98` resolved, `D98` was cited, and both entries passed
-// every gate while a reader following the citation landed on whichever came first. Three numbers
-// shipped twice that way in one commit, the plans' entries having been appended without reading the
-// counter, and what found it was a grep for something else.
-test('no decision number is used twice', async () => {
-    const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
-    const seen = new Set<string>()
-    const twice: string[] = []
-    for (const match of decisions.matchAll(/^# (D\d+)\./gm)) {
-        const id = match[1] ?? ''
-        if (seen.has(id)) twice.push(id)
-        seen.add(id)
-    }
-    expect(twice).toEqual([])
-})
-
-// And the other way: a decision nobody reaches is a road not taken that no rule records taking.
-test('every decision is cited by a clause', async () => {
-    const decisions = await Bun.file(new URL('DECISIONS.md', DOCS)).text()
-    const declared = [...decisions.matchAll(/^# (D\d+)\./gm)].map(
-        (match) => match[1] ?? '',
-    )
-    // Whitespace-normalised: a citation wrapping across two lines is the same citation, and the
-    // first version of this check read one as absent.
-    const flat = rulebook.replace(/\s+/g, ' ')
-    const cited = new Set(
-        [...flat.matchAll(/\bSee (D\d+)\b/g)].map((match) => match[1] ?? ''),
-    )
-    expect(declared.filter((entry) => !cited.has(entry))).toEqual([])
-})
-
-// Format rule 7 promises that a withdrawn clause stays in place rather than vanishing, and until
-// now nothing had ever been withdrawn, so the promise was untested. A withdrawal that does not name
-// its successor is the failure it exists to prevent: an old citation resolving to a hole.
-test('every withdrawn clause names the clause that supersedes it', async () => {
-    const live = new Set(clauses().map((clause) => clause.id))
-    const dangling: string[] = []
-    for (const { id, text } of withdrawn()) {
-        // A clause whose whole statement was answerable from a type is superseded by the REGISTRY
-        // ROW that carries it rather than by another number — the statement changes document, and
-        // there is no clause left to point at. So the row is what the withdrawal names, and it has
-        // to resolve the same way a clause number does: five clauses moved this way, and a
-        // withdrawal naming a row nobody wrote is the same hole as one naming no successor at all.
-        const row = /superseded by REGISTRY's `([^`]+)` rows?\./.exec(text)?.[1]
-        if (row) {
-            if (!registry.includes(`| \`${row}\` |`)) dangling.push(id)
-            continue
-        }
-        const successor = /superseded by (\d+\.\d+)/.exec(text)?.[1]
-        if (!successor || !live.has(successor)) dangling.push(id)
-    }
-    expect(dangling).toEqual([])
 })
 
 // CLAUDE.md is the document every session reads first, and it named none of the other four while
@@ -527,7 +358,7 @@ test('every clause the working notes cite exists', async () => {
 })
 
 // And the routing itself: a session told to read a document that is not there has been sent
-// nowhere, which is exactly what happened to the sentence naming `SPEC.md`.
+// nowhere.
 test('every document the working notes name exists', async () => {
     const notes = await Bun.file(new URL('../CLAUDE.md', DOCS)).text()
     const missing: string[] = []

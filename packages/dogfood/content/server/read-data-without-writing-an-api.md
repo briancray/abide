@@ -44,10 +44,10 @@ export you are looking at.
 
 ```abide #ui/pages/invoices/[id]/page.abide
 <script>
-import { memo, route } from 'abide'
+import { reactive, route } from 'abide'
 import { getInvoice } from '#server/rpc/invoices'
 
-const invoice = memo(() => getInvoice({ id: route.params.id }))
+const invoice = reactive(() => getInvoice({ id: route.params.id }))
 </script>
 
 <h1>Invoice {invoice.number}</h1>
@@ -80,11 +80,11 @@ that silently does nothing.
 
 {% example rpc-reactive %}
 
-`getInvoice({ id })` hands back the same `Reactive` that `state`, `memo` and `channel` do — so
+`getInvoice({ id })` hands back the same `Reactive` every `reactive` does — so
 the probes and the triggers are on the **result** of the call, and a promise's one answer is not
 what a button waiting on it needs.
 
-`refreshing()` tells a reload from a first load, `await invoice` waits, and
+`busy()` beside `ready()` tells a reload from a first load, `await invoice` waits, and
 `invoice.refresh()` reloads — which is why the reminder button above stays live across the second
 load and only goes back to disabled when there is genuinely nothing held. The hand-written arm
 tracks two variables of its own to say the same thing, because a promise answers once and
@@ -94,13 +94,13 @@ See [Loading states](../values/show-a-value-that-isnt-there-yet.md).
 
 ## Two callers asking for one invoice are one request
 
-The `memo` wrapper is not ceremony. A `memo` is identity per arguments: two components asking
-for invoice `42` are one request, and the second gets the value the first is waiting on.
+The `reactive` wrapper is not ceremony. A keyed value is identity per arguments: two components
+asking for invoice `42` are one request, and the second gets the value the first is waiting on.
 
-Hand `GET` the memo directly to name the caching yourself:
+Hand `GET` the keyed value directly to name the caching yourself:
 
 ```ts #server/rpc/invoices.ts — excerpt
-const invoiceById = memo(
+const invoiceById = reactive(
     ({ id }: { id: string }) => database.invoice.find(id),
     { ttl: 30_000 },
 )
@@ -114,11 +114,11 @@ export const getInvoice = GET(invoiceById, {
 
 | Target | Meaning |
 | --- | --- |
-| a `memo` | identity per args — coalescing, `ttl`, `invalidate` |
-| a `channel` | the read-only view of a room |
-| a plain function | sugar: `GET(fn)` **is** `GET(memo(fn))` |
+| a keyed value | identity per args — coalescing, `ttl`, `invalidate` |
+| one `Reactive` | that value, a channel among them — a client reading it follows every production (18.17) |
+| a plain function | sugar: `GET(fn)` **is** `GET(reactive(fn))` |
 
-So there is no un-memoized endpoint to reason about.
+So there is no uncached endpoint to reason about.
 
 Fill in `description`. It rides onto every surface the handler generates, and an agent reads it to
 decide whether this is the call it wants.

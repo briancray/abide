@@ -1,10 +1,10 @@
 <script>
-import { memo, principal, state } from 'abide'
+import { principal, reactive } from 'abide'
 import { searchInvoices } from '#server/rpc/invoices'
 
-let limit = state('2')
+let limit = reactive('2')
 
-const found = memo(() => searchInvoices({ limit: Number(limit) }))
+const found = reactive(() => searchInvoices({ limit: Number(limit) }))
 </script>
 
 <div class="row">
@@ -24,5 +24,7 @@ const found = memo(() => searchInvoices({ limit: Number(limit) }))
 
 <ul class="fields">
     <li><span>invoices</span>
-        <strong>{found.error() ? '—' : (found.length ?? '—')}</strong></li>
+        <strong>
+            {found.ready() && !found.error() ? found.length : '—'}
+        </strong></li>
 </ul>

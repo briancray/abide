@@ -1,9 +1,9 @@
-import { channel } from 'abide'
+import { reactive } from 'abide'
 
 export type Turn = { speaker: string; text: string }
 
-// Three past messages, whatever a reader asks for.
-export const turns = channel<Turn, { conversation: string }>({ tail: 3 })
+// The latest turn and two before it, whatever a reader asks for.
+export const onboarding = reactive<Turn>(undefined, { history: 2 })
 
 const OPENING: Turn[] = [
     { speaker: 'you', text: 'How do I rotate an API key?' },
@@ -11,6 +11,5 @@ const OPENING: Turn[] = [
     { speaker: 'you', text: 'Does the old key keep working?' },
 ]
 
-// A room is created by a publish, so the conversation opens with one.
-const onboarding = turns({ conversation: 'onboarding' })
+// The conversation opens with three publishes, so it has a past to show.
 for (const turn of OPENING) onboarding.publish(turn)

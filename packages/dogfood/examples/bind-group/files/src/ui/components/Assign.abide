@@ -1,8 +1,8 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 
-let tier = state('gold')
-let regions = state(['north'])
+let tier = reactive('gold')
+let regions = reactive(['north'])
 </script>
 
 <div class="row">

@@ -1,9 +1,9 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 
 const STATUSES = ['draft', 'sent', 'paid', 'overdue']
 
-let status = state('draft')
+let status = reactive('draft')
 </script>
 
 <div class="tabs">

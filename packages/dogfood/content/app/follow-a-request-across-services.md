@@ -52,7 +52,7 @@ changes nothing but the record.
 
 A span **is a `LogRecord`**, not a second feed. That is the decision worth knowing: there is one
 stream of things that happened, so a span and a log line are read by the same tooling, gated by
-the same channels and tailed by the same command. A separate span feed would be a second thing
+the same namespaces and tailed by the same command. A separate span feed would be a second thing
 to ship, a second thing to configure, and a second place for a correlation id to go wrong.
 
 Each carries `startedAt` as ISO-8601 and its duration as a **monotonic** measurement — a wall

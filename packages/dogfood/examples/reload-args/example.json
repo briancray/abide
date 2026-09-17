@@ -1,5 +1,5 @@
 {
-    "title": "`m.refresh(Partial<Args>)` — a slice of the args space",
+    "title": "`k.refresh(Partial<Args>)` — a slice of the args space",
     "summary": "Two warehouses holding the same shelf. Book one out of east and watch which of the two loads again.",
     "app": "dashboard",
     "files": ["src/server/rpc/stock.ts", "src/ui/components/Shelves.abide"],

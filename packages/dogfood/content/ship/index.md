@@ -44,7 +44,7 @@ Read on: [Build & start](build-and-serve-the-app.md) ·
 
 ## Watching what you deployed
 
-The same log channels, tailed from your terminal against a running app.
+The same logs, tailed from your terminal against a running app.
 
 Read on: [Tail a deployed app](watch-a-running-app.md)
 
@@ -54,7 +54,7 @@ Read on: [Tail a deployed app](watch-a-running-app.md)
 handler called once — the same route table your pages read, framed for a terminal.
 
 Read on: [Call a handler](call-a-handler-from-the-terminal.md) ·
-[Watch a room](watch-a-room-from-the-terminal.md)
+[Watch a channel](watch-a-room-from-the-terminal.md)
 
 ## Calling the app from a test
 

@@ -1,15 +1,15 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 import { getContact } from '#server/rpc/contacts'
 
-const contact = state(getContact({ id: '42' }))
+const contact = reactive(getContact({ id: '42' }))
 </script>
 
 <ul class="fields">
     <li><span>name</span>
-        <strong>{contact.name ?? '—'}</strong></li>
+        <strong>{contact.ready() ? contact.name : '—'}</strong></li>
     <li><span>role</span>
-        <strong>{contact.role ?? '—'}</strong></li>
+        <strong>{contact.ready() ? contact.role : '—'}</strong></li>
 </ul>
 
-<p class="status">{contact.pending() ? 'loading…' : ''}</p>
+<p class="status">{contact.busy() ? 'loading…' : ''}</p>

@@ -1,12 +1,12 @@
 <script>
-import { memo, state } from 'abide'
+import { reactive } from 'abide'
 import { getMetrics } from '#server/rpc/metrics'
 
 const RANGES = ['7d', '30d']
 
-let range = state('7d')
+let range = reactive('7d')
 
-const metrics = memo(() => getMetrics({ range }))
+const metrics = reactive(() => getMetrics({ range }))
 </script>
 
 <ul class="grid">
@@ -18,9 +18,9 @@ const metrics = memo(() => getMetrics({ range }))
         {/for}
         </div></li>
     <li><span>orders</span>
-        <strong>{metrics.pending() ? '—' : metrics.orders}</strong>
+        <strong>{metrics.ready() ? metrics.orders : '—'}</strong>
     </li>
     <li><span>times computed</span>
-        <strong>{metrics.pending() ? '—' : metrics.computed}</strong>
+        <strong>{metrics.ready() ? metrics.computed : '—'}</strong>
     </li>
 </ul>

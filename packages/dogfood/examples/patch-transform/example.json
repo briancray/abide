@@ -1,5 +1,5 @@
 {
-    "title": "`memo(load, { transform })` \u2014 an array in, an index held",
+    "title": "`reactive(() => rows, { transform })` \u2014 an array in, an index held",
     "summary": "The regions table arriving from the server as a list, on a dashboard whose feed names ids.",
     "app": "dashboard",
     "files": [

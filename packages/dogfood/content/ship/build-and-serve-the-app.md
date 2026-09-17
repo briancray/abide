@@ -78,7 +78,7 @@ Read on: [Response types](../server/answer-with-something-other-than-json.md)
 ## The errors a build finds
 
 A build sees the whole route table, so it catches what a per-file check cannot: two files
-mounting at one address, and a memo handed to two handlers. Both name the files involved rather
+mounting at one address, and a `reactive` handed to two handlers. Both name the files involved rather
 than picking a winner at the first request.
 
 Read on: [Checks](catch-mistakes-before-you-ship.md) ·

@@ -72,53 +72,54 @@ needs no adapter between the two.
 being a read of the socket rather than a row.
 
 `salesByRegion({ year })` hands back the same `Reactive` shape the handler had, chunks
-included. So the cursor walks on the caller's side exactly as it did on the server's:
+included (16.3). `rows` adopts it, so to a cursor, a guard and an await `rows` **is** that stream
+(11.15), and the cursor walks on the caller's side exactly as it did on the server's:
 
 | Spelling | Means |
 | --- | --- |
-| `{#for await row of rows}` | every chunk, replaying what the value retained first |
-| `{rows}` | the **accumulation**, materialised once the stream closes — `undefined` and pending before then, there being no complete value to serve |
-| `rows.pending()` | true until the stream **closes**, not until the first chunk |
-| `{await rows}` | hold for the whole thing |
+| `{#for row of rows}` | every row the run has produced so far, and each one after as it lands (9.2) |
+| `{rows}` | the **accumulation so far**, materialised on the read that asks for it (9.2) |
+| `rows.busy()` | true until the stream **closes**; `ready()` is true from the first chunk (3.7, 3.8) |
+| `{await rows}` | hold for the whole thing — the accumulation at close (2.8) |
 
-`{:catch}` on a `{#for await}` **appends** after the rows already painted, that block having
-accumulated rather than rendered as a unit.
+Nothing copies the accumulation per chunk (9.3), and a reader is woken at most once per task
+however many chunks landed in it (9.23).
+
+`{:catch}` on that `{#for}` renders **after** the rows already painted rather than in place of
+them — what the run produced before it failed is still what it produced.
 
 Read on: [Loading states](../values/show-a-value-that-isnt-there-yet.md) ·
 [Lists](../templates/repeat-markup-over-a-list.md)
 
-## Retention belongs to the caller's memo
+## A reader arriving mid-run replays the run, not a ring
 
-There is no retention option on the transport and none is owed. A call is made inside a memo,
-and the caller replays that memo's `tail`:
+There is no retention option on the transport and none is owed. `history` on a streaming producer
+retains **finished runs** — a run enters the ring at its close (6.17) — and says nothing about the
+run being built now. What a late reader needs is the
+answer being built, and a cursor over the stream hands it the run in flight from its start before
+it goes live (2.7). So a reader arriving halfway through still paints every row.
 
-```ts browser
-const rows = memo(() => salesByRegion({ year: 2026 }), { tail: 500 })
-```
+Read on: [History](../values/keep-the-last-few-values.md)
 
-Two `Reactive`s, two rings, each bounded where it lives — the handler's `tail` on the server,
-the memo's on the client. A `tail` on the call itself would be a third place to say it with no
-rule for which won.
-
-Read on: [History & tail](../values/keep-the-last-few-values.md)
-
-## A stream is not a room
+## A stream is not a channel
 
 Both produce more than once, and what the producer declared separates them — not something
-a runtime sniffs. A channel declares a `Message`, so every publish is a whole one, where a
-streaming body declares chunks of one value and no chunk is a whole anything.
+a runtime sniffs. A channel is written by `publish`, and every publish is a whole message (9.6). A
+body declared `async function*` is a stream, yielding chunks of one value (9.20), and no chunk is a
+whole anything. That is why a stream is `busy()` until it closes (3.7), where a channel is never
+busy where it is published (3.9).
 
-The practical consequence is keying: a room's chunks carry a `seq`, which `{#for await}` uses
-as the default key. A jsonl stream has none, so rows are positional unless the block spells
+The practical consequence is keying: every production of a wired channel carries a sequence number
+(18.10), which a `{#for}` over its cursor uses as the default key (18.16). A jsonl stream has none, so rows are positional unless the block spells
 `by`:
 
 ```abide #ui/pages/reports/page.abide — excerpt
-{#for await region of salesByRegion({ year: 2026 }) by region.code}
+{#for region of salesByRegion({ year: 2026 }) by region.code}
     <tr><td>{region.name}</td><td>{region.total}</td></tr>
 {/for}
 ```
 
-Read on: [Rooms](../values/let-anything-publish-and-anything-read.md) · [Sockets](keep-a-room-of-callers-in-sync.md)
+Read on: [Channels](../values/let-anything-publish-and-anything-read.md) · [Sockets](keep-a-room-of-callers-in-sync.md)
 
 ## A page in flight is not held for an unfinished stream
 
@@ -135,6 +136,6 @@ Read on: [Streaming HTML](../pages/send-the-page-before-the-data-lands.md) ·
 
 ## Next
 
-* [Sockets](keep-a-room-of-callers-in-sync.md) — pushed rather than pulled, many callers on one subject
+* [Sockets](keep-a-room-of-callers-in-sync.md) — pushed rather than pulled, many callers on one channel
 * [Limits](put-a-ceiling-on-a-request.md) — `timeout` is per chunk on a handler that yields
-* [History & tail](../values/keep-the-last-few-values.md) — retention, cursors and replay in full
+* [History](../values/keep-the-last-few-values.md) — retention, cursors and replay in full

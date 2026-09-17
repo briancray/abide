@@ -3,21 +3,16 @@ title: Slow down a value that changes too fast
 nav: Throttle & debounce
 intent: A search box that fires on every keystroke, without firing on every keystroke.
 covers:
-  - state › `throttle`
-  - memo › `throttle`
-  - channel › `throttle`
-  - state › `debounce`
-  - memo › `debounce`
-  - channel › `debounce`
-  - state › `identity`
+  - `throttle`
+  - `debounce`
+  - `identity`
   - `structural`
-  - memo › `identity`
 examples:
   - packages/dogfood/examples/cap-debounce
   - packages/dogfood/examples/cap-throttle
 ---
 
-A filter box is the case where "reading loads it" stops being free. Bind the input to a state,
+A filter box is the case where "reading loads it" stops being free. Bind the input to a value,
 derive the figure from it, and you have declared one request per keystroke. Two options cap that,
 and a third stops a value waking anybody when it did not really move.
 
@@ -31,30 +26,31 @@ Both cap **how often the value changes**, and both apply however the change was 
 | `debounce: n` | once the changes stop for `n` ms |
 
 Declaring both is a build error naming the value, there being no reading under which you meant one
-of them. Every `Reactive` takes them, and what drives the change is the producer's business:
+of them. Each value below takes them, and what drives the change is the producer's business:
 
 | The value | What moves it | What a window collapses |
 | --- | --- | --- |
-| a `memo` over a load | a trigger — a dependency, an `invalidate`, a `refresh`, a `ttl` lapsing | reloads |
-| a `memo` over a stream | a chunk | recomputes |
-| a `state` | a write | wakes |
-| a `channel` | a publish | wakes |
+| a derived value over a load | a trigger — a dependency, an `invalidate`, a `refresh`, a `ttl` lapsing | reloads |
+| a value you write | a write | wakes |
+| a channel | a publish | wakes |
+| a stream — an `async function*` body | a chunk | wakes |
+| a keyed value — a body with a parameter | a key reached for the first time | starts |
 
 ## `debounce` waits for the changes to stop
 
 {% example cap-debounce %}
 
-*1 option, 0 markup changed* — it goes on the memo that pays the cost, and the probes did not move
+*1 option, 0 markup changed* — it goes on the value that pays the cost, and the probes did not move
 either.
 
 `debounce` is right where the intermediate values are not answers — a half-typed region being the
 example the whole page is built on. Five keystrokes are one load rather than five, and **the count
 already held stays on screen the whole time.**
 
-That is the `refresh()` contract rather than a new one: inside the window the held value keeps
-being served and `refreshing()` is true, so a figure does not blank between keystrokes and there is
-no fourth probe to learn. A **first** load still reports `pending()`, there being nothing held to
-serve — which is the dash the card passes through once, on its way to the first figure.
+That is the `refresh()` contract rather than a new one: while the window is holding a change back
+the value already held keeps being served, so the value stays `busy()` **and** `ready()` and a
+figure does not blank between keystrokes. A **first** load is busy with nothing to serve — which is
+the dash the card passes through once, on its way to the first figure.
 
 The hand-written arm is where the cost shows. The window is one timer, but it arrives with two
 things beside it: the flag that keeps the held figure up, and the guard that stops an answer for a
@@ -77,16 +73,41 @@ arrival. That is why the card's spec counts paints rather than comparing the two
 value is identical either way, and the work is the whole claim.
 
 A window **delays**, and does not itself drop. It collapses a batch into one delivery, so a cursor
-over a capped room gets what the ring held in one go rather than one per frame, and a
-`{#for await}` block keyed on the sequence number stays sound. For a plain read the batch is the
+over a capped channel gets what the ring held in one go rather than one per frame, and a
+`{#for}` over that cursor, keyed on the sequence number, stays sound. For a plain read the batch is the
 latest value, which is why the same rule looks like two behaviours.
 
-`tail` decides what survives the batch, never the window. There is no second buffer behind a cap,
-so a room capped at the default retention serves the latest message and loses the ones between it.
-Raise `tail` where the ones between are the point.
+`history` decides what survives the batch, never the window. There is no second buffer behind a
+cap, so a capped channel with no `history` serves the latest production and loses the ones between it.
+Raise `history` where the ones between are the point.
 
-Read on: [History & tail](keep-the-last-few-values.md) ·
-[Rooms](let-anything-publish-and-anything-read.md)
+A stream takes either cap too, and the window is over how often its **readers** wake (5.18). A read
+serves the accumulation as the last release left it, not the chunks the window is still holding
+(5.19), while a cursor still gets every chunk (5.11). The close releases what the window holds, so
+`await` resolves with the whole accumulation (2.8).
+
+Read on: [History](keep-the-last-few-values.md) ·
+[Streaming data](../server/send-data-as-it-arrives.md) ·
+[Channels](let-anything-publish-and-anything-read.md)
+
+## On a keyed value the window is over starting a key
+
+A body with a parameter is a space of values, and what a filter box drives through it is a new
+**key** per keystroke, not a new value under one key. So the window on a keyed value holds back
+**starting** a key it has not reached before (5.20). `search({ q })` reached for `n`, `no`, `nor`
+and `north` inside one debounce starts `north` alone. A throttle starts `n` at once and, at the end
+of the window, the latest key reached since.
+
+A key the window passed over for a later one is never started and never kept (5.21). No request
+goes out for `no`, and there is no entry for it left to hold. The key being held back reports
+`busy()` (5.22), so the page reads a load in flight, which is what it is about to be.
+
+A key already started is an ordinary entry. Reaching it again is a cache hit and does not wait.
+What moves it after that — a dependency, an `invalidate`, a `ttl` — is capped as any value is. A keyed
+channel is a keyed value, so reaching its key is held the same way, and after that the window is
+over its publishes, as the table says.
+
+Read on: [Caching](load-once-per-set-of-arguments.md)
 
 ## The cap belongs on the value, not at the call site
 
@@ -95,7 +116,7 @@ A value that must not join a stampede says so about itself, where the knowledge 
 decide how hard any one entry may be hit.
 
 The one read that ignores the cap is a `bind:`. The binding wrote the value, so it sees its own
-write immediately while the rest of the page waits out the window — otherwise a throttled state
+write immediately while the rest of the page waits out the window — otherwise a throttled value
 under `bind:value` would snap the text back under a typist between keystrokes.
 
 Read on: [Caching](load-once-per-set-of-arguments.md) ·
@@ -108,30 +129,31 @@ shows it — because there is nothing to show. `identity` decides what counts as
 getting it wrong leaves the output right and the work wrong: nothing renders incorrectly, the page
 just re-renders on every recompute.
 
-**`structural` is the default** on a state and a memo, so an args object, a derived record or a
-list rebuilt from the same rows collapses without being asked to. The comparison is spent against a
-**wake** — and a wake is a re-render and a DOM mutation, which costs more than the walk that avoids
-it. So it is not priced against zero; it is priced against the work it cancels.
+**The reference is the default** (5.4), which is what JavaScript means by the same value. Declare
+`identity: structural` on the value whose producer rebuilds what it hands back — a reload that
+fetches an equal record, a list rebuilt from the same rows — and it collapses without waking
+anybody. It is not the default because the walk runs on every write, where the wake it saves is
+collected only when the payload really is equal.
 
 It BAILS rather than guesses: a `Map`, a `Set`, a class instance, a cycle, and it answers "not
 equal", so an indecisive comparison wakes readers instead of collapsing a change. `canonical` is
-not this and is not an equality at all; it builds a memo KEY, which has to be stable across
+not this and is not an equality at all; it builds a keyed value's KEY, which has to be stable across
 processes and across sides, so it sorts, drops `undefined` and allocates a string.
 
-Write `identity: (value) => value` to opt back out, and your own comparator where `structural`
-bails on a shape you need compared. It takes either form: a **projection** compared with `!==`, or
-a **comparator** answering directly. The second exists because "same length, same elements" cannot
+Write your own comparator where `structural` bails on a shape you need compared. It takes either
+form: a **projection** compared with `!==`, or a **comparator** answering directly. The second exists because "same length, same elements" cannot
 be projected — a freshly built array is `!==` whatever is in it.
 
-A state holding an object is the case you hit first. A form binding rewrites it per keystroke, a
-`refresh()` on `state(fetchUser())` returns a structurally identical user, and a write through a
-member path copies down the path. Each of them is a new reference for a value that did not move.
+A value you write holding an object is the case you hit first. A form binding rewrites it per
+keystroke, a `refresh()` on `reactive(() => fetchUser())` returns a structurally identical user, and a
+write through a member path copies down the path. Each of them is a new reference for a value that
+did not move.
 
-**A room is the one producer that defaults to the reference**, and that is a fact about what a
-production means there rather than an exception. A publish is an EVENT, and two identical events
-are two events. A state's or a memo's production is a VALUE, and two identical values are one.
+**A publish is not gated at all** (9.6), and that is a fact about what a production means there
+rather than an exception. A publish is an EVENT, and two identical events are two events. A write
+and a body's production are VALUES, and `identity` decides when two of them are one.
 
-Read on: [Rooms](let-anything-publish-and-anything-read.md) ·
+Read on: [Channels](let-anything-publish-and-anything-read.md) ·
 [Derived values](derive-a-value-from-other-values.md)
 
 ## `identity` costs O(size) per production
@@ -143,12 +165,13 @@ all freshly built and all equal is 0.31 ms, which is the pathological end and st
 frame. The walk that finds its difference at the last row is the one that pays without collecting.
 
 It compares the **stored** value against the previous one, which is why it never runs per chunk — a
-streaming producer has one stored value, materialised when it closes. It holds one token and not a
-set, so uniqueness is against the previous stored value rather than against the tail, and raising
-`tail` never makes a write dearer.
+streaming producer has one stored value, the accumulation, materialised on the read that asks for
+it (9.2). It holds one token and not a
+set, so uniqueness is against the previous stored value rather than against a channel's ring, and
+raising `history` never makes a write dearer (6.2).
 
 ## Next
 
 * [Caching](load-once-per-set-of-arguments.md) — the entries a cap applies to
-* [History & tail](keep-the-last-few-values.md) — the other way an accumulating value gets expensive
+* [History](keep-the-last-few-values.md) — the other way an accumulating value gets expensive
 * [Form binding](../templates/bind-a-form-to-state.md) — the input the filter came from

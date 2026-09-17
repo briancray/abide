@@ -1,12 +1,12 @@
 <script>
-import { memo, state } from 'abide'
+import { reactive } from 'abide'
 import { getInvoice } from '#server/rpc/invoices'
 
 const SPELLINGS = ['ABC-123', 'abc-123']
 
-let id = state('ABC-123')
+let id = reactive('ABC-123')
 
-const invoice = memo(() => getInvoice({ id }))
+const invoice = reactive(() => getInvoice({ id }))
 </script>
 
 <div class="tabs">
@@ -16,9 +16,9 @@ const invoice = memo(() => getInvoice({ id }))
 {/for}
 </div>
 
-<p class="status">{invoice.pending() ? 'loading…' : ''}</p>
+<p class="status">{invoice.busy() ? 'loading…' : ''}</p>
 
 <ul class="fields">
     <li><span>invoice</span>
-        <strong>{invoice.ref ?? '—'}</strong></li>
+        <strong>{invoice.ready() ? invoice.ref : '—'}</strong></li>
 </ul>

@@ -24,7 +24,8 @@
         "verify": "bun run lint && bun run typecheck && bun run test",
         "bench": "bun packages/harness/scripts/bench.ts",
         "status": "bun packages/harness/scripts/serveStatus.ts",
-        "test:gates": "HARNESS_VERIFY_GATES=1 bun test packages/abide packages/harness/tests packages/dogfood/tests"
+        "test:gates": "HARNESS_VERIFY_GATES=1 bun test packages/abide packages/harness/tests packages/dogfood/tests",
+        "bench:reactive": "bun packages/harness/scripts/benchReactive.ts"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.5.11",

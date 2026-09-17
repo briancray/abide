@@ -1,0 +1,4689 @@
+// THE REACTIVE CORE'S GATES. Correctness tests cannot guard any of this: every claim
+// here is about WORK — a reader that woke when nothing it reads changed still reads
+// the right value, and a body that ran twice still produces the right answer. So the
+// assertions count wake-ups and body runs, and the two that have an installable broken
+// arm carry it, per CLAUDE.md's revert discipline.
+
+import { expect, setSystemTime, test } from 'bun:test'
+import { gate } from 'harness/gate'
+import {
+    flushSync,
+    isReactive,
+    NotLanded,
+    reactive,
+    refuse,
+    structural,
+    watch,
+} from '#shared'
+import { CELL } from '#shared/reactive/CELL.ts'
+
+// THE RECORD A VALUE'S STATE LIVES ON. Every test that asserts a field rather than an
+// answer reaches it through here — read off the callable itself, a field is `undefined`,
+// and an invariant written as an equality between two of them passes on nothing.
+function cellOf<Fields>(value: unknown): Fields {
+    return (value as { [CELL]: Fields })[CELL]
+}
+
+// A wake counter that is not itself a reactive read — `watch` would re-enter the graph
+// and the count would include its own subscription.
+function wakes<Value>(value: {
+    watch(effect: (value: Value) => void): () => void
+}): {
+    count(): number
+    stop(): void
+} {
+    let woken = 0
+    const stop = value.watch(() => {
+        woken += 1
+    })
+    // The immediate run (12.2) is not a wake — it is the subscription.
+    woken = 0
+    // A WAKE IS BATCHED TO THE END OF THE TURN, so the count is taken after the turn is
+    // ended rather than after the write. `flushSync` is the only way to observe an effect
+    // in the same turn as the write that caused it.
+    return {
+        count: (): number => {
+            flushSync()
+            return woken
+        },
+        stop,
+    }
+}
+
+test('a value form lands at construction and reads as ready', () => {
+    const total = reactive(41)
+    expect(total.ready()).toBe(true)
+    expect(total.busy()).toBe(false)
+    expect(total()).toBe(41)
+    expect(total.peek()).toBe(41)
+})
+
+// RULEBOOK 2.7, move 6. The throw is what lets move 7 type the read as `Stored`.
+test('a read throws NotLanded where nothing has landed, and peek does not', () => {
+    const pending = reactive(new Promise<number>(() => {}))
+    expect(pending.ready()).toBe(false)
+    expect(pending.busy()).toBe(true)
+    expect(() => pending()).toThrow(NotLanded)
+    expect(pending.peek()).toBeUndefined()
+})
+
+// The trigger named by the state it produces: busy AND ready.
+test('refresh keeps serving while it reloads', async () => {
+    let answer = 1
+    const held = reactive(() => Promise.resolve(answer))
+    await held
+    expect(held()).toBe(1)
+    answer = 2
+    held.refresh()
+    expect(held.ready()).toBe(true)
+    expect(held.busy()).toBe(true)
+    expect(held()).toBe(1)
+    await held
+    expect(held()).toBe(2)
+})
+
+// SERVED UNTIL SOMETHING READS (7.16, 7.17). The mark changes nothing a reader can see — still
+// ready, not busy — and the read that follows runs the producer, which is the moment the held
+// value stops being served (7.8) and, over an async body, the first load again.
+test('invalidate keeps serving until the next read, which stops serving and loads', async () => {
+    const answer = 1
+    const held = reactive(() => Promise.resolve(answer))
+    await held
+    held.invalidate()
+    expect(`busy: ${held.busy()}`).toBe('busy: false')
+    expect(`ready: ${held.ready()}`).toBe('ready: true')
+    expect(() => held()).toThrow(NotLanded)
+    expect(`busy after the read: ${held.busy()}`).toBe(
+        'busy after the read: true',
+    )
+    expect(`ready after the read: ${held.ready()}`).toBe(
+        'ready after the read: false',
+    )
+})
+
+// 11.20 on the truth-conditional premise: the derived value's data IS being refreshed
+// when its source's is, so `busy` is true whether or not anything asks. Note the body
+// never re-runs here — 7.4 keeps serving, the value does not change, 11.5 gives no
+// recompute — so nothing but a walk of the source list can report it.
+test('busy propagates through a derived value while its source refreshes', async () => {
+    const answer = 1
+    const invoice = reactive(() => Promise.resolve(answer))
+    await invoice
+    const doubled = reactive(() => invoice() * 2)
+    expect(doubled()).toBe(2)
+    expect(doubled.busy()).toBe(false)
+
+    invoice.refresh()
+    expect(invoice.busy()).toBe(true)
+    expect(doubled.ready()).toBe(true)
+    expect(doubled.busy()).toBe(true)
+})
+
+// THE ABORT. A body that reads an unlanded value is abandoned, mints nothing (11.53),
+// and re-runs when the source lands. The count is what matters: a body run to
+// completion against an unlanded read would have produced once with the wrong input.
+test('a body reading an unlanded value mints nothing and re-runs on landing', async () => {
+    let resolveSource: (value: number) => void = (): void => {}
+    const source = reactive(
+        new Promise<number>((resolve) => {
+            resolveSource = resolve
+        }),
+    )
+    let runs = 0
+    const derived = reactive(() => {
+        runs += 1
+        return source() + 1
+    })
+    expect(runs).toBe(1)
+    expect(derived.ready()).toBe(false)
+    expect(derived.busy()).toBe(true)
+
+    resolveSource(41)
+    await source
+    // THE READ IS WHAT RE-RUNS IT (11.5). Nothing watches this value, so the source
+    // landing marks it and stops; under eager the body had already run again by the time
+    // the `await` returned. The contract 2.13 and 11.53 state is unchanged either way — the
+    // body is abandoned rather than completed against an absent value, and it mints
+    // nothing on the run that aborted.
+    expect(runs).toBe(1)
+    expect(derived()).toBe(42)
+    expect(runs).toBe(2)
+})
+
+// 2.14 FOR A READER THAT ONLY GUARDS, which is the case the two around this one cannot reach. A
+// binding spelled `{#if unpaid.ready()}` subscribes to the PROBE and never to the value, so no
+// read of its will ever pull an aborted body forward — and the body cannot answer `ready` until it
+// has run for the value being probed (11.55). Left to push-pull the guard says "counting…" for as
+// long as the page is open, and every number on it is right.
+//
+// THE REVERT is dropping the `aborted` queue from `markReaders`: `after: counting… | counting…`.
+test('a body something only guards re-runs when the value it aborted on lands', async () => {
+    let landRows: (rows: { paid: boolean }[]) => void = (): void => {}
+    const pending = new Promise<{ paid: boolean }[]>((resolve) => {
+        landRows = resolve
+    })
+    const rows = reactive(() => pending)
+    let bodyRuns = 0
+    const unpaid = reactive(() => {
+        bodyRuns += 1
+        return rows().filter((row) => !row.paid)
+    })
+    const painted: string[] = []
+    const stop = watch(() => {
+        painted.push(unpaid.ready() ? `ready:${unpaid().length}` : 'counting…')
+    })
+    flushSync()
+    expect(`before: ${painted.join(' | ')}`).toBe('before: counting…')
+
+    landRows([{ paid: false }, { paid: true }])
+    await pending
+    flushSync()
+    expect(`after: ${painted.join(' | ')}`).toBe(
+        'after: counting… | ready:1',
+    )
+    // The aborted run and the one that finished it, and no third: the guard's own read of the
+    // value finds a body that has already run rather than pulling it a second time.
+    expect(`body runs: ${bodyRuns}`).toBe('body runs: 2')
+    stop()
+})
+
+// 11.5 THROUGH AN EFFECT, which is the case the one above cannot answer. A value
+// something WATCHES is not lazy: the mark reaches the effect, the effect's read pulls the
+// body forward, and it re-runs inside the write. This is the shape a template makes, so
+// it is the one that decides whether push-pull is visible to an app at all.
+test('a watched derived value re-runs on the write, not on a later read', async () => {
+    let resolveSource: (value: number) => void = (): void => {}
+    const source = reactive(
+        new Promise<number>((resolve) => {
+            resolveSource = resolve
+        }),
+    )
+    let runs = 0
+    const derived = reactive(() => {
+        runs += 1
+        return source() + 1
+    })
+    const seen: number[] = []
+    const stop = derived.watch((value) => {
+        seen.push(value as number)
+    })
+    runs = 0
+
+    resolveSource(41)
+    await source
+    expect(runs).toBe(1)
+    expect(seen).toEqual([42])
+    stop()
+})
+
+// A READ IS UNAFFECTED BY RETENTION. `tail` says how many past productions are kept and
+// nothing about what `s()` answers — 9.1 makes a room's production one complete `Message`
+// and the REGISTRY's `Room` row makes its value the latest one. History is `s.history` (2.5)
+// and is reached no other way.
+test('a value declaring tail still reads as the latest production', () => {
+    const room = reactive<string>(undefined, { history: 2 })
+    room.publish('a')
+    room.publish('b')
+    room.publish('c')
+    room.publish('d')
+    expect(room()).toBe('d')
+    // And the retention is the depth, trimmed from the front.
+    expect([...room.history()]).toEqual(['b', 'c', 'd'])
+})
+
+// 9.6 generalised: the ordinal counts productions on every producer, not just a room.
+test('publish returns the ordinal and mints on every call', () => {
+    const room = reactive<string>(undefined, { history: 9 })
+    expect(room.publish('ok')).toBe(1)
+    expect(room.publish('ok')).toBe(2)
+    expect(room()).toBe('ok')
+    // Two productions, not one collapsed into one — which the read cannot show and the
+    // retention can.
+    expect([...room.history()]).toEqual(['ok', 'ok'])
+})
+
+// Arity is the discriminator. Getting the overload ORDER wrong is
+// what makes this silently one type: keyed-first swallows the unkeyed form.
+test('a body declaring a parameter is keyed, and one declaring none is not', () => {
+    const unkeyed = reactive(() => 7)
+    expect(unkeyed()).toBe(7)
+
+    const keyed = reactive((args: { id: number }) => args.id * 2)
+    expect(keyed({ id: 4 })()).toBe(8)
+    // 11.24: members sorted, so two spellings of one key are one entry.
+    expect(keyed.entries.size).toBe(1)
+    expect(keyed({ id: 4 })).toBe(keyed({ id: 4 }))
+})
+
+// 3.19: reaching an instance that exists joins the standing work rather than starting
+// a second. Without it, `{#if user.busy()}` re-evaluating on every wake is a request
+// per re-render.
+test('reaching a key twice runs the body once', () => {
+    let runs = 0
+    const keyed = reactive((args: { id: number }) => {
+        runs += 1
+        return args.id
+    })
+    keyed({ id: 1 })
+    keyed({ id: 1 })
+    keyed({ id: 1 })
+    expect(runs).toBe(1)
+})
+
+// 3.8 against 3.7: the static probe reads the map and allocates nothing, where
+// reaching an entry creates and starts it. This is bought out of a
+// shared get-or-create; here it is visible in the spelling.
+test('a static probe over a keyed value allocates no entry', () => {
+    const keyed = reactive((args: { id: number }) => args.id)
+    expect(reactive.busy(keyed)).toBe(false)
+    expect(keyed.entries.size).toBe(0)
+    keyed({ id: 1 })
+    expect(keyed.entries.size).toBe(1)
+})
+
+// A function in the value position is a body, so one the app wants to hold is wrapped.
+test('a function held as data goes inside a record', () => {
+    const handler = (): string => 'called'
+    const held = reactive({ handler })
+    expect(held().handler).toBe(handler)
+})
+
+test('an effect runs immediately and again on change, and its disposer runs first', () => {
+    const count = reactive(1)
+    const order: string[] = []
+    const stop = watch(() => {
+        order.push(`run:${count()}`)
+        return () => order.push('dispose')
+    })
+    count.set(2)
+    flushSync()
+    stop()
+    expect(order).toEqual(['run:1', 'dispose', 'run:2', 'dispose'])
+})
+
+// ── The two claims with an installable broken arm ────────────────────────────────
+
+// THE DEFAULT IS THE REFERENCE. A fresh object with the same contents is a different
+// value to `Object.is`, so it produces and wakes — which is what `===` means and what
+// an author who has not read the rulebook will predict. The re-materialisation
+// hazard is real and is now the APP's to declare against, not the framework's to
+// charge every value for.
+test('the default identity is the reference, so a re-materialised value wakes', () => {
+    const invoice = reactive({ id: 1, total: 100 })
+    const counter = wakes(invoice)
+    invoice.set({ id: 1, total: 100 })
+    const woken = counter.count()
+    counter.stop()
+    expect(woken).toBe(1)
+})
+
+// `Object.is` RATHER THAN `===`, AND THE TWO CASES THAT DIFFER. This is the whole of
+// the difference: `NaN === NaN` is false and `+0 === -0` is true, and `Object.is`
+// inverts both. The NaN half is why the default is `Object.is` — a value that lands on
+// NaN (a failed parse, a division, an aggregate over nothing) would otherwise never
+// compare equal to itself, so every write of it wakes every reader forever.
+gate(
+    'a repeated NaN wakes no reader',
+    {
+        revert: () => {
+            ;(globalThis as { REVERT_NAN?: boolean | undefined }).REVERT_NAN =
+                true
+            return () => {
+                ;(
+                    globalThis as { REVERT_NAN?: boolean | undefined }
+                ).REVERT_NAN = undefined
+            }
+        },
+        worth: { wakes: 1 },
+    },
+    () => {
+        const reverted = (globalThis as { REVERT_NAN?: boolean | undefined })
+            .REVERT_NAN
+        // The broken arm is the obvious spelling of "the reference": `===`.
+        const measure = reactive(
+            Number.NaN,
+            reverted
+                ? {
+                      identity: (next: number, previous: number) =>
+                          next === previous,
+                  }
+                : undefined,
+        )
+        const counter = wakes(measure)
+        measure.set(Number.NaN)
+        const woken = counter.count()
+        counter.stop()
+        expect(`wakes: ${woken}`).toBe('wakes: 0')
+    },
+)
+
+// THE COST OF THE CHOICE, stated rather than hidden. `Object.is` separates the zeroes,
+// so a value moving from +0 to -0 produces and wakes where `===` would have collapsed
+// it. That is a spurious wake in the one case where the two numbers are almost always
+// interchangeable — and it is the price of the NaN case above.
+test('the signed zeroes are two values, which is what Object.is costs', () => {
+    const measure = reactive(0)
+    const counter = wakes(measure)
+    measure.set(-0)
+    const woken = counter.count()
+    counter.stop()
+    expect(woken).toBe(1)
+})
+
+// 5.2 through the OVERRIDE. A value whose producer re-materialises — a reload that
+// fetched an equal payload and built a fresh object for it — declares `structural` and
+// stops waking every reader on every reload. The output stays right either way and
+// only the work moves, which is why this is a wake count and not a value assertion.
+gate(
+    'a set of a structurally equal value wakes no reader where the app declared structural',
+    {
+        revert: () => {
+            // The broken arm is the app forgetting the option, which is the default.
+            ;(
+                globalThis as { REVERT_IDENTITY?: boolean | undefined }
+            ).REVERT_IDENTITY = true
+            return () => {
+                ;(
+                    globalThis as { REVERT_IDENTITY?: boolean | undefined }
+                ).REVERT_IDENTITY = undefined
+            }
+        },
+        worth: { wakes: 1 },
+    },
+    () => {
+        const reverted = (
+            globalThis as { REVERT_IDENTITY?: boolean | undefined }
+        ).REVERT_IDENTITY
+        const invoice = reactive(
+            { id: 1, total: 100 },
+            reverted ? undefined : { identity: structural },
+        )
+        const counter = wakes(invoice)
+        // A FRESH OBJECT with the same contents — the re-materialisation every reload
+        // produces, and the case the default cannot see.
+        invoice.set({ id: 1, total: 100 })
+        const woken = counter.count()
+        counter.stop()
+        expect(`wakes: ${woken}`).toBe('wakes: 0')
+    },
+)
+
+// The other half of the same split: `publish` is UNGATED, so two identical messages
+// are two events somebody sent on purpose. Gating it would hand the publisher back a
+// delivery that did not happen.
+gate(
+    'a publish of an equal value mints every time',
+    {
+        revert: () => {
+            ;(
+                globalThis as { REVERT_PUBLISH_GATE?: boolean | undefined }
+            ).REVERT_PUBLISH_GATE = true
+            return () => {
+                ;(
+                    globalThis as { REVERT_PUBLISH_GATE?: boolean | undefined }
+                ).REVERT_PUBLISH_GATE = undefined
+            }
+        },
+        // MEASURED, not guessed: the gated arm still mints ONCE, because the first write
+        // to a not-landed value has nothing to compare against. The claim this gate
+        // protects is the SECOND message, which is the one a chat drops.
+        worth: { retained: 1 },
+    },
+    () => {
+        const reverted = (
+            globalThis as { REVERT_PUBLISH_GATE?: boolean | undefined }
+        ).REVERT_PUBLISH_GATE
+        const room = reactive<string>(undefined, { history: 4 })
+        // THE PRODUCTION IS THE CLAIM, NOT THE WAKE, and batching is what made the
+        // difference visible. Two publishes in one turn reach a `watch` ONCE — 5.10 has a
+        // window cap the wake and not the production, and 5.11 has the cursor deliver what
+        // the window collapsed. So counting wakes here measured the batch; counting what
+        // retention holds measures whether the second message existed at all.
+        //
+        // The broken arm routes the publish through the gated write, which is what "one
+        // member, two spellings" would collapse to if `publish` were `set`.
+        if (reverted) room.set('ok')
+        else room.publish('ok')
+        if (reverted) room.set('ok')
+        else room.publish('ok')
+        expect(`retained: ${[...room.history()].length}`).toBe('retained: 2')
+    },
+)
+
+// ── Push-pull: the cases eager recompute got wrong, and the ones nothing covered ──
+
+// THE DIAMOND. A -> B, A -> C, B + C -> D. Under eager synchronous recompute this
+// produced TWICE on one write, and the first production carried `b_new + c_old` — a
+// value the system was never logically in. That production was not internal: it set
+// `value`, bumped `ordinal`, appended to the ring where `tail` was declared, and fired
+// `watch`. Measured with eager in place: dRuns 2, seen [120, 220], wakes 2.
+//
+// Resolving DEPTH-FIRST from the read is what orders D after both B and C, so the
+// intermediate cannot be observed and cannot be retained.
+test('a diamond produces once, and never a value the system was not in', () => {
+    const a = reactive(10)
+    const b = reactive(() => a() * 10)
+    const c = reactive(() => a() * 10 + 100)
+    let runs = 0
+    const d = reactive(() => {
+        runs += 1
+        return b() + c()
+    })
+    const seen: number[] = []
+    const stop = d.watch((value) => {
+        seen.push(value as number)
+    })
+    runs = 0
+    seen.length = 0
+
+    a.set(11)
+    flushSync()
+    expect(d()).toBe(11 * 10 + (11 * 10 + 100))
+    expect(runs).toBe(1)
+    expect(seen).toEqual([320])
+    stop()
+})
+
+// 5.2 ON A DIAMOND, which is the contract eager claimed and broke. The source moves,
+// the derived value does not, and nothing downstream may wake.
+test('a diamond whose value does not change wakes nobody', () => {
+    const a = reactive(1)
+    const b = reactive(() => a() > 0)
+    const c = reactive(() => a() < 100)
+    const both = reactive(() => b() && c())
+    let woken = 0
+    const stop = both.watch(() => {
+        woken += 1
+    })
+    woken = 0
+
+    a.set(2)
+    expect(both()).toBe(true)
+    a.set(3)
+    expect(both()).toBe(true)
+    expect(woken).toBe(0)
+    stop()
+})
+
+// 11.58, AND THE WHOLE OF WHAT PUSH-PULL BUYS. A write MARKS every derived value that
+// read the source and runs none of them; the one that is read runs, and the other
+// forty-nine do not. A correctness test cannot see this — every one of the fifty serves
+// the right value on the read that asks — so the assertion is the body-run count.
+//
+// THE REVERT IS STRUCTURAL and named here rather than installed: running the marked
+// readers in the mark walk, which is what eager did, takes `runs` from 1 to 50 and takes
+// the op from 202 ns to 2,385 ns at a fan of a hundred under bun's JSC. Measured the same
+// way in the browsers a reader brings: 285 -> 2,185 ns under V8 and 250 -> 2,300 under
+// WebKit. No engine inverts it.
+//
+// An earlier attempt at push-pull was reverted on a note saying it measured slower on the
+// write path. The mechanism that note did not record: the effect queue was truncated with
+// `PENDING.length = 0` after every drain, which hands the backing store back, so each
+// write that reached an effect allocated one again. Holding the capacity and moving a
+// cursor over it is worth 2.6 ns of the 3.5 ns that regression was.
+test('a write runs no derived body, and the read runs one', () => {
+    const source = reactive(0)
+    let runs = 0
+    const fan: (() => number)[] = []
+    for (let index = 0; index < 50; index += 1)
+        fan.push(
+            reactive(() => {
+                runs += 1
+                return source() + index
+            }) as unknown as () => number,
+        )
+    // 3.16: reaching an instance starts the work it is for, so construction runs each
+    // body once. What a WRITE does is the claim.
+    expect(runs).toBe(50)
+    runs = 0
+
+    source.set(1)
+    expect(runs).toBe(0)
+    expect((fan[0] as () => number)()).toBe(1)
+    expect(runs).toBe(1)
+    // And the other forty-nine still serve the right value, each running once, on the
+    // read that asks for it.
+    expect((fan[7] as () => number)()).toBe(8)
+    expect(runs).toBe(2)
+})
+
+// PROPAGATION PAST DEPTH 1. The only probe test in the repo was depth 1, so a
+// mis-memoising walk would have passed it.
+test('busy propagates through three levels of derivation', async () => {
+    const answer = 1
+    const source = reactive(() => Promise.resolve(answer))
+    await source
+    const one = reactive(() => source() * 2)
+    const two = reactive(() => one() * 2)
+    const three = reactive(() => two() * 2)
+    expect(three()).toBe(8)
+    expect(three.busy()).toBe(false)
+
+    source.refresh()
+    expect(three.busy()).toBe(true)
+    expect(three.ready()).toBe(true)
+})
+
+// THE CYCLE GUARD, which nothing anywhere exercised. `a` reads `b` and `b` reads `a`;
+// a probe must terminate rather than recurse forever.
+test('a probe over a cycle terminates', () => {
+    let other: (() => number) | null = null
+    const first = reactive(() => (other === null ? 1 : other()))
+    const second = reactive(() => first() + 1)
+    other = second as unknown as () => number
+    first.refresh()
+    expect(first.busy()).toBe(false)
+    expect(second.busy()).toBe(false)
+})
+
+// ── What a value COSTS TO MAKE, asserted as a count ──────────────────────────────
+
+// THE CONTRACT IS "CARRIES NEITHER ITS MEMBERS NOR ITS FIELDS", and a correctness test
+// cannot see either half: the members answer identically whether they are own properties
+// or inherited ones, and the fields do whether they sit on the function or on a record it
+// captures — so only the count moves. `Object.assign(self, MEMBERS)` was 437 of the 501 ns
+// a value cost to construct under bun's JSC and 855 of 985 under V8 — 87% of it — and a
+// table builds one of these per cell per row.
+//
+// THE REVERTS ARE STRUCTURAL, so they are named here rather than installed. Putting
+// `Object.assign(self, MEMBERS)` and the `defineProperty` brand back in `createReactive`
+// takes this to 47 own names, and takes construction to 547 ns here, 1090 ns under V8 and
+// 600 ns under WebKit — and a V8 write with one watcher from 12.1 ns back to 44.3, because
+// 43 own properties on a function is past what V8 tracks with a map. Putting the 33 fields
+// back on the function instead of on `Cell` takes this to 36 own names and 0 own symbols,
+// and construction from 87 ns to 123 here and from 83 ns to 101 under V8.
+test('a value carries its fields and not its members', () => {
+    const value = reactive(1)
+    // The three a function always has, and nothing of the value's own.
+    expect(Object.getOwnPropertyNames(value).length).toBe(3)
+    // The record, and only the record: the brand is inherited, so it is not one per value.
+    expect(Object.getOwnPropertySymbols(value)).toEqual([CELL])
+    expect(Object.hasOwn(value, 'peek')).toBe(false)
+})
+
+// The three things the prototype must not have cost, because callability and the brand
+// are what every other guard in the design is written over.
+test('a value stays callable, thenable and branded through its prototype', async () => {
+    const value = reactive(41)
+    expect(typeof value).toBe('function')
+    expect(value instanceof Function).toBe(true)
+    expect(isReactive(value)).toBe(true)
+    expect(value()).toBe(41)
+    expect(value.peek()).toBe(41)
+    expect(value.ready()).toBe(true)
+    // 1.4: thenable, and reached through the prototype like every other member.
+    expect(await value).toBe(41)
+})
+
+// THE READ'S FAST PATH, ASSERTED AS THE FLAG IT IS. `direct` is `state === CLEAN &&
+// servable && tailDepth === 0` maintained by hand, and it is what makes a read one load
+// and one branch instead of three of each — 2.39 -> 1.85 ns here, 4.03 -> 3.21 over a
+// thousand values, and level with the hand-written arm under WebKit.
+//
+// IT FAILS ONE WAY SILENTLY. Set true where it should be false, a read serves a stale
+// value and every other test here catches it. Left false where it could be true, nothing
+// is wrong and every read afterwards takes the slow frame forever — so the restore after
+// a mark is what this asserts, and it is a work claim rather than a value one.
+//
+// THE REVERT IS RUNNABLE and was run: dropping the `direct = ...` line from `resolve`'s
+// no-change arm fails this test, and on the shape it governs — a diamond whose sources
+// move but whose own value does not, read a hundred times between writes — takes a read
+// from 2.88 ns to 3.68, because every read after the mark stays on the indirect frame.
+test('a value is directly servable again after a mark that changed nothing', () => {
+    const inner = (value: unknown): { direct: boolean; state: number } =>
+        cellOf(value)
+
+    const settled = reactive(41)
+    settled()
+    expect(inner(settled).direct).toBe(true)
+
+    // A diamond whose value does not move: `both` is marked CHECK, resolves to no
+    // change, and must go back to being served from the field.
+    const source = reactive(1)
+    const left = reactive(() => source() > 0)
+    const right = reactive(() => source() < 100)
+    const both = reactive(() => left() && right())
+    expect(both()).toBe(true)
+    expect(inner(both).direct).toBe(true)
+
+    source.set(2)
+    expect(inner(both).direct).toBe(false)
+    expect(both()).toBe(true)
+    expect(inner(both).direct).toBe(true)
+
+    // Retention does not move it: a read serves the latest production whatever is kept.
+    const room = reactive<string>(undefined, { history: 2 })
+    room.publish('a')
+    expect(room()).toBe('a')
+    expect(inner(room).direct).toBe(true)
+})
+
+// ── The cursor: RULEBOOK 2.5, 2.6, 2.7, 5.11, 9.10 ───────────────────────────────
+
+// Takes `count` turns and stops, so a live cursor cannot hang a test. `break` is also
+// what exercises the iterator's `return` — the only thing that drops its subscriber.
+async function take<Value>(
+    over: AsyncIterable<Value>,
+    count: number,
+): Promise<Value[]> {
+    const seen: Value[] = []
+    if (count === 0) return seen
+    for await (const value of over) {
+        seen.push(value)
+        if (seen.length === count) break
+    }
+    return seen
+}
+
+// 2.5: replays the retained snapshot and then continues live from where that snapshot
+// ended, WITH NO GAP AND NO REPEAT. The join is where a cursor built out of a snapshot
+// plus a subscription goes wrong in both directions at once — it repeats whatever landed
+// between the two, and it drops whatever landed while the snapshot was being taken.
+test('a tail cursor replays what is retained and then continues live', async () => {
+    const room = reactive<string>(undefined, { history: 9 })
+    room.publish('a')
+    room.publish('b')
+    const seen = take(room.history(), 4)
+    room.publish('c')
+    room.publish('d')
+    expect(await seen).toEqual(['a', 'b', 'c', 'd'])
+})
+
+// 2.6: the argument is replay DEPTH alone, bounded above by what is retained. It says
+// where a reader starts and nothing about what it goes on to receive.
+test('the tail argument is replay depth, bounded by what is retained', async () => {
+    const room = reactive<string>(undefined, { history: 9 })
+    for (const message of ['a', 'b', 'c', 'd']) room.publish(message)
+
+    expect([...room.history(2)]).toEqual(['c', 'd'])
+    // Asking for more than is retained is answered with what is retained.
+    expect([...room.history(99)]).toEqual(['a', 'b', 'c', 'd'])
+    // And depth 0 replays nothing — it is a starting point, not a window size.
+    expect([...room.history(0)]).toEqual([])
+    const live = take(room.history(0), 1)
+    room.publish('e')
+    expect(await live).toEqual(['e'])
+})
+
+// 2.7: the bare cursor is the LIVE one. It yields the production in flight from its
+// start — so the standing message, not the next one — and replays no past value at all.
+// This is the whole difference from `s.history(n)`, and it is one ordinal wide.
+test('a bare cursor yields the production in flight and then what follows', async () => {
+    const room = reactive<string>(undefined, { history: 9 })
+    room.publish('a')
+    room.publish('b')
+    const seen = take(room, 2)
+    room.publish('c')
+    // 'a' is past and is not replayed; 'b' is the production standing when the cursor
+    // opened, and it is.
+    expect(await seen).toEqual(['b', 'c'])
+})
+
+// A cursor over a value nothing has produced into MUST WAIT rather than hand over the
+// `undefined` it is holding — the clamp at ordinal zero.
+test('a bare cursor over a value with nothing produced waits', async () => {
+    const room = reactive<string>(undefined, { history: 9 })
+    const seen = take(room, 1)
+    room.publish('first')
+    expect(await seen).toEqual(['first'])
+})
+
+// 9.10: a cursor older than the ring MUST be answered with the whole ring rather than
+// with a gap. It has missed productions either way; what it must not do is report the
+// ones it missed as delivered, or stall on an index that is no longer there.
+test('a cursor older than the ring is answered with the whole ring', async () => {
+    const room = reactive<number>(undefined, { history: 2 })
+    const seen = take(room.history(0), 4)
+    // Ten productions with the consumer never getting a turn. Its first turn comes at the
+    // END of the turn now that a drain is batched, by which time its position has run off
+    // the front of the ring — where before batching it was resolved by the first publish
+    // and saw a 1 that the other nine then buried.
+    for (let index = 1; index <= 10; index += 1) room.publish(index)
+    const taken = await seen
+    // 1 to 6 are gone and retention does not hold them, so they are not delivered and —
+    // the half that matters — not reported as delivered either: the cursor is answered
+    // from the OLDEST the ring still has, in order, rather than stalling on an index that
+    // is no longer there or repeating one that is.
+    expect(taken).toEqual([7, 8, 9, 10])
+})
+
+// 5.11 IS A WORK CLAIM AND CANNOT BE SEEN IN A VALUE. A cursor driven by WAKES collapses
+// two productions that land between two turns into one — the reader still sees a correct
+// message, just not both. So the assertion is the COUNT of turns, and the distinguishing
+// case is two publishes with no `await` between them.
+//
+// TWO IS NOT THE DISTINGUISHING NUMBER AND THREE IS, which is the whole reason this was
+// run against its own revert rather than trusted for being green. Resolving a waiting
+// cursor with `source.value` instead of indexing the ring by ordinal still answers two
+// correctly — the cursor is woken by the first and reads the second on the turn after —
+// so the case has to leave it MORE THAN ONE BEHIND. With three it gives ['a', 'c'] and
+// then hangs on a turn that will never come, where the ring gives ['a', 'b', 'c'].
+test('productions between two turns are each a turn, not one', async () => {
+    const room = reactive<string>(undefined, { history: 9 })
+    const seen = take(room.history(0), 3)
+    room.publish('a')
+    // No `await` between these, so the cursor gets no turn until all three have landed.
+    room.publish('b')
+    room.publish('c')
+    expect(await seen).toEqual(['a', 'b', 'c'])
+})
+
+// The sync face is the window, now, and it stops — it cannot wait, so it is the snapshot
+// rather than the cursor. Both faces come off one `Tail`.
+test('the sync face of a tail is the retained window and ends', () => {
+    const room = reactive<string>(undefined, { history: 2 })
+    for (const message of ['a', 'b', 'c', 'd']) room.publish(message)
+    const held = room.history()
+    expect([...held]).toEqual(['b', 'c', 'd'])
+    // Iterating it again gives the same window rather than draining it.
+    expect([...held]).toEqual(['b', 'c', 'd'])
+})
+
+// A live cursor has no end of its own, so the consumer leaving is the only thing that
+// drops its subscriber. A cursor per row of a list that never unsubscribed would grow
+// the reader list for the life of the page — and nothing about the output would say so.
+test('leaving a cursor drops its subscriber', async () => {
+    const room = reactive<string>(undefined, { history: 9 })
+    room.publish('a')
+    await Promise.resolve()
+    const before = cellOf<{ readers: unknown[] }>(room).readers.length
+    await take(room.history(1), 1)
+    expect(cellOf<{ readers: unknown[] }>(room).readers.length).toBe(before)
+})
+
+// 12.8 THROUGH `s.watch`, which is 12.9's whole point: `s.watch` is `watch` narrowed to
+// one source, so it must answer a throwing effect the same way. It did not — it had no
+// catch at all, so the reader stayed alive and re-ran into the same throw on every write,
+// where `watch(…)` stops. Nothing about the values either one serves says so.
+test('an effect that throws stops its s.watch, as it stops a watch', () => {
+    const count = reactive(1)
+    let runs = 0
+    expect(() =>
+        count.watch(() => {
+            runs += 1
+            throw new Error('no')
+        }),
+    ).toThrow('no')
+    expect(runs).toBe(1)
+
+    // The revert is the missing `catch`: without it this is 2, and it keeps climbing —
+    // one more run per write, for the life of the value.
+    expect(() => count.set(2)).not.toThrow()
+    expect(runs).toBe(1)
+})
+
+// ── `s.patch`, which nothing covered ─────────────────────────────────────────────
+
+// 5.7: REPLACES THE HEAD PRODUCTION RATHER THAN APPENDING ONE. A mutation in place is not
+// a new production, so retention does not grow and no sequence number is minted — and the
+// reader still has to be woken, which is the cascade's job rather than the ordinal's.
+//
+// THE REVERT IS ONE LINE: putting `this.ordinal += 1` back into `patch`. Retention then
+// reads 1 where the ordinal says 2, and since a cursor holds its place BY ordinal the next
+// turn reads one past the end of the ring and hands over `undefined` — the assertion below
+// that a cursor is not woken becomes a cursor woken with nothing in it.
+test('a patch replaces the head production rather than appending one', async () => {
+    // A ring, because retention past the standing production is what there is to count.
+    const held = reactive<{ n: number }>(undefined, { history: 4 })
+    held.publish({ n: 1 })
+    let woken = 0
+    const stop = held.watch(() => {
+        woken += 1
+    })
+    woken = 0
+
+    held.patch((value) => {
+        value.n = 2
+    })
+    flushSync()
+    // The reader is woken — a mutation in place is still something to re-render.
+    expect(woken).toBe(1)
+    expect(held().n).toBe(2)
+    // And retention did not grow: one production, mutated, not two.
+    expect([...held.history()].length).toBe(1)
+    stop()
+
+    // A cursor is not handed a turn for it, and above all is not handed `undefined`.
+    const cursor = held.history(0)[Symbol.asyncIterator]()
+    held.patch((value) => {
+        value.n = 3
+    })
+    const turn = await Promise.race([
+        cursor.next(),
+        new Promise<{ done: true }>((resolve) =>
+            setTimeout(() => resolve({ done: true }), 20),
+        ),
+    ])
+    expect(turn.done).toBe(true)
+    await cursor.return?.()
+})
+
+// 2.2 through `patch`: there is nothing to mutate where nothing has landed, and handing
+// the callback `undefined` would fail inside the app's own code instead.
+test('a patch of a value with nothing landed refuses', () => {
+    const pending = reactive(new Promise<{ n: number }>(() => {}))
+    expect(() =>
+        pending.patch((value) => {
+            value.n = 1
+        }),
+    ).toThrow(NotLanded)
+})
+
+// ── `watch` over named sources: RULEBOOK 12.3 ────────────────────────────────────
+
+// 12.3: WHERE SOURCES ARE GIVEN, THE EFFECT RUNS ONLY WHEN THOSE CHANGE. The body is not
+// a tracked context, so a read inside it subscribes to nothing — which is the whole point
+// and the one thing a value assertion cannot see: the effect reads the right `b` either
+// way, it just runs twice as often.
+//
+// The revert is the bare form — `watch(() => { runs += 1; b() })` — which discovers `b` by
+// running and takes this from 0 to 1 on the first assertion.
+test('a watch given sources runs only when those sources change', () => {
+    const a = reactive(1)
+    const b = reactive(10)
+    let runs = 0
+    const stop = watch(a, () => {
+        runs += 1
+        // Read, and deliberately not declared. A tracked body would subscribe here.
+        void b()
+    })
+    expect(runs).toBe(1)
+    runs = 0
+
+    b.set(20)
+    flushSync()
+    expect(runs).toBe(0)
+    a.set(2)
+    flushSync()
+    expect(runs).toBe(1)
+    stop()
+})
+
+// The array form, and that every source in it is live — not just the first.
+test('a watch over several sources runs for any of them', () => {
+    const first = reactive(1)
+    const second = reactive(2)
+    let runs = 0
+    const stop = watch([first, second], () => {
+        runs += 1
+    })
+    runs = 0
+
+    first.set(10)
+    flushSync()
+    expect(runs).toBe(1)
+    second.set(20)
+    flushSync()
+    expect(runs).toBe(2)
+    stop()
+})
+
+// Stopping it drops the reader from EVERY source it was given, not just the one that
+// happened to wake it last. A watch that unsubscribed from one of three would keep
+// running for the other two, and nothing about its output would say so.
+test('stopping a watch drops it from every source it was given', () => {
+    const first = reactive(1)
+    const second = reactive(2)
+    const readers = (value: unknown): number =>
+        cellOf<{ readers: unknown[] }>(value).readers.length
+    const beforeFirst = readers(first)
+    const beforeSecond = readers(second)
+
+    let runs = 0
+    const stop = watch([first, second], () => {
+        runs += 1
+    })
+    expect(readers(first)).toBe(beforeFirst + 1)
+    expect(readers(second)).toBe(beforeSecond + 1)
+
+    stop()
+    expect(readers(first)).toBe(beforeFirst)
+    expect(readers(second)).toBe(beforeSecond)
+    first.set(9)
+    second.set(9)
+    expect(runs).toBe(1)
+})
+
+// 12.1 through the narrowed form: the disposer runs before each rerun and once at teardown.
+test('a watch over sources runs its disposer before each rerun and at teardown', () => {
+    const source = reactive(1)
+    const order: string[] = []
+    const stop = watch(source, () => {
+        order.push(`run:${source.peek()}`)
+        return () => order.push('dispose')
+    })
+    source.set(2)
+    flushSync()
+    stop()
+    expect(order).toEqual(['run:1', 'dispose', 'run:2', 'dispose'])
+})
+
+// ── Adoption: RULEBOOK 11.12 to 11.19 ────────────────────────────────────────────
+
+// 11.12: A `Reactive` a body hands back is ADOPTED and MUST NOT be stored as a value. It
+// used to be stored — `outer()` handed back the inner callable itself — which is the one
+// case 1.6 names: a `Reactive` is thenable, so anything that tells a load from a value has
+// to take it as a value, and anything that takes a body's RESULT has to take it as a
+// producer. A `Reactive` held as data goes inside a record.
+test('a body that hands back a Reactive adopts it rather than storing it', () => {
+    const inner = reactive(1)
+    const outer = reactive(() => inner)
+    expect(outer()).toBe(1)
+    // And it goes on serving what the adopted one serves.
+    inner.set(2)
+    expect(outer()).toBe(2)
+})
+
+// 11.13 and 11.14 together: the adopted productions mirror into the OUTER value, and the
+// outer's own `transform` runs on the way in. Mirroring through `produce` rather than
+// `accept` would skip the transform and is the obvious wrong spelling.
+test('adopted productions mirror into the outer value, through its own transform', () => {
+    const feed = reactive(1)
+    const outer = reactive(() => feed, {
+        transform: (value: number) => value * 10,
+    })
+    const seen: number[] = [outer()]
+    const stop = outer.watch((value) => {
+        seen.push(value)
+    })
+    feed.set(2)
+    flushSync()
+    feed.set(3)
+    flushSync()
+    stop()
+    expect(outer()).toBe(30)
+    expect(seen).toEqual([10, 10, 20, 30])
+})
+
+// 11.18: a recompute landing on the SAME adopted `Reactive` wakes nobody. A body that
+// reads something unrelated and hands back the same value every time is the common shape —
+// re-subscribing there would mint a production out of a recompute that decided nothing,
+// and the value would be right every time.
+//
+// The revert is dropping the `standing.source === inner` test in `adopt`: this goes from 0
+// to 2, one wake per recompute, for as long as the value lives.
+test('a recompute onto the same adopted Reactive wakes no reader', () => {
+    const trigger = reactive(0)
+    const held = reactive(1)
+    const outer = reactive(() => {
+        trigger()
+        return held
+    })
+    let woken = 0
+    const stop = outer.watch(() => {
+        woken += 1
+    })
+    woken = 0
+
+    trigger.set(1)
+    trigger.set(2)
+    expect(woken).toBe(0)
+    expect(outer()).toBe(1)
+    stop()
+})
+
+// 11.16: on re-adoption the outer clears where the newly adopted has nothing to serve. It
+// cannot go on serving the old one's value — that value belongs to a producer this is no
+// longer adopting.
+test('re-adopting something with nothing to serve clears the outer', () => {
+    const pick = reactive(0)
+    const landed = reactive(41)
+    const pending = reactive(new Promise<number>(() => {}))
+    const outer = reactive(() => (pick() === 0 ? landed : pending))
+    expect(outer()).toBe(41)
+    expect(outer.ready()).toBe(true)
+
+    pick.set(1)
+    // THE READ IS WHAT SWITCHES THE ADOPTION, and a probe is not a read (3.2 — a probe
+    // MUST NOT start work). Until something asks for the value the body has not re-run,
+    // so the probes still answer about the one it was adopting: this is the floor over the
+    // graph AS IT STANDS rather than as the next recompute will leave it.
+    expect(() => outer()).toThrow(NotLanded)
+    expect(outer.ready()).toBe(false)
+    // 11.19: and it reports busy for the one it now adopts.
+    expect(outer.busy()).toBe(true)
+})
+
+// 11.17: the adopted value's `identity` is inherited where the outer declared none — so an
+// adopting value collapses the repeats its producer would have collapsed, rather than
+// waking on every one of them.
+//
+// The revert is dropping the inheritance: `woken` goes from 0 to 1.
+test('an adopting value inherits the identity it did not declare', () => {
+    const inner = reactive({ id: 1 }, { identity: structural })
+    const outer = reactive(() => inner)
+    let woken = 0
+    const stop = outer.watch(() => {
+        woken += 1
+    })
+    woken = 0
+
+    // A fresh object with the same contents: `structural` collapses it, the reference
+    // default would not.
+    inner.set({ id: 1 })
+    expect(woken).toBe(0)
+    stop()
+})
+
+// 11.19 through a load: an adopting value reports busy only where the adopted one does,
+// and the adopted is not in its tracked source list — the body read `pick`, not the value
+// it handed back.
+test('busy propagates from the adopted value', async () => {
+    let settle: (value: number) => void = (): void => {}
+    const loading = reactive(
+        new Promise<number>((resolve) => {
+            settle = resolve
+        }),
+    )
+    const outer = reactive(() => loading)
+    expect(outer.busy()).toBe(true)
+    expect(outer.ready()).toBe(false)
+
+    settle(7)
+    await loading
+    expect(outer()).toBe(7)
+    expect(outer.busy()).toBe(false)
+})
+
+// A TRIGGER ON THE OUTER VALUE WAS A VALUE STUCK FOR THE LIFE OF THE PAGE. `invalidate`
+// marks the outer unservable and re-runs its body, the body hands back the SAME inner value,
+// and 11.18 makes that recompute decide nothing — so nothing ever made the outer servable
+// again. `refresh` stuck `busy` the same way. The inner here has no producer, so 7.6 makes
+// reaching it inert and the outer has to settle from what the inner already serves.
+//
+// THE REVERT is `adopt` returning on the same source without re-mirroring: `ready: false`,
+// `busy: true`, and the read throws `NotLanded` with the value sitting in the inner.
+test('a trigger on an adopting value settles it again over the same adoption', () => {
+    const inner = reactive(1)
+    const outer = reactive(() => inner)
+    expect(outer()).toBe(1)
+
+    outer.invalidate()
+    expect(outer()).toBe(1)
+    expect(`ready: ${outer.ready()}`).toBe('ready: true')
+    expect(`busy: ${outer.busy()}`).toBe('busy: false')
+
+    outer.refresh()
+    expect(`busy: ${outer.busy()}`).toBe('busy: false')
+    expect(outer()).toBe(1)
+})
+
+// 11.18 THROUGH THE SETTLE ABOVE. The re-mirror goes through the identity gate, so the
+// same production arriving again wakes nobody — a refresh over an adoption whose inner did
+// not move must not repaint what reads the outer. `invalidate` is not asked the same: it
+// takes away what there was to serve, which is a move every value reader has to hear.
+//
+// THE REVERT is `mirror` calling `produce(cell, inner.value, false)` — ungated: `wakes: 1`.
+test('refreshing over the same adoption wakes no reader', () => {
+    const inner = reactive(1)
+    const outer = reactive(() => inner)
+    const counter = wakes(outer)
+    outer.refresh()
+    const woken = counter.count()
+    counter.stop()
+    expect(`wakes: ${woken}`).toBe('wakes: 0')
+})
+
+// 11.52: THE ADOPTED VALUE IS WHERE THE DATA IS. The outer's own body only hands back a
+// reference, so re-running it reloads nothing — without the reach a `refresh` on the value
+// an app holds is a spinner over a load that never happens.
+//
+// THE REVERT is dropping the reach from `refreshCell` and `invalidateCell`: `inner runs: 0`
+// on both lines.
+test('a trigger on an adopting value reaches the adopted one', () => {
+    // Counted apart from what the body produces, so every run mints a value the identity
+    // gate cannot collapse and the outer serving it is proof the production arrived.
+    let produced = 0
+    let runs = 0
+    const inner = reactive(() => {
+        runs += 1
+        produced += 1
+        return produced
+    })
+    const outer = reactive(() => inner)
+    expect(outer()).toBe(1)
+
+    runs = 0
+    outer.refresh()
+    expect(`inner runs: ${runs}`).toBe('inner runs: 1')
+    expect(outer()).toBe(2)
+
+    // Lazily, so nothing runs until the outer value is read (7.12).
+    runs = 0
+    outer.invalidate()
+    expect(`inner runs before a read: ${runs}`).toBe(
+        'inner runs before a read: 0',
+    )
+    expect(outer()).toBe(3)
+    expect(`inner runs: ${runs}`).toBe('inner runs: 1')
+    expect(outer.ready()).toBe(true)
+})
+
+// 11.51 ON A PROBE-ONLY MOVE. A production of the adopted value reaches the adopter through
+// the mirror and moves the adopter's probes with it — but a move that mints nothing (a load
+// starting, a refresh landing an equal value, a stream closing) reached the mirror not at
+// all. `outer.busy()` answered right whenever it was asked and nothing ever asked it again,
+// which in a template is a spinner that does not appear, or one that never goes away.
+//
+// THE REVERT is `markProbes` not following an adoption's mirror: `saw: false`.
+test('a guard on an adopting value hears the adopted value start and stop loading', async () => {
+    let settle: (value: number) => void = (): void => {}
+    let loads = 0
+    const inner = reactive(() => {
+        loads += 1
+        if (loads === 1) return 1
+        return new Promise<number>((resolve) => {
+            settle = resolve
+        })
+    })
+    const outer = reactive(() => inner)
+    const saw: boolean[] = []
+    const stop = watch(() => {
+        saw.push(outer.busy())
+    })
+    inner.refresh()
+    flushSync()
+    settle(1)
+    await inner
+    flushSync()
+    stop()
+    expect(`saw: ${saw.join(',')}`).toBe('saw: false,true,false')
+})
+
+// 11.51 FOR `error`, AND WHAT A FAILURE DOES THROUGH AN ADOPTION. The adopted value is where
+// the load is, so its failure is the adopter's to report: `error()` answers it, a read with
+// nothing to serve throws it rather than `NotLanded` — "no", where `NotLanded` says "not yet"
+// and a tracked body waits on it forever (2.2) — and an await rejects with it (2.9). Before,
+// all three stopped at the adoption, and the await never settled at all.
+//
+// THE REVERT is `failureOf` answering the value's own `failure` alone: `error: undefined`.
+test('a failure of the adopted value is the adopter error, its read throw and its await rejection', async () => {
+    let fail: (error: unknown) => void = (): void => {}
+    const inner = reactive(
+        new Promise<number>((_resolve, reject) => {
+            fail = reject
+        }),
+    )
+    const outer = reactive(() => inner)
+    const guard: unknown[] = []
+    const stop = watch(() => {
+        guard.push((outer.error() as unknown as Error | undefined)?.message)
+    })
+    const awaited = outer.then(
+        () => 'resolved',
+        (error: unknown) => `rejected: ${(error as Error).message}`,
+    )
+    fail(new Error('boom'))
+    await inner.catch(() => undefined)
+    flushSync()
+    stop()
+
+    expect(
+        `error: ${(outer.error() as unknown as Error | undefined)?.message}`,
+    ).toBe('error: boom')
+    expect(`guard: ${guard[guard.length - 1]}`).toBe('guard: boom')
+    let thrown: unknown
+    try {
+        outer()
+    } catch (error) {
+        thrown = error
+    }
+    expect(`read threw: ${(thrown as Error).message}`).toBe('read threw: boom')
+    expect(await awaited).toBe('rejected: boom')
+})
+
+// 2.4 AND 11.51 TOGETHER: a revalidation of the adopted value that fails leaves the adopter
+// serving what it held, with the failure standing beside it.
+test('a failed revalidation of the adopted value leaves the adopter serving, with the error', async () => {
+    let loads = 0
+    let fail: (error: unknown) => void = (): void => {}
+    const inner = reactive(() => {
+        loads += 1
+        if (loads === 1) return 1
+        return new Promise<number>((_resolve, reject) => {
+            fail = reject
+        })
+    })
+    const outer = reactive(() => inner)
+    inner.refresh()
+    fail(new Error('revalidate failed'))
+    await Bun.sleep(1)
+    expect(outer()).toBe(1)
+    expect(
+        `error: ${(outer.error() as unknown as Error | undefined)?.message}`,
+    ).toBe('error: revalidate failed')
+})
+
+// ── The probe floor: a value is no better than the worst it was built from ───────
+
+// 11.20 AND 11.59. `busy` asks whether ANYTHING it reads is loading; `ready` whether
+// EVERYTHING it reads has something to serve. Only that pairing makes `busy && !ready`
+// one sentence, and only the second half was implemented.
+//
+// A VALUE ASSERTION CANNOT SEE THIS. The derived value goes on serving the figure it
+// computed before — right by its own lights and a lie about the data, with nothing in the
+// output to say so. The revert is `ready()` returning `this.servable`: the last assertion
+// flips to true and no other test in this file moves.
+test('a derived value is not ready while a value it read has nothing to serve', async () => {
+    const answer = 1
+    const source = reactive(() => Promise.resolve(answer))
+    await source
+    const derived = reactive(() => source() * 2)
+    expect(derived()).toBe(2)
+    expect(derived.ready()).toBe(true)
+
+    // 7.4: a refresh keeps serving, so the floor is unmoved.
+    source.refresh()
+    expect(derived.busy()).toBe(true)
+    expect(derived.ready()).toBe(true)
+    await source
+
+    // An invalidate does not: the source has nothing to serve, so neither has anything
+    // built from it, whatever it happens to be holding.
+    // An invalidate changes nothing until a read (7.17); the read of the source is what makes it
+    // unservable, and the floor follows it there.
+    source.invalidate()
+    expect(derived.ready()).toBe(true)
+    expect(() => source()).toThrow(NotLanded)
+    expect(source.ready()).toBe(false)
+    expect(derived.busy()).toBe(true)
+    expect(derived.ready()).toBe(false)
+})
+
+// The floor reaches through the adoption too, which is not in the tracked source list —
+// the body handed it back rather than reading it.
+test('the floor reaches the adopted value as well as the read ones', async () => {
+    const answer = 41
+    // A producer, since `invalidate` is inert on a value with no body (7.x) — there is
+    // nothing to re-run and nothing to be invalid against.
+    const inner = reactive(() => Promise.resolve(answer))
+    await inner
+    const outer = reactive(() => inner)
+    expect(outer()).toBe(41)
+    expect(outer.ready()).toBe(true)
+
+    inner.invalidate()
+    expect(outer.ready()).toBe(true)
+    expect(() => inner()).toThrow(NotLanded)
+    expect(outer.ready()).toBe(false)
+    expect(outer.busy()).toBe(true)
+})
+
+// ── 3.3: reading a probe subscribes ──────────────────────────────────────────────
+
+// THE CANONICAL TEMPLATE SHAPE, and the one that could not come back. `{#if s.ready()}`
+// renders the spinner branch, which never reads `s()` — so before 3.3 the effect subscribed
+// to NOTHING and the value landing woke nobody. Stuck on the spinner for the life of the
+// page, with the value sitting right there.
+//
+// A VALUE ASSERTION CANNOT SEE IT: every probe answers correctly the moment it is asked.
+// What was missing was the wake, so the assertion is the render count and what it painted.
+// The revert is dropping the `track(cell, reader)` from `isReady`: `renders` stays 1 and
+// `painted` stays the spinner.
+test('a guard on a probe comes back when the value lands', async () => {
+    let settle: (value: number) => void = (): void => {}
+    const value = reactive(
+        new Promise<number>((resolve) => {
+            settle = resolve
+        }),
+    )
+    let renders = 0
+    let painted: unknown
+    const stop = watch(() => {
+        renders += 1
+        painted = value.ready() ? value() : 'spinner'
+    })
+    expect(painted).toBe('spinner')
+    expect(renders).toBe(1)
+
+    settle(41)
+    await value
+    expect(painted).toBe(41)
+    expect(renders).toBe(2)
+    stop()
+})
+
+// A PROBE MOVES WITHOUT A PRODUCTION. 7.4 has a refresh keep serving, so no value changes
+// and 5.2 mints nothing — but `busy` went true, and a reader that asked about it has to
+// hear so. Nothing carried that: the flip has to open the cascade itself.
+//
+// The revert is dropping the `if (!wasLoading) cascade(this)` from `refresh`: the effect
+// runs once, at subscription, and never reports the load at all.
+test('a refresh wakes a reader that asked whether it was busy', async () => {
+    const answer = 1
+    const source = reactive(() => Promise.resolve(answer))
+    await source
+    const seen: boolean[] = []
+    const stop = watch(() => {
+        seen.push(source.busy())
+    })
+    expect(seen).toEqual([false])
+
+    source.refresh()
+    flushSync()
+    expect(seen).toEqual([false, true])
+    await source
+    // And again when it settles, since `busy` moved back.
+    expect(seen.at(-1)).toBe(false)
+    stop()
+})
+
+// The same for `ready` through the READ that follows an invalidate: nothing to serve is a move a
+// guard has to hear even though no value was minted — at the read, where the value stops being
+// served (7.17), and not at the mark.
+test('the read after an invalidate wakes a reader that asked whether it was ready', async () => {
+    const answer = 1
+    const source = reactive(() => Promise.resolve(answer))
+    await source
+    const derived = reactive(() => source() * 2)
+    const seen: boolean[] = []
+    const stop = watch(() => {
+        seen.push(derived.ready())
+    })
+    expect(seen).toEqual([true])
+
+    source.invalidate()
+    flushSync()
+    expect(seen).toEqual([true])
+    expect(() => source()).toThrow(NotLanded)
+    flushSync()
+    expect(seen).toEqual([true, false])
+    stop()
+})
+
+// A DERIVED BODY READING A PROBE, which is the reader half of the probe edge landing on a
+// `Cell` rather than on a watch subscriber. It was broken and nothing here caught it —
+// every probe test read from a `watch`, so the field a `Cell` needs to carry the edge was
+// never initialised and the first such body threw on `undefined.length`.
+test('a derived body may read a probe and wakes when it moves', async () => {
+    const answer = 1
+    const source = reactive(() => Promise.resolve(answer))
+    await source
+    const label = reactive(() => (source.busy() ? 'loading' : 'idle'))
+    expect(label()).toBe('idle')
+
+    source.refresh()
+    expect(label()).toBe('loading')
+    await source
+    expect(label()).toBe('idle')
+})
+
+// The probe edge is rebuilt per run, so a guard that stops being taken stops waking. A
+// cursored edge would keep the old one and the body would run for a probe it no longer
+// asks about — which is a wake, and a wake is a DOM write.
+test('a probe a body stops reading stops waking it', async () => {
+    const answer = 1
+    const watched = reactive(() => Promise.resolve(answer))
+    await watched
+    const use = reactive(true)
+    let runs = 0
+    const body = reactive(() => {
+        runs += 1
+        return use() ? watched.busy() : false
+    })
+    body()
+    expect(runs).toBe(1)
+
+    use.set(false)
+    body()
+    const settled = runs
+    // The body no longer asks about `watched`, so a load starting there reaches nobody.
+    watched.refresh()
+    expect(runs).toBe(settled)
+    await watched
+})
+
+// THE CAP (RULEBOOK 5.9-5.16). Every claim below is about WORK — the values these tests
+// read are right whether or not a window exists, which is what makes a correctness test
+// blind to the whole mechanism. So they count wakes, and they count PRODUCTIONS against
+// them, because 5.10's "caps the wake, does not drop a production" is exactly a pair of
+// counts moving apart.
+//
+// THE REVERTS, AND WHAT EACH REPORTS. Releasing every production instead of holding it
+// (`capped` never called) reports: throttle 1 -> 10 wakes, debounce 0 -> 1, the
+// cap/production split 0 -> 1, the held value 1 -> 2, and once-per-window 2 -> 1 wakes.
+// The last two tests survive that revert and carry their own: comparing the gate against
+// `cell.value` instead of `cap.minted` drops the third production, and removing the
+// construction refusal leaves both options declared and nothing thrown. Dropping the
+// debounce RESET reports 0 -> 5 wakes, and only against a run that outlasts a window.
+//
+// THE WINDOW IS 30 ms AND EVERY WAIT IS 3x IT. Contention can only make a timer LATE, so
+// waiting longer is safe under `--parallel`; what would be fragile is asserting that a
+// window had NOT closed yet, and nothing here does. The synchronous counts — ten writes
+// reaching a reader once — involve no clock at all.
+const WINDOW = 30
+const AFTER_WINDOW = 90
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+test('a throttle lets the leading change through and holds the rest', () => {
+    const query = reactive<number>(undefined, { throttle: WINDOW })
+    const woken = wakes(query)
+    for (let write = 1; write <= 10; write += 1) query.set(write)
+    // 5.13: the first change immediately, and then at most once per window — so nine of
+    // the ten reached nobody, and the one that did is the one that opened the window.
+    expect(woken.count()).toBe(1)
+    expect(query()).toBe(1)
+    woken.stop()
+})
+
+test('a debounce holds every change after the first landing', () => {
+    // The value has to have LANDED before a debounce has anything to do: the first
+    // production goes straight out, having no held value to be held back from.
+    const query = reactive<number>(0, { debounce: WINDOW })
+    const woken = wakes(query)
+    for (let write = 1; write <= 10; write += 1) query.set(write)
+    // 5.14: the change waits for the changes to STOP, so nobody has been woken and what
+    // a reader sees is still the value the run started from.
+    expect(woken.count()).toBe(0)
+    expect(query()).toBe(0)
+    woken.stop()
+})
+
+test('a window caps the wake and drops no production', async () => {
+    const feed = reactive<number>(undefined, { debounce: WINDOW, history: 19 })
+    feed.publish(0)
+    const woken = wakes(feed)
+    for (let write = 1; write <= 10; write += 1) feed.publish(write)
+    expect(woken.count()).toBe(0)
+    await sleep(AFTER_WINDOW)
+    // 5.10: ONE wake for ten productions. The counts moving apart is the mechanism —
+    // equal counts would mean the window capped nothing, and ten against ten productions
+    // retained would mean it had dropped nine.
+    expect(woken.count()).toBe(1)
+    expect(feed.peek()).toBe(10)
+    // 5.11: the cursor is handed every production the window collapsed, retention having
+    // held them. A reader watching the value saw one; a reader walking the ring sees all
+    // ten, behind the opening value the ring also took.
+    expect([...feed.history(20)]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    woken.stop()
+})
+
+test('a held value goes on being served, and the window reads as busy', async () => {
+    const query = reactive<number>(undefined, { throttle: WINDOW })
+    query.set(1)
+    query.set(2)
+    // 5.16: what a reader sees is the value the window released, not the one it holds.
+    expect(query()).toBe(1)
+    expect(query.busy()).toBe(true)
+    expect(query.ready()).toBe(true)
+    await sleep(AFTER_WINDOW)
+    expect(query()).toBe(2)
+    expect(query.busy()).toBe(false)
+})
+
+test('the identity gate compares against the last production, not the last release', () => {
+    const query = reactive<number>(undefined, { throttle: WINDOW, history: 9 })
+    query.set(1)
+    query.set(2)
+    query.set(1)
+    // Three productions. Comparing the third against the RELEASED 1 would collapse it,
+    // and 5.10 forbids a window dropping a production — the reader would then settle on
+    // 2 for a value whose last write was 1.
+    expect([...query.history(10)]).toEqual([1, 2, 1])
+})
+
+test('a value declaring both throttle and debounce refuses, naming the value', () => {
+    // 5.15 is a build error and there is no build, so it lands at construction. `toThrow`
+    // rather than a returned refusal: this is not a value refusing a write, it is a value
+    // that cannot be constructed.
+    expect(() =>
+        reactive<number>(undefined, { throttle: 10, debounce: 10 }),
+    ).toThrow(/declares both throttle and debounce/)
+})
+
+test('a run of writes wakes once per window rather than twice at its edges', async () => {
+    const query = reactive<number>(undefined, { throttle: WINDOW })
+    const woken = wakes(query)
+    query.set(1)
+    query.set(2)
+    expect(woken.count()).toBe(1)
+    await sleep(AFTER_WINDOW)
+    // The window closing released what it held — the second wake, and the last one. A
+    // throttle that re-opened a window on an empty close would wake again here for
+    // nothing, which is the shape a trailing-edge timer usually gets wrong.
+    expect(woken.count()).toBe(2)
+    expect(query()).toBe(2)
+    woken.stop()
+})
+
+// 5.14'S DISTINGUISHING CASE, and it took two tries to find. Writes made in ONE turn
+// cannot tell a window armed once at the first change from one pushed back by every
+// change — both hold the LATEST production, and both release it when the first timer
+// fires. Spreading the writes out does not do it either, so long as they are all in
+// before that first timer: the release still carries the last of them.
+//
+// What tells them apart is a run that OUTLASTS a window. The armed-once arm fires in the
+// middle of it and releases an intermediate value, and the writes still coming arm it
+// again — so it wakes repeatedly where a debounce wakes once, at the end.
+//
+// THE MARGIN IS 7.5x — a 150 ms window against 20 ms between writes — and the direction
+// that breaks it is contention stretching one gap past the whole window. A timing failure
+// under `--parallel` is re-run with `test:serial` before it is believed.
+test('a debounce waits for the changes to stop, not for the first of them', async () => {
+    const LONG = 150
+    const query = reactive<number>(0, { debounce: LONG })
+    const woken = wakes(query)
+    for (let write = 1; write <= 12; write += 1) {
+        query.set(write)
+        await sleep(20)
+    }
+    expect(woken.count()).toBe(0)
+    await sleep(LONG * 3)
+    expect(woken.count()).toBe(1)
+    expect(query()).toBe(12)
+    woken.stop()
+})
+
+test('a window does not hold back the first landing', () => {
+    // 5.16 is what decides this: holding needs a held value to go on serving, and before
+    // the first landing there is none — so a reader would get neither. A `debounce: 300`
+    // left a value unreadable for 300 ms after construction, which is every form on a
+    // page reading as not-ready on mount.
+    const typed = reactive<string>('', { debounce: WINDOW })
+    expect(typed.ready()).toBe(true)
+    expect(typed()).toBe('')
+    expect(typed.busy()).toBe(false)
+
+    // 4.16: an opening `undefined` is a landing the window never saw, so it is ready at once and the
+    // FIRST write is already a change the debounce holds, served over the `undefined` it replaces.
+    const capped = reactive<number | undefined>(undefined, { debounce: WINDOW })
+    expect(capped.ready()).toBe(true)
+    capped.set(1)
+    expect(capped()).toBeUndefined()
+    expect(capped.busy()).toBe(true)
+})
+
+// WHERE THE CAP GOES DECIDES WHETHER A CALL IS MADE AT ALL, and the two placements are
+// not interchangeable. Capping the KEY means a key that was superseded is never reached,
+// so the call behind it is never issued. Capping the value that WRAPS the call only
+// delays each answer — the body has already run by the time a window can hold anything,
+// which is 5.12, and it is not built.
+//
+// THE WRITES ARE IN SEPARATE TURNS. Four writes in one turn reach a reader once whatever
+// any cap says, the turn batch having collapsed them — an earlier version of this test
+// wrote them together and reported one call against an implementation making four.
+test('a cap on the key spares the call a superseded key would have made', async () => {
+    const LONG = 100
+    let calls = 0
+    const region = reactive<string>('north', { debounce: LONG })
+    const countOrders = reactive((args: { region: string }) => {
+        calls += 1
+        return `orders in ${args.region}`
+    })
+    const orders = reactive(() => countOrders({ region: region() }))
+    const stop = watch(() => {
+        orders()
+    })
+    // The opening value landed and was reached, which is the one call before any typing.
+    expect(calls).toBe(1)
+    for (const typed of ['n', 'no', 'nor', 'north']) {
+        region.set(typed)
+        flushSync()
+        await sleep(20)
+    }
+    await sleep(LONG * 3)
+    flushSync()
+    // Four keystrokes, no new call: every intermediate key was superseded inside the
+    // window and never reached, and the last one is the key already held.
+    expect(calls).toBe(1)
+    expect(orders()).toBe('orders in north')
+    stop()
+})
+
+// 5.12, AND THE OTHER ARM OF THE CAP. A value's production has already been handed in
+// when a window meets it, so the window holds it and retention keeps it (5.10). A BODY's
+// work has not started, and 5.12 says not to start it — so the cap sits on the run rather
+// than on what the run produced, and the load the body would have issued is never issued.
+//
+// THE COUNTS THAT MATTER ARE CALLS AND KEYS. A correctness test sees `n=south` whichever
+// way this is built; what separates them is how many calls were made on the way there and
+// which keys they were made with.
+async function typeInto(
+    value: { set(next: string): void },
+    letters: string[],
+): Promise<void> {
+    // SEPARATE TURNS. Four writes in one turn wake once whatever any cap says, the turn
+    // batch having collapsed them — which is not what is being measured here.
+    for (const letter of letters) {
+        value.set(letter)
+        flushSync()
+        await sleep(20)
+    }
+}
+
+function searchRig(options: Record<string, number>): {
+    region: { set(next: string): void }
+    keys: string[]
+    wakes: () => number
+    stop: () => void
+    orders: { peek(): string | undefined }
+} {
+    const keys: string[] = []
+    let woken = 0
+    const region = reactive<string>('north')
+    const countOrders = reactive((args: { region: string }) => {
+        keys.push(args.region)
+        return `n=${args.region}`
+    })
+    const orders = reactive(() => countOrders({ region: region() }), options)
+    const stop = watch(() => {
+        try {
+            orders()
+            woken += 1
+        } catch {
+            // Nothing landed yet is not a wake worth counting.
+        }
+    })
+    keys.length = 0
+    woken = 0
+    return { region, keys, wakes: () => woken, stop, orders }
+}
+
+test('a debounced body runs once for a burst, with the last key', async () => {
+    const rig = searchRig({ debounce: 150 })
+    await typeInto(rig.region, ['s', 'so', 'sou', 'south'])
+    await sleep(450)
+    flushSync()
+    // ONE call, and the key it was made with is the one the typist stopped on. The three
+    // intermediate keys were never reached, so no entry exists for them and no request
+    // was issued — which is 5.12 rather than 5.10.
+    expect(rig.keys).toEqual(['south'])
+    // And the barrier held: nothing downstream woke while the window was open (5.9).
+    expect(rig.wakes()).toBe(1)
+    expect(rig.orders.peek()).toBe('n=south')
+    rig.stop()
+})
+
+test('a throttled body runs the leading change and the trailing one', async () => {
+    const rig = searchRig({ throttle: 150 })
+    await typeInto(rig.region, ['s', 'so', 'sou', 'south'])
+    await sleep(450)
+    flushSync()
+    // 5.13: the leading change goes straight through, and the window caps what follows —
+    // so the two calls are the first key and the last, and neither middle key was reached.
+    expect(rig.keys).toEqual(['s', 'south'])
+    expect(rig.wakes()).toBe(2)
+    rig.stop()
+})
+
+test('an uncapped body runs for every key, which is what the cap is against', async () => {
+    const rig = searchRig({})
+    await typeInto(rig.region, ['s', 'so', 'sou', 'south'])
+    await sleep(450)
+    flushSync()
+    expect(rig.keys).toEqual(['s', 'so', 'sou', 'south'])
+    expect(rig.wakes()).toBe(4)
+    rig.stop()
+})
+
+// A LOAD THAT FAILS IS A PROBE MOVING AND NO VALUE MOVING, which is the one edge the
+// failure path did not open. Going loading opens a probe cascade; the rejection that ends
+// it opened only the VALUE one — and a spinner that read `s.busy()` alone is not a reader
+// of the value, so it never woke. It stayed up for the life of the page with the refusal
+// sitting right there, and nothing about any value the page shows says so.
+//
+// `s.error` IS A PROBE by the rulebook's own term (3.3), and it subscribed to nothing at
+// all: `error()` read the field and registered no edge, so `{#if s.error()}` answered once
+// and never again.
+//
+// THE REVERT is dropping `probesMoved(cell)` from `absorb`'s rejection arm: the first
+// guard stops at one run and reports busy forever. Dropping `trackProbe` from `error()`
+// instead leaves the second at `[undefined]`.
+test('a failed load wakes the guards that asked about it', async () => {
+    let refuse: ((reason: unknown) => void) | undefined
+    const load = reactive(
+        () =>
+            new Promise<number>((_settle, reject) => {
+                refuse = reject
+            }),
+    )
+    const busySeen: boolean[] = []
+    const errorSeen: (string | undefined)[] = []
+    const stopBusy = watch(() => {
+        busySeen.push(load.busy())
+    })
+    const stopError = watch(() => {
+        errorSeen.push((load.error() as Error | undefined)?.message)
+    })
+    expect(busySeen).toEqual([true])
+
+    refuse?.(new Error('boom'))
+    await Promise.resolve()
+    await Promise.resolve()
+    flushSync()
+    expect(busySeen).toEqual([true, false])
+    expect(errorSeen).toEqual([undefined, 'boom'])
+    stopBusy()
+    stopError()
+})
+
+// 11.12 IS ABOUT WHAT A BODY HANDS BACK, so a run that hands back something else is not
+// adopting any more. The mirror outlived the recompute that ended it: the outer served the
+// figure its body computed until the inner value produced, and then served the INNER's
+// value — one its own body had not computed and its source list does not reach.
+//
+// THE REVERT is dropping the `dropAdoption` arm in `run`: the last assertion reads 5.
+test('a body that stops handing back a Reactive stops mirroring it', () => {
+    const inner = reactive(1)
+    const adopting = reactive(true)
+    const outer = reactive(() => (adopting() ? inner : 99))
+    expect(outer()).toBe(1)
+
+    adopting.set(false)
+    expect(outer()).toBe(99)
+    inner.set(5)
+    flushSync()
+    expect(outer()).toBe(99)
+    // And the floor is its own again: it was reporting through a value it no longer reads.
+    expect(outer.ready()).toBe(true)
+})
+
+// 12.3's NARROWED FORM IS UNTRACKED, and being given its sources is only half of that: the
+// effect still RUNS wherever it was reached from. Opened inside a tracked body — a `watch`,
+// or a `reactive` body — its reads were attributed to that outer reader, which then re-ran
+// on a value it had never read. Nothing about either value says so; the outer just runs
+// twice as often as its own body justifies.
+//
+// THE REVERT is dropping the `TRACKING.reader = null` pair in `watchOver`: the outer runs
+// a second time.
+test('a narrowed watch runs untracked inside a tracked body', () => {
+    const read = reactive(1)
+    const untouched = reactive(10)
+    let outerRuns = 0
+    const stop = watch(() => {
+        outerRuns += 1
+        read()
+        untouched.watch(() => {
+            untouched()
+        })
+    })
+    expect(outerRuns).toBe(1)
+    untouched.set(11)
+    flushSync()
+    expect(outerRuns).toBe(1)
+    stop()
+})
+
+// ONE POSITION, TWO FACES. 2.5 has a cursor replay from where it was opened, and the sync
+// face of the same `Tail` answered from a DEPTH captured when `tail()` was called — so a
+// production landing between the call and the walk slid the window forward: the two faces
+// of one object replayed different productions, the sync one dropping a production its own
+// position says to hand over and including one that landed after the call.
+//
+// THE REVERT is indexing the window from the ring's end by that captured depth rather than
+// from the ordinal: the sync face reads ['b', 'c'].
+test('both faces of one tail answer from the same position', async () => {
+    const room = reactive<string>(undefined, { history: 9 })
+    room.publish('a')
+    room.publish('b')
+    const held = room.history(2)
+    room.publish('c')
+    expect([...held]).toEqual(['a', 'b', 'c'])
+    expect(await take(held, 3)).toEqual(['a', 'b', 'c'])
+})
+
+// A CONSUMER MAY ASK TWICE BEFORE EITHER ANSWER ARRIVES. `for await` asks one turn at a
+// time, which is why one resolver slot passed every test here — and a second `next()`
+// overwrote the first's resolver, so that promise never settled at all. A `Promise.all`
+// over two turns hung with the productions already retained.
+//
+// THE REVERT is replacing the queue in `openCursor` with a single `settle` slot: this test
+// times out rather than failing.
+test('two turns asked for before either lands are both answered', async () => {
+    const room = reactive<string>(undefined, { history: 9 })
+    const cursor = room.history(0)[Symbol.asyncIterator]()
+    const first = cursor.next()
+    const second = cursor.next()
+    room.publish('a')
+    room.publish('b')
+    expect([(await first).value, (await second).value]).toEqual(['a', 'b'])
+    await cursor.return?.()
+})
+
+// ── `ttl`: the life of a production (RULEBOOK 6.4 through 6.12) ──────────────────────
+
+// A CLOCK READ IS WHAT AN EXPIRY COSTS, and counting them is the only assertion that can
+// tell the mechanism from a no-op branch — the value reads the same either way. It is a
+// performance contract rather than a tidiness one: `Date.now()` is several times a read of
+// an already-served value, and the design has one read per template slot per row.
+function clockReads(during: () => void): number {
+    const realNow = Date.now
+    let asked = 0
+    Date.now = (): number => {
+        asked += 1
+        return realNow.call(Date)
+    }
+    try {
+        during()
+    } finally {
+        Date.now = realNow
+    }
+    return asked
+}
+
+function timersArmed(during: () => void): number {
+    const realSetTimeout = globalThis.setTimeout
+    let armed = 0
+    globalThis.setTimeout = ((
+        handler: () => void,
+        ms?: number,
+    ): ReturnType<typeof setTimeout> => {
+        armed += 1
+        return realSetTimeout(handler, ms)
+    }) as typeof globalThis.setTimeout
+    try {
+        during()
+    } finally {
+        globalThis.setTimeout = realSetTimeout
+    }
+    return armed
+}
+
+// THE REVERT: hoisting `Date.now()` out of the `expiry === null` test in `produce` — the
+// spelling that reads as tidier, one clock read per production instead of a branch —
+// reports 200 clock reads against 0. Two hundred rather than one hundred because the
+// derived value's recompute is a production too, which is the point: the cost is per
+// production in the graph, not per write an app makes.
+test('a value that declares no ttl never asks what time it is', () => {
+    const source = reactive(1)
+    const derived = reactive(() => source() + 1)
+    const asked = clockReads(() => {
+        for (let index = 0; index < 100; index += 1) {
+            source.set(index)
+            derived()
+        }
+    })
+    expect(`clock reads: ${asked}`).toBe('clock reads: 0')
+})
+
+// 6.8, AND IT IS AN ALLOCATION CLAIM AS MUCH AS A BEHAVIOUR ONE. A plain state's contents
+// are what the app put there, so `ttl` on one does not merely answer the same — it builds
+// no record, arms no timer and leaves `direct` alone, which is what keeps the clock off
+// the read. Asserting the value survived would pass against a branch that expired it and
+// had nothing to reload with.
+//
+// WHAT THE REVERT MOVES IS `direct`, NOT THE CLOCK, and the first spelling of this gate
+// asserted the clock alone and passed with the mechanism out — a plain state is guarded
+// twice over, by `expiryFor` here and by `expire`'s own test for a body, so dropping one
+// of them still reaches no `Date.now()` on a read. What it does reach is `readIndirect`,
+// on every read, for the life of the value.
+//
+// THE REVERT: dropping the `hasProducer` term from `expiryFor` reports `direct: false`
+// against `direct: true`, and 1 clock read against 0.
+test('ttl is inert on a value with no producer', () => {
+    let held = reactive<number>(41, { ttl: 1 })
+    const asked = clockReads(() => {
+        held = reactive<number>(41, { ttl: 1 })
+        held()
+        held.peek()
+    })
+    expect(`clock reads: ${asked}`).toBe('clock reads: 0')
+    // 6.8 is a claim about the READ PATH: a value with nothing to reload with must not
+    // pay for a mechanism that could only ever answer "still 41".
+    expect(`direct: ${cellOf<{ direct: boolean }>(held).direct}`).toBe(
+        'direct: true',
+    )
+    const realNow = Date.now()
+    setSystemTime(new Date(realNow + 60_000))
+    try {
+        expect(held()).toBe(41)
+        expect(held.ready()).toBe(true)
+    } finally {
+        setSystemTime()
+    }
+})
+
+// 6.11 AND 6.12 TOGETHER, which is what the user's ruling decided: past its `ttl` the
+// held value is not served, and the producer is what answers instead. A SYNCHRONOUS body
+// lands inside the read, so the expiry is never observable as an absence here — the read
+// returns the new value rather than refusing.
+//
+// The clock is moved rather than slept through, which is what isolates the READ's half:
+// `setSystemTime` does not move `setTimeout`, so 6.9's timer provably cannot have fired
+// and nothing but `readIndirect` can have noticed.
+//
+// THE REVERT: removing the `expire` call from `readIndirect` reports 'first' against
+// 'second', the producer never having been asked again.
+test('a read past the ttl runs the producer instead of serving the cache', () => {
+    let runs = 0
+    let answer = 'first'
+    const loaded = reactive(
+        () => {
+            runs += 1
+            return answer
+        },
+        { ttl: 1_000 },
+    )
+    expect(loaded()).toBe('first')
+    expect(loaded()).toBe('first')
+    expect(`runs: ${runs}`).toBe('runs: 1')
+    answer = 'second'
+    const realNow = Date.now()
+    setSystemTime(new Date(realNow + 1_001))
+    try {
+        expect(loaded()).toBe('second')
+        expect(`runs: ${runs}`).toBe('runs: 2')
+        // And the production that just landed restarts the life rather than leaving every
+        // read after it expired.
+        expect(loaded()).toBe('second')
+        expect(`runs: ${runs}`).toBe('runs: 2')
+    } finally {
+        setSystemTime()
+    }
+})
+
+// AN INFINITE RELOAD RATHER THAN A STALE READ, which is why it is a run count and not a
+// value assertion — the value is right on every one of these reads and the producer is
+// being called on every one of them.
+//
+// 6.13 IS WHAT MAKES IT SAFE, and it was not always: while an expiry only stopped the
+// value being SERVED, a producer revalidating to the value already held minted nothing
+// (5.2), so the deadline stayed at the previous production's and the next read expired
+// again. Releasing the production clears `landed`, so there is nothing for the identity
+// gate to collapse against and the reload is a real production that moves the deadline.
+//
+// THE REVERT: removing `expiry.at = mintedAt` from `produce` reports 4 runs against 2 —
+// the reload lands but the deadline stays where it was, so the read after it expires
+// again, and the one after that.
+test('a producer that revalidates to the same value restarts the life', () => {
+    let runs = 0
+    const loaded = reactive(
+        () => {
+            runs += 1
+            return 'steady'
+        },
+        { ttl: 1_000 },
+    )
+    expect(`runs: ${runs}`).toBe('runs: 1')
+    const realNow = Date.now()
+    setSystemTime(new Date(realNow + 1_001))
+    try {
+        expect(loaded()).toBe('steady')
+        expect(`runs: ${runs}`).toBe('runs: 2')
+        // The reload confirmed what was held, so the life restarts here — these two reads
+        // are inside the new window and must call nothing.
+        expect(loaded()).toBe('steady')
+        expect(loaded()).toBe('steady')
+        expect(`runs: ${runs}`).toBe('runs: 2')
+    } finally {
+        setSystemTime()
+    }
+})
+
+// 6.5 ON THE RING, with the timer deliberately out of reach — a `ttl` of a minute cannot
+// fire inside this test, so what drops the productions is the read and nothing else.
+// 6.9's timer is the common path and this is the backstop it needs: a clamped background
+// tab or a blocked loop is a late fire, and the clause is about the READ.
+//
+// THE REVERT: removing the sweep from the `tail` member reports ['a', 'b', 'c'] against
+// ['c'].
+test('an expired production is dropped from the ring on the read that follows', () => {
+    const room = reactive<string>(undefined, { history: 9, ttl: 60_000 })
+    room.publish('a')
+    room.publish('b')
+    expect([...room.history()]).toEqual(['a', 'b'])
+    const realNow = Date.now()
+    setSystemTime(new Date(realNow + 60_001))
+    try {
+        room.publish('c')
+        // `a` and `b` are past their life and `c` is not, and a read is what notices.
+        expect([...room.history()]).toEqual(['c'])
+        // 2.5: the LATEST production is what a read answers, whatever the retention did.
+        expect(room()).toBe('c')
+    } finally {
+        setSystemTime()
+    }
+})
+
+// 6.8: ON A VALUE WITH NO PRODUCER A DEADLINE REACHES THE PAST ALONE. What was published last is
+// still served, so it is still what a cursor replays — a chat keeping an hour of messages keeps the
+// latest however old it is.
+//
+// THE REVERT is `standingKept` answering 0: `retained: ` with nothing after it.
+test('ttl on a value with no producer expires past productions and keeps the standing one', () => {
+    const room = reactive<string>(undefined, { history: 9, ttl: 60_000 })
+    room.publish('a')
+    room.publish('b')
+    const realNow = Date.now()
+    setSystemTime(new Date(realNow + 60_001))
+    try {
+        expect(`retained: ${[...room.history()].join(',')}`).toBe('retained: b')
+        expect(room()).toBe('b')
+    } finally {
+        setSystemTime()
+    }
+})
+
+// 6.4, AND IT IS THE CLAIM A CORRECTNESS TEST CANNOT SEE: the room reads as `b` either
+// way. A production falling out of retention is not something a reader is looking at —
+// 2.5 puts everything before the latest behind `s.history` — so waking on it is a `.data`
+// write per subscriber for a change none of them can observe.
+//
+// THE REVERT is structural: adding `cascade(cell)` to `dropExpired` reports 1 wake
+// against 0.
+test('an expiry wakes no reader', async () => {
+    const room = reactive<string>(undefined, { history: 9, ttl: 20 })
+    room.publish('a')
+    room.publish('b')
+    const counter = wakes(room)
+    // Past the life of both, with the ring's own timer doing the dropping.
+    await Bun.sleep(80)
+    const woken = counter.count()
+    counter.stop()
+    expect(`wakes: ${woken}`).toBe('wakes: 0')
+    // And it really did drop `a`, or the wake count above is zero for the wrong reason — `b` is
+    // standing, and a value with no producer keeps that one (6.8).
+    expect([...room.history()]).toEqual(['b'])
+})
+
+// 6.6 AND 6.9 ARE ONE MECHANISM SEEN TWICE: one timer for the ring, armed at the head,
+// re-armed by its own fire. A timer per retained production is the obvious spelling and
+// the one the clause exists to refuse — at `history: 500` it is 500 live timers per value,
+// and the ring is the thing that already knows which is oldest.
+//
+// THE REVERT: arming inside the ring push rather than behind `expiry.timer === null`
+// reports 40 timers against 1.
+test('a ring holds one expiry timer however many productions it takes', () => {
+    const armed = timersArmed(() => {
+        const room = reactive<number>(undefined, { history: 19, ttl: 60_000 })
+        for (let index = 0; index < 40; index += 1) room.publish(index)
+    })
+    expect(`timers: ${armed}`).toBe('timers: 1')
+})
+
+// 6.10. A room with a minute of retention left behind on a script that has finished is a
+// process that does not exit, and a `ttl` is exactly the option an app declares on the
+// long-lived ones. The browser half is inert — a number has no `unref` and a tab has no
+// process to hold open — which is the uniform variant CLAUDE.md prefers to an exception.
+test('an expiry timer does not hold the process open', () => {
+    const realSetTimeout = globalThis.setTimeout
+    let unreffed = 0
+    globalThis.setTimeout = ((
+        handler: () => void,
+        ms?: number,
+    ): ReturnType<typeof setTimeout> => {
+        const timer = realSetTimeout(handler, ms)
+        const held = timer as unknown as { unref: () => unknown }
+        const realUnref = held.unref
+        held.unref = (): unknown => {
+            unreffed += 1
+            return realUnref.call(timer)
+        }
+        return timer
+    }) as typeof globalThis.setTimeout
+    try {
+        const room = reactive<string>(undefined, { history: 4, ttl: 60_000 })
+        // Two, because the standing production of a value with no producer has no deadline (6.8).
+        room.publish('a')
+        room.publish('b')
+    } finally {
+        globalThis.setTimeout = realSetTimeout
+    }
+    expect(`unref calls: ${unreffed}`).toBe('unref calls: 1')
+})
+
+// 6.7, AND THE TURN COUNT IS THE WEAKER HALF OF IT. A caught-up cursor is parked on an
+// unresolved `next()` and only a `notify` settles one, so the silence in `dropExpired`
+// already covers it — and so does the ordinal, since an expiry moves no production. A
+// gate on the turn count alone passes with the silence reverted, which is how this one
+// was found to be worth nothing on its first spelling.
+//
+// WHAT AN EXPIRY CAN ACTUALLY CORRUPT IS THE POSITION. A cursor reads `ring[at -
+// ringBase]`, so a trim that moves the ring without moving the base hands it a different
+// production at the same ordinal — a gap or a repeat, which is precisely what 2.5 forbids
+// and what a turn count cannot see.
+//
+// THE REVERT: dropping `ringed.ringBase += dropped` from `dropExpired` reports the cursor
+// receiving `undefined` where it should receive 3.
+test('a cursor across an expiry continues in order with no gap and no repeat', async () => {
+    const room = reactive<number>(undefined, { history: 9, ttl: 20 })
+    room.publish(1)
+    room.publish(2)
+    const cursor = room.history(10)[Symbol.asyncIterator]()
+    expect((await cursor.next()).value).toBe(1)
+    expect((await cursor.next()).value).toBe(2)
+    // Caught up and parked, and the expiry takes `1` out of the ring underneath it.
+    let turned = 0
+    const parked = cursor.next().then((result) => {
+        turned += 1
+        return result
+    })
+    await Bun.sleep(80)
+    expect(`turns: ${turned}`).toBe('turns: 0')
+    expect([...room.history()]).toEqual([2])
+    // The next turn is the next PRODUCTION, at the position the ordinal says, rather than
+    // whatever the trim happened to leave at that index.
+    room.publish(3)
+    expect((await parked).value).toBe(3)
+    await cursor.return?.()
+})
+
+// ── A keyed body does not track (RULEBOOK 14.4, 11.6, 11.23, 2.14) ─────────────────────
+
+// 14.4 AND 11.6: AN ENTRY IS HELD, NOT DERIVED. It comes back through `ttl`, a trigger or
+// eviction and through nothing else — so a value its body read changing leaves it alone. An
+// entry is the answer to a call made with those args, and a call that re-issued itself
+// whenever something it happened to read moved is a request per keystroke somewhere else.
+//
+// THE REVERT is `heldOnce` handing back the body unwrapped: `value: 30`, and the entry busy while
+// the source it read reloads.
+test('a keyed entry does not recompute when a value its body read changes', () => {
+    const rate = reactive(2)
+    let runs = 0
+    const price = reactive((args: { amount: number }) => {
+        runs += 1
+        return args.amount * rate()
+    })
+    const entry = price({ amount: 10 })
+    expect(entry()).toBe(20)
+    rate.set(3)
+    expect(`value: ${entry()}`).toBe('value: 20')
+    expect(`runs: ${runs}`).toBe('runs: 1')
+    entry.refresh()
+    expect(`after refresh: ${entry()}`).toBe('after refresh: 30')
+})
+
+// 2.14 STILL HOLDS FOR AN ENTRY. An abort is not a completed run: the read that threw has
+// subscribed, and that subscription is the only thing that brings the entry back when the value
+// lands. What a keyed body gives up is the recompute AFTER it has an answer.
+test('a keyed body aborted on a value that had not landed re-runs when it lands, and then holds', async () => {
+    let settle: (value: number) => void = (): void => {}
+    const rate = reactive(
+        new Promise<number>((resolve) => {
+            settle = resolve
+        }),
+    )
+    let runs = 0
+    const price = reactive((args: { amount: number }) => {
+        runs += 1
+        return args.amount * rate()
+    })
+    const entry = price({ amount: 10 })
+    expect(`ready: ${entry.ready()}`).toBe('ready: false')
+    settle(2)
+    await rate
+    expect(entry()).toBe(20)
+    rate.set(5)
+    expect(entry()).toBe(20)
+    expect(`runs: ${runs}`).toBe('runs: 2')
+})
+
+// 11.23: AN ENTRY PROPAGATES NOTHING. Its floor is its own — a source it read going busy is not
+// a load of this entry's, because nothing about this entry will be recomputed from it.
+test('a keyed entry is not busy because a value its body read is', async () => {
+    let answer = 1
+    const source = reactive(() => Promise.resolve(answer))
+    await source
+    const keyed = reactive((args: { times: number }) => source() * args.times)
+    const entry = keyed({ times: 3 })
+    expect(entry()).toBe(3)
+    answer = 2
+    source.refresh()
+    expect(`source busy: ${source.busy()}`).toBe('source busy: true')
+    expect(`entry busy: ${entry.busy()}`).toBe('entry busy: false')
+})
+
+// ── `args`: the gate on a keyed value's args (RULEBOOK 9.9, 11.26, 11.28, 11.41, 11.42) ──
+
+// THE BODY IS WHERE THE PRIVILEGED CALL IS, so a refused `Args` must never reach it — and the
+// refusal is still an ENTRY, under the key taken before the gate ran (11.26), so a second reach
+// of the same bad args joins it rather than refusing again (1.8).
+//
+// THE REVERT is building entries from the ungated body: `body runs: 1` and nothing refused.
+test('an args gate refuses before the body runs, and the refusal is the entry for that key', () => {
+    let runs = 0
+    const invoice = reactive(
+        (args: { id: number }) => {
+            runs += 1
+            return args.id * 2
+        },
+        {
+            args: (value: unknown) => {
+                if ((value as { id: number }).id < 0)
+                    throw new Error('id must not be negative')
+                return value as { id: number }
+            },
+        },
+    )
+    const refused = invoice({ id: -1 })
+    expect(`body runs: ${runs}`).toBe('body runs: 0')
+    expect(`error: ${(refused.error() as unknown as Error).name}`).toBe(
+        'error: ValidationError',
+    )
+    let thrown: unknown
+    try {
+        refused()
+    } catch (error) {
+        thrown = error
+    }
+    expect(`read threw: ${(thrown as Error).name}`).toBe(
+        'read threw: ValidationError',
+    )
+    expect(invoice({ id: -1 })).toBe(refused)
+    expect(invoice({ id: 4 })()).toBe(8)
+})
+
+// 11.28 AND 9.9: THE GATE REFUSES AND DECIDES NOTHING ELSE. A schema that normalises hands back
+// a value, and that value is discarded — the body gets the args the caller sent, and two args
+// the gate would normalise to one are still two keys.
+//
+// THE REVERT is handing the body what the gate returned: `body saw: number`.
+test('an args gate that normalises decides neither the entry nor what the body sees', () => {
+    const seen: string[] = []
+    const keyed = reactive(
+        (args: { id: string | number }) => {
+            seen.push(typeof args.id)
+            return args.id
+        },
+        {
+            args: (value: unknown): { id: string | number } => ({
+                id: Number((value as { id: string }).id),
+            }),
+        },
+    )
+    keyed({ id: '7' })
+    keyed({ id: 7 })
+    expect(`body saw: ${seen[0]}`).toBe('body saw: string')
+    expect(`entries: ${keyed.entries.size}`).toBe('entries: 2')
+})
+
+// 11.42 AT CONSTRUCTION. The clause asks for a compile error and the checker cannot raise one —
+// `() => 1` is assignable to the keyed overload's body, so the call type-checks as keyed — so
+// the refusal lands on the first moment there is, naming the value, the way 5.15's does. What
+// it stops is a gate that silently gates nothing.
+//
+// THE REVERT is dropping the `args` test from `createReactive`: the refusal is `undefined`.
+test('args on a value with no parameter refuses at construction', () => {
+    let refusal: unknown
+    try {
+        reactive(() => 1, { args: (value: unknown) => value } as never)
+    } catch (thrown) {
+        refusal = thrown
+    }
+    expect(`${(refusal as Error | undefined)?.message}`).toContain(
+        'declares args with no parameter to gate',
+    )
+})
+
+// A GATED STREAM IS STILL A STREAM. The stream is declared by the body's kind (9.20), so a gate
+// wrapping the body in a plain function would quietly make every gated stream a value holding a
+// generator.
+//
+// THE REVERT is `gated` wrapping every body in a plain function: `eu()` is the generator object
+// rather than `['eu-1']`.
+test('an args gate on a keyed stream keeps it a stream, and refuses before it starts', async () => {
+    let started = 0
+    const rows = reactive(
+        async function* (args: { region: string }) {
+            started += 1
+            yield `${args.region}-1`
+        },
+        {
+            args: (value: unknown) => {
+                if ((value as { region: string }).region === '')
+                    throw new Error('no region')
+                return value as { region: string }
+            },
+        },
+    )
+    const eu = rows({ region: 'eu' })
+    await turns()
+    expect(eu()).toEqual(['eu-1'])
+    const none = rows({ region: '' })
+    await turns()
+    expect(`started: ${started}`).toBe('started: 1')
+    expect(`error: ${(none.error() as unknown as Error).name}`).toBe(
+        'error: ValidationError',
+    )
+})
+
+// 11.46: A KEYED `ttl` IS THE LIFE OF AN ENTRY, evicted whole with its ring, and the
+// next reach of that key starts the work again from nothing. It is NOT the unkeyed
+// mechanism forwarded down — that would expire productions INSIDE an entry the clause says
+// should have been dropped, and leave the map holding every key ever reached.
+//
+// THE REVERT is forwarding `ttl` to `createReactive` in place of the lifetime: the entry
+// carries an expiry of its own, which is the first assertion to fail, and past the deadline
+// the map still reports `entries: 1`.
+test('a keyed entry past its ttl is evicted whole, and the next reach starts again', async () => {
+    let runs = 0
+    const keyed = reactive(
+        (args: { id: number }) => {
+            runs += 1
+            return args.id * 10
+        },
+        { ttl: 20 },
+    )
+    const first = keyed({ id: 1 })
+    expect(first()).toBe(10)
+    expect(cellOf<{ expiry: unknown }>(first).expiry).toBeNull()
+    expect(keyed.entries.size).toBe(1)
+
+    await Bun.sleep(80)
+    expect(`entries: ${keyed.entries.size}`).toBe('entries: 0')
+    expect(keyed({ id: 1 })).not.toBe(first)
+    expect(`runs: ${runs}`).toBe('runs: 2')
+})
+
+// 11.50: A PRODUCTION MOVES AN ENTRY TO THE NEWEST POSITION, so a key that keeps producing
+// outlives one reached at the same moment and left alone. The margins are wide because
+// the deadlines are timers: `b` has been dead for 30 ms at the check and `a` has 30 ms left.
+//
+// THE REVERT is `touch` ignoring productions after the first: `a: false`.
+test('an entry that produces takes the newest position and outlives one that does not', async () => {
+    const keyed = reactive((args: { id: string }) => reactive(args.id), {
+        ttl: 100,
+    })
+    const a = keyed({ id: 'a' })
+    keyed({ id: 'b' })
+    await Bun.sleep(60)
+    a.set('a again')
+    await Bun.sleep(70)
+    expect(`a: ${keyed.entries.has('{"id":"a"}')}`).toBe('a: true')
+    expect(`b: ${keyed.entries.has('{"id":"b"}')}`).toBe('b: false')
+    await Bun.sleep(80)
+    expect(`entries: ${keyed.entries.size}`).toBe('entries: 0')
+})
+
+// 11.49: ONE TIMER FOR THE WHOLE KEYED FACE, armed at the oldest entry. A timer per entry
+// is a `setTimeout` per key a list reaches — per row — and every production would re-arm
+// its own. The count is the claim; the eviction above cannot tell the two apart.
+//
+// THE REVERT is arming in `touch` without the `timer !== null` test: `timers armed: 50`.
+test('a keyed ttl holds one timer however many entries it reaches', () => {
+    const realSetTimeout = globalThis.setTimeout
+    let armed = 0
+    globalThis.setTimeout = ((...args: Parameters<typeof setTimeout>) => {
+        armed += 1
+        return realSetTimeout(...args)
+    }) as typeof setTimeout
+    try {
+        const keyed = reactive((args: { id: number }) => args.id, {
+            ttl: 60_000,
+        })
+        for (let id = 0; id < 50; id += 1) keyed({ id })
+    } finally {
+        globalThis.setTimeout = realSetTimeout
+    }
+    expect(`timers armed: ${armed}`).toBe('timers armed: 1')
+})
+
+// 6.13, 6.14 AND 6.15 — WHAT THE DEADLINE ITSELF DOES, and all three are about a moment
+// nothing reads. The producer must NOT have been called (that is 6.12's job, on the read
+// that follows), the payload must be gone rather than merely unserved, and the two probes
+// must agree with each other: nothing to serve, and nothing in flight to wait for.
+//
+// SLEPT THROUGH RATHER THAN CLOCK-MOVED, which is the opposite of the read gate above:
+// what is under test here is the timer, so it has to actually fire.
+//
+// THE REVERT: dropping the `dropStanding` call from `sweepExpiry` reports
+// `ready=true busy=false released=false` against `ready=false busy=false released=true`.
+test('a deadline releases the value and starts nothing', async () => {
+    let runs = 0
+    const loaded = reactive(
+        () => {
+            runs += 1
+            return { big: 'payload' }
+        },
+        { ttl: 20 },
+    )
+    expect(loaded.ready()).toBe(true)
+    await Bun.sleep(80)
+    // Read NOTHING before the probes: a read is what runs the producer, so touching the
+    // value here would measure 6.12 and report it as 6.14.
+    const ready = loaded.ready()
+    const busy = loaded.busy()
+    const released =
+        (loaded as unknown as { value: unknown }).value === undefined
+    expect(`ready=${ready} busy=${busy} released=${released}`).toBe(
+        'ready=false busy=false released=true',
+    )
+    // 6.4 again, and it is the clause that makes the rest of this shape hold: waking here
+    // would cause the read that runs the producer, and every `ttl` value in the design
+    // would reload on its deadline whether or not anything wanted it.
+    expect(`runs: ${runs}`).toBe('runs: 1')
+    // 6.12: and now the read calls it.
+    expect(loaded()).toEqual({ big: 'payload' })
+    expect(`runs: ${runs}`).toBe('runs: 2')
+})
+
+// A DERIVED VALUE IS NO BETTER THAN WHAT IT WAS BUILT FROM, and 6.13 is what makes that
+// free here: the drop moves `servable`, which is the field `walkReady` already reads. No
+// clock enters the probe walk, which is what the alternative — testing the deadline per
+// node — would have cost every graph in the design whether or not it declared a `ttl`.
+test('a source past its ttl makes what derives from it unready', async () => {
+    const source = reactive(() => 2, { ttl: 20 })
+    const derived = reactive(() => source() * 3)
+    expect(derived()).toBe(6)
+    expect(derived.ready()).toBe(true)
+    await Bun.sleep(80)
+    expect(`derived ready: ${derived.ready()}`).toBe('derived ready: false')
+    expect(`derived busy: ${derived.busy()}`).toBe('derived busy: false')
+})
+
+// A WRITE LANDING ON A RELEASED VALUE, which is the one path `expire` cannot clean up
+// after itself: the timer released the production and marked the value as waiting for a
+// producer, and then a `set` answered the question instead. Without the clear in
+// `produce` the mark survives the write, and the next read calls the body anyway —
+// discarding what was just written and reporting it as a reload.
+//
+// THE REVERT: removing `expiry.dropped = false` from `produce` reports 2 runs against 1.
+test('a write landing on a released value stops the read reloading', async () => {
+    let runs = 0
+    const loaded = reactive(
+        () => {
+            runs += 1
+            return 'from the body'
+        },
+        { ttl: 20 },
+    )
+    await Bun.sleep(80)
+    // The deadline released it; a write answers before any read does.
+    loaded.set('from the app')
+    expect(loaded()).toBe('from the app')
+    expect(`runs: ${runs}`).toBe('runs: 1')
+})
+
+// ── `servable === landed && !stale`, the invariant nothing was checking ──────────────
+
+// THE LADDER THE READ PATH IS BUILT ON. `servable` is `landed && !stale` CACHED rather
+// than recomputed, and `direct` caches `state === CLEAN && servable` on top of it — which
+// is what makes a read one load and one branch. Nine sites move the three fields by hand.
+//
+// IT FAILS SILENTLY IN BOTH DIRECTIONS, which is why it is a gate and not a comment. A
+// site that marks `stale` and forgets `servable` leaves `s.ready()` answering true and
+// `readIndirect` handing back a value the system has already decided is wrong; one that
+// clears `servable` and forgets `stale` leaves a value refusing every read with nothing
+// able to explain why. The output of the failing arm is a plausible value either way.
+//
+// WALKED RATHER THAN ENUMERATED. The transitions that exist today could be listed, and
+// then the next one — the one this is for — would not be in the list. A sequence over the
+// public surface reaches whatever paths exist, so a transition added later is covered by
+// the operation that reaches it rather than by somebody remembering to extend a table.
+//
+// WHAT IT CANNOT SEE IS A STATE THAT DOES NOT SURVIVE ITS OWN OPERATION, and 6.13's is
+// one: the read that discovers an expiry runs the producer in the same frame (6.12), so
+// between two operations the value has always been put back. Removing `servable = false`
+// from `dropStanding` passes this walk for that reason. The gate under it is where that
+// transition is checked, and the split is the honest one rather than a slower fuzz that
+// would have to sleep through a timer on every step.
+function breachedBy(value: unknown): string | null {
+    const cell = cellOf<{
+        landed: boolean
+        stale: boolean
+        servable: boolean
+    }>(value)
+    if (cell.servable === (cell.landed && !cell.stale)) return null
+    return `servable=${cell.servable} landed=${cell.landed} stale=${cell.stale}`
+}
+
+// Seeded so a failure names a reproducible sequence rather than one that has gone by the
+// time it is read. xorshift32, which is four operations and needs no dependency.
+function sequence(seed: number): () => number {
+    let state = seed
+    return (): number => {
+        state ^= state << 13
+        state ^= state >>> 17
+        state ^= state << 5
+        state >>>= 0
+        return state
+    }
+}
+
+test('servable stays landed && !stale across every transition', async () => {
+    const source = reactive(1)
+    const unlanded = reactive(new Promise<number>(() => {}))
+    let abortNow = false
+    let failNow = false
+    let adoptNow = false
+    // Adopting something that has nothing to serve is 11.16's branch, and it is the only
+    // adoption arm that LEAVES the adopting value unservable — adopting a settled one puts
+    // it back inside the same operation, which is why adopting `source` cannot reach it.
+    let adoptPendingNow = false
+
+    const subjects: { name: string; value: unknown; ops: (() => void)[] }[] = []
+
+    const plain = reactive({ n: 1 })
+    subjects.push({
+        name: 'a value',
+        value: plain,
+        ops: [
+            () => plain.set({ n: 2 }),
+            () => plain.publish({ n: 2 }),
+            () =>
+                plain.patch((held) => {
+                    held.n += 1
+                }),
+            () => plain.invalidate(),
+            () => plain.refresh(),
+        ],
+    })
+
+    // The body reaches every arm `run` has: a production, the abort (11.53), a refusal,
+    // and an adoption whose source stops being servable (11.16).
+    const derived = reactive(() => {
+        if (abortNow) return unlanded()
+        if (failNow) throw new Error('refused')
+        if (adoptPendingNow) return unlanded
+        if (adoptNow) return source
+        return source() + 1
+    })
+    subjects.push({
+        name: 'a body',
+        value: derived,
+        ops: [
+            () => source.set(source.peek() === 1 ? 2 : 1),
+            () => derived.invalidate(),
+            () => derived.refresh(),
+            () => derived.set(99),
+            () => {
+                abortNow = !abortNow
+                derived.refresh()
+            },
+            () => {
+                failNow = !failNow
+                derived.refresh()
+            },
+            () => {
+                adoptNow = !adoptNow
+                derived.refresh()
+            },
+            () => {
+                adoptPendingNow = !adoptPendingNow
+                derived.refresh()
+            },
+            () => source.invalidate(),
+        ],
+    })
+
+    const room = reactive<number>(undefined, { history: 3 })
+    subjects.push({
+        name: 'a room',
+        value: room,
+        ops: [
+            () => room.publish(1),
+            () => room.publish(2),
+            () => room.invalidate(),
+        ],
+    })
+
+    // 6.13's transition, reached through the read rather than the timer so the walk stays
+    // contention-immune and runs in the parallel gate (CLAUDE.md, "counts run in bun test").
+    let ttlRuns = 0
+    const expiring = reactive(
+        () => {
+            ttlRuns += 1
+            return { at: ttlRuns }
+        },
+        { ttl: 1_000 },
+    )
+    subjects.push({
+        name: 'a ttl value',
+        value: expiring,
+        ops: [
+            () => {
+                const now = Date.now()
+                setSystemTime(new Date(now + 1_001))
+                try {
+                    expiring.peek()
+                } finally {
+                    setSystemTime()
+                }
+            },
+            () => expiring.invalidate(),
+            () => expiring.refresh(),
+        ],
+    })
+
+    const next = sequence(0x5eed)
+    const walked: string[] = []
+    for (let step = 0; step < 600; step += 1) {
+        const subject = subjects[
+            next() % subjects.length
+        ] as (typeof subjects)[0]
+        const pick = next() % subject.ops.length
+        walked.push(`${subject.name}[${pick}]`)
+        try {
+            ;(subject.ops[pick] as () => void)()
+        } catch (thrown) {
+            // A read inside an op may refuse, which is the value working rather than the
+            // invariant breaking — 2.2 and 2.3 are what those throws are.
+            if (!(thrown instanceof Error)) throw thrown
+        }
+        flushSync()
+        for (const held of subjects) {
+            const breach = breachedBy(held.value)
+            if (breach !== null)
+                throw new Error(
+                    `${held.name} breached servable === landed && !stale at step ${step} (${breach}). The sequence was: ${walked.slice(-8).join(' -> ')}`,
+                )
+        }
+    }
+    expect(`steps walked: ${walked.length}`).toBe('steps walked: 600')
+})
+
+// THE TRANSITION THE WALK ABOVE STRUCTURALLY CANNOT OBSERVE. Only 6.9's timer leaves a
+// value sitting in the released state — every read that reaches it starts the producer on
+// the way past — so this is the one place the three fields can be read while 6.13 holds.
+//
+// THE REVERT: removing `cell.servable = false` from `dropStanding` reports
+// `servable=true landed=false stale=true`.
+test('a released value still reads servable === landed && !stale', async () => {
+    const expiring = reactive(() => ({ n: 1 }), { ttl: 20 })
+    expect(breachedBy(expiring)).toBeNull()
+    await Bun.sleep(80)
+    expect(`breach: ${breachedBy(expiring)}`).toBe('breach: null')
+    // And it is genuinely sitting in the released state rather than having been put back
+    // by something on the way here, or the line above holds for the wrong reason.
+    expect(`ready: ${expiring.ready()}`).toBe('ready: false')
+})
+
+// ── A refused write (RULEBOOK 4.6, 4.9, 4.10, 4.11, 4.12) ───────────────────────────
+
+// 4.9 IS A WORK CLAIM AND CANNOT BE READ OFF THE VALUE. "Stores nothing and mints no
+// production" and "stores the refusal and wakes everyone" leave `s()` answering 1 either
+// way — the ordinal and the wake count are the only places the difference shows.
+//
+// 4.6 is why the refusal is RETURNED rather than thrown: a throw from a `transform` is
+// indistinguishable from the producer having failed, and those two must not be one case.
+//
+// THE REVERT: dropping the `isFailed(shaped)` test from `accept` reports
+// `value: TooBig: TooBig` — the refusal stored as though it were the new value, minting a
+// production for it and waking every reader with an `Error` where a number belongs.
+test('a transform that refuses stores nothing and mints nothing', () => {
+    const tooBig = refuse.typed<'TooBig', { n: number }>('TooBig', 413)
+    // NO TYPE ARGUMENTS. The transform's return is inferred whole and split: the kept `number`
+    // is what is stored, and the refusal is what `s.error()` is typed as.
+    const bounded = reactive(1, {
+        transform: (value) => (value > 10 ? tooBig({ n: value }) : value),
+    })
+    const ordinalOf = (): number => cellOf<{ ordinal: number }>(bounded).ordinal
+    const before = ordinalOf()
+    const counter = wakes(bounded)
+
+    bounded.set(99)
+    const woken = counter.count()
+    counter.stop()
+    // 4.9 both halves: nothing stored, and no production minted for it.
+    expect(`value: ${bounded()}`).toBe('value: 1')
+    expect(`ordinal moved: ${ordinalOf() - before}`).toBe('ordinal moved: 0')
+    // 5.1: the value did not change, so nothing on the value edge may have woken.
+    expect(`wakes: ${woken}`).toBe('wakes: 0')
+    // 4.10: and the refusal is what it left behind.
+    expect(`error: ${bounded.isError(bounded.error(), 'TooBig')}`).toBe(
+        'error: true',
+    )
+    // And `Failures` is inferred from the transform, so this needs no cast at all. The annotation is
+    // the gate, and it is the typecheck's: THE REVERT is the `<Accepted, Stored, Failures>` overload,
+    // under which `data` is `unknown` and this line does not compile.
+    const data: { n: number } | undefined = bounded.error()?.data
+    expect(data).toEqual({ n: 99 })
+})
+
+// 4.11. A standing refusal that survives the write which superseded it is a value
+// reporting a failure it has already recovered from — and a `{#if s.error()}` guard that
+// never comes down.
+//
+// THE REVERT: dropping `cell.failure = undefined` from `produce` reports `error: TooBig`.
+test('an accepted write clears the standing refusal', () => {
+    const tooBig = refuse.typed<'TooBig', { n: number }>('TooBig', 413)
+    const bounded = reactive(1, {
+        transform: (value) => (value > 10 ? tooBig({ n: value }) : value),
+    })
+    bounded.set(99)
+    expect(`error: ${bounded.error()?.name}`).toBe('error: TooBig')
+    bounded.set(2)
+    expect(`value: ${bounded()}`).toBe('value: 2')
+    expect(
+        `error: ${bounded.error() === undefined ? 'none' : 'standing'}`,
+    ).toBe('error: none')
+})
+
+// 4.12: A FAILED REVALIDATION LEAVES THE HELD VALUE BEING SERVED, which is the case 2.3
+// must NOT be applied to. With nothing landed a refusal is observable state moving and has
+// to propagate; over a value still being served it changes nothing a reader can see, and
+// waking there is a wake on an unchanged value (5.1).
+//
+// THE REVERT: cascading unconditionally in `refused` rather than behind `!cell.landed`
+// reports 1 wake against 0.
+test('a failed revalidation goes on serving and wakes nobody', async () => {
+    let failNext = false
+    const loaded = reactive(() =>
+        failNext
+            ? Promise.reject(new Error('the reload failed'))
+            : Promise.resolve('held'),
+    )
+    expect(await loaded).toBe('held')
+    const counter = wakes(loaded)
+    failNext = true
+    loaded.refresh()
+    await Bun.sleep(10)
+    const woken = counter.count()
+    counter.stop()
+    expect(`value: ${loaded()}`).toBe('value: held')
+    expect(`ready: ${loaded.ready()}`).toBe('ready: true')
+    expect(`wakes: ${woken}`).toBe('wakes: 0')
+    // A CAST, AND IT IS HONEST RATHER THAN LAZY: this producer rejected with a plain
+    // `Error`, which is outside anything it declared. `s.error()` is typed `Failures |
+    // undefined` and a raw throw is neither — 16.43 is the clause that says what happens to
+    // one, and nothing narrows it here.
+    expect(`error: ${(loaded.error() as unknown as Error).message}`).toBe(
+        'error: the reload failed',
+    )
+})
+
+// THE ARGUMENT SHIFT NOTHING TYPE-CHECKS. `MEMBERS` is assigned onto a prototype and is
+// never matched against the `Reactive` type, so a member spelling its `this` annotation as
+// a real parameter compiles clean and shifts every argument by one — `s.isError(error,
+// name)` would then bind the error to `this` and the name to `error`. This was written
+// that way on the first pass and the compiler said nothing.
+//
+// THE REVERT: spelling `isError`'s first parameter `_this: Cell` reports
+// `narrows: false`, because the name arrives where the error is expected.
+test('s.isError takes the error and the name, in that order', () => {
+    const mine = refuse.typed('Mine')
+    const value = reactive(1)
+    expect(`narrows: ${value.isError(mine(), 'Mine')}`).toBe('narrows: true')
+    expect(`other: ${value.isError(mine(), 'Yours')}`).toBe('other: false')
+})
+
+// ── `schema`: the gate on the way in (RULEBOOK 4.3, 4.4, 4.5, 9.8, 19.3, 19.4, 19.5) ──
+
+// 4.3 AND 4.4 ARE ONE CLAIM ABOUT ORDER: the schema runs FIRST and what it RETURNS is what
+// `transform` receives. A transform reading the raw input where a schema had normalised it
+// is a second answer to what the value holds, and the output looks right either way — the
+// number reaching storage is the same whenever the trim happened.
+//
+// THE REVERT: passing `value` instead of `checked` to `transform` in `accept` reports
+// `stored: 7` against `stored: 3` — the untrimmed string measured, spaces and all.
+test('a schema runs before transform, and transform gets what it returned', () => {
+    const order: string[] = []
+    const trimmed = reactive<string, number>(undefined, {
+        schema: (value: unknown) => {
+            order.push('schema')
+            return String(value).trim()
+        },
+        transform: (value) => {
+            order.push('transform')
+            return value.length
+        },
+    })
+    trimmed.set('  abc  ')
+    expect(order.join(', ')).toBe('schema, transform')
+    expect(`stored: ${trimmed()}`).toBe('stored: 3')
+})
+
+// 4.5: THE THROW IS CAUGHT AND CONVERTED, and 15.8 says what into. A schema that threw past
+// the write would take down whoever called `s.set` — a template expression or an event
+// handler — and 4.10 already has a refused write leaving the failure on `s.error` instead.
+//
+// 19.5: the throw becomes the `''` entry, which is the key for "about the value itself".
+//
+// THE REVERT: dropping the `try`/`catch` around the call in `runSchema` reports the throw
+// escaping `set`, so the test never reaches its assertion.
+test('a schema refuses by throwing, and the throw becomes a ValidationError', () => {
+    const positive = reactive<number, number>(1, {
+        schema: (value: unknown) => {
+            if (typeof value !== 'number' || value <= 0)
+                throw new Error('must be positive')
+            return value
+        },
+    })
+    const counter = wakes(positive)
+    positive.set(-5)
+    const woken = counter.count()
+    counter.stop()
+    // 4.9: nothing stored, nothing minted.
+    expect(`value: ${positive()}`).toBe('value: 1')
+    expect(`wakes: ${woken}`).toBe('wakes: 0')
+    const refusal = positive.error() as unknown as {
+        name: string
+        status: number
+        data: Record<string, string[]>
+    }
+    expect(`${refusal.name} ${refusal.status}`).toBe('ValidationError 422')
+    expect(refusal.data).toEqual({ '': ['must be positive'] })
+})
+
+// 19.4, AND IT CANNOT BE CAUGHT BY A TYPE. `Schema<boolean>` and a predicate are the same
+// function type, so no annotation separates them — what separates them at RUNTIME is 19.3
+// plus 19.7: a schema returns what it ACCEPTS and never coerces, so a function handed a
+// number and answering `true` has answered a question rather than returned the value.
+//
+// It throws rather than refusing the write, because this is the author's mistake and not
+// the data's: converting it to a `ValidationError` would report the app's own bug to the
+// app's users as though they had typed something wrong.
+//
+// THE REVERT: dropping the boolean test from `runSchema` reports `stored: true` — the
+// predicate's answer written into the value.
+test('a predicate is refused as a schema', () => {
+    // NO OPENING VALUE, or the predicate is caught at construction and the write below
+    // never happens — 1.7 has reaching an instance start its work, and for the value form
+    // that work is the initial write.
+    const wrong = reactive<number, number>(undefined, {
+        schema: ((value: unknown) => typeof value === 'number') as never,
+    })
+    let threw: unknown
+    try {
+        wrong.set(2)
+    } catch (thrown) {
+        threw = thrown
+    }
+    expect((threw as Error | undefined)?.message).toContain(
+        'A predicate is not a Schema',
+    )
+})
+
+// 9.8: THE GATE IS ON EVERY WAY IN, and `publish` is the one that is ungated for IDENTITY
+// (5.5) — which is a different gate entirely. A room that accepted anything because the
+// author had only pictured `set` is the failure this distinguishes.
+//
+// THE REVERT: testing `gated` before running the schema in `accept` reports the ring
+// holding ['ok', 'no'] against ['ok'].
+test('a schema gates publish as well as set', () => {
+    const room = reactive<string>(undefined, {
+        history: 4,
+        schema: (value: unknown) => {
+            if (value !== 'ok') throw new Error('only ok')
+            return value as string
+        },
+    })
+    room.publish('ok')
+    room.publish('no')
+    expect([...room.history()]).toEqual(['ok'])
+    expect(`error: ${(room.error() as unknown as Error).name}`).toBe(
+        'error: ValidationError',
+    )
+})
+
+// 9.5: A REFUSED WRITE HANDS ITS REFUSAL BACK to the call that made it. `s.error` is where a
+// refusal STANDS for whatever reads it later; the caller that just wrote holds the answer
+// now, and handing it back a number was an ordinal the write never minted — indistinguishable
+// from a publish that landed.
+//
+// THE REVERT is `refused` returning `cell.ordinal`: `publish refused: false` and
+// `set refused: false`, with the ordinal unmoved behind both.
+test('a refused write hands its refusal back, and an accepted one does not', () => {
+    const tooBig = refuse.typed<'TooBig', { n: number }>('TooBig', 413)
+    const bounded = reactive(1, {
+        transform: (value) => (value > 10 ? tooBig({ n: value }) : value),
+    })
+    const published = bounded.publish(99)
+    expect(`publish refused: ${bounded.isError(published, 'TooBig')}`).toBe(
+        'publish refused: true',
+    )
+    const written = bounded.set(99)
+    expect(`set refused: ${bounded.isError(written, 'TooBig')}`).toBe(
+        'set refused: true',
+    )
+    expect(bounded.publish(2)).toBe(2)
+    expect(bounded.set(3)).toBeUndefined()
+
+    const gated = reactive<string, string>('ok', {
+        schema: (value: unknown) => {
+            if (value !== 'ok') throw new Error('only ok')
+            return value as string
+        },
+    })
+    expect(`schema: ${(gated.set('no') as Error | undefined)?.name}`).toBe(
+        'schema: ValidationError',
+    )
+})
+
+// 11.47: what a BODY produced is gated too, which is the way in an author never writes
+// explicitly — there is no `set` call to look at. A body is where a value crosses in from
+// a network, so it is the way in that most needs the gate.
+test('a schema gates what a body produced', () => {
+    let answer: unknown = 3
+    const loaded = reactive(() => answer, {
+        schema: (value: unknown) => {
+            if (typeof value !== 'number') throw new Error('must be a number')
+            return value
+        },
+    })
+    expect(`value: ${loaded()}`).toBe('value: 3')
+    answer = 'not a number'
+    loaded.refresh()
+    expect(`still: ${loaded()}`).toBe('still: 3')
+    expect(`error: ${(loaded.error() as unknown as Error).name}`).toBe(
+        'error: ValidationError',
+    )
+})
+
+// 2.8 FOR EVERY VALUE, not only a stream: `then` resolves where `busy` becomes false. A
+// caller awaiting a value mid-refresh wants what the refresh brings — resolving on
+// `servable` alone handed it the figure the refresh was already replacing.
+//
+// THE REVERT is `settled` testing `servable` alone: `awaited: 1`.
+//
+// THE LOAD IS HELD OPEN BY HAND. `await` reaches `then` a microtask late, and a refresh over an
+// already-resolved promise has landed by then — which passes with the revert in place.
+test('awaiting a value mid-refresh resolves with what the refresh lands', async () => {
+    let settle: (value: number) => void = (): void => {}
+    let loads = 0
+    const loaded = reactive(() => {
+        loads += 1
+        if (loads === 1) return 1
+        return new Promise<number>((resolve) => {
+            settle = resolve
+        })
+    })
+    loaded.refresh()
+    const awaited = loaded.then((value) => value)
+    settle(2)
+    expect(`awaited: ${await awaited}`).toBe('awaited: 2')
+})
+
+// ── Streams: an async generator body (RULEBOOK 3.7, 3.8, 9.2, 9.3, 9.20, 9.21, 9.22) ──
+
+// ONE RUN OF A STREAM, DRIVEN BY HAND. Every chunk and the close are placed by the test, so
+// a case asserts the state between two chunks rather than racing a timer to it. A run is
+// recorded the moment its generator starts executing, which the first `next()` does
+// synchronously — so `runs[0]` exists as soon as the value is constructed.
+type Run<Chunk> = {
+    push(chunk: Chunk): void
+    close(): void
+    fail(error: unknown): void
+}
+
+function streamOf<Chunk>(): {
+    body: () => AsyncGenerator<Chunk>
+    runs: Run<Chunk>[]
+} {
+    const runs: Run<Chunk>[] = []
+    return {
+        runs,
+        body: async function* () {
+            const queued: IteratorResult<Chunk>[] = []
+            let failure: unknown
+            let failed = false
+            let wake: (() => void) | null = null
+            const nudge = (): void => {
+                const woken = wake
+                wake = null
+                woken?.()
+            }
+            runs.push({
+                push: (chunk) => {
+                    queued.push({ value: chunk, done: false })
+                    nudge()
+                },
+                close: () => {
+                    queued.push({ value: undefined, done: true })
+                    nudge()
+                },
+                fail: (error) => {
+                    failure = error
+                    failed = true
+                    nudge()
+                },
+            })
+            for (;;) {
+                while (queued.length === 0 && !failed)
+                    await new Promise<void>((resolve) => {
+                        wake = resolve
+                    })
+                if (failed) throw failure
+                const next = queued.shift() as IteratorResult<Chunk>
+                if (next.done === true) return
+                yield next.value
+            }
+        },
+    }
+}
+
+// Enough turns for a pushed chunk to cross the generator and the pump.
+async function turns(): Promise<void> {
+    await Bun.sleep(1)
+}
+
+// 9.20, 3.7, 3.8 AND 9.2 — the shape of a stream end to end. Nothing has landed until the
+// first chunk, the value is the accumulation from then on, and `busy` holds until the close
+// rather than dropping at the first chunk the way a single load's would.
+test('an async generator body streams: ready from its first chunk, busy until it closes', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    expect(`busy: ${rows.busy()}`).toBe('busy: true')
+    expect(`ready: ${rows.ready()}`).toBe('ready: false')
+    expect(rows.peek()).toBeUndefined()
+
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    await turns()
+    expect(`ready: ${rows.ready()}`).toBe('ready: true')
+    expect(`busy: ${rows.busy()}`).toBe('busy: true')
+    expect(rows()).toEqual([1])
+
+    run.push(2)
+    run.push(3)
+    await turns()
+    expect(rows()).toEqual([1, 2, 3])
+
+    run.close()
+    await turns()
+    expect(`busy: ${rows.busy()}`).toBe('busy: false')
+    expect(rows()).toEqual([1, 2, 3])
+})
+
+// 9.3 AND 9.22, ASSERTED AS THE WORK. The accumulation is pushed into per chunk and
+// materialised on the read — so a hundred chunks and one read are ONE run of the transform,
+// and a second read with nothing new in between is none. The output cannot show this: a
+// materialisation per chunk hands the reader the same array.
+//
+// THE REVERT is materialising in `acceptChunk` rather than in the read: `transforms: 100`.
+test('a stream materialises its accumulation on the read, not per chunk', async () => {
+    const feed = streamOf<number>()
+    let transforms = 0
+    const rows = reactive(feed.body, {
+        transform: (chunks: number[]) => {
+            transforms += 1
+            return chunks
+        },
+    })
+    const run = feed.runs[0] as Run<number>
+    for (let chunk = 0; chunk < 100; chunk += 1) run.push(chunk)
+    await turns()
+    expect(rows().length).toBe(100)
+    expect(rows().length).toBe(100)
+    expect(`transforms: ${transforms}`).toBe('transforms: 1')
+})
+
+// A READ BETWEEN CHUNKS IS A NEW VALUE, and its identity is what says so. A reader that
+// kept an earlier snapshot must still hold what it read, and a derived value comparing by
+// reference must see the accumulation move — a live buffer handed out would collapse
+// every production after the first at the identity gate.
+test('each read of a moved stream is a snapshot of its own', async () => {
+    const feed = streamOf<string>()
+    const rows = reactive(feed.body)
+    const count = reactive(() => rows().length)
+    const run = feed.runs[0] as Run<string>
+    run.push('a')
+    await turns()
+    const first = rows()
+    expect(count()).toBe(1)
+    run.push('b')
+    await turns()
+    expect(first).toEqual(['a'])
+    expect(rows()).toEqual(['a', 'b'])
+    expect(rows()).not.toBe(first)
+    expect(count()).toBe(2)
+})
+
+// 9.21: A REFRESH SERVES WHAT IT HELD UNTIL THE NEW STREAM SAYS SOMETHING. Swapping at the
+// refresh would blank a list the moment somebody asked for a newer one; swapping at the
+// close would hold a stale list for the whole length of the new stream.
+//
+// THE REVERT is swapping the buffer in `startStream`: `during: ` reads an empty list.
+test('refreshing a stream serves the old accumulation until the new first chunk', async () => {
+    const feed = streamOf<string>()
+    const rows = reactive(feed.body)
+    const first = feed.runs[0] as Run<string>
+    first.push('old')
+    first.close()
+    await turns()
+
+    rows.refresh()
+    expect(`busy: ${rows.busy()}`).toBe('busy: true')
+    expect(`during: ${rows().join(',')}`).toBe('during: old')
+
+    const second = feed.runs[1] as Run<string>
+    second.push('new')
+    await turns()
+    expect(`after: ${rows().join(',')}`).toBe('after: new')
+    second.close()
+    await turns()
+    expect(`busy: ${rows.busy()}`).toBe('busy: false')
+})
+
+// A superseded run must stop reaching the value. The old generator is told to return, and
+// a chunk it had already queued lands nowhere.
+test('a chunk from a superseded stream lands nowhere', async () => {
+    const feed = streamOf<string>()
+    const rows = reactive(feed.body)
+    const first = feed.runs[0] as Run<string>
+    first.push('a')
+    await turns()
+    rows.refresh()
+    first.push('late')
+    await turns()
+    expect(rows()).toEqual(['a'])
+})
+
+// 2.7 OVER A STREAM: "the production in flight, from its start" is the stream in flight, so
+// a cursor opened after three chunks hands over all three and then goes on live.
+test('a cursor over a stream replays the run in flight from its first chunk', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    run.push(2)
+    run.push(3)
+    await turns()
+    const cursor = rows[Symbol.asyncIterator]()
+    const seen: number[] = []
+    for (let step = 0; step < 3; step += 1)
+        seen.push((await cursor.next()).value as number)
+    const pending = cursor.next()
+    run.push(4)
+    seen.push((await pending).value as number)
+    expect(seen).toEqual([1, 2, 3, 4])
+    await cursor.return?.()
+})
+
+// 2.8: `await rows` HOLDS FOR THE WHOLE THING. The first chunk makes the value ready, and
+// resolving there would hand an awaiting caller a list with most of it missing.
+test('awaiting a stream holds until it closes', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    let settled: number[] | null = null
+    rows.then((value) => {
+        settled = value
+    })
+    run.push(1)
+    await turns()
+    expect(settled).toBeNull()
+    run.push(2)
+    run.close()
+    await turns()
+    expect(settled as number[] | null).toEqual([1, 2])
+})
+
+// A stream closing with nothing in it is a finished value, not one still waiting: the
+// accumulation of no chunks is an empty list.
+test('a stream that closes without a chunk lands an empty accumulation', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    ;(feed.runs[0] as Run<number>).close()
+    await turns()
+    expect(`ready: ${rows.ready()}`).toBe('ready: true')
+    expect(`busy: ${rows.busy()}`).toBe('busy: false')
+    expect(rows()).toEqual([])
+})
+
+// 2.4 AND 2.2 ON A STREAM. A stream that fails after it said something leaves what it said
+// being served, with the failure standing beside it; one that fails before its first chunk
+// has nothing to serve and its read throws the failure.
+test('a stream that fails keeps what it accumulated, and one with nothing throws', async () => {
+    const partial = streamOf<number>()
+    const rows = reactive(partial.body)
+    const run = partial.runs[0] as Run<number>
+    run.push(1)
+    await turns()
+    run.fail(new Error('socket closed'))
+    await turns()
+    expect(rows()).toEqual([1])
+    expect(`busy: ${rows.busy()}`).toBe('busy: false')
+    expect((rows.error() as unknown as Error).message).toBe('socket closed')
+
+    const empty = streamOf<number>()
+    const nothing = reactive(empty.body)
+    ;(empty.runs[0] as Run<number>).fail(new Error('refused'))
+    await turns()
+    let thrown: unknown
+    try {
+        nothing()
+    } catch (error) {
+        thrown = error
+    }
+    expect((thrown as Error).message).toBe('refused')
+})
+
+// 9.20 PER ENTRY. A keyed body declared as an async generator streams each key on its own.
+test('a keyed async generator body streams each entry', async () => {
+    const keyed = reactive(async function* (args: { id: number }) {
+        yield args.id
+        yield args.id * 10
+    })
+    const one = keyed({ id: 1 })
+    const two = keyed({ id: 2 })
+    await turns()
+    expect(one()).toEqual([1, 10])
+    expect(two()).toEqual([2, 20])
+    expect(`busy: ${one.busy()}`).toBe('busy: false')
+})
+
+// 9.23, ASSERTED AS THE WORK. A generator that yields a thousand chunks without awaiting
+// anything in between lands all of them inside one task, and nothing can paint between two
+// of them — so a reader woken per chunk did a thousand reads nobody could see, and a read of
+// a stream is a copy of its accumulation. That was 61 ms for twenty thousand chunks.
+//
+// THE REVERT is `acceptChunk` calling `cascade` and `probesMoved` itself rather than
+// `wakeLater`: `wakes: 1000`, `transforms: 1000`.
+test('a burst of chunks in one task wakes a reader once', async () => {
+    let transforms = 0
+    const rows = reactive(
+        async function* () {
+            for (let chunk = 0; chunk < 1000; chunk += 1) yield chunk
+        },
+        {
+            transform: (chunks: number[]) => {
+                transforms += 1
+                return chunks
+            },
+        },
+    )
+    let wakes = 0
+    let seen = 0
+    const stop = watch(() => {
+        wakes += 1
+        seen = rows().length
+    })
+    // The run at registration is the subscription, and it found nothing landed.
+    wakes = 0
+    await rows
+    await turns()
+    stop()
+    expect(`seen: ${seen}`).toBe('seen: 1000')
+    expect(`wakes: ${wakes}`).toBe('wakes: 1')
+    expect(`transforms: ${transforms}`).toBe('transforms: 1')
+})
+
+// 9.24: `flushSync` IS HOW A TURN IS ENDED ON DEMAND, and a wake a stream is holding for the
+// next task is exactly what a test, a measurement or a server render ending the turn has to
+// see. The first assertion is what proves the wake WAS held: the chunks have landed and the
+// effect has not heard.
+//
+// THE REVERT is `flushSync` not calling `wakeStreams`: `after flush: 0`.
+test('flushSync delivers a stream wake held for the next task', async () => {
+    const rows = reactive(async function* () {
+        yield 'a'
+        yield 'b'
+    })
+    let seen = 0
+    const stop = watch(() => {
+        seen = rows().length
+    })
+    for (let step = 0; step < 20; step += 1) await Promise.resolve()
+    expect(`landed: ${rows.peek()?.length}`).toBe('landed: 2')
+    expect(`before flush: ${seen}`).toBe('before flush: 0')
+    flushSync()
+    expect(`after flush: ${seen}`).toBe('after flush: 2')
+    stop()
+})
+
+// ── Adopting a stream: RULEBOOK 11.15 forwarding what a stream declares ─────────────
+
+// `reactive(() => salesByRegion(args))` IS HOW A PAGE HOLDS A STREAM, so the adopting value
+// is the one a template reads, iterates and awaits — and it has to BE the stream to each of
+// those, not a value holding copies of it. A cursor over it hands over chunks (1.2), it holds
+// for the close when awaited (2.8), and a guard on its `busy` comes back when the stream ends.
+//
+// THE REVERT is `mirror` accepting `heldValue(inner)` for a stream as it does for a value. The
+// first assertion to fail is the await, which resolves mid-stream with `[1, 2]`; past it, the
+// cursor hands over whole accumulations where the chunks should be.
+test('a value adopting a stream is that stream to a cursor, a guard and an await', async () => {
+    const feed = streamOf<number>()
+    const inner = reactive(feed.body)
+    const rows = reactive(() => inner)
+    const run = feed.runs[0] as Run<number>
+    const guard: boolean[] = []
+    const stop = watch(() => {
+        guard.push(rows.busy())
+    })
+    let settled: number[] | null = null
+    rows.then((value) => {
+        settled = value
+    })
+
+    run.push(1)
+    run.push(2)
+    await turns()
+    expect(rows()).toEqual([1, 2])
+    expect(settled).toBeNull()
+
+    const cursor = rows[Symbol.asyncIterator]()
+    const taken: unknown[] = [
+        (await cursor.next()).value,
+        (await cursor.next()).value,
+    ]
+    const pending = cursor.next()
+    run.push(3)
+    taken.push((await pending).value)
+    await cursor.return?.()
+    expect(`cursor: ${taken.join('|')}`).toBe('cursor: 1|2|3')
+
+    run.close()
+    await turns()
+    flushSync()
+    stop()
+    expect(settled as number[] | null).toEqual([1, 2, 3])
+    expect(`guard: ${guard[guard.length - 1]}`).toBe('guard: false')
+})
+
+// 9.2 THROUGH THE ADOPTION, AS THE WORK. The adopter materialises on the read that asks, with
+// its OWN gates (11.14) — and a mirror that copied the accumulation to hand it over did it
+// once per wake with nothing reading at all.
+//
+// THE REVERT is the same as above: `outer transforms before a read: 3`.
+test('a value adopting a stream materialises nothing until it is read, through its own transform', async () => {
+    const feed = streamOf<number>()
+    const inner = reactive(feed.body)
+    let transforms = 0
+    const total = reactive(() => inner, {
+        transform: (chunks: number[]) => {
+            transforms += 1
+            return [chunks.reduce((sum, chunk) => sum + chunk, 0)]
+        },
+    })
+    const run = feed.runs[0] as Run<number>
+    for (let chunk = 1; chunk <= 3; chunk += 1) {
+        run.push(chunk)
+        await turns()
+    }
+    expect(`outer transforms before a read: ${transforms}`).toBe(
+        'outer transforms before a read: 0',
+    )
+    expect(total()).toEqual([6])
+    expect(total()).toEqual([6])
+    expect(`outer transforms after two reads: ${transforms}`).toBe(
+        'outer transforms after two reads: 1',
+    )
+})
+
+// A body that stops handing back the stream stops being it: the adopter serves what its body
+// computed, and reads straight from the field again.
+//
+// THE REVERT is `dropAdoption` leaving the forwarding in place: `stream` is still the
+// forwarded record, and every read of the value goes on paying the indirect path.
+test('a value that stops adopting a stream serves its own value again', async () => {
+    const feed = streamOf<number>()
+    const inner = reactive(feed.body)
+    const flag = reactive(true)
+    const outer = reactive(() => (flag() ? inner : [99]))
+    ;(feed.runs[0] as Run<number>).push(1)
+    await turns()
+    expect(outer()).toEqual([1])
+    flag.set(false)
+    expect(outer()).toEqual([99])
+    expect(cellOf<{ stream: unknown }>(outer).stream).toBeNull()
+    expect(`direct: ${cellOf<{ direct: boolean }>(outer).direct}`).toBe(
+        'direct: true',
+    )
+})
+
+// ── Writes to a stream (RULEBOOK 9.25, 9.26, 9.27, 11.60) ───────────────────────────────
+
+// 9.25: A WRITE OVER A STREAM LASTS UNTIL THE STREAM SAYS SOMETHING NEW. Nothing arriving leaves
+// it standing; the next chunk puts the accumulation back, the write having been a value the
+// producer never made.
+//
+// THE REVERT is `standWrite` not recording the version it stood at, and it is the PUBLISH that
+// shows it: a gated `set` materialises what it compares against, which stamps the version as a
+// side effect, where an ungated publish compares nothing — `after publish: 1,2,3,4`.
+test('a set on a stream stands until the next chunk overwrites it', async () => {
+    const feed = streamOf<string>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<string>
+    run.push('1')
+    run.push('2')
+    await turns()
+    rows.set(['local'])
+    expect(`after set: ${rows().join(',')}`).toBe('after set: local')
+    await turns()
+    expect(`still: ${rows().join(',')}`).toBe('still: local')
+    run.push('3')
+    await turns()
+    expect(`after chunk: ${rows().join(',')}`).toBe('after chunk: 1,2,3')
+
+    // Unread chunks, then an ungated write over them.
+    run.push('4')
+    await turns()
+    rows.publish(['published'])
+    expect(`after publish: ${rows().join(',')}`).toBe(
+        'after publish: published',
+    )
+})
+
+// 9.26: A CURSOR WALKS CHUNKS, and a write is not one. A write minting an ordinal with nothing in
+// the ring behind it put the cursor one past the end, and its next turn handed over `undefined`.
+//
+// THE REVERT is `accept` sending a stream's write through `produce`: `cursor: 1|2|` — the third
+// turn hands over `undefined`.
+test('a set on a stream moves no cursor over it', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    run.push(2)
+    await turns()
+    const cursor = rows[Symbol.asyncIterator]()
+    const taken: unknown[] = [
+        (await cursor.next()).value,
+        (await cursor.next()).value,
+    ]
+    rows.set([0])
+    const pending = cursor.next()
+    run.push(3)
+    taken.push((await pending).value)
+    await cursor.return?.()
+    expect(`cursor: ${taken.join('|')}`).toBe('cursor: 1|2|3')
+})
+
+// 9.27: `patch` MUTATES THE ACCUMULATION, not the copy a read was handed — so the change is there
+// when the next chunk arrives, where a patched snapshot would be rebuilt from the untouched chunks.
+//
+// THE REVERT is `patch` mutating `cell.value` on a stream: `after chunk: 1,2,3`.
+test('patch on a stream mutates its accumulation, and later chunks land after it', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    run.push(2)
+    await turns()
+    rows.patch((chunks) => {
+        chunks[0] = 10
+    })
+    expect(`after patch: ${rows().join(',')}`).toBe('after patch: 10,2')
+    run.push(3)
+    await turns()
+    expect(`after chunk: ${rows().join(',')}`).toBe('after chunk: 10,2,3')
+})
+
+// 11.60: THE ADOPTER HOLDS THE ADOPTED BUFFER BY REFERENCE, so a patch through it is a patch of
+// the stream — and has to be told to the stream, or the stream goes on serving the snapshot it
+// took before the buffer changed under it. A `set` reaches the stream too, and stands there until
+// the accumulation next changes (9.25).
+//
+// THE REVERT is `patch` on a forwarding value mutating the shared buffer itself: `inner: 1`; and
+// `forwardStream` not taking a write standing on the stream: `outer after set: 9`.
+test('patch and set through a value adopting a stream reach the stream', async () => {
+    const feed = streamOf<number>()
+    const inner = reactive(feed.body)
+    const outer = reactive(() => inner)
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    await turns()
+    expect(inner()).toEqual([1])
+    outer.patch((chunks) => {
+        chunks[0] = 9
+    })
+    flushSync()
+    expect(`inner: ${inner().join(',')}`).toBe('inner: 9')
+    expect(`outer: ${outer().join(',')}`).toBe('outer: 9')
+
+    outer.set([42])
+    expect(`outer after set: ${outer().join(',')}`).toBe('outer after set: 42')
+    expect(`inner after set: ${inner().join(',')}`).toBe('inner after set: 42')
+    run.push(2)
+    await turns()
+    expect(`outer after chunk: ${outer().join(',')}`).toBe(
+        'outer after chunk: 9,2',
+    )
+})
+
+// `ttl` ON A STREAM IS THE LIFE OF A CLOSED RUN, and it needed no reading of its own: 6.17 makes
+// the accumulation at close the production, so 6.11 and 6.12 are the same sentence they are
+// everywhere else. The run IN FLIGHT has produced nothing, so it has no deadline — which is what
+// stops a long stream expiring underneath the reader it is still filling.
+//
+// THE CLOCK IS MOVED RATHER THAN WAITED ON, and that tests the READ path (6.11) apart from the
+// timer that normally does the work — `setSystemTime` moves neither.
+//
+// THE REVERT is `retainRun` not setting `expiry.at`: `after: 3` — the accumulation goes on being
+// served past its life.
+test('a closed streaming run is not served past its ttl', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body, { ttl: 50 })
+    const first = feed.runs[0] as Run<number>
+    first.push(1)
+    first.push(2)
+    first.close()
+    await turns()
+    expect(`closed: ${rows()?.length}`).toBe('closed: 2')
+
+    const realNow = Date.now()
+    setSystemTime(new Date(realNow + 500))
+    try {
+        // 6.11 AND 6.12: not served, and the read starts the producer — which on a stream is a
+        // new RUN rather than a recompute, so what answers is the next run's accumulation.
+        // `ready` is the TIMER's half of this (6.14) and the clock moved without firing it, so
+        // what is asserted here is the read.
+        expect(() => rows()).toThrow()
+        const second = feed.runs[1] as Run<number>
+        second.push(3)
+        second.close()
+        await turns()
+        expect(`after: ${rows()?.join(',')}`).toBe('after: 3')
+    } finally {
+        setSystemTime()
+    }
+})
+
+// THE RUN IN FLIGHT HAS NO DEADLINE, because nothing has been minted for one to run from. A
+// stream open for longer than its own `ttl` — a socket, a token stream over a slow model — must
+// go on being read, and only what it CLOSED with can expire.
+//
+// THE REVERT is `retainRun` setting `expiry.at` from `beginAccumulation` instead of the close:
+// `during: ` throws, the run expiring while it is still being filled.
+test('a streaming run in flight does not expire', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body, { ttl: 50 })
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    await turns()
+    const realNow = Date.now()
+    setSystemTime(new Date(realNow + 500))
+    try {
+        expect(`during: ${rows()?.join(',')}`).toBe('during: 1')
+    } finally {
+        setSystemTime()
+    }
+})
+
+// 6.5 OVER THE RING OF CLOSED RUNS: a past run is dropped on the read that follows its deadline,
+// and `s.history` is the read that reaches one (2.5). The two rings a stream carries are the
+// point — the sweep trims the closed runs and never the chunk buffer.
+//
+// THE REVERT is `ringedOf` answering the cell rather than the view: the sweep splices the chunk
+// buffer, and the replay still reads `1|2`.
+test('a past streaming run is dropped on the read after its ttl', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body, { ttl: 50, history: 4 })
+    const first = feed.runs[0] as Run<number>
+    first.push(1)
+    first.close()
+    await turns()
+    rows.refresh()
+    const second = feed.runs[1] as Run<number>
+    second.push(2)
+    second.close()
+    await turns()
+    expect(
+        `past: ${[...rows.history()].map((run) => run.join('')).join('|')}`,
+    ).toBe('past: 1|2')
+
+    const realNow = Date.now()
+    setSystemTime(new Date(realNow + 500))
+    try {
+        expect(`swept: ${[...rows.history()].length}`).toBe('swept: 0')
+    } finally {
+        setSystemTime()
+    }
+})
+
+// 6.17: A RUN ENTERS THE RING WHEN IT CLOSES, as the accumulation at close. The two buffers are
+// the point: `chunks` is the run being built and a cursor over the VALUE walks it (2.7), where
+// `history()` walks the runs that finished. A stream that has produced `a`,`b` and then `c` has
+// one entry in its past and three chunks in its buffer, and neither number is the other.
+//
+// THE REVERT is `pump` not calling `retainRun`: `past: ` reads empty.
+test('a streaming run enters the ring at its close', async () => {
+    const feed = streamOf<string>()
+    const rows = reactive(feed.body, { history: 4 })
+    const first = feed.runs[0] as Run<string>
+    first.push('a')
+    first.push('b')
+    await turns()
+    expect(`mid-run past: ${[...rows.history()].length}`).toBe('mid-run past: 0')
+    first.close()
+    await turns()
+    rows.refresh()
+    const second = feed.runs[1] as Run<string>
+    second.push('c')
+    second.close()
+    await turns()
+    const past = [...rows.history()]
+    expect(`past: ${past.map((run) => run.join('')).join('|')}`).toBe(
+        'past: ab|c',
+    )
+})
+
+// 6.20: A RUN THAT FAILED OR THAT A TRIGGER REPLACED ENTERS NOTHING. Both stop short of the close,
+// and the close is the whole of what mints the entry — so this is one assertion about two paths
+// through `pump`, neither of which reaches `retainRun`.
+//
+// THE REVERT is retaining on the failure arm as well as the close: `past: ab|c` gains the
+// superseded and failed runs.
+test('a failed or superseded streaming run enters nothing', async () => {
+    const feed = streamOf<string>()
+    const rows = reactive(feed.body, { history: 4 })
+    const first = feed.runs[0] as Run<string>
+    first.push('a')
+    first.push('b')
+    first.close()
+    await turns()
+
+    rows.refresh()
+    const second = feed.runs[1] as Run<string>
+    second.push('superseded')
+    await turns()
+    rows.refresh()
+    const third = feed.runs[2] as Run<string>
+    third.push('failed')
+    third.fail(new Error('the stream broke'))
+    await turns()
+
+    rows.refresh()
+    const fourth = feed.runs[3] as Run<string>
+    fourth.push('c')
+    fourth.close()
+    await turns()
+    const past = [...rows.history()]
+    expect(`past: ${past.map((run) => run.join('')).join('|')}`).toBe(
+        'past: ab|c',
+    )
+})
+
+// 6.21: A REPLAY ENDS AT THE LAST RUN THAT CLOSED. The run in flight is what a READ answers with
+// (9.2), and a cursor over the past must not hand over a half-built accumulation as though it
+// were a result — the same sentence 6.17 makes, from the reader's end.
+//
+// THE REVERT is `retainRun` being called from `acceptChunk` rather than at the close: the
+// in-flight `x` appears in the replay.
+test('a replay over a stream ends at the last run that closed', async () => {
+    const feed = streamOf<string>()
+    const rows = reactive(feed.body, { history: 4 })
+    const first = feed.runs[0] as Run<string>
+    first.push('done')
+    first.close()
+    await turns()
+    rows.refresh()
+    const second = feed.runs[1] as Run<string>
+    second.push('x')
+    await turns()
+    const past = [...rows.history()]
+    expect(`past: ${past.map((run) => run.join('')).join('|')}`).toBe(
+        'past: done',
+    )
+    expect(`read: ${rows()?.join('')}`).toBe('read: x')
+})
+
+// A LIVE CURSOR OVER THE PAST WAKES ON A CLOSE, and on nothing else. Its readers are the view's
+// own, so the chunks landing in between move it not at all — which is also what keeps a close
+// from waking every binding on the value a second time.
+//
+// THE REVERT is `retainRun` not notifying the view's readers: the `for await` never takes a turn.
+test('a cursor over a stream past takes a turn per run that closes', async () => {
+    const feed = streamOf<string>()
+    const rows = reactive(feed.body, { history: 4 })
+    const first = feed.runs[0] as Run<string>
+    first.push('a')
+    first.close()
+    await turns()
+
+    const cursor = rows.history(1)[Symbol.asyncIterator]()
+    const seen: string[] = []
+    const replayed = await cursor.next()
+    seen.push((replayed.value as string[]).join(''))
+    // RACED AGAINST A TURN OF THE LOOP rather than awaited bare: with the notify reverted this
+    // promise never settles, and a gate that HANGS reports nothing at all.
+    const live = Promise.race([
+        cursor.next(),
+        (async (): Promise<IteratorResult<unknown>> => {
+            for (let step = 0; step < 50; step += 1) await turns()
+            return { value: ['(no turn)'], done: false }
+        })(),
+    ])
+    rows.refresh()
+    const second = feed.runs[1] as Run<string>
+    second.push('b')
+    second.push('c')
+    await turns()
+    second.close()
+    seen.push(((await live).value as string[]).join(''))
+    expect(`seen: ${seen.join('|')}`).toBe('seen: a|bc')
+    await cursor.return?.()
+})
+
+// 5.18: A WINDOW ON A STREAM CAPS THE WAKE. Chunks go on landing and a cursor is handed every one
+// of them (5.11), but a reader of the value hears at most once per window — a table re-rendered per
+// chunk of a fast stream is the cost `throttle` exists to cap.
+//
+// THE REVERT is `acceptChunk` releasing every chunk whatever the cap: `wakes: 6`.
+test('throttle on a stream wakes readers once per window, and a cursor still gets every chunk', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body, { throttle: WINDOW })
+    const run = feed.runs[0] as Run<number>
+    let wakes = 0
+    const stop = watch(() => {
+        rows()
+        wakes += 1
+    })
+    const cursor = rows[Symbol.asyncIterator]()
+    run.push(0)
+    await turns()
+    wakes = 0
+    for (let chunk = 1; chunk <= 6; chunk += 1) {
+        run.push(chunk)
+        await turns()
+    }
+    expect(`wakes: ${wakes}`).toBe('wakes: 0')
+    await sleep(AFTER_WINDOW)
+    flushSync()
+    expect(`wakes: ${wakes}`).toBe('wakes: 1')
+    const seen: unknown[] = []
+    for (let step = 0; step < 7; step += 1)
+        seen.push((await cursor.next()).value)
+    expect(seen).toEqual([0, 1, 2, 3, 4, 5, 6])
+    await cursor.return?.()
+    stop()
+})
+
+// 5.19: WHAT A READER SEES IS WHAT THE WINDOW RELEASED, not the chunks it is holding — the read
+// agrees with the wake, so a value that has not been told of a chunk does not show it either.
+//
+// THE REVERT is `materialise` slicing the whole buffer: `during: 1,2`.
+test('a read of a throttled stream serves the accumulation as the last release left it', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body, { throttle: WINDOW })
+    const run = feed.runs[0] as Run<number>
+    // No read until a chunk is held: a snapshot taken earlier would answer from its cache and prove
+    // nothing about what the window has released.
+    run.push(1)
+    await turns()
+    run.push(2)
+    await turns()
+    expect(`during: ${rows().join(',')}`).toBe('during: 1')
+    await sleep(AFTER_WINDOW)
+    expect(`after: ${rows().join(',')}`).toBe('after: 1,2')
+})
+
+// 5.14 ON A STREAM: a debounce releases once the chunks stop, and a close releases what it holds, so
+// awaiting the stream is never handed a partial accumulation (2.8).
+test('a debounced stream releases once the chunks stop, and its close releases what is held', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body, { debounce: WINDOW })
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    await turns()
+    for (let chunk = 2; chunk <= 4; chunk += 1) {
+        run.push(chunk)
+        await turns()
+    }
+    expect(`held: ${rows().join(',')}`).toBe('held: 1')
+    await sleep(AFTER_WINDOW)
+    expect(`released: ${rows().join(',')}`).toBe('released: 1,2,3,4')
+    run.push(5)
+    run.close()
+    expect(`awaited: ${(await rows).join(',')}`).toBe('awaited: 1,2,3,4,5')
+})
+
+// ── `tags` selections, process-wide (RULEBOOK 11.44, 11.45, 13.1, 13.2, 13.3, 13.7, 13.9, 13.11) ──
+
+// Deferred loads, settled by hand, so a case can hold a set of values busy between two lines.
+function deferredLoads(): {
+    load: () => Promise<number>
+    settleAll: (value: number) => void
+} {
+    const settles: ((value: number) => void)[] = []
+    return {
+        load: () =>
+            new Promise<number>((resolve) => {
+                settles.push(resolve)
+            }),
+        settleAll: (value) => {
+            for (const settle of settles.splice(0)) settle(value)
+        },
+    }
+}
+
+// 13.2 AND 13.11 OVER TAGS, and 11.45's function form. A tag reaches across values — keyed
+// entries of one memo and an unkeyed value elsewhere carrying the same tag answer as one set.
+test('busy and ready over tags answer ANY and EVERY across the values carrying them', async () => {
+    const loads = deferredLoads()
+    // The parameter is the declaration that this is keyed; the body has no use for it.
+    const orders = reactive((_args: { customer: number }) => loads.load(), {
+        tags: (args) => [`customer:${args?.customer}`],
+    })
+    const profile = reactive(() => Promise.resolve(7), { tags: ['customer:1'] })
+    const other = reactive(() => Promise.resolve(8), { tags: ['customer:2'] })
+    orders({ customer: 1 })
+    await profile
+    await other
+    expect(`busy: ${reactive.busy({ tags: ['customer:1'] })}`).toBe(
+        'busy: true',
+    )
+    expect(`ready: ${reactive.ready({ tags: ['customer:1'] })}`).toBe(
+        'ready: false',
+    )
+    expect(`other busy: ${reactive.busy({ tags: ['customer:2'] })}`).toBe(
+        'other busy: false',
+    )
+    loads.settleAll(3)
+    await Bun.sleep(1)
+    expect(`busy after: ${reactive.busy({ tags: ['customer:1'] })}`).toBe(
+        'busy after: false',
+    )
+    expect(`ready after: ${reactive.ready({ tags: ['customer:1'] })}`).toBe(
+        'ready after: true',
+    )
+})
+
+// 13.1: a tag selection is every entry carrying ANY of its tags, and nothing else is touched.
+test('invalidate over tags reaches every value carrying any of them, and no other', () => {
+    const runs = { a: 0, b: 0, c: 0 }
+    const a = reactive(
+        () => {
+            runs.a += 1
+            return 1
+        },
+        { tags: ['invoice'] },
+    )
+    const b = reactive(
+        () => {
+            runs.b += 1
+            return 2
+        },
+        { tags: ['customer:1'] },
+    )
+    const c = reactive(
+        () => {
+            runs.c += 1
+            return 3
+        },
+        { tags: ['elsewhere'] },
+    )
+    reactive.invalidate({ tags: ['invoice', 'customer:1'] })
+    a()
+    b()
+    c()
+    expect(`runs: ${runs.a},${runs.b},${runs.c}`).toBe('runs: 2,2,1')
+})
+
+// 13.7: A REFRESH THIS WIDE IS BOUNDED BY WHAT IS READ. Reloading two hundred entries nobody is
+// looking at is two hundred requests for nothing; the unread ones are marked instead, and their
+// next read is what reloads them.
+//
+// THE REVERT is refreshing every match: `unread runs before a read: 2`.
+test('refresh over tags reloads what something reads and marks the rest', () => {
+    let readRuns = 0
+    let unreadRuns = 0
+    const read = reactive(
+        () => {
+            readRuns += 1
+            return readRuns
+        },
+        { tags: ['report'] },
+    )
+    const unread = reactive(
+        () => {
+            unreadRuns += 1
+            return unreadRuns
+        },
+        { tags: ['report'] },
+    )
+    const stop = watch(() => {
+        read()
+    })
+    reactive.refresh({ tags: ['report'] })
+    expect(`read runs: ${readRuns}`).toBe('read runs: 2')
+    expect(`unread runs before a read: ${unreadRuns}`).toBe(
+        'unread runs before a read: 1',
+    )
+    expect(unread()).toBe(2)
+    stop()
+})
+
+// 13.3 AND 13.9: ONE SIGNAL PER SELECTION. A guard over a tag selection subscribes to the
+// selection, not to each entry in it — so a page spinner over a hundred entries holds one edge,
+// and comes back when the loads end.
+//
+// THE REVERTS: answering a tracked `busy({ tags })` through each entry's own `busy` subscribes the
+// guard to the first busy entry the ANY stopped at and to none of the others, `probe readers: 1`;
+// and `markProbes` not marking the signals leaves the guard
+// stuck on its first answer, `saw: true`.
+test('a guard over a tag selection subscribes once and comes back when the loads end', async () => {
+    const loads = deferredLoads()
+    const values = []
+    for (let index = 0; index < 10; index += 1)
+        values.push(reactive(() => loads.load(), { tags: ['feed'] }))
+    const saw: boolean[] = []
+    const stop = watch(() => {
+        saw.push(reactive.busy({ tags: ['feed'] }))
+    })
+    let probeReaders = 0
+    for (const value of values)
+        probeReaders += cellOf<{ probeReaders: unknown[] }>(value).probeReaders
+            .length
+    expect(`probe readers: ${probeReaders}`).toBe('probe readers: 0')
+    loads.settleAll(1)
+    await Bun.sleep(1)
+    flushSync()
+    stop()
+    expect(`saw: ${saw.join(',')}`).toBe('saw: true,false')
+})
+
+// An entry evicted by its `ttl` is out of the map, and a tag sweep must not go on reaching it —
+// that would be a reload for a key nothing can read any more.
+//
+// THE REVERT is the eviction not calling `untag`: `runs: 2`.
+test('an evicted keyed entry leaves its tags', async () => {
+    let runs = 0
+    const keyed = reactive(
+        (args: { id: number }) => {
+            runs += 1
+            return args.id
+        },
+        { ttl: 20, tags: ['evictable'] },
+    )
+    keyed({ id: 1 })
+    await Bun.sleep(80)
+    expect(keyed.entries.size).toBe(0)
+    reactive.invalidate({ tags: ['evictable'] })
+    reactive.refresh({ tags: ['evictable'] })
+    expect(`runs: ${runs}`).toBe('runs: 1')
+})
+
+// ── `store`: where a value lives when the process does not (RULEBOOK 8, 9.11, 11.43) ──────
+
+// A store over a plain map, with every call recorded. `answer` decides what `get` hands back —
+// a value, `undefined` for a miss, a promise, or a throw — and `slow` holds each `set` open until
+// released, so a case can pile writes up behind one in flight.
+function memoryStore<Stored>(initial?: {
+    answer?: () => Stored | undefined | Promise<Stored | undefined>
+    slow?: boolean
+}): {
+    store: {
+        get: () => never
+        set: (value: Stored, retention: { ttl: number }) => never
+    }
+    gets: number
+    sets: { value: Stored; ttl: number }[]
+    release: () => void
+} {
+    const record = {
+        gets: 0,
+        sets: [] as { value: Stored; ttl: number }[],
+        releases: [] as (() => void)[],
+    }
+    const store = {
+        get: () => {
+            record.gets += 1
+            return initial?.answer?.()
+        },
+        set: (value: Stored, retention: { ttl: number }) => {
+            record.sets.push({ value, ttl: retention.ttl })
+            if (initial?.slow !== true) return undefined
+            return new Promise<void>((resolve) => {
+                record.releases.push(resolve)
+            })
+        },
+    }
+    return {
+        store: store as never,
+        get gets() {
+            return record.gets
+        },
+        get sets() {
+            return record.sets
+        },
+        release: () => {
+            for (const resolve of record.releases.splice(0)) resolve()
+        },
+    }
+}
+
+// 8.3, 8.4, 8.15 AND 8.17. A store answers before the initial value, a miss falls back to it, and
+// a synchronous `get` is not a load — the value is there at construction with nothing pending.
+test('a store answers before the initial value, and a miss falls back to it', () => {
+    const hit = memoryStore<number>({ answer: () => 9 })
+    const restored = reactive(4, { store: hit.store })
+    expect(`restored: ${restored()}`).toBe('restored: 9')
+    expect(`busy: ${restored.busy()}`).toBe('busy: false')
+
+    const miss = memoryStore<number>({ answer: () => undefined })
+    expect(`miss: ${reactive(4, { store: miss.store })()}`).toBe('miss: 4')
+
+    const unreadable = memoryStore<number>({
+        answer: () => {
+            throw new Error('corrupt')
+        },
+    })
+    const warn = console.warn
+    console.warn = (): void => {}
+    try {
+        expect(
+            `unreadable: ${reactive(4, { store: unreadable.store })()}`,
+        ).toBe('unreadable: 4')
+    } finally {
+        console.warn = warn
+    }
+})
+
+// An unsettled `get` IS a load: busy with nothing to serve until it answers.
+test('an async get is a load until it answers', async () => {
+    const slow = memoryStore<number>({ answer: () => Promise.resolve(9) })
+    const value = reactive(4, { store: slow.store })
+    expect(`busy: ${value.busy()}`).toBe('busy: true')
+    expect(`ready: ${value.ready()}`).toBe('ready: false')
+    expect(await value).toBe(9)
+    expect(`busy after: ${value.busy()}`).toBe('busy after: false')
+})
+
+// 8.5: A RESTORE IS NOT A WRITE. The gates are for what goes IN, and a restore hands back what was
+// already stored — a transform that stamps or narrows would re-apply to its own output.
+test('a restore runs neither schema nor transform', () => {
+    let gates = 0
+    const hit = memoryStore<number>({ answer: () => 9 })
+    const value = reactive(4, {
+        store: hit.store,
+        schema: (input: unknown) => {
+            gates += 1
+            return input as number
+        },
+        transform: (input: number) => {
+            gates += 1
+            return input * 100
+        },
+    })
+    expect(`value: ${value()}`).toBe('value: 9')
+    expect(`gates: ${gates}`).toBe('gates: 0')
+})
+
+// 8.8 AND 8.13: `set` RUNS PER PRODUCTION, handed the value's own `ttl`. A write `identity`
+// collapsed is not a production and is not written, and neither is the restore — writing back what
+// was just read is a round trip for nothing.
+//
+// THE REVERT is `persist` ignoring `restoring`: `sets: 9,5,6`.
+test('set runs once per production, with the ttl, and never for the restore', () => {
+    const memory = memoryStore<number>({ answer: () => 9 })
+    const value = reactive(4, { store: memory.store, ttl: 60_000 })
+    value.set(5)
+    value.set(5)
+    value.set(6)
+    expect(`sets: ${memory.sets.map((write) => write.value).join(',')}`).toBe(
+        'sets: 5,6',
+    )
+    expect(`ttl: ${memory.sets[0]?.ttl}`).toBe('ttl: 60000')
+})
+
+// 8.10 AND 8.11: WRITES COALESCE LATEST-WINS. One in flight, one pending, and every later write
+// replaces the pending one — a slow store is handed the first and the last, never a queue of
+// intermediates nobody can observe, and a read never waits on any of it.
+//
+// THE REVERT is `writeStore` sending every production: `in flight: 0,1,2,3,4`.
+test('writes to a slow store coalesce latest-wins and never block a read', async () => {
+    const memory = memoryStore<number>({ answer: () => undefined, slow: true })
+    const value = reactive(0, { store: memory.store })
+    for (let step = 1; step <= 4; step += 1) value.set(step)
+    expect(value()).toBe(4)
+    expect(
+        `in flight: ${memory.sets.map((write) => write.value).join(',')}`,
+    ).toBe('in flight: 0')
+    memory.release()
+    await Bun.sleep(1)
+    memory.release()
+    await Bun.sleep(1)
+    expect(`sets: ${memory.sets.map((write) => write.value).join(',')}`).toBe(
+        'sets: 0,4',
+    )
+})
+
+// 8.12: A PERSISTER THAT SILENTLY STOPPED IS WORSE THAN NONE. A failed write warns and the store
+// stays attached, so the next production is written like any other.
+test('a failed store write warns and the next production is still written', () => {
+    let fail = true
+    const written: number[] = []
+    const store = {
+        get: (): number | undefined => undefined,
+        set: (value: number): void => {
+            if (fail) {
+                fail = false
+                throw new Error('disk full')
+            }
+            written.push(value)
+        },
+    }
+    const warnings: unknown[] = []
+    const warn = console.warn
+    console.warn = (...args: unknown[]): void => {
+        warnings.push(args.join(' '))
+    }
+    try {
+        // No opening value, so the first production is the first write and nothing precedes it.
+        const value = reactive<number>(undefined, { store: store as never })
+        value.set(1)
+        value.set(2)
+    } finally {
+        console.warn = warn
+    }
+    expect(`written: ${written.join(',')}`).toBe('written: 2')
+    expect(`warned: ${String(warnings[0])}`).toContain('abide:reactive')
+})
+
+// A STORE IN FRONT OF A BODY IS A CACHE: `get` on a cold entry, the body on a miss, `set` on every
+// production — and 8.16, a trigger reloads from the body, since re-reading the cache it would be
+// refreshing could never fetch anything newer than itself.
+test('a store in front of a body is read first, and the body runs on a miss and on a trigger', () => {
+    let runs = 0
+    const hit = memoryStore<number>({ answer: () => 41 })
+    const cached = reactive(
+        () => {
+            runs += 1
+            return 1
+        },
+        { store: hit.store },
+    )
+    expect(`cached: ${cached()}`).toBe('cached: 41')
+    expect(`runs on a hit: ${runs}`).toBe('runs on a hit: 0')
+    cached.refresh()
+    expect(`after refresh: ${cached()}`).toBe('after refresh: 1')
+    expect(`set: ${hit.sets.map((write) => write.value).join(',')}`).toBe(
+        'set: 1',
+    )
+
+    const miss = memoryStore<number>({ answer: () => undefined })
+    let missRuns = 0
+    const computed = reactive(
+        () => {
+            missRuns += 1
+            return 7
+        },
+        { store: miss.store },
+    )
+    expect(`miss: ${computed()}`).toBe('miss: 7')
+    expect(`runs on a miss: ${missRuns}`).toBe('runs on a miss: 1')
+})
+
+// 8.2: `get` IS A PRODUCER, so the triggers stop being inert on a value that has one — a refresh
+// re-reads the store, where another tab may have written.
+test('refresh on a value with a store re-reads the store', () => {
+    let stored = 1
+    const memory = memoryStore<number>({ answer: () => stored })
+    const theme = reactive(0, { store: memory.store })
+    expect(theme()).toBe(1)
+    stored = 2
+    theme.refresh()
+    expect(`after refresh: ${theme()}`).toBe('after refresh: 2')
+    expect(`gets: ${memory.gets}`).toBe('gets: 2')
+})
+
+// 8.9, 8.6 AND 8.7 ON A STREAM. `set` runs once at the close, on the accumulation and never a
+// partial; a restore seeds the ring with it, so a cursor replays it, and the value reads as
+// finished — ready and not busy — with the body never started.
+test('a stream is stored once at close, and a restore is a finished stream', async () => {
+    const memory = memoryStore<number[]>({ answer: () => undefined })
+    const feed = streamOf<number>()
+    reactive(feed.body, { store: memory.store })
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    run.push(2)
+    await turns()
+    expect(`sets mid-stream: ${memory.sets.length}`).toBe('sets mid-stream: 0')
+    run.close()
+    await turns()
+    expect(
+        `stored: ${JSON.stringify(memory.sets.map((write) => write.value))}`,
+    ).toBe('stored: [[1,2]]')
+
+    const restoredFeed = streamOf<number>()
+    const restoring = memoryStore<number[]>({ answer: () => [5, 6] })
+    const restored = reactive(restoredFeed.body, { store: restoring.store })
+    expect(`started: ${restoredFeed.runs.length}`).toBe('started: 0')
+    expect(`ready: ${restored.ready()}, busy: ${restored.busy()}`).toBe(
+        'ready: true, busy: false',
+    )
+    const cursor = restored[Symbol.asyncIterator]()
+    const replayed = [(await cursor.next()).value, (await cursor.next()).value]
+    await cursor.return?.()
+    expect(`replayed: ${replayed.join(',')}`).toBe('replayed: 5,6')
+})
+
+// 11.43: A KEYED STORE IS A FUNCTION OF THE ARGS. Closing over one key gives every entry the same
+// store, and they clobber each other silently.
+test('a keyed store is built per entry from its args', () => {
+    const stores = new Map<number, ReturnType<typeof memoryStore<string>>>()
+    const profile = reactive((args: { id: number }) => `computed ${args.id}`, {
+        store: (args) => {
+            const memory = memoryStore<string>({
+                answer: () => (args?.id === 1 ? 'stored 1' : undefined),
+            })
+            stores.set(args?.id as number, memory)
+            return memory.store
+        },
+    })
+    expect(profile({ id: 1 })()).toBe('stored 1')
+    expect(profile({ id: 2 })()).toBe('computed 2')
+    expect(`entry 2 wrote: ${stores.get(2)?.sets[0]?.value}`).toBe(
+        'entry 2 wrote: computed 2',
+    )
+    expect(`entry 1 wrote: ${stores.get(1)?.sets.length}`).toBe(
+        'entry 1 wrote: 0',
+    )
+})
+
+// 9.11: A STORE HOLDS THE LATEST PRODUCTION, never the ring.
+test('a store on a value with history round-trips the latest production and not the ring', () => {
+    const memory = memoryStore<string>({ answer: () => 'restored' })
+    const room = reactive<string>(undefined, { history: 9, store: memory.store })
+    expect(room()).toBe('restored')
+    room.publish('a')
+    room.publish('b')
+    expect(`sets: ${memory.sets.map((write) => write.value).join(',')}`).toBe(
+        'sets: a,b',
+    )
+})
+
+// ── `invalidate` is lazy (RULEBOOK 7.3, 7.12, 7.13, 7.14, 7.15, 7.16) ─────────────────────
+
+// 7.3 AND 7.12: A MARK, NOT A LOAD. Nothing runs at the call, subscribed or not, and the read
+// that follows is what runs the producer — so an invalidate over values nobody reads again costs
+// nothing, where the eager one sent a request for each.
+//
+// THE REVERT is `invalidateCell` starting the producer itself: `runs at the call: 2`.
+test('invalidate runs nothing until the next read, which runs fresh', () => {
+    let answer = 1
+    let runs = 0
+    const held = reactive(() => {
+        runs += 1
+        return answer
+    })
+    expect(held()).toBe(1)
+    answer = 2
+    held.invalidate()
+    expect(`runs at the call: ${runs}`).toBe('runs at the call: 1')
+    expect(`read: ${held()}`).toBe('read: 2')
+    expect(`runs after the read: ${runs}`).toBe('runs after the read: 2')
+})
+
+// 7.14 AND 7.17: THE MARK WAKES NOBODY. What is on screen stays — the value and every guard over it
+// — so a `{#if s.ready()}` guard cannot strand a placeholder that never reads the value again. The
+// read that follows is what moves anything.
+//
+// THE REVERT is `invalidateCell` making the value unservable at the mark: `guard: true,false` and a
+// guard left on a branch that never reads.
+test('invalidate wakes no reader, and a guard on ready still reads the value afterwards', () => {
+    let answer = 1
+    const held = reactive(() => answer)
+    let valueWakes = 0
+    const stopValue = watch(() => {
+        held()
+        valueWakes += 1
+    })
+    const guard: boolean[] = []
+    const stopGuard = watch(() => {
+        guard.push(held.ready())
+    })
+    valueWakes = 0
+    answer = 2
+    held.invalidate()
+    flushSync()
+    expect(`value wakes: ${valueWakes}`).toBe('value wakes: 0')
+    expect(`guard: ${guard.join(',')}`).toBe('guard: true')
+    expect(`read: ${held()}`).toBe('read: 2')
+    stopValue()
+    stopGuard()
+})
+
+// 7.13: A VALUE BUILT FROM AN INVALIDATED ONE IS NOT SERVED FROM ITS OWN FIELD. Its read reaches
+// back and runs the producer that owes a reload first, and the ordinary cascade from what that
+// producer mints does the rest — so a derived value read by hand after an invalidate is fresh.
+//
+// THE REVERT is `readIndirect` not pulling what is owed: `derived: 10`.
+test('a read of a derived value runs the producer an invalidate marked upstream', () => {
+    let answer = 1
+    const source = reactive(() => answer)
+    const derived = reactive(() => source() * 10)
+    expect(derived()).toBe(10)
+    answer = 2
+    source.invalidate()
+    expect(`derived: ${derived()}`).toBe('derived: 20')
+})
+
+// 7.15: A LOAD IN FLIGHT WHEN THE VALUE IS MARKED WRONG was started from what the mark says is
+// wrong, so its answer lands nowhere; the read that follows starts the one that counts.
+test('invalidate discards the load it finds in flight', async () => {
+    const settles: ((value: number) => void)[] = []
+    const held = reactive(
+        () =>
+            new Promise<number>((resolve) => {
+                settles.push(resolve)
+            }),
+    )
+    held.invalidate()
+    ;(settles[0] as (value: number) => void)(1)
+    await Bun.sleep(1)
+    expect(`ready after the discarded load: ${held.ready()}`).toBe(
+        'ready after the discarded load: false',
+    )
+    expect(() => held()).toThrow(NotLanded)
+    ;(settles[1] as (value: number) => void)(2)
+    expect(await held).toBe(2)
+})
+
+// 7.15 FOR A STREAM: the run in flight stops reaching the value, and the read after the mark
+// starts a new one.
+test('invalidate stops a stream in flight, and the next read starts a new run', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const first = feed.runs[0] as Run<number>
+    first.push(1)
+    await turns()
+    rows.invalidate()
+    first.push(2)
+    await turns()
+    expect(`runs before a read: ${feed.runs.length}`).toBe(
+        'runs before a read: 1',
+    )
+    expect(() => rows()).toThrow(NotLanded)
+    expect(`runs after a read: ${feed.runs.length}`).toBe(
+        'runs after a read: 2',
+    )
+    ;(feed.runs[1] as Run<number>).push(9)
+    await turns()
+    expect(rows()).toEqual([9])
+})
+
+// 1.7 THROUGH `then`: awaiting a marked value is reaching it, so it runs the producer rather than
+// waiting on a load nothing started.
+test('awaiting an invalidated value runs its producer', async () => {
+    let answer = 1
+    const held = reactive(() => Promise.resolve(answer))
+    await held
+    answer = 2
+    held.invalidate()
+    expect(`awaited: ${await held}`).toBe('awaited: 2')
+})
+
+// 7.13 THROUGH AN ADOPTION: the adopter's read reaches the adopted value's owed reload.
+test('reading a value adopting an invalidated one runs the adopted producer', () => {
+    let answer = 1
+    const inner = reactive(() => answer)
+    const outer = reactive(() => inner)
+    expect(outer()).toBe(1)
+    answer = 2
+    inner.invalidate()
+    expect(`outer: ${outer()}`).toBe('outer: 2')
+})
+
+// ── `history` on every value (RULEBOOK 6.16, 9.15, 9.28, 11.39) ─────────────────────────────
+
+// 6.16: WITH NO HISTORY THE STANDING PRODUCTION IS WHAT IS RETAINED, so `s.history` is a member of every
+// value and replays that one before going live — a reader never has to know which kind it holds.
+//
+// THE REVERT is `retained` answering 0 where there is no ring: `replayed: ` with nothing after it.
+test('tail on a value declaring no history replays the standing production, then goes live', async () => {
+    const value = reactive(1)
+    expect(`replayed: ${[...value.history(5)].join(',')}`).toBe('replayed: 1')
+    const cursor = value.history(5)[Symbol.asyncIterator]()
+    expect((await cursor.next()).value).toBe(1)
+    value.set(2)
+    expect((await cursor.next()).value).toBe(2)
+    await cursor.return?.()
+})
+
+// 11.39 AND 9.28: A BODY AND A KEYED VALUE TAKE `history` TOO, and a keyed value retains it per entry.
+//
+// THE REVERT is `createKeyed` dropping `history` from what entries are built from:
+// `a: a2` rather than `a: seed a,a1,a2`.
+test('a keyed value declaring history retains it per entry', () => {
+    const threads = reactive(({ id }: { id: string }) => `seed ${id}`, {
+        history: 5,
+    })
+    const a = threads({ id: 'a' })
+    const b = threads({ id: 'b' })
+    a.publish('a1')
+    b.publish('b1')
+    a.publish('a2')
+    expect(`a: ${[...a.history()].join(',')}`).toBe('a: seed a,a1,a2')
+    expect(`b: ${[...b.history()].join(',')}`).toBe('b: seed b,b1')
+    const derived = reactive(() => a().toUpperCase(), { history: 1 })
+    expect(derived()).toBe('A2')
+    a.publish('a3')
+    expect(derived()).toBe('A3')
+    expect(`derived: ${[...derived.history()].join(',')}`).toBe('derived: A2,A3')
+})
+
+// 6.16 AGAINST 6.1: `history: n` retains n past productions BESIDE the standing one.
+//
+// THE REVERT is a ring of `history` rather than `history + 1`: `retained: 3,4`.
+test('history counts the productions before the standing one', () => {
+    const value = reactive(0, { history: 2 })
+    for (const next of [1, 2, 3, 4]) value.set(next)
+    expect(`retained: ${[...value.history()].join(',')}`).toBe('retained: 2,3,4')
+})
+
+// 7.8 THROUGH A REFRESH. A refresh is the load an invalidate owed, and it is a load over a value
+// marked wrong — so it does not serve what is held meanwhile the way a refresh over a good value
+// does (7.4). `invalidate(); refresh()` blanks, which is the order the reload guide warns about.
+//
+// THE REVERT is `refreshCell` clearing the debt without unserving: `ready: true`.
+test('a refresh over an invalidated value does not serve what the mark said was wrong', () => {
+    const settled = reactive(() => 1)
+    settled.invalidate()
+    settled.refresh()
+    expect(settled()).toBe(1)
+    const loading = reactive(() => Promise.resolve(1))
+    return loading.then(() => {
+        loading.invalidate()
+        loading.refresh()
+        expect(`ready: ${loading.ready()}`).toBe('ready: false')
+        expect(`busy: ${loading.busy()}`).toBe('busy: true')
+    })
+})
+
+// 2.8 AND 1.7 THROUGH A DERIVED VALUE. Awaiting a value whose body aborted on a source still in flight
+// has to pull it once the source lands: nothing else reads it, so it sits marked and unrun, and a waiter
+// that only asked whether it was busy was asking the run that aborted — the await never settled.
+//
+// THE REVERT is the waiter asking `busyNow` without resolving first: the test times out.
+test('awaiting a derived value settles once the source it aborted on lands', async () => {
+    let settle: (value: number) => void = (): void => {}
+    const source = reactive(
+        new Promise<number>((resolve) => {
+            settle = resolve
+        }),
+    )
+    const doubled = reactive(() => source() * 2)
+    const awaited = doubled.then((value) => value)
+    settle(21)
+    expect(`awaited: ${await awaited}`).toBe('awaited: 42')
+})
+
+// 9.15: AN ADOPTING VALUE'S PAST IS THE ADOPTED VALUE'S, by delegation to whatever it adopts now —
+// and its own once its body stops handing one back.
+//
+// THE REVERT is `tail` reading the adopter's own ring: `forwarded: again`.
+test('tail on an adopting value forwards to what it adopts', () => {
+    const conversation = reactive<string>(undefined, { history: 4 })
+    conversation.publish('hello')
+    conversation.publish('again')
+    const adopting = reactive(true)
+    const outer = reactive(() => (adopting() ? conversation : 'plain'))
+    expect(outer()).toBe('again')
+    expect(`forwarded: ${[...outer.history()].join(',')}`).toBe(
+        'forwarded: hello,again',
+    )
+    adopting.set(false)
+    expect(outer()).toBe('plain')
+    expect(`after: ${[...outer.history()].join(',')}`).toBe('after: plain')
+})
+
+// ── Writes through adoption, and `undefined` (RULEBOOK 11.60, 11.63, 4.14, 4.15, 6.18, 6.19) ────
+
+// 11.62: A `Reactive` WRITTEN IS ADOPTED, which is 11.12's sentence about a body's return value,
+// said once more about a write. Storing it instead is what 1.6 calls the hazard: the callable is
+// thenable, so the value would settle to one snapshot of what it was holding and stop following it.
+// After the write the two are one value — a production of the inner is a production of this, and a
+// write here reaches the inner through 11.60.
+//
+// THE REVERT is `setThroughGates` accepting a `Reactive` as a value: `after: 1`, the outer frozen
+// on the snapshot it took.
+test('a Reactive written with set is adopted rather than stored', () => {
+    const inner = reactive(1)
+    const held = reactive<number | undefined>(undefined)
+    held.set(inner)
+    expect(`adopted: ${held()}`).toBe('adopted: 1')
+    let woken = 0
+    const stop = held.watch(() => {
+        woken += 1
+    })
+    woken = 0
+    inner.set(2)
+    flushSync()
+    expect(`after: ${held()}`).toBe('after: 2')
+    expect(`woken: ${woken}`).toBe('woken: 1')
+    // 11.60 from the other end: the adopter's own write is the adopted value's.
+    held.set(9)
+    flushSync()
+    expect(`inner after a write to the adopter: ${inner()}`).toBe(
+        'inner after a write to the adopter: 9',
+    )
+    stop()
+})
+
+// 11.60: AN ADOPTING VALUE IS THE VALUE IT ADOPTS, writes included. A write standing on the adopter
+// alone was the one member that did not reach through, so a value built over a shared entry held a
+// private copy of every edit made to it.
+//
+// THE REVERT is `ADOPTING_PROTOTYPE`'s `set` writing the adopter itself: `source after set: 1`.
+test('set, publish and patch on an adopting value reach the adopted value', () => {
+    const source = reactive({ n: 1 })
+    const outer = reactive(() => source)
+    expect(outer().n).toBe(1)
+    outer.set({ n: 2 })
+    expect(`source after set: ${source().n}`).toBe('source after set: 2')
+    outer.publish({ n: 3 })
+    expect(`source after publish: ${source().n}`).toBe(
+        'source after publish: 3',
+    )
+    let woken = 0
+    const stop = source.watch(() => {
+        woken += 1
+    })
+    woken = 0
+    outer.patch((value) => {
+        value.n = 4
+    })
+    flushSync()
+    stop()
+    expect(`source woken by patch: ${woken}`).toBe('source woken by patch: 1')
+    expect(outer().n).toBe(4)
+})
+
+// 11.63, 6.18 AND 4.16: A KEYED VALUE WITH NOTHING TO LOAD answers `undefined`, which is a value like
+// any other — loaded, ready, read — and is never retained, so its history starts at the first publish.
+// The opening `undefined` is not shaped either: the `transform` is for messages.
+//
+// THE REVERT is `produce` retaining an `undefined`: `retained: hello,,again`; and `run`
+// sending a first `undefined` through the pipeline: `transformed: 1`.
+test('a body answering undefined is loaded, and undefined never enters history', () => {
+    type Turn = { speaker: string; text: string }
+    let transformed = 0
+    const turns = reactive(
+        (_: { conversation: string }): Turn | undefined => undefined,
+        {
+            history: 50,
+            transform: (turn) => {
+                transformed += 1
+                return turn
+            },
+        },
+    )
+    const onboarding = turns({ conversation: 'onboarding' })
+    expect(`ready: ${onboarding.ready()}`).toBe('ready: true')
+    expect(onboarding()).toBeUndefined()
+    expect(`transformed: ${transformed}`).toBe('transformed: 0')
+    expect(`replayed: ${[...onboarding.history()].length}`).toBe('replayed: 0')
+    onboarding.publish({ speaker: 'ada', text: 'hello' })
+    onboarding.publish(undefined)
+    onboarding.publish({ speaker: 'ada', text: 'again' })
+    expect(
+        `retained: ${[...onboarding.history()].map((turn) => turn?.text).join(',')}`,
+    ).toBe('retained: hello,again')
+})
+
+// 6.19 WITH NO HISTORY: the standing production is what a cursor takes, and an `undefined` standing is
+// nothing to take — a cursor that fell behind a production and then an `undefined` waits for the next.
+//
+// THE REVERT is `take` handing over the standing value whatever it is: `turn: undefined`.
+test('a cursor is never handed undefined', async () => {
+    const selected = reactive<string | undefined>('a')
+    const cursor = selected.history(1)[Symbol.asyncIterator]()
+    expect((await cursor.next()).value).toBe('a')
+    selected.set('b')
+    selected.set(undefined)
+    expect(`sync: ${[...selected.history(1)].length}`).toBe('sync: 0')
+    let turn: unknown = 'none'
+    const next = cursor.next().then((result) => {
+        turn = result.value
+    })
+    await Promise.resolve()
+    expect(`turn: ${turn}`).toBe('turn: none')
+    selected.set('c')
+    await next
+    expect(`turn: ${turn}`).toBe('turn: c')
+})
+
+// 4.14 AGAINST 4.15: NO ARGUMENT IS EMPTY, AND `undefined` IS A VALUE.
+//
+// THE REVERT is the factory passing `first` whatever the arity: `empty ready: true`.
+test('reactive() is empty and reactive(undefined) is loaded', () => {
+    const empty = reactive<string>()
+    const loaded = reactive<string | undefined>(undefined)
+    expect(`empty ready: ${empty.ready()}`).toBe('empty ready: false')
+    expect(() => empty()).toThrow(NotLanded)
+    expect(`loaded ready: ${loaded.ready()}`).toBe('loaded ready: true')
+    expect(loaded()).toBeUndefined()
+})
+
+// ── A window on a keyed value holds back starting a key (RULEBOOK 5.20, 5.21, 5.22) ─────────
+
+// 5.20 AND 5.21: A DEBOUNCE STARTS THE KEY THE REACHES STOPPED AT. A search box typing `n`, `no`,
+// `nor` reaches three keys, and the two superseded before the window closed never make their call
+// — 5.12's "don't start work a window would discard", across keys. They are not held either, so a
+// later reach of one of them goes through the window again.
+//
+// THE REVERT is the factory starting each entry as it is reached: `calls: n,no,nor`.
+test('a debounce on a keyed value starts only the key the reaches stopped at', async () => {
+    const calls: string[] = []
+    const search = reactive(
+        (args: { query: string }) => {
+            calls.push(args.query)
+            return args.query.length
+        },
+        { debounce: WINDOW },
+    )
+    const first = search({ query: 'n' })
+    search({ query: 'no' })
+    const last = search({ query: 'nor' })
+    expect(`calls: ${calls.join(',')}`).toBe('calls: ')
+    // 5.22: held back is busy, with nothing to serve yet.
+    expect(`busy: ${last.busy()}, ready: ${last.ready()}`).toBe('busy: true, ready: false')
+    expect(`held: ${search.entries.size}`).toBe('held: 1')
+    await sleep(AFTER_WINDOW)
+    expect(`calls: ${calls.join(',')}`).toBe('calls: nor')
+    expect(last()).toBe(3)
+    expect(`superseded busy: ${first.busy()}`).toBe('superseded busy: false')
+})
+
+// 5.13 ACROSS KEYS: a throttle starts the first key at once, holds what is reached inside its
+// window, and starts the latest of those when the window ends.
+test('a throttle on a keyed value starts the first key at once and the latest at the window end', async () => {
+    const calls: string[] = []
+    const region = reactive(
+        (args: { name: string }) => {
+            calls.push(args.name)
+            return args.name
+        },
+        { throttle: WINDOW },
+    )
+    region({ name: 'north' })
+    region({ name: 'south' })
+    region({ name: 'east' })
+    expect(`calls: ${calls.join(',')}`).toBe('calls: north')
+    await sleep(AFTER_WINDOW)
+    expect(`calls: ${calls.join(',')}`).toBe('calls: north,east')
+})
+
+// A KEYED STREAM IS WHERE THIS PAYS MOST: a started key is a connection, not one request.
+test('a debounce on a keyed stream opens one stream for a burst of reaches', async () => {
+    const opened: string[] = []
+    const rows = reactive(
+        async function* (args: { region: string }) {
+            opened.push(args.region)
+            yield args.region
+        },
+        { debounce: WINDOW },
+    )
+    rows({ region: 'n' })
+    rows({ region: 'no' })
+    const settled = rows({ region: 'nor' })
+    await sleep(AFTER_WINDOW)
+    expect(`opened: ${opened.join(',')}`).toBe('opened: nor')
+    expect(await settled).toEqual(['nor'])
+})

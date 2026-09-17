@@ -5,29 +5,27 @@ intent: Branch on a value, on a case, on whether something has landed, and on wh
 covers:
   - `{#if cond}`
   - `{#switch expr}`
-  - `{#await promise}`
-  - `{#await promise then value}`
   - `{#try}`
 examples:
   - packages/dogfood/examples/branch-switch
   - packages/dogfood/examples/try-region
 ---
 
-Four questions a page asks about a value, and a block for each: is it true, which of these is
-it, has it landed, and did it fail. Each renders one branch, and the branch it renders is the
-only one in the document.
+Four questions a page asks about a value: is it true, which of these is it, has it landed, and
+did rendering it fail. Three blocks answer them, because whether a value has landed is a
+condition like any other. Each renders one branch, and the branch it renders is the only one in
+the document.
 
-## The four blocks
+## The three blocks
 
 | You write | Branches | Asks |
 | --- | --- | --- |
 | `{#if cond}` | `{:else if}`, `{:else}` | is it true |
 | `{#switch expr}` | `{:case v}`, `{:default}` | which of these is it |
-| `{#await promise}` | `{:then}`, `{:catch e}`, `{:finally}` | has it landed |
 | `{#try}` | `{:catch e}`, `{:finally}` | did rendering this fail |
 
-All four are **render-time** structure rather than a filter over markup that exists anyway: the
-branch not taken has no nodes. And all four bind each reactive read in their subject **once for
+All three are **render-time** structure rather than a filter over markup that exists anyway: the
+branch not taken has no nodes. And all three bind each reactive read in their subject **once for
 the body**, so a condition mentioning a value three times is one subscription and one read.
 
 ## A switch renders exactly one branch
@@ -42,14 +40,16 @@ where the alternatives are values rather than conditions: four `{:else if}` clau
 one expression against four constants is a `{#switch}` written the long way, and the long way
 is where the fifth case gets added to the wrong chain.
 
-## `{#await}` renders while it waits, or after
+## Whether it has landed is an `{#if}`
 
-`{#await promise}` renders its **body while pending** and its binding is live, so the body can
-show whatever has already arrived. `{#await promise then value}` waits first and renders nothing
-until it has the value — and over a stream, that means waiting for the **close**.
+There is no block for waiting. `{#if invoice.ready()}` is the branch that renders once there is a
+value, and `{:else}` is what shows until then. A probe in the condition subscribes to that probe
+alone, and `ready()` does not move for a reload in flight, so the branch stays mounted through a
+`refresh()` and its body is **updated** when the new value lands rather than rebuilt.
 
-The first is what a page wants. The second is what a calculation wants, where a half-arrived
-value is not a smaller answer but a wrong one.
+Where the render should wait for the value instead of showing something in the meantime,
+`{await invoice}` holds it — and over a stream, until the **close**. That is what a calculation
+wants, where a half-arrived value is not a smaller answer but a wrong one.
 
 Read on: [Loading states](../values/show-a-value-that-isnt-there-yet.md) ·
 [Streaming data](../server/send-data-as-it-arrives.md)
@@ -64,6 +64,10 @@ where the region was, instead of a table with one cell missing and no explanatio
 
 Where the boundary goes is therefore a decision about what stays useful without what failed. A
 `{#try}` around a page is a page that disappears; around a panel, it is a panel that says why.
+
+The throw is the render's own. Moved into a derived value it would reach no boundary: once a value
+has landed, a recompute that throws leaves the last one being served (2.2), and the failure is
+`error()`'s to report instead.
 
 `{:finally}` runs on both paths, and it is markup rather than a callback — it is what stays on
 screen either way.

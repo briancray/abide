@@ -1,22 +1,23 @@
 <script>
-import { memo, state } from 'abide'
+import { reactive } from 'abide'
 import { countOrders } from '#server/rpc/metrics'
 
-let region = state('north')
+let region = reactive('north')
 
 // The cap goes on the value that pays for it, and no markup moved.
-const orders = memo(() => countOrders({ region }), { debounce: 400 })
+const orders = reactive(() => countOrders({ region }), { debounce: 400 })
+const updating = reactive(() => orders.busy() && orders.ready())
 </script>
 
 <div class="row">
     <label>region
         <input bind:value={region}>
     </label>
-    <span class="status">{orders.refreshing() ? 'updating…' : ''}</span>
+    <span class="status">{updating ? 'updating…' : ''}</span>
 </div>
 
 <ul class="fields stacked">
     <li><span>orders</span>
-        <strong>{orders.pending() ? '—' : orders}</strong>
+        <strong>{orders.ready() ? orders : '—'}</strong>
     </li>
 </ul>

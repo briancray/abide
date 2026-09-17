@@ -11,11 +11,11 @@ enumerates:
   - MCP
 ---
 
-A **transport** gives a producer an address. `rpc` is a `memo` reachable over http and `socket`
-is a `channel` reachable over a web socket — in both cases the thing handed back is the same
+A **transport** gives a producer an address. `rpc` is a `reactive` value reachable over http and
+`socket` is a channel reachable over a web socket — in both cases the thing handed back is the same
 `Reactive` shape the producer had, so nothing about a value says which transport carried it.
 
-## `rpc` — `memo` + transport
+## `rpc` — `reactive` + transport
 
 ### The call
 
@@ -25,7 +25,7 @@ is a `channel` reachable over a web socket — in both cases the thing handed ba
 | `Value` | `unknown` | What the addressed `Reactive` holds. |
 | `Produced` | `unknown` | What it yields, per the unit rule. |
 | `Middleware` | `<Ctx, Result>(next: (ctx?: Ctx) => Promise<Result>, ctx: Ctx) => Result \| Promise<Result>` | One rung of an onion. |
-| `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Memo<Value, Args, Value, Failures, Produced> \| Channel<Value, Args, Value, Failures> \| ((args?: Args) => Value), options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. |
+| `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Keyed<Value, Args, Value, Failures, Produced> \| ((args?: Args) => Value), options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. |
 | `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declares a mutation. |
 | `rpc.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | Whether a caught failure is the one named. |
 | `rpc.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The same call handed back as the raw response. |
@@ -68,38 +68,41 @@ Spelled per lane, so the same name means what that lane has:
 * `middleware` — `Middleware<{ request: Request; args: () => Args }, Value \| Failures>[]`. The rungs run per call.
 * `clients` — `Clients`. Which surfaces carry this handler.
 * `crossOrigin` — `boolean \| string[]`. Whether other origins may call it.
-A handler is a memo, a channel, or a plain function that becomes one — `GET(fn)` is sugar for
-`GET(memo(fn))`. `RpcOptions` describes the **address**, so a shape belongs to the value and
-rides in on the memo instead. Calling an `Rpc` hands back the same `Reactive` shape the handler
-had, `Produced` included.
+A handler is a `reactive` value, a `Keyed`, or a plain function that becomes one — `GET(fn)` is
+sugar for `GET(reactive(fn))`. `RpcOptions` describes the **address**, so a shape belongs to the
+value and rides in on it instead. Calling an `Rpc` hands back the same `Reactive` shape the handler
+had, `Produced` included, and a client reading a `GET` is subscribed over the socket mux to what
+that handler produces for those args.
 
-## `socket` — `channel` + transport
+## `socket` — a channel + transport
 
 | Name | Signature | Meaning |
 | --- | --- | --- |
-| `Socket` | `<Message, Args, Accepted = Message, Failures = never>(args?: Args) => Room<Message, Accepted, Failures>` | A `channel` over a web socket. |
-| `Message` | `unknown` | The message type. |
-| `socket` | `<Message, Args, Accepted = Message, Failures = never>(channel?: Channel<Message, Args, Accepted, Failures>, options?: SocketOptions<Message, Args>) => Socket<Message, Args, Accepted, Failures>` | The socket factory. |
+| `Socket` | `<Produced, Args, Failures = never>(args?: Args) => Reactive<Produced, Produced, Failures, Produced>` | A value carried over a web socket. |
+| `Produced` | `unknown` | What one production carries. |
+| `socket` | `<Produced, Args, Failures = never>(values?: Reactive<Produced, Produced, Failures, Produced> \| Keyed<Produced, Args, Produced, Failures, Produced>, options?: SocketOptions<Produced, Args>) => Socket<Produced, Args, Failures>` | The socket factory, over a `reactive` or a `Keyed`. |
 
 ### `SocketOptions`
 
 | Name | Signature | Meaning |
 | --- | --- | --- |
-| `SocketEvent` | `{ kind: 'subscribe' \| 'publish'; room: Args; message?: Message; request: Request }` | What the socket lane's onion carries. |
+| `SocketEvent` | `{ kind: 'subscribe' \| 'publish'; args: Args; message?: Produced; request: Request }` | What the socket lane's onion carries. |
 | `clientPublish` | `boolean` | Whether a frame from outside the process may publish. |
 
 ### The options it shares with the other lane
 
 Spelled per lane, so the same name means what that lane has:
 
-* `Args` — `Record<string, JsonValue> \| undefined`. The room.
+* `Args` — `Record<string, JsonValue> \| undefined`. The channel's key.
 * `middleware` — `Middleware<SocketEvent, void>[]`. The rungs an upgrade and every frame pass.
 * `crossOrigin` — `boolean \| string[]`. Which origins may upgrade.
-* `clients` — `Clients`. Which surfaces carry this room.
-`socket(channel)` hands back a `Socket`, which is `(args?) => Room` — the **same `Room`** a
-channel invokes to. `Message` and `Args` come through from the channel unchanged, and every
-channel is carried over one web socket mux, so a page subscribed to four rooms holds one
-connection.
+* `clients` — `Clients`. Which surfaces carry this channel.
+`socket(values)` takes a `Reactive` or a `Keyed` and hands back a `Socket`, which is
+`(args?) => Reactive` — the **same value** the `Keyed` hands back for those args, so one socket
+carries every channel in it. `Produced` and `Args` come through unchanged, and every channel is
+carried over one web socket mux, so a page subscribed to four channels holds one
+connection. A value a socket carries is process-wide, and a `publish` on it reaches every
+subscriber.
 
 ## Schemas
 
@@ -123,7 +126,7 @@ only one publishable to a tool definition or an OpenAPI operation.
 | `x-content-type-options: nosniff` | everything | Refuses a browser's guess at a type the response already declared. |
 | `traceresponse` | everything | Correlates the answer, a failure included. |
 | `cache-control: private, no-store` | a page, an rpc answer, any refusal | The default a write through `response()` overrides. |
-| `cache-control: private, max-age=<ttl>` | a `GET` over a `global` `memo` | The memo's own duration, answered rather than restated in a `ResponseInit`. |
+| `cache-control: private, max-age=<ttl>` | a `GET` over a `global` `reactive` value | The value's own duration, answered rather than restated in a `ResponseInit`. |
 | `cache-control: no-store` | `/__abide/health`, `/__abide/principal` | Refuses caching for an answer about this process or this caller. |
 | `cache-control: public, max-age=31536000, immutable` | the built bundle | A chunk addressed by its own content hash. |
 | `cache-control: public, max-age=0, must-revalidate` | a file under `src/ui/public` | A file at an address the build never chose. |
@@ -165,7 +168,7 @@ is the handler's own, not a transport's approximation of it.
 ### The transport is not where a shape goes
 
 There is no `schemas` option on `GET` or `POST`. A shape is a fact about the value, so it rides
-in on the memo, and an in-process caller gets the check a wire caller gets. A schema declared at
+in on the value, and an in-process caller gets the check a wire caller gets. A schema declared at
 the transport would skip itself every other way the handler is reached.
 
 ## Examples
@@ -178,13 +181,13 @@ export const getInvoice = GET(({ id }: { id: string }) =>
 )
 ```
 
-### A room with an address
+### A channel with an address
 
 ```ts #server/sockets/chat.ts
 import { socket } from 'abide'
-import { thread } from '#shared/rooms'
+import { threads } from '#shared/channels'
 
-export default socket(thread, { clientPublish: true })
+export default socket(threads, { clientPublish: true })
 ```
 
 ## See also

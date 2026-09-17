@@ -34,7 +34,7 @@ import type { Work } from './Work.ts'
 // was published, so a field abide never declared is created here at 0 and read back at
 // 0. Measured with the check out — a record carrying only `wakes` and `bindingRuns`
 // reports `descents: 0`, not `undefined`, and `REACTIVE.md`'s k=8 gate of 16 against 256
-// passes on it. See D113.
+// passes on it.
 function published(): PublishedWork | null {
     const record = (globalThis as Record<string, unknown>)[PUBLISHED_WORK_KEY]
     if (record === undefined || record === null) return null

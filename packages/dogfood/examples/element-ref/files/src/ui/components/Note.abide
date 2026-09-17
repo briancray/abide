@@ -1,9 +1,9 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 
-let note = state('')
-let field = state()
-let focused = state(false)
+let note = reactive('')
+let field = reactive()
+let focused = reactive(false)
 </script>
 
 <label>note

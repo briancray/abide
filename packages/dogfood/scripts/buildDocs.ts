@@ -206,7 +206,7 @@ measure()
 `
 
 // THE BRIDGE THE INSTRUMENTED FRAME GETS, appended after the harness and before the
-// arm. It belongs to the DOCUMENTATION rather than to the harness — 40.21 — so it
+// arm. It belongs to the DOCUMENTATION rather than to the harness — 40.18 — so it
 // lives here beside the rest of the page's own script rather than in the injectable.
 const MEASURE_BRIDGE = `
 // THE LOAD IS A CASE WITH NO BODY, armed here — before the arm's first line and after
@@ -774,7 +774,7 @@ export function serveDocs(): void {
             if (name === 'status.html')
                 return new Response(
                     '<!doctype html><meta charset="utf-8"><title>No status yet</title>' +
-                        '<p style="font:400 1rem/1.5 system-ui;max-width:34rem;margin:4rem auto">' +
+                        '<p style="font:400 1rem/1.4 system-ui;max-width:34rem;margin:4rem auto">' +
                         'No status page has been generated. Run <code>bun run status --serve</code> ' +
                         '— it rebuilds these docs and writes this page from a real run. ' +
                         'Add <code>--measure</code> to drive a browser over every example card.',

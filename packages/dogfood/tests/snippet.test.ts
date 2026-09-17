@@ -267,7 +267,7 @@ test('every control the arm renders is one the page source names', async () => {
 // only ever visible as a readout, so an arm reporting a count the `.abide` source never names
 // is the two arms having come apart on the one line the reader is there to read. It renders
 // perfectly either way, and it is worse than a stray button: a stray button does nothing, and
-// a stray counter is a number a reader will believe. RULEBOOK 40.26.
+// a stray counter is a number a reader will believe. RULEBOOK 40.22.
 //
 // A READOUT IS A `<strong>` and its label is the text in front of it, which is the shape both
 // arms already wrote — the value is the part that legitimately differs, being live in one and

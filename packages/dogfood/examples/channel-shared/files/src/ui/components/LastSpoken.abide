@@ -1,15 +1,13 @@
 <script>
-import { turns } from '#shared/conversations'
-
-// The same args reach the same room. No prop, no provider.
-const room = turns({ conversation: 'onboarding' })
+// The same import reaches the same channel. No prop, no provider.
+import { onboarding } from '#shared/conversations'
 </script>
 
 <ul class="fields stacked">
     <li><span>last spoken</span>
-        <strong>{room.pending() ? 'nobody' : room.speaker}</strong>
+        <strong>{onboarding ? onboarding.speaker : 'nobody'}</strong>
     </li>
     <li><span>said</span>
-        <strong>{room.pending() ? 'nothing yet' : room.text}</strong>
+        <strong>{onboarding ? onboarding.text : 'nothing yet'}</strong>
     </li>
 </ul>

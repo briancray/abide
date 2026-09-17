@@ -1,11 +1,11 @@
 ---
 title: Record what happened
 nav: Logging
-intent: Structured logs on channels you can turn on one at a time, including abide's own.
+intent: Structured logs under namespaces you can turn on one at a time, including abide's own.
 covers:
   - `log`
   - `log.info` / `log.warning` / `log.error` / `log.debug`
-  - `log.channel`
+  - `log.named`
   - `Logger`
   - `LogRecord`
   - `log.records`
@@ -32,10 +32,10 @@ examples:
 ---
 
 `log('invoice paid', { id })` writes a line. What makes it worth having rather than a
-`console.log` is everything around it: the line carries a trace, it goes on a channel somebody
-can switch off, and it is published to a room a page can read.
+`console.log` is everything around it: the line carries a trace, it goes under a namespace somebody
+can switch off, and it is published to a channel a page can read.
 
-## The four levels and the default channel
+## The four levels and the default namespace
 
 ```ts server
 log('sending')
@@ -45,34 +45,34 @@ log.warning('retrying', { attempt: 2 })
 log.error('mailer refused', { error })
 ```
 
-`log` on its own is a message on the default channel, which is `APP_NAME`. The four named forms
+`log` on its own is a message under the default namespace, which is `APP_NAME`. The four named forms
 are the levels, and every one of them takes whatever arguments you give it — a message and a
 record of structured data is the shape that reads well in both output formats.
 
-## A channel is turned on one at a time
+## A namespace is turned on one at a time
 
 {% example log-channels %}
 
 *1 gate, 0 filters* — and the gate is at the call, so a line nothing selected never builds its
 argument object.
 
-`log.channel(name)` hands back a `Logger` — the same shape as `log`, bound to a channel. `DEBUG`
-decides which channels emit, with the comma-and-wildcard grammar the ecosystem already uses, so
+`log.named(name)` hands back a `Logger` — the same shape as `log`, bound to a namespace. `DEBUG`
+decides which namespaces emit, with the comma-and-wildcard grammar the ecosystem already uses, so
 `DEBUG=billing,abide:*` is a sentence anybody who has used the convention can already read.
 
-`log.enabled()` asks whether a gated line on this channel would be written. It is for the case
+`log.enabled()` asks whether a gated line under this namespace would be written. It is for the case
 where **building the argument is the expensive part**:
 
 ```ts server
 if (log.enabled()) log.debug('table', { rows: expensiveSnapshot() })
 ```
 
-## abide's own channels
+## abide's own namespaces
 
 Every one is namespaced `abide:`, so `DEBUG=abide:*` turns on the framework and nothing of
 yours, and `DEBUG=abide:request` turns on one lane.
 
-| Channel | Levels | What it says |
+| Namespace | Levels | What it says |
 | --- | --- | --- |
 | `abide:request` | `debug` | one line per request |
 | `abide:socket` | `debug` | one line per socket event |
@@ -86,7 +86,7 @@ yours, and `DEBUG=abide:request` turns on one lane.
 | `abide:watch` | `warning` | a `watch` effect or `Disposer` that threw |
 | `abide:hydrate` / `abide:navigate` | `warning` | the browser lane |
 
-The `warning` channels are worth reading as a list, because each is a failure that is
+The `warning` namespaces are worth reading as a list, because each is a failure that is
 **otherwise silent**: a stale value still being served, an effect that threw after its first
 run, an error page that could not render. None of them stops the app, and none of them shows up
 anywhere else.
@@ -94,31 +94,32 @@ anywhere else.
 Read on: [Watching values](../values/do-something-when-a-value-changes.md) ·
 [Error pages](../pages/show-a-page-when-something-fails.md)
 
-## `log.records` is a room
+## `log.records` is a channel
 
 ```ts shared
 type LogRecord = {
     time: string
     level: 'debug' | 'info' | 'warning' | 'error'
-    channel: string
+    namespace: string
     message: string
     trace: string
 }
 ```
 
-`log.records` is a `Room<LogRecord>`, which is why an admin page showing the last hundred lines
-**subscribes** rather than polls, and why `abide logs` is `abide call` on that same handler.
-There is no second mechanism for reading logs back.
+`log.records` is a channel — an ordinary `reactive` of `LogRecord` declaring `history` (28.1) —
+which is why an admin page showing the last hundred lines **subscribes** rather than polls. There
+is no second mechanism for reading logs back.
 
-The room's `tail` is `ABIDE_MAX_LOG_BUFFER_COUNT`, and it is a memory ring like any other —
+The channel's `history` is `ABIDE_MAX_LOG_BUFFER_COUNT`, and it is a memory ring like any other —
 bounded, and gone when the process is. Anything that has to outlive the process goes to a
 collector, which is what the machine format is for.
 
 `ABIDE_LOGS` opts in to declaring the `GET` over `log.records`. It is off by default because an
-app's log is not something to expose by accident.
+app's log is not something to expose by accident. A client reading that `GET` is subscribed to
+every line it publishes (18.17), and `abide logs` is exactly that subscription (38.10).
 
-Read on: [Rooms](../values/let-anything-publish-and-anything-read.md) ·
-[History & tail](../values/keep-the-last-few-values.md)
+Read on: [Channels](../values/let-anything-publish-and-anything-read.md) ·
+[History](../values/keep-the-last-few-values.md)
 
 ## Two formats, chosen for the reader
 

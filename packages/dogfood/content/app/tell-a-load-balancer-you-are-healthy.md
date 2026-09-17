@@ -63,8 +63,8 @@ Read on: [Lifecycle](run-code-at-start-and-stop.md) · [Logging](record-what-hap
 ## `health` is a value, seeded like an rpc
 
 `health` is a `Reactive<Health>`, so a status page reads it by name and follows it. It is
-**seeded like an rpc**, which means a page rendered on the server already has the answer inline
-and does not fetch it again on hydration.
+**seeded like an rpc**, which means the browser's own read on hydration is answered from the seed
+buffer rather than by the reporter running again (25.3, 41.6).
 
 ```abide #ui/pages/status/page.abide — excerpt
 <ul class="fields">

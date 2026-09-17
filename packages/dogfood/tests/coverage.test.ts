@@ -355,8 +355,8 @@ async function abideSources(): Promise<{ where: string; code: string }[]> {
     return sources
 }
 
-// Which names in a source are states, from what the source itself says: a `state`/`memo`
-// binding, a `Reactive<…>` prop, a `bind:` target, or an explicit write. A zero-argument
+// Which names in a source are reactive values, from what the source itself says: a `reactive`
+// binding — `reactive.of` and `reactive.share` included — a `Reactive<…>` prop, a `bind:` target, or an explicit write. A zero-argument
 // call on anything else is an ordinary function — `cookies()` is one — and reading every
 // `foo()` as an unsugared state read is how this gate would start failing on code it has
 // no business judging. The cost is a read staying invisible where nothing else in the
@@ -364,7 +364,7 @@ async function abideSources(): Promise<{ where: string; code: string }[]> {
 function stateNames(code: string): Set<string> {
     const names = new Set<string>()
     for (const match of code.matchAll(
-        /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:state|memo)\b/g,
+        /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*reactive\b/g,
     ))
         names.add(match[1] ?? '')
     for (const match of code.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*Reactive</g))
@@ -376,26 +376,6 @@ function stateNames(code: string): Set<string> {
     for (const namespace of NAMESPACES) names.delete(namespace)
     return names
 }
-
-// THE SAME GATE, POINTED AT THE OTHER PIECE OF CEREMONY THE SUGAR REMOVES. 31.12 short-circuits
-// a property access on a name bound to a `Reactive`, and the rest of the chain with it — so
-// `contact?.name` is a guard the compiler already wrote, and printing it teaches a reader to
-// write it. A `?.` after a CALL is untouched: `level.peek()?.onHand` chains off a result rather
-// than off a name, and 31.12 does not reach it.
-test('an abide snippet does not guard a read the compiler already short-circuits', async () => {
-    const offenders: string[] = []
-    for (const { where, code } of await abideSources()) {
-        const states = stateNames(code)
-        for (const match of code.matchAll(
-            /(?<![.\w$)])([A-Za-z_$][\w$]*)\?\./g,
-        )) {
-            const name = match[1] ?? ''
-            if (states.has(name))
-                offenders.push(`${where}: ${name}?. — write \`${name}.\``)
-        }
-    }
-    expect(offenders).toEqual([])
-})
 
 test('an abide snippet reads and writes state by name, not through the explicit forms', async () => {
     const offenders: string[] = []
@@ -442,12 +422,12 @@ test('front matter names exactly the example directories the page embeds', async
     expect(wrong).toEqual([])
 })
 
-// ONE TEACHING PAGE PER EXAMPLE, which is what is left of "one example per page" (40.4,
-// withdrawn) once a page carries a demo per behaviour. The property that rule was protecting
+// ONE TEACHING PAGE PER EXAMPLE, which is what is left of "one example per page" once a page
+// carries a demo per behaviour instead (40.20). The property that rule was protecting
 // survives the inversion: a reader meets an example where it is taught, so a directory taught
-// from two pages is code one of those readers has never been shown running. RULEBOOK 40.27.
+// from two pages is code one of those readers has never been shown running. RULEBOOK 40.23.
 //
-// `covers` IS THE DISCRIMINANT, and it is the one already in the front matter (40.16): an
+// `covers` IS THE DISCRIMINANT, and it is the one already in the front matter (40.13): an
 // overview carries a section's opening example and a style experiment re-renders one to
 // compare voices, and neither is teaching the names in it. A page that claims a name is.
 test('an example directory is taught by exactly one page', async () => {
@@ -483,7 +463,7 @@ test('every example declares an app the brand names', async () => {
     expect(wrong).toEqual([])
 })
 
-// ONE APP PER PAGE (RULEBOOK 40.29). Six cards from four worlds is four worlds to enter, and
+// ONE APP PER PAGE (RULEBOOK 40.25). Six cards from four worlds is four worlds to enter, and
 // the reader pays that per card while the thing being taught is one thing throughout.
 test('every example a page embeds is drawn from the same app', async () => {
     const mixed: string[] = []
@@ -500,9 +480,9 @@ test('every example a page embeds is drawn from the same app', async () => {
     expect(mixed).toEqual([])
 })
 
-// THE OLD SHAPE, LISTED SO IT IS A NUMBER RATHER THAN A READING. A page in the shape 40.4 and
-// 40.6 were withdrawn for — one example in the lead and every section hanging a snippet off it —
-// passes every check there is: 40.23 and 40.24 are judgement, and the example it embeds declares
+// THE OLD SHAPE, LISTED SO IT IS A NUMBER RATHER THAN A READING. A page in the shape 40.20 and
+// 40.21 replaced — one example in the lead and every section hanging a snippet off it —
+// passes every check there is: 40.27 and 40.28 are judgement, and the example it embeds declares
 // `unconverted`, which the app check waves through. So an agent asked to convert a section can
 // polish its prose, leave the structure untouched, and go green.
 //
@@ -677,7 +657,7 @@ test('no nav label begins with a preposition', async () => {
     expect(offenders).toEqual([])
 })
 
-// RULEBOOK 40.16: a page declares in `covers` which REGISTRY names it covers, and an overview or
+// RULEBOOK 40.13: a page declares in `covers` which REGISTRY names it covers, and an overview or
 // a reference page declares none. `machines/index` had grown four entries the section's topic pages
 // should have owned, and nothing said so — the coverage tests above are satisfied by a
 // claim from any page, which is exactly what makes the WRONG page's claim invisible.
@@ -958,7 +938,7 @@ test('a counted bench row states the ratio its own two figures make', async () =
 
 // A REFERENCE PAGE THAT RESTATES A SIGNATURE IS A SECOND COPY OF IT, and the check above only
 // asked that the NAME be present — so `Reactive<Stored, Failures>` sat in three reference pages
-// across the whole of D49, which added the slot the two-parameter form was missing. A reader who
+// across the whole change that added the slot the two-parameter form was missing. A reader who
 // opens the reference gets the copy, and the copy is what they write code against.
 //
 // Only the SIGNATURE cell is compared. The description is where a reference page earns its keep,

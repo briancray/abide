@@ -1,12 +1,12 @@
 <script>
-import { props, state } from 'abide'
+import { props, reactive } from 'abide'
 import QueueControl from '#ui/components/QueueControl.abide'
 
 type Props = { name: string }
 
 const { name } = props<Props>()
 // Nothing above holds this key, so it is created right here.
-let queued = state.share('queued', () => state('nothing'))
+let queued = reactive.share('queued', () => reactive('nothing'))
 </script>
 
 <ul class="fields stacked">

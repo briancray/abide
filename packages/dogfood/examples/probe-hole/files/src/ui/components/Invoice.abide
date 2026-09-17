@@ -1,8 +1,8 @@
 <script>
-import { memo } from 'abide'
+import { reactive } from 'abide'
 import { getInvoice } from '#server/rpc/invoices'
 
-const invoice = memo(() => getInvoice({ id: '4021' }))
+const invoice = reactive(() => getInvoice({ id: '4021' }))
 </script>
 
 <ul class="fields stacked">

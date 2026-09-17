@@ -1,15 +1,16 @@
 <script>
-import { memo } from 'abide'
+import { reactive } from 'abide'
 import { applyOrderCount, type OrderCount } from '#shared/regions'
 import { getRegions } from '#server/rpc/regions'
 
-// The answer is an array and every frame after it names an id, so the
-// reshape happens once here rather than per frame downstream.
-const byId = memo(() => getRegions(), {
+const regions = reactive(() => getRegions())
+
+// Reads the rows rather than adopting the call, so a patch lands here.
+const byId = reactive(() => regions, {
     transform: (rows) => new Map(rows.map((row) => [row.id, row])),
 })
 
-const rows = memo(() => [...byId.values()])
+const rows = reactive(() => [...byId.values()])
 
 const FEED: OrderCount[] = [
     { id: 'south', orders: 95 },
@@ -35,5 +36,5 @@ function applyNextFrame() {
 
 <div class="row">
     <button onclick={applyNextFrame}>Apply next frame</button>
-    <span class="status">{byId.pending() ? 'loading…' : ''}</span>
+    <span class="status">{byId.busy() ? 'loading…' : ''}</span>
 </div>

@@ -1,5 +1,5 @@
 {
-    "title": "`channel({ transform })` — a publish refused by name",
+    "title": "`{ transform }` on a channel — a publish refused by name",
     "summary": "The composer holding a message longer than the conversation takes. Press Send, then cut it down and press again.",
     "app": "chat",
     "files": [

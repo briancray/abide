@@ -1,10 +1,9 @@
 <script>
-import { state } from 'abide'
-import { turns } from '#shared/conversations'
+import { reactive } from 'abide'
+import { onboarding } from '#shared/conversations'
 import LastSpoken from '#ui/components/LastSpoken.abide'
 
-const room = turns({ conversation: 'onboarding' })
-const draft = state('How do I rotate an API key?')
+const draft = reactive('How do I rotate an API key?')
 </script>
 
 <LastSpoken/>
@@ -13,7 +12,7 @@ const draft = state('How do I rotate an API key?')
     <label>message
         <input bind:value={draft}>
     </label>
-    <button onclick={() => room.publish({ speaker: 'you', text: draft })}>
+    <button onclick={() => onboarding.publish({ speaker: 'you', text: draft })}>
         Send
     </button>
 </div>

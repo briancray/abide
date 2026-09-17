@@ -1,17 +1,16 @@
 <script>
-import { state } from 'abide'
-import { turns } from '#shared/conversations'
+import { reactive } from 'abide'
+import { onboarding } from '#shared/conversations'
 import { tooLong } from '#shared/failures'
 
-const room = turns({ conversation: 'onboarding' })
-let refusal = state('')
-let draft = state(
+let refusal = reactive('')
+let draft = reactive(
     'Walk me through rotating an API key, revoking the old one, and ' +
         'updating each of the three services that still hold it today.',
 )
 
 function send() {
-    const answer = room.publish({ speaker: 'you', text: draft })
+    const answer = onboarding.publish({ speaker: 'you', text: draft })
     if (!tooLong.is(answer)) {
         refusal = ''
         return
@@ -22,7 +21,9 @@ function send() {
 
 <ul class="fields stacked">
     <li><span>last sent</span>
-        <strong>{room.pending() ? 'nothing sent yet' : room.text}</strong>
+        <strong>
+            {onboarding ? onboarding.text : 'nothing sent yet'}
+        </strong>
     </li>
 </ul>
 

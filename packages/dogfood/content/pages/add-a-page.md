@@ -47,10 +47,10 @@ current route all key on `invoices/[id]` for every invoice rather than on one ad
 
 ```abide #ui/pages/invoices/[id]/page.abide
 <script>
-import { memo, route } from 'abide'
+import { reactive, route } from 'abide'
 import { getInvoice } from '#server/rpc/invoices'
 
-const invoice = memo(() => getInvoice({ id: route.params.id }))
+const invoice = reactive(() => getInvoice({ id: route.params.id }))
 </script>
 
 <h1>Invoice {route.params.id}</h1>

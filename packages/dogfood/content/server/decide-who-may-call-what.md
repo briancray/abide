@@ -60,8 +60,8 @@ async (next, ctx) =>
 
 One spelling covers all three shapes, because a rung returns what the handler returns:
 `return notSignedIn()` refuses, `return cached` answers without running the handler, and
-`return next(ctx)` goes on. A `refuse(401)` still works and is a **throw**, `refuse` being
-declared `never`.
+`return next(ctx)` goes on. `return refuse(401)` refuses the same way, `refuse` handing back its
+`Failed` like any other refusal (17.4).
 
 Two ways out, and they are not the same:
 

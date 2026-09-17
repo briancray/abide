@@ -16,13 +16,13 @@ declares what a page may load, `url` builds an address, and `navigate` goes to o
 
 | Name | Signature | Meaning |
 | --- | --- | --- |
-| `log` | `(...args: unknown[]) => void` | A message on the default channel. |
+| `log` | `(...args: unknown[]) => void` | A message under the default namespace. |
 | `log.info` / `log.warning` / `log.error` / `log.debug` | `(...args: unknown[]) => void` | The four levels. |
-| `log.channel` | `(name: string) => Logger` | A named channel. |
-| `Logger` | `typeof log` | What `log.channel` hands back. |
-| `log.enabled` | `() => boolean` | Whether a gated line on this channel would be written. |
-| `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; channel: string; message: string; trace: string }` | One line, as a value. |
-| `log.records` | `Room<LogRecord>` | The room every line is published to. |
+| `log.named` | `(name: string) => Logger` | A logger under a named namespace. |
+| `Logger` | `typeof log` | What `log.named` hands back. |
+| `log.enabled` | `() => boolean` | Whether a gated line under this namespace would be written. |
+| `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; namespace: string; message: string; trace: string }` | One line, as a value. |
+| `log.records` | `Reactive<LogRecord[], LogRecord, never, LogRecord>` | The channel every line is published to. |
 | `abide:request` | `debug` | One line per request. |
 | `abide:socket` | `debug` | One line per socket event. |
 | `abide:lifecycle` | `debug` `error` | A lifecycle that ran. |
@@ -37,14 +37,16 @@ declares what a page may load, `url` builds an address, and `navigate` goes to o
 | `abide:watch` | `warning` | A `watch` effect or `Disposer` that threw. |
 | `abide:hydrate` / `abide:navigate` | `warning` | The browser lane. |
 
-`log` is a **channel** underneath, which is what makes its records readable the way any room is
-readable: `log.records` is a cursor, so a page showing the last hundred lines subscribes rather
-than polls, and `abide logs` is `abide call` on that same handler.
+`log` publishes into a **channel** underneath, which is what makes its records readable the way
+any channel is readable. `log.records` is an ordinary `reactive` declaring `history`, so a page
+showing the last hundred lines reads `log.records.history(100)` and subscribes rather than polls.
+`abide logs` is a live subscription to that same channel, as `abide connect` makes one: a client
+reading the `GET` over it is subscribed to every line.
 
-### Channels and gating
+### Namespaces and gating
 
-A record carries a channel, defaulting to `APP_NAME`. `DEBUG` gates which channels emit, with
-the same comma-and-wildcard grammar the ecosystem already uses — so a channel nothing selects
+A record carries a namespace, defaulting to `APP_NAME`. `DEBUG` gates which namespaces emit, with
+the same comma-and-wildcard grammar the ecosystem already uses — so a namespace nothing selects
 costs the argument evaluation and nothing else.
 
 ### The two formats

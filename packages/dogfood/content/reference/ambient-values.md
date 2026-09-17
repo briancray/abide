@@ -144,7 +144,7 @@ tracking rules.
 export const getInvoice = GET(invoiceById, {
     middleware: [
         (next, ctx) => {
-            if (!principal.authenticated) return refuse(401)
+            if (!principal.authenticated()) return refuse(401)
             return next(ctx)
         },
     ],

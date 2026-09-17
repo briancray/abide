@@ -1,7 +1,7 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 
-let note = state('Chased <b>twice</b> — no answer')
+let note = reactive('Chased <b>twice</b> — no answer')
 </script>
 
 <label>note

@@ -1,13 +1,13 @@
 <script>
-import { memo } from 'abide'
+import { reactive } from 'abide'
 import { bookOut, getStock } from '#server/rpc/stock'
 
-const east = memo(() => getStock({ warehouse: 'east', sku: 'A-70' }))
-const west = memo(() => getStock({ warehouse: 'west', sku: 'A-70' }))
+const east = reactive(() => getStock({ warehouse: 'east', sku: 'A-70' }))
+const west = reactive(() => getStock({ warehouse: 'west', sku: 'A-70' }))
 
 async function book() {
     await bookOut({ warehouse: 'east', sku: 'A-70' })
-    // A slice of the args space, not a key and not the whole memo.
+    // A slice of the args space, not one key and not every key.
     getStock.refresh({ warehouse: 'east' })
 }
 </script>

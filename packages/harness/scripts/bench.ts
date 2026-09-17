@@ -4,16 +4,16 @@
 // A WORKSPACE SCRIPT AND NOT AN `abide` COMMAND. `abide <cmd>` is governed surface —
 // RULEBOOK 38 and REGISTRY's Commands section — so a bench subcommand would owe a
 // clause, a registry row and a decisions entry, for a tool no app author runs.
-// See docs/DECISIONS.md D110.
+
 //
 // THE NOTE GOES PER ROW, and this is the question stage 5 of the plan manufactured
-// rather than inherited. See docs/DECISIONS.md D112.
+// rather than inherited.
 //
 // WHAT THIS TABLE IS NOW: the rows a BROWSER CANNOT TAKE. Everything a page can
 // measure about itself — nodes moved, nodes created, first paint, time per op — is
 // measured live in the reader's own browser when they open the panel, so a static
 // copy of it here would be a second, staler answer to a question already answered.
-// What is left is what no page can see: a count over the SOURCE. See D118.
+// What is left is what no page can see: a count over the SOURCE.
 //
 // A row is written only where BOTH arms produced a number, and no abide arm RUNS —
 // `compiled/` is one emitted module, not a served page — so a row this cannot

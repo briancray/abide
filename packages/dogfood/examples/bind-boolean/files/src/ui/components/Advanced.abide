@@ -1,8 +1,8 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 
-let subscribed = state(true)
-let showAdvanced = state(false)
+let subscribed = reactive(true)
+let showAdvanced = reactive(false)
 </script>
 
 <label><input type="checkbox" bind:checked={subscribed}> Email me</label>

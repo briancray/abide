@@ -1,12 +1,11 @@
 <script>
-import { memo, state } from 'abide'
+import { reactive } from 'abide'
 import { getStock } from '#server/rpc/stock'
 
-let opened = state(0)
+let opened = reactive(0)
 
-// Re-reading after the ttl has lapsed is what fetches: the lapse
-// itself woke nobody.
-const level = memo(() => {
+// Re-reading after the lapse fetches; the lapse itself woke nobody.
+const level = reactive(() => {
     opened
     return getStock({ warehouse: 'east', sku: 'A-70' })
 })
@@ -14,7 +13,7 @@ const level = memo(() => {
 
 <ul class="fields stacked">
     <li><span>on hand</span>
-        <strong>{level.pending() ? 'counting…' : level.onHand}</strong>
+        <strong>{level.ready() ? level.onHand : 'counting…'}</strong>
     </li>
     <li><span>loads</span><strong>{level.loads}</strong></li>
 </ul>

@@ -138,7 +138,7 @@ helper takes a `ResponseInit`, so a handler that knows its answer is shareable o
 | Default | On | Why |
 | --- | --- | --- |
 | `private, no-store` | a page, an rpc answer, any refusal | a page renders per request and a handler answers as whoever called it. Absent is not neutral: it licenses a shared cache to invent a lifetime for an answer that names who asked |
-| `private, max-age=<the `ttl`>` | a `GET` over a [`global`](../values/load-once-per-set-of-arguments.md) memo | one number, not two — `private` because access is not something a rung can be read for, and nothing at all for `ttl: Infinity`, which no cache can be told |
+| `private, max-age=<the `ttl`>` | a `GET` over a [`global`](../values/load-once-per-set-of-arguments.md) `reactive` | one number, not two — `private` because access is not something a rung can be read for, and nothing at all for `ttl: Infinity`, which no cache can be told |
 | `no-store` | `/__abide/health`, `/__abide/principal` | both describe this process or this caller at this moment. A cached health check is a load balancer being told a drained instance is fine |
 | `public, max-age=31536000, immutable` | the built bundle | a chunk is addressed by its own content hash, so it cannot go stale |
 

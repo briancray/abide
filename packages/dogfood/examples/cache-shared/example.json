@@ -1,5 +1,5 @@
 {
-    "title": "`memo((args) => …)` — identity per set of arguments",
+    "title": "`reactive((args) => …)` — identity per set of arguments",
     "summary": "Two tiles on one dashboard, each on its own range. Put them both on 30d, then send one back to 7d.",
     "app": "dashboard",
     "files": [

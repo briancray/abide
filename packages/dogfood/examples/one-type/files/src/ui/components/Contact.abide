@@ -1,25 +1,23 @@
 <script>
-import { channel, memo, state } from 'abide'
+import { reactive } from 'abide'
 import { getContact } from '#server/rpc/contacts'
 
-const notes = channel({ tail: 20 })
+let draft = reactive('')
 
-let draft = state('')
-
-const words = memo(() => (draft ? draft.split(' ').length : 0))
-const contact = memo(() => getContact({ id: '1' }))
-const room = notes()
+const words = reactive(() => (draft ? draft.split(' ').length : 0))
+const contact = reactive(() => getContact({ id: '1' }))
+const notes = reactive<{ text: string }>()
 </script>
 
 <ul class="fields">
     <li><span>owned</span>
-        <strong>{draft.pending() ? '…' : (draft || '—')}</strong></li>
+        <strong>{draft.ready() ? (draft || '—') : '…'}</strong></li>
     <li><span>derived</span>
-        <strong>{words.pending() ? '…' : words}</strong></li>
+        <strong>{words.ready() ? words : '…'}</strong></li>
     <li><span>loaded</span>
-        <strong>{contact.pending() ? '…' : contact.name}</strong></li>
+        <strong>{contact.ready() ? contact.name : '…'}</strong></li>
     <li><span>pushed</span>
-        <strong>{room.pending() ? '…' : room.text}</strong></li>
+        <strong>{notes.ready() ? notes.text : '…'}</strong></li>
 </ul>
 
 <div class="row">
@@ -27,7 +25,7 @@ const room = notes()
         <input bind:value={draft}>
     </label>
     <button onclick={() => {
-        room.publish({ text: draft })
+        notes.publish({ text: draft })
         draft = ''
     }}>Add</button>
 </div>

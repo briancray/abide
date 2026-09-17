@@ -1,14 +1,14 @@
 // WHAT A CARD CLAIMS, ASSERTED AGAINST THE ARM THAT RUNS IT. The frame renders `vanilla/`
-// (40.19), so the arm has to HOLD the invariant the prose states — a hand-written dependency
+// (40.16), so the arm has to HOLD the invariant the prose states — a hand-written dependency
 // list, a hand-written entry table.
 //
 // AND IT IS NOW THE ONLY PLACE SOME OF THOSE CLAIMS LIVE. The cards used to render their own
 // counters; the bookkeeping that produced them was noise in the source a reader came to read,
-// so it left (40.32). What is left on the page is what the app would show, and the work a card
+// so it left (40.28). What is left on the page is what the app would show, and the work a card
 // claims is asserted HERE rather than displayed — which is where a "does less work" contract
 // belongs anyway, the output being identical either way.
 //
-// The `.abide` source is still a claim of equivalence rather than a run (D40) — this pins the
+// The `.abide` source is still a claim of equivalence rather than a run — this pins the
 // half that executes.
 import { expect, test } from 'bun:test'
 
@@ -306,8 +306,8 @@ test('channel-rooms: each args key is its own room, kept across a switch', async
         'Does the old key keep working?',
     ])
 
-    // A room nothing has published to allocates no entry and reads as unlanded, which
-    // is the readout's 'nothing here yet' rather than the other room's message.
+    // A key nothing has published to lands `undefined` (11.63), which is the readout's
+    // 'nothing here yet' rather than the other room's message.
     click('[data-conversation="billing"]')
     expect([read('#conversation'), read('#last')]).toEqual([
         'billing',
@@ -376,7 +376,7 @@ test('channel-transform: a message over the limit is refused under its own name'
     ])
 })
 
-test('channel-identity: a resend mints no production and keeps the cursor', async () => {
+test('channel-identity: a resend is minted, whatever identity says', async () => {
     await mount('channel-identity', 'chat.js')
     const draft = document.querySelector('#draft') as HTMLInputElement
 
@@ -386,17 +386,16 @@ test('channel-identity: a resend mints no production and keeps the cursor', asyn
         'Resend me the key rotation steps.',
     ])
 
-    // THE CLAIM. The second press is the same message as the one standing, so nothing
-    // is minted and the standing sequence number is what comes back — which is the
-    // half a reader cannot see, the screen being identical either way.
+    // THE CLAIM. The second press is the same turn as the one standing, and a publish
+    // mints a production whatever `identity` says (9.6), so the cursor moves. An arm
+    // that collapsed the repeat reads '1' here with the screen otherwise identical.
     click('#send')
-    expect(read('#cursor')).toBe('1')
+    expect(read('#cursor')).toBe('2')
 
-    // And identity is against the PREVIOUS message alone: a changed one is new.
     draft.value = 'Resend me the billing steps.'
     click('#send')
     expect([read('#cursor'), read('#last')]).toEqual([
-        '2',
+        '3',
         'Resend me the billing steps.',
     ])
 })

@@ -1,17 +1,17 @@
 <script>
-import { memo, state } from 'abide'
+import { reactive } from 'abide'
 import { searchContacts } from '#server/rpc/search'
 
-let query = state('a')
+let query = reactive('a')
 
-const matches = memo(() => searchContacts({ query }))
+const matches = reactive(() => searchContacts({ query }))
 </script>
 
 <div class="row">
     <label>search
         <input bind:value={query}>
     </label>
-    <span class="status">{matches.pending() ? 'searching…' : ''}</span>
+    <span class="status">{matches.busy() ? 'searching…' : ''}</span>
 </div>
 
 <ul>

@@ -3,17 +3,14 @@ title: Check what callers send you
 nav: Schemas
 intent: Reject a malformed body at the boundary, with a type on the other side that matches.
 covers:
-  - state › `schema`
-  - memo › `schema`
-  - memo › `args`
-  - channel › `args`
+  - reactive › `schema`
+  - `args`
   - `Schema<T>`
   - `JsonValue`
   - `Issues<T>`
   - `Paths<T>`
   - `validateJson`
   - `JsonSchema`
-  - channel › `schema`
 examples:
   - packages/dogfood/examples/schema-browser
   - packages/dogfood/examples/schema-issues
@@ -26,8 +23,8 @@ drift between them is silent.
 
 Here the annotation you already wrote **is** the schema. `GET(({ id }: { id: number }) => …)`
 builds the runtime schema for `{ id: number }`, and a caller sending `{ id: "abc" }` gets a 422
-before the handler runs. Where that derivation is not enough, one option pins the shape, at the
-producer rather than at the address.
+before the handler runs. Where that derivation is not enough, an option pins the shape, on the
+value rather than at the address.
 
 ## A derived schema reads `required` off the syntax
 
@@ -41,22 +38,22 @@ defaults, and `Args` itself is optional where the parameter has one.
 | `({ id = 1 } = {})` | `Args` itself optional | `getInvoice()` with a bare URL |
 | no parameter at all | none | `getInvoice()` |
 
-## `schema` is the input, `transform` is the output
+## `args` and `schema` gate what comes in, `transform` shapes what is stored
 
 Deriving from an annotation means the build resolves types, so build time is typecheck time —
 and a schema is only ever as good as the inference that reached it. Where inference **fails**
 the compiler reads on rather than refusing the file, because valid TypeScript has to compile.
 The cost is that an unresolved annotation degrades to a **wider** schema, silently.
 
-That is the trade "the shape is never declared twice" is bought with, and the repair is two
-options at two **positions**. `schema` gates what comes in:
+That is the trade "the shape is never declared twice" is bought with, and the repair is an
+option at each **position**. `args` gates the arguments a keyed value is called with:
 
 ```ts #server/rpc/invoices.ts — excerpt
 import { z } from 'zod'
 
-const invoices = memo(
+const invoices = reactive(
     (args: { lines: Line[] }) => database.invoice.create(args.lines),
-    { schema: z.object({ lines: z.array(lineSchema).min(1) }) },
+    { args: z.object({ lines: z.array(lineSchema).min(1) }) },
 )
 
 export const createInvoice = POST(invoices)
@@ -65,21 +62,21 @@ export const createInvoice = POST(invoices)
 `transform` shapes what gets stored:
 
 ```ts #shared/ledger.ts — excerpt
-const paidIds = memo(() => listInvoices({ year }), {
+const paidIds = reactive(() => listInvoices({ year }), {
     transform: (all) => new Set(all.filter((r) => r.paid).map((r) => r.id)),
 })
 ```
 
 They are not two spellings of one job. `Accepted` and `Stored` already name the two ends, and
 that second one has no validation in it at all. So the **option name** is the discriminant: a
-function in `schema` refuses by throwing, a function in `transform` refuses by returning a
-`Failed`, and neither has to be told from the other.
+function in `schema` or `args` refuses by throwing, a function in `transform` refuses by returning
+a `Failed`, and neither has to be told from the other.
 
-**"Input" means what the producer consumes**, which is one rule read three ways. A state
-and a channel consume a value, so `schema` checks that value. A memo consumes **args** — its body
-takes them — so `schema` on a memo is the argument shape, re-declared over `Args` in
-`MemoOptions`. An unkeyed memo, consuming nothing, cannot spell it at all: a compile error naming
-the overload, not an option that quietly does nothing.
+**Each gate checks one position.** `schema` checks the value: what a write sets, what a publish
+takes, and what a body produced (4.3, 9.8, 11.47). `args` checks the arguments a keyed value is
+called with (11.41), and it only refuses (11.28). A value whose body takes no parameter has no
+arguments, so it cannot spell `args` at all (11.42), rather than carrying an option that quietly
+does nothing.
 
 With no `transform`, `Stored` is `Accepted` and `schema` decides both ends. Nothing declares
 that; it falls out of the types.
@@ -102,26 +99,26 @@ A refused write fills `error()` rather than throwing, and stores nothing — so 
 what was typed while the record keeps what it had. On a primitive the issues are a bare
 `string[]`, there being no path to key them under.
 
-An rpc's handler is a memo in `#server`, so a browser calling it through the generated wrapper
-cannot pre-check — the wrapper carries a method, an address and a description, and nothing else.
-Not an exception; that is where the memo is. Want the same shape checked on both sides and you put
+An rpc's handler is a `reactive` in `#server`, so a browser calling it through the generated
+wrapper cannot pre-check — the wrapper carries a method, an address and a description, and nothing
+else. Not an exception; that is where the value is. Want the same shape checked on both sides and you put
 it in `#shared` and declare it twice — the one duplication this design asks for, and it asks for
 it deliberately.
 
 ## There is no `schemas` on `GET` or `POST`
 
-A shape is a fact about the **value**, the way `ttl` and `tail` are, so it rides in on the `memo`
-that was passed and `RpcOptions` is left describing an address — `description`, `middleware`,
+A shape is a fact about the **value**, the way `ttl` is, so it rides in on the
+`reactive` that was passed and `RpcOptions` is left describing an address — `description`, `middleware`,
 `timeout`, `crossOrigin`, `maxBodySize`.
 
 So `GET(getInvoice)` and `POST(getInvoice)` state the shape once between them, and an in-process
 caller gets the check a wire caller gets. A schema declared at the transport
-is one that **skips itself** every other way the handler is reached — composed inside another
-memo, imported by a second server module — so the shape would hold for your untrusted callers
+is one that **skips itself** every other way the handler is reached — read inside another
+value, imported by a second server module — so the shape would hold for your untrusted callers
 and not for your own code.
 
-`GET(fn)` is still sugar for `GET(memo(fn))`. Write the memo out when you have a schema to
-declare, and not otherwise.
+`GET(fn)` is still sugar for `GET(reactive(fn))`. Write the `reactive` out when you have a gate
+to declare, and not otherwise.
 
 ## `Schema<T>` takes three forms
 
@@ -190,7 +187,7 @@ type JsonValue =
 ```
 
 The bound exists because the canonical wire form of an arguments object is also its **cache
-key**. A value that cannot be serialized cannot be keyed, and a memo that cannot key its
+key**. A value that cannot be serialized cannot be keyed, and a keyed value that cannot key its
 arguments cannot coalesce two callers onto one load.
 
 `GET` and `DELETE` narrow it further, their wire form being URL parameters: flat only, an array
@@ -231,50 +228,57 @@ shape rather than being an untyped string index — a typo in `'lines.0.qty'` is
 
 Read on: [Failures](refuse-a-request-and-say-why.md)
 
-## A schema normalises the value; it does not decide the key
+## `args` refuses; it does not decide the key
 
 {% example schema-key %}
 
-A memo's entry is filed under the arguments **as sent**, and the schema runs after. So a
-normalisation in it changes what the body sees and never which entry it is.
+A keyed value's entry is filed under the arguments **as sent**, and `args` runs after (11.26). It
+refuses and does nothing else (11.28), so a normalisation in it changes neither which entry it is
+nor what the body sees.
 
 The order is forced rather than chosen. A browser has to compute the same key the server does in
-order to find its seeded value, and it cannot run a schema it was never sent. So the key is
-taken before validation. Otherwise every handler with a normalising schema re-issues its call on
+order to find its seeded value, and it cannot run a gate it was never sent. So the key is
+taken before validation. Otherwise every handler with a normalising gate re-issues its call on
 hydration.
 
-On a `channel` the same cost is sharper: two spellings of a room key are **two rooms**, and a
-publisher in one is invisible to a subscriber in the other with nothing warning either. Where
-arguments must collapse, normalise them at the caller or type them so the variation cannot be
-spelled. The schema is the wrong instrument.
+In channels keyed by their args the same cost is sharper: two spellings of a channel key are
+**two channels**, and a publisher in one is invisible to a subscriber in the other with nothing
+warning either. Where arguments must collapse, normalise them at the caller or type them so the
+variation cannot be spelled. The gate is the wrong instrument.
 
-## A channel is the one producer with both
+## A channel gates the message with `schema` and the key with `args`
 
-A room's message is its input, so that is `schema` — the same option a state uses, `Accepted`
-being `Message` here:
+A channel's message is its input, so that is `schema` — the same option a value you write uses,
+`Accepted` being the message here:
 
-```ts #shared/rooms.ts — excerpt
-export const thread = channel({ schema: messageSchema })
-```
-
-It runs on **every** publish, the app's own included, because validity is not a question about who
-is asking. So the `socket` declares who may connect and whether a frame may
-publish at all, and nothing about what a frame contains.
-
-But a channel also has a **room key**, and that is where it parts company with a memo. A memo's
-args *are* its input — the body consumes them — so a memo spells that `schema`. A room's
-key merely picks which room while the message flows, so it keeps a separate `args`:
-
-```ts #shared/rooms.ts — excerpt
-export const thread = channel<Post, { id: string }>({
-    args: z.object({ id: z.string().uuid() }),
+```ts #shared/channels.ts — excerpt
+export const thread = reactive<Post>(undefined, {
+    history: 50,
     schema: messageSchema,
 })
 ```
 
-Two positions, so two options, and this is the only producer with both. Both are derived from
-the type when not provided, the same way a handler's are, and a room key is checked but never
-normalised: two spellings of one key are two rooms.
+It runs on **every** publish, the app's own included, because validity is not a question about who
+is asking. The opening `undefined` lands past it (4.16), so the schema only ever sees a `Post`. So the `socket` declares who may connect and whether a frame may
+publish at all, and nothing about what a frame contains.
+
+A channel keyed by its args also has a **channel key**, and that is the parameter its body
+declares, so it is `args`. The key picks which channel while the message flows:
+
+```ts #shared/channels.ts — excerpt
+export const threads = reactive(
+    (_args: { id: string }): Post | undefined => undefined,
+    {
+        history: 50,
+        args: z.object({ id: z.string().uuid() }),
+        schema: messageSchema,
+    },
+)
+```
+
+Two positions, so two options. Both are derived from the type when not provided, the same way a
+handler's are, and a channel key is checked but never normalised (11.28): two spellings of one key
+are two channels.
 
 Read on: [Sockets](keep-a-room-of-callers-in-sync.md)
 

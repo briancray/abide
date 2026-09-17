@@ -59,7 +59,7 @@ makes `RETRIES=5` a number without anybody writing `Number()` at the read site. 
 cannot be coerced is a start-time failure rather than a `NaN` that reaches arithmetic.
 
 `ConfigDefaults` is **synchronous by contract**. Configuration that needs a network call is not
-configuration; it is a value, and a value has a `memo`.
+configuration; it is a value, and a value can have a body.
 
 Read on: [Derived values](../values/derive-a-value-from-other-values.md)
 
@@ -87,12 +87,13 @@ Read on: [Schemas](../server/check-what-callers-send-you.md) ·
 
 ## `config` is a value, and is read like any other
 
-`config` is an unkeyed `global` memo, which is why it is `config()` rather than an object you
-import: it is one entry for the process, and reading it in a template subscribes.
+`config` is an unkeyed `global` reactive value, which is why it is `config()` rather than an
+object you import: it is one entry for the process, and reading it in a template subscribes.
 
-`config.invalidate()` re-reads the environment and re-runs `onConfig`. That is for a process
-whose environment genuinely changed under it — a rotated secret, a re-issued key — and it is a
-trigger rather than a poll, so nothing pays for the possibility.
+`config.invalidate()` has the next read re-read the environment and re-run `onConfig`, and runs
+nothing itself. That is for a process whose environment genuinely changed under it — a rotated
+secret, a re-issued key — and it is a trigger rather than a poll, so nothing pays for the
+possibility.
 
 `config()` **throws what `onConfig` threw**. A configuration that cannot resolve is not a
 degraded app, and the throw is what stops one starting.

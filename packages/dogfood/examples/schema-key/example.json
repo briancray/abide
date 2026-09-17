@@ -1,5 +1,5 @@
 {
-    "title": "`memo(fn, { schema })` — the schema refuses, the arguments key",
+    "title": "`reactive(fn, { args })` — the gate refuses, the arguments key",
     "summary": "One invoice, spelled two ways. Open the second spelling, then go back to the first.",
     "app": "crm",
     "about": "server",

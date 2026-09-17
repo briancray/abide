@@ -20,7 +20,7 @@ ABIDE_OPENAPI=1 abide start
 
 ## The document is generated from the route table
 
-The document is served from a **memo over the route table**, and it takes no `ttl` — there is
+The document is served from a **`reactive` over the route table**, and it takes no `ttl` — there is
 nothing to go stale against, the route table being what it is derived from. So a handler added
 is an operation published, and there is no regeneration step to forget.
 

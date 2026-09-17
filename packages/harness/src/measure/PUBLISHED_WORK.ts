@@ -2,7 +2,7 @@
 // purpose: `harness/measure` may have no abide in its graph at all (44.1), and abide's
 // published `files` cannot carry a devDependency's types. So the two halves cannot
 // share a declaration, and what keeps them honest is a shape check at the read rather
-// than the type system. See docs/DECISIONS.md D113.
+// than the type system.
 //
 // A leaf — no imports of its own — because the name crosses a seam and both sides read
 // it (CLAUDE.md, "seams and imports"). It is also injected into the browser page as

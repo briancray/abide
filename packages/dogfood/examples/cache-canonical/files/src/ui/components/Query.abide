@@ -1,5 +1,5 @@
 <script>
-import { memo, state } from 'abide'
+import { reactive } from 'abide'
 import { getMetrics } from '#server/rpc/metrics'
 
 const REGIONS = ['north', 'south']
@@ -13,10 +13,10 @@ function spelled(name, region) {
     return { region, range: '7d', compare: undefined }
 }
 
-let spelling = state('range first')
-let region = state('north')
+let spelling = reactive('range first')
+let region = reactive('north')
 
-const metrics = memo(() => getMetrics(spelled(spelling, region)))
+const metrics = reactive(() => getMetrics(spelled(spelling, region)))
 </script>
 
 <ul class="fields stacked">
@@ -35,9 +35,9 @@ const metrics = memo(() => getMetrics(spelled(spelling, region)))
         {/for}
         </div></li>
     <li><span>orders</span>
-        <strong>{metrics.pending() ? '—' : metrics.orders}</strong>
+        <strong>{metrics.ready() ? metrics.orders : '—'}</strong>
     </li>
     <li><span>times computed</span>
-        <strong>{metrics.pending() ? '—' : metrics.computed}</strong>
+        <strong>{metrics.ready() ? metrics.computed : '—'}</strong>
     </li>
 </ul>

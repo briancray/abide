@@ -7,7 +7,7 @@ const OPENING = [
 ]
 
 // THE RING, WRITTEN BY HAND: appended to and trimmed on every
-// publish, so what a reader asks for is capped by the room and not
+// publish, so what a reader asks for is capped by the channel and not
 // by the reader.
 const rooms = new Map()
 

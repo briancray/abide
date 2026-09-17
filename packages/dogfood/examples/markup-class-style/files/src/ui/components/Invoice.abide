@@ -1,9 +1,9 @@
 <script>
-import { memo, state } from 'abide'
+import { reactive } from 'abide'
 
-let daysLate = state(0)
+let daysLate = reactive(0)
 
-const dim = memo(() => (daysLate > 0 ? 1 : 0.45))
+const dim = reactive(() => (daysLate > 0 ? 1 : 0.45))
 </script>
 
 <p class="badge" class:overdue={daysLate > 0} style:opacity={dim}>

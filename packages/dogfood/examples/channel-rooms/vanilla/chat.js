@@ -1,5 +1,5 @@
-// ONE ROOM PER ARGS KEY, WRITTEN BY HAND — the canonical form of
-// the key included, because two spellings of one key are two rooms
+// ONE CHANNEL PER ARGS KEY, WRITTEN BY HAND — the canonical form of
+// the key included, because two spellings of one key are two channels
 // and neither of them is the one the other half of the app is in.
 const rooms = new Map()
 
@@ -37,7 +37,7 @@ const last = document.querySelector('#last')
 const draft = document.querySelector('#draft')
 
 let here = 'onboarding'
-// The room changed, so the old subscription has to go and a new one
+// The channel changed, so the old subscription has to go and a new one
 // has to be taken out — by hand, in the right order, every time.
 let unsubscribe = () => {}
 

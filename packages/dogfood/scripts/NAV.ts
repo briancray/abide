@@ -130,9 +130,6 @@ export const NAV = [
         pages: [
             'reference/index',
             'reference/reactive',
-            'reference/state',
-            'reference/memo',
-            'reference/channel',
             'reference/watch',
             'reference/selections',
             'reference/refusals',

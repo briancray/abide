@@ -1,13 +1,14 @@
 <script>
-import { memo, state } from 'abide'
+import { reactive } from 'abide'
 
-let rate = state('1.09')
+let rate = reactive('1.09')
 
-const converted = memo(() => {
-    const value = Number(rate)
+// Called from the markup, so a throw here fails the render.
+function convert(typed: string) {
+    const value = Number(typed)
     if (!(value > 0)) throw new Error('Rate must be a positive number.')
     return (1240 * value).toFixed(2)
-})
+}
 </script>
 
 <label>rate
@@ -17,7 +18,7 @@ const converted = memo(() => {
 {#try}
     <ul class="fields">
         <li><span>invoice</span><strong>#4310</strong></li>
-        <li><span>converted</span><strong>${converted}</strong></li>
+        <li><span>converted</span><strong>${convert(rate)}</strong></li>
     </ul>
 {:catch problem}
     <p class="status">{problem.message}</p>

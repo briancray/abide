@@ -1,5 +1,5 @@
 // THE WIRE PANEL AND THE NETWORK ARE TWO ARTIFACTS ONCE AN EXAMPLE SERVES ITSELF, and that is
-// the whole cost of 40.20's second arm: while the fixture WAS the answer, an exchange the panel
+// the whole cost of 40.17's second arm: while the fixture WAS the answer, an exchange the panel
 // showed was an exchange that had happened, and now the panel is authored beside routes that
 // answer independently. So the join is checked here — every wire entry dispatched through the
 // arm's own routes, body against body.

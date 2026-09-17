@@ -1,16 +1,14 @@
 ---
 title: Keep the last few values
-nav: History & tail
+nav: History
 intent: A log pane, a chat scrollback, the last n readings — bounded, and cheap to append to.
 covers:
-  - state › `tail`
-  - `s.tail`
-  - `Tail<Stored>`
-  - `Produced`
+  - `history`
+  - `s.history`
+  - `History<Stored>`
   - `for await (… of s)`
   - `s[Symbol.asyncIterator]`
   - `ABIDE_MAX_STREAM_BUFFER_SIZE`
-  - memo › `tail`
 examples:
   - packages/dogfood/examples/tail-window
   - packages/dogfood/examples/tail-cursor
@@ -18,44 +16,46 @@ examples:
 ---
 
 A chat pane wants the last fifty messages. A log viewer wants the last five hundred lines. A
-sensor readout wants the last twenty samples. In each case the value is a stream of things and
+sensor readout wants the last twenty samples. In each case something keeps arriving and
 the page wants a window onto the recent past — not the latest one, and not all of them.
 
-`tail` is that window, and it is a number on the value rather than an array you maintain beside
+`history` is that window, and it is a number on the value rather than an array you maintain beside
 it.
 
-## `tail` decides how far back the value goes
+## `history` decides how far back a value's past goes
 
 {% example tail-window %}
 
 *1 number, 0 arrays* — the ring is appended to and trimmed by the value, and what a reader asks
 for is capped by the value rather than by the reader.
 
-## `tail` defaults to 1, so retention is asked for
+## `history` is an option on every value but a stream
 
-Every `Reactive` retains **one** production by default — the latest, which is a snapshot and
-nothing more. Set `tail` to keep more. Every reactive value takes one.
+Every `Reactive` holds its standing production. With no `history` it retains none before it
+(6.16), so a cursor over it replays that one and goes live (2.5). `history: n` keeps n more beside
+it, and a value you write, a derived value and a keyed value all take it (11.39). A keyed value
+keeps one ring per entry (9.28).
 
-Leave it at the default on a room and a subscriber arriving late replays one message. Leave it
-at the default on a `global` memo fanning one stream out and only the answer in front of you
-survives — the ones before it are gone. That is why `tail: Infinity` is spelled there rather
-than inferred from the body having produced a stream.
+`s.history(n)` is a member of every `Reactive`, so the cursor is spelled the same whatever keeps the
+past. A value adopting another forwards it to the value it adopted (9.15).
+
+A stream keeps its finished runs. A run enters the ring when it **closes**, as the accumulation at
+close (6.17), so `history` means the same thing on one as everywhere else. So does `ttl`: its clock
+starts at that close, and never reaches the run in flight (6.22). A run that failed or
+that a trigger replaced enters nothing (6.20), and a replay ends at the last run that closed
+(6.21). A reader
+arriving mid-run gets the run in flight from its start, which is what a cursor over it does (2.7).
 
 Read on: [Caching](load-once-per-set-of-arguments.md)
 
 ## The unit is the value, not the piece
 
-One rule, reading three ways. `Stored` is the type of it.
+`history` counts `Stored`, and on a channel that is a message (6.3). `{ history: 100 }` keeps a
+hundred past messages beside the latest, whether a `publish` or a `set` produced them.
 
-| The producer | Holds | So `tail(100)` retains |
-| --- | --- | --- |
-| a state — `set` | a value | the last 100 values |
-| a room — `publish` | a message | the last 100 messages |
-| an async-generator body | the accumulation, at close | the last 100 answers |
-
-Which is why a `tail` on a `Reactive<Row[]>` retains a hundred **arrays**, not a hundred rows.
+Which is why `history` on a value of `Row[]` retains a hundred **arrays**, not a hundred rows.
 Pushing into an array is not a production — it is a mutation of one value — so where you want a
-tail over items, **produce the item**:
+past over items, **publish the item**.
 
 A chunk is a piece of one value rather than a past one, so it is not what history is made of. A
 ring of chunks would replay a fragment of one answer and no answer at all. `Produced` is a fourth
@@ -65,72 +65,69 @@ parameter on `Reactive` and defaults to `Stored`, so nothing that is not a strea
 Read on: [Streaming data](../server/send-data-as-it-arrives.md) ·
 [Sockets](../server/keep-a-room-of-callers-in-sync.md)
 
-## `s.tail(n)` replays the ring; a bare cursor goes live
+## `s.history(n)` replays the ring; a bare cursor goes live
 
 {% example tail-cursor %}
 
-`s.tail(n)` is always called, and hands back a `Tail<Stored>` — `Iterable` **and**
+`s.history(n)` is always called, and hands back a `History<Stored>` — `Iterable` **and**
 `AsyncIterable`, with nothing allocated until one of the two is pulled. The synchronous face is
 the snapshot, now; the asynchronous one replays that snapshot and then goes live.
 
 `n` is **replay depth and nothing else** — `min(n, retained)`, defaulting to everything retained.
 It says how far back a reader starts and says nothing about what the reader goes on to accumulate.
-`tail(0)` replays nothing and goes live. Those are two different numbers, and the card has both:
-`tail: 200` on the value bounds what may be replayed, `tail(3)` in the block is where that reader
+`history(0)` replays nothing and goes live. Those are two different numbers, and the card has both:
+`history: 200` on the value bounds what may be replayed, `history(3)` in the block is where that reader
 started.
 
 Both readers on the card see every arrival after they opened, which is the part worth being clear
 about — a bare cursor is not a smaller window onto the past, it is **no** window onto it.
 
 A bare `for await (… of s)` is the **live** cursor. It yields the production in flight from its
-start and then what follows it, and it replays no past value at all. Spell `s.tail(n)` where you
+start and then what follows it, and it replays no past value at all. Spell `s.history(n)` where you
 want the ring first.
 
 The two walk different units. The ring holds past `Stored` values and the bare cursor yields
 `Produced`, which is why `Produced` is a type parameter of its own.
 
-In a template that is the same pair. `{#for await item of source}` over a bare name goes live;
-spell `source.tail(n)` to replay the ring first, and `by` keys it exactly as `{#for}` does —
-a room's default key being the message's own `seq`.
+In a template the cursor is the block's subject. `{#for item of source}` reads the value like
+any name; `{#for item of source.history(n)}` replays the ring and then goes live, and `history(0)` goes
+live without replaying. `by` keys it exactly as over a list — a wired value's default key being
+the production's own `seq` (18.16).
 
 There is no cap on what the **block** then accumulates. A stream painting a hundred thousand rows
 is yours to bound, exactly as a `{#for}` over a hundred thousand items is; conflating the two into
-one number made a chat room's default retention render one message.
+one number made a chat channel's default retention render one message.
 
 Read on: [Lists](../templates/repeat-markup-over-a-list.md) ·
 [Loading states](show-a-value-that-isnt-there-yet.md)
 
-## An undo stack builds on a state's own history
+## An undo stack is history the app keeps
 
 {% example tail-undo %}
 
-A state's productions are its past values, so a `tail` past the default is the history an undo
-stack needs. abide gives you the history and not the stack, because what a stack should coalesce,
-discard and restore differs per app.
+A channel is live state many readers follow. An undo stack is the private past of one value, walked
+by the one reader typing into it, and `history` is not how it is built. The value holds its latest,
+and the past is an array the app pushes into — here from a `watch` over the draft. abide leaves the stack to you, because what a stack should coalesce, discard and restore
+differs per app.
 
 Two things decide how you build it.
 
-A write through a member path copies down that path, and that copy makes replay work at all: each
-retained entry has to be a distinct object, or every restore hands back the value already on
-screen.
+Each entry has to be a distinct object, or every restore hands back the value already on screen.
+A string already is one. A record is one when it is written through a member path, because that
+write copies down the path.
 
-And **an undo is itself a write**, so it appends to the same ring — walk backwards through a ring
-you are also appending to and the second step reads the first one back. So the position lives
-outside the value: snapshot the history when a run begins and move an index over that array,
-which is the `history` and `at` pair above.
+And **an undo is itself a write**, so the `watch` pushes it onto the same array — walk backwards
+through an array you are also appending to and the second step reads the first one back. So the
+position lives over a snapshot: take one when a run begins and move an index over it, which is the
+`run` and `at` pair in `undo.ts`.
 
-Read on: [Values by name](../templates/read-and-write-a-value-by-name.md)
+Read on: [Watching values](do-something-when-a-value-changes.md) ·
+[Values by name](../templates/read-and-write-a-value-by-name.md)
 
-## A mutated value replays nothing
+## A copy per write is the wrong shape for a stream of items
 
 A write through a member path copies down that path and then sets, so the reference moves and
-readers wake. The copy is a distinct object, so `structural` sees a change where mutating in place
-would have shown it none, and a tail becomes worth having. `doc.title = 'Draft'` copies down the
-path, so each of fifty entries is its own object. Mutate in place instead and the ring holds fifty
-references to one value: replaying it replays nothing, with nothing thrown and nothing wrong in
-the markup.
-
-It costs a copy per write, so this is the wrong shape for a stream:
+readers wake. It costs a copy per write, so it is the wrong shape for items arriving one at a time:
 
 ```ts shared
 for (const row of incoming) rows.push(row)   // O(n²) — a copy per row
@@ -138,21 +135,20 @@ for (const row of incoming) rows.push(row)   // O(n²) — a copy per row
 
 Two escapes, and which one is right depends on what you wanted. `rows().push(row)` is the
 unlifted O(1) form — a read hands back the array, and pushing to it plainly wakes nobody. And
-where you wanted a tail over the rows, produce the row: a `Reactive` whose value is the item,
-retained by `tail`.
+where you wanted a past over the rows, publish the row to a value that declares `history`.
 
 Read on: [Values by name](../templates/read-and-write-a-value-by-name.md) ·
 [Patching a list](patch-a-list-from-a-live-feed.md)
 
-## Retention costs nothing that scales with `tail`
+## Retention costs nothing that scales with `history`
 
-Retention is **append-only**: a ring of `tail` entries, a version bump for readers to subscribe
+Retention is **append-only**: a ring of the standing production and `history` more, a version bump for readers to subscribe
 to, and the snapshot materialised on the read that follows.
 
 That shape is the point of the design rather than an implementation note. Rebuilding an
 accumulating value to signal a change — `concat` per chunk — is O(n²) over a stream, so the signal
 is separated from the payload: push into the ring, bump the version, materialise on read. Raising
-`tail` from 50 to 5000 must not make a write dearer, and that is the one timing claim that stays
+`history` from 50 to 5000 does not make a write dearer (6.2), and that is the one timing claim that stays
 honest across substrates, being a ratio between two sizes of the same structure.
 
 `ttl` expiry costs nothing per write either. Entries past it are dropped on the read that follows
@@ -164,14 +160,14 @@ Read on: [Reloading](decide-when-a-value-reloads.md)
 
 ## `ABIDE_MAX_STREAM_BUFFER_SIZE` caps a transcript in memory
 
-`tail` counts productions. The thing that can actually run away is bytes, and one variable caps it
+`history` counts productions. The thing that can actually run away is bytes, and one variable caps it
 wherever a transcript is held:
 
 | | |
 | --- | --- |
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | bytes, default `Infinity` |
 
-It governs both holders of a stream transcript — a seed buffer entry, and a `global` memo's entry
+It governs both holders of a stream transcript — a seed buffer entry, and a `global` keyed value's entry
 fanning one producer out to late readers. One number for one shape, rather than a second variable
 meaning the same thing somewhere else.
 
@@ -187,4 +183,4 @@ Read on: [Configuration](../reference/configuration.md) ·
 
 * [Streaming data](../server/send-data-as-it-arrives.md) — where chunks come from
 * [Sockets](../server/keep-a-room-of-callers-in-sync.md) — where messages come from
-* [Watch a room](../ship/watch-a-room-from-the-terminal.md) — the same cursor from a shell
+* [Watch a channel](../ship/watch-a-room-from-the-terminal.md) — the same cursor from a shell

@@ -1,9 +1,9 @@
 <script>
 import { getSettings } from '#server/rpc/settings'
-import { memo } from 'abide'
+import { reactive } from 'abide'
 
-const ada = memo(() => getSettings({ profile: 'ada' }))
-const grace = memo(() => getSettings({ profile: 'grace' }))
+const ada = reactive(() => getSettings({ profile: 'ada' }))
+const grace = reactive(() => getSettings({ profile: 'grace' }))
 </script>
 
 <ul class="fields stacked">

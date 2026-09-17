@@ -4,13 +4,13 @@ let opened = 0
 </script>
 
 <script>
-import { props, state } from 'abide'
+import { props, reactive } from 'abide'
 
 const { name } = props<{ name: string }>()
 
 opened += 1
 
-let calls = state(0)
+let calls = reactive(0)
 </script>
 
 <li><span>{name}</span>

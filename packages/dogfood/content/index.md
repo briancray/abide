@@ -81,7 +81,7 @@ Read on: [Shipping](ship/index.md) ·
 
 {% lead reference/index %}
 
-Read on: [Reference](reference/index.md) · [Reactive](reference/reactive.md) ·
+Read on: [Reference](reference/index.md) · [`reactive`](reference/reactive.md) ·
 [Transports](reference/transports.md) · [`.abide` files](reference/abide-files.md) ·
 [CLI](reference/cli.md)
 

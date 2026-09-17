@@ -112,3 +112,58 @@ test('a file exporting one thing is named after what it exports', async () => {
     }
     expect(misnamed).toEqual([])
 })
+
+// CLAUDE.md, "documents": the clauses are what stops one rule being decided twice by two sessions
+// that never met, and the join between them and the code is a number in a comment. The docs gate
+// already holds REGISTRY and BRAND to citations that resolve; the framework's own comments were
+// the third citing document and had no gate at all. Four had gone stale unnoticed — three naming
+// a clause that had moved one number, and one naming a section that was never written.
+//
+// WHAT THIS CANNOT CATCH is the whole of an amendment: a citation that still RESOLVES while what
+// it meant moved. That stays a rule rather than a check, and re-reading every hit is what an
+// amendment costs.
+//
+// A MEASUREMENT IS TOLD FROM A CITATION BY ITS UNIT, and that is why every number in these
+// comments carries one. `2.39 -> 1.86 ns` reads as two clause numbers to anything that only sees
+// the digits, so the unit goes on both ends rather than on the last — the alternative is a
+// heuristic over arrows and ranges that is wrong in one direction or the other.
+//
+// `%` IS NOT WORD-FINAL. It was written into the alternation behind a `\b` with the rest,
+// which can never hold after a non-word character — so `0.7% floor` read as a citation of
+// clause 0.7 and this gate caught its own author writing one.
+//
+// THE REVERT: putting `3.19` back on `Keyed.ts:52` reports
+// `src/shared/reactive/Keyed.ts:52: 3.19` against an empty list. Reverting one of the
+// off-by-one citations instead reports NOTHING — `1.7` is a live clause again, carrying a
+// different rule — which is this gate's own blind spot demonstrated on itself.
+const UNIT = /^\s*(?:(?:ns|µs|ms|s|x)\b|%)/
+
+test('every clause a framework comment cites exists', async () => {
+    const rulebook = await Bun.file(
+        new URL('../../../docs/RULEBOOK.md', import.meta.url),
+    ).text()
+    const ids = new Set<string>()
+    for (const paragraph of rulebook.split(/\n\s*\n/)) {
+        const clause = /^(\d+\.\d+)\s/.exec(paragraph.trim())
+        if (clause?.[1]) ids.add(clause[1])
+    }
+    expect(ids.size).toBeGreaterThan(100)
+
+    const dangling: string[] = []
+    for (const { path, text } of await sources(new URL('src/', ABIDE))) {
+        const lines = text.split('\n')
+        for (let index = 0; index < lines.length; index += 1) {
+            const line = lines[index] ?? ''
+            if (!line.trimStart().startsWith('//')) continue
+            for (const cited of line.matchAll(/\b(\d{1,2}\.\d{1,2})\b/g)) {
+                const id = cited[1] ?? ''
+                const after = line.slice(
+                    (cited.index ?? 0) + (cited[0]?.length ?? 0),
+                )
+                if (UNIT.test(after) || ids.has(id)) continue
+                dangling.push(`src/${path}:${index + 1}: ${id}`)
+            }
+        }
+    }
+    expect(dangling).toEqual([])
+})

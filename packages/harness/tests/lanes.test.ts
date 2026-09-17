@@ -15,7 +15,7 @@ test('every lane entry resolves', async () => {
 // `measure` needs nothing, `engine` needs CDP, `server` needs `bun:jsc` — and that is
 // the whole reason the harness is a package. `report` depends on nothing at all and
 // `gate` depends on `bun:test`, so neither is a fourth question; they are named here
-// so the next reader counting entries does not go looking for one. See D101.
+// so the next reader counting entries does not go looking for one.
 test('the two entries that are not lanes resolve too', async () => {
     await expect(import('harness/report')).resolves.toBeDefined()
     await expect(import('harness/gate')).resolves.toBeDefined()

@@ -11,7 +11,7 @@
 //
 // NOT IN THE DOCS NAV. A page in `content/` is governed as documentation — a lead on
 // the main overview, a `covers` line, the voice rules — and none of that is true of
-// an instrument. See docs/DECISIONS.md D119.
+// an instrument.
 
 import { buildDocs } from '../../dogfood/scripts/buildDocs.ts'
 import { countExportedNames } from './countExportedNames.ts'

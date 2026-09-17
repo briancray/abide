@@ -55,7 +55,7 @@ So a document rendered for a client that dropped in the meantime says `true`, an
 client's own first read corrects it. That correction is an ordinary value change, not a
 hydration mismatch: nothing is rebuilt, the text updates where it stands.
 
-## Catch up by invalidating, not refreshing
+## Catch up by refreshing, not invalidating
 
 When the connection comes back, what you want reloaded is whatever the reader is actually
 looking at — not every value the scope is holding.
@@ -73,10 +73,11 @@ entries something is reading and degenerates to a mark for the rest. So a scope 
 hundred catches up the handful a reader is holding and marks the other hundred and ninety-odd,
 which is exactly the line above and makes it the reconnect default.
 
-`invalidate()` is the other choice, for where nothing on screen may move: it drops the same
-caches and leaves every value standing, so the catch-up happens on the next read. It is not a
-cheaper `refresh()` to reach for first — an invalidated entry has nothing left to serve, so a
-`refresh()` behind one drops every reader to its pending branch.
+`invalidate()` is the other choice, for where nothing on screen may move: it runs nothing, sends
+nothing and wakes nobody (7.3, 7.14), and leaves every value standing until the next read (7.17). It
+is not a cheaper `refresh()` to reach for first — the read or the `refresh()` that follows one
+loads over a value marked wrong, which reports `ready()` false (7.8), and every reader guarding on it
+drops to its pending branch.
 
 See [Reloading](../values/decide-when-a-value-reloads.md) for the two in full.
 

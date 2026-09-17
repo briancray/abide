@@ -8,7 +8,7 @@ const PEOPLE: Record<string, { name: string; role: string }> = {
 // A CRM's own audit column, kept here so the example is one file.
 const OPENED = new Map<string, number>()
 
-// ONE PARAMETER, so this is a keyed memo: an entry per args key,
+// ONE PARAMETER, so this is a keyed value: an entry per args key,
 // and the entry is what a caller adopts. It runs once per request
 // that reaches it, which is what makes `opened` say something a
 // count taken on the client could not.

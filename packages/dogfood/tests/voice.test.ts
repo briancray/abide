@@ -90,7 +90,7 @@ test('no page points at another part of itself by position', async () => {
 // place anybody thought to look. Two pages were meanwhile carrying 77 RFC-2119 requirements under
 // their OWN clause numbers, and those numbers collide: their 6.3 was about a global body reading
 // an ambient where RULEBOOK 6.3 is the unit of `tail`. One requirement had no clause behind it at
-// all and lived only there, which is 11.60 now.
+// all and lived only there, which is 11.54 now.
 //
 // Both were in the writing-styles experiment, demonstrating RFC 2119 AS A STYLE, and they were
 // exempted by name for exactly as long as they existed. The experiment is gone and the exemption

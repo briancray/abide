@@ -1,20 +1,21 @@
 <script>
-import { state } from 'abide'
-import { turns } from '#shared/conversations'
+import { reactive } from 'abide'
+import { onboarding } from '#shared/conversations'
 
-const room = turns({ conversation: 'onboarding' })
-let draft = state('Resend me the key rotation steps.')
-let cursor = state(0)
+let draft = reactive('Resend me the key rotation steps.')
+let cursor = reactive(0)
 
 function send() {
-    cursor = room.publish({ speaker: 'you', text: draft })
+    cursor = onboarding.publish({ speaker: 'you', text: draft })
 }
 </script>
 
 <ul class="fields stacked">
     <li><span>resume from</span><strong>{cursor}</strong></li>
     <li><span>last turn</span>
-        <strong>{room.pending() ? 'nothing sent yet' : room.text}</strong>
+        <strong>
+            {onboarding ? onboarding.text : 'nothing sent yet'}
+        </strong>
     </li>
 </ul>
 

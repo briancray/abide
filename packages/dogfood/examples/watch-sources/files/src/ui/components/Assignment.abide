@@ -1,12 +1,11 @@
 <script>
-import { state, watch } from 'abide'
+import { reactive, watch } from 'abide'
 
-let notes = state('Called Tuesday.')
-let owner = state('ada')
-let audited = state('')
+let notes = reactive('Called Tuesday.')
+let owner = reactive('ada')
+let audited = reactive('')
 
-// Reads both, wakes on one. `sources` REPLACES the tracking, so
-// reading the notes plainly here subscribes to nothing.
+// Reads both, wakes on one: `sources` REPLACES the tracking.
 watch([owner], () => {
     audited = `${owner} — ${notes.length} characters of notes`
 })

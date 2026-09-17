@@ -1,10 +1,10 @@
 <script>
-import { route, state, url } from 'abide'
+import { reactive, route, url } from 'abide'
 import { turns } from '#shared/conversations'
 
 const here = route.params.conversation
-const room = turns({ conversation: here })
-const draft = state('Does the old key keep working?')
+const thread = turns({ conversation: here })
+const draft = reactive('Does the old key keep working?')
 </script>
 
 <nav class="switch">
@@ -21,7 +21,7 @@ const draft = state('Does the old key keep working?')
 <ul class="fields stacked">
     <li><span>conversation</span><strong>{here}</strong></li>
     <li><span>last turn</span>
-        <strong>{room.pending() ? 'nothing here yet' : room.text}</strong>
+        <strong>{thread ? thread.text : 'nothing here yet'}</strong>
     </li>
 </ul>
 
@@ -29,7 +29,7 @@ const draft = state('Does the old key keep working?')
     <label>message
         <input bind:value={draft}>
     </label>
-    <button onclick={() => room.publish({ speaker: 'you', text: draft })}>
+    <button onclick={() => thread.publish({ speaker: 'you', text: draft })}>
         Send
     </button>
 </div>

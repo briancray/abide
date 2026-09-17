@@ -1,5 +1,5 @@
 ---
-title: Bind a form to state
+title: Bind a form to a value
 nav: Form binding
 intent: Inputs, checkboxes, radio groups and a details element, two-way with no handler.
 covers:
@@ -9,15 +9,14 @@ covers:
   - `bind:open`
   - `bind:group`
   - `bind:value={{get, set}}`
-  - state › `transform`
 examples:
   - packages/dogfood/examples/bind-text
   - packages/dogfood/examples/bind-boolean
   - packages/dogfood/examples/bind-group
 ---
 
-A form is state you can see. The usual cost of saying so is a handler per field — read the
-event, pull `target.value`, set the state, and remember to seed the input from the state on
+A form is a value you can see. The usual cost of saying so is a handler per field — read the
+event, pull `target.value`, set the value, and remember to seed the input from the value on
 the way back. `bind:` is that pair written once.
 
 ## A text input binds with `bind:value`
@@ -26,13 +25,13 @@ the way back. `bind:` is that pair written once.
 
 *2 lines, 1 direction each* — and no handler between them.
 
-`bind:value` reads the property and writes back on `input` or `change`. The state is the single
+`bind:value` reads the property and writes back on `input` or `change`. The value is the single
 copy — there is no separate form model to keep in step with it, and no submit handler needed to
 find out what the fields hold. A `<textarea>` and a `<select>` take the same binding.
 
 The hand-written arm is a listener **and** a seeding line per field, and the seeding half is the
 one that gets forgotten: the page looks right until something other than the keyboard writes the
-state.
+value.
 
 Read on: [Local state](../values/show-a-value-that-changes.md)
 
@@ -59,7 +58,7 @@ disclosure's open state is somewhere you can read rather than somewhere in the D
 ```
 
 The `{#if}` reads `showAdvanced` like any other value, which is the point of binding it: the
-disclosure is state, so the rest of the page can branch on it.
+disclosure is a value, so the rest of the page can branch on it.
 
 ## A radio group binds to one value, a checkbox set to an array
 
@@ -95,7 +94,7 @@ Read on: [Conditionals](show-markup-conditionally.md) ·
 
 ## `bind:` takes any writable `Reactive`
 
-`bind:` needs somewhere to write. A state name and a member path both qualify; an expression
+`bind:` needs somewhere to write. A value's name and a member path both qualify; an expression
 does not, because `bind:value={price * 2}` has nothing to write back to.
 
 Where the value you want is computed, hand over the pair explicitly:
@@ -104,19 +103,23 @@ Where the value you want is computed, hand over the pair explicitly:
 <input bind:value={{ get: () => cents / 100, set: (v) => cents = v * 100 }}>
 ```
 
-The accessor pair is the general form. Naming a state is the sugar over it.
+The accessor pair is the general form. Naming a value is the sugar over it.
+
+A derived value is writable too, and where its body hands back another `Reactive` the write goes
+through to that one (11.60). So `bind:value` over `reactive(() => users({ id: selected }))` edits
+the shared `users({ id })` entry, and every other reader of that entry sees the edit.
 
 ## A `schema` refuses a value as it is written
 
-A `schema` runs on the way into a state, and a write it refuses is rejected at the boundary
+A `schema` runs on the way into a value, and a write it refuses is rejected at the boundary
 rather than stored and checked later:
 
 ```abide #ui/pages/account/page.abide — excerpt
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 import { z } from 'zod'
 
-const email = state('', { schema: z.string().email() })
+const email = reactive<string>(undefined, { schema: z.string().email() })
 </script>
 
 <input bind:value={email}>
@@ -128,6 +131,9 @@ const email = state('', { schema: z.string().email() })
 `error()` hands back the failure **without throwing**, so a rejected field renders a message
 rather than reaching `{#try}`. A schema refusal is a `ValidationError`, and on a primitive its
 `data` is the list of messages.
+
+The field opens empty. An opening `undefined` lands without passing the schema (4.16), so an
+unfilled field is not a refusal.
 
 **The field is not clobbered while you type.** A refused write does not move the stored value,
 so nothing wakes the read-back side of the binding and the `f` you just typed stays where it is.
@@ -147,16 +153,19 @@ the same name serves a form field and a handler.
 ```ts #shared/failures.ts
 import { refuse } from 'abide'
 
-export const notAnEmail = refuse.typed('NotAnEmail', 422)
+export const notAnEmail = refuse.typed<'NotAnEmail', { value: string }>(
+    'NotAnEmail',
+    422,
+)
 ```
 
 ```abide #ui/pages/account/page.abide — excerpt
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 import { notAnEmail } from '#shared/failures'
 
-const email = state('', {
-    transform: (value) =>
+const email = reactive(undefined, {
+    transform: (value: string) =>
         value.includes('@') ? value : notAnEmail({ value }),
 })
 </script>
@@ -166,6 +175,9 @@ const email = state('', {
     <p class="error">{email.error().data.value} is not an email address.</p>
 {/if}
 ```
+
+No type argument is spelled: the refusal is typed onto `error()` from what the transform hands
+back, and annotating its parameter says what the field takes.
 
 `isError` narrows it by name, and `.data` is typed to what that failure declared — the same two
 calls a page makes on a refused request. That is the reason to reach for it over a schema here:
@@ -208,7 +220,7 @@ Leave the `bind:` off and it does not compile. The marker sits at the call site 
 that is the side giving write access up, so a reader sees it without opening the child, while
 the child declaring it lets the compiler check every caller.
 
-`bind:` needs the same lvalue a native binding does — a state name, a member path, or a
+`bind:` needs the same lvalue a native binding does — a value's name, a member path, or a
 `{get, set}` pair.
 
 Read on: [Components](reuse-a-piece-of-markup.md)

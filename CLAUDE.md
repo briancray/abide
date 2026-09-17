@@ -2,16 +2,14 @@
 
 # documents
 
-four documents carry what has been DECIDED, each answering one question, and a statement in the
-wrong one is the drift they exist to stop. this file is a fifth and it answers a different
-question — how to WORK here. the other four are about the product.
+three documents carry what has been DECIDED, each answering one question, and a statement in the
+wrong one is the drift they exist to stop. this file is a fourth and it answers a different
+question — how to WORK here. the other three are about the product.
 
 * `docs/REGISTRY.md` — every name an app author can write, its signature, one sentence of what it
 IS, and the clauses that govern it. behaviour is cited, never described.
 * `docs/RULEBOOK.md` — every rule, numbered, stated ONCE. anything that needs a rule cites its
 number rather than restating it, because a second copy drifts and only one of them gets fixed.
-* `docs/DECISIONS.md` — every road not taken, naming the alternative it refused and the clauses it
-decided. a reason a MAINTAINER needs; a reason a USER needs is a guide's.
 * `docs/BRAND.md` — positioning, voice, vocabulary, visual identity.
 
 CONVERTING A PAGE TO THE CARD SHAPE is taught by a CONVERTED page, never by a description of one.
@@ -20,27 +18,24 @@ conversion is done and the set is now a RATCHET, so a page arriving in the old s
 own slug and that is the moment somebody notices. A new page is matched against a CONVERTED one —
 any of them, `derive-a-value-from-other-values` being the worked case. The
 clauses say what must hold and a worked page says what it looks like, which is the part sixteen
-clauses across three documents do not carry.
+clauses across two documents do not carry.
 
 BEFORE WRITING A DOCUMENTATION PAGE, read RULEBOOK 40 and BRAND. 40 is the docs system — one
-example per BEHAVIOUR TAUGHT (40.23, 40.24), what a `{% snippet %}` guarantees (40.8-40.12), and
-what a panel earns (40.13, 40.14) —
+example per BEHAVIOUR TAUGHT (40.20, 40.21), what a `{% snippet %}` guarantees (40.6-40.10), and
+what a panel earns (40.11, 40.12) —
 and BRAND is the voice, the vocabulary, and the register of a title against a nav label. both bind
 today, where most of the rulebook describes a design nothing can run yet.
 
 BEFORE DECIDING BEHAVIOUR, grep RULEBOOK for a clause rather than inventing one. deciding new
-behaviour means writing three things: the clause, the registry row it hangs off, and the DECISIONS
-entry wherever an alternative was refused. AMENDING a clause means one more: grep its number across
-`docs/` AND this file, and re-read every hit rather than only the `Assumes:` lines. the gate catches
-a citation that DANGLES — registry, decisions, brand and these working notes each have a test that
-the number still exists — and no test can catch a citation that still RESOLVES while what it meant
-moved, which is the whole of an amendment. a decision resting on a premise the amendment removes
-goes on reading as valid in both documents, nothing contradicting it and only its REASON having
-stopped being true — which is how D3 outlived the monotonicity it was built on for fifty-two
-entries. the framework is not written, so a clause is not something to check code against — what it
-stops is one rule being decided twice, differently, by two sessions that never met.
+behaviour means writing two things: the clause, and the registry row it hangs off. AMENDING a clause
+means one more: grep its number across `docs/` AND this file, and re-read every hit. the gate
+catches a citation that DANGLES — registry, brand and these working notes each have a test that the
+number still exists — and no test can catch a citation that still RESOLVES while what it meant
+moved, which is the whole of an amendment. the framework is not written, so a clause is not
+something to check code against — what it stops is one rule being decided twice, differently, by
+two sessions that never met.
 
-each of the four states its own format rules at the top and `packages/dogfood/tests/rulebook.test.ts`
+each of the three states its own format rules at the top and `packages/dogfood/tests/rulebook.test.ts`
 gates them, in both directions: a rule with no name to hang off, and a name with no rule. a rule
 that turns out to be checkable belongs in a test rather than in prose — here as much as there.
 
@@ -64,25 +59,24 @@ is all there is.
 * maintain a consistent runtime between all builds and environments
 * isomorphism by default — same callable, same name, same *intent* on both sides
 * uses typescript 7 for compiler
-* valid typescript or javascript should always compile — in a `.abide`. RULEBOOK 19.13 is the
-rule and D22 is why it widens rather than refusing
-* a state is read and written BY NAME inside a `.abide` file, and the explicit `x()` / `x.set(v)`
-spelling keeps compiling — the sugar is over it, never instead of it. RULEBOOK 31.1, 31.3 and 31.9,
-and D28 is why a binding holds rather than reads
+* valid typescript or javascript should always compile — in a `.abide`. RULEBOOK 19.12 is the
+rule
+* a reactive value is read and written BY NAME inside a `.abide` file, and the explicit `x()` / `x.set(v)`
+spelling keeps compiling — the sugar is over it, never instead of it. RULEBOOK 31.1, 31.3 and 31.7
 * small and low level client bundle built from compiled .abide
 * prefer UNIFORMITY over a hard-coded exception, even where the uniform variant is inert. an
 option that exists everywhere and does nothing on one producer is one concept; the same option
 withheld from that producer is two — the option, and the exception. an inert variant is
 understood from the invariant it already carries, where an exception has to be taught, is a
 branch in the implementation, and is a case in every debugging session. this is a working bias
-here and a decided one there: D96 is the entry, 18.17 the worked case it withdrew
+here and a decided one there
 * value performance when all other conditions are met
 
 # seams and imports
 
 * a bun workspace: `packages/abide` is the framework, `packages/harness` is the harness everything is tested and measured with, `packages/dogfood` is the documentation app abide is dogfooded on.
 * import across the seams with the `#server` / `#ui` / `#shared`
-* the harness's own split is by DEPENDENCY, and that is the whole reason it is a package rather than a folder inside the framework: `harness/measure` has no abide in its graph at all, which is what lets the hand-written arm of a ratio be timed by the same clock and the same batch sizing as the abide arm. FIVE ENTRIES, THREE LANES: `harness/report` depends on nothing and `harness/gate` depends on `bun:test`, so neither is a lane and neither answers a fourth question — RULEBOOK 44.1 and D101.
+* the harness's own split is by DEPENDENCY, and that is the whole reason it is a package rather than a folder inside the framework: `harness/measure` has no abide in its graph at all, which is what lets the hand-written arm of a ratio be timed by the same clock and the same batch sizing as the abide arm. FIVE ENTRIES, THREE LANES: `harness/report` depends on nothing and `harness/gate` depends on `bun:test`, so neither is a lane and neither answers a fourth question — RULEBOOK 44.1.
 * an export in the `exports` map is public SURFACE, not dead code — a static tool reporting it unused is reporting that the dogfood app does not exercise it, which is a gap in the dogfood, not machinery to delete
 * before adding a helper, grep the sibling seam — the same utility on both sides of `#shared` is the duplication this layout invites. widen the existing one, or lift it to `#shared` when both sides need it; a second implementation is only right when the two seams have genuinely different invariants, and then the comment says which
 * an import EDGE is priced by the module it lands on, never by the name it asks for. a module reached from the client entry's STATIC closure keeps every export ANYTHING in the build uses — bun shakes exports fine for a lone entry and stops once the module is in a shared chunk — so one import that reads as free costs that module's whole union on every page.
@@ -115,7 +109,7 @@ a hot path is anything walked per row, per frame, per node or per chunk. the rul
 
 * an object's shape is FIXED at construction: initialize every field the type declares, `undefined` included, rather than adding one on a later path, and keep an array to one element type. a shape that grows a field conditionally is two hidden classes, and every read downstream of it deoptimizes
 * prefer a class or a plain record to a closure that captures its enclosing scope — a long-lived object built from a closure keeps that whole scope alive for the object's lifetime, so copy the fields it actually needs. no `delete`, no shape mutation, no dynamic property access in a path walked per row
-* never `await` a value that is usually already settled — guard it (`isThenable(v) ? await v : v`); an unconditional await costs a promise wrap and a microtask tick at every call site, and a template slot pays it per row. but a `Reactive` is THENABLE (RULEBOOK 1.5), so wherever one can arrive the guard reads the BRAND first — `isReactive(v)` ahead of `isThenable(v)`, RULEBOOK 1.7 — or the guard written to skip a microtask silently settles a live value to one snapshot instead. the template slot is exactly where both are true at once
+* never `await` a value that is usually already settled — guard it (`isThenable(v) ? await v : v`); an unconditional await costs a promise wrap and a microtask tick at every call site, and a template slot pays it per row. but a `Reactive` is THENABLE (RULEBOOK 1.4), so wherever one can arrive the guard reads the BRAND first — `isReactive(v)` ahead of `isThenable(v)`, RULEBOOK 1.6 — or the guard written to skip a microtask silently settles a live value to one snapshot instead. the template slot is exactly where both are true at once
 * a DOM mutation costs more than the JS that decides it — when a path can compare, key or skip instead of touching a node, that is the cheaper arm even when it adds branches. the claim still needs the ratio: assert NODES MOVED against the vanilla arm, not just ms
 * but NODES MOVED IS A COUNT, NOT A COST, and the two part company at exactly one place: a node with no layout box. moving a COMMENT is 0.11 µs and moving an ELEMENT with its subtree is 2.8 µs — 25x — because only the element is in the reflow, and on a 500-row reorder the reflow is 52% of the op and identical however many markers moved with it. so a marker-elision change worth 998 fewer records measured at +0.053 ms on one run and −0.033 on the next — under the noise floor — and was dropped. when a COUNT is what motivates a change, convert it to a cost before writing any of it: time the mutation APART from the forced reflow, say which kind of node the count is counting, and run it twice — one run cannot tell 0.4% from zero, and the arms swapping places between runs is the answer
 * a layout read (`offsetWidth`, `getBoundingClientRect`, `scrollTop`) after a write in the same path forces the layout the write invalidated — batch the reads before the writes, or hoist the measurement out of the loop entirely. one such read per row is the whole frame
@@ -129,7 +123,7 @@ these fail SILENTLY — the output stays right while the work goes wrong, so a c
 
 * a freshly built wrapper defeats an identity check — when a value is re-wrapped per run (a state envelope, a result record), `oldValue !== value` is always true and every propagation cutoff downstream of it silently stops working
 * the inverse costs too: when a value's IDENTITY is what wakes readers, rebuilding it is how the change gets signalled, and an accumulating value then pays a full copy per write — `concat` per chunk is O(n²) over a stream. separate the signal from the payload: push into a buffer, bump a VERSION for readers to subscribe to, and materialise the snapshot on the read that follows. which of the three variants is right is decided by the read/write ratio — version + lazy snapshot when writes dominate, structural compare that KEEPS the old identity when reads dominate, a cursor when the reader consumes in order
-* a cap on what is REMEMBERED must not become a cost per write — if raising `tail`, a scrollback or a buffer size makes every write dearer, the retention is being rebuilt rather than appended to. assert it: a ratio between two sizes of the same structure, which is the one timing claim that stays honest across substrates
+* a cap on what is REMEMBERED must not become a cost per write — if raising `history`, a scrollback or a buffer size makes every write dearer, the retention is being rebuilt rather than appended to. assert it: a ratio between two sizes of the same structure, which is the one timing claim that stays honest across substrates
 
 # performance and measurement
 

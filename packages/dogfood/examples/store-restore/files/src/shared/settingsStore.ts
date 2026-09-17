@@ -1,12 +1,14 @@
 import type { Store } from 'abide'
 import { readSetting, writeSetting } from '#server/rpc/settings'
 
-// `Store` is `{ get, set }` and there is no way to spell either
-// alone: a persister with no restore is a `watch` under a longer
-// name, and a restore with no persister is the initial value.
+// Both halves or neither: `Store` has no spelling for one alone.
 export function settingsStore<T>(name: string): Store<T | undefined> {
     return {
-        get: () => readSetting({ name }) as Promise<T | undefined>,
+        // Stored as JSON; a setting never written answers `null`, the miss.
+        get: async () => {
+            const stored = await readSetting({ name })
+            return stored == null ? undefined : (JSON.parse(stored) as T)
+        },
         set: (value) => writeSetting({ name, value: JSON.stringify(value) }),
     }
 }

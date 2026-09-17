@@ -52,7 +52,7 @@ same rule a `bind:` write-back is under: a handler runs because something happen
 a value moved, so a read inside one is a read and never a subscription.
 
 It means a handler can read anything it likes without accidentally arranging to be re-run. The
-place that arrangement belongs is a `memo` or a `watch`, where it is what you asked for.
+place that arrangement belongs is a derived value or a `watch`, where it is what you asked for.
 
 Read on: [Derived values](../values/derive-a-value-from-other-values.md)
 

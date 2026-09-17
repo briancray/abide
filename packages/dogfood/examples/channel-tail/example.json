@@ -1,5 +1,5 @@
 {
-    "title": "`channel({ tail })` — how far back the room goes",
+    "title": "`{ history }` on a channel — how far back it goes",
     "summary": "A transcript pane over a conversation already three turns old. Send a fourth and watch the top of it.",
     "app": "chat",
     "files": ["src/shared/conversations.ts", "src/ui/pages/chat/page.abide"],

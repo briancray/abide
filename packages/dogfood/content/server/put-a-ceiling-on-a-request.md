@@ -26,7 +26,7 @@ handler moves it, and there is no reverse-proxy rule to keep in step with either
 | `timeout: 30_000` | milliseconds a call may go without progress, refused at `504` |
 
 Both sit in `RpcOptions`, beside `description`, `middleware` and `crossOrigin`, and both are
-about the address rather than the value — which is what keeps them off the memo. Every
+about the address rather than the value — which is what keeps them off the `reactive`. Every
 signature is in the [Transports](../reference/transports.md) reference.
 
 ## `maxBodySize` is checked before buffering
@@ -87,14 +87,14 @@ Read on: [Config](../app/configure-the-app.md)
 A ceiling protects the server. The caller has its own way out, and it is reader-local:
 
 ```ts browser
-const rows = memo(() =>
+const rows = reactive(() =>
     salesByRegion({ year: 2026 }, { signal: controller.signal }),
 )
 ```
 
 `signal` detaches **this** reader and rejects **this** read. The shared load runs to completion
-for the other readers, and still populates the memo entry when every reader has left — so the
-next reader gets it free. An aborted read never becomes the memo's `error()`.
+for the other readers, and still populates the entry when every reader has left — so the
+next reader gets it free. An aborted read never becomes the value's `error()`.
 
 Read on: [Caching](../values/load-once-per-set-of-arguments.md)
 

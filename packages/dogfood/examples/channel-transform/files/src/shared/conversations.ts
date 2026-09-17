@@ -1,4 +1,4 @@
-import { channel } from 'abide'
+import { reactive } from 'abide'
 import { tooLong } from './failures.ts'
 
 export type Turn = { speaker: string; text: string }
@@ -6,8 +6,9 @@ export type Turn = { speaker: string; text: string }
 const LIMIT = 120
 
 // Runs on every publish, the app's own included.
-export const turns = channel<Turn, { conversation: string }>({
-    transform: (turn) => {
+export const onboarding = reactive(undefined, {
+    history: 50,
+    transform: (turn: Turn) => {
         if (turn.text.length <= LIMIT) return turn
         return tooLong({ length: turn.text.length })
     },

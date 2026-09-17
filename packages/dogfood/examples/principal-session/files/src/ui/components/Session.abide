@@ -1,8 +1,8 @@
 <script>
-import { principal, state } from 'abide'
+import { principal, reactive } from 'abide'
 import { signIn } from '#server/rpc/session'
 
-let email = state('ada@example.com')
+let email = reactive('ada@example.com')
 </script>
 
 <div class="row">

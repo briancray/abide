@@ -1,15 +1,15 @@
 <script>
-import { memo } from 'abide'
+import { reactive } from 'abide'
 import { getPerson } from '#server/rpc/people'
 
-const person = memo(() => getPerson({ id: '42' }))
+const person = reactive(() => getPerson({ id: '42' }))
 
 // Bound straight to the field, so typing IS the write.
-const draft = memo(() => person.name ?? '')
+const draft = reactive(() => person.name)
 
-const status = memo(() => {
-    if (person.pending()) return 'loading…'
-    return person.refreshing() ? 'refreshing…' : ''
+const status = reactive(() => {
+    if (!person.ready()) return 'loading…'
+    return person.busy() ? 'refreshing…' : ''
 })
 </script>
 

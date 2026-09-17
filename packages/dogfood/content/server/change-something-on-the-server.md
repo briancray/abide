@@ -23,11 +23,14 @@ remember to set.
 | `PATCH(handler, options?)` | the same, for a partial change |
 | `DELETE(handler, options?)` | a mutation whose arguments travel in the URL |
 
-Each takes exactly what [`GET`](read-data-without-writing-an-api.md) takes — a memo, a channel,
-or a plain function that becomes one — mounts at the same file-path address, and accepts the
+Each takes exactly what [`GET`](read-data-without-writing-an-api.md) takes — a `reactive`, a channel,
+or a plain function that becomes a `reactive` — mounts at the same file-path address, and accepts the
 same options. The method is the whole per-method difference, and what it changes is retention,
 how the arguments travel, and whether a browser may cache the answer. Every signature is in the
 [Transports](../reference/transports.md) reference.
+
+Handed a channel, a value with no producer, a mutation publishes the call's arguments into it, and
+declaring that handler is what authorises the publish (16.8).
 
 ## Two presses inside one flight are one write
 
@@ -36,7 +39,7 @@ how the arguments travel, and whether a browser may cache the answer. Every sign
 *2 files, 0 in-flight flag* — the arm keeps one entry because the card has one invoice, and a
 page with a list of them keeps a table keyed by the arguments.
 
-A memo handed to a mutation has its `ttl` **defaulted to 0** unless the memo named one. A `ttl`
+A `reactive` handed to a mutation has its `ttl` **defaulted to 0** unless it declared one. A `ttl`
 of 0 coalesces until the response closes and no longer:
 
 | | Result |
@@ -51,13 +54,13 @@ write must not have.
 Read on: [Caching](../values/load-once-per-set-of-arguments.md) ·
 [Failures](refuse-a-request-and-say-why.md)
 
-## A `ttl` on the memo caps a write to once per period
+## A `ttl` on the handler's value caps a write to once per period
 
-Where a write genuinely must not run twice in a period, name the `ttl` on the memo and hand
-that to the method:
+Where a write genuinely must not run twice in a period, declare the `ttl` on the `reactive` and
+hand that to the method:
 
 ```ts #server/rpc/invoices.ts — excerpt
-const sendReminder = memo(({ id }: { id: string }) => mailer.remind(id), {
+const sendReminder = reactive(({ id }: { id: string }) => mailer.remind(id), {
     ttl: 3_600_000,
 })
 
@@ -66,15 +69,15 @@ export const remindAboutInvoice = POST(sendReminder)
 
 One reminder per invoice per hour, whoever asks and however often.
 
-## A memo belongs to exactly one handler
+## A `reactive` belongs to exactly one handler
 
-Handing the same memo to two handlers is a **build error naming both**. It is not a restriction
-so much as a shape that never worked. `GET(user)` and `POST(user)` over one memo either have the
-`POST` quietly stop the `GET` caching, or share one entry table under two freshness rules. Under
-the second, a `POST` populating an entry the `GET`'s 60s keeps fresh serves the second click the
+Handing the same `reactive` to two handlers is a **build error naming both**. It is not a
+restriction so much as a shape that never worked. `GET(user)` and `POST(user)` over one value
+either have the `POST` quietly stop the `GET` caching, or share one entry table under two
+freshness rules. Under the second, a `POST` populating an entry the `GET`'s 60s keeps fresh serves the second click the
 first click's response, and **the write never happens**.
 
-The shapes wanted the repair anyway. A read memo and a write memo have different `Args`.
+The shapes wanted the repair anyway. A read and a write have different `Args`.
 
 ## Arguments travel in the body
 
@@ -147,7 +150,7 @@ Read on: [Form binding](../templates/bind-a-form-to-state.md) ·
 
 The method decides the **ceiling**. A `GET` answer can be made shareable by the handler's own
 `ResponseInit`; a `POST` answer cannot be, whatever it sets, no browser usefully caching one. Its
-only cache is ever the memo's `ttl`.
+only cache is ever the value's `ttl`.
 
 So a `POST` is a legitimate read — for a query too big for a URL — and it costs the browser
 cache to use one. Prefer `GET` where the arguments fit a URL, for the cache on top of what the

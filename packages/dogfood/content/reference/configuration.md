@@ -20,7 +20,7 @@ variable is what a deployment actually has.
 | `PORT` | `number` | The listen port. |
 | `APP_URL` | `string \| null` | The app's public URL. |
 | `NODE_ENV` | `string` | The environment name, verbatim. |
-| `APP_NAME` | `string` | The app's name, and `log`'s default channel. |
+| `APP_NAME` | `string` | The app's name, and `log`'s default namespace. |
 | `APP_VERSION` | `string` | The version beside that name. |
 | `APP_DATA_DIR` | `string` | The platform's per-user data directory. |
 | `ABIDE_PRINCIPAL_SECRET` | `string \| null` | What seals the principal cookie. |
@@ -33,9 +33,9 @@ variable is what a deployment actually has.
 | `ABIDE_LOGS` | `boolean` | Opts in to declaring the `GET` over `log.records`. |
 | `ABIDE_OPENAPI` | `boolean` | Opts in to declaring the OpenAPI address. |
 | `ABIDE_MCP` | `boolean` | Opts in to declaring the MCP address. |
-| `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | The `tail` of `log.records`. |
+| `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | The `history` of `log.records`. |
 | `ABIDE_LOG_FORMAT` | `'tsv' \| 'json' \| null` | The machine log format. |
-| `DEBUG` | `string \| null` | Log-channel gating. |
+| `DEBUG` | `string \| null` | Log-namespace gating. |
 | `NO_COLOR` | `string \| null` | Refuses ansi anywhere. |
 | `FORCE_COLOR` | `string \| null` | Asks for the readable form off a pipe. |
 

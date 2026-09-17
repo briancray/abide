@@ -1,11 +1,11 @@
 <script>
-import { props, state } from 'abide'
+import { props, reactive } from 'abide'
 
 type Props = { name: string }
 
 const { name } = props<Props>()
 // One shelf above holds this key, so this call finds it rather than building.
-let queued = state.share('queued', () => state('nothing'))
+let queued = reactive.share('queued', () => reactive('nothing'))
 </script>
 
 <div class="row">

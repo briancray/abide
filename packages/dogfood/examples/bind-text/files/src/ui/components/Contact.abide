@@ -1,8 +1,8 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 
-let email = state('ada@example.com')
-let plan = state('monthly')
+let email = reactive('ada@example.com')
+let plan = reactive('monthly')
 </script>
 
 <div class="row">

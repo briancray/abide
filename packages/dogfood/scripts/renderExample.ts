@@ -63,7 +63,7 @@ measure()
 //
 // IT IS NOT INSTRUMENTATION. A field here is one the app would ship, and it is now the only
 // count a card carries: a counter kept in the source to be rendered was noise in the code the
-// reader came to read, and the code is what has to be short enough to prove the heading (40.32).
+// reader came to read, and the code is what has to be short enough to prove the heading (40.28).
 const HITS = '{{hits}}'
 
 // A LATENCY IS THE POINT, not a nicety: a fixture that answers in the same tick paints the
@@ -512,10 +512,10 @@ function renderRatio(ratio: string): string {
 // own browser when they ask.
 //
 // There is no authored half any more. A hand-typed 16.8 ms in a results table reads
-// as a result, and four of the five rows here were exactly that. See D118.
+// as a result, and four of the five rows here were exactly that.
 //
-// 40.21 — the instrumentation sits outside the render, which is what this panel IS.
-// 40.13 wants an artifact behind every panel; the artifact is the running arm, which
+// 40.18 — the instrumentation sits outside the render, which is what this panel IS.
+// 40.11 wants an artifact behind every panel; the artifact is the running arm, which
 // `coverage.test.ts` already requires every example to have.
 function renderBench(manifest: Manifest): string {
     let counted = ''
@@ -691,8 +691,8 @@ function renderResult(
     const html = `<!doctype html><meta charset="utf-8">
 <link rel="stylesheet" href="${FONTS}">
 <style>${base}
-body { margin:0; padding:1.5rem; background:var(--paper); color:var(--ink);
-  font:400 1rem/1.5rem var(--sans);
+body { margin:0; padding:1.4rem; background:var(--paper); color:var(--ink);
+  font:400 1rem/1.4rem var(--sans);
   display:flex; flex-direction:column; gap:var(--gap-flow); }
 </style>${arm.markup}
 <script type="application/json" data-fixtures>${data}</script>${NETWORK}${server}${DRIVER}

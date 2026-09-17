@@ -1,10 +1,10 @@
 <script>
-import { memo, state, watch } from 'abide'
+import { reactive, watch } from 'abide'
 
-let received = state(0)
+let received = reactive(0)
 
 // Fires on the first arrival, then at most once per window.
-const shown = memo(() => received, { throttle: 500 })
+const shown = reactive(() => received, { throttle: 500 })
 
 watch(() => {
     const feed = setInterval(() => {

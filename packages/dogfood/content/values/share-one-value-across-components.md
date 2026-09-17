@@ -3,7 +3,7 @@ title: Share one value across components
 nav: Sharing
 intent: Two components far apart in the tree reading the same thing, with no prop threaded between them.
 covers:
-  - `state.share`
+  - `reactive.share`
   - `Shared`
 examples:
   - packages/dogfood/examples/share-agree
@@ -17,22 +17,22 @@ threaded through the list that does not want one.
 
 Where a value really is one thing for the whole app, **reach for a module first**: export the
 value, import it wherever you read it, and you have it typed, with no key, no registry and no
-lifetime of its own to reason about. `state.share` is for the value that is one thing per
+lifetime of its own to reason about. `reactive.share` is for the value that is one thing per
 *subtree* — the case a module cannot reach, because two shelves each want their own.
 
-## The forms of `state.share`
+## The forms of `reactive.share`
 
-`state.share` is get-or-create in the current scope, by key. One call, and the key is a literal.
+`reactive.share` is get-or-create in the current scope, by key. One call, and the key is a literal.
 
 | You write | What you get |
 | --- | --- |
-| `state.share(key, build)` | the value under `key`, built by `build` only if nobody above you had one |
-| `state.share(key, build)` again | the same value, and this call's `build` never runs |
-| `state.share(expression, build)` | a build error — the key is a literal or it is nothing |
+| `reactive.share(key, build)` | the value under `key`, built by `build` only if nobody above you had one |
+| `reactive.share(key, build)` again | the same value, and this call's `build` never runs |
+| `reactive.share(expression, build)` | a build error — the key is a literal or it is nothing |
 
 What comes back is whatever the thunk built, which is an ordinary `Reactive` with no share-shaped
 wrapper on it. `Shared` is the optional registry of key names, and both are in the
-[`state` reference](../reference/state.md).
+[`reactive` reference](../reference/reactive.md).
 
 ## Two components far apart read one value
 
@@ -47,14 +47,14 @@ neither of them anything.
 
 That is the case a prop cannot reach. Where a parent already has the value, hand it down — a plain
 `T` prop is a **live read** of the caller's expression, so `title={track}` follows `track` and the
-child re-renders without being reinstantiated. Reach for `state.share` when the path between the
+child re-renders without being reinstantiated. Reach for `reactive.share` when the path between the
 readers is uninterested, and for a prop when the parent that owns the value is the one rendering
 the reader.
 
 Read on: [Components](../templates/reuse-a-piece-of-markup.md) ·
 [Form binding](../templates/bind-a-form-to-state.md)
 
-## `state.share` hands back the one that won
+## `reactive.share` hands back the one that won
 
 {% example share-winner %}
 
@@ -70,7 +70,7 @@ thunk instead keeps the loser's value from being built at all.
 
 `Shared` is your app's own registry, widened by declaration merging — and an **opt-in tightening**,
 not a precondition. A key it declares is checked against it; a key it does not is inferred from the
-thunk, so `state.share` works before you have written one.
+thunk, so `reactive.share` works before you have written one.
 
 ```ts src/shared/shared.ts — excerpt
 declare module 'abide' {
@@ -82,13 +82,13 @@ declare module 'abide' {
 
 The registry buys one thing: two modules cannot disagree about the value under one name. With the
 key declared, a typo is a compile error and the value type follows from the key. Without one,
-`state.share('scratch', () => state(0))` is a `Reactive<number>` inferred from what you built.
+`reactive.share('scratch', () => reactive(0))` is a `Reactive<number>` inferred from what you built.
 
 A **dynamic key is a build error**, declared or not, and that is deliberate rather than a
-limitation to work around: a `channel`'s args are for a per-room value. It also keeps the set of
-shared keys fixed by the source, so there is no runtime bound to enforce and nothing to refuse.
+limitation to work around: what a dynamic key would reach for is a keyed value, holding one
+entry per args key. It also keeps the set of shared keys fixed by the source, so there is no runtime bound to enforce and nothing to refuse.
 
-Read on: [Rooms](let-anything-publish-and-anything-read.md) ·
+Read on: [Channels](let-anything-publish-and-anything-read.md) ·
 [Sockets](../server/keep-a-room-of-callers-in-sync.md)
 
 ## A shared value lives in the component that created it, and below
@@ -104,14 +104,14 @@ That scoping is what makes a short word safe as a key. A registry keyed process-
 `queued` a name two unrelated parts of an app collide on in silence, and neither side could see
 the collision.
 
-So the scope is the choice. **One per subtree is `state.share`; one for the app is a module**, and
+So the scope is the choice. **One per subtree is `reactive.share`; one for the app is a module**, and
 reaching for a key where a module would have done buys a registry, a literal to keep in step and a
 scope to think about, in exchange for nothing.
 
-A shared value is **never evicted within its scope**. It goes when the scope does and not before.
-A `global` memo entry may be dropped early because it can be rebuilt — that is a cache miss — but
-a shared value cannot be, and dropping one would orphan live readers that go on reading something
-nobody can refresh.
+A shared value is **never evicted within its scope** (10.4). It goes when the scope does and not
+before, because dropping one would orphan live readers that go on reading something nobody can
+refresh. Even a `global` entry, which can be rebuilt, is bounded only by its own `ttl` and by
+`invalidate` (11.35, 11.36).
 
 Read on: [Caching](load-once-per-set-of-arguments.md)
 

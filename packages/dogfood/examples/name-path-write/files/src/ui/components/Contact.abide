@@ -1,7 +1,7 @@
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 
-let contact = state({
+let contact = reactive({
     name: 'Ada Lovelace',
     address: { city: 'London', country: 'UK' },
 })

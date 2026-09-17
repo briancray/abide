@@ -22,9 +22,6 @@ message naming the field rather than a `422` you read back out of a response bod
 same schema the browser wrapper is built from and the same one OpenAPI publishes; there is one
 per handler and the CLI is a reader of it.
 
-`abide logs` is this command on `log.records`, which is the shape worth noticing: a built-in
-that turns out to be an ordinary call is a built-in that cannot drift from the thing it wraps.
-
 Read on: [Schemas](../server/check-what-callers-send-you.md) ·
 [Logging](../app/record-what-happened.md)
 
@@ -53,6 +50,13 @@ route table, and a call is a call. It is for the questions that are one-off by n
 does this record look like, does this handler still refuse that — where writing a script is
 more ceremony than the question deserves.
 
+`abide logs` is the same kind of connection, made to one channel: a live subscription to
+`log.records`, the one `abide connect` makes to any channel (38.10). That is the shape worth
+noticing — a built-in that turns out to be an ordinary subscription cannot drift from the thing it
+reads.
+
+Read on: [Logging](../app/record-what-happened.md)
+
 ## Which app, and with what
 
 `--url`, then `ABIDE_APP_URL`, then the local app. `ABIDE_APP_TOKEN` is the bearer sent with
@@ -67,5 +71,5 @@ Read on: [Tail a deployed app](watch-a-running-app.md) ·
 ## Next
 
 * [Tail a deployed app](watch-a-running-app.md) — the same connection, for logs
-* [Watch a room](watch-a-room-from-the-terminal.md) — the same connection, for a channel
+* [Watch a channel](watch-a-room-from-the-terminal.md) — the same connection, for a channel
 * [CLI](../reference/cli.md) — every command and flag

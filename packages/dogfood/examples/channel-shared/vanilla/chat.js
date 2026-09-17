@@ -1,4 +1,4 @@
-// THE ROOM, WRITTEN BY HAND: a latest message and the list of
+// THE CHANNEL, WRITTEN BY HAND: a latest message and the list of
 // readers to tell about the next one. Nothing else knows that two
 // parts of this page both want it, so both are wired up here.
 const rooms = new Map()

@@ -9,9 +9,9 @@ it answers on — there is no route table to register it in, and no build step t
 
 ```abide #ui/pages/page.abide
 <script>
-import { state } from 'abide'
+import { reactive } from 'abide'
 
-const count = state(0)
+let count = reactive(0)
 </script>
 
 <h1>Clicked {count} times</h1>
@@ -47,7 +47,7 @@ The `<script>` block is the page's setup: ordinary imports, ordinary TypeScript,
 this instance of the page. Everything after it is the markup, and the two share one scope — the
 template resolves names against that script and nothing else.
 
-`import { state } from 'abide'` is a real import. Nothing in a `.abide` file is ambient, so a
+`import { reactive } from 'abide'` is a real import. Nothing in a `.abide` file is ambient, so a
 name in the markup is a name you can follow back to where it came from.
 
 ## `count` is read by name, and written by name
@@ -58,16 +58,16 @@ Inside a `.abide` file, a reactive value is read and written under its own name.
 | --- | --- |
 | `{count}` in the markup | read the current value, and follow it from here on |
 | `count += 1` in a handler | write, and wake everything that read it |
-| `count.pending()` | a probe — the `Reactive` API, on a member call |
+| `count.busy()` | a probe — the `Reactive` API, on a member call |
 
 Naming `count` in an expression **reads** it; the explicit `count()` and `count.set(v)` keep
 compiling everywhere the sugar does, because the sugar is over those forms rather than instead
 of them. A `.ts` file — which has no template around it — writes them out:
 
 ```ts #ui/counters.ts
-import { state } from 'abide'
+import { reactive } from 'abide'
 
-export const count = state(0)
+export const count = reactive(0)
 count.set(count() + 1)
 ```
 
@@ -84,7 +84,7 @@ The same page reaches your database by importing the function that reads it. Any
 from `#server/rpc/**` is callable from a page under the name it was declared with.
 
 ```ts #server/rpc/invoices.ts
-import { GET } from 'abide'
+import { GET } from 'abide/server'
 import { database } from '#server/database'
 
 export const getInvoice = GET(
@@ -95,10 +95,10 @@ export const getInvoice = GET(
 
 ```abide #ui/pages/invoices/[id]/page.abide
 <script>
-import { memo, route } from 'abide'
+import { reactive, route } from 'abide'
 import { getInvoice } from '#server/rpc/invoices'
 
-const invoice = memo(() => getInvoice({ id: route.params.id }))
+const invoice = reactive(() => getInvoice({ id: route.params.id }))
 </script>
 
 <h1>Invoice {invoice.number}</h1>

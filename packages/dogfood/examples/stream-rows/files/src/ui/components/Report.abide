@@ -1,19 +1,19 @@
 <script>
-import { memo, refresh } from 'abide'
+import { reactive, refresh } from 'abide'
 import { salesByRegion } from '#server/rpc/reports'
 
-const rows = memo(() => salesByRegion({ year: 2026 }))
+const rows = reactive(() => salesByRegion({ year: 2026 }))
 </script>
 
 <ul class="fields stacked">
-{#for await region of rows}
+{#for region of rows}
     <li><span>{region.name}</span><strong>{region.total}</strong></li>
 {/for}
 </ul>
 
 <ul class="fields">
     <li><span>regions</span>
-        <strong>{rows.pending() ? '…' : rows.length}</strong></li>
+        <strong>{rows.busy() ? '…' : rows.length}</strong></li>
 </ul>
 
 <div class="row">

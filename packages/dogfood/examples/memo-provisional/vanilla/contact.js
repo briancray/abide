@@ -1,6 +1,6 @@
-// THE GATE, and it is null until the answer lands — which is the
-// whole of what this card is about, because `null?.readOnly` is
-// undefined and undefined is falsy.
+// THE GATE, null until the answer lands. `null?.readOnly` is falsy,
+// so the first button is live for as long as there is no answer —
+// the frame the abide arm paints before `disabled` has a value.
 let viewer = null
 
 function mode(gate) {

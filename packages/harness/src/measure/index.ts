@@ -5,7 +5,7 @@
 // reason harness is a package rather than a folder (CLAUDE.md, "seams and imports").
 //
 // `harness/report` is a FOURTH entry and is not a fourth lane: a lane is a DEPENDENCY
-// partition, and the leaf depends on nothing. See docs/DECISIONS.md D101.
+// partition, and the leaf depends on nothing.
 
 import { type Batched, type BatchSpec, batch } from '../report/index.ts'
 import { install, isArmed } from './install.ts'

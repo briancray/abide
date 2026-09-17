@@ -3,10 +3,12 @@ title: Load once per set of arguments
 nav: Caching
 intent: Two components asking for the same thing should be one load, not two.
 covers:
-  - memo › `Args`
-  - `memo` body, keyed
+  - reactive › `Args`
+  - `reactive` body, keyed
   - `global`
   - `tags`
+  - `k.busy`
+  - `k.ready`
 examples:
   - packages/dogfood/examples/cache-shared
   - packages/dogfood/examples/cache-canonical
@@ -15,7 +17,7 @@ examples:
 
 A tile shows the week's orders. Another below it shows the average. Both need the same seven days,
 neither knows about the other, and the usual repair is to lift the fetch somewhere both can reach
-and thread it back down as a prop. A keyed memo is that repair with nothing lifted: **identity per
+and thread it back down as a prop. A keyed value is that repair with nothing lifted: **identity per
 arguments**.
 
 ## The two forms, and which one caches
@@ -24,17 +26,20 @@ There is a cache at all because the body takes args, and the discriminant is exa
 
 | You write | What you get |
 | --- | --- |
-| `memo(() => …)` | tracked, one value, re-run by what it read |
-| `memo((args) => …)` | **untracked**, one entry per args key, held |
+| `reactive(() => …)` | tracked, one value, re-run by what it read |
+| `reactive((args) => …)` | **untracked**, one entry per args key, held |
 
-A keyed memo does not re-run because something its body read moved — its ways back are `ttl`, an
-explicit `invalidate` or `refresh`, and eviction. The two are different shapes rather than one
-shape with an option, and every signature is in the [`memo` reference](../reference/memo.md).
+A keyed value does not re-run because something its body read moved — its ways back are `ttl`, an
+explicit `invalidate` or `refresh`, and eviction (11.6, 14.4). Its `ttl` is the life of an entry,
+counted from that entry's latest production (11.46, 11.50). The two are different shapes rather
+than one shape with an option, and every signature is in the
+[`reactive` reference](../reference/reactive.md).
 
-Calling it hands back a `Reactive` for that key, so the probes and the triggers are on the result:
-`metricsFor({ range }).pending()`, not `metricsFor.pending()`.
+Calling it hands back a `Reactive` for that key, so a probe on the result asks about that entry:
+`metricsFor({ range }).busy()`. The factory carries `busy` and `ready` too, and
+`metricsFor.busy()` asks about every entry, or about those a partial args matches (13.2, 13.11).
 
-## A memo's cache is one entry per args key
+## A keyed value's cache is one entry per args key
 
 {% example cache-shared %}
 
@@ -76,14 +81,17 @@ transport uses.
 
 One canonicalization rather than two: args that cannot be keyed are exactly args that cannot be
 sent, so both fail in the same place. The key is therefore **structural**, and
-`memo(() => getMetrics({ range }))` builds a fresh object on every run and still lands on the same
+`reactive(() => getMetrics({ range }))` builds a fresh object on every run and still lands on the same
 entry — which is what makes the identity cutoff hold, so a recompute onto a key already held wakes
 nobody and shows no spinner.
 
 Args are always plain args. A reactive value in an argument position **reads**; making the call
-follow that value is the enclosing unkeyed memo's job.
+follow that value is the enclosing derived value's job.
 
-## A memo's cache is request-local on a server, process-local in a browser
+An `args` schema refuses and does nothing else. The key is taken before it runs (11.26), so it never
+moves a call onto another entry (11.28), and the body gets the args the caller sent.
+
+## A keyed value's cache is request-local on a server, process-local in a browser
 
 One scope is one caller on both sides, and only what counts as a caller differs.
 
@@ -107,7 +115,7 @@ on this page shows it, because a card is one browser tab and the thing `global` 
 second caller gets.
 
 It also decides what the answer says about caching. An rpc answer is `private, no-store` by
-default; a `GET` over a global memo answers `private, max-age=<the ttl>` instead, because those
+default; a `GET` over a global keyed value answers `private, max-age=<the ttl>` instead, because those
 are one number and writing it twice in two units is how they come apart.
 
 **The directive stays `private`, and widening it is yours.** `global` guarantees the answer does
@@ -126,40 +134,40 @@ in the `Args` instead, where it keys an entry rather than hiding in one. That re
 `cache-control` be derived rather than trusted: the answer is not about who asked because the shape
 that would make it so does not compile.
 
-And a global memo is bounded by its own `ttl` and the app's `invalidate` and by nothing else. There
+And a global value is bounded by its own `ttl` and the app's `invalidate` and by nothing else. There
 is no byte ceiling and no eviction count: measuring an arbitrary value costs an O(size) walk, and
 an LRU would evict an entry a reader is mid-flight on. `global: true` with `ttl: Infinity` is an
 unbounded cache — unbounded because the app asked for it, the bound being a number the app knows
 and abide does not.
 
-A global memo over a stream fans one producer out to many readers, and the one thing it needs is
-`tail: Infinity` — otherwise a reader arriving mid-stream replays one chunk and goes live, which is
-a truncated answer rather than an error.
+A global value over a stream fans one producer out to many readers, and it needs no retention to do
+it. A reader arriving mid-stream gets the run in flight from its start and then goes live (2.7), and
+a reader leaving does not cancel the producer for the ones that remain (11.40).
 
-Read on: [History & tail](keep-the-last-few-values.md) ·
+Read on: [History](keep-the-last-few-values.md) ·
 [Auth & principal](../app/know-who-is-calling.md) ·
 [Authorization](../server/decide-who-may-call-what.md) ·
 [Response types](../server/answer-with-something-other-than-json.md)
 
-## `tags` invalidate entries across memos
+## `tags` reach entries across keyed values
 
 {% example cache-tags %}
 
-`tags` is the only thing that reaches **across** memos. An entry carries them, and a selection
-matches on them. The function form receives the memo's args, so a tag can name the **row** rather
-than the query — which lets `invalidate({ tags: ['region:north'] })` reach every entry about that
-region without knowing which memos those were. Any other memo declaring the same tag joins the same
-selection, in any file.
+`tags` is the only thing that reaches **across** values. An entry carries them, and a selection
+matches on them. The function form receives the entry's args, so a tag can name the **row** rather
+than the query — which lets `refresh({ tags: ['region:north'] })` reach every entry about that
+region without knowing which values those were. Any other value declaring the same tag joins the
+same selection, in any file.
 
 So one press moves two numbers that came from two different handlers, and the row underneath does
 not move at all: it declares `region:south`, and a selection is as much what it leaves alone.
 
 The hand-written arm is where that costs something. An entry table alone cannot answer "everything
 about north", so the tags are a second index beside it, and every entry has to be added to both or
-a later invalidate quietly misses it.
+a later reload quietly misses it.
 
-A tag is scoped the way a memo is: request-local on a server, process-local in a browser. One
-request can never invalidate another's.
+A tag is scoped the way a keyed value is: request-local on a server, process-local in a browser. One
+request can never reload another's.
 
 Read on: [Reloading](decide-when-a-value-reloads.md) ·
 [Mutations](../server/change-something-on-the-server.md)
@@ -168,4 +176,4 @@ Read on: [Reloading](decide-when-a-value-reloads.md) ·
 
 * [Reloading](decide-when-a-value-reloads.md) — `ttl`, `invalidate`, `refresh` and selections
 * [Throttle & debounce](slow-down-a-value-that-changes-too-fast.md) — capping how often an entry revalidates
-* [Reading data](../server/read-data-without-writing-an-api.md) — `GET` over a memo you named yourself
+* [Reading data](../server/read-data-without-writing-an-api.md) — `GET` over a keyed value you named yourself

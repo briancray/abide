@@ -3,9 +3,8 @@ title: Derive a value from other values
 nav: Derived values
 intent: Compute something from what you already have, and recompute it only when the inputs move.
 covers:
-  - `memo`
-  - `Memo`
-  - `memo` body, unkeyed
+  - `Keyed`
+  - `reactive` body, unkeyed
 examples:
   - packages/dogfood/examples/memo-tracked
   - packages/dogfood/examples/memo-adoption
@@ -15,23 +14,24 @@ examples:
   - packages/dogfood/examples/memo-provisional
 ---
 
-Everything on this page is `memo`: a value computed from other values, which recomputes when they
-move and not otherwise. You write the computation once, and what it read re-runs it.
+Everything on this page is `reactive` given a body: a value computed from other values, which
+recomputes when they move and not otherwise. You write the computation once, and what it read
+re-runs it.
 
-## The two forms of `memo`
+## The two body forms of `reactive`
 
-`memo` is one name with two, and the body's parameter picks between them.
+A body comes in two forms, and its parameter picks between them.
 
 | You write | You get |
 | --- | --- |
-| `memo(() => …)` | a `Reactive` — **tracked**, recomputing when what it read changes |
-| `memo((args) => …)` | a `Memo` — a factory, **untracked**, one entry per args key |
+| `reactive(() => …)` | a `Reactive` — **tracked**, recomputing when what it read changes |
+| `reactive((args) => …)` | a `Keyed` — a factory, **untracked**, one entry per args key |
 
-Both take `schema`, `store`, `global`, `tags`, `throttle` and `debounce`, and both hand back
-something a page reads by name. Every signature and every member is in the
-[`memo` reference](../reference/memo.md).
+Both take `schema`, `transform`, `store`, `history`, `global`, `tags`, `throttle` and `debounce`,
+and both hand back something a page reads by name. Every signature and every member is in the
+[`reactive` reference](../reference/reactive.md).
 
-## A memo re-runs when what its body read changes
+## A derived value re-runs when what its body read changes
 
 {% example memo-tracked %}
 
@@ -42,17 +42,18 @@ Whatever the body **read** on its last run is the whole dependency graph. Readin
 the graph is discovered rather than declared, and it can change from one run to the next without
 anything being kept in step.
 
-## An unkeyed memo is a `Reactive`, not a wrapper
+## A derived value is a `Reactive`, not a wrapper
 
-An unkeyed memo has no members of its own, so every spelling on it is the one a `state` gets:
+A derived value has no members of its own, so every spelling on it is the one a value you write
+gets:
 
-| You write | On a `state` | On an unkeyed `memo` |
+| You write | On a value you write | On a derived value |
 | --- | --- | --- |
 | a read | `{total}` | `{total}` |
-| a probe | `contact.pending()` | `contact.pending()` |
+| a probe | `contact.busy()` | `contact.busy()` |
 | a write | `total = 0` | `total = 0` |
 
-There is one `set` in the design and it is `Reactive`'s, so writing to an unkeyed memo is the
+There is one `set` in the design and it is `Reactive`'s, so writing to a derived value is the
 member the type already declares.
 
 ## Make a call re-run when its arguments change
@@ -60,17 +61,19 @@ member the type already declares.
 {% example memo-adoption %}
 
 A `<script>` setup body is untracked, so the call written bare registers nothing and never follows
-`id`. Wrapping it in a memo is the only spelling that does, and that wrapper is compulsory rather
+`id`. Wrapping it in a body is the only spelling that does, and that wrapper is compulsory rather
 than a matter of taste.
 
 It costs nothing, and that is **adoption**. A body returning another `Reactive` is adopted
-rather than stored: the outer subscribes to the inner, mirrors its productions into its own ring,
-and forwards its probes and triggers. So the reads reach the record rather than a box to be opened
-first, and `pending` belongs to the load. A wrapper that stored the call would settle the moment
-its body returned, and its `pending` would read false for the whole of the load it wraps.
+rather than stored: the outer subscribes to the inner and mirrors its productions into its own
+ring. Every probe forwards from the adopted value, `error()` included (11.51), and a trigger on the
+outer reaches the adopted one (11.52). So the reads reach the record rather than a box to be opened
+first, and `busy` belongs to the load. A wrapper that stored the call would settle the moment
+its body returned, and its `busy` would read false for the whole of the load it wraps.
 
-`transform` runs after that adoption rather than instead of it, on the settled payload, so a
-reshape keeps the load rather than reading it — see
+`transform` runs after that adoption rather than instead of it, on the settled payload (11.14). A
+write does not stop at the outer value, though: it reaches the one adopted (11.60), so a reshape you
+mean to patch reads the load rather than adopting it — see
 [Patching a list](patch-a-list-from-a-live-feed.md).
 
 Adoption is an identity cutoff too: an args key that hits a live entry adopts synchronously.
@@ -80,35 +83,39 @@ record's own count says so.
 Read on: [Reading data](../server/read-data-without-writing-an-api.md) ·
 [Caching](load-once-per-set-of-arguments.md)
 
-## A write to a memo stands until the next recompute
+## A write to a derived value stands until the next recompute
 
 {% example memo-write %}
 
-A memo is writable, and a write stands until the next recompute clobbers it. On an unkeyed memo
-that means it survives until something the body read moves — one primitive rather than a state
-beside the memo and an effect keeping the two in step.
+A derived value is writable, and a write stands until the next recompute clobbers it. That means
+it survives until something the body read moves — one primitive rather than a second value beside
+it and an effect keeping the two in step.
 
 That is also the trade. The reload is a new answer even where the fields are identical, because
 the cutoff compares identity, and the handler builds a record per call.
 
-There is no warning on that write, and there could not be a useful one: `memo(() =>
-structuredClone(upstream))` and `memo(() => a + b)` are indistinguishable to a compiler, so a
+That is a body computing its value. One handing back a `Reactive` passes the write through to the
+value it adopted instead (11.60).
+
+There is no warning on that write, and there could not be a useful one: `reactive(() =>
+structuredClone(upstream))` and `reactive(() => a + b)` are indistinguishable to a compiler, so a
 warning would fire hardest on the good pattern.
 
-A write of a settled value is not a load — `success()` stays true, `refreshing()` stays false. A
+A write of a settled value is not a load — `ready()` stays true and `busy()` never moves. A
 write of an unsettled one **is** a load and moves the probes the way any load does.
 
-## A keyed memo holds one entry per set of arguments
+## A keyed value holds one entry per set of arguments
 
 {% example memo-keyed %}
 
 Every keystroke is a key, so backspacing lands on an entry already held: nothing is asked for
-and `pending` never gets a moment to be true. The factory does not cap the load. Every word not
-typed before is a request of its own, and `throttle` caps them. A `Memo` is `(args) => Reactive`
-with `invalidate` and `refresh` on it as well — the factory holds every key, and so it is the
-only thing with an args space to narrow.
-The probes are on the result alone: `searchContacts({ query }).pending()`, and there is no
-`searchContacts.pending()` to reach for.
+and `busy` never gets a moment to be true. The factory does not cap the load. Every word not
+typed before is a request of its own, and `throttle` caps them. A `Keyed` is `(args) => Reactive`
+with `busy`, `ready`, `invalidate` and `refresh` on it as well — the factory holds every key, and
+so it is the only thing with an args space to narrow. `searchContacts({ query }).busy()` asks about
+one entry, and `searchContacts.busy()` about every entry or those a partial args matches (13.2).
+
+An entry does not recompute when something its body read moves (11.6, 14.4).
 
 Read on: [Caching](load-once-per-set-of-arguments.md) ·
 [Throttle & debounce](slow-down-a-value-that-changes-too-fast.md) ·
@@ -128,36 +135,45 @@ Two repairs, and hoisting the read is also the faster shape: move it above the `
 
 Read on: [Reloading](decide-when-a-value-reloads.md)
 
-## A branch on a value that has not landed takes the wrong arm
+## A branch on a value that has not landed paints nothing yet
 
 {% example memo-provisional %}
 
-A read that has not landed is `undefined`, and `undefined` is falsy, so a body branching on one
-takes its `else`. The property access short-circuits, so `viewer.readOnly` is `undefined` rather
-than a `TypeError`. You write no `?.`. Whether that is the harmless arm depends on which way you
-wrote the condition:
+The body never takes the wrong arm. Reading `viewer` before it lands throws `NotLanded`, which
+abandons the run (2.13), and the body runs again when the gate lands (2.14). The abandoned run is
+**provisional** and mints no production (11.53): nothing enters the ring, no `transform` sees it,
+no `store` is written, and no reader is served. You write no `?.`, because nothing past the read
+runs.
 
-{% snippet memo-provisional src/ui/components/Contact.abide const mode %}
+The hole is where the wait shows. `mode === 'locked'` throws the same way, and an abandoned
+expression leaves what it last rendered in place (32.25). On the first frame that is no `disabled`
+at all, so the top `Save` is live until the answer arrives.
 
-The compiler **warns** and names the read, as it does for a read after an `await`. The warning
-cannot promise completeness, a body calling a helper that branches being out of its reach — so
-the framework guarantees the other half instead. A run that read an unlanded value is
-**provisional** and mints no production: nothing enters the ring, no `transform` sees it, no
-`store` is written, and no reader is served. When the value lands, the run that reads nothing
-unlanded is the first real production.
+Only you know which answer is safe before there is one, so say it with the probe:
 
-The call still went out, and only you can stop that, because only you know which read is a
-**gate** and which is a **payload**. Settle the gate before branching on it:
+{% snippet memo-provisional src/ui/components/Contact.abide <button disabled={!mode %}
 
-{% snippet memo-provisional src/ui/components/Contact.abide const guarded %}
-
-Locked is the answer until the gate says otherwise, so the second arm's `Save` is dead on the
-first frame rather than live for one.
+Locked is the answer until the gate says otherwise, so the second `Save` is dead on the first frame
+rather than live for one.
 
 Read on: [Loading states](show-a-value-that-isnt-there-yet.md)
+
+## A read in a condition makes the body re-subscribe
+
+A body is tracked by the ORDER of the reads it makes, which is what keeps a recompute to a
+pointer compare per source. `flag() ? one() : two()` reads a different second source every time
+the flag moves, so the match fails at the flag, everything after it is detached, and both sources
+are subscribed again — per recompute, for as long as the value lives.
+
+The compiler **warns** and names the read (14.15). Two repairs, and both are the same move: read
+the values above the branch so the order is fixed, or give each arm its own value and branch over
+the two. A `{#if}` in markup is untouched — a block binds each read in its subject once for the
+body, so the order there cannot alternate.
+
+Read on: [Watching values](do-something-when-a-value-changes.md)
 
 ## Next
 
 * [Caching](load-once-per-set-of-arguments.md) — one entry per set of arguments
 * [Throttle & debounce](slow-down-a-value-that-changes-too-fast.md) — when the inputs move too fast
-* [Watching values](do-something-when-a-value-changes.md) — for effects, where a memo is for values
+* [Watching values](do-something-when-a-value-changes.md) — for effects, where a body is for values

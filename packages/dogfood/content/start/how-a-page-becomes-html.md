@@ -93,8 +93,8 @@ Read on: [Head & metadata](../pages/set-the-title-and-social-preview.md) ·
 
 ## 3. The render starts
 
-Rendering a page runs its setup: the `<script>` blocks, the `state` calls, the `memo`
-bodies the markup reads. Each read that needs the server starts its work immediately, so the
+Rendering a page runs its setup: the `<script>` blocks, the `reactive` calls, the bodies
+the markup reads. Each read that needs the server starts its work immediately, so the
 loads on a page are in flight together rather than in the order the markup happens to mention
 them.
 
@@ -108,10 +108,10 @@ a **sink**, and the hole fills when the value lands. The markup after it keeps g
 
 ```abide #ui/pages/invoices/[id]/page.abide
 <script>
-import { memo, route } from 'abide'
+import { reactive, route } from 'abide'
 import { getInvoice } from '#server/rpc/invoices'
 
-const invoice = memo(() => getInvoice({ id: route.params.id }))
+const invoice = reactive(() => getInvoice({ id: route.params.id }))
 </script>
 
 <h1>Invoice {invoice.number}</h1>
@@ -126,20 +126,11 @@ Waiting is the opt-in, and `await` asks for it:
 | --- | --- |
 | `{invoice.total}` | flushes now, fills later |
 | `{await invoice.total}` | holds until the value lands |
-| `{#await invoice then { total }}` | holds, the same way |
-| `{#await invoice}{:then { total }}` | flushes now, with a pending body to swap |
+| `{#if invoice.ready()}` | flushes now, with the `{:else}` to swap |
 
 `await` governs the expression, not the name. `{await invoice}` holds for the whole row,
 `{await invoice.total}` holds for the one field, and `{await a.x + b.y}` holds for both values —
 every reactive read under an `await` blocks, so there is no form of it to learn separately.
-
-Where `then` sits decides the `{#await}` block. On the opening tag it is the blocking
-form, and it mounts once with a value. As a `{:then}` branch it is not: the pending body goes out
-now and is swapped for the branch when the value lands.
-
-A `then` takes a name or a pattern, and both bind the **resolved value** — `then row` names the
-whole invoice, `then { total }` takes the one field off it. The names stay live, so a
-reload updates the body rather than rebuilding it.
 
 Read on: [Streaming HTML](../pages/send-the-page-before-the-data-lands.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md)
@@ -177,11 +168,11 @@ and pays the delay to first byte deliberately.
 ## 6. The browser takes over
 
 Markers and the bundle. Not a serialized tree to diff, and not a copy of your data in the
-document — the client re-runs the same setup the server ran: every `<script>`, every `state`,
-every `memo` body, again.
+document — the client re-runs the same setup the server ran: every `<script>`, every
+`reactive` call, every body, again.
 
-That sounds like paying twice, and for the loads it is not. `memo(() => getInvoice(…))` runs a
-second time in the browser and makes the same call — one the browser already issued before the
+That sounds like paying twice, and for the loads it is not. `reactive(() => getInvoice(…))` runs
+a second time in the browser and makes the same call — one the browser already issued before the
 bundle loaded. The render **buffered what it fetched**, so that call is answered from the buffer
 rather than from the database. One code path on both sides.
 
@@ -195,7 +186,7 @@ nothing again.
 Binding happens against the nodes that are already there. A marker whose content does not match
 rebuilds its own block, not the page.
 
-**A `memo` body that is expensive and is not a load is genuinely paid twice** — there is nothing
+**A body that is expensive and is not a load is genuinely paid twice** — there is nothing
 to seed for a pure computation. That is the case that belongs behind a handler, where it runs on
 the server and arrives as data.
 
