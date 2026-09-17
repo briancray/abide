@@ -3,8 +3,11 @@
 
 export type Attribute = {
     name: string
-    // Static text. A reactive or interpolated attribute is 32.4 and is not parsed yet.
+    // The literal text, or the expression source where `expression` is true.
     value: string
+    // `attr={expr}` rather than `attr="text"`. The field is always present rather than added
+    // on the expression path, so the record has one shape.
+    expression: boolean
 }
 
 export type TemplateNode =

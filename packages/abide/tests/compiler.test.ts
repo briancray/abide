@@ -98,13 +98,20 @@ test('a static page emits no client runtime import', () => {
     const emitted = compileFile(PAGE)
     expect(emitted).not.toContain('abide/runtime')
     expect(emitted).toContain("from 'abide/server'")
+    // And a page with no slot at all imports nothing: an emitted module carrying an import
+    // nothing calls is a name an app's own tooling reports as unused, in a file nobody wrote.
+    expect(compileFile('<h1>static</h1>')).not.toContain('import')
 })
 
 // CLAUDE.md, "seams and imports", and the comment in `src/server/index.ts`: the compiler is not
 // reachable through the public server specifier.
 test('the compiler is not reachable from the server seam', async () => {
     const server = await import('#server')
-    expect(Object.keys(server).sort()).toEqual(['escapeText', 'render'])
+    expect(Object.keys(server).sort()).toEqual([
+        'escapeAttribute',
+        'escapeText',
+        'render',
+    ])
 })
 
 const temporary: string[] = []
@@ -137,7 +144,10 @@ test('a compiled page renders as bytes into a shell', async () => {
     expect(out.indexOf('<title>abide</title>')).toBeLessThan(
         out.indexOf('</head>'),
     )
-    expect(out).toContain('<h1 class="title">abide</h1>')
+    // 41.10 — a body slot is wrapped in the markers the client finds it by. A HEAD slot is not:
+    // nothing hydrates it, so it carries no marker and the client counts none there.
+    expect(out).toContain('<h1 class="title"><!--a-->abide<!--/a--></h1>')
+    expect(out).toContain('<title>abide</title>')
     // The escape is asserted on the RENDERED document, not on the emitted source: the
     // mechanism is what reaches a browser, and a grep for `escapeText(` passes against a
     // module that does not compile.

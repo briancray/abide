@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs' // bun exposes no sync existence check of i
 import { dirname } from 'node:path' // bun exposes no path helpers of its own
 import { parseArgs } from 'node:util' // bun exposes no argv parser of its own yet
 
-import { compileFile, parseAbide } from '#compiler'
+import { compileFile, emitClient, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 
 const USAGE = `abide <command>
@@ -40,6 +40,16 @@ async function build(root: string, out: string): Promise<number> {
             const file = parseAbide(text)
             const reactive = await session?.reactiveNames(source, file)
             await Bun.write(target, compileFile(text, reactive))
+
+            // The client module is emitted only where there is something to hydrate. A static
+            // page has no `.client.ts` beside it, which is what makes "this page ships no
+            // runtime" a fact about the build rather than a claim about the bundler.
+            const client = emitClient(file, reactive)
+            if (client !== '')
+                await Bun.write(
+                    `${out}/${relative.replace(/\.abide$/, '.client.ts')}`,
+                    client,
+                )
         }
     } finally {
         session?.close()

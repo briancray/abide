@@ -6,5 +6,5 @@
 // this module is public surface, so a compiler under it is one `export *` from being an app's
 // dependency. `packages/abide/tests/compiler.test.ts` holds that apart.
 
-export { escapeText } from './escapeText.ts'
+export { escapeAttribute, escapeText } from './escapeText.ts'
 export { type Component, render, type Shell } from './render.ts'

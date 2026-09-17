@@ -26,3 +26,11 @@ export function escapeText(value: unknown): string {
     }
     return out
 }
+
+// The same rewrite for an attribute value, plus the quote that would end it. A separate function
+// rather than a flag: the flag would be read on every slot to answer a question the call site
+// already knows.
+export function escapeAttribute(value: unknown): string {
+    const text = escapeText(value)
+    return text.includes('"') ? text.replaceAll('"', '&quot;') : text
+}

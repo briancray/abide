@@ -176,10 +176,24 @@ function readTag(
         const attrName = source.slice(attrStart, at)
 
         if (source[at] !== '=') {
-            attributes.push({ name: attrName, value: '' })
+            attributes.push({ name: attrName, value: '', expression: false })
             continue
         }
         at += 1
+
+        // `attr={expr}` — the braces are found the same way a slot's are, so `onclick={f('}')}`
+        // ends where it reads as ending.
+        if (source[at] === '{') {
+            const close = readExpression(source, at)
+            attributes.push({
+                name: attrName,
+                value: source.slice(at + 1, close).trim(),
+                expression: true,
+            })
+            at = close + 1
+            continue
+        }
+
         const quote = source[at]
         if (quote === '"' || quote === "'") {
             const close = source.indexOf(quote, at + 1)
@@ -193,6 +207,7 @@ function readTag(
             attributes.push({
                 name: attrName,
                 value: source.slice(at + 1, close),
+                expression: false,
             })
             at = close + 1
             continue
@@ -200,7 +215,11 @@ function readTag(
         const valueStart = at
         while (at < source.length && /[^\s>]/.test(source[at] as string))
             at += 1
-        attributes.push({ name: attrName, value: source.slice(valueStart, at) })
+        attributes.push({
+            name: attrName,
+            value: source.slice(valueStart, at),
+            expression: false,
+        })
     }
     return { name, attributes, selfClosing: false, end: at }
 }
