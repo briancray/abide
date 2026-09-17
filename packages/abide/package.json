@@ -19,7 +19,9 @@
         "#ui": "./src/ui/index.ts",
         "#ui/*": "./src/ui/*",
         "#server": "./src/server/index.ts",
-        "#server/*": "./src/server/*"
+        "#server/*": "./src/server/*",
+        "#compiler": "./src/compiler/index.ts",
+        "#compiler/*": "./src/compiler/*"
     },
     "scripts": {
         "typecheck": "tsc -p tsconfig.json"
