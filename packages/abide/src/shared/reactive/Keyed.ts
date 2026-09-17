@@ -14,11 +14,11 @@ import { canonicalKey } from './canonicalKey.ts'
 import { armTimer } from './Expiry.ts'
 import { NotLanded } from './NotLanded.ts'
 import {
+    abandonDeferred,
     createReactive,
     isStreamBody,
     type Reactive,
     type ReactiveOptions,
-    abandonDeferred,
     startDeferred,
     untag,
 } from './Reactive.ts'
@@ -284,7 +284,10 @@ export function createKeyed<
     const starts =
         throttle === undefined && debounce === undefined
             ? null
-            : new StartWindow(throttle !== undefined, (throttle ?? debounce) as number)
+            : new StartWindow(
+                  throttle !== undefined,
+                  (throttle ?? debounce) as number,
+              )
     const lifetime = ttl === undefined ? null : new Lifetime(ttl)
     const entryBody = heldOnce(
         gate === undefined ? body : gated(body, gate as Schema<Args>),

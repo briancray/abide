@@ -24,16 +24,16 @@ import {
     headDeadline,
     type Ringed,
 } from './Expiry.ts'
-import { isThenable } from './isThenable.ts'
-import { NotLanded } from './NotLanded.ts'
-import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
-import { NO_INITIAL } from './NO_INITIAL.ts'
 import {
     type History,
     historyFrom,
     type Retained,
     retained,
 } from './History.ts'
+import { isThenable } from './isThenable.ts'
+import { NO_INITIAL } from './NO_INITIAL.ts'
+import { NotLanded } from './NotLanded.ts'
+import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 import {
     CHECK,
     CLEAN,
@@ -857,11 +857,7 @@ function markReaders(cell: Cell, wanted: number): void {
         // and the guard answers false for as long as the page is open. A reader on the VALUE edge
         // needs none of this — its own read pulls — so this is the probe edge alone, and a body
         // nothing probes stays as lazy as 11.5 makes it.
-        if (
-            was === CLEAN &&
-            below.aborted &&
-            below.probeReaders.length !== 0
-        ) {
+        if (was === CLEAN && below.aborted && below.probeReaders.length !== 0) {
             PENDING[pendingCount] = reader
             pendingCount += 1
         }
@@ -2074,7 +2070,8 @@ function sweepExpiry(cell: Cell): void {
     const expiry = cell.expiry
     if (expiry === null) return
     expiry.timer = null
-    if (cell.ringDepth > 0) dropExpired(expiry, ringedOf(cell), standingKept(cell))
+    if (cell.ringDepth > 0)
+        dropExpired(expiry, ringedOf(cell), standingKept(cell))
     if (
         (cell.body !== null || cell.store !== null) &&
         !expiry.dropped &&
@@ -3063,7 +3060,9 @@ const ADOPTING_PROTOTYPE = Object.assign(
             const adoption = this[CELL].adoption
             if (adoption === null || isReactive(value))
                 return MEMBERS.publish.call(this, value)
-            return (adoption.source.callable as Reactive<unknown>).publish(value)
+            return (adoption.source.callable as Reactive<unknown>).publish(
+                value,
+            )
         },
         patch(this: Callable, mutate: (value: unknown) => void): void {
             const adoption = this[CELL].adoption

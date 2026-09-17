@@ -28,6 +28,7 @@ import {
 } from './Reactive.ts'
 
 export { canonicalKey } from './canonicalKey.ts'
+export type { History } from './History.ts'
 export { isThenable } from './isThenable.ts'
 export type { Keyed } from './Keyed.ts'
 export { NotLanded } from './NotLanded.ts'
@@ -41,7 +42,6 @@ export {
     type Transformer,
 } from './Reactive.ts'
 export { structural } from './structural.ts'
-export type { History } from './History.ts'
 export { type Disposer, type Effect, watch } from './watch.ts'
 
 // WHAT A STATIC PROBE MAY BE ASKED ABOUT. Both result types already carry the four
@@ -92,22 +92,14 @@ type Shaping<Accepted, Shaped, Args = never> = Omit<
     transform?: (value: Accepted) => Shaped
 }
 // What a body handing back a `Reactive` adopts (11.12): its failures, and its chunks where it streams.
-type AdoptedFailures<Computed> = Computed extends Reactive<
-    unknown,
-    never,
-    infer Failures,
-    unknown
->
-    ? Failures
-    : never
-type AdoptedProduced<Computed, Otherwise> = Computed extends Reactive<
-    unknown,
-    never,
-    unknown,
-    infer Produced
->
-    ? Produced
-    : Otherwise
+type AdoptedFailures<Computed> =
+    Computed extends Reactive<unknown, never, infer Failures, unknown>
+        ? Failures
+        : never
+type AdoptedProduced<Computed, Otherwise> =
+    Computed extends Reactive<unknown, never, unknown, infer Produced>
+        ? Produced
+        : Otherwise
 
 // THE STREAMING OVERLOADS COME FIRST, and for the reason the keyed one comes after the
 // unkeyed: `() => AsyncGenerator<Chunk>` is a `() => Computed`, so the general form would

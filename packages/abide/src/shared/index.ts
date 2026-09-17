@@ -17,6 +17,7 @@ export {
     type Disposer,
     type Effect,
     flushSync,
+    type History,
     type Identity,
     isReactive,
     type Keyed,
@@ -27,7 +28,6 @@ export {
     type Selection,
     type Store,
     structural,
-    type History,
     type Transformer,
     watch,
 } from './reactive/index.ts'

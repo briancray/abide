@@ -178,9 +178,7 @@ test('a body something only guards re-runs when the value it aborted on lands', 
     landRows([{ paid: false }, { paid: true }])
     await pending
     flushSync()
-    expect(`after: ${painted.join(' | ')}`).toBe(
-        'after: counting… | ready:1',
-    )
+    expect(`after: ${painted.join(' | ')}`).toBe('after: counting… | ready:1')
     // The aborted run and the one that finished it, and no third: the guard's own read of the
     // value finds a body that has already run rather than pulling it a second time.
     expect(`body runs: ${bodyRuns}`).toBe('body runs: 2')
@@ -3713,7 +3711,9 @@ test('a streaming run enters the ring at its close', async () => {
     first.push('a')
     first.push('b')
     await turns()
-    expect(`mid-run past: ${[...rows.history()].length}`).toBe('mid-run past: 0')
+    expect(`mid-run past: ${[...rows.history()].length}`).toBe(
+        'mid-run past: 0',
+    )
     first.close()
     await turns()
     rows.refresh()
@@ -4344,7 +4344,10 @@ test('a keyed store is built per entry from its args', () => {
 // 9.11: A STORE HOLDS THE LATEST PRODUCTION, never the ring.
 test('a store on a value with history round-trips the latest production and not the ring', () => {
     const memory = memoryStore<string>({ answer: () => 'restored' })
-    const room = reactive<string>(undefined, { history: 9, store: memory.store })
+    const room = reactive<string>(undefined, {
+        history: 9,
+        store: memory.store,
+    })
     expect(room()).toBe('restored')
     room.publish('a')
     room.publish('b')
@@ -4520,7 +4523,9 @@ test('a keyed value declaring history retains it per entry', () => {
     expect(derived()).toBe('A2')
     a.publish('a3')
     expect(derived()).toBe('A3')
-    expect(`derived: ${[...derived.history()].join(',')}`).toBe('derived: A2,A3')
+    expect(`derived: ${[...derived.history()].join(',')}`).toBe(
+        'derived: A2,A3',
+    )
 })
 
 // 6.16 AGAINST 6.1: `history: n` retains n past productions BESIDE the standing one.
@@ -4529,7 +4534,9 @@ test('a keyed value declaring history retains it per entry', () => {
 test('history counts the productions before the standing one', () => {
     const value = reactive(0, { history: 2 })
     for (const next of [1, 2, 3, 4]) value.set(next)
-    expect(`retained: ${[...value.history()].join(',')}`).toBe('retained: 2,3,4')
+    expect(`retained: ${[...value.history()].join(',')}`).toBe(
+        'retained: 2,3,4',
+    )
 })
 
 // 7.8 THROUGH A REFRESH. A refresh is the load an invalidate owed, and it is a load over a value
@@ -4738,7 +4745,9 @@ test('a debounce on a keyed value starts only the key the reaches stopped at', a
     const last = search({ query: 'nor' })
     expect(`calls: ${calls.join(',')}`).toBe('calls: ')
     // 5.22: held back is busy, with nothing to serve yet.
-    expect(`busy: ${last.busy()}, ready: ${last.ready()}`).toBe('busy: true, ready: false')
+    expect(`busy: ${last.busy()}, ready: ${last.ready()}`).toBe(
+        'busy: true, ready: false',
+    )
     expect(`held: ${search.entries.size}`).toBe('held: 1')
     await sleep(AFTER_WINDOW)
     expect(`calls: ${calls.join(',')}`).toBe('calls: nor')

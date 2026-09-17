@@ -48,7 +48,9 @@ export type Retained = {
 export function retained(source: Retained): number {
     if (source.stream !== null) return source.ring.length
     if (source.ringDepth === 0)
-        return source.servable && source.ordinal > 0 && source.value !== undefined
+        return source.servable &&
+            source.ordinal > 0 &&
+            source.value !== undefined
             ? 1
             : 0
     return source.ring.length < source.ringDepth
