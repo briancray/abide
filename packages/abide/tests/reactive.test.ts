@@ -547,6 +547,48 @@ test('a write runs no derived body, and the read runs one', () => {
     expect(runs).toBe(2)
 })
 
+// A BODY THAT REORDERS ITS SOURCES, which is the one shape the cursor protocol cannot
+// answer from the cursor alone — and nothing covered it. Every other test here either
+// reads the same list in the same order or reads a strictly shorter one, and both of
+// those agree with a `track` that never truncates. This one does not: the run matches
+// two, diverges on the third, and then reads a value that is still sitting further down
+// the list it is replacing.
+//
+// THE REVERT IS STRUCTURAL — it is the `at < sources.length` test in `track` — and this
+// is what it is worth. Dropping the truncation leaves the run appending past a tail it
+// has not dropped, `endRun` then trims a tail that now holds LIVE sources, and both
+// reordered values come out unsubscribed: `runs` 3 -> 1 and the value 'ACB' -> 'Acb'.
+test('a body that reorders its sources keeps every one of them subscribed', () => {
+    const first = reactive('a')
+    const second = reactive('b')
+    const third = reactive('c')
+    const swapped = reactive(false)
+    let runs = 0
+    const joined = reactive(() => {
+        runs += 1
+        return swapped()
+            ? `${first()}${third()}${second()}`
+            : `${first()}${second()}${third()}`
+    }) as unknown as () => string
+    expect(joined()).toBe('abc')
+
+    // The reorder itself: matches `swapped` and `first`, diverges where `second` was,
+    // and reads `second` again one slot later.
+    swapped.set(true)
+    expect(joined()).toBe('acb')
+    runs = 0
+
+    // Each of the three still wakes it exactly once, and the one that moved PAST the
+    // divergence is the one a missing truncation loses.
+    first.set('A')
+    expect(joined()).toBe('Acb')
+    second.set('B')
+    expect(joined()).toBe('AcB')
+    third.set('C')
+    expect(joined()).toBe('ACB')
+    expect(`runs: ${runs}`).toBe('runs: 3')
+})
+
 // PROPAGATION PAST DEPTH 1. The only probe test in the repo was depth 1, so a
 // mis-memoising walk would have passed it.
 test('busy propagates through three levels of derivation', async () => {
@@ -1061,6 +1103,38 @@ test('an adopting value inherits the identity it did not declare', () => {
     // A fresh object with the same contents: `structural` collapses it, the reference
     // default would not.
     inner.set({ id: 1 })
+    expect(woken).toBe(0)
+    stop()
+})
+
+// THE SHORT WRITE'S PREDICATE MUST OUTLIVE THE THING THAT MADE IT FALSE. `simple` is what
+// seats a value on `SIMPLE_PROTOTYPE`, where `set` is `Object.is` and three stores — and
+// `identityFn` is one of the fields under it that MOVES after construction, because 11.17
+// has an adoption inherit the inner value's. A value that adopted, inherited `structural`,
+// and then stopped adopting keeps the inherited comparator, so it must not still be sitting
+// on the short write when a later `set` arrives.
+//
+// The revert is dropping the `simpleShape(cell)` call in `adopt`: `woken` goes from 0 to 1,
+// because `dropAdoption` re-seats by a `simple` that never heard about the comparator.
+test('a value that stops adopting keeps the identity it inherited', () => {
+    const inner = reactive({ id: 1 }, { identity: structural })
+    const adopting = reactive(true)
+    const outer = reactive(() => (adopting() ? inner : { id: 1 }))
+    // Adopt, then hand back something that is not a `Reactive`, then pull the recompute.
+    expect(outer()).toEqual({ id: 1 })
+    adopting.set(false)
+    flushSync()
+    expect(outer()).toEqual({ id: 1 })
+
+    let woken = 0
+    const stop = outer.watch(() => {
+        woken += 1
+    })
+    woken = 0
+    // A fresh object with the same contents. The inherited `structural` collapses it; the
+    // reference compare the short write uses would not.
+    outer.set({ id: 1 })
+    flushSync()
     expect(woken).toBe(0)
     stop()
 })
@@ -1838,6 +1912,27 @@ test('two turns asked for before either lands are both answered', async () => {
     const first = cursor.next()
     const second = cursor.next()
     room.publish('a')
+    room.publish('b')
+    expect([(await first).value, (await second).value]).toEqual(['a', 'b'])
+    await cursor.return?.()
+})
+
+// AND A TURN OUTSTANDING WHILE A PRODUCTION IS ALREADY RETAINED, which the test above
+// cannot reach: it asks both turns before anything is published, so the first `next()`
+// finds the cursor caught up and both go on the queue in order whatever the guard does.
+// A cursor's reader is an EFFECT and is drained at the end of the turn, so a `publish`
+// between the two `next()` calls leaves the first resolver still queued with its
+// production already in the ring — and a `next()` that reads the ring there hands the
+// LATER caller the EARLIER production.
+//
+// THE REVERT is dropping the `waiting.length === 0` test in `Cursor.next`: the two turns
+// come back transposed, `second` holding 'a' and `first` holding 'b'.
+test('a turn outstanding is answered before a later one takes from the ring', async () => {
+    const room = reactive<string>(undefined, { history: 9 })
+    const cursor = room.history(0)[Symbol.asyncIterator]()
+    const first = cursor.next()
+    room.publish('a')
+    const second = cursor.next()
     room.publish('b')
     expect([(await first).value, (await second).value]).toEqual(['a', 'b'])
     await cursor.return?.()

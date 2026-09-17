@@ -13,7 +13,13 @@
 // values in the same order on almost every run, so the common shape is "the source at
 // the cursor is the one we already had" — a pointer compare and an increment, with no
 // set operation at all. The general algorithm is the fallback: the first read that does
-// not match sets `diverged` and everything from the cursor on is detached and rebuilt.
+// not match detaches everything from the cursor on and rebuilds it.
+//
+// DIVERGENCE IS SAID BY THE CURSOR, not by a flag beside it. `cursor === sources.length`
+// IS the diverged state — a run that diverges truncates to its cursor and appends from
+// there, so the two stay equal for the rest of the run and the cursor can never match
+// again. The flag that used to carry this was a second field load and a second branch on
+// the read path, which is the hottest path in the design.
 
 // THE THREE STATES A READER CAN BE IN, and the whole of push-pull is that there are
 // three rather than two. `DIRTY` says a source of mine PRODUCED and I must run.
@@ -62,10 +68,9 @@ export type Subscriber = {
     // writes on a 50-row list, every one of them redundant, and the identity gate that
     // exists to stop exactly that cannot see a production nobody minted.
     probeSources: Tracked[]
-    // How far into `sources` this run has matched. Reset before each run.
+    // How far into `sources` this run has matched, and once it reaches `sources.length`
+    // the run has DIVERGED and every read left goes through `track`. Reset before each run.
     cursor: number
-    // Set once a run reads something the previous run did not read there.
-    diverged: boolean
     alive: boolean
 }
 
@@ -134,23 +139,21 @@ function truncate(reader: Subscriber): void {
 // the call site in `Reactive`, so what is left here is the divergence: this is the
 // fallback, reached on the first read a run makes that the previous run did not.
 export function track(source: Tracked, reader: Subscriber): void {
-    if (!reader.diverged) {
-        reader.diverged = true
-        truncate(reader)
-    }
-    reader.sources.push(source)
-    reader.cursor += 1
+    const sources = reader.sources
+    const at = reader.cursor
+    // THE FIRST DIVERGENCE OF THIS RUN, and the only one that has anything to drop. The
+    // truncation leaves `sources.length === cursor` and the append below keeps them
+    // equal, so every later read of this run arrives with the test already false — which
+    // is the flag this replaced, read off state the cursor was carrying anyway.
+    if (at < sources.length) truncate(reader)
+    sources.push(source)
+    reader.cursor = at + 1
     // Appends happen only after a divergence, so this scan is off the common path. It
     // is what stops a body reading one value twice from waking twice.
     const readers = source.readers
     for (let index = 0; index < readers.length; index += 1)
         if (readers[index] === reader) return
     readers.push(reader)
-}
-
-export function beginRun(reader: Subscriber): void {
-    reader.cursor = 0
-    reader.diverged = false
 }
 
 // The tail a run left behind. The TEST that there is one is the caller's — it is two

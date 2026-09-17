@@ -99,7 +99,6 @@ class Lifetime {
             sources: [cell],
             probeSources: [],
             cursor: 0,
-            diverged: false,
             alive: true,
             state: CLEAN,
             running: false,

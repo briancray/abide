@@ -419,6 +419,25 @@ export function isStreamBody(body: (args: never) => unknown): boolean {
 // its record, so a read is one context load — the hand-written arm's one captured
 // variable — and a member reaches the record through `CELL`, one load ahead of what it
 // did before.
+//
+// THE FIELD COUNT SITS ON A VM BOUNDARY AND IT IS NOT A LEVER. Both engines give an
+// object a fixed inline slot budget and spill the rest to an out-of-line store, and this
+// record is over it — so the count moves numbers that have nothing to do with the work.
+// Two independent measurements say the same thing from opposite ends. Taking `Cell` to
+// 38 is worth ~11% of `construct a value` and ~6-9% of the derived case, and it does not
+// matter HOW the four go: a consolidation into one record and four fields simply deleted
+// buy the same number, so the consolidation is not what pays. Going the other way,
+// 42 -> 46, is FREE — above the budget the out-of-line store already exists. And dropping
+// ONE field moved chain 20 and both layered DAGs +4.2% under V8 while moving nothing
+// under JSC; adding a DEAD boolean back put all three within 0.6%, which is the proof it
+// was layout and not work — that same dead boolean then cost the probe walk 6-7%.
+//
+// So the boundary is worth KNOWING and not worth engineering around. Adding a 43rd field
+// costs nothing; getting under costs a structural change that the next field added here
+// silently undoes, and it re-rolls in a different direction for every row. If
+// construction ever needs that 11%, shed fields — do not build machinery to shed them.
+// And when a V8-only move of this size shows up on a graph row, the first thing to check
+// is whether the field count changed.
 class Cell {
     // ARRAYS, not sets. The mark walk walks this per write and a set's iterator
     // allocates; removal is O(n) against a reader count that is small by construction.
@@ -431,7 +450,6 @@ class Cell {
     // carries the reader half of the probe edge as well as the source half.
     declare probeSources: Cell[]
     declare cursor: number
-    declare diverged: boolean
     declare label: string
     declare body: ((args: unknown) => unknown) | null
     declare args: unknown
@@ -520,6 +538,18 @@ class Cell {
     // stream whose writes stand apart from its chunks (9.25, 9.26). One field where the write and
     // the recompute each tested two, maintained where a forwarded stream comes and goes.
     declare bareWrite: boolean
+    // EVERYTHING A GATED WRITE WOULD OTHERWISE ASK, IN ONE FIELD: no cap holding the
+    // production back, no expiry, no ring to append to, no store to persist through, no
+    // declared `identity`, and `bareWrite`'s own three. A value carrying none of them has a
+    // `produce` -> `serve` -> `cascade` that reduces to three stores and a mark — which is
+    // what `SIMPLE_PROTOTYPE.set` spells out rather than calls.
+    //
+    // IT SELECTS A PROTOTYPE AND IS NOT READ ON THE WRITE PATH. See `SIMPLE_PROTOTYPE`.
+    //
+    // MAINTAINED, NOT FIXED: three of the fields under it move after construction —
+    // `bareWrite` and `plain` where a forwarded stream comes and goes, `identityFn` where an
+    // adoption takes the inner value's. `simpleShape` is called at each of those.
+    declare simple: boolean
 
     constructor(
         label: string,
@@ -534,7 +564,6 @@ class Cell {
         this.sources = []
         this.probeSources = []
         this.cursor = 0
-        this.diverged = false
         this.label = label
         this.body = body
         this.args = args
@@ -607,6 +636,8 @@ class Cell {
         this.plain = this.expiry === null && this.stream === null
         this.bareWrite =
             this.schema === null && this.transform === null && !streaming
+        this.simple = false
+        simpleShape(this)
     }
 
     notify(): void {
@@ -679,6 +710,33 @@ function comparatorFor(
         return identity as (next: unknown, previous: unknown) => boolean
     const project = identity as (value: unknown) => unknown
     return (next, previous) => project(next) === project(previous)
+}
+
+// `simple` IN ONE PLACE, and the prototype that goes with it. A second copy of this
+// conjunction is the drift that would let one of the four sites go on reading `true` after
+// the field under it moved — and what the short write would then skip is a cap, a ring or a
+// declared `identity`, silently.
+//
+// THE CALLABLE IS RE-SEATED ONLY WHERE IT IS ON ONE OF THESE TWO. A value that is adopting or
+// forwarding a stream carries a prototype of its own and keeps it; the field is still
+// maintained, so the seat it lands on when the adoption drops is the right one.
+function simpleShape(cell: Cell): void {
+    cell.simple =
+        cell.bareWrite &&
+        // `plain` carries `expiry === null` and `stream === null` already.
+        cell.plain &&
+        cell.cap === null &&
+        cell.store === null &&
+        cell.ringDepth === 0 &&
+        cell.identityFn === null
+    const callable = cell.callable
+    if (callable === null) return
+    const seat = Object.getPrototypeOf(callable)
+    if (seat !== MEMBER_PROTOTYPE && seat !== SIMPLE_PROTOTYPE) return
+    Object.setPrototypeOf(
+        callable as object,
+        cell.simple ? SIMPLE_PROTOTYPE : MEMBER_PROTOTYPE,
+    )
 }
 
 // THE EFFECT QUEUE. A mark walk runs no body, so something has to run the ones that
@@ -1429,6 +1487,7 @@ function adopt(cell: Cell, inner: Cell): void {
     // Assigned before the first mirror, or the production that mirror makes is gated by
     // the wrong comparison.
     if (cell.identityFn === null) cell.identityFn = inner.identityFn
+    simpleShape(cell)
     const stop = watchOver([inner], cell, (): undefined => {
         mirror(cell, inner)
         return undefined
@@ -1478,7 +1537,10 @@ function dropAdoption(cell: Cell): void {
     cell.adoption = null
     standing.stop()
     if (cell.stream !== null) stopForwarding(cell)
-    Object.setPrototypeOf(cell.callable as object, MEMBER_PROTOTYPE)
+    Object.setPrototypeOf(
+        cell.callable as object,
+        cell.simple ? SIMPLE_PROTOTYPE : MEMBER_PROTOTYPE,
+    )
 }
 
 // 11.15 FOR A STREAM: the adopter takes the adopted value's buffer, ring and ordinals by
@@ -1493,6 +1555,7 @@ function forwardStream(cell: Cell, inner: Cell, adopted: Stream): void {
         cell.stream = stream
         cell.plain = false
         cell.bareWrite = false
+        simpleShape(cell)
         cell.direct = false
     }
     // The adopted version is this one's: a chunk or a patch of the stream moves both, and a write
@@ -1531,6 +1594,7 @@ function stopForwarding(cell: Cell): void {
     cell.stream = null
     cell.plain = cell.expiry === null
     cell.bareWrite = cell.schema === null && cell.transform === null
+    simpleShape(cell)
     cell.ring = cell.ringDepth > 0 ? [] : EMPTY_RING
     // The ring is empty and the next production is `ordinal + 1`, at index zero.
     cell.ringBase = cell.ordinal
@@ -1561,10 +1625,9 @@ function run(cell: Cell): void {
     // and a recompute is per write on every derived value in the graph.
     const previous = TRACKING.reader
     TRACKING.reader = reader
-    // `beginRun` and `endRun` spelled out: two field writes and a two-field test, behind
-    // a call frame each, on a path walked once per node per write.
+    // THE RUN'S CURSOR, spelled out rather than behind a call frame on a path walked once
+    // per node per write. Zero is also "has diverged nowhere yet": see `tracking.ts`.
     reader.cursor = 0
-    reader.diverged = false
     // The probe edge is rebuilt rather than cursored: a guard that stops being taken has
     // to stop waking, and a body reads few probes where it reads many values.
     if (reader.probeSources.length !== 0) detachProbes(reader)
@@ -1573,8 +1636,7 @@ function run(cell: Cell): void {
         produced = body(cell.args)
     } catch (thrown) {
         TRACKING.reader = previous
-        if (!reader.diverged && reader.cursor < reader.sources.length)
-            endRun(reader)
+        if (reader.cursor < reader.sources.length) endRun(reader)
         cell.running = false
         if (thrown instanceof NotLanded) {
             cell.loading = true
@@ -1609,8 +1671,7 @@ function run(cell: Cell): void {
     // A body that read FEWER values than last time leaves a tail nothing reads, and
     // that is the only thing `endRun` has to do — so the test is here and the call is
     // the rare arm.
-    if (!reader.diverged && reader.cursor < reader.sources.length)
-        endRun(reader)
+    if (reader.cursor < reader.sources.length) endRun(reader)
     cell.running = false
     // A VALUE THAT WAS ADOPTING AND IS NOT ANY MORE. Behind the `adoption` load so every
     // other recompute pays one field test rather than the brand read below it.
@@ -2232,7 +2293,6 @@ function settled(cell: Cell): Promise<unknown> {
             sources: [cell],
             probeSources: [],
             cursor: 0,
-            diverged: false,
             alive: true,
             state: CLEAN,
             running: false,
@@ -3014,6 +3074,64 @@ const ADOPTING_PROTOTYPE = Object.assign(
 )
 Object.defineProperty(ADOPTING_PROTOTYPE, REACTIVE_BRAND, { value: true })
 
+// THE SAME MEMBERS WITH THE COMMON WRITE SPELLED OUT, and a prototype rather than a branch
+// for the reason `acceptIntoStream` already gives: a test in the shared `set` that a value
+// can never take still costs that value. Measured — `identity: structural`, which fails such
+// a test on its first load and goes on to the same `produce` it always did, went from 51 ns
+// to 57 with the test in `set`, and to 57 again with the short arm moved behind its own
+// frame instead, so it was never the size of `set`. The seat takes that value back to the
+// baseline path exactly, because it IS the baseline path.
+//
+// ON A `simple` VALUE THAT IS ALREADY SERVING, `produce` -> `serve` -> `cascade` reduces to
+// what is below: the ring, the cap, the expiry and the store are absent by `simple`; `moved`
+// is false by the three state tests, so no probe moves and nothing settles; and every status
+// field `serve` writes is already at the value it writes. The three state tests are the
+// `moved` computation itself, read here to prove the rest is dead rather than to pick a
+// branch, and anything they refuse falls through to `MEMBERS.set`, which is unchanged.
+const SIMPLE_PROTOTYPE = Object.assign(
+    Object.create(Function.prototype) as Record<PropertyKey, unknown>,
+    MEMBERS,
+    {
+        set(this: Callable, value: unknown): unknown {
+            const cell = this[CELL]
+            if (
+                cell.servable &&
+                !cell.loading &&
+                cell.failure === undefined &&
+                (value === null ||
+                    (typeof value !== 'object' &&
+                        typeof value !== 'function') ||
+                    typeof (value as PromiseLike<unknown>).then !== 'function')
+            ) {
+                // INSIDE THE ARM, so the fallback below bumps it once rather than twice.
+                // A generation is only ever compared against a snapshot a load took, so
+                // two bumps ahead of the snapshot discard exactly what one does — but the
+                // field is the sort of thing a later reader comes to reason about, and a
+                // write that counts as two is a thing to have to un-learn.
+                cell.generation += 1
+                // 5.2, and `simple` is what makes `Object.is` the whole gate.
+                if (Object.is(value, cell.value)) {
+                    // The collapse arm's one lasting effect: `produce` restores `direct`
+                    // here, because a write can land on a value a mark walk has reached.
+                    cell.direct = cell.state === CLEAN
+                    return undefined
+                }
+                cell.value = value
+                // 6.18: an `undefined` is served and moves no ordinal.
+                if (value !== undefined) cell.ordinal += 1
+                // `setDirect`, with `plain` known true by `simple`.
+                cell.direct = cell.state === CLEAN
+                if (cell.readers.length !== 0) markReaders(cell, DIRTY)
+                // `cascade`'s tail. A write made from inside an effect appends to the drain
+                // already walking rather than opening a second one.
+                if (!draining && pendingCount !== 0) schedule()
+                return undefined
+            }
+            return MEMBERS.set.call(this, value)
+        },
+    },
+)
+Object.defineProperty(SIMPLE_PROTOTYPE, REACTIVE_BRAND, { value: true })
 
 export function createReactive<
     Stored,
@@ -3061,8 +3179,8 @@ export function createReactive<
         // call and no set operation. `track` is the divergence.
         const reader = TRACKING.reader
         if (reader !== null) {
-            if (!reader.diverged && reader.sources[reader.cursor] === cell)
-                reader.cursor += 1
+            const at = reader.cursor
+            if (reader.sources[at] === cell) reader.cursor = at + 1
             else track(cell, reader)
         }
         // ONE LOAD AND ONE BRANCH FOR THE WHOLE COMMON PATH. `direct` is the pull and
@@ -3079,7 +3197,11 @@ export function createReactive<
     // transition the store just built.
     Object.setPrototypeOf(
         self,
-        streaming ? STREAM_PROTOTYPE : MEMBER_PROTOTYPE,
+        streaming
+            ? STREAM_PROTOTYPE
+            : cell.simple
+              ? SIMPLE_PROTOTYPE
+              : MEMBER_PROTOTYPE,
     )
     self[CELL] = cell
     cell.callable = self as unknown as Reactive<unknown>

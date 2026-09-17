@@ -64,7 +64,6 @@ export function watchOver(
         sources: sources as unknown as Tracked[],
         probeSources: [],
         cursor: 0,
-        diverged: false,
         alive: true,
         state: CLEAN,
         running: false,
@@ -123,7 +122,6 @@ function watchTracked(effect: Effect): Disposer {
         sources: [],
         probeSources: [],
         cursor: 0,
-        diverged: false,
         alive: true,
         state: CLEAN,
         running: false,
@@ -141,7 +139,6 @@ function watchTracked(effect: Effect): Disposer {
             const previous = TRACKING.reader
             TRACKING.reader = reader
             reader.cursor = 0
-            reader.diverged = false
             if (reader.probeSources.length !== 0) detachProbes(reader)
             reader.running = true
             try {
@@ -149,8 +146,7 @@ function watchTracked(effect: Effect): Disposer {
             } catch (thrown) {
                 reader.running = false
                 TRACKING.reader = previous
-                if (!reader.diverged && reader.cursor < reader.sources.length)
-                    endRun(reader)
+                if (reader.cursor < reader.sources.length) endRun(reader)
                 // The abort reaches here too: an effect that read a value which has
                 // not landed is not an effect that failed, it is one whose turn has
                 // not come. The read subscribed before it threw, so the value landing
@@ -163,8 +159,7 @@ function watchTracked(effect: Effect): Disposer {
             }
             reader.running = false
             TRACKING.reader = previous
-            if (!reader.diverged && reader.cursor < reader.sources.length)
-                endRun(reader)
+            if (reader.cursor < reader.sources.length) endRun(reader)
         },
     }
     reader.notify()
