@@ -103,3 +103,32 @@ test('a second file in the same session is not answered from the first', async (
     )
     expect([...(await session.reactiveNames(PAGE, second))]).toEqual(['b'])
 })
+
+// COMPILE TIME IS A SNAPSHOT COUNT, and asserting it as one is what makes the claim survive a
+// loaded machine. Adding a file to the project's ROOT SET is what costs — 19.7 ms against 0.8 ms
+// for a file it already has — so a build that takes a snapshot per file pays that on every file
+// it has. THE REVERT: have `reactiveNamesFor` loop over `reactiveNames`; the answers are
+// identical and this reports 12 snapshots where 1 is due, which is ~19 ms a file rather than
+// ~0.8 ms and is 99.8% of the time a build spends.
+test('a whole build takes ONE snapshot, not one per file', async () => {
+    const batch = await TypeSession.open(TSCONFIG)
+    try {
+        const sources = []
+        for (let at = 0; at < 12; at += 1)
+            sources.push({
+                path: `${ROOT}src/batch-${at}.abide`,
+                file: parseAbide(
+                    `<script>\nimport { reactive } from 'abide'\nconst v${at} = reactive(${at})\nconst plain${at} = ${at}\n</script><p>{v${at}}</p>`,
+                ),
+            })
+
+        const answers = await batch.reactiveNamesFor(sources)
+        expect(batch.snapshots).toBe(1)
+        expect(answers).toHaveLength(12)
+        // And every answer is the one the per-file path would have given.
+        for (let at = 0; at < 12; at += 1)
+            expect([...(answers[at] as Set<string>)]).toEqual([`v${at}`])
+    } finally {
+        batch.close()
+    }
+})

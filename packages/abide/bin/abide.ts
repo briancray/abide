@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs' // bun exposes no sync existence check of i
 import { dirname } from 'node:path' // bun exposes no path helpers of its own
 import { parseArgs } from 'node:util' // bun exposes no argv parser of its own yet
 
+import type { AbideFile } from '#compiler'
 import { compileFile, emitClient, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 
@@ -33,18 +34,30 @@ async function build(root: string, out: string): Promise<number> {
     const session =
         tsconfig === undefined ? undefined : await TypeSession.open(tsconfig)
     try {
+        const parsed: { path: string; file: AbideFile; text: string }[] = []
         for (const source of sources) {
-            const relative = source.slice(root.length + 1)
-            const target = `${out}/${relative.replace(/\.abide$/, '.ts')}`
             const text = await Bun.file(source).text()
-            const file = parseAbide(text)
-            const reactive = await session?.reactiveNames(source, file)
-            await Bun.write(target, compileFile(text, reactive))
+            parsed.push({ path: source, file: parseAbide(text), text })
+        }
+
+        // ONE SNAPSHOT FOR THE WHOLE BUILD. Asking file by file costs 19.7 ms each against 0.8 ms
+        // sharing one, because what is expensive is adding a file to the project's root set
+        // rather than asking about it — and a fresh build adds every file it has.
+        const names = await session?.reactiveNamesFor(parsed)
+
+        for (let at = 0; at < parsed.length; at += 1) {
+            const entry = parsed[at] as (typeof parsed)[number]
+            const relative = entry.path.slice(root.length + 1)
+            const reactive = names?.[at]
+            await Bun.write(
+                `${out}/${relative.replace(/\.abide$/, '.ts')}`,
+                compileFile(entry.text, reactive),
+            )
 
             // The client module is emitted only where there is something to hydrate. A static
             // page has no `.client.ts` beside it, which is what makes "this page ships no
             // runtime" a fact about the build rather than a claim about the bundler.
-            const client = emitClient(file, reactive)
+            const client = emitClient(entry.file, reactive)
             if (client !== '')
                 await Bun.write(
                     `${out}/${relative.replace(/\.abide$/, '.client.ts')}`,

@@ -147,6 +147,16 @@ async function compileCeiling(
         await session.reactiveNames(`${fixture}fresh-${at}.abide`, sample)
     const freshNanoseconds = (Bun.nanoseconds() - freshStart) / ROUNDS
 
+    // THE SAME FILES IN ONE SNAPSHOT, which is what a build does. The gap between this and the
+    // line above is not a micro-optimisation: it is adding a file to the project's ROOT SET
+    // against asking about a file already in it.
+    const batched = []
+    for (let at = 0; at < ROUNDS; at += 1)
+        batched.push({ path: `${fixture}batch-${at}.abide`, file: sample })
+    const batchStart = Bun.nanoseconds()
+    await session.reactiveNamesFor(batched)
+    const batchNanoseconds = (Bun.nanoseconds() - batchStart) / ROUNDS
+
     console.log('\nCOMPILE TIME — a ceiling, not a ratio (44.22)')
     console.log(`  ${sources.length} sources, ${arms.length} paired examples`)
     console.log(
@@ -159,16 +169,16 @@ async function compileCeiling(
         `  + the checker, file NEW to the project       ${(freshNanoseconds / 1000).toFixed(0)} µs  <- a fresh build is all of these`,
     )
     console.log(
-        `  a build of ${sources.length} sources therefore costs about ${((freshNanoseconds * sources.length) / 1e9).toFixed(2)}s in the checker alone,`,
+        `  + the checker, NEW but sharing ONE snapshot  ${(batchNanoseconds / 1000).toFixed(0)} µs  <- what a build does`,
     )
     console.log(
-        `  which is ${((freshNanoseconds / (freshNanoseconds + emitNanoseconds)) * 100).toFixed(1)}% of compile time. NAME THE SHARE BEFORE CHANGING THE LAYER: the`,
+        `  the batch is ${(freshNanoseconds / batchNanoseconds).toFixed(1)}x cheaper a file, so ${sources.length} sources cost about`,
     )
     console.log(
-        '  suspect is one `updateSnapshot` per file, where the shadows could be registered',
+        `  ${((batchNanoseconds * sources.length) / 1e9).toFixed(2)}s in the checker rather than ${((freshNanoseconds * sources.length) / 1e9).toFixed(2)}s. What costs is adding a file to the`,
     )
     console.log(
-        '  together and the project resolved once. Unmeasured, and therefore not yet done.',
+        "  project's root set, not asking about one already in it — so a build pays it once.",
     )
     console.log(
         `  machine ${process.platform}-${process.arch}, bun ${Bun.version}, ${new Date().toISOString().slice(0, 10)}`,
