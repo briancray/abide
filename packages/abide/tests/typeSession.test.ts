@@ -84,8 +84,8 @@ count = count + step
 
     // 2 + 3 = 5, so the write went through `set` rather than rebinding the name.
     expect(out).toContain('<title>count is 5</title>')
-    expect(out).toContain('<h1><!--a0-->5<!--/a--></h1>')
-    expect(out).toContain('<p><!--a1-->10<!--/a--></p>')
+    expect(out).toContain('<h1>5</h1>')
+    expect(out).toContain('<p>10</p>')
 })
 
 // Two files through one session, at the same shadow path. THE REVERT: drop `fileChanges` from

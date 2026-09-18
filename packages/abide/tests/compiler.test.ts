@@ -134,10 +134,12 @@ test('a compiled page renders as bytes into a shell', async () => {
     expect(out.indexOf('<title>abide</title>')).toBeLessThan(
         out.indexOf('</head>'),
     )
-    // 41.10 — a body slot is wrapped in the markers the client finds it by. A HEAD slot is not:
-    // nothing hydrates it, so it carries no marker and the client counts none there.
-    expect(out).toContain('<h1 class="title"><!--a0-->abide<!--/a--></h1>')
+    // NOTHING IS ADDED TO THE DOCUMENT. The markup is what the author would have written by
+    // hand, and the client finds its bindings by position rather than by anything put there.
+    expect(out).toContain('<h1 class="title">abide</h1>')
     expect(out).toContain('<title>abide</title>')
+    expect(out).not.toContain('<!--')
+    expect(out).not.toContain('data-a')
     // The escape is asserted on the RENDERED document, not on the emitted source: the
     // mechanism is what reaches a browser, and a grep for `escapeText(` passes against a
     // module that does not compile.

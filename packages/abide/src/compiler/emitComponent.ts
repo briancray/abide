@@ -1,4 +1,3 @@
-import { ELEMENT_ATTRIBUTE, SLOT_CLOSE, SLOT_OPEN } from '#ui/MARKERS.ts'
 import { lowerNames } from './lowerNames.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { planTemplate, type TemplatePlan } from './planTemplate.ts'
@@ -75,19 +74,9 @@ function emitNode(
 ): string {
     if (node.kind === 'text') return JSON.stringify(node.text)
 
-    if (node.kind === 'expression') {
-        // 32.1 — the slot is escaped at run time, never at compile time: the value is not known
-        // here.
-        const value = `escapeText(${lowerNames(node.source, reactive)})`
-        const at = plan?.slotIndex.get(node)
-        // 41.10 — the markers are what the client finds the slot by, and a slot with no plan
-        // (a head contribution) gets none because nothing hydrates it.
-        if (at === undefined) return value
-        // The NUMBER goes in the marker. Found by counting instead, a slot is addressed by the
-        // page's shape rather than by the template's, and an absent region renumbers every slot
-        // after it. See `#ui/MARKERS.ts`.
-        return `"<!--${SLOT_OPEN}${at}-->" + ${value} + "<!--${SLOT_CLOSE}-->"`
-    }
+    if (node.kind === 'expression')
+        // 32.1 — escaped at run time, never at compile time: the value is not known here.
+        return `escapeText(${lowerNames(node.source, reactive)})`
 
     const parts: string[] = []
     let open = `<${node.tag}`
@@ -106,16 +95,29 @@ function emitNode(
         )
         open = ''
     }
-    const element = plan?.elementIndex.get(node)
-    if (element !== undefined) open += ` ${ELEMENT_ATTRIBUTE}="${element}"`
     open += '>'
     parts.push(JSON.stringify(open))
 
     if (node.children.length === 0 && isVoid(node.tag)) return parts.join(' + ')
-    const children = node.children.map((child) =>
-        emitNode(child, reactive, plan),
-    )
-    return [...parts, ...children, JSON.stringify(`</${node.tag}>`)].join(' + ')
+    return [
+        ...parts,
+        ...emitChildren(node.children, reactive, plan),
+        JSON.stringify(`</${node.tag}>`),
+    ].join(' + ')
+}
+
+// A run of adjacent text and expressions is emitted as ONE concatenation and carries no marker.
+// The client finds it by its position, so nothing has to be put in the document to mark it — and
+// nothing added is the only scheme that leaves CSS and `childNodes` answering what they would
+// have answered for the page the author wrote.
+function emitChildren(
+    nodes: TemplateNode[],
+    reactive: ReadonlySet<string>,
+    plan: TemplatePlan | undefined,
+): string[] {
+    const out: string[] = []
+    for (const node of nodes) out.push(emitNode(node, reactive, plan))
+    return out
 }
 
 type EmittedAttribute =

@@ -19,12 +19,9 @@ const REFERENCE = `
 
 // The same document with the CURRENT scheme applied: two comments around every slot, and a
 // `data-a` on the element carrying a listener.
-const COMPILED = `
-<ul id="list"><li class="a"><!--a0-->one<!--/a--></li><li class="b"><!--a1-->two<!--/a--></li><li class="c"><!--a2-->three<!--/a--></li></ul>
-<p id="filled"><!--a3-->text<!--/a--></p>
-<p id="blank"><!--a4--><!--/a--></p>
-<div id="parent" data-a="0"><span>kid</span></div>
-`
+// The same document as the compiler now emits it: a text run written whole, a listener element
+// found by position. Nothing is added, so this string is character-for-character the reference.
+const COMPILED = REFERENCE
 
 const PROBE = `(() => {
     const q = (s) => document.querySelectorAll(s).length
@@ -104,12 +101,15 @@ test('a compiled document answers CSS and DOM queries as the authored one does',
     //
     // Both go when a static region is addressed structurally instead: no invented nodes and no
     // invented attributes is the only scheme that has nothing on this list.
-    expect(differences.sort()).toEqual([
-        'blankChildNodes: authored 0 -> compiled 2',
-        'dataAttributes: authored 0 -> compiled 1',
-        'filledFirstChildIsText: authored 3 -> compiled 8',
-        'slotHostChildNodes: authored 1 -> compiled 3',
-    ])
+    // THE RATCHET IS EMPTY. It held four differences — `[data-a]` matched by an attribute
+    // selector in the document as served, `firstChild` a Comment where the author wrote a Text,
+    // and two entries added to `childNodes` per slot including in an element left empty. All four
+    // are gone because nothing is added to the document at all: a text run is written whole and
+    // its node is found by child index from the region root.
+    //
+    // A difference appearing here again is a compiler inventing structure an author's CSS or
+    // queries can see, and it fails rather than being discussed.
+    expect(differences).toEqual([])
 })
 
 // WHAT IS SAFE, asserted so it is not re-litigated. CSS structural selectors are element-based

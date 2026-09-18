@@ -63,8 +63,12 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
     const { html, mount } = await mountPage(PAGE)
 
     // The server rendered the initial value, so the document is right before any script runs.
-    expect(html).toContain('<!--a0-->clicks<!--/a-->')
-    expect(html).toContain('<!--a1-->0<!--/a-->')
+    // ONE TEXT RUN, written whole and carrying nothing the author did not. `{label}: {count}`
+    // merges into a single text node when parsed, so there is nothing to separate and nothing
+    // invented to separate it with.
+    expect(html).toContain('<p id="out">clicks: 0</p>')
+    expect(html).not.toContain('<!--')
+    expect(html).not.toContain('data-a')
     // 32.5 — the handler is a listener, and the server writes no `onclick` for it to fire from.
     expect(html).not.toContain('onclick')
 
@@ -104,17 +108,29 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
     expect(work.wakes).toBe(1)
 })
 
-// A slot reading nothing reactive is written once by the server and never again. THE REVERT:
-// drop the `readsReactive` check in `emitClient` and bind every slot; `bindingRuns` on the click
-// then reports 2 where 1 is due, and it grows with every static slot on the page.
-test('a slot that reads nothing reactive opens no binding', async () => {
-    const file = parseAbide(PAGE)
-    const reactive = await session.reactiveNames(`${ROOT}src/page.abide`, file)
-    const client = emitClient(file, reactive)
-    expect(client).toContain(
-        'watch(() => setText(slotAt(slotNodes, 1), count()))',
-    )
-    expect(client).not.toContain('slotAt(slotNodes, 0)')
+// A RUN reading nothing reactive is written once by the server and never again. The page below
+// has TWO runs — one static, one live — which is what makes the case distinguish: a page whose
+// only run is live reports one binding whether the check is there or not. THE REVERT: drop
+// `readsReactive` in `emitClient` and bind every run; this reports 2 bindings where 1 is due, and
+// the mount gate below reports `bindingRuns` 2 where it reports 1.
+test('a run that reads nothing reactive opens no binding', async () => {
+    const source = `<script>
+import { reactive } from 'abide'
+
+let count = reactive(0)
+const label = 'clicks'
+</script>
+
+<p id="static">{label}</p>
+<p id="live">{count}</p>`
+
+    const file = parseAbide(source)
+    const names = await session.reactiveNames(`${ROOT}src/page.abide`, file)
+    const client = emitClient(file, names)
+
+    expect(client).toContain('textAt(root, [1,0])')
+    expect(client).not.toContain('textAt(root, [0,0])')
+    expect(client.match(/watch\(/g) ?? []).toHaveLength(1)
 })
 
 // A page with nothing to hydrate emits no client module at all, which is what makes "this page
