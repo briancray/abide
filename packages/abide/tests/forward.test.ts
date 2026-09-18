@@ -64,6 +64,8 @@ test('a binding that finds the wrong kind of node says so', () => {
 
 test('the emitted binding walks a path and adds nothing to the document', () => {
     const client = emitClient(parseAbide(SOURCE), new Set(['a', 'b']))
+    // The two bindings share no prefix past the root here, so nothing is hoisted and each path
+    // is walked whole. A region whose bindings sit under one ancestor emits a `childAt` first.
     expect(client).toContain('textAt(root, [1,0,0])')
     expect(client).toContain('elementAt(root, [1,1])')
     expect(client).not.toContain('data-a')

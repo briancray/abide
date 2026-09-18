@@ -15,6 +15,7 @@ const REFERENCE = `
 <p id="filled">text</p>
 <p id="blank"></p>
 <div id="parent"><span>kid</span></div>
+<section id="deep"><div class="mid"><article><p class="leaf">deep</p></article></div></section>
 `
 
 // The same document with the CURRENT scheme applied: two comments around every slot, and a
@@ -131,6 +132,16 @@ test('CSS structural matching is untouched by markers', async ({ page }) => {
             sibling: q('.a ~ .c'),
             child: q('#parent > span'),
             empty: q('p:empty'),
+            // DESCENDANT AND ANCESTOR MATCHING, named because they are the ones a wrapper
+            // element would break and a comment cannot: a comment is not an element, so it
+            // joins no combinator chain and is skipped by every one of these.
+            descendant: q('#deep p'),
+            deepDescendant: q('section div article p'),
+            descendantClass: q('#deep .leaf'),
+            ancestorHas: q('section:has(.leaf)'),
+            ancestorHasDeep: q('div:has(> article p)'),
+            universalDescendant: q('#deep * p'),
+            starChild: q('#deep > *'),
         }
     })()`)
     expect(matched).toEqual({
@@ -140,7 +151,17 @@ test('CSS structural matching is untouched by markers', async ({ page }) => {
         adjacent: 1,
         sibling: 1,
         child: 1,
-        // Both `#blank` and nothing else: the comments inside it do not stop it being empty.
         empty: 1,
+        // A comment is not an element, so it joins no combinator chain: descendant, `:has`
+        // and the universal selector all skip it. This is what makes a comment the only thing
+        // a compiler MAY add at a dynamic boundary — a wrapper element would break every one
+        // of these, and an attribute would be matched by a selector the author wrote.
+        descendant: 1,
+        deepDescendant: 1,
+        descendantClass: 1,
+        ancestorHas: 1,
+        ancestorHasDeep: 1,
+        universalDescendant: 1,
+        starChild: 1,
     })
 })

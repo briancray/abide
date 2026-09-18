@@ -40,68 +40,96 @@ for (const shape of ['simple', 'dense'] as Shape[]) {
     }
 }
 
+// THE TWO COSTS IN ONE CURRENCY. Bytes are only comparable to a walk once they are time, and
+// they become time at a bandwidth — so the bandwidth is stated rather than assumed. These are
+// throughput figures for a warm connection, not first-byte latency, which neither scheme changes.
+const LINKS: [string, number][] = [
+    ['slow 4G, 1.5 Mbps', 1.5e6 / 8],
+    ['median mobile, 5 Mbps', 5e6 / 8],
+    ['home broadband, 25 Mbps', 25e6 / 8],
+]
+
+console.log('\nBYTES AS TIME — the 15,000-slot page, markers against none\n')
+{
+    const withMarkers = Bun.gzipSync(
+        new TextEncoder().encode(grid(100, 50, 'two-markers', 'dense').markup),
+    ).length
+    const without = Bun.gzipSync(
+        new TextEncoder().encode(grid(100, 50, 'no-markers', 'dense').markup),
+    ).length
+    const extra = withMarkers - without
+    console.log(
+        `  markers add ${(extra / 1024).toFixed(1)} KB gzipped (${(without / 1024).toFixed(1)} -> ${(withMarkers / 1024).toFixed(1)} KB)`,
+    )
+    for (const [name, bytesPerSecond] of LINKS)
+        console.log(
+            `    ${name.padEnd(24)} ${((extra / bytesPerSecond) * 1000).toFixed(0)} ms of transfer`,
+        )
+    console.log('')
+    console.log(
+        '  Against that, the WALK: hoisting the shared prefix makes a structural walk flat in',
+    )
+    console.log(
+        '  depth and 0.87-1.35x a marker walk — call it a wash, and under 0.2 ms either way at',
+    )
+    console.log(
+        '  15,000 bindings. `depth.spec.ts` has the table. So the byte column decides, and it',
+    )
+    console.log('  decides by one to two orders of magnitude.\n')
+}
+
 console.log('WHAT THIS DECIDES, and it is not what it looks like.\n')
 console.log(
     '  ONE MARKER INSTEAD OF TWO SAVES ALMOST NOTHING: ~2% gzip. The incompressible part is',
 )
 console.log(
-    '  the distinct numbers a0..aN, not the <!-- around them, so halving the markers halves',
-)
-console.log('  almost none of the bytes. "Fewer markers" is not the lever.\n')
-console.log(
-    '  HYDRATION SPEED IS NOT THE REASON EITHER, and the share says so. With bindings doing',
+    '  the distinct numbers a0..aN, not the <!-- around them. "Fewer markers" is not the lever.\n',
 )
 console.log(
-    '  ordinary work the WALK is 15-39% of hydration, so eliding every marker has a ceiling',
+    '  HYDRATION SPEED DOES NOT DECIDE IT EITHER. The walk is 15-39% of hydration once',
 )
 console.log(
-    '  of ~19% — of an operation that is 4.2 ms at 15,000 slots and would not cross a frame',
+    '  bindings do ordinary work, so eliding every marker has a ceiling of ~19% of an',
 )
 console.log(
-    '  until ~150,000. CLAUDE.md already records one marker-elision change dropped for this',
+    '  operation that would not cross a frame until ~150,000 slots. And a HOISTED structural',
 )
 console.log(
-    '  exact reason: 998 fewer records, +0.053 ms then -0.033. A count is not a cost.\n',
-)
-console.log('  TWO REASONS SURVIVE, and the second one settles it.\n')
-console.log(
-    '  BYTES. A slot-dense page is about twice the size gzipped: +49 KB at 15,000 slots,',
+    '  walk is level with a marker walk anyway, so there is no speed to trade at all.\n',
 )
 console.log(
-    '  which on a 1 Mbps link is ~400 ms before anything renders. That is an interaction',
-)
-console.log('  budget, spent on the network rather than in the walk.\n')
-console.log(
-    '  OBSERVABILITY, which is a CORRECTNESS constraint and not a budget at all. A compiler',
+    '  A NAIVE STRUCTURAL WALK DOES LOSE, and by a lot: O(bindings x depth), measured at 13x',
 )
 console.log(
-    '  may not invent structure that changes what CSS matches or what a DOM query returns.',
+    '  a marker walk on a tree 32 deep. That is an emitted-code problem, not a scheme problem',
 )
 console.log(
-    '  `invariance.spec.ts` measures four places the current scheme does: `[data-a]` is',
+    '  — the compiler holds every path, so the shared prefix is walked once and the cost goes',
+)
+console.log('  flat. It is the thing to check if the walk ever regresses.\n')
+console.log(
+    '  SO THE ANSWER IS BYTES AND OBSERVABILITY. Markers double a slot-dense page gzipped,',
 )
 console.log(
-    '  matched by an attribute selector in the document AS SERVED; `firstChild` is a Comment',
+    '  which is 78 ms of transfer on a median mobile link against a walk difference of under',
 )
 console.log(
-    '  where the author wrote a Text; and `childNodes` gains two entries per slot, including',
+    '  0.1 ms. And a compiler may not invent structure an author CSS or queries can see —',
 )
 console.log(
-    '  in an element the author left empty. CSS structural selectors are all untouched —',
+    '  which is not a budget at all. `invariance.spec.ts` holds that at zero differences,',
 )
 console.log(
-    '  including `:empty`, which both engines ignore comments for — so a comment is safe for',
+    '  including descendant, :has and universal matching, which a WRAPPER would break and a',
 )
-console.log('  style and unsafe for traversal.\n')
+console.log('  comment would not.\n')
 console.log(
-    '  THE SHAPE THAT FOLLOWS: markers in fewer PLACES, not fewer markers. A region whose',
-)
-console.log(
-    '  structure is static is walked structurally and adds nothing to the document; markers',
+    '  WHERE A MARKER STILL EARNS ITS BYTES: a region whose shape depends on a value shifts',
 )
 console.log(
-    '  become a per-REGION mechanism at the boundaries where shape depends on a value',
+    "  its siblings' child indices, so 32.13 and 32.14 need an ANCHOR the document keeps",
 )
 console.log(
-    '  (32.13, 32.14, 32.16). The same boundary the slot addressing already draws.',
+    '  whether the region rendered or not. A comment is the right anchor — selector-safe,',
 )
+console.log('  and the only thing on this page that is.')

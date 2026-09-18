@@ -128,8 +128,10 @@ const label = 'clicks'
     const names = await session.reactiveNames(`${ROOT}src/page.abide`, file)
     const client = emitClient(file, names)
 
-    expect(client).toContain('textAt(root, [1,0])')
-    expect(client).not.toContain('textAt(root, [0,0])')
+    // The live run is the only one bound, and the walk to it is hoisted: `[1]` once, then the
+    // text node off it. A second binding on the static run would appear as a second `watch`.
+    expect(client).toContain('const base = childAt(root, [1])')
+    expect(client).toContain('textAt(base, [0])')
     expect(client.match(/watch\(/g) ?? []).toHaveLength(1)
 })
 

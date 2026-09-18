@@ -9,6 +9,18 @@
 // text binding found a text node and a listener found an element catches the gross case — a
 // region of a different shape — for one `nodeType` read per binding at mount.
 
+// The shared walk a region's bindings start from. Emitted ONCE for the longest path prefix every
+// binding has in common, because walking from the region root per binding is O(bindings x depth):
+// measured at 13x a marker walk on a tree 32 deep, and flat against depth once hoisted.
+export function childAt(root: Node, path: number[]): Node {
+    const node = walk(root, path)
+    if (node === undefined)
+        throw new Error(
+            `abide: no node at [${path.join(',')}], so the client and the server disagree about this region's shape (41.11).`,
+        )
+    return node
+}
+
 function walk(root: Node, path: number[]): Node | undefined {
     let node: Node | undefined = root
     for (let at = 0; at < path.length; at += 1) {
