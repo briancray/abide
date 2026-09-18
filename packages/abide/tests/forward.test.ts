@@ -64,10 +64,12 @@ test('a binding that finds the wrong kind of node says so', () => {
 
 test('the emitted binding walks a path and adds nothing to the document', () => {
     const client = emitClient(parseAbide(SOURCE), new Set(['a', 'b']))
-    // The two bindings share no prefix past the root here, so nothing is hoisted and each path
-    // is walked whole. A region whose bindings sit under one ancestor emits a `childAt` first.
-    expect(client).toContain('textAt(root, [1,0,0])')
-    expect(client).toContain('elementAt(root, [1,1])')
+    // The `<span>`'s text and the `<button>` both sit under the `<div>` at [1], so that walk is
+    // taken once and both reference it. The `<p>` at [0] has no company and walks alone.
+    expect(client).toContain('const at0 = childAt(root, [1])')
+    expect(client).toContain('textAt(at0, [0,0])')
+    expect(client).toContain('elementAt(at0, [1])')
+    expect(client).toContain('textAt(root, [0,0])')
     expect(client).not.toContain('data-a')
     expect(client).not.toContain('slots(')
 })
@@ -84,4 +86,29 @@ test('a region that may not render moves its siblings — 32.13 and 32.14 need a
     // The same page with a conditional region absent between them. Nothing marks where it was.
     document.body.innerHTML = '<p>before</p>'
     expect(() => textAt(document.body, [1, 0])).toThrow('41.11')
+})
+
+// THE WALK IS SHARED WHERE IT CAN BE. Four bindings under one parent walk the parent once, not
+// four times — measured at 2.3x a marker walk on a wide tree when every binding walked alone
+// (`depth.spec.ts`), and the compiler holds every path so the sharing is free to compute.
+//
+// THE REVERT: return `{ base: 'root', rest: path }` from `hoistPaths`' `reference` and emit no
+// anchors; every binding then walks its whole path, which this reports as 0 `childAt` lines where
+// 1 is due and four full paths where four one-step ones are.
+test('bindings under one parent share the walk to it', () => {
+    const source = `<script>
+import { reactive } from 'abide'
+let a = reactive(1)
+let b = reactive(2)
+let c = reactive(3)
+</script>
+<section><div><p>{a}</p><p>{b}</p><p>{c}</p></div></section>`
+
+    const client = emitClient(parseAbide(source), new Set(['a', 'b', 'c']))
+    // One anchor down to the shared `<div>`, then a step per binding.
+    expect(client.match(/childAt\(/g) ?? []).toHaveLength(1)
+    expect(client).toContain('childAt(root, [0,0])')
+    expect(client).toContain('textAt(at0, [0,0])')
+    expect(client).toContain('textAt(at0, [1,0])')
+    expect(client).toContain('textAt(at0, [2,0])')
 })

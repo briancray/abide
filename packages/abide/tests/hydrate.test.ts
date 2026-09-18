@@ -128,10 +128,11 @@ const label = 'clicks'
     const names = await session.reactiveNames(`${ROOT}src/page.abide`, file)
     const client = emitClient(file, names)
 
-    // The live run is the only one bound, and the walk to it is hoisted: `[1]` once, then the
-    // text node off it. A second binding on the static run would appear as a second `watch`.
-    expect(client).toContain('const base = childAt(root, [1])')
-    expect(client).toContain('textAt(base, [0])')
+    // The live run is the only one bound. It is the ONLY binding on the page, so it walks its
+    // own path and no anchor is emitted — an anchor for one binding saves nothing and costs a
+    // line. The hoisting case is the test below.
+    expect(client).toContain('textAt(root, [1,0])')
+    expect(client).not.toContain('childAt(')
     expect(client.match(/watch\(/g) ?? []).toHaveLength(1)
 })
 

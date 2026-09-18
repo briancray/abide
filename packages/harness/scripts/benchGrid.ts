@@ -7,7 +7,7 @@
 // markers in a reorder. This is a different question — what they cost to ship and to walk at
 // hydration — and it has to answer in something other than a count or it goes the same way.
 
-import { grid, type Shape, type Variant } from './GRID.ts'
+import { grid, type Shape, type Variant } from './gridPage.ts'
 
 const VARIANTS: Variant[] = ['two-markers', 'one-marker', 'no-markers']
 const SHAPES: [number, number][] = [

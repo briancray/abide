@@ -6,7 +6,13 @@
 // `structural` is the naive emit: every binding walks from the region root.
 // `hoisted` walks each shared ancestor ONCE and indexes the leaves off it, which is what a
 // compiler can do because it knows every path at build time.
+import { hoistPaths } from '../../abide/src/compiler/hoistPaths.ts'
+
 export type Scheme = 'structural' | 'hoisted' | 'markers'
+
+// `hoisted` uses the compiler's OWN `hoistPaths`, so what is measured here is what is emitted —
+// the prototype it replaced hoisted a single common prefix and flattered the deep shape while
+// doing nothing at all for the wide one.
 
 export type Tree = {
     markup: string
@@ -17,6 +23,41 @@ export type Tree = {
 
 // `leaves` slots, each `depth` elements below the root, sharing ancestors the way a real
 // component tree does rather than each having a private chain.
+// `spread` puts the leaves under MANY distinct parents rather than one, which is the shape a
+// single shared prefix cannot help: the prefix every binding shares is short, so each still walks
+// its last steps alone. It is the case that would justify hoisting per subtree, and it exists so
+// that question is answered rather than assumed.
+export function wide(
+    depth: number,
+    parents: number,
+    perParent: number,
+    scheme: Scheme,
+): Tree {
+    let markup = ''
+    const paths: number[][] = []
+    let at = 0
+    for (let p = 0; p < parents; p += 1) {
+        let inner = ''
+        for (let k = 0; k < perParent; k += 1) {
+            inner += `<span>${scheme === 'markers' ? `<!--a${at}-->` : ''}${at}${scheme === 'markers' ? '<!--/a-->' : ''}</span>`
+            const path: number[] = []
+            for (let d = 0; d < depth; d += 1) path.push(d === 0 ? p : 0)
+            path.push(k, 0)
+            paths.push(path)
+            at += 1
+        }
+        let wrapped = inner
+        for (let d = 1; d < depth; d += 1) wrapped = `<div>${wrapped}</div>`
+        markup += `<section>${wrapped}</section>`
+    }
+    return {
+        markup: `<main id="r">${markup}</main>`,
+        script: mount(scheme, paths),
+        bindings: parents * perParent,
+        depth,
+    }
+}
+
 export function tree(depth: number, leaves: number, scheme: Scheme): Tree {
     const paths: number[][] = []
     let markup = ''
@@ -69,25 +110,23 @@ while (true) {
 globalThis.__SLOTS__ = found
 `
     if (scheme === 'hoisted') {
-        // THE SHARED PREFIX IS WALKED ONCE. Every path here shares the same chain of ancestors,
-        // which a compiler can see at build time, so the walk is O(depth + bindings) rather than
-        // O(depth x bindings). Nothing about the DOCUMENT changes — this is purely what the
-        // emitted code does with paths it already had.
-        const prefix = commonPrefix(paths)
-        const rest = paths.map((path) => path.slice(prefix.length))
+        // THE COMPILER'S OWN PLAN, emitted the way `emitClient` emits it.
+        const plan = hoistPaths(paths)
+        const walk =
+            'const step = (n, p) => { for (let d = 0; d < p.length; d += 1) n = n.childNodes[p[d]]; return n }'
+        const anchors = plan.anchors
+            .map(
+                (anchor) =>
+                    `const ${anchor.name} = step(${anchor.from}, ${JSON.stringify(anchor.steps)})`,
+            )
+            .join('\n')
+        const refs = paths.map((path) => plan.reference(path))
         return `
 const root = document.querySelector('#r')
-let base = root
-const prefix = ${JSON.stringify(prefix)}
-for (let d = 0; d < prefix.length; d += 1) base = base.childNodes[prefix[d]]
-const rest = ${JSON.stringify(rest)}
+${walk}
+${anchors}
 const found = []
-for (let i = 0; i < rest.length; i += 1) {
-    const path = rest[i]
-    let node = base
-    for (let d = 0; d < path.length; d += 1) node = node.childNodes[path[d]]
-    found.push(node)
-}
+${refs.map((ref, i) => `found[${i}] = step(${ref.base}, ${JSON.stringify(ref.rest)})`).join('\n')}
 globalThis.__SLOTS__ = found
 `
     }
@@ -104,19 +143,4 @@ for (let i = 0; i < paths.length; i += 1) {
 }
 globalThis.__SLOTS__ = found
 `
-}
-
-// The longest run of indices every path begins with. A compiler computes this once, from paths it
-// already holds, and emits one walk for it.
-function commonPrefix(paths: number[][]): number[] {
-    if (paths.length === 0) return []
-    const first = paths[0] as number[]
-    let length = first.length
-    for (const path of paths) {
-        let at = 0
-        while (at < length && at < path.length && path[at] === first[at])
-            at += 1
-        length = at
-    }
-    return first.slice(0, length)
 }

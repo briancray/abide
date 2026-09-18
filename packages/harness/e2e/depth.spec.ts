@@ -21,11 +21,15 @@ const trees = JSON.parse(
         [
             '-e',
             `
-import { tree } from './packages/harness/scripts/DEPTH.ts'
+import { tree, wide } from './packages/harness/scripts/depthTree.ts'
 const out = []
 for (const [d, n] of ${JSON.stringify(CASES)})
     for (const s of ['structural', 'hoisted', 'markers'])
-        out.push({ scheme: s, ...tree(d, n, s) })
+        out.push({ scheme: s, shape: 'deep', ...tree(d, n, s) })
+// WIDE: 500 parents x 4 bindings, four levels down. A single shared prefix hoists almost
+// nothing here, which is the case that would justify hoisting per subtree.
+for (const s of ['structural', 'hoisted', 'markers'])
+    out.push({ scheme: s, shape: 'wide', ...wide(4, 500, 4, s) })
 console.log(JSON.stringify(out))
 `,
         ],
@@ -80,6 +84,7 @@ test('the walk against tree depth, in this engine', async ({
         )) as { ns: number; found: number }
         rows.push({
             scheme: built.scheme,
+            shape: built.shape,
             depth: built.depth,
             bindings: built.bindings,
             ns: measured.ns,
@@ -88,10 +93,25 @@ test('the walk against tree depth, in this engine', async ({
     }
 
     const lines = [`\n=== ${testInfo.project.name} — one hydration walk ===`]
-    for (const [depth, bindings] of CASES) {
-        const here = rows.filter(
-            (row) => row.depth === depth && row.bindings === bindings,
-        )
+    const groups: { label: string; rows: typeof rows }[] = []
+    for (const [depth, bindings] of CASES)
+        groups.push({
+            label: `deep  ${String(depth).padStart(2)} x ${String(bindings).padStart(4)}`,
+            rows: rows.filter(
+                (row) =>
+                    row.shape === 'deep' &&
+                    row.depth === depth &&
+                    row.bindings === bindings,
+            ),
+        })
+    groups.push({
+        label: 'wide   4 x 2000 (500 parents)',
+        rows: rows.filter((row) => row.shape === 'wide'),
+    })
+
+    for (const group of groups) {
+        const here = group.rows
+        const bindings = here[0]?.bindings ?? 0
         const naive = here.find((row) => row.scheme === 'structural')
         const hoisted = here.find((row) => row.scheme === 'hoisted')
         const markers = here.find((row) => row.scheme === 'markers')
@@ -107,7 +127,7 @@ test('the walk against tree depth, in this engine', async ({
                 ? ''
                 : `  !! ${wrong.map((row) => `${row.scheme} found ${row.found}`).join(', ')} of ${bindings}`
         lines.push(
-            `  depth ${String(depth).padStart(2)} x ${String(bindings).padStart(4)}   naive ${(naive.ns / 1e6).toFixed(3)}   hoisted ${(hoisted.ns / 1e6).toFixed(3)}   markers ${(markers.ns / 1e6).toFixed(3)} ms    hoisted/markers ${(hoisted.ns / markers.ns).toFixed(2)}x${ok}`,
+            `  ${group.label}   naive ${(naive.ns / 1e6).toFixed(3)}   hoisted ${(hoisted.ns / 1e6).toFixed(3)}   markers ${(markers.ns / 1e6).toFixed(3)} ms    hoisted/markers ${(hoisted.ns / markers.ns).toFixed(2)}x${ok}`,
         )
     }
     console.log(lines.join('\n'))

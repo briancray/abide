@@ -1,6 +1,7 @@
-// THE GRID PAGE, and the marker variants it is measured in. A leaf in the sense that matters —
-// both the bun-side count and the browser-side clock build the same page from here, so a
-// difference between the two substrates is the substrate and not the page.
+// THE GRID PAGE, and the marker variants it is measured in. Both the bun-side count and the
+// browser-side clock build the same page from here, so a difference between the two substrates is
+// the substrate and not the page. NOT a constants leaf despite what its old UPPERCASE name said —
+// it exports builders, and `conventions.test.ts` reads that name as a promise of no imports.
 //
 // WHY A GRID. Hydration cost is per SLOT, and a page with three slots cannot tell any scheme from
 // any other. A grid is the shape where the count is large, regular, and shaped like something an

@@ -32,7 +32,7 @@ const pages = JSON.parse(
         [
             '-e',
             `
-import { grid } from './packages/harness/scripts/GRID.ts'
+import { grid } from './packages/harness/scripts/gridPage.ts'
 const out = []
 for (const [r, c] of ${JSON.stringify(SHAPES)})
     for (const v of ${JSON.stringify(VARIANTS)})
