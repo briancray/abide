@@ -19,6 +19,22 @@ export function cards(n: number): Card[] {
 // The `.abide` source for a page holding `n` cards, written out rather than looped: `{#for}` is
 // not built, so the loop is unrolled at generation time. What is being timed is the emitted
 // code's shape, and an unrolled page has exactly the shape a `{#for}` will emit per row.
+// The hand-written arm's CLIENT half: find the nodes a later update will write, and wire the
+// button. That is what a person does by hand, and it is what `mount` does — abide additionally
+// opens a reactive subscription per run, which is capability rather than waste and is named in
+// the bench output rather than hidden in the ratio.
+export function vanillaWire(): string {
+    return `
+const nodes = []
+const articles = document.querySelectorAll('#list > article')
+for (let at = 0; at < articles.length; at += 1) {
+    const card = articles[at]
+    nodes.push(card.children[0].firstChild, card.children[1].firstChild, card.children[2].firstChild)
+}
+globalThis.__WIRED__ = nodes
+`
+}
+
 export function abideSource(n: number): string {
     let template = ''
     for (let at = 0; at < n; at += 1)

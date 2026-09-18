@@ -41,7 +41,38 @@ export async function buildCompiledPage(source: string): Promise<CompiledPage> {
             // TURN: a measured body that clicks and returns is measured before any binding has
             // run, and reports zero work for a page that did all of it a microtask later.
             // `dom.test.ts` states the same rule for the bun-side lane.
-            `import mount from './Page.client.ts'\nimport { flushSync } from 'abide'\nconst g = globalThis as unknown as { __MOUNT__: unknown; __FLUSH__: unknown }\ng.__MOUNT__ = () => mount(document.body)\ng.__FLUSH__ = flushSync\n`,
+            //
+            // `__LOOP_MOUNT__` does the SAME bindings over the SAME nodes with one binding site
+            // executed n times instead of n sites executed once. The emitted mount is
+            // straight-line, and the server bench found that shape costing ~6x what a loop costs
+            // because code that runs once never gets warm. This is the arm that says whether the
+            // client pays the same thing — and it is what `{#for}` emits by construction.
+            [
+                `import mount from './Page.client.ts'`,
+                `import { flushSync, reactive, watch } from 'abide'`,
+                `import { escapeless, setText } from 'abide/runtime'`,
+                `const g = globalThis`,
+                `g.__MOUNT__ = () => mount(document.body)`,
+                `g.__MOUNT_INTO__ = (root) => mount(root)`,
+                `g.__FLUSH__ = flushSync`,
+                `g.__LOOP_MOUNT__ = (root) => {`,
+                // THE VALUE IS MADE PER MOUNT, as the emitted one is: `let rows = reactive(...)`
+                // lives inside the compiled mount, so each call starts with an empty reader list.
+                // Hoisting it to module scope made every repetition add 3000 more readers to the
+                // same cell and the arm reported 84 ms for what takes 7 — an O(n^2) fan-out that
+                // read as a finding about emitted code shape.
+                `    const spare = reactive([0])`,
+                `    const cards = root.querySelectorAll('#list > article')`,
+                `    for (let at = 0; at < cards.length; at += 1) {`,
+                `        const card = cards[at]`,
+                `        for (let k = 0; k < 3; k += 1) {`,
+                `            const node = card.children[k].firstChild`,
+                `            watch(() => setText(node, escapeless(spare()[0])))`,
+                `        }`,
+                `    }`,
+                `}`,
+                '',
+            ].join('\n'),
         )
 
         const { default: Component } = await import(`${scratch}/Page.ts`)
