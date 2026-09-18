@@ -1,7 +1,11 @@
-import { REGION_CLOSE, REGION_OPEN } from '#ui/REGION.ts'
+import { REGION_CLOSE, REGION_OPEN, ROW_OPEN } from '#ui/REGION.ts'
 import { lowerNames } from './lowerNames.ts'
 import type { AbideFile } from './parseAbide.ts'
-import { planTemplate, type TemplatePlan } from './planTemplate.ts'
+import {
+    isSingleRooted,
+    planTemplate,
+    type TemplatePlan,
+} from './planTemplate.ts'
 import { SERVER_SPECIFIER } from './SPECIFIERS.ts'
 import { splitImports } from './splitImports.ts'
 import type { Attribute, TemplateNode } from './TemplateNode.ts'
@@ -85,7 +89,12 @@ function emitNode(
         // 32.23: the subject is read ONCE for the whole block, not once per row.
         const subject = lowerNames(node.subject, reactive)
         const body = emitChildren(node.children, reactive, undefined)
-        const row = body.length === 0 ? "''" : body.join(' + ')
+        const joined = body.length === 0 ? "''" : body.join(' + ')
+        // A row with several top-level nodes has no node that IS the row, so it carries one
+        // anchor. A single-element row carries nothing.
+        const row = isSingleRooted(node.children)
+            ? joined
+            : `${JSON.stringify(`<!--${ROW_OPEN}-->`)} + ${joined}`
         const index = node.index === '' ? '__at' : node.index
         return `${JSON.stringify(`<!--${REGION_OPEN}-->`)} + ((__list) => {
         if (__list == null) return ''

@@ -12,3 +12,12 @@
 // place it adds one.
 export const REGION_OPEN = '['
 export const REGION_CLOSE = ']'
+
+// A ROW's opening anchor, emitted ONLY where a row's body has more than one top-level node. A
+// single-element row IS its element — the nodes between the region's anchors are the rows and
+// nothing has to be added to tell them apart — but `<dt>{k}</dt><dd>{v}</dd>` has no such node,
+// and counting elements there finds four rows in a list of two.
+//
+// One comment per ROW, not per slot, which is the difference between ~2.5 bytes gzipped a row and
+// the doubled page `benchGrid.ts` measured for per-slot markers.
+export const ROW_OPEN = 'r'

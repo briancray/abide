@@ -138,3 +138,95 @@ test('the rows survive a swap with their bindings', async () => {
         (document.querySelector('#list li') as HTMLElement).textContent,
     ).toBe('Dorothy Vaughan')
 })
+
+// A BODY WITH SEVERAL TOP-LEVEL NODES. `<dl><dt>..</dt><dd>..</dd></dl>` is ordinary HTML and the
+// row has no single node that IS it — counting elements between the region's anchors finds four
+// rows in a list of two, which is how this was found: the server rendered correctly and the
+// client threw `undefined is not an object (evaluating '__row.id')` at mount.
+//
+// It gets ONE anchor per ROW, which is ~2.5 bytes gzipped a row — not the per-SLOT marker
+// `benchGrid.ts` measured doubling a page. A single-element row still carries nothing.
+const PAIRS = `<script>
+import { reactive } from 'abide'
+
+let rows = reactive([
+    { id: 'a', k: 'Ada', v: '1815' },
+    { id: 'b', k: 'Grace', v: '1906' },
+    { id: 'c', k: 'Katherine', v: '1918' },
+])
+
+function reverse() {
+    rows = [...rows].reverse()
+}
+</script>
+
+<dl id="pairs">{#for row of rows by row.id}<dt>{row.k}</dt><dd>{row.v}</dd>{/for}</dl>
+<button id="rev" onclick={reverse}>reverse</button>`
+
+async function mountPairs() {
+    const file = parseAbide(PAIRS)
+    const names = await session.reactiveNames(`${ROOT}src/pairs.abide`, file)
+    const dir = temporaryModule({
+        'Page.ts': compileFile(PAIRS, names),
+        'Page.client.ts': emitClient(file, names),
+    })
+    const { default: Component } = await import(`${dir}/Page.ts`)
+    let html = ''
+    for await (const chunk of render(
+        Component,
+        '<!doctype html><html><head></head><body></body></html>',
+    ))
+        html += new TextDecoder().decode(chunk)
+    document.body.innerHTML = html.slice(
+        html.indexOf('<body>') + '<body>'.length,
+        html.indexOf('</body>'),
+    )
+    const { default: mount } = await import(`${dir}/Page.client.ts`)
+    mount(document.body)
+    return html
+}
+
+const pairText = (): string[] =>
+    [...document.querySelectorAll('#pairs > *')].map(
+        (node) => node.textContent ?? '',
+    )
+
+test('a row with several top-level nodes mounts and reorders whole', async () => {
+    const html = await mountPairs()
+    // One anchor a row, plus the region's two. A single-element row would have only the two.
+    expect((html.match(/<!--r-->/g) ?? []).length).toBe(3)
+    expect(pairText()).toEqual([
+        'Ada',
+        '1815',
+        'Grace',
+        '1906',
+        'Katherine',
+        '1918',
+    ])
+
+    const first = document.querySelector('#pairs dt') as HTMLElement
+    ;(document.querySelector('#rev') as HTMLElement).click()
+    flushSync()
+
+    // BOTH nodes of each row moved, and together: a `<dd>` left behind its `<dt>` is the failure
+    // this shape has that a single-element row cannot.
+    expect(pairText()).toEqual([
+        'Katherine',
+        '1918',
+        'Grace',
+        '1906',
+        'Ada',
+        '1815',
+    ])
+    // And they are the same nodes — reordered, not rebuilt.
+    expect(document.querySelectorAll('#pairs dt')[2]).toBe(first)
+})
+
+// THE REVERT: emit no row anchor and count elements instead (`isSingleRooted` returning true
+// always). `rowsIn` then finds 6 rows in a list of 3, and the mount throws
+// `undefined is not an object` on the fourth — which is what this did before it was built.
+test('a single-element row still carries no anchor', async () => {
+    const html = await mountPage()
+    expect(html).not.toContain('<!--r-->')
+    expect((html.match(/<!--/g) ?? []).length).toBe(2)
+})

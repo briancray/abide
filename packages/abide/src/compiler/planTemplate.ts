@@ -193,3 +193,17 @@ function walk(nodes: TemplateNode[], path: number[], plan: TemplatePlan): void {
 function isEventName(name: string): boolean {
     return name.length > 2 && name.startsWith('on')
 }
+
+// Whether a `{#for}` body is ONE top-level element and nothing else. That row IS its element, so
+// the nodes between the region's anchors are the rows and nothing has to be added to tell them
+// apart. `<dt>{k}</dt><dd>{v}</dd>` is not — counting elements there finds four rows in a list of
+// two — and that body gets a per-ROW anchor instead.
+//
+// Formatting whitespace is already gone by here (33.17, 33.18), so a body written across lines is
+// still single-rooted.
+export function isSingleRooted(children: TemplateNode[]): boolean {
+    return (
+        children.length === 1 &&
+        (children[0] as TemplateNode).kind === 'element'
+    )
+}

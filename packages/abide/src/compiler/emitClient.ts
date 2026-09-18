@@ -3,6 +3,7 @@ import { hoistPaths } from './hoistPaths.ts'
 import { lowerNames } from './lowerNames.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
+    isSingleRooted,
     type ListPlan,
     planTemplate,
     type RegionPlan,
@@ -295,6 +296,7 @@ function emitList(
               )
 
     // The row's own bindings, against the row element the server wrote or the reconcile made.
+    const single = isSingleRooted(region.children)
     const rowMarkup = emitMarkup(region.children, reactive).replaceAll(
         new RegExp(`\\b${region.item}\\b`, 'g'),
         '__row',
@@ -318,8 +320,11 @@ function emitList(
         [
             `const ${name}_list = () => { const __l = ${subject}; return __l == null ? [] : [...__l] }`,
             `const ${name}_key = (__row, __at) => ${key.replaceAll('__at', '__at')}`,
-            `const ${name}_make = (__row, ${at}) => { const __t = document.createElement('template'); __t.innerHTML = ${rowMarkup}; return __t.content.firstElementChild }`,
-            `const ${name}_mount = (__node, __row, ${at}) => {`,
+            // EVERY node the body produced, not just the first. A multi-rooted row also gets its
+            // anchor, so what `make` hands back matches what `rowsIn` found.
+            `const ${name}_make = (__row, ${at}) => { const __t = document.createElement('template'); __t.innerHTML = ${single ? rowMarkup : `'<!--${'r'}-->' + ${rowMarkup}`}; return [...__t.content.childNodes] }`,
+            `const ${name}_mount = (__nodes, __row, ${at}) => {`,
+            `    const __node = __nodes[${single ? '0' : '1'}]`,
             `    const stops = []`,
             `    const watch = (effect) => { stops.push(watchEffect(effect)) }`,
             ...rowLines.map((line) => `    ${line}`),
@@ -330,9 +335,9 @@ function emitList(
 
     lines.push(`const ${name} = regionAt(${parent}, ${region.index})`)
     // HYDRATION, NOT RENDERING. The rows are already there; wiring them is all that is left.
-    lines.push(`let ${name}_rows = rowsIn(${name}).map((__node, __i) => {
+    lines.push(`let ${name}_rows = rowsIn(${name}, ${single ? 'false' : 'true'}).map((__nodes, __i) => {
     const __row = ${name}_list()[__i]
-    return { key: ${name}_key(__row, __i), data: __row, node: __node, stop: ${name}_mount(__node, __row, __i) }
+    return { key: ${name}_key(__row, __i), data: __row, nodes: __nodes, stop: ${name}_mount(__nodes, __row, __i) }
 })`)
     lines.push(`${inside === '' ? 'watchEffect' : 'watch'}(() => {
     const __l = ${name}_list()
@@ -342,7 +347,7 @@ function emitList(
         __l.map((__row, __i) => ${name}_key(__row, __i)),
         __l,
         (__i) => ${name}_make(__l[__i], __i),
-        (__node, __i) => ${name}_mount(__node, __l[__i], __i),
+        (__nodes, __i) => ${name}_mount(__nodes, __l[__i], __i),
     )
 })`)
 }
