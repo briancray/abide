@@ -7,20 +7,19 @@
 // moved, both of which a naive re-render would raise and neither of which changes the output.
 
 import { afterAll, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
 import { measure } from 'harness/measure'
 import { compileFile, emitClient, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
+import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
 
-const temporary: string[] = []
 afterAll(() => {
     session.close()
-    for (const dir of temporary) rmSync(dir, { recursive: true, force: true })
+    removeTemporaryModules()
 })
 
 const PAGE = `<script>
@@ -37,12 +36,10 @@ async function mountPage(source: string) {
     const file = parseAbide(source)
     const reactive = await session.reactiveNames(`${ROOT}src/page.abide`, file)
 
-    const dir = mkdtempSync(
-        `${new URL('./', import.meta.url).pathname}hydrate-`,
-    )
-    temporary.push(dir)
-    writeFileSync(`${dir}/Page.ts`, compileFile(source, reactive))
-    writeFileSync(`${dir}/Page.client.ts`, emitClient(file, reactive))
+    const dir = temporaryModule({
+        'Page.ts': compileFile(source, reactive),
+        'Page.client.ts': emitClient(file, reactive),
+    })
 
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
@@ -71,7 +68,20 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
     // 32.5 — the handler is a listener, and the server writes no `onclick` for it to fire from.
     expect(html).not.toContain('onclick')
 
-    mount(document.body)
+    // MEASURED AT MOUNT, not only at the click, and the difference is where the gate lives.
+    // 12.2 runs an effect immediately, so a binding opened for a static slot runs HERE and
+    // never again — a click-only measurement reports the same 1 with the mechanism out and
+    // distinguishes nothing, which is what the revert showed when this was written that way.
+    const mountWork = measure(() => {
+        mount(document.body)
+        flushSync()
+    })
+    // Two slots on this page, ONE of which reads a reactive value. THE REVERT: drop the
+    // `readsReactive` check in `emitClient`; this reports `bindingRuns` 1 -> 2 and `wakes`
+    // 1 -> 2, and both grow with every static slot on the page.
+    expect(mountWork.bindingRuns).toBe(1)
+    expect(mountWork.wakes).toBe(1)
+
     const out = document.querySelector('#out') as HTMLElement
     const button = document.querySelector('button') as HTMLElement
     expect(out.textContent).toBe('clicks: 0')
@@ -88,13 +98,10 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
     expect(work.elementsMoved).toBe(0)
     expect(work.textMoved).toBe(0)
 
-    // `bindingRuns` IS NOT ASSERTED HERE, and the reason is worth more than the assertion:
-    // nothing in abide publishes `__ABIDE_WORK__`, so `bindingRuns`, `wakes` and `descents` are
-    // all null. Publishing a partial record is WORSE than publishing none — the zeroing pass in
-    // `armCase` writes all three, so a field nobody increments reads back 0 and every gate
-    // asserting it passes against a counter that was never wired (44.24). The count that stands
-    // in for it until the core publishes is the emitted-source gate below.
-    expect(work.bindingRuns).toBeNull()
+    // On the CLICK only the reactive slot may re-run. A static slot's binding, if one were
+    // opened, would not show up here at all — which is exactly why the mount is measured above.
+    expect(work.bindingRuns).toBe(1)
+    expect(work.wakes).toBe(1)
 })
 
 // A slot reading nothing reactive is written once by the server and never again. THE REVERT:

@@ -1,8 +1,8 @@
 import { afterAll, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
 import { compileFile, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
+import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const TSCONFIG = `${ROOT}tsconfig.json`
@@ -48,10 +48,7 @@ const value = mystery()
     expect(names.has('value')).toBe(false)
 })
 
-const temporary: string[] = []
-afterAll(() => {
-    for (const dir of temporary) rmSync(dir, { recursive: true, force: true })
-})
+afterAll(removeTemporaryModules)
 
 // The whole of stage 2 in one case: the checker decides which names are reactive, the lowering
 // rewrites reads and writes by name, the imports hoist, and the document that comes out carries
@@ -75,10 +72,7 @@ count = count + step
     const names = await session.reactiveNames(PAGE, file)
     expect([...names]).toEqual(['count'])
 
-    const dir = mkdtempSync(`${new URL('./', import.meta.url).pathname}stage2-`)
-    temporary.push(dir)
-    const module = `${dir}/Page.ts`
-    writeFileSync(module, compileFile(source, names))
+    const module = `${temporaryModule({ 'Page.ts': compileFile(source, names) })}/Page.ts`
 
     const { default: Page } = await import(module)
     let out = ''

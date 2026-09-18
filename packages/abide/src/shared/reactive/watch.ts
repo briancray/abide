@@ -11,6 +11,7 @@
 // imports the narrowed form from here. A second argument is the author saying which form
 // they meant, and it needs nothing from the other module but a type.
 
+import { WORK } from '../WORK.ts'
 import { CELL } from './CELL.ts'
 import { NotLanded } from './NotLanded.ts'
 import type { Reactive } from './Reactive.ts'
@@ -88,6 +89,7 @@ export function watchOver(
             const previous = TRACKING.reader
             TRACKING.reader = null
             try {
+                WORK.wakes += 1
                 dispose = effect()
             } catch (thrown) {
                 TRACKING.reader = previous
@@ -142,6 +144,7 @@ function watchTracked(effect: Effect): Disposer {
             if (reader.probeSources.length !== 0) detachProbes(reader)
             reader.running = true
             try {
+                WORK.wakes += 1
                 dispose = effect()
             } catch (thrown) {
                 reader.running = false

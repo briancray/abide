@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
 import { compileFile, parseAbide } from '#compiler'
 import { escapeText, render } from '#server'
+import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const PAGE = `<head>
     <title>{title}</title>
@@ -114,20 +114,10 @@ test('the compiler is not reachable from the server seam', async () => {
     ])
 })
 
-const temporary: string[] = []
-afterAll(() => {
-    for (const dir of temporary) rmSync(dir, { recursive: true, force: true })
-})
+afterAll(removeTemporaryModules)
 
 test('a compiled page renders as bytes into a shell', async () => {
-    // Inside the package so the emitted `abide/server` import resolves; a fresh directory per
-    // run so two workers cannot share one artifact.
-    const dir = mkdtempSync(
-        `${new URL('./', import.meta.url).pathname}compiled-`,
-    )
-    temporary.push(dir)
-    const module = `${dir}/Page.ts`
-    writeFileSync(module, compileFile(PAGE))
+    const module = `${temporaryModule({ 'Page.ts': compileFile(PAGE) })}/Page.ts`
 
     const { default: Page } = await import(module)
     const shell =

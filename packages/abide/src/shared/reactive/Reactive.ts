@@ -15,6 +15,7 @@
 import { type Failed, isFailed } from '../Failed.ts'
 import { validationError } from '../refuse.ts'
 import { type Found, runSchema, type Schema } from '../Schema.ts'
+import { WORK } from '../WORK.ts'
 import { CELL } from './CELL.ts'
 import {
     armTimer,
@@ -830,6 +831,9 @@ function markReaders(cell: Cell, wanted: number): void {
         // that is RUNNING is what stops a body re-marking itself when a source it pulled
         // forward produces underneath it.
         if (!reader.alive || reader.running || reader.state >= wanted) continue
+        // One node VISITED. Past the guard above, so it counts what the walk did rather than
+        // what it was offered — the difference between the two is the whole of the O(V) claim.
+        WORK.descents += 1
         const was = reader.state
         reader.state = wanted
         if (reader.isEffect) {
