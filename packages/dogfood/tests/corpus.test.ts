@@ -23,8 +23,6 @@ const TSCONFIG = new URL('../examples/tsconfig.json', import.meta.url).pathname
 const NOT_YET = new Set<string>([
     // 32.17 — the render-time boundary. Not built.
     'try-region/files/src/ui/components/Total.abide',
-    // A multi-line string in a `reactive(...)` argument; not yet diagnosed.
-    'channel-transform/files/src/ui/pages/chat/page.abide',
 ])
 
 const sources = [

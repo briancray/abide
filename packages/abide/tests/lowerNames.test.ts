@@ -166,3 +166,35 @@ test('a parameter shadowing a reactive name is NOT yet respected — 31.12', () 
         'const f = (n) => n() + 1',
     )
 })
+
+// A LINE BREAK ENDS A STATEMENT. THE REVERT: drop the line-break case in `rightHandSide`; a write
+// with no semicolon after it swallows the next statement whole — `n = ''` followed by `return`
+// lowers to `n.set('' return)`, which is not a program. One file in the corpus, whose author
+// simply does not write semicolons, and it would be every such file.
+test('a write ends at the line break, not at the next semicolon', () => {
+    expect(lowerNames("n = ''\nreturn", N)).toBe("n.set('')\nreturn")
+    expect(lowerNames('n = 1\nconst a = 2', N)).toBe('n.set(1)\nconst a = 2')
+    expect(lowerNames('n = 1\nother()', N)).toBe('n.set(1)\nother()')
+    // A value that plainly CONTINUES across the break is still one value.
+    expect(lowerNames("n = 'a' +\n    'b'", N)).toBe("n.set('a' +\n    'b')")
+    expect(lowerNames('n = a\n    .b', N)).toBe('n.set(a\n    .b)')
+    // And a semicolon still ends it where there is one.
+    expect(lowerNames('n = 1; other()', N)).toBe('n.set(1); other()')
+})
+
+// 31.5, 31.6 — A MEMBER REACHES THE VALUE unless the `Reactive` declares it. THE REVERT: skip
+// every identifier followed by `.`, which is what this did before; `rows.join(', ')` then stays a
+// call on the Reactive and reports `rows.join is not a function` at run time, with the page
+// rendering up to that line and stopping.
+test('a member reaches the value, and the API reaches the Reactive', () => {
+    expect(lowerNames("n.join(', ')", N)).toBe("n().join(', ')")
+    expect(lowerNames('n.length', N)).toBe('n().length')
+    expect(lowerNames('n.map((x) => x)', N)).toBe('n().map((x) => x)')
+    // The `Reactive`'s own members are the API and pass through untouched (31.7).
+    expect(lowerNames('n.set(2)', N)).toBe('n.set(2)')
+    expect(lowerNames('n.peek()', N)).toBe('n.peek()')
+    expect(lowerNames('n.ready()', N)).toBe('n.ready()')
+    expect(lowerNames('n.isError(e, "X")', N)).toBe('n.isError(e, "X")')
+    // A member of something else is not ours either way.
+    expect(lowerNames('obj.n.join()', N)).toBe('obj.n.join()')
+})

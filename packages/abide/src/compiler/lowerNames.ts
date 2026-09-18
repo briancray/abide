@@ -1,5 +1,6 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
+import { REACTIVE_MEMBERS } from './REACTIVE_MEMBERS.ts'
 
 // 31.1 and 31.4 — inside a `.abide` a name bound to a `Reactive` is READ where it stands and
 // WRITTEN where it is assigned. The rewrite is at the TOKEN level, driven by TypeScript's own
@@ -164,12 +165,24 @@ export function lowerNames(
         // absent next token is a read, not a reason to skip.
         const next = tokens[i + 1] as Token | undefined
 
-        // 31.7 — the explicit spelling keeps compiling. `n()` and `n.set(v)` are already right.
-        if (next?.kind === OPEN_PAREN || next?.kind === DOT) continue
+        // 31.7 — the explicit spelling keeps compiling. `n()` is already right.
+        if (next?.kind === OPEN_PAREN) continue
+
+        // 31.5, 31.6 — A MEMBER REACHES THE VALUE unless the `Reactive` declares it. `n.set(v)`
+        // is the API and passes through; `regions.join(', ')` is the array's own method and has
+        // to read the value first, or it is a call on a function that is not there.
+        if (next?.kind === DOT) {
+            const member = tokens[i + 2] as Token | undefined
+            if (member === undefined || REACTIVE_MEMBERS.has(member.text))
+                continue
+            out += `${source.slice(at, token.start)}${token.text}()`
+            at = token.end
+            continue
+        }
 
         const op = next === undefined ? undefined : OP_ASSIGN.get(next.kind)
         if (next !== undefined && (next.kind === EQUALS || op !== undefined)) {
-            const rhs = rightHandSide(tokens, i + 2)
+            const rhs = rightHandSide(tokens, i + 2, source)
             const value = lowerNames(
                 source.slice(next.end, rhs.end).trim(),
                 reactive,
@@ -251,15 +264,60 @@ function tokenise(source: string): Token[] {
     return tokens
 }
 
-// Where the value being assigned ends: the first `,` or `;` at depth zero, or the bracket that
-// closes the region this assignment is inside. `n = f(a, b)` keeps its comma; `[n = 1, 2]` does not.
+// Tokens that can END a value. A line break after one of these ends the statement unless what
+// follows plainly continues it — which is what JavaScript's automatic semicolon insertion does,
+// and what a scan that only looks for `;` misses.
+const ENDS_VALUE = new Set<SyntaxKind>([
+    SyntaxKind.Identifier,
+    SyntaxKind.StringLiteral,
+    SyntaxKind.NumericLiteral,
+    SyntaxKind.BigIntLiteral,
+    SyntaxKind.NoSubstitutionTemplateLiteral,
+    SyntaxKind.TemplateTail,
+    SyntaxKind.CloseParenToken,
+    SyntaxKind.CloseBracketToken,
+    SyntaxKind.CloseBraceToken,
+    SyntaxKind.TrueKeyword,
+    SyntaxKind.FalseKeyword,
+    SyntaxKind.NullKeyword,
+    SyntaxKind.ThisKeyword,
+])
+
+// Tokens that plainly CONTINUE a value across a line break: `a\n.b`, `a\n + 1`, `f(a\n, b)`.
+const CONTINUES_VALUE = new Set<SyntaxKind>([
+    SyntaxKind.DotToken,
+    SyntaxKind.QuestionDotToken,
+    SyntaxKind.CommaToken,
+    SyntaxKind.CloseParenToken,
+    SyntaxKind.CloseBracketToken,
+    SyntaxKind.CloseBraceToken,
+    SyntaxKind.QuestionToken,
+    SyntaxKind.ColonToken,
+])
+
+// Where the value being assigned ends: the first `,` or `;` at depth zero, the bracket that closes
+// the region this assignment is inside, or A LINE BREAK that ends the statement.
+//
+// THE LINE BREAK IS NOT OPTIONAL. `refusal = ''` followed by `return` on the next line has no
+// semicolon between them, and a scan looking only for one produced `refusal.set('' return)` —
+// found by compiling the corpus, in a file whose author simply does not write semicolons.
 function rightHandSide(
     tokens: Token[],
     from: number,
+    source: string,
 ): { index: number; end: number } {
     let depth = 0
     for (let i = from; i < tokens.length; i += 1) {
         const token = tokens[i] as Token
+        const previous = i > from ? (tokens[i - 1] as Token) : undefined
+        if (
+            depth === 0 &&
+            previous !== undefined &&
+            ENDS_VALUE.has(previous.kind) &&
+            !CONTINUES_VALUE.has(token.kind) &&
+            source.slice(previous.end, token.start).includes('\n')
+        )
+            return { index: i, end: previous.end }
         if (
             token.kind === OPEN_PAREN ||
             token.kind === OPEN_BRACKET ||
