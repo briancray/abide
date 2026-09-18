@@ -510,7 +510,6 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- | --- |
 | `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 32.13, 32.23 |
 | `{#for item, index of list by key}` | `{:catch}` | Repeats markup over a list, or over a cursor as it produces. | 18.16, 32.14, 32.15, 32.16, 32.24, 41.9 |
-| `{#switch expr}` | `{:case v}` `{:default}` | Multi-way markup. | 32.13 |
 | `{#try}` | `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.17 |
 
 ### Components

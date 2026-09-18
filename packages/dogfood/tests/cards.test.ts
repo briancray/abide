@@ -1821,27 +1821,6 @@ test('element-ref: the button reaches the node and the listeners report it', asy
     expect(read('#state')).toBe('idle')
 })
 
-test('branch-switch: exactly one branch is in the document at a time', async () => {
-    await mount('branch-switch', 'invoice.js')
-    const lines = () =>
-        [...document.querySelectorAll('#branch p')].map(
-            (one) => one.textContent,
-        )
-
-    expect(lines()).toEqual(['Not sent yet.'])
-
-    // THE CLAIM. Moving to another case replaces the branch rather than adding one, so the
-    // document never holds two answers to a question with one.
-    click('#overdue')
-    expect(lines()).toEqual(['Chase this one.'])
-
-    click('#sent')
-    expect(lines()).toEqual(['Waiting on the customer.'])
-
-    click('#paid')
-    expect(lines()).toEqual(['Settled — nothing to chase.'])
-})
-
 test('try-region: the failure replaces the whole region, not the line that threw', async () => {
     await mount('try-region', 'total.js')
     expect(

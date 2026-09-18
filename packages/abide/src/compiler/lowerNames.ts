@@ -78,6 +78,79 @@ export function lowerNames(
         return false
     }
 
+    // A DESTRUCTURING PATTERN BINDS NAMES, it does not read them — `const { n } = x` declares `n`
+    // and `const { n: m } = x` declares `m`. Skipped as a whole, the same way an import clause is,
+    // because the immediately-preceding-token test that catches `let n` cannot see past a brace.
+    for (let i = 0; i < tokens.length - 1; i += 1) {
+        if (!DECLARATION.has((tokens[i] as Token).kind)) continue
+        const opener = tokens[i + 1] as Token
+        if (opener.kind !== OPEN_BRACE && opener.kind !== OPEN_BRACKET) continue
+        let depth = 0
+        for (let j = i + 1; j < tokens.length; j += 1) {
+            const token = tokens[j] as Token
+            if (token.kind === OPEN_BRACE || token.kind === OPEN_BRACKET)
+                depth += 1
+            else if (
+                token.kind === CLOSE_BRACE ||
+                token.kind === CLOSE_BRACKET
+            ) {
+                depth -= 1
+                if (depth === 0) {
+                    skipped.push({ start: opener.start, end: token.end })
+                    i = j
+                    break
+                }
+            }
+        }
+    }
+
+    // A PARAMETER IS A BINDING, NOT A READ — the third position where that is true, after an
+    // import clause and a destructuring pattern. `function f(region)` lowered to
+    // `function f(region())` and `(rows) => …` to `(rows()) => …`; neither is a program. The
+    // parameter list is skipped whole, which also covers a default value that reads the name it
+    // shadows — a case worth being wrong about loudly rather than quietly.
+    const closeOf = (open: number): number => {
+        let depth = 0
+        for (let j = open; j < tokens.length; j += 1) {
+            const kind = (tokens[j] as Token).kind
+            if (kind === OPEN_PAREN) depth += 1
+            else if (kind === CLOSE_PAREN) {
+                depth -= 1
+                if (depth === 0) return j
+            }
+        }
+        return -1
+    }
+    for (let i = 0; i < tokens.length; i += 1) {
+        const token = tokens[i] as Token
+        // `rows => …`, the parenthesis-free arrow.
+        if (
+            token.kind === IDENTIFIER &&
+            (tokens[i + 1] as Token | undefined)?.kind ===
+                SyntaxKind.EqualsGreaterThanToken
+        ) {
+            skipped.push({ start: token.start, end: token.end })
+            continue
+        }
+        if (token.kind !== OPEN_PAREN) continue
+        const previousKind = i > 0 ? (tokens[i - 1] as Token).kind : undefined
+        const close = closeOf(i)
+        if (close === -1) continue
+        const afterKind = (tokens[close + 1] as Token | undefined)?.kind
+        // A parameter list is either what follows `function` (with or without a name), or a
+        // parenthesised list an `=>` follows.
+        const isFunction =
+            previousKind === SyntaxKind.FunctionKeyword ||
+            (previousKind === IDENTIFIER &&
+                i > 1 &&
+                (tokens[i - 2] as Token).kind === SyntaxKind.FunctionKeyword)
+        if (isFunction || afterKind === SyntaxKind.EqualsGreaterThanToken)
+            skipped.push({
+                start: (tokens[i] as Token).start,
+                end: (tokens[close] as Token).end,
+            })
+    }
+
     for (let i = 0; i < tokens.length; i += 1) {
         const token = tokens[i] as Token
         if (token.kind !== IDENTIFIER || !reactive.has(token.text)) continue
@@ -111,6 +184,27 @@ export function lowerNames(
             continue
         }
 
+        // AN OBJECT LITERAL'S KEY IS NOT A READ. `{ limit: n }` names a property; lowering the
+        // key gives `{ limit(): n }`, a method with a body that is not one. The preceding token
+        // is what tells a key from a ternary's `:` or a label.
+        if (
+            (previous?.kind === OPEN_BRACE || previous?.kind === COMMA) &&
+            next?.kind === SyntaxKind.ColonToken
+        )
+            continue
+
+        // AN OBJECT SHORTHAND IS A KEY AND A VALUE. `{ n }` means `{ n: n }`, so the key has to
+        // stay `n` and only the value lowers — `{ n() }` is a method with no body and the module
+        // does not parse. Found by compiling the corpus, in seven files.
+        if (
+            (previous?.kind === OPEN_BRACE || previous?.kind === COMMA) &&
+            (next?.kind === COMMA || next?.kind === CLOSE_BRACE)
+        ) {
+            out += `${source.slice(at, token.start)}${token.text}: ${token.text}()`
+            at = token.end
+            continue
+        }
+
         // 31.1 — every other position is a read.
         out += `${source.slice(at, token.start)}${token.text}()`
         at = token.end
@@ -124,8 +218,28 @@ type Token = { kind: SyntaxKind; text: string; start: number; end: number }
 function tokenise(source: string): Token[] {
     const scanner = createScanner(true, undefined, source)
     const tokens: Token[] = []
+    // A TEMPLATE LITERAL IS NOT ORDINARY TOKENS. `` `a${b}c` `` scans as TemplateHead, then `b`,
+    // then a CLOSE BRACE that has to be RE-SCANNED as the literal's continuation — without that
+    // the scanner reads `c\`` as ordinary code, and a bare word in the TEXT of a template gets
+    // rewritten as if it were a read. Found by compiling the corpus: `${owner} — … of notes`
+    // lowered to `${owner())} — … of notes()`, which is not a program.
+    const templates: number[] = []
     while (true) {
-        const kind = scanner.scan()
+        let kind = scanner.scan()
+        if (kind === SyntaxKind.TemplateHead) templates.push(0)
+        else if (
+            kind === CLOSE_BRACE &&
+            templates.length > 0 &&
+            templates[templates.length - 1] === 0
+        ) {
+            kind = scanner.reScanTemplateToken(false)
+            if (kind === SyntaxKind.TemplateTail) templates.pop()
+        } else if (kind === OPEN_BRACE && templates.length > 0)
+            templates[templates.length - 1] =
+                (templates[templates.length - 1] as number) + 1
+        else if (kind === CLOSE_BRACE && templates.length > 0)
+            templates[templates.length - 1] =
+                (templates[templates.length - 1] as number) - 1
         if (kind === END_OF_FILE) break
         tokens.push({
             kind,

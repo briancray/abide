@@ -89,7 +89,6 @@ places a value belongs, so the name reads. A position whose declared type is a
 | --- | --- | --- |
 | `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. |
 | `{#for item, index of list by key}` | `{:catch}` | Repeats markup over a list, or over a cursor as it produces. |
-| `{#switch expr}` | `{:case v}` `{:default}` | Multi-way markup. |
 | `{#try}` | `{:catch e}`, `{:finally}` | A render-time boundary and a region. |
 
 ### Components

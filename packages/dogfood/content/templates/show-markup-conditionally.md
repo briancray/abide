@@ -1,44 +1,33 @@
 ---
 title: Show markup conditionally
 nav: Conditionals
-intent: Branch on a value, on a case, on whether something has landed, and on whether it failed.
+intent: Branch on a value, on whether something has landed, and on whether rendering it failed.
 covers:
   - `{#if cond}`
-  - `{#switch expr}`
   - `{#try}`
 examples:
-  - packages/dogfood/examples/branch-switch
   - packages/dogfood/examples/try-region
 ---
 
-Four questions a page asks about a value: is it true, which of these is it, has it landed, and
-did rendering it fail. Three blocks answer them, because whether a value has landed is a
-condition like any other. Each renders one branch, and the branch it renders is the only one in
-the document.
+Three questions a page asks about a value: is it true, has it landed, and did rendering it
+fail. Two blocks answer them, because whether a value has landed is a condition like any other.
+Each renders one branch, and the branch it renders is the only one in the document.
 
-## The three blocks
+## The two blocks
 
 | You write | Branches | Asks |
 | --- | --- | --- |
 | `{#if cond}` | `{:else if}`, `{:else}` | is it true |
-| `{#switch expr}` | `{:case v}`, `{:default}` | which of these is it |
 | `{#try}` | `{:catch e}`, `{:finally}` | did rendering this fail |
 
-All three are **render-time** structure rather than a filter over markup that exists anyway: the
-branch not taken has no nodes. And all three bind each reactive read in their subject **once for
-the body**, so a condition mentioning a value three times is one subscription and one read.
+Both are **render-time** structure rather than a filter over markup that exists anyway: the
+branch not taken has no nodes. And both bind each reactive read in their subject **once for the
+body**, so a condition mentioning a value three times is one subscription and one read.
 
-## A switch renders exactly one branch
-
-{% example branch-switch %}
-
-*1 block, 0 removals* — the arm's other half is taking the last branch out, which is the half
-that decides whether this is a switch at all.
-
-`{#if}` and `{#switch}` are the same rule with different arity. `{#switch}` earns its keep
-where the alternatives are values rather than conditions: four `{:else if}` clauses comparing
-one expression against four constants is a `{#switch}` written the long way, and the long way
-is where the fifth case gets added to the wrong chain.
+**There is no `{#switch}`.** Matching one expression against several constants is a chain of
+`{:else if}`, and a second spelling for it would be a second thing to learn, a second lowering
+to keep correct and a second place a reader looks first. The chain reads a little longer and is
+the only shape there is.
 
 ## Whether it has landed is an `{#if}`
 

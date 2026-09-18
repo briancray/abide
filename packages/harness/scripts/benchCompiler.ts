@@ -132,8 +132,11 @@ async function compileCeiling(
     // the root set changed, so the project is resolved again — and a FRESH BUILD is all new
     // files while a watch rebuild is all known ones. Timed on the compiler's own fixture,
     // because a file outside every tsconfig throws rather than measuring (31.3).
-    const fixture = new URL('packages/abide/tests/fixtures/typed/src/', REPO)
-        .pathname
+    // Inside the project the session opened, or the query throws rather than measuring.
+    const fixture = new URL(
+        'packages/dogfood/examples/bind-text/files/src/',
+        REPO,
+    ).pathname
     const sample = parseAbide(sources[0]?.text ?? '')
     await session.reactiveNames(`${fixture}warm.abide`, sample)
 
@@ -186,14 +189,25 @@ async function compileCeiling(
 }
 
 async function main(): Promise<void> {
+    // The EXAMPLES' own project, not abide's. A shadow has to be inside the project that is open
+    // or the checker never reads it, which is why the corpus counted as untypeable rather than as
+    // unsupported — a fact about the tsconfig, not about the compiler.
     const session = await TypeSession.open(
-        new URL('packages/abide/tsconfig.json', REPO).pathname,
+        new URL('packages/dogfood/examples/tsconfig.json', REPO).pathname,
     )
     try {
         const arms = await armsFor(session)
+        // GLOBBED, not listed. A hand-written list of a directory's files is a second copy of
+        // what the directory already says, and this one had four names in it that no longer
+        // existed — the bench failed on a rename rather than reporting a bigger number.
+        const runtimeFiles = [
+            ...new Bun.Glob('**/*.ts').scanSync({
+                cwd: new URL('packages/abide/src/ui/', REPO).pathname,
+            }),
+        ]
         const runtime = await countLines(
             new URL('packages/abide/src/ui/', REPO),
-            ['index.ts', 'slots.ts', 'setText.ts', 'handlers.ts', 'MARKERS.ts'],
+            runtimeFiles,
         )
 
         let authoredAbide = 0
@@ -247,15 +261,14 @@ async function main(): Promise<void> {
             `\n  ${withClient} of ${arms.length} paired examples emit a client module today.`,
         )
         console.log(
-            `  ${typeable} of ${arms.length} can be TYPED — the examples sit in no tsconfig, so`,
+            `  ${typeable} of ${arms.length} can be TYPED. An example the checker cannot reach is counted at 0`,
         )
         console.log(
-            '  31.3 cannot be answered for them and every name lowers as written. They are',
+            '  shipped lines rather than dropped — a budget over the subset that happens to work',
         )
         console.log(
-            '  counted at 0 shipped lines rather than dropped: a budget over the subset that',
+            '  is a budget that improves by failing — so this denominator is the one to watch.',
         )
-        console.log('  happens to work is a budget that improves by failing.')
 
         await compileCeiling(session, arms)
     } finally {

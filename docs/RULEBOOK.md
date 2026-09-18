@@ -1299,7 +1299,7 @@ string.
 
 32.12 `{...expr}` MUST spread props on a component and attributes on an element.
 
-32.13 `{#if}` and `{#switch}` MUST render one branch.
+32.13 `{#if}` MUST render one branch.
 
 32.14 `{#for}` without a key MUST be positional.
 

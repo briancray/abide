@@ -80,3 +80,89 @@ test('an import clause is not rewritten', () => {
         "import { x } from './x.ts'\nn.set(1)",
     )
 })
+
+// AN OBJECT SHORTHAND IS A KEY AND A VALUE, and only the value is a read. THE REVERT: drop the
+// shorthand case in `lowerNames`; `{ n }` lowers to `{ n() }`, which is a method with no body, and
+// the emitted module does not parse at all. Seven files in the example corpus hit this.
+test('an object shorthand keeps its key', () => {
+    expect(lowerNames('f({ n })', N)).toBe('f({ n: n() })')
+    expect(lowerNames('f({ a, n })', N)).toBe('f({ a, n: n() })')
+    expect(lowerNames('f({ n, a })', N)).toBe('f({ n: n(), a })')
+    // An explicit key is already a value position and is lowered as one.
+    expect(lowerNames('f({ k: n })', N)).toBe('f({ k: n() })')
+    // A spread reads the whole value.
+    expect(lowerNames('f({ ...n })', N)).toBe('f({ ...n() })')
+})
+
+// 31.14 — a destructuring pattern BINDS. THE REVERT: drop the pattern-skipping pass; `const { n }
+// = x` lowers to `const { n: n() } = x`, which declares nothing and does not parse.
+test('a destructuring pattern is not a read', () => {
+    expect(lowerNames('const { n } = x', N)).toBe('const { n } = x')
+    expect(lowerNames('const [n] = x', N)).toBe('const [n] = x')
+    expect(lowerNames('const { a, n } = x', N)).toBe('const { a, n } = x')
+    // And the read after it is still a read.
+    expect(lowerNames('const { a } = x\nn + 1', N)).toBe(
+        'const { a } = x\nn() + 1',
+    )
+})
+
+// A TEMPLATE LITERAL'S TEXT IS TEXT. THE REVERT: drop the `reScanTemplateToken` handling in
+// `tokenise`; the scanner reads the literal's tail as ordinary code, so a bare word in the TEXT is
+// rewritten as a read and the closing backtick is lost — `${n} of n` lowered to `${n())} of n()`,
+// which is not a program. One file in the corpus, and it would have been every file using a
+// template.
+test('a template literal only lowers its substitutions', () => {
+    expect(lowerNames('`${n} and n`', N)).toBe('`${n()} and n`')
+    expect(lowerNames('`n ${n} n`', N)).toBe('`n ${n()} n`')
+    expect(lowerNames('`${n} ${n}`', N)).toBe('`${n()} ${n()}`')
+    // An object inside a substitution still closes correctly.
+    expect(lowerNames('`${f({ n })} tail n`', N)).toBe(
+        '`${f({ n: n() })} tail n`',
+    )
+    expect(lowerNames('x = `a${n}b`', N)).toBe('x = `a${n()}b`')
+})
+
+// AN OBJECT KEY IS NOT A READ. THE REVERT: drop the key case; `{ n: 1 }` lowers to `{ n(): 1 }`.
+test('an object key is not a read', () => {
+    expect(lowerNames('f({ n: 1 })', N)).toBe('f({ n: 1 })')
+    expect(lowerNames('f({ a: 1, n: 2 })', N)).toBe('f({ a: 1, n: 2 })')
+    // A ternary's colon is not a key, and the name before it IS a read.
+    expect(lowerNames('a ? n : b', N)).toBe('a ? n() : b')
+})
+
+// A PARAMETER IS A BINDING — the third position where that is true, after an import clause and a
+// destructuring pattern. THE REVERT: drop the parameter-list pass; `function f(n)` lowers to
+// `function f(n())` and `(n) => n` to `(n()) => n()`, neither of which is a program. Two files in
+// the corpus, and every file that declares a handler taking a name the page also holds.
+test('a parameter is not a read', () => {
+    // The SIGNATURE is a binding list. The BODY is a separate question — see below.
+    expect(lowerNames('function f(a, n) { return 1 }', N)).toBe(
+        'function f(a, n) { return 1 }',
+    )
+    expect(lowerNames('const f = (n) => 1', N)).toBe('const f = (n) => 1')
+    expect(lowerNames('const f = n => 1', N)).toBe('const f = n => 1')
+    // A call is not a parameter list, and its argument IS a read.
+    expect(lowerNames('f(n)', N)).toBe('f(n())')
+    expect(lowerNames('f(n, 2)', N)).toBe('f(n(), 2)')
+    // And an arrow that does not shadow still reads.
+    expect(lowerNames('const f = (a) => n + a', N)).toBe(
+        'const f = (a) => n() + a',
+    )
+})
+
+// 31.12 — A BINDING SHADOWS THE NAME IT REUSES, for the body it is bound in. NOT IMPLEMENTED:
+// `lowerNames` has no notion of scope, so a parameter named after a reactive value fixes the
+// SIGNATURE and still lowers the BODY, where the name means the parameter.
+//
+// Asserted as it behaves TODAY so that implementing scope fails this test and forces it to be
+// rewritten — the shape the slot-addressing dead end was found and fixed through. What it costs
+// until then: a page naming a handler's parameter after one of its own values emits a call on
+// something that is not a function, and finds out at run time.
+test('a parameter shadowing a reactive name is NOT yet respected — 31.12', () => {
+    expect(lowerNames('function f(n) { return n }', N)).toBe(
+        'function f(n) { return n() }',
+    )
+    expect(lowerNames('const f = (n) => n + 1', N)).toBe(
+        'const f = (n) => n() + 1',
+    )
+})

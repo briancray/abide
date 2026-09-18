@@ -42,7 +42,7 @@ which is a distinction an empty string would quietly lose.
 | `src/ui/pages/docs/[...path]/page.abide` | `/docs/start/install` |
 
 `route.url` comes from the file path and `route.name` is the **resolution path** — the pattern
-that matched, not the address that arrived. So a log line, a metric and a `{#switch}` over the
+that matched, not the address that arrived. So a log line, a metric and an `{#if}` over the
 current route all key on `invoices/[id]` for every invoice rather than on one address each.
 
 ```abide #ui/pages/invoices/[id]/page.abide
