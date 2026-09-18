@@ -7,7 +7,7 @@
 // markers in a reorder. This is a different question — what they cost to ship and to walk at
 // hydration — and it has to answer in something other than a count or it goes the same way.
 
-import { grid, type Variant } from './GRID.ts'
+import { grid, type Shape, type Variant } from './GRID.ts'
 
 const VARIANTS: Variant[] = ['two-markers', 'one-marker', 'no-markers']
 const SHAPES: [number, number][] = [
@@ -17,71 +17,91 @@ const SHAPES: [number, number][] = [
 ]
 
 console.log('BYTES AND NODES — what the document carries\n')
-for (const [rows, columns] of SHAPES) {
-    const cells = rows * columns
-    console.log(`  ${rows}x${columns} = ${cells} cells`)
-    const base = grid(rows, columns, 'no-markers')
-    for (const variant of VARIANTS) {
-        const built = grid(rows, columns, variant)
-        const raw = new TextEncoder().encode(built.markup)
-        const comments = (built.markup.match(/<!--/g) ?? []).length
-        // WHAT SHIPS IS COMPRESSED, and a marker is the most compressible thing on the page: the
-        // same token, thousands of times. The raw column overstates the cost by a lot, and
-        // quoting it would be quoting the worst case as if it were the bill.
-        const zipped = Bun.gzipSync(raw).length
-        const zippedBase = Bun.gzipSync(
-            new TextEncoder().encode(base.markup),
-        ).length
-        console.log(
-            `    ${variant.padEnd(12)} raw ${String(raw.length).padStart(7)}  gzip ${String(zipped).padStart(6)}  ${String(comments).padStart(6)} comments  gzip +${String(zipped - zippedBase).padStart(5)} over none (${((zipped / zippedBase - 1) * 100).toFixed(1)}%)`,
-        )
+for (const shape of ['simple', 'dense'] as Shape[]) {
+    for (const [rows, columns] of SHAPES) {
+        const base = grid(rows, columns, 'no-markers', shape)
+        console.log(`  ${shape} ${rows}x${columns} = ${base.cells} slots`)
+        for (const variant of VARIANTS) {
+            const built = grid(rows, columns, variant, shape)
+            const raw = new TextEncoder().encode(built.markup)
+            const comments = (built.markup.match(/<!--/g) ?? []).length
+            // WHAT SHIPS IS COMPRESSED, and a marker is the most compressible thing on the page: the
+            // same token, thousands of times. The raw column overstates the cost by a lot, and
+            // quoting it would be quoting the worst case as if it were the bill.
+            const zipped = Bun.gzipSync(raw).length
+            const zippedBase = Bun.gzipSync(
+                new TextEncoder().encode(base.markup),
+            ).length
+            console.log(
+                `    ${variant.padEnd(12)} raw ${String(raw.length).padStart(7)}  gzip ${String(zipped).padStart(6)}  ${String(comments).padStart(6)} comments  gzip +${String(zipped - zippedBase).padStart(5)} over none (${((zipped / zippedBase - 1) * 100).toFixed(1)}%)`,
+            )
+        }
+        console.log('')
     }
-    console.log('')
 }
 
 console.log('WHAT THIS DECIDES, and it is not what it looks like.\n')
 console.log(
-    '  ONE MARKER INSTEAD OF TWO SAVES ALMOST NOTHING: 2.3% gzip at 1000 cells. The',
+    '  ONE MARKER INSTEAD OF TWO SAVES ALMOST NOTHING: ~2% gzip. The incompressible part is',
 )
 console.log(
-    '  incompressible part is the distinct numbers `a0`..`a999`, not the `<!--` around',
+    '  the distinct numbers a0..aN, not the <!-- around them, so halving the markers halves',
+)
+console.log('  almost none of the bytes. "Fewer markers" is not the lever.\n')
+console.log(
+    '  HYDRATION SPEED IS NOT THE REASON EITHER, and the share says so. With bindings doing',
 )
 console.log(
-    '  them, so halving the markers halves almost none of the bytes. "Fewer markers" is',
-)
-console.log('  not the lever; "no markers" is.\n')
-console.log(
-    '  THE HYDRATION WALK IS NOT THE REASON EITHER. Markers make it 2.5-2.7x (chromium)',
+    '  ordinary work the WALK is 15-39% of hydration, so eliding every marker has a ceiling',
 )
 console.log(
-    '  and 3.3-4.5x (webkit), and all of it is invisible: 0.44 ms for 5000 cells, which',
+    '  of ~19% — of an operation that is 4.2 ms at 15,000 slots and would not cross a frame',
 )
 console.log(
-    '  would not cross a frame until ~180,000 cells. `bun run e2e:harness` has the table.\n',
+    '  until ~150,000. CLAUDE.md already records one marker-elision change dropped for this',
 )
 console.log(
-    '  WHAT IS LEFT IS BYTES, and they are worth acting on: a slot-dense page is about',
+    '  exact reason: 998 fewer records, +0.053 ms then -0.033. A count is not a cost.\n',
+)
+console.log('  TWO REASONS SURVIVE, and the second one settles it.\n')
+console.log(
+    '  BYTES. A slot-dense page is about twice the size gzipped: +49 KB at 15,000 slots,',
 )
 console.log(
-    '  TWICE the size gzipped. At 5000 cells that is +12 KB on the wire — on a 1 Mbps',
+    '  which on a 1 Mbps link is ~400 ms before anything renders. That is an interaction',
+)
+console.log('  budget, spent on the network rather than in the walk.\n')
+console.log(
+    '  OBSERVABILITY, which is a CORRECTNESS constraint and not a budget at all. A compiler',
 )
 console.log(
-    '  link, roughly 100 ms before anything renders, which is an interaction budget.',
+    '  may not invent structure that changes what CSS matches or what a DOM query returns.',
 )
 console.log(
-    '  That is the one column here that crosses perception, and it crosses it on the',
-)
-console.log('  network rather than in the walk.\n')
-console.log(
-    '  THE SHAPE THAT FOLLOWS: a region whose structure is STATIC can be walked',
+    '  `invariance.spec.ts` measures four places the current scheme does: `[data-a]` is',
 )
 console.log(
-    '  structurally and needs no markers at all — a compiled template knows where its',
+    '  matched by an attribute selector in the document AS SERVED; `firstChild` is a Comment',
 )
 console.log(
-    '  slots are. Markers then stop being a per-slot mechanism and become a per-REGION',
+    '  where the author wrote a Text; and `childNodes` gains two entries per slot, including',
 )
 console.log(
-    '  one, needed only where the shape depends on a value (32.13, 32.14, 32.16). Not',
+    '  in an element the author left empty. CSS structural selectors are all untouched —',
 )
-console.log('  built; this is the measurement that says to build it.')
+console.log(
+    '  including `:empty`, which both engines ignore comments for — so a comment is safe for',
+)
+console.log('  style and unsafe for traversal.\n')
+console.log(
+    '  THE SHAPE THAT FOLLOWS: markers in fewer PLACES, not fewer markers. A region whose',
+)
+console.log(
+    '  structure is static is walked structurally and adds nothing to the document; markers',
+)
+console.log(
+    '  become a per-REGION mechanism at the boundaries where shape depends on a value',
+)
+console.log(
+    '  (32.13, 32.14, 32.16). The same boundary the slot addressing already draws.',
+)

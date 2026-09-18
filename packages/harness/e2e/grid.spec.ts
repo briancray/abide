@@ -21,7 +21,6 @@ type Row = {
 }
 
 const SHAPES: [number, number][] = [
-    [10, 10],
     [50, 20],
     [100, 50],
 ]
@@ -37,11 +36,13 @@ import { grid } from './packages/harness/scripts/GRID.ts'
 const out = []
 for (const [r, c] of ${JSON.stringify(SHAPES)})
     for (const v of ${JSON.stringify(VARIANTS)})
-        out.push({ variant: v, rows: r, columns: c, ...grid(r, c, v) })
+        out.push({ variant: v, rows: r, columns: c, ...grid(r, c, v, 'dense') })
 console.log(JSON.stringify(out))
 `,
         ],
-        { cwd: REPO, encoding: 'utf8' },
+        // A dense 100x50 grid is ~700 KB of markup per variant, well past the default
+        // 1 MB stdout buffer — which fails as ENOBUFS and reads like a spawn problem.
+        { cwd: REPO, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
     )
         .trim()
         .split('\n')
@@ -75,45 +76,79 @@ test('the hydration walk, per scheme, in this engine', async ({
                 for (let at = 0; at < 5; at += 1) run()
 
                 // Enough repetitions that the sample is far above a coarsened clock.
-                const reps = cells >= 5000 ? 40 : cells >= 1000 ? 200 : 2000
+                const reps = cells >= 10000 ? 20 : cells >= 1000 ? 100 : 1000
                 const start = performance.now()
                 for (let at = 0; at < reps; at += 1) run()
                 const elapsed = performance.now() - start
-                const found = (
-                    globalThis as unknown as { __SLOTS__: unknown[] }
-                ).__SLOTS__.filter((n) => n != null).length
-                return { nanoseconds: (elapsed * 1e6) / reps, found }
+                const slots = (globalThis as unknown as { __SLOTS__: Text[] })
+                    .__SLOTS__
+                const found = slots.filter((n) => n != null).length
+
+                // THE WALK IS NOT HYDRATION. Finding a slot is the cheap half; RUNNING its
+                // binding — evaluating the expression and writing the node — is the half an app
+                // actually pays, and it is the denominator the walk's ratio has to be read
+                // against. A slot doing real work is the normal case, not the heavy one.
+                const bindStart = performance.now()
+                for (let at = 0; at < reps; at += 1) {
+                    for (let i = 0; i < slots.length; i += 1) {
+                        const node = slots[i]
+                        if (node == null) continue
+                        // A deliberately ordinary expression: a few arithmetic ops and a string
+                        // build, which is what a formatted cell costs.
+                        const value = `${((i * 31) % 97) + at} / ${((i * 7) % 13) + 1}`
+                        if (node.data !== value) node.data = value
+                    }
+                }
+                const bindElapsed = performance.now() - bindStart
+
+                return {
+                    nanoseconds: (elapsed * 1e6) / reps,
+                    bindNanoseconds: (bindElapsed * 1e6) / reps,
+                    found,
+                }
             },
             { script: built.script, cells: built.cells },
-        )) as { nanoseconds: number; found: number }
+        )) as { nanoseconds: number; bindNanoseconds: number; found: number }
 
         rows.push({
             variant: built.variant,
             cells: built.cells,
             nanoseconds: measured.nanoseconds,
+            bindNanoseconds: measured.bindNanoseconds,
             found: measured.found,
         })
     }
 
     const lines = [`\n=== ${testInfo.project.name} — one hydration walk ===`]
-    for (const [r, c] of SHAPES) {
-        const cells = r * c
+    // Grouped by the slot count the page REPORTED, not by one recomputed from the shape: a dense
+    // cell holds three slots, and recomputing it here was silently matching nothing.
+    for (const cells of [...new Set(rows.map((row) => row.cells))]) {
         const here = rows.filter((row) => row.cells === cells)
         const base = here.find((row) => row.variant === 'no-markers')
-        lines.push(`  ${r}x${c} = ${cells} cells`)
+        lines.push(`  ${cells} slots (dense cells, 3 slots each)`)
         for (const row of here) {
             // EVERY ARM MUST HAVE FOUND EVERY SLOT. An arm that walked nothing is the fastest one
             // on the table, and the only thing that tells it from a quick one is the count.
             const ok =
                 row.found === cells ? '' : `  !! found ${row.found} of ${cells}`
             const ms = row.nanoseconds / 1e6
+            const total = row.nanoseconds + row.bindNanoseconds
             lines.push(
-                `    ${row.variant.padEnd(12)} ${ms.toFixed(3)} ms   ${(row.nanoseconds / cells).toFixed(0)} ns/cell   ${base ? `${(row.nanoseconds / base.nanoseconds).toFixed(2)}x none` : ''}${ok}`,
+                `    ${row.variant.padEnd(12)} walk ${ms.toFixed(2)} ms  bind ${(row.bindNanoseconds / 1e6).toFixed(2)} ms  total ${(total / 1e6).toFixed(2)} ms   walk is ${((row.nanoseconds / total) * 100).toFixed(0)}% of hydration   ${base ? `${(row.nanoseconds / base.nanoseconds).toFixed(2)}x none` : ''}${ok}`,
             )
         }
         // WHERE IT CROSSES PERCEPTION, which is the only place the ratio matters. Under a frame
         // nothing here is visible however large the multiple.
         const worst = here.find((row) => row.variant === 'two-markers')
+        if (worst !== undefined && base !== undefined) {
+            // NAME THE SHARE. What eliding markers can win is capped by the fraction of hydration
+            // the walk is — everything else is the bindings, which no addressing scheme touches.
+            const totalWorst = worst.nanoseconds + worst.bindNanoseconds
+            const saved = worst.nanoseconds - base.nanoseconds
+            lines.push(
+                `    eliding markers saves ${(saved / 1e6).toFixed(2)} ms of a ${(totalWorst / 1e6).toFixed(2)} ms hydration — a ceiling of ${((saved / totalWorst) * 100).toFixed(1)}%`,
+            )
+        }
         if (worst !== undefined) {
             // THE N AT WHICH IT WOULD MATTER, stated rather than left to be imagined. Under a
             // frame nothing here is visible however large the multiple, and a ratio quoted
