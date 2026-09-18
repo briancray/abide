@@ -11,6 +11,7 @@
         ".": "./src/shared/index.ts",
         "./runtime": "./src/ui/index.ts",
         "./server": "./src/server/index.ts",
+        "./compiler": "./src/compiler/index.ts",
         "./package.json": "./package.json"
     },
     "imports": {

@@ -102,10 +102,24 @@ export class TypeSession {
             if (project === undefined) return new Set()
             // ONE round trip for the whole file. The per-position overload exists and costs a
             // request each; the gate beside this counts them.
-            const types = await project.checker.getTypeAtPosition(
-                shadowPath,
-                offsets,
-            )
+            let types: Awaited<
+                ReturnType<typeof project.checker.getTypeAtPosition>
+            >
+            try {
+                types = await project.checker.getTypeAtPosition(
+                    shadowPath,
+                    offsets,
+                )
+            } catch (thrown) {
+                // The shadow has to be INSIDE the opened project or the checker never reads it.
+                // Refusing loudly rather than answering an empty set: an empty set is a file
+                // whose every name lowers as written, which renders `[object Object]` where a
+                // value was due — a wrong page, with nothing about it saying so.
+                throw new Error(
+                    `abide: ${abidePath} is not inside the project ${this.tsconfig}, so no name in it can be typed (31.3). Give the app a tsconfig whose include reaches it.`,
+                    { cause: thrown },
+                )
+            }
             const reactive = new Set<string>()
             for (let i = 0; i < names.length; i += 1) {
                 const type = types[i]
