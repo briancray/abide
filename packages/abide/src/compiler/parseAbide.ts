@@ -144,7 +144,11 @@ function parseTemplate(source: string): TemplateNode[] {
             }
             if (inner.startsWith(':else')) {
                 const open = blocks[blocks.length - 1]
-                if (open !== undefined && open.kind === 'block') {
+                if (
+                    open !== undefined &&
+                    open.kind === 'block' &&
+                    open.block === 'if'
+                ) {
                     const rest = inner.slice(':else'.length).trim()
                     const branch: Branch = {
                         // `{:else}` carries no condition, which is what makes it always take.
@@ -157,6 +161,24 @@ function parseTemplate(source: string): TemplateNode[] {
                     stack.pop()
                     stack.push(branch.children)
                 }
+                at = end + 1
+                continue
+            }
+            if (inner.startsWith('#for')) {
+                const block = forBlock(inner.slice(4).trim())
+                children.push(block)
+                blocks.push(block)
+                stack.push(
+                    block.kind === 'block' && block.block === 'for'
+                        ? block.children
+                        : [],
+                )
+                at = end + 1
+                continue
+            }
+            if (inner === '/for') {
+                blocks.pop()
+                if (stack.length > 1) stack.pop()
                 at = end + 1
                 continue
             }
@@ -185,6 +207,26 @@ function parseTemplate(source: string): TemplateNode[] {
 
     collapseWhitespace(root)
     return root
+}
+
+// `item, index of list by key` — `index` and `by` are optional, and everything after `of` up to
+// a top-level `by` is the subject. Split on the KEYWORDS rather than on commas, because the
+// subject may hold both.
+function forBlock(source: string): TemplateNode {
+    const of = / of /.exec(source)
+    const head = of === null ? source : source.slice(0, of.index)
+    const tail = of === null ? '' : source.slice(of.index + 4)
+    const by = / by /.exec(tail)
+    const [item = '', index = ''] = head.split(',').map((part) => part.trim())
+    return {
+        kind: 'block',
+        block: 'for',
+        item,
+        index,
+        subject: (by === null ? tail : tail.slice(0, by.index)).trim(),
+        key: by === null ? '' : tail.slice(by.index + 4).trim(),
+        children: [],
+    }
 }
 
 function readTag(
@@ -314,8 +356,10 @@ function collapseWhitespace(children: TemplateNode[]): void {
             continue
         }
         if (node.kind === 'block') {
-            for (const branch of node.branches)
-                collapseWhitespace(branch.children)
+            if (node.block === 'for') collapseWhitespace(node.children)
+            else
+                for (const branch of node.branches)
+                    collapseWhitespace(branch.children)
             continue
         }
         if (node.kind !== 'text' || node.text.trim() !== '') continue

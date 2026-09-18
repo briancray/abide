@@ -79,6 +79,23 @@ function emitNode(
         // 32.1 — escaped at run time, never at compile time: the value is not known here.
         return `escapeText(${lowerNames(node.source, reactive)})`
 
+    if (node.kind === 'block' && node.block === 'for') {
+        // 32.14 — the body repeats. 32.24: an absent subject iterates zero times, which is what
+        // the guard is for rather than a `?? []` that would also swallow a genuine mistake.
+        // 32.23: the subject is read ONCE for the whole block, not once per row.
+        const subject = lowerNames(node.subject, reactive)
+        const body = emitChildren(node.children, reactive, undefined)
+        const row = body.length === 0 ? "''" : body.join(' + ')
+        const index = node.index === '' ? '__at' : node.index
+        return `${JSON.stringify(`<!--${REGION_OPEN}-->`)} + ((__list) => {
+        if (__list == null) return ''
+        let __out = ''
+        let ${index} = 0
+        for (const ${node.item} of __list) { __out += ${row}; ${index} += 1 }
+        return __out
+    })(${subject}) + ${JSON.stringify(`<!--${REGION_CLOSE}-->`)}`
+    }
+
     if (node.kind === 'block') {
         // 32.13 — ONE branch renders. The anchors go in whichever one that is, and stay when the
         // branch changes, which is what keeps every sibling after the region addressable.

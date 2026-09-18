@@ -10,6 +10,7 @@
 export { escapeless } from './escapeless.ts'
 export { childAt, elementAt, textAt } from './nodeAt.ts'
 export { REGION_CLOSE, REGION_OPEN } from './REGION.ts'
+export { type Row, reconcile, rowsIn } from './reconcile.ts'
 export {
     afterRegion,
     fillRegion,

@@ -32,3 +32,15 @@ export type TemplateNode =
     // makes it the one place a marker earns its bytes. `invariance.spec.ts` is why that marker
     // has to be a comment, and `benchGrid.ts` is why there are none anywhere else.
     | { kind: 'block'; block: 'if'; branches: Branch[] }
+    // 32.14 — repeats its body over a list. A REGION like `{#if}`, and the body is planned once
+    // and instantiated per row, so a row's paths are the row's own.
+    | {
+          kind: 'block'
+          block: 'for'
+          // `{#for item, index of list by key}` — `index` and `key` are optional.
+          item: string
+          index: string
+          subject: string
+          key: string
+          children: TemplateNode[]
+      }

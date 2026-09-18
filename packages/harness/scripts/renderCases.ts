@@ -35,6 +35,18 @@ globalThis.__WIRED__ = nodes
 `
 }
 
+// The same page written with `{#for}`, which is how anybody would write it. The unrolled one
+// below is kept beside it because the difference between them is a finding: straight-line emitted
+// code never gets warm, and a loop is what fixes it.
+export function abideLoopSource(): string {
+    return `<script>
+import { reactive } from 'abide'
+
+let rows = reactive(CARDS)
+</script>
+<main id="list">{#for row of rows by row.id}<article class="card"><h2>{row.title}</h2><p>{row.body}</p><span class="n">{row.count}</span></article>{/for}</main>`
+}
+
 export function abideSource(n: number): string {
     let template = ''
     for (let at = 0; at < n; at += 1)

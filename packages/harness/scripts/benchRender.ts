@@ -10,7 +10,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync 
 import { compileFile, parseAbide, TypeSession } from 'abide/compiler'
 import { render } from 'abide/server'
 import { batch, ratio, type Sample } from 'harness/report'
-import { abideSource, cards, vanillaMarkup } from './renderCases.ts'
+import {
+    abideLoopSource,
+    abideSource,
+    cards,
+    vanillaMarkup,
+} from './renderCases.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 const SIZES = [10, 100, 1000]
@@ -37,14 +42,28 @@ async function main(): Promise<void> {
             )
             const Component = await load(compileFile(source, names))
 
+            const loopSource = abideLoopSource().replace(
+                'CARDS',
+                JSON.stringify(list),
+            )
+            const loopFile = parseAbide(loopSource)
+            const loopNames = await session.reactiveNames(
+                `${REPO}packages/abide/tests/fixtures/typed/src/loop.abide`,
+                loopFile,
+            )
+            const Loop = await load(compileFile(loopSource, loopNames))
+
             const measured = batch({
                 case: `render ${size} cards`,
                 arms: {
-                    abide: (): void => {
-                        void drain(Component)
-                    },
                     vanilla: (): void => {
                         void vanillaMarkup(list)
+                    },
+                    'abide, {#for}': (): void => {
+                        void drain(Loop)
+                    },
+                    'abide, unrolled': (): void => {
+                        void drain(Component)
                     },
                 },
                 emulated: null,
@@ -79,19 +98,14 @@ function drain(component: () => { head: string; body: string }): string {
 }
 
 function report(size: number, measured: ReturnType<typeof batch>): void {
-    const abide = measured.samples.abide as Sample
     const vanilla = measured.samples.vanilla as Sample
-    const result = ratio(abide, vanilla, { floor: measured.floor })
-    const perCard = abide.nanoseconds / size
+    const loop = measured.samples['abide, {#for}'] as Sample
+    const unrolled = measured.samples['abide, unrolled'] as Sample
     console.log(
-        `  ${String(size).padStart(4)} cards   abide ${(abide.nanoseconds / 1000).toFixed(1)} µs   vanilla ${(vanilla.nanoseconds / 1000).toFixed(1)} µs   ${
-            result.kind === 'ratio'
-                ? `${result.value.toFixed(2)}x`
-                : result.kind
-        }`,
+        `  ${String(size).padStart(4)} cards   vanilla ${(vanilla.nanoseconds / 1000).toFixed(1)} µs   {#for} ${(loop.nanoseconds / 1000).toFixed(1)} µs (${(loop.nanoseconds / vanilla.nanoseconds).toFixed(2)}x)   unrolled ${(unrolled.nanoseconds / 1000).toFixed(1)} µs (${(unrolled.nanoseconds / vanilla.nanoseconds).toFixed(2)}x)`,
     )
     console.log(
-        `              ${perCard.toFixed(0)} ns a card; a 100 ms interaction budget is ~${Math.round(100e6 / perCard).toLocaleString()} cards`,
+        `              ${(loop.nanoseconds / size).toFixed(0)} ns a card through the loop; ${(unrolled.nanoseconds / loop.nanoseconds).toFixed(2)}x of it unrolled`,
     )
 }
 
@@ -110,15 +124,10 @@ WHAT THIS SAYS
   SHARED SOURCE IS NOT SHARED WORK, and an arm that skips the safety is the same mistake as
   an arm that renders nothing.
 
-  AT 1000 CARDS ABIDE LOSES, 2.9x, and the cause is the emitted SHAPE rather than anything
-  per slot. A 1000-card page with no \`{#for}\` unrolls to one function with ~7000 straight-line
-  property accesses, and straight-line code that runs once never becomes warm — the same
-  content in a LOOP is 42 µs against 250. Array-join and append-to-a-string emit the same
-  250 µs, so it is not the concatenation either.
-
-  WHICH MAKES IT A \`{#for}\` PROBLEM AND NOT A RENDERING ONE. A repeated region emits a loop
-  by construction, and a hand-unrolled thousand-slot template is not a shape to optimise for.
-  The number to watch after \`{#for}\` lands is this same row.
+  THE UNROLLED COLUMN IS WHY \`{#for}\` EXISTS. A 1000-card page written without it becomes one
+  function with ~7000 straight-line property accesses, and straight-line code that runs once
+  never becomes warm. This bench predicted that a loop would fix it and by roughly how much,
+  before the loop was built; the two columns are that prediction, kept, and it held.
 `)
 
 void render

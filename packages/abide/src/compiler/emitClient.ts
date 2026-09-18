@@ -3,6 +3,7 @@ import { hoistPaths } from './hoistPaths.ts'
 import { lowerNames } from './lowerNames.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
+    type ListPlan,
     planTemplate,
     type RegionPlan,
     type TemplatePlan,
@@ -144,17 +145,29 @@ function emitRegion(
     }
 
     for (const region of plan.regions)
-        emitBlock(
-            region,
-            base,
-            inside,
-            reactive,
-            lines,
-            helpers,
-            used,
-            counter,
-            resolve,
-        )
+        if (region.kind === 'for')
+            emitList(
+                region,
+                base,
+                inside,
+                reactive,
+                lines,
+                helpers,
+                used,
+                counter,
+            )
+        else
+            emitBlock(
+                region,
+                base,
+                inside,
+                reactive,
+                lines,
+                helpers,
+                used,
+                counter,
+                resolve,
+            )
 }
 
 // 32.13 — one arm renders. The SERVER already rendered one, so the first mount HYDRATES it rather
@@ -240,6 +253,98 @@ function emitBlock(
     helpers.push(
         `function ${name}_html(arm) {\n${armHtml.join('\n')}\n    return ''\n}`,
     )
+}
+
+// 32.14 — the list. The server already rendered the rows, so the first mount HYDRATES them:
+// every row's element is already in the document and only its bindings are missing. Only a change
+// to the list reconciles, and only the rows that moved move.
+//
+// 32.23 — the subject is read ONCE for the block. 32.24 — an absent subject iterates zero times.
+function emitList(
+    region: ListPlan,
+    base: string,
+    inside: string,
+    reactive: ReadonlySet<string>,
+    lines: string[],
+    helpers: string[],
+    used: Set<string>,
+    counter: { next: number },
+): void {
+    const name = `ls${counter.next}`
+    counter.next += 1
+    for (const runtime of ['regionAt', 'rowsIn', 'reconcile'] as const)
+        used.add(runtime)
+    used.add('watch')
+
+    const parent =
+        region.parent.length === 0
+            ? base
+            : `childAt(${base}, ${JSON.stringify(region.parent)})`
+    if (region.parent.length > 0) used.add('childAt')
+
+    const subject = lowerNames(region.subject, reactive)
+    const at = region.at === '' ? '__at' : region.at
+    // 41.9 — with no `by`, the key is the POSITION, which is 32.14's positional reconcile: a row
+    // is whatever is in that slot, and a reorder rewrites the rows rather than moving them.
+    const key =
+        region.key === ''
+            ? '__at'
+            : lowerNames(region.key, reactive).replaceAll(
+                  new RegExp(`\\b${region.item}\\b`, 'g'),
+                  '__row',
+              )
+
+    // The row's own bindings, against the row element the server wrote or the reconcile made.
+    const rowMarkup = emitMarkup(region.children, reactive).replaceAll(
+        new RegExp(`\\b${region.item}\\b`, 'g'),
+        '__row',
+    )
+    if (rowMarkup.includes('escapeText(')) used.add('escapeText')
+    if (rowMarkup.includes('escapeAttribute(')) used.add('escapeAttribute')
+
+    const rowLines: string[] = []
+    emitRegion(
+        region.plan,
+        '__node',
+        '',
+        reactive,
+        rowLines,
+        helpers,
+        used,
+        counter,
+    )
+
+    helpers.push(
+        [
+            `const ${name}_list = () => { const __l = ${subject}; return __l == null ? [] : [...__l] }`,
+            `const ${name}_key = (__row, __at) => ${key.replaceAll('__at', '__at')}`,
+            `const ${name}_make = (__row, ${at}) => { const __t = document.createElement('template'); __t.innerHTML = ${rowMarkup}; return __t.content.firstElementChild }`,
+            `const ${name}_mount = (__node, __row, ${at}) => {`,
+            `    const stops = []`,
+            `    const watch = (effect) => { stops.push(watchEffect(effect)) }`,
+            ...rowLines.map((line) => `    ${line}`),
+            `    return () => { for (const stop of stops) stop() }`,
+            `}`,
+        ].join('\n'),
+    )
+
+    lines.push(`const ${name} = regionAt(${parent}, ${region.index})`)
+    // HYDRATION, NOT RENDERING. The rows are already there; wiring them is all that is left.
+    lines.push(`let ${name}_rows = rowsIn(${name}).map((__node, __i) => {
+    const __row = ${name}_list()[__i]
+    return { key: ${name}_key(__row, __i), data: __row, node: __node, stop: ${name}_mount(__node, __row, __i) }
+})`)
+    lines.push(`${inside === '' ? 'watchEffect' : 'watch'}(() => {
+    const __l = ${name}_list()
+    ${name}_rows = reconcile(
+        ${name},
+        ${name}_rows,
+        __l.map((__row, __i) => ${name}_key(__row, __i)),
+        __l,
+        (__i) => ${name}_make(__l[__i], __i),
+        (__node, __i) => ${name}_mount(__node, __l[__i], __i),
+    )
+})`)
 }
 
 // A path step, rendered against whatever this region's base is. A NEGATIVE first step is a

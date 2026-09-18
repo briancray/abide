@@ -33,9 +33,24 @@ export type HandlerBinding = {
     source: string
 }
 
+// A `{#for}`: ONE body, planned once and instantiated per row. A row's paths are the row's own,
+// exactly as an arm's are — which is the same property, now doing the work it was built for.
+export type ListPlan = {
+    kind: 'for'
+    index: number
+    parent: number[]
+    item: string
+    at: string
+    subject: string
+    key: string
+    plan: TemplatePlan
+    children: TemplateNode[]
+}
+
 // A `{#if}` and its arms. Each arm is planned as its OWN region — its bindings are addressed from
 // the region's own root, so two arms may hold the same paths and neither can see the other's.
 export type RegionPlan = {
+    kind: 'if'
     // Which region this is among its parent's, in document order. The client counts opening
     // anchors to find it.
     index: number
@@ -53,7 +68,7 @@ export type RegionPlan = {
 export type TemplatePlan = {
     runs: TextRun[]
     handlers: HandlerBinding[]
-    regions: RegionPlan[]
+    regions: (RegionPlan | ListPlan)[]
     runOf: Map<TemplateNode, number>
 }
 
@@ -117,19 +132,36 @@ function walk(nodes: TemplateNode[], path: number[], plan: TemplatePlan): void {
         }
 
         if (node.kind === 'block') {
-            // 32.13 — the block is a REGION. Its arms are planned apart, each from its own root,
-            // so the same paths in two arms mean two different things and neither is reachable
-            // from the other.
             const index = plan.regions.length
-            plan.regions.push({
-                index,
-                parent: [...path],
-                branches: node.branches.map((branch: Branch) => ({
-                    subject: branch.subject,
-                    plan: planTemplate(branch.children),
-                    children: branch.children,
-                })),
-            })
+            if (node.block === 'for') {
+                // 32.14 — the body is planned ONCE. Every row instantiates the same plan, so a
+                // thousand rows emit one binding site rather than a thousand, which is the shape
+                // the server bench found straight-line emission losing 6x to.
+                plan.regions.push({
+                    kind: 'for',
+                    index,
+                    parent: [...path],
+                    item: node.item,
+                    at: node.index,
+                    subject: node.subject,
+                    key: node.key,
+                    plan: planTemplate(node.children),
+                    children: node.children,
+                })
+            } else {
+                // 32.13 — the block is a REGION. Its arms are planned apart, each from its own
+                // root, so the same paths in two arms mean two different things.
+                plan.regions.push({
+                    kind: 'if',
+                    index,
+                    parent: [...path],
+                    branches: node.branches.map((branch: Branch) => ({
+                        subject: branch.subject,
+                        plan: planTemplate(branch.children),
+                        children: branch.children,
+                    })),
+                })
+            }
             afterRegion = index
             sinceRegion = 0
             childIndex += 1
