@@ -136,7 +136,7 @@ test('a compiled page renders as bytes into a shell', async () => {
     )
     // 41.10 — a body slot is wrapped in the markers the client finds it by. A HEAD slot is not:
     // nothing hydrates it, so it carries no marker and the client counts none there.
-    expect(out).toContain('<h1 class="title"><!--a-->abide<!--/a--></h1>')
+    expect(out).toContain('<h1 class="title"><!--a0-->abide<!--/a--></h1>')
     expect(out).toContain('<title>abide</title>')
     // The escape is asserted on the RENDERED document, not on the emitted source: the
     // mechanism is what reaches a browser, and a grep for `escapeText(` passes against a

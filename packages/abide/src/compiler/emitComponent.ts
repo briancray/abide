@@ -83,7 +83,10 @@ function emitNode(
         // 41.10 — the markers are what the client finds the slot by, and a slot with no plan
         // (a head contribution) gets none because nothing hydrates it.
         if (at === undefined) return value
-        return `"<!--${SLOT_OPEN}-->" + ${value} + "<!--${SLOT_CLOSE}-->"`
+        // The NUMBER goes in the marker. Found by counting instead, a slot is addressed by the
+        // page's shape rather than by the template's, and an absent region renumbers every slot
+        // after it. See `#ui/MARKERS.ts`.
+        return `"<!--${SLOT_OPEN}${at}-->" + ${value} + "<!--${SLOT_CLOSE}-->"`
     }
 
     const parts: string[] = []

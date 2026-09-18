@@ -63,8 +63,8 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
     const { html, mount } = await mountPage(PAGE)
 
     // The server rendered the initial value, so the document is right before any script runs.
-    expect(html).toContain('<!--a-->clicks<!--/a-->')
-    expect(html).toContain('<!--a-->0<!--/a-->')
+    expect(html).toContain('<!--a0-->clicks<!--/a-->')
+    expect(html).toContain('<!--a1-->0<!--/a-->')
     // 32.5 — the handler is a listener, and the server writes no `onclick` for it to fire from.
     expect(html).not.toContain('onclick')
 
@@ -111,8 +111,10 @@ test('a slot that reads nothing reactive opens no binding', async () => {
     const file = parseAbide(PAGE)
     const reactive = await session.reactiveNames(`${ROOT}src/page.abide`, file)
     const client = emitClient(file, reactive)
-    expect(client).toContain('watch(() => setText(slotNodes[1], count()))')
-    expect(client).not.toContain('slotNodes[0]')
+    expect(client).toContain(
+        'watch(() => setText(slotAt(slotNodes, 1), count()))',
+    )
+    expect(client).not.toContain('slotAt(slotNodes, 0)')
 })
 
 // A page with nothing to hydrate emits no client module at all, which is what makes "this page

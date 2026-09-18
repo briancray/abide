@@ -35,7 +35,7 @@ export function emitClient(
         // opening a watch for it is the difference between one waking reader on a page and one
         // per slot; the gate beside this counts them.
         if (!readsReactive(plan.slots[at] as string, reactive)) continue
-        lines.push(`watch(() => setText(slotNodes[${at}], ${source}))`)
+        lines.push(`watch(() => setText(slotAt(slotNodes, ${at}), ${source}))`)
     }
 
     for (const handler of plan.handlers) {
@@ -49,7 +49,7 @@ export function emitClient(
 
     const needsWatch = lines.some((line) => line.startsWith('watch('))
     const runtime: string[] = []
-    if (plan.slots.length > 0) runtime.push('setText', 'slots')
+    if (plan.slots.length > 0) runtime.push('setText', 'slotAt', 'slots')
     if (plan.handlers.length > 0) runtime.push('handlers')
 
     const watchImport = needsWatch
