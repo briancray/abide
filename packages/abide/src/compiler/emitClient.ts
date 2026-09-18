@@ -1,7 +1,13 @@
+import { emitMarkup } from './emitComponent.ts'
 import { hoistPaths } from './hoistPaths.ts'
 import { lowerNames } from './lowerNames.ts'
 import type { AbideFile } from './parseAbide.ts'
-import { planTemplate, type TextRun } from './planTemplate.ts'
+import {
+    planTemplate,
+    type RegionPlan,
+    type TemplatePlan,
+    type TextRun,
+} from './planTemplate.ts'
 import { RUNTIME_SPECIFIER, SHARED_SPECIFIER } from './SPECIFIERS.ts'
 import { splitImports } from './splitImports.ts'
 
@@ -26,27 +32,90 @@ export function emitClient(
             (node) => !(node.kind === 'element' && node.tag === 'head'),
         ),
     )
-    const live = plan.runs.filter((run) => readsReactive(run, reactive))
-    if (live.length === 0 && plan.handlers.length === 0) return ''
+    const used = new Set<string>()
+    const lines: string[] = []
+    const helpers: string[] = []
+    emitRegion(plan, 'root', '', reactive, lines, helpers, used, { next: 0 })
+    if (lines.length === 0) return ''
 
     const setup = splitImports(lowerNames(file.scripts.join('\n'), reactive))
-    const lines: string[] = []
+    // `watch` and the escaping are an APP's names (`abide`); everything else is the client
+    // runtime's (`abide/runtime`).
+    const fromShared = new Set(['watch', 'escapeText', 'escapeAttribute'])
+    const shared = [...used].filter((name) => fromShared.has(name))
+    const runtime = [...used].filter((name) => !fromShared.has(name))
 
-    // THE WALK IS SHARED, not repeated per binding. See `hoistPaths`: one anchor per parent that
-    // more than one binding sits under, each walking from the deepest anchor above it.
+    // `watch` is imported under a second name because an ARM's bindings are collected so they can
+    // be stopped on a swap: inside an arm `watch` is a local that records the disposer, and
+    // `watchEffect` is the real one underneath it.
+    const names = shared
+        .sort()
+        .map((name) => (name === 'watch' ? 'watch as watchEffect' : name))
+    const sharedImport =
+        shared.length === 0
+            ? ''
+            : `import { ${names.join(', ')} } from '${SHARED_SPECIFIER}'\n`
+    return `${sharedImport}import { ${runtime.sort().join(', ')} } from '${RUNTIME_SPECIFIER}'
+${setup.imports}
+export default function mount(root) {
+${indent(setup.body)}
+${indent(helpers.join('\n'))}
+${indent(lines.join('\n'))}
+}
+`
+}
+
+// One region's bindings, emitted against `base` — the page for the outermost, and a `{#if}` arm's
+// own anchor for a nested one. The arms of a block are emitted as their own functions so an arm's
+// paths are its own: `[0,1]` in one arm and `[0,1]` in another are different nodes, and neither
+// arm can reach the other's.
+function emitRegion(
+    plan: TemplatePlan,
+    base: string,
+    inside: string,
+    reactive: ReadonlySet<string>,
+    lines: string[],
+    helpers: string[],
+    used: Set<string>,
+    counter: { next: number },
+): void {
+    const live = plan.runs.filter((run) => readsReactive(run, reactive))
+    // A path through a REGION reference is not hoistable: its first step names a region rather
+    // than a child, so a prefix ending there is not a node and an anchor at it would walk from
+    // nothing. Those paths are emitted whole; only child-index paths are shared.
+    const direct = (path: number[]): boolean => path.some((step) => step < 0)
     const hoisted = hoistPaths([
-        ...live.map((run) => run.path),
-        ...plan.handlers.map((handler) => handler.path),
+        ...live.map((run) => run.path).filter((path) => !direct(path)),
+        ...plan.handlers
+            .map((handler) => handler.path)
+            .filter((path) => !direct(path)),
     ])
-    for (const anchor of hoisted.anchors)
+
+    const resolve = (path: number[]): string => {
+        const at = hoisted.reference(path)
+        return `${at.base}, ${JSON.stringify(at.rest)}`
+    }
+
+    for (const anchor of hoisted.anchors) {
+        used.add('childAt')
+        // `anchor.from` is a BASE, not a function: the walk itself is always `childAt`.
         lines.push(
-            `const ${anchor.name} = childAt(${anchor.from}, ${JSON.stringify(anchor.steps)})`,
+            `const ${anchor.name} = ${step(
+                'childAt',
+                anchor.steps,
+                anchor.from === 'root' ? base : anchor.from,
+                inside,
+                used,
+                true,
+            )}`,
         )
+    }
 
     for (const run of live) {
-        // THE RUN IS WRITTEN WHOLE. Its static parts are literals and its expressions are read
-        // live, so a change to any one of them recomputes the string and writes the single text
-        // node the browser actually has. One `data` write, and no node invented to separate them.
+        used.add('watch')
+        used.add('setText')
+        used.add('textAt')
+        used.add('escapeless')
         const value = run.parts
             .map((part) =>
                 part.kind === 'static'
@@ -54,36 +123,155 @@ export function emitClient(
                     : `escapeless(${lowerNames(part.text, reactive)})`,
             )
             .join(' + ')
-        const at = hoisted.reference(run.path)
+        const at = direct(run.path)
+            ? { base: 'root', rest: run.path }
+            : hoisted.reference(run.path)
         lines.push(
-            `watch(() => setText(textAt(${at.base}, ${JSON.stringify(at.rest)}), ${value}))`,
+            `${inside === '' ? 'watchEffect' : 'watch'}(() => setText(${step('textAt', at.rest, at.base === 'root' ? base : at.base, inside, used, true)}, ${value}))`,
         )
     }
 
-    // 32.5 — a native listener on the element itself.
     for (const handler of plan.handlers) {
-        const at = hoisted.reference(handler.path)
+        used.add('elementAt')
+        const at = direct(handler.path)
+            ? { base: 'root', rest: handler.path }
+            : hoisted.reference(handler.path)
         lines.push(
-            `elementAt(${at.base}, ${JSON.stringify(at.rest)}).addEventListener(${JSON.stringify(
+            `${step('elementAt', at.rest, at.base === 'root' ? base : at.base, inside, used, true)}.addEventListener(${JSON.stringify(
                 handler.event,
             )}, ${lowerNames(handler.source, reactive)})`,
         )
     }
 
-    const runtime: string[] = []
-    if (live.length > 0) runtime.push('escapeless', 'setText', 'textAt')
-    if (plan.handlers.length > 0) runtime.push('elementAt')
-    if (hoisted.anchors.length > 0) runtime.push('childAt')
-
-    const watchImport =
-        live.length > 0 ? `import { watch } from '${SHARED_SPECIFIER}'\n` : ''
-    return `${watchImport}import { ${runtime.sort().join(', ')} } from '${RUNTIME_SPECIFIER}'
-${setup.imports}
-export default function mount(root) {
-${indent(setup.body)}
-${indent(lines.join('\n'))}
+    for (const region of plan.regions)
+        emitBlock(
+            region,
+            base,
+            inside,
+            reactive,
+            lines,
+            helpers,
+            used,
+            counter,
+            resolve,
+        )
 }
-`
+
+// 32.13 — one arm renders. The SERVER already rendered one, so the first mount HYDRATES it rather
+// than replacing it: a page that re-renders every region on load creates every node twice and
+// throws away the document it was sent.
+function emitBlock(
+    region: RegionPlan,
+    base: string,
+    inside: string,
+    reactive: ReadonlySet<string>,
+    lines: string[],
+    helpers: string[],
+    used: Set<string>,
+    counter: { next: number },
+    _resolve: (path: number[]) => string,
+): void {
+    const name = `rg${counter.next}`
+    counter.next += 1
+    used.add('regionAt')
+    used.add('fillRegion')
+    used.add('watch')
+
+    const parent =
+        region.parent.length === 0
+            ? base
+            : `childAt(${base}, ${JSON.stringify(region.parent)})`
+    if (region.parent.length > 0) used.add('childAt')
+    lines.push(`const ${name} = regionAt(${parent}, ${region.index})`)
+
+    // Which arm takes, as one expression. `{:else}` carries no condition and is the floor.
+    let take = '-1'
+    for (let at = region.branches.length - 1; at >= 0; at -= 1) {
+        const branch = region.branches[at] as (typeof region.branches)[number]
+        take =
+            branch.subject === ''
+                ? String(at)
+                : `(${lowerNames(branch.subject, reactive)}) ? ${at} : ${take}`
+    }
+
+    // Each arm's markup, for the swap. The server's own emitter is not reachable here, so the
+    // client carries its own copy of each arm's markup — which is why `escapeText` is in #shared.
+    const armHtml: string[] = []
+    const armMount: string[] = []
+    for (let at = 0; at < region.branches.length; at += 1) {
+        const branch = region.branches[at] as (typeof region.branches)[number]
+        const armLines: string[] = []
+        emitRegion(
+            branch.plan,
+            name,
+            name,
+            reactive,
+            armLines,
+            helpers,
+            used,
+            counter,
+        )
+        armMount.push(
+            `    if (arm === ${at}) {\n${armLines.map((line) => `        ${line}`).join('\n')}\n    }`,
+        )
+        const markup = emitMarkup(branch.children, reactive)
+        if (markup.includes('escapeText(')) used.add('escapeText')
+        if (markup.includes('escapeAttribute(')) used.add('escapeAttribute')
+        armHtml.push(`    if (arm === ${at}) return ${markup}`)
+    }
+
+    // EVERY BINDING AN ARM OPENS IS COLLECTED, and the arm it replaces is stopped. Without it a
+    // swap leaves the old arm's readers alive: they wake on every write, write into nodes that
+    // are no longer in the document, and the page looks right while doing the work twice.
+    helpers.push(
+        `const ${name}_mount = (${name}, arm) => {\n    const stops = []\n    const watch = (effect) => { stops.push(watchEffect(effect)) }\n${armMount.join('\n')}\n    return () => { for (const stop of stops) stop() }\n}`,
+    )
+
+    lines.push(`let ${name}_at = ${take}`)
+    lines.push(`let ${name}_stop = ${name}_mount(${name}, ${name}_at)`)
+    lines.push(`${inside === '' ? 'watchEffect' : 'watch'}(() => {
+    const next = ${take}
+    if (next === ${name}_at) return
+    ${name}_at = next
+    ${name}_stop()
+    fillRegion(${name}, ${name}_html(next))
+    ${name}_stop = ${name}_mount(${name}, next)
+})`)
+    helpers.push(
+        `function ${name}_html(arm) {\n${armHtml.join('\n')}\n    return ''\n}`,
+    )
+}
+
+// A path step, rendered against whatever this region's base is. A NEGATIVE first step is a
+// reference to a sibling region: `-1 - n` is region n in this parent, and the step after it is
+// how many nodes past its closing anchor to count.
+function step(
+    fn: string,
+    path: number[],
+    base: string,
+    inside: string,
+    used: Set<string>,
+    checked = false,
+): string {
+    if (inside !== '' && base === inside) {
+        // Inside an arm, the first index counts from the region's OPENING anchor.
+        used.add('insideRegion')
+        const [first, ...rest] = path
+        const node = `insideRegion(${inside}, ${first ?? 0})`
+        return rest.length === 0 && !checked
+            ? node
+            : `${fn}(${node}, ${JSON.stringify(rest)})`
+    }
+    const first = path[0]
+    if (first !== undefined && first < 0) {
+        used.add('regionAt')
+        used.add('afterRegion')
+        const region = -1 - first
+        const offset = path[1] ?? 0
+        const node = `afterRegion(regionAt(${base}, ${region}), ${offset})`
+        return `${fn}(${node}, ${JSON.stringify(path.slice(2))})`
+    }
+    return `${fn}(${base}, ${JSON.stringify(path)})`
 }
 
 // Whether any expression in the run reads a name the checker called reactive. A run of static

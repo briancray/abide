@@ -6,5 +6,7 @@
 // this module is public surface, so a compiler under it is one `export *` from being an app's
 // dependency. `packages/abide/tests/compiler.test.ts` holds that apart.
 
-export { escapeAttribute, escapeText } from './escapeText.ts'
+// Re-exported rather than owned: 32.1's escaping is #shared now, because a client swapping a
+// `{#if}` branch parses markup too.
+export { escapeAttribute, escapeText } from '#shared/escapeText.ts'
 export { type Component, render, type Shell } from './render.ts'

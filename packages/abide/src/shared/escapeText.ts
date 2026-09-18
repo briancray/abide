@@ -1,6 +1,8 @@
-// 32.1 — `{expr}` renders escaped. Server-side only by design: the client sets text through
-// `node.data`, which is not a parse, so it needs none of this. That is why it is here rather
-// than in #shared.
+// 32.1 — `{expr}` renders escaped. In #shared because BOTH sides parse markup now: the server
+// writes the document, and a client swapping a `{#if}` branch re-renders that region's markup.
+// A text run is still written through `data`, which is not a parse and needs none of this —
+// `escapeless` in #ui is that path, and the two sitting apart is what keeps them from being
+// confused for one another.
 
 // The common slot holds nothing to escape, so the scan is the fast path and the rewrite is
 // the fallback: a clean string is returned as it arrived, with no allocation.

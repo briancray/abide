@@ -1,4 +1,4 @@
-import type { TemplateNode } from './TemplateNode.ts'
+import type { Branch, TemplateNode } from './TemplateNode.ts'
 
 // ONE walk, consulted by BOTH emitters, so the position the server writes and the position the
 // client walks to cannot drift: it is looked up, not recomputed.
@@ -18,7 +18,9 @@ import type { TemplateNode } from './TemplateNode.ts'
 // its own unmerged pieces is counting something no document has.
 
 export type TextRun = {
-    // Child indices from the region root down to the text node.
+    // Child indices from the region root down to the text node. A NEGATIVE step is a region
+    // reference: `-1 - n` means "region n in this parent", and the step after it is how many
+    // nodes past its closing anchor to count. See `regionAt`/`afterRegion`.
     path: number[]
     // The pieces, in order. A string is static text; an expression is source to evaluate.
     parts: { kind: 'static' | 'expression'; text: string }[]
@@ -31,16 +33,37 @@ export type HandlerBinding = {
     source: string
 }
 
+// A `{#if}` and its arms. Each arm is planned as its OWN region — its bindings are addressed from
+// the region's own root, so two arms may hold the same paths and neither can see the other's.
+export type RegionPlan = {
+    // Which region this is among its parent's, in document order. The client counts opening
+    // anchors to find it.
+    index: number
+    // Where the region's anchor pair sits: the path to its PARENT, then its index there.
+    parent: number[]
+    branches: {
+        subject: string
+        plan: TemplatePlan
+        // The arm's own nodes, so the CLIENT can emit its markup for a branch swap using the same
+        // emitter the server used. Two copies of that emitter is two escaping rules.
+        children: TemplateNode[]
+    }[]
+}
+
 export type TemplatePlan = {
     runs: TextRun[]
     handlers: HandlerBinding[]
-    // Where a node's run index is looked up by the server emitter, keyed by the first node of the
-    // run so the emitter can tell a run it must join from one it can write as a literal.
+    regions: RegionPlan[]
     runOf: Map<TemplateNode, number>
 }
 
 export function planTemplate(template: TemplateNode[]): TemplatePlan {
-    const plan: TemplatePlan = { runs: [], handlers: [], runOf: new Map() }
+    const plan: TemplatePlan = {
+        runs: [],
+        handlers: [],
+        regions: [],
+        runOf: new Map(),
+    }
     walk(template, [], plan)
     return plan
 }
@@ -53,7 +76,18 @@ function walk(nodes: TemplateNode[], path: number[], plan: TemplatePlan): void {
     // `childIndex` counts what a BROWSER will see: a run of adjacent text and expressions is one
     // node however many pieces it was written as.
     let childIndex = 0
+    // Once a region has been passed, every sibling after it is counted from that region's closing
+    // anchor rather than by child index — the region's own length depends on a value, so the
+    // indices after it are not a fixed thing to address by.
+    let afterRegion = -1
+    let sinceRegion = 0
     let at = 0
+
+    const place = (): number[] =>
+        afterRegion === -1
+            ? [...path, childIndex]
+            : [...path, -1 - afterRegion, sinceRegion]
+
     while (at < nodes.length) {
         const node = nodes[at] as TemplateNode
 
@@ -71,23 +105,45 @@ function walk(nodes: TemplateNode[], path: number[], plan: TemplatePlan): void {
                 }
                 at += 1
             }
-            // A run with no expression in it is static markup and needs no binding and no
-            // address: the server writes it and nothing ever touches it again.
+            // A run with no expression is static markup: the server writes it and nothing ever
+            // touches it again, so it needs neither a binding nor an address.
             if (dynamic) {
                 plan.runOf.set(first, plan.runs.length)
-                plan.runs.push({ path: [...path, childIndex], parts })
+                plan.runs.push({ path: place(), parts })
             }
             childIndex += 1
+            sinceRegion += 1
+            continue
+        }
+
+        if (node.kind === 'block') {
+            // 32.13 — the block is a REGION. Its arms are planned apart, each from its own root,
+            // so the same paths in two arms mean two different things and neither is reachable
+            // from the other.
+            const index = plan.regions.length
+            plan.regions.push({
+                index,
+                parent: [...path],
+                branches: node.branches.map((branch: Branch) => ({
+                    subject: branch.subject,
+                    plan: planTemplate(branch.children),
+                    children: branch.children,
+                })),
+            })
+            afterRegion = index
+            sinceRegion = 0
+            childIndex += 1
+            at += 1
             continue
         }
 
         if (node.kind === 'element') {
-            const here = [...path, childIndex]
+            const here = place()
             for (const attribute of node.attributes) {
                 if (!attribute.expression || !isEventName(attribute.name))
                     continue
-                // 32.5 — a native listener on the element itself. The element is reached by the
-                // same path walk as a text node, so nothing is added to the document to find it.
+                // 32.5 — a native listener on the element itself, reached by the same walk a
+                // text node is, so nothing is added to the document to find it.
                 plan.handlers.push({
                     path: here,
                     event: attribute.name.slice(2).toLowerCase(),
@@ -97,6 +153,7 @@ function walk(nodes: TemplateNode[], path: number[], plan: TemplatePlan): void {
             walk(node.children, here, plan)
         }
         childIndex += 1
+        sinceRegion += 1
         at += 1
     }
 }

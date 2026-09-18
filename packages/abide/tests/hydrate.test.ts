@@ -133,7 +133,9 @@ const label = 'clicks'
     // line. The hoisting case is the test below.
     expect(client).toContain('textAt(root, [1,0])')
     expect(client).not.toContain('childAt(')
-    expect(client.match(/watch\(/g) ?? []).toHaveLength(1)
+    // `watchEffect` at the top level, `watch` inside a `{#if}` arm — the second is a local that
+    // collects its disposer so a branch swap can stop it. Either spelling counts as a binding.
+    expect(client.match(/watch(Effect)?\(/g) ?? []).toHaveLength(1)
 })
 
 // A page with nothing to hydrate emits no client module at all, which is what makes "this page

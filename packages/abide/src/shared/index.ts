@@ -10,6 +10,7 @@
 // value (15.1), so it is in this seam rather than the server's: the same object crosses a
 // wire, fills `s.error` and narrows through `s.isError`.
 
+export { escapeAttribute, escapeText } from './escapeText.ts'
 export { type Failed, isFailed } from './Failed.ts'
 export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'

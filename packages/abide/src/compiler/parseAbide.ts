@@ -1,4 +1,4 @@
-import type { Attribute, TemplateNode } from './TemplateNode.ts'
+import type { Attribute, Branch, TemplateNode } from './TemplateNode.ts'
 
 // A `.abide` file is a script, a style and a template, and this splits it into the three
 // and parses the third. The expression grammar is NOT parsed here: `{expr}` is captured as
@@ -85,6 +85,8 @@ function parseTemplate(source: string): TemplateNode[] {
     const root: TemplateNode[] = []
     // The open elements, innermost last. `root` is the floor and is never popped.
     const stack: TemplateNode[][] = [root]
+    // The open control blocks, so a `{:else}` knows which block it belongs to.
+    const blocks: TemplateNode[] = []
     let at = 0
 
     while (at < source.length) {
@@ -120,10 +122,52 @@ function parseTemplate(source: string): TemplateNode[] {
 
         if (char === '{') {
             const end = readExpression(source, at)
-            children.push({
-                kind: 'expression',
-                source: source.slice(at + 1, end).trim(),
-            })
+            const inner = source.slice(at + 1, end).trim()
+
+            // `{#if}`, `{:else}`, `{:else if}`, `{/if}` — a control block opens a new ARM rather
+            // than a new element, so it keeps its own stack beside the element one.
+            if (inner.startsWith('#if')) {
+                const branch: Branch = {
+                    subject: inner.slice(3).trim(),
+                    children: [],
+                }
+                const block: TemplateNode = {
+                    kind: 'block',
+                    block: 'if',
+                    branches: [branch],
+                }
+                children.push(block)
+                blocks.push(block)
+                stack.push(branch.children)
+                at = end + 1
+                continue
+            }
+            if (inner.startsWith(':else')) {
+                const open = blocks[blocks.length - 1]
+                if (open !== undefined && open.kind === 'block') {
+                    const rest = inner.slice(':else'.length).trim()
+                    const branch: Branch = {
+                        // `{:else}` carries no condition, which is what makes it always take.
+                        subject: rest.startsWith('if')
+                            ? rest.slice(2).trim()
+                            : '',
+                        children: [],
+                    }
+                    open.branches.push(branch)
+                    stack.pop()
+                    stack.push(branch.children)
+                }
+                at = end + 1
+                continue
+            }
+            if (inner === '/if') {
+                blocks.pop()
+                if (stack.length > 1) stack.pop()
+                at = end + 1
+                continue
+            }
+
+            children.push({ kind: 'expression', source: inner })
             at = end + 1
             continue
         }
@@ -267,6 +311,11 @@ function collapseWhitespace(children: TemplateNode[]): void {
         const node = children[i] as TemplateNode
         if (node.kind === 'element') {
             collapseWhitespace(node.children)
+            continue
+        }
+        if (node.kind === 'block') {
+            for (const branch of node.branches)
+                collapseWhitespace(branch.children)
             continue
         }
         if (node.kind !== 'text' || node.text.trim() !== '') continue

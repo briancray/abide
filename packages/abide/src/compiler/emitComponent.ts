@@ -1,3 +1,4 @@
+import { REGION_CLOSE, REGION_OPEN } from '#ui/REGION.ts'
 import { lowerNames } from './lowerNames.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { planTemplate, type TemplatePlan } from './planTemplate.ts'
@@ -78,6 +79,28 @@ function emitNode(
         // 32.1 — escaped at run time, never at compile time: the value is not known here.
         return `escapeText(${lowerNames(node.source, reactive)})`
 
+    if (node.kind === 'block') {
+        // 32.13 — ONE branch renders. The anchors go in whichever one that is, and stay when the
+        // branch changes, which is what keeps every sibling after the region addressable.
+        const arms = node.branches.map((branch) => ({
+            subject:
+                branch.subject === ''
+                    ? ''
+                    : lowerNames(branch.subject, reactive),
+            body: emitChildren(branch.children, reactive, plan),
+        }))
+        let expression = "''"
+        for (let at = arms.length - 1; at >= 0; at -= 1) {
+            const arm = arms[at] as (typeof arms)[number]
+            const body = arm.body.length === 0 ? "''" : arm.body.join(' + ')
+            expression =
+                arm.subject === ''
+                    ? `(${body})`
+                    : `(${arm.subject} ? ${body} : ${expression})`
+        }
+        return `${JSON.stringify(`<!--${REGION_OPEN}-->`)} + ${expression} + ${JSON.stringify(`<!--${REGION_CLOSE}-->`)}`
+    }
+
     const parts: string[] = []
     let open = `<${node.tag}`
     for (const attribute of node.attributes) {
@@ -104,6 +127,17 @@ function emitNode(
         ...emitChildren(node.children, reactive, plan),
         JSON.stringify(`</${node.tag}>`),
     ].join(' + ')
+}
+
+// The markup for a set of nodes, as an expression. Exported because a `{#if}` arm's markup is
+// needed on the CLIENT too — a branch swap re-renders the region — and a second emitter for it
+// would be a second escaping rule.
+export function emitMarkup(
+    nodes: TemplateNode[],
+    reactive: ReadonlySet<string>,
+): string {
+    const parts = emitChildren(nodes, reactive, undefined)
+    return parts.length === 0 ? "''" : parts.join(' + ')
 }
 
 // A run of adjacent text and expressions is emitted as ONE concatenation and carries no marker.
