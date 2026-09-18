@@ -10,7 +10,8 @@
         "./engine": "./src/engine/index.ts",
         "./server": "./src/server/index.ts",
         "./report": "./src/report/index.ts",
-        "./gate": "./src/gate/index.ts"
+        "./gate": "./src/gate/index.ts",
+        "./renderCases": "./scripts/renderCases.ts"
     },
     "scripts": {
         "typecheck": "tsc -p tsconfig.json",

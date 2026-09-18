@@ -58,3 +58,25 @@ test('a declaration is not a write', () => {
         'let n = reactive(0)\nn.set(2)',
     )
 })
+
+// AN IMPORT CLAUSE NAMES A BINDING, IT DOES NOT READ ONE. THE REVERT: drop the skipped-span pass
+// in `lowerNames`; `import { n } from './x.ts'` lowers to `import { n() } from './x.ts'`, which
+// is not valid in any grammar — the emitted module fails to parse and nothing about the compiler
+// output says why.
+test('an import clause is not rewritten', () => {
+    expect(lowerNames("import { n } from './x.ts'", N)).toBe(
+        "import { n } from './x.ts'",
+    )
+    expect(lowerNames("import n from './x.ts'", N)).toBe(
+        "import n from './x.ts'",
+    )
+    expect(lowerNames("import { n as m } from './x.ts'", N)).toBe(
+        "import { n as m } from './x.ts'",
+    )
+    // A DYNAMIC import is an expression, and a reactive name in its argument is a read.
+    expect(lowerNames('import(n)', N)).toBe('import(n())')
+    // And the statement after an import is lowered as usual.
+    expect(lowerNames("import { x } from './x.ts'\nn = 1", N)).toBe(
+        "import { x } from './x.ts'\nn.set(1)",
+    )
+})

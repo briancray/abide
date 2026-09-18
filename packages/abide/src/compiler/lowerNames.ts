@@ -33,6 +33,10 @@ const DECLARATION = new Set<SyntaxKind>([
     SyntaxKind.VarKeyword,
 ])
 
+// An import CLAUSE names bindings, it does not read them: `import { n } from '...'` lowered to
+// `import { n() }` is not valid in any grammar. The whole statement is skipped, from the keyword
+// to its specifier — which is also why `splitImports` and this agree on where one ends.
+
 // `+=`, `-=`, `*=`, `/=`, `%=`, `**=` — an op-assign on a reactive name reads and writes, so it
 // lowers to `n.set(n() <op> (rhs))`. A table because the alternative is six branches.
 const OP_ASSIGN = new Map<SyntaxKind, string>([
@@ -53,9 +57,31 @@ export function lowerNames(
     let out = ''
     let at = 0
 
+    // Spans the rewrite must not touch: each import statement, from its keyword to its specifier.
+    const skipped: { start: number; end: number }[] = []
+    for (let i = 0; i < tokens.length; i += 1) {
+        if ((tokens[i] as Token).kind !== SyntaxKind.ImportKeyword) continue
+        const start = (tokens[i] as Token).start
+        for (let j = i + 1; j < tokens.length; j += 1) {
+            const token = tokens[j] as Token
+            // A dynamic `import(...)` is an expression and its argument IS read.
+            if (token.kind === OPEN_PAREN) break
+            if (token.kind !== SyntaxKind.StringLiteral) continue
+            skipped.push({ start, end: token.end })
+            i = j
+            break
+        }
+    }
+    const isSkipped = (at: number): boolean => {
+        for (const span of skipped)
+            if (at >= span.start && at < span.end) return true
+        return false
+    }
+
     for (let i = 0; i < tokens.length; i += 1) {
         const token = tokens[i] as Token
         if (token.kind !== IDENTIFIER || !reactive.has(token.text)) continue
+        if (isSkipped(token.start)) continue
         // A member name is not the binding: `obj.n` is a property, `n.set` is the API (31.7).
         const previous = i > 0 ? (tokens[i - 1] as Token) : undefined
         if (previous?.kind === DOT) continue
