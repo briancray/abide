@@ -158,5 +158,8 @@ test('every example renders on the server and mounts on the client', async () =>
     // a sibling, which is exactly why those shapes went unbuilt — `nesting.test.ts` is where they
     // are held now. THE FLOOR IS WHAT THE CORPUS REACHES, not a round number under it: one unit
     // of slack is one file that may stop running with nothing reporting it.
-    expect(sources.length - broken.length).toBeGreaterThanOrEqual(35)
+    //
+    // 37 ONCE 31.3's DECLARED POSITIONS HOLD THE `Reactive`: `watch([owner], …)` had lowered its
+    // source to a read, and `watch` walked the readers of a string.
+    expect(sources.length - broken.length).toBeGreaterThanOrEqual(37)
 })

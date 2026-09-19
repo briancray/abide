@@ -1,8 +1,27 @@
 import { readdirSync, statSync } from 'node:fs' // Bun exposes no sync directory listing of its own
 import { basename, dirname, join, resolve } from 'node:path' // Bun exposes no path helpers of its own
-import type { Node } from 'typescript/unstable/ast'
-import { isIdentifier, isVariableStatement } from 'typescript/unstable/ast/is'
-import { API } from 'typescript/unstable/async'
+import type { Node, TypeNode } from 'typescript/unstable/ast'
+import {
+    isArrayLiteralExpression,
+    isArrowFunction,
+    isCallExpression,
+    isFunctionDeclaration,
+    isFunctionExpression,
+    isIdentifier,
+    isMethodDeclaration,
+    isNewExpression,
+    isParenthesizedExpression,
+    isReturnStatement,
+    isVariableDeclaration,
+    isVariableStatement,
+} from 'typescript/unstable/ast/is'
+import {
+    API,
+    type Checker,
+    type Type,
+    TypeFlags,
+    type UnionType,
+} from 'typescript/unstable/async'
 import { classifyRead, type Read } from './classifyRead.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { projectShadow } from './projectShadow.ts'
@@ -224,12 +243,30 @@ export class TypeSession {
                     }),
                 )
                 const reads = answers[at] as Read[]
+                const holding: Promise<void>[] = []
                 for (const resolved of nodes)
                     for (const node of resolved) {
                         if (node === undefined) continue
                         const read = classifyRead(node)
-                        if (read !== undefined) reads.push(read)
+                        if (read === undefined) continue
+                        reads.push(read)
+                        if (read.shape === 'value')
+                            holding.push(
+                                declaredType(checker, node).then(
+                                    async (type) => {
+                                        if (
+                                            type !== undefined &&
+                                            (await isReactiveTyped(
+                                                checker,
+                                                type,
+                                            ))
+                                        )
+                                            read.shape = 'asWritten'
+                                    },
+                                ),
+                            )
                     }
+                await Promise.all(holding)
                 reads.sort((left, right) => left.start - right.start)
             }),
         )
@@ -239,4 +276,93 @@ export class TypeSession {
     close(): void {
         this.api.close()
     }
+}
+
+// 31.3 — THE DECLARED TYPE OF THE POSITION A READ STANDS IN, where it is one of the three the
+// clause names: a call's parameter, an annotated binding, an annotated return. An array literal
+// passes its position through, because `watch([a, b], …)` is the parameter's own shape. Anything
+// else is `undefined` and stays a read.
+//
+// THE PARAMETER IS ASKED OF THE SIGNATURE'S TARGET, the generic declaration, and never of the
+// instantiated one: `structuredClone<T>(value: T)` INFERS `T` from this very argument, and an
+// instantiated signature would call the argument a `Reactive` because it already is one in the
+// shadow.
+async function declaredType(
+    checker: Checker,
+    node: Node,
+): Promise<Type | undefined> {
+    let top = node
+    while (
+        isArrayLiteralExpression(top.parent) ||
+        isParenthesizedExpression(top.parent)
+    )
+        top = top.parent
+    const parent = top.parent
+    if (
+        (isCallExpression(parent) || isNewExpression(parent)) &&
+        parent.expression !== top
+    ) {
+        const index = parent.arguments?.indexOf(top as never) ?? -1
+        if (index < 0) return undefined
+        const resolved = await checker.getResolvedSignature(parent)
+        if (resolved === undefined) return undefined
+        const signature = (await resolved.getTarget()) ?? resolved
+        const parameters = await signature.getParameters()
+        // A REST PARAMETER IS NOT ASKED: its type is the array it collects into, and the position
+        // is one element of it. Nothing declares a `...Reactive[]` yet, so it stays a read.
+        if (index >= parameters.length - 1 && signature.hasRestParameter)
+            return undefined
+        const parameter = parameters[index]
+        return parameter === undefined
+            ? undefined
+            : checker.getTypeOfSymbol(parameter)
+    }
+    if (isVariableDeclaration(parent) && parent.initializer === top)
+        return annotated(checker, parent.type)
+    if (isReturnStatement(parent)) {
+        let holder: Node = parent.parent
+        while (
+            holder !== undefined &&
+            !isFunctionDeclaration(holder) &&
+            !isFunctionExpression(holder) &&
+            !isArrowFunction(holder) &&
+            !isMethodDeclaration(holder)
+        )
+            holder = holder.parent
+        return holder === undefined
+            ? undefined
+            : annotated(checker, (holder as { type?: TypeNode }).type)
+    }
+    if (isArrowFunction(parent) && parent.body === top)
+        return annotated(checker, parent.type)
+    return undefined
+}
+
+function annotated(
+    checker: Checker,
+    type: TypeNode | undefined,
+): Promise<Type | undefined> {
+    return type === undefined
+        ? Promise.resolve(undefined)
+        : checker.getTypeFromTypeNode(type)
+}
+
+// A union is `Reactive`-typed only where EVERY member is, `null` and `undefined` aside: `s.set`
+// takes `Accepted | Promise<Accepted> | Reactive<Accepted>`, and a position that also takes a
+// plain value is one where a read is what was meant. `Reactive<X>[]` counts, being the shape a
+// list of sources is declared as.
+async function isReactiveTyped(checker: Checker, type: Type): Promise<boolean> {
+    const members =
+        (type.flags & TypeFlags.Union) !== 0
+            ? await (type as UnionType).getTypes()
+            : [type]
+    let reactive = false
+    for (const member of members) {
+        if ((member.flags & (TypeFlags.Undefined | TypeFlags.Null)) !== 0)
+            continue
+        if (!(await checker.typeToString(member)).startsWith(REACTIVE_PREFIX))
+            return false
+        reactive = true
+    }
+    return reactive
 }

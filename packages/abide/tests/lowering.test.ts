@@ -1,9 +1,9 @@
 import { afterAll, expect, test } from 'bun:test'
-import { REACTIVE_MEMBERS } from '#compiler/REACTIVE_MEMBERS.ts'
-import { reactive } from '#shared'
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { emitComponent } from '#compiler'
+import { REACTIVE_MEMBERS } from '#compiler/REACTIVE_MEMBERS.ts'
 import { tokenise } from '#compiler/tokenise.ts'
+import { reactive } from '#shared'
 import { closeTyped, lower, refusal, typed } from './typed.ts'
 
 afterAll(closeTyped)
@@ -218,6 +218,39 @@ test('a binding shadows the page value for the body it is bound in — 31.3', as
     expect(await lower('{ let n = 2; use(n) }\nn = 3', N)).toBe(
         '{ let n = 2; use(n) }\nn.set(3)',
     )
+})
+
+// 31.3 — THE POSITIONS THAT HOLD THE `Reactive`: a parameter DECLARED as one, an annotated binding
+// and an annotated return. The declared type is the one written at the declaration, so a generic
+// `T` that would INFER to a `Reactive` from this very argument is not one — `structuredClone(n)`
+// snapshots. And a union is `Reactive`-typed only where every member is: `s.set` also takes a
+// plain value, so `m.set(n)` still reads. THE REVERT: drop the `holding` pass in
+// `TypeSession.readsFor`; the first five lower to a read — 5 wrong rewrites, and `watch` is
+// handed a string where it walks a source's readers.
+test('a position declared as a Reactive holds the Reactive — 31.3', async () => {
+    const NM = new Set(['n', 'm'])
+    const watching = "import { watch } from 'abide'\n"
+    expect(await lower(`${watching}watch([n], () => {})`, NM)).toBe(
+        `${watching}watch([n], () => {})`,
+    )
+    expect(await lower(`${watching}watch([n, m], () => {})`, NM)).toBe(
+        `${watching}watch([n, m], () => {})`,
+    )
+    expect(await lower(`${watching}watch(n, () => {})`, NM)).toBe(
+        `${watching}watch(n, () => {})`,
+    )
+    expect(await lower("const r: import('abide').Reactive<any> = n", NM)).toBe(
+        "const r: import('abide').Reactive<any> = n",
+    )
+    expect(
+        await lower(
+            "function f(): import('abide').Reactive<any> { return n }",
+            NM,
+        ),
+    ).toBe("function f(): import('abide').Reactive<any> { return n }")
+    expect(await lower('structuredClone(n)', NM)).toBe('structuredClone(n())')
+    expect(await lower('m.set(n)', NM)).toBe('m.set(n())')
+    expect(await lower('const r: number = n', NM)).toBe('const r: number = n()')
 })
 
 // THE RIGHT OF A WRITE IS LOWERED AS A SPAN OF THE SAME TOKENS, because a substring does not carry
