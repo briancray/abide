@@ -2,7 +2,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { compileFile, parseAbide } from '#compiler'
 import { escapeStyleValue, escapeText, render } from '#server'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-import { closeTyped, clientOf, namesRead, serverOf, typed } from './typed.ts'
+import { clientOf, closeTyped, namesRead, serverOf, typed } from './typed.ts'
 
 afterAll(closeTyped)
 
@@ -118,24 +118,22 @@ test('a static page emits no client runtime import', () => {
 // reachable through the public server specifier.
 test('the compiler is not reachable from the server seam', async () => {
     const server = await import('#server')
-    // `safeUrl` is here for the same reason the escaping is: 32.22 is an INTERPOLATION's clause,
-    // so the check runs where the value arrives, and emitted markup calls it by name. `writePath`
-    // is 31.9's, by the same road: a `<script>` runs on both sides and the copy happens where the
-    // write does. `raw` and its `Raw` are 32.26's, and they are here for a third reason on top:
-    // 32.27 lowers `{raw(x)}` to this export, so emitted markup calls it by name too. `listOf` is
-    // 32.16's: the emitted `{#for}` and the client's `updateList` ask the one function what a
-    // subject iterates as.
-    expect(Object.keys(server).sort()).toEqual([
-        'Raw',
-        'escapeAttribute',
-        'escapeStyleValue',
-        'escapeText',
-        'listOf',
-        'raw',
-        'render',
-        'safeUrl',
-        'writePath',
-    ])
+    // THE WHOLE ISOMORPHIC SURFACE CROSSES, so the list is the shared seam's plus what the server
+    // owns: `listOf` is 32.16's — the emitted `{#for}` and the client's `updateList` ask the one
+    // function what a subject iterates as — `render` is 35.4's, and the five methods are 16.2's.
+    const shared = Object.keys(await import('#shared'))
+    expect(Object.keys(server).sort()).toEqual(
+        [
+            ...shared,
+            'DELETE',
+            'GET',
+            'PATCH',
+            'POST',
+            'PUT',
+            'listOf',
+            'render',
+        ].sort(),
+    )
 })
 
 afterAll(removeTemporaryModules)

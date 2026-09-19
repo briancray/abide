@@ -304,3 +304,50 @@ test("a refusal's schema runs untracked", () => {
     flushSync()
     expect(runs).toBe(1)
 })
+
+// 15.5 — RETURNING A `Failed` REFUSES, from a body as much as from a `transform`. Only the
+// `transform` had been checked, so a body answering `notFound(…)` STORED the refusal as its
+// value: `ready()` true, `error()` empty, and the page rendering an error object as data. Both
+// ways a body answers are asserted, and a write is the boundary — it is not an answer.
+// THE REVERT: drop the `isFailed` arm in `run` and the `answered` test in `absorb`; the first
+// body reports `error: none, ready: true` where `NotFound` is due, and the recompute below serves
+// the refusal itself as its value.
+test('a body that returns a refusal refuses — 15.5', async () => {
+    const summary = (value: { error(): unknown; ready(): boolean }): string =>
+        `error: ${isFailed(value.error()) ? (value.error() as Error).name : 'none'}, ready: ${value.ready()}`
+
+    const settled = reactive(() => notFound())
+    expect(summary(settled)).toBe('error: NotFound, ready: false')
+
+    const loaded = reactive(async () => notFound())
+    await loaded.catch(() => {})
+    expect(summary(loaded)).toBe('error: NotFound, ready: false')
+
+    const keyed = reactive(async ({ id }: { id: string }) =>
+        id === '42' ? { id } : notFound(),
+    )
+    const missing = keyed({ id: 'nope' })
+    await missing.catch(() => {})
+    expect(summary(missing)).toBe('error: NotFound, ready: false')
+
+    // 4.17 — A WRITE OF ONE IS DATA. `set` is not a producer's answer; a write refuses only where
+    // its `transform` returned the refusal (4.6).
+    const held = reactive<unknown>(0)
+    held.set(notFound())
+    expect(summary(held)).toBe('error: none, ready: true')
+})
+
+// 2.4 THROUGH 15.5 — a recompute that refuses leaves what was served standing, with the refusal
+// beside it, exactly as a recompute that threw does.
+test('a recompute that returns a refusal keeps serving what it had', () => {
+    const id = reactive('42')
+    const invoice = reactive(() => (id() === '42' ? 'INV-0042' : notFound()))
+    const seen: string[] = []
+    watch(() => {
+        const error = invoice.error() as Error | undefined
+        seen.push(`${invoice()} ${error?.name ?? 'none'}`)
+    })
+    id.set('nope')
+    flushSync()
+    expect(seen).toEqual(['INV-0042 none', 'INV-0042 NotFound'])
+})

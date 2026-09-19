@@ -185,6 +185,8 @@ escape the write.
 4.16 An opening `undefined`, the value form's or a body's first answer, MUST land without passing a
 `schema`, a `transform`, a window or a `store`.
 
+4.17 `s.set` MUST store a `Failed` it is given as a value rather than refuse the write.
+
 # 5. Productions and identity
 
 5.1 A reader MUST be woken only when read identity changes.
@@ -640,14 +642,15 @@ woke have run.
 
 # 13. Selections
 
-13.1 A `Selection` MUST be one `Reactive`, one `Keyed`, or a set of `tags`.
+13.1 A `Selection` MUST be one `Reactive`, one `Keyed`, one `Rpc`, or a set of `tags`.
 
 13.2 `busy` over a `Selection` MUST answer whether ANY entry in it is busy.
 
 13.3 An implementation MUST hold one signal per `Selection`, and MUST NOT hold one per entry.
 
-13.4 `s.refresh`, `s.invalidate`, `k.refresh` and `k.invalidate` MUST be defined as `refresh` and
-`invalidate` over a `Selection`, and MUST NOT be a second mechanism.
+13.4 `s.refresh`, `s.invalidate`, `k.refresh`, `k.invalidate`, `rpc.refresh` and `rpc.invalidate`
+MUST be defined as `refresh` and `invalidate` over a `Selection`, and MUST NOT be a second
+mechanism.
 
 13.5 An implementation MUST NOT provide a free `done`, `success` or `error` over a `Selection`.
 
@@ -664,6 +667,9 @@ only entries something subscribes to and MUST mark the rest.
 in the process.
 
 13.11 `ready` over a `Selection` MUST answer whether EVERY entry in it is ready.
+
+13.12 A pattern given beside a `Selection` MUST narrow it to the entries whose `Args` match the
+pattern.
 
 # 14. Tracking
 

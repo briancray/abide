@@ -1485,7 +1485,15 @@ function refused(cell: Cell, failure: unknown): unknown {
 // A load. 4.2: a load given to a write makes the value loaded, at construction and at
 // every write alike. `generation` is what makes a stale settle a no-op — a refresh
 // landing after an invalidate must not overwrite the newer run's answer.
-function absorb(cell: Cell, result: unknown, gated: boolean): void {
+//
+// `answered` IS A BODY'S ANSWER, and 15.5 has one that settles to a `Failed` refuse. A write that
+// settles to one is not an answer, and 4.17 stores it as it would a settled one.
+function absorb(
+    cell: Cell,
+    result: unknown,
+    gated: boolean,
+    answered: boolean,
+): void {
     // THE BRAND IS READ BEFORE `then` (RULEBOOK 1.6). A `Reactive` is thenable by 1.4,
     // so a guard written the other way round settles a live value to one snapshot — a write
     // of `other` would hand back `other`'s current value instead of `other`.
@@ -1506,7 +1514,8 @@ function absorb(cell: Cell, result: unknown, gated: boolean): void {
     ;(result as PromiseLike<unknown>).then(
         (settled) => {
             if (cell.generation !== generation) return
-            accept(cell, settled, gated)
+            if (answered && isFailed(settled)) refused(cell, settled)
+            else accept(cell, settled, gated)
         },
         (failed) => {
             if (cell.generation !== generation) return
@@ -1775,11 +1784,28 @@ function run(cell: Cell): void {
     // only `transform` here routed every body production straight past its own gate
     // (11.47). The gate was written, the tests were written, and this path answered them
     // without ever reaching it.
+    const primitive =
+        produced === null ||
+        (typeof produced !== 'object' && typeof produced !== 'function')
+    if (cell.bareWrite && primitive) {
+        produce(cell, produced, true)
+        return
+    }
+    // 15.5 — A BODY THAT RETURNS A REFUSAL REFUSES. Past the primitive arm, so a recompute
+    // answering a number pays nothing for it, and ahead of the object arm, because a `Failed` is
+    // an object with no `then` and that arm would store it as the value. It lands the way a
+    // body's throw does above, a refusal being the same observable move whichever way the body
+    // said it.
+    if (!primitive && isFailed(produced)) {
+        cell.loading = false
+        cell.failure = produced
+        cascade(cell)
+        probesMoved(cell)
+        return
+    }
     if (
         cell.bareWrite &&
-        (produced === null ||
-            (typeof produced !== 'object' && typeof produced !== 'function') ||
-            typeof (produced as PromiseLike<unknown>).then !== 'function')
+        typeof (produced as PromiseLike<unknown>).then !== 'function'
     ) {
         produce(cell, produced, true)
         return
@@ -1791,7 +1817,7 @@ function run(cell: Cell): void {
         adoptAnswer(cell, produced)
         return
     }
-    absorb(cell, produced, true)
+    absorb(cell, produced, true, true)
 }
 
 // 11.67 — a body's answer that 11.66 refuses is the body's failure.
@@ -2596,7 +2622,7 @@ function setThroughGates(cell: Cell, value: unknown): unknown {
         const answer = accept(cell, value, true)
         return typeof answer === 'number' ? undefined : answer
     }
-    absorb(cell, value, true)
+    absorb(cell, value, true, false)
     return undefined
 }
 
@@ -2683,7 +2709,7 @@ function settleRestore(
     // A MISS IS THE VALUE WITHOUT A STORE: the body runs, or the initial value lands (8.3).
     if (cell.body !== null) startProducer(cell)
     else if (initial === undefined) landOpening(cell)
-    else if (initial !== NO_INITIAL) absorb(cell, initial, true)
+    else if (initial !== NO_INITIAL) absorb(cell, initial, true, false)
     else if (cell.loading) {
         cell.loading = false
         probesMoved(cell)
@@ -3046,7 +3072,7 @@ const MEMBERS = {
         const cell = this[CELL]
         cell.generation += 1
         if (!isThenable(value)) return accept(cell, value, false)
-        absorb(cell, value, false)
+        absorb(cell, value, false, false)
         return cell.ordinal
     },
     patch(this: Callable, mutate: (value: unknown) => void): void {
@@ -3355,7 +3381,7 @@ export function createReactive<
     if (cell.store !== null) restoreFirst(cell, cell.store, initial)
     else if (body === null) {
         if (initial === undefined) landOpening(cell)
-        else if (initial !== NO_INITIAL) absorb(cell, initial, true)
+        else if (initial !== NO_INITIAL) absorb(cell, initial, true, false)
     } else if (deferred) cell.loading = true
     else startProducer(cell)
     return self as unknown as Reactive<Stored, Accepted, Failures, Produced>

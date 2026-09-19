@@ -5,6 +5,8 @@ intent: Mark something stale, force it to reload now, or let it expire on its ow
 covers:
   - `k.invalidate`
   - `k.refresh`
+  - `rpc.invalidate`
+  - `rpc.refresh`
   - `s.invalidate`
   - `s.refresh`
   - `Selection`
@@ -106,6 +108,7 @@ The members above are conveniences over four free functions, and those four take
 | --- | --- |
 | one `Reactive` | that value |
 | one keyed value | every args key of it |
+| one handler | the value behind it — every args key, where it is keyed |
 | `{ tags: [...] }` | every entry carrying any of those tags, **across values** |
 | nothing | this scope |
 
@@ -115,12 +118,13 @@ import { busy, invalidate, refresh } from 'abide'
 invalidate(level)                     // ≡ level.invalidate()
 invalidate({ tags: ['sku:A-70'] })    // across every value tagging it
 refresh(getStock)                     // every args key, loaded now
+refresh(getStock, { sku: 'A-70' })    // ≡ getStock.refresh({ sku: 'A-70' })
 busy()                                // anything in this scope in flight
 ```
 
 The member spellings are **defined as** these, not a second mechanism at a second width:
-`s.refresh()` is `refresh(s)`, and `getStock.refresh(args)` is `refresh(getStock)` narrowed
-to part of its args space — which is the next section.
+`s.refresh()` is `refresh(s)`, and `getStock.refresh(args)` is `refresh(getStock, args)` — the
+selection narrowed to part of its args space, which is the next section (13.4, 13.12).
 
 Two rules make the wide forms safe to reach for.
 

@@ -12,6 +12,7 @@ import { type Found, runSchema, type Schema } from '../Schema.ts'
 import { CELL } from './CELL.ts'
 import { canonicalKey } from './canonicalKey.ts'
 import { armTimer } from './Expiry.ts'
+import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { NotLanded } from './NotLanded.ts'
 import {
     abandonDeferred,
@@ -48,6 +49,15 @@ export type Keyed<
     invalidate(pattern?: Partial<Args>): void
     // The entries reached so far. Not app surface — the statics and the tests read it.
     entries: Map<string, Reactive<Stored, Accepted, Failures>>
+}
+
+export function isKeyed(
+    value: unknown,
+): value is Keyed<unknown, unknown, unknown, never, unknown> {
+    return (
+        typeof value === 'function' &&
+        (value as { [KEYED_BRAND]?: boolean })[KEYED_BRAND] === true
+    )
 }
 
 function matches(args: unknown, pattern: unknown): boolean {
@@ -339,6 +349,7 @@ export function createKeyed<
         return created
     } as Keyed<Stored, Args, Accepted, Failures>
 
+    ;(self as unknown as Record<symbol, boolean>)[KEYED_BRAND] = true
     self.entries = entries
     self.busy = (pattern?: Partial<Args>): boolean => {
         for (const [key, entry] of entries)

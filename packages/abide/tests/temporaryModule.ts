@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/mkdir/rm of its own
+import { dirname } from 'node:path' // bun has no path helpers of its own
 
 // WHERE AN EMITTED MODULE GOES TO BE IMPORTED. Not under `packages/abide`, and that is the whole
 // point of the helper: `conventions.test.ts` globs `**/*.ts` there, so a temp module written
@@ -14,8 +15,11 @@ const made: string[] = []
 export function temporaryModule(files: Record<string, string>): string {
     const dir = mkdtempSync(`${ROOT}m-`)
     made.push(dir)
-    for (const [name, text] of Object.entries(files))
+    // A name may carry directories, so a caller can lay out a tree rather than a flat folder.
+    for (const [name, text] of Object.entries(files)) {
+        mkdirSync(dirname(`${dir}/${name}`), { recursive: true })
         writeFileSync(`${dir}/${name}`, text)
+    }
     return dir
 }
 

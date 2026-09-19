@@ -9,6 +9,8 @@ covers:
   - `tags`
   - `k.busy`
   - `k.ready`
+  - `rpc.busy`
+  - `rpc.ready`
 examples:
   - packages/dogfood/examples/cache-shared
   - packages/dogfood/examples/cache-canonical
@@ -37,7 +39,9 @@ than one shape with an option, and every signature is in the
 
 Calling it hands back a `Reactive` for that key, so a probe on the result asks about that entry:
 `metricsFor({ range }).busy()`. The factory carries `busy` and `ready` too, and
-`metricsFor.busy()` asks about every entry, or about those a partial args matches (13.2, 13.11).
+`metricsFor.busy()` asks about every entry, or about those a partial args matches (13.2, 13.11,
+13.12). A handler declared over one carries the same two, so `getMetrics.busy({ range })` on the
+`GET` is the same question as `metricsFor.busy({ range })` on the value behind it.
 
 ## A keyed value's cache is one entry per args key
 

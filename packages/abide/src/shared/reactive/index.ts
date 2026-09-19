@@ -30,7 +30,7 @@ import {
 export { canonicalKey } from './canonicalKey.ts'
 export type { History } from './History.ts'
 export { isThenable } from './isThenable.ts'
-export type { Keyed } from './Keyed.ts'
+export { isKeyed, type Keyed } from './Keyed.ts'
 export { NotLanded } from './NotLanded.ts'
 export {
     flushSync,
@@ -49,7 +49,7 @@ export { type Disposer, type Effect, watch } from './watch.ts'
 // for `busy`, ALL for `ready` — so the selection is the shape rather than a union, and
 // the statics have no arm to pick.
 //
-// 13.1'S THIRD ARM IS `{ tags }`: every value carrying any of those tags, across values.
+// 13.1'S LAST ARM IS `{ tags }`: every value carrying any of those tags, across values.
 export type Selection =
     | {
           busy(): boolean
@@ -69,7 +69,7 @@ function tagsOf(selection: Selection): string[] | null {
 function named(name: string, selection: Selection | undefined): Selection {
     if (selection === undefined)
         throw new Error(
-            `reactive.${name}() was called with no selection. The bare form sweeps every entry in scope and is not built yet; name the value or the keyed face.`,
+            `${name}() was called with no selection. The bare form sweeps every entry in scope and is not built yet; name the value or the keyed face.`,
         )
     return selection
 }
@@ -80,8 +80,8 @@ function named(name: string, selection: Selection | undefined): Selection {
 // `Stored | Failures` — cannot be inferred from one union: the checker put all of it in `Stored`,
 // so a refusing transform stored its own refusal and `s.error()` lost the name it refused with.
 type Refusal = Failed<string, unknown>
-type Kept<Shaped> = Exclude<Shaped, Refusal>
-type Refused<Shaped> = Extract<Shaped, Refusal>
+export type Kept<Shaped> = Exclude<Shaped, Refusal>
+export type Refused<Shaped> = Extract<Shaped, Refusal>
 // `transform` ALONE IS WHERE `Shaped` IS READ FROM. The rest of the options mention the stored value
 // too — a `store`, an `identity` — and inferring from those as well made a `store` whose `get` is
 // typed `never` pin the stored value to `never`.
@@ -92,11 +92,11 @@ type Shaping<Accepted, Shaped, Args = never> = Omit<
     transform?: (value: Accepted) => Shaped
 }
 // What a body handing back a `Reactive` adopts (11.12): its failures, and its chunks where it streams.
-type AdoptedFailures<Computed> =
+export type AdoptedFailures<Computed> =
     Computed extends Reactive<unknown, never, infer Failures, unknown>
         ? Failures
         : never
-type AdoptedProduced<Computed, Otherwise> =
+export type AdoptedProduced<Computed, Otherwise> =
     Computed extends Reactive<unknown, never, unknown, infer Produced>
         ? Produced
         : Otherwise
@@ -182,33 +182,60 @@ export function reactive(
     )
 }
 
-// THE STATIC PROBES. 3.2 keeps a probe from starting work and 1.7 has reaching an
-// instance start it, so the allocate/do-not-allocate split is visible in the spelling
-// rather than remembered as a rule.
-reactive.busy = function busyOver(selection?: Selection): boolean {
+// What a pattern beside a selection is typed as: the `Args` the selection's OWN member narrows by
+// (13.12), read off the member being called rather than off `refresh` for all four — the four take
+// the same two arguments, and deriving three of them from a fourth is one member's signature
+// standing in for another's. A `Reactive`'s members take none, so a pattern there is inert; the
+// tag arm takes none at all.
+type PatternOf<
+    Chosen,
+    Member extends 'busy' | 'ready' | 'refresh' | 'invalidate',
+> =
+    Chosen extends Record<Member, (pattern?: infer Pattern) => unknown>
+        ? Pattern
+        : never
+
+// THE FREE PROBES AND TRIGGERS. 3.2 keeps a probe from starting work and 1.7 has reaching an
+// instance start it, so the allocate/do-not-allocate split is visible in the spelling rather than
+// remembered as a rule. A pattern is handed to the selection's own face, which is what narrows a
+// `Keyed` and an `Rpc` over one — so `refresh(s, pattern)` and `s.refresh(pattern)` are one call
+// (13.4, 13.12).
+export function busy<Chosen extends Selection>(
+    selection?: Chosen,
+    pattern?: PatternOf<Chosen, 'busy'>,
+): boolean {
     const chosen = named('busy', selection)
     const tags = tagsOf(chosen)
     if (tags !== null) return busyOverTags(tags)
-    return (chosen as { busy(): boolean }).busy()
+    return (chosen as { busy(pattern: unknown): boolean }).busy(pattern)
 }
 // ALL, against `busy`'s ANY. The ambiguity stood declared rather than resolved for a
 // long time; these are the quantifiers under which `busy && !ready` reads as one
 // sentence.
-reactive.ready = function readyOver(selection?: Selection): boolean {
+export function ready<Chosen extends Selection>(
+    selection?: Chosen,
+    pattern?: PatternOf<Chosen, 'ready'>,
+): boolean {
     const chosen = named('ready', selection)
     const tags = tagsOf(chosen)
     if (tags !== null) return readyOverTags(tags)
-    return (chosen as { ready(): boolean }).ready()
+    return (chosen as { ready(pattern: unknown): boolean }).ready(pattern)
 }
-reactive.refresh = function refreshOver(selection?: Selection): void {
+export function refresh<Chosen extends Selection>(
+    selection?: Chosen,
+    pattern?: PatternOf<Chosen, 'refresh'>,
+): void {
     const chosen = named('refresh', selection)
     const tags = tagsOf(chosen)
     if (tags !== null) refreshOverTags(tags)
-    else (chosen as { refresh(): void }).refresh()
+    else (chosen as { refresh(pattern: unknown): void }).refresh(pattern)
 }
-reactive.invalidate = function invalidateOver(selection?: Selection): void {
+export function invalidate<Chosen extends Selection>(
+    selection?: Chosen,
+    pattern?: PatternOf<Chosen, 'invalidate'>,
+): void {
     const chosen = named('invalidate', selection)
     const tags = tagsOf(chosen)
     if (tags !== null) invalidateOverTags(tags)
-    else (chosen as { invalidate(): void }).invalidate()
+    else (chosen as { invalidate(pattern: unknown): void }).invalidate(pattern)
 }

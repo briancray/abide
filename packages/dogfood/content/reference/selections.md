@@ -8,28 +8,29 @@ enumerates:
 
 A probe answers about one [`Reactive`](reactive.md); a **selection** answers about a set of
 them. The four below are free functions, and the members on a value are defined as them —
-`s.refresh()` is `refresh(s)`, and `k.refresh(pattern)` is `refresh(k)` narrowed by args.
+`s.refresh()` is `refresh(s)`, and `k.refresh(pattern)` is `refresh(k, pattern)`.
 
 ## Syntax
 
 ```ts browser
-busy(selection)
-ready(selection)
-refresh(selection)
-invalidate(selection)
+busy(selection, pattern)
+ready(selection, pattern)
+refresh(selection, pattern)
+invalidate(selection, pattern)
 ```
 
-Called bare, each one means the whole scope.
+All four take the same two arguments. Called bare, each one means the whole scope; the pattern is
+optional and narrows a keyed selection to the entries whose args match it.
 
 ## Members
 
 | Name | Signature | Description |
 | --- | --- | --- |
-| `Selection` | `Reactive<any, any, any, any> \| Keyed<any, any, any, any> \| { tags: string[] }` | One value, one keyed value — every args key of it — or every entry carrying any of these tags, across values. |
-| `busy` | `(selection?: Selection) => boolean` | Whether any entry in the selection has work in flight. |
-| `ready` | `(selection?: Selection) => boolean` | Whether every entry in the selection has a value to serve. |
-| `refresh` | `(selection?: Selection) => void` | Stale while revalidate, over the selection. |
-| `invalidate` | `(selection?: Selection) => void` | Marks the selection stale. Nothing loads and nobody is woken until the next read. |
+| `Selection` | `Reactive<any, any, any, any> \| Keyed<any, any, any, any> \| Rpc<any, any, any, any> \| { tags: string[] }` | One value, one keyed value — every args key of it — one handler, which is the value behind it, or every entry carrying any of these tags, across values. |
+| `busy` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether any entry in the selection has work in flight. |
+| `ready` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether every entry in the selection has a value to serve. |
+| `refresh` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Stale while revalidate, over the selection. |
+| `invalidate` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Marks the selection stale. Nothing loads and nobody is woken until the next read. |
 
 ## Description
 

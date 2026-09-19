@@ -13,6 +13,7 @@
 // in another — and the grouped output below is what a reader looks at instead.
 
 import { expect, test } from 'bun:test'
+import { relative as relativePath } from 'node:path' // bun has no path helpers of its own
 import {
     emitClient,
     emitComponent,
@@ -32,6 +33,31 @@ const SHELL = '<!doctype html><html><head></head><body></body></html>'
 const sources = [
     ...new Bun.Glob('*/files/**/*.abide').scanSync({ cwd: EXAMPLES.pathname }),
 ].sort()
+
+// `#server/x` as a path from `from` — a file's directory inside the copied tree, '' at its root —
+// to the copy of `src/server/x.ts`.
+function seams(module: string, from: string): string {
+    return module.replace(
+        /from '#(server|shared|ui)(\/[^']*)?'/g,
+        (_, seam: string, rest: string | undefined) => {
+            const target = `src/${seam}${rest === undefined ? '/index' : rest}.ts`
+            const path = relativePath(from === '' ? '.' : from, target)
+            return `from '${path.startsWith('.') ? path : `./${path}`}'`
+        },
+    )
+}
+
+// Every `.ts` under an example's `files/src`, keyed by where it goes in the copy.
+async function exampleTree(example: string): Promise<Record<string, string>> {
+    const root = new URL(`${example}/files/`, EXAMPLES).pathname
+    const tree: Record<string, string> = {}
+    for (const path of new Bun.Glob('src/**/*.ts').scanSync({ cwd: root }))
+        tree[path] = seams(
+            await Bun.file(`${root}${path}`).text(),
+            path.slice(0, path.lastIndexOf('/')),
+        )
+    return tree
+}
 
 test('every example renders on the server and mounts on the client', async () => {
     const session = await TypeSession.open(TSCONFIG)
@@ -70,28 +96,22 @@ test('every example renders on the server and mounts on the client', async () =>
             try {
                 const file = parseAbide(text)
                 const names = await session.reads(path, file)
-                // EACH EXAMPLE IS ITS OWN APP, with its own `#server` / `#shared` / `#ui`, and
-                // the emitted module imports through them exactly as the source did. A temp
-                // directory is not that app, so the specifiers are rewritten to the example's own
-                // files. An `imports` map was tried first and bun did not resolve one pointing
-                // outside its own package — this is the harness's problem to solve, not the
-                // compiler's, and solving it is what makes the run cover the whole corpus rather
-                // than the subset that happens to import nothing.
-                const root = new URL(
-                    `${relative.slice(0, relative.indexOf('/files/'))}/files/src/`,
-                    EXAMPLES,
-                ).pathname
-                const resolve = (module: string): string =>
-                    module.replace(
-                        /from '#(server|shared|ui)(\/[^']*)?'/g,
-                        (_, seam: string, rest: string | undefined) =>
-                            `from '${root}${seam}${rest === undefined ? '/index.ts' : `${rest}.ts`}'`,
-                    )
-
+                // EACH EXAMPLE IS ITS OWN APP, with its own `#server` / `#shared` / `#ui`, and a
+                // temp directory is not that app. So the example's WHOLE `src` is copied beside the
+                // page with every module's seam specifiers rewritten to the copy — not the page's
+                // alone. Rewriting only the page left a handler's own `#server/database` to
+                // resolve through `packages/dogfood/package.json`, to the DOCS APP's database, and
+                // an example ran against another app's module with nothing saying so. An `imports`
+                // map was tried and bun did not resolve one pointing outside its own package; a
+                // runtime `onResolve` does not fire for a bare `#shared` that fails its lookup.
+                const example = relative.slice(0, relative.indexOf('/files/'))
+                const tree = await exampleTree(example)
                 const dir = temporaryModule({
-                    'Page.ts': resolve(emitComponent(file, names)),
-                    'Page.client.ts': resolve(
+                    ...tree,
+                    'Page.ts': seams(emitComponent(file, names), ''),
+                    'Page.client.ts': seams(
                         emitClient(file, names) || 'export default () => {}',
+                        '',
                     ),
                 })
 
@@ -130,10 +150,16 @@ test('every example renders on the server and mounts on the client', async () =>
     const reasons = new Map<string, number>()
     for (const line of broken) {
         const missing = /Export named '([^']+)'/.exec(line)
+        // A module the example never shipped — the `database.ts` its handlers import is not in
+        // `files/` — and a package nothing installed are facts about the CORPUS, not the runtime.
+        const absent =
+            /Cannot find (module|package) '(?:[./]*\/)?([^']+)'/.exec(line)
         const key =
             missing !== null
                 ? `\`${missing[1]}\` is not exported — that surface is not built`
-                : (line.split(':')[0] ?? line)
+                : absent !== null
+                  ? `\`${absent[2]}\` ${absent[1] === 'module' ? 'is not in the example' : 'is not installed'} — the corpus is missing it`
+                  : (line.split(':')[0] ?? line)
         reasons.set(key, (reasons.get(key) ?? 0) + 1)
     }
     const ranked = [...reasons].sort((left, right) => right[1] - left[1])
@@ -161,5 +187,8 @@ test('every example renders on the server and mounts on the client', async () =>
     //
     // 37 ONCE 31.3's DECLARED POSITIONS HOLD THE `Reactive`: `watch([owner], …)` had lowered its
     // source to a read, and `watch` walked the readers of a string.
-    expect(sources.length - broken.length).toBeGreaterThanOrEqual(37)
+    //
+    // 44 WITH `GET` AND THE MUTATIONS IN PROCESS. It read 51 first, and 7 of those were the docs
+    // app's database answering an example's handler — see `exampleTree`.
+    expect(sources.length - broken.length).toBeGreaterThanOrEqual(44)
 })

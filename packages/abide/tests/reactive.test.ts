@@ -7,10 +7,14 @@
 import { expect, setSystemTime, test } from 'bun:test'
 import { gate } from 'harness/gate'
 import {
+    busy,
     flushSync,
+    invalidate,
     isReactive,
     NotLanded,
     reactive,
+    ready,
+    refresh,
     refuse,
     structural,
     watch,
@@ -374,7 +378,7 @@ test('reaching a key twice runs the body once', () => {
 // shared get-or-create; here it is visible in the spelling.
 test('a static probe over a keyed value allocates no entry', () => {
     const keyed = reactive((args: { id: number }) => args.id)
-    expect(reactive.busy(keyed)).toBe(false)
+    expect(busy(keyed)).toBe(false)
     expect(keyed.entries.size).toBe(0)
     keyed({ id: 1 })
     expect(keyed.entries.size).toBe(1)
@@ -4272,21 +4276,17 @@ test('busy and ready over tags answer ANY and EVERY across the values carrying t
     orders({ customer: 1 })
     await profile
     await other
-    expect(`busy: ${reactive.busy({ tags: ['customer:1'] })}`).toBe(
-        'busy: true',
-    )
-    expect(`ready: ${reactive.ready({ tags: ['customer:1'] })}`).toBe(
-        'ready: false',
-    )
-    expect(`other busy: ${reactive.busy({ tags: ['customer:2'] })}`).toBe(
+    expect(`busy: ${busy({ tags: ['customer:1'] })}`).toBe('busy: true')
+    expect(`ready: ${ready({ tags: ['customer:1'] })}`).toBe('ready: false')
+    expect(`other busy: ${busy({ tags: ['customer:2'] })}`).toBe(
         'other busy: false',
     )
     loads.settleAll(3)
     await Bun.sleep(1)
-    expect(`busy after: ${reactive.busy({ tags: ['customer:1'] })}`).toBe(
+    expect(`busy after: ${busy({ tags: ['customer:1'] })}`).toBe(
         'busy after: false',
     )
-    expect(`ready after: ${reactive.ready({ tags: ['customer:1'] })}`).toBe(
+    expect(`ready after: ${ready({ tags: ['customer:1'] })}`).toBe(
         'ready after: true',
     )
 })
@@ -4315,7 +4315,7 @@ test('invalidate over tags reaches every value carrying any of them, and no othe
         },
         { tags: ['elsewhere'] },
     )
-    reactive.invalidate({ tags: ['invoice', 'customer:1'] })
+    invalidate({ tags: ['invoice', 'customer:1'] })
     a()
     b()
     c()
@@ -4347,7 +4347,7 @@ test('refresh over tags reloads what something reads and marks the rest', () => 
     const stop = watch(() => {
         read()
     })
-    reactive.refresh({ tags: ['report'] })
+    refresh({ tags: ['report'] })
     expect(`read runs: ${readRuns}`).toBe('read runs: 2')
     expect(`unread runs before a read: ${unreadRuns}`).toBe(
         'unread runs before a read: 1',
@@ -4371,7 +4371,7 @@ test('a guard over a tag selection subscribes once and comes back when the loads
         values.push(reactive(() => loads.load(), { tags: ['feed'] }))
     const saw: boolean[] = []
     const stop = watch(() => {
-        saw.push(reactive.busy({ tags: ['feed'] }))
+        saw.push(busy({ tags: ['feed'] }))
     })
     let probeReaders = 0
     for (const value of values)
@@ -4401,8 +4401,8 @@ test('an evicted keyed entry leaves its tags', async () => {
     keyed({ id: 1 })
     await Bun.sleep(80)
     expect(keyed.entries.size).toBe(0)
-    reactive.invalidate({ tags: ['evictable'] })
-    reactive.refresh({ tags: ['evictable'] })
+    invalidate({ tags: ['evictable'] })
+    refresh({ tags: ['evictable'] })
     expect(`runs: ${runs}`).toBe('runs: 1')
 })
 

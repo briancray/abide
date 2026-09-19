@@ -18,19 +18,24 @@ export {
 export { type Failed, isFailed } from './Failed.ts'
 export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
+export { jsonSchema } from './jsonSchema.ts'
 export { Raw, raw } from './Raw.ts'
 export {
+    busy,
     type Disposer,
     type Effect,
     flushSync,
     type History,
     type Identity,
+    invalidate,
     isReactive,
     type Keyed,
     NotLanded,
     type Reactive,
     type ReactiveOptions,
     reactive,
+    ready,
+    refresh,
     type Selection,
     type Store,
     structural,
@@ -38,7 +43,6 @@ export {
     watch,
 } from './reactive/index.ts'
 export { notFound, refuse, validationError } from './refuse.ts'
-export { jsonSchema } from './jsonSchema.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'
 export { safeUrl } from './safeUrl.ts'
 export { validateJson } from './validateJson.ts'
