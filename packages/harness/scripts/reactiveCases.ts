@@ -10,7 +10,7 @@
 // walks by resolution, and the reason the harness is a package.
 
 import { flushSync, reactive, structural } from 'abide'
-import { signal } from 'harness/measure/vanilla'
+import { carelessSignal, signal } from 'harness/measure/vanilla'
 
 // Defeats dead-code elimination without allocating: every read writes here.
 let sink: unknown
@@ -1023,6 +1023,73 @@ function probeSettledDag(width: number, depth: number): Case {
     }
 }
 
+// WHAT THE MACHINERY BUYS, which is the other half of every ratio above. The CAREFUL
+// hand-written arm already carries an identity check, so those rows price abide
+// against a guard somebody had to know to write. These two price it against the
+// version most people write first — an unconditional notify — and the answer goes the
+// other way.
+//
+// READERS ARE THE POINT. With nobody subscribed a careless write is a store and the
+// two arms are level; the cost only exists where somebody is listening, so the width
+// is the case. 100 is a table with a bound cell per row, not a stress test.
+function equalWriteAgainstCareless(width: number, fresh: boolean): Case {
+    const name = fresh
+        ? `a re-materialised equal value, ${width} readers, structural vs CARELESS`
+        : `a write of the value already held, ${width} readers, vanilla written CARELESSLY`
+    const make = (): { id: number; total: number } => ({ id: 1, total: 100 })
+    const standing = make()
+    // SEEDED WITH THE VALUE THE WRITE WRITES, so "already held" is true on the first
+    // write and not only from the second — the timed loop repeats, but the work pass
+    // writes ONCE, and a case whose two passes disagree is the failure the work record
+    // exists to catch.
+    const held = carelessSignal(fresh ? make() : standing)
+    const value = fresh
+        ? reactive(make(), { identity: structural })
+        : reactive(standing)
+    for (let at = 0; at < width; at += 1) {
+        held.subscribe((next) => {
+            sink = next
+        })
+        value.watch((next) => {
+            sink = next
+        })
+    }
+    return {
+        name,
+        distinguishes:
+            'what the gate BUYS rather than what it costs — abide skips the wake and this arm wakes every reader on a write that moved nothing, which is the version most people write first',
+        vanilla: (): void => {
+            held.write(fresh ? make() : standing)
+        },
+        abide: (): void => {
+            value.set(fresh ? make() : standing)
+            flushSync()
+        },
+        work: () => {
+            const same = make()
+            const one = carelessSignal(fresh ? make() : same)
+            const two = fresh
+                ? reactive(make(), { identity: structural })
+                : reactive(same)
+            let a = 0
+            let b = 0
+            for (let at = 0; at < width; at += 1) {
+                one.subscribe(() => {
+                    a += 1
+                })
+                two.watch(() => {
+                    b += 1
+                })
+            }
+            b = 0
+            one.write(fresh ? make() : same)
+            two.set(fresh ? make() : same)
+            flushSync()
+            return { vanilla: { wakes: a }, abide: { wakes: b } }
+        },
+    }
+}
+
 export const reactiveCases = (): Case[] => [
     constructValue(),
     constructDerived(),
@@ -1053,6 +1120,8 @@ export const reactiveCases = (): Case[] => [
     repeatedReads(5),
     probeSettledDag(5, 3),
     probeSettledDag(5, 5),
+    equalWriteAgainstCareless(100, false),
+    equalWriteAgainstCareless(100, true),
 ]
 
 export type { Case }

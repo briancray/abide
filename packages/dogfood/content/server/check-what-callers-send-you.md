@@ -11,6 +11,7 @@ covers:
   - `Paths<T>`
   - `validateJson`
   - `JsonSchema`
+  - `jsonSchema`
 examples:
   - packages/dogfood/examples/schema-browser
   - packages/dogfood/examples/schema-issues
@@ -120,10 +121,10 @@ and not for your own code.
 `GET(fn)` is still sugar for `GET(reactive(fn))`. Write the `reactive` out when you have a gate
 to declare, and not otherwise.
 
-## `Schema<T>` takes three forms
+## `Schema<T>` takes two forms
 
 ```ts shared
-type Schema<T> = ((value: unknown) => T) | StandardSchemaV1<T> | JsonSchema
+type Schema<T> = ((value: unknown) => T) | StandardSchemaV1<T>
 ```
 
 A schema **returns what it accepts**, so it normalises as well as refuses. That is why the
@@ -134,11 +135,25 @@ as the value is the silent version of a refusal.
 | --- | --- |
 | `(value: unknown) => T` | returns what it accepts, throws a sentence at what it refuses |
 | `StandardSchemaV1<T>` | the interop spec zod, valibot and arktype all answer to |
-| `JsonSchema` | a JSON Schema document — the **native** form |
+A JSON Schema document is the **native** shape, and it enters as the Standard form:
+`jsonSchema(document)` wraps it.
 
-A handler means `JsonSchema`, and it is the only form publishable to a tool definition or an
-OpenAPI operation. `validateJson(schema, value)` is the native validator, handing back `null`
-when the value matches and `Issues<T>` when it does not.
+```ts shared
+import { jsonSchema, reactive } from 'abide'
+
+const age = reactive(30, {
+    schema: jsonSchema<number>({ type: 'number', minimum: 0 }),
+})
+```
+
+A handler means `JsonSchema`, and it is the only shape publishable to a tool definition or an
+OpenAPI operation — the wrapper exposes the document where a Standard Schema exposes its JSON
+Schema, so it is published as written. `validateJson(schema, value)` is the native validator,
+handing back `null` when the value matches and `Issues<T>` when it does not.
+
+A document is data, so something has to read it, and `jsonSchema` is what brings the validator.
+A page that never calls it carries none of it (19.14). Hand a gate a bare document and it refuses
+with the sentence naming the wrapper (19.15), rather than accepting a shape it never checked.
 
 ## `Issues<T>` is keyed by path, not a list
 

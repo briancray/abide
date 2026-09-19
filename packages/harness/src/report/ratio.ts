@@ -112,3 +112,12 @@ export function ratio(
         return { kind: 'underTheFloor', ...shared, floor: spec.floor }
     return { kind: 'ratio', ...shared, value }
 }
+
+// A verdict as the text a bench row prints. Only a `ratio` is a number; the other two say why
+// there is none.
+export function claimOf(result: Ratio): string {
+    if (result.kind === 'ratio') return `${result.value.toFixed(2)}x`
+    if (result.kind === 'underTheFloor')
+        return `under the floor (${(result.floor * 100).toFixed(1)}%)`
+    return 'under one frame — not resolvable by a wall clock'
+}

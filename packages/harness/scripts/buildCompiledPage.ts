@@ -9,8 +9,8 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
 import { tmpdir } from 'node:os' // bun exposes no temp-directory helper of its own
 import {
-    compileFile,
     emitClient,
+    emitComponent,
     parseAbide,
     TypeSession,
 } from 'abide/compiler'
@@ -29,11 +29,11 @@ export async function buildCompiledPage(source: string): Promise<CompiledPage> {
     try {
         const file = parseAbide(source)
         // The fixture path is what puts the shadow inside a project the checker has opened.
-        const names = await session.reactiveNames(
+        const names = await session.reads(
             `${REPO}packages/abide/tests/fixtures/typed/src/browser.abide`,
             file,
         )
-        writeFileSync(`${scratch}/Page.ts`, compileFile(source, names))
+        writeFileSync(`${scratch}/Page.ts`, emitComponent(file, names))
         writeFileSync(`${scratch}/Page.client.ts`, emitClient(file, names))
         writeFileSync(
             `${scratch}/entry.ts`,

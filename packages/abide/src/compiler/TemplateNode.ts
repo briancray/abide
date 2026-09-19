@@ -1,8 +1,13 @@
 // What a `.abide` template parses into. Build-time only — nothing here is reached from
 // the client's static closure, and none of it is walked per row.
 
+// AN HTML TAG OR ATTRIBUTE NAME IS ASCII CASE-INSENSITIVE, so every comparison reads the `lower`
+// form the parser folded once, and the author's spelling is what the emitters write. Folded at each
+// comparison instead, every site that forgot was its own bug: `<HEAD>` never hoisted, `HREF=`
+// skipped 32.22's check, `ONCLICK=` shipped as a live attribute, `</BR>` was emitted.
 export type Attribute = {
     name: string
+    lowerName: string
     // The literal text, or the expression source where `expression` is true.
     value: string
     // `attr={expr}` rather than `attr="text"`. The field is always present rather than added
@@ -22,6 +27,7 @@ export type TemplateNode =
     | {
           kind: 'element'
           tag: string
+          lowerTag: string
           attributes: Attribute[]
           children: TemplateNode[]
       }

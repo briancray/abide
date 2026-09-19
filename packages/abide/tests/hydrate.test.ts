@@ -13,6 +13,9 @@ import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { closeTyped, clientOf } from './typed.ts'
+
+afterAll(closeTyped)
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
@@ -34,7 +37,7 @@ const label = 'clicks'
 
 async function mountPage(source: string) {
     const file = parseAbide(source)
-    const reactive = await session.reactiveNames(`${ROOT}src/page.abide`, file)
+    const reactive = await session.reads(`${ROOT}src/page.abide`, file)
 
     const dir = temporaryModule({
         'Page.ts': compileFile(source, reactive),
@@ -125,14 +128,19 @@ const label = 'clicks'
 <p id="live">{count}</p>`
 
     const file = parseAbide(source)
-    const names = await session.reactiveNames(`${ROOT}src/page.abide`, file)
+    const names = await session.reads(`${ROOT}src/page.abide`, file)
     const client = emitClient(file, names)
 
     // The live run is the only one bound. It is the ONLY binding on the page, so it walks its
     // own path and no anchor is emitted — an anchor for one binding saves nothing and costs a
     // line. The hoisting case is the test below.
-    expect(client).toContain('textAt(root, [1,0])')
-    expect(client).not.toContain('childAt(')
+    expect(client).toContain('__textAt(root, [1,0], true)')
+    expect(client).not.toContain('__childAt(')
+    // The STATIC run is still ADDRESSED, and that is not a binding: every part of it is an
+    // expression, so it can render no node at all, and the index of everything after it in that
+    // parent counts through the node `textAt` puts back. One line, and nothing reads it again.
+    expect(client).toContain('__textAt(root, [0,0], true)')
+    expect(client).not.toContain('__setText(__textAt(root, [0,0]')
     // `watchEffect` at the top level, `watch` inside a `{#if}` arm — the second is a local that
     // collects its disposer so a branch swap can stop it. Either spelling counts as a binding.
     expect(client.match(/watch(Effect)?\(/g) ?? []).toHaveLength(1)
@@ -140,6 +148,6 @@ const label = 'clicks'
 
 // A page with nothing to hydrate emits no client module at all, which is what makes "this page
 // ships no runtime" a fact about the build rather than a claim about the bundler.
-test('a static page emits no client module', () => {
-    expect(emitClient(parseAbide('<h1>static</h1>'), new Set())).toBe('')
+test('a static page emits no client module', async () => {
+    expect(await clientOf('<h1>static</h1>', [])).toBe('')
 })

@@ -3,7 +3,13 @@
 // for why the substrate matters more than the numbers.
 
 import { reactive } from 'abide'
-import { type Batched, batch, ratio, type Sample } from 'harness/report'
+import {
+    type Batched,
+    batch,
+    claimOf,
+    ratio,
+    type Sample,
+} from 'harness/report'
 import { countExportedNames } from './countExportedNames.ts'
 import { countLines } from './countLines.ts'
 import { type Case, reactiveCases } from './reactiveCases.ts'
@@ -21,12 +27,7 @@ function report(measured: Batched, work: Case['work']): void {
     const result = ratio(abideSample, vanillaSample, { floor: measured.floor })
     const vanillaNs = vanillaSample.nanoseconds
     const abideNs = abideSample.nanoseconds
-    const claim =
-        result.kind === 'ratio'
-            ? `${result.value.toFixed(2)}x`
-            : result.kind === 'underTheFloor'
-              ? `under the floor (${(measured.floor * 100).toFixed(1)}%)`
-              : 'under one frame — not resolvable by a wall clock'
+    const claim = claimOf(result)
     console.log(
         `  abide ${abideNs.toFixed(1)} ns   vanilla ${vanillaNs.toFixed(1)} ns   ${claim}`,
     )

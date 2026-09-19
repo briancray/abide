@@ -1,8 +1,10 @@
-import { emitMarkup } from './emitComponent.ts'
+import type { Read } from './classifyRead.ts'
+import { emitMarkup, emitRow, importClause } from './emitComponent.ts'
 import { hoistPaths } from './hoistPaths.ts'
-import { lowerNames } from './lowerNames.ts'
+import { Lowering } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
+    isHead,
     isSingleRooted,
     type ListPlan,
     planTemplate,
@@ -10,6 +12,7 @@ import {
     type TemplatePlan,
     type TextRun,
 } from './planTemplate.ts'
+import { SHARED_NAMES } from './SHARED_NAMES.ts'
 import { RUNTIME_SPECIFIER, SHARED_SPECIFIER } from './SPECIFIERS.ts'
 import { splitImports } from './splitImports.ts'
 
@@ -19,193 +22,254 @@ import { splitImports } from './splitImports.ts'
 // NOTHING IS ADDED TO THE DOCUMENT to make this work. A text run and a listener element are both
 // reached by walking child indices from the region root, which is exact for a region whose shape
 // is static — and a compiled template's is, up to the boundaries where 32.13, 32.14 and 32.16
-// make it depend on a value. Those boundaries are where a marker will earn its place; nowhere
-// before them does.
+// make it depend on a value. Those boundaries are where a marker earns its place; nowhere before
+// them does.
 //
 // 41.7 — hydration re-executes the setup, so the values the client starts from are the values the
 // document was rendered with.
 
+// What the emitters thread through every region: the next region's number, and whether anything
+// LIVE has been emitted anywhere in the page.
+type Counter = { next: number; live: boolean }
+
 export function emitClient(
     file: AbideFile,
-    reactive: ReadonlySet<string> = new Set(),
+    reads: readonly Read[] = [],
 ): string {
-    const plan = planTemplate(
-        file.template.filter(
-            (node) => !(node.kind === 'element' && node.tag === 'head'),
-        ),
-    )
-    const used = new Set<string>()
+    const plan = planTemplate(file.template.filter((node) => !isHead(node)))
+    const lowering = new Lowering(file, reads)
+    const used = lowering.used
     const lines: string[] = []
     const helpers: string[] = []
-    emitRegion(plan, 'root', '', reactive, lines, helpers, used, { next: 0 })
-    if (lines.length === 0) return ''
+    const counter = { next: 0, live: false }
+    emitRegion(plan, 'root', lowering, lines, helpers, counter)
+    // NOTHING LIVE IS NO MODULE. `lines.length === 0` stopped meaning that the moment a BLANK run
+    // started being addressed whether or not it reads anything reactive: a page whose only
+    // expression is `{new Date().getFullYear()}` emitted a `mount` holding one `textAt` and
+    // nothing else, so `bin/abide.ts` wrote a `.client.ts` beside a page that has nothing to
+    // hydrate — and "this page ships no runtime" stopped being a fact about the build. A blank
+    // address is only load-bearing because a LATER index counts through it, so with no binding,
+    // no listener and no region anywhere in the page there is nothing for it to hold a place for.
+    if (!counter.live) return ''
+    const warnMismatch = lowering.use('warnMismatch')
+    const scope = lowering.use('Scope')
 
-    const setup = splitImports(lowerNames(file.scripts.join('\n'), reactive))
-    // `watch` and the escaping are an APP's names (`abide`); everything else is the client
-    // runtime's (`abide/runtime`).
-    const fromShared = new Set(['watch', 'escapeText', 'escapeAttribute'])
-    const shared = [...used].filter((name) => fromShared.has(name))
-    const runtime = [...used].filter((name) => !fromShared.has(name))
+    // 34.2 — A `<script module>` IS PROCESS-WIDE IN A BROWSER, which is MODULE SCOPE: it is
+    // evaluated once when this module is first imported rather than once per `mount`, so a second
+    // mount of the same page reads what the first one left.
+    const moduleSetup = splitImports(lowering.modules())
+    const setup = splitImports(lowering.scripts())
+    // The escaping is an APP's (`abide`); everything else is the client runtime's (`abide/runtime`).
+    const shared: string[] = []
+    const runtime: string[] = []
+    for (const name of used)
+        (SHARED_NAMES.has(name) ? shared : runtime).push(name)
 
-    // `watch` is imported under a second name because an ARM's bindings are collected so they can
-    // be stopped on a swap: inside an arm `watch` is a local that records the disposer, and
-    // `watchEffect` is the real one underneath it.
-    const names = shared
-        .sort()
-        .map((name) => (name === 'watch' ? 'watch as watchEffect' : name))
     const sharedImport =
         shared.length === 0
             ? ''
-            : `import { ${names.join(', ')} } from '${SHARED_SPECIFIER}'\n`
-    return `${sharedImport}import { ${runtime.sort().join(', ')} } from '${RUNTIME_SPECIFIER}'
-${setup.imports}
+            : `import { ${importClause(shared.sort())} } from '${SHARED_SPECIFIER}'\n`
+    // THE SETUP IS NOT RE-INDENTED. Adding a margin to every line rewrites the INSIDE of a
+    // multi-line template literal, so a string constant gains four spaces it never had.
+    // 41.11 — A MISMATCH MUST NOT REBUILD THE PAGE, and the page is the one region with no block
+    // around it. So the root's own bindings warn and stop rather than rebuilding, while every
+    // block inside rebuilds itself; an author's own throw is not a mismatch and comes straight
+    // back out.
+    //
+    // THE PAGE OPENS A SCOPE LIKE EVERY ARM AND ROW, and nothing ever stops it: the page's
+    // bindings live as long as the page. One object a page buys one way of opening a binding.
+    return `${sharedImport}import { ${importClause(runtime.sort())} } from '${RUNTIME_SPECIFIER}'
+${moduleSetup.imports}${setup.imports}
+${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}\
 export default function mount(root) {
-${indent(setup.body)}
-${indent(helpers.join('\n'))}
-${indent(lines.join('\n'))}
+${setup.body}
+${helpers.join('\n')}
+const ${SCOPE} = new ${scope}()
+try {
+${lines.join('\n')}
+} catch (thrown) { if (!${warnMismatch}(thrown)) throw thrown }
 }
 `
 }
 
-// One region's bindings, emitted against `base` — the page for the outermost, and a `{#if}` arm's
-// own anchor for a nested one. The arms of a block are emitted as their own functions so an arm's
-// paths are its own: `[0,1]` in one arm and `[0,1]` in another are different nodes, and neither
-// arm can reach the other's.
+// One region's bindings, emitted against its own root. The arms of a block are emitted as their
+// own functions so an arm's paths are its own: `[0,1]` in one arm and `[0,1]` in another are
+// different nodes, and neither arm can reach the other's.
+//
+// A REGION'S ROOT IS NOT ALWAYS A NODE. The page's is — `mount(root)` is handed one — but a
+// `{#if}` arm's children hang off its own anchors and a `{#for}` row's are the nodes the reconcile
+// handed back, and neither has an element that contains them. Every addressing helper takes all
+// three, so which kind a root is belongs to the runtime and is not a case here: the emitter hands
+// over the root's NAME and a path, whatever the root turned out to be.
 function emitRegion(
     plan: TemplatePlan,
-    base: string,
-    inside: string,
-    reactive: ReadonlySet<string>,
+    root: string,
+    lowering: Lowering,
     lines: string[],
     helpers: string[],
-    used: Set<string>,
-    counter: { next: number },
+    counter: Counter,
 ): void {
-    const live = plan.runs.filter((run) => readsReactive(run, reactive))
-    // A path through a REGION reference is not hoistable: its first step names a region rather
-    // than a child, so a prefix ending there is not a node and an anchor at it would walk from
-    // nothing. Those paths are emitted whole; only child-index paths are shared.
-    const direct = (path: number[]): boolean => path.some((step) => step < 0)
-    const hoisted = hoistPaths([
-        ...live.map((run) => run.path).filter((path) => !direct(path)),
-        ...plan.handlers
-            .map((handler) => handler.path)
-            .filter((path) => !direct(path)),
-    ])
+    const live = new Set<TextRun>()
+    for (const run of plan.runs) if (readsReactive(run, lowering)) live.add(run)
+    // A path through a REGION reference shares only what stands BEFORE the reference: a prefix
+    // that ends between the two numbers a reference is written as addresses nothing, so an anchor
+    // there would walk from nowhere. Cut at the first reference, the rest of the path is shared
+    // like any other.
+    const sharable: number[][] = []
+    for (const run of live) sharable.push(beforeRegion(run.path))
+    for (const handler of plan.handlers)
+        sharable.push(beforeRegion(handler.path))
+    // Where a path is walked from: its nearest anchor, or the region's own root.
+    const hoisted = hoistPaths(sharable, root)
 
-    const resolve = (path: number[]): string => {
-        const at = hoisted.reference(path)
-        return `${at.base}, ${JSON.stringify(at.rest)}`
-    }
+    // ADDRESSED IN DOCUMENT ORDER, WITH THE ANCHORS INTERLEAVED rather than emitted ahead of
+    // everything. A BLANK run renders no node at all when its value is empty, and `textAt` puts
+    // one back on the run that resolves it — until it does, every index after that position in
+    // the same parent is short by one, an ANCHOR's walk included. Lexicographic path order is
+    // document order, and a run that shifts an index always sorts before what it shifts, so one
+    // sort is the whole of the ordering.
+    const addresses: { path: number[]; text: string }[] = []
 
-    for (const anchor of hoisted.anchors) {
-        used.add('childAt')
-        // `anchor.from` is a BASE, not a function: the walk itself is always `childAt`.
-        lines.push(
-            `const ${anchor.name} = ${step(
+    // `anchor.from` is a BASE, not a function: the walk itself is always `childAt`.
+    for (const anchor of hoisted.anchors)
+        addresses.push({
+            path: anchor.path,
+            text: `const ${anchor.name} = ${step(
                 'childAt',
                 anchor.steps,
-                anchor.from === 'root' ? base : anchor.from,
-                inside,
-                used,
-                true,
+                anchor.from,
+                lowering,
             )}`,
-        )
-    }
+        })
 
-    for (const run of live) {
-        used.add('watch')
-        used.add('setText')
-        used.add('textAt')
-        used.add('escapeless')
+    for (const run of plan.runs) {
+        const bound = live.has(run)
+        // A run reading nothing reactive opens no binding — but a BLANK one still has to be
+        // resolved, because the node it is missing is what every later index in that parent
+        // counts through. Nothing else about it is ever read again.
+        if (!bound && !run.blank) continue
+        const at = hoisted.reference(run.path)
+        const address = step(
+            'textAt',
+            at.rest,
+            at.base,
+            lowering,
+            true,
+            run.blank,
+        )
+        if (!bound) {
+            addresses.push({ path: run.path, text: address })
+            continue
+        }
+        counter.live = true
+        const escapeless = lowering.use('escapeless')
         const value = run.parts
             .map((part) =>
-                part.kind === 'static'
+                part.holder === null
                     ? JSON.stringify(part.text)
-                    : `escapeless(${lowerNames(part.text, reactive)})`,
+                    : `${escapeless}(${lowering.slot(part.holder)})`,
             )
             .join(' + ')
-        const at = direct(run.path)
-            ? { base: 'root', rest: run.path }
-            : hoisted.reference(run.path)
-        lines.push(
-            `${inside === '' ? 'watchEffect' : 'watch'}(() => setText(${step('textAt', at.rest, at.base === 'root' ? base : at.base, inside, used, true)}, ${value}))`,
-        )
+        // RESOLVED ONCE, AT ITS ADDRESS'S PLACE IN THE ORDER, and the binding closes over the node.
+        // The node a path lands on is the same one on every run — `textAt` puts a blank run's
+        // back on the first and `setText` never removes it — so re-walking the path per write was
+        // the same answer bought again: measured in Chromium at 0.47 µs a write against 0.22 µs
+        // with the node held, the walk alone 0.21 µs of it, over two runs of 80,000 writes.
+        const node = `__t${run.path.join('_').replaceAll('-', 'm')}`
+        addresses.push({
+            path: run.path,
+            text: `const ${node} = ${address}\n${SCOPE}.watch(() => ${lowering.use('setText')}(${node}, ${value}))`,
+        })
     }
 
+    addresses.sort(byPath)
+    for (const address of addresses) lines.push(address.text)
+
     for (const handler of plan.handlers) {
-        used.add('elementAt')
-        const at = direct(handler.path)
-            ? { base: 'root', rest: handler.path }
-            : hoisted.reference(handler.path)
+        counter.live = true
+        const at = hoisted.reference(handler.path)
         lines.push(
-            `${step('elementAt', at.rest, at.base === 'root' ? base : at.base, inside, used, true)}.addEventListener(${JSON.stringify(
+            `${step('elementAt', at.rest, at.base, lowering)}.addEventListener(${JSON.stringify(
                 handler.event,
-            )}, ${lowerNames(handler.source, reactive)})`,
+            )}, ${lowering.expression(handler.attribute)})`,
         )
     }
 
     for (const region of plan.regions)
         if (region.kind === 'for')
-            emitList(
-                region,
-                base,
-                inside,
-                reactive,
-                lines,
-                helpers,
-                used,
-                counter,
-            )
-        else
-            emitBlock(
-                region,
-                base,
-                inside,
-                reactive,
-                lines,
-                helpers,
-                used,
-                counter,
-                resolve,
-            )
+            emitList(region, root, lowering, lines, helpers, counter)
+        else emitBlock(region, root, lowering, lines, helpers, counter)
 }
 
-// 32.13 — one arm renders. The SERVER already rendered one, so the first mount HYDRATES it rather
+// A path cut at its first region reference, the reference's own first number kept, so every
+// PROPER prefix `hoistPaths` counts is one a walk can stop at.
+function beforeRegion(path: number[]): number[] {
+    for (let at = 0; at < path.length; at += 1)
+        if ((path[at] as number) < 0) return path.slice(0, at + 1)
+    return path
+}
+
+// A region's bindings go through its SCOPE, so what replaced the region can stop them (see
+// `Scope`). In the framework's own `__` namespace because a row binds the AUTHOR's item name as a
+// parameter in the same scope.
+const SCOPE = '__scope'
+
+// 41.11 — A MISMATCH REBUILDS THIS BLOCK OR ROW AND NOTHING WIDER. What the server wrote is what
+// hydration walks; where it disagrees, it is re-rendered from the same markup a swap or a new row
+// uses (`rebuild`) and wired again. `__rebuilt` is what stops a document that disagrees for some
+// other reason from rebuilding forever — the second failure is the author's to see.
+function mountFunction(
+    name: string,
+    parameters: string,
+    body: string[],
+    rebuild: string,
+    lowering: Lowering,
+): string {
+    return [
+        `const ${name}_mount = (${parameters}, __rebuilt) => {`,
+        `    const ${SCOPE} = new ${lowering.use('Scope')}()`,
+        `    try {`,
+        ...body.map((line) => `        ${line}`),
+        `    } catch (thrown) {`,
+        `        ${SCOPE}.stop()`,
+        `        if (__rebuilt || !${lowering.use('warnMismatch')}(thrown)) throw thrown`,
+        `        ${rebuild}`,
+        `        return ${name}_mount(${parameters}, true)`,
+        `    }`,
+        `    return ${SCOPE}`,
+        `}`,
+    ].join('\n')
+}
+
+// 32.13 — one arm renders. The SERVER already rendered one, so the first run HYDRATES it rather
 // than replacing it: a page that re-renders every region on load creates every node twice and
-// throws away the document it was sent.
+// throws away the document it was sent. The condition is evaluated once a run, the first run
+// included — the arm hydrated is the arm the watch then compares against.
 function emitBlock(
     region: RegionPlan,
-    base: string,
-    inside: string,
-    reactive: ReadonlySet<string>,
+    root: string,
+    lowering: Lowering,
     lines: string[],
     helpers: string[],
-    used: Set<string>,
-    counter: { next: number },
-    _resolve: (path: number[]) => string,
+    counter: Counter,
 ): void {
     const name = `rg${counter.next}`
     counter.next += 1
-    used.add('regionAt')
-    used.add('fillRegion')
-    used.add('watch')
+    counter.live = true
+    const fillRegion = lowering.use('fillRegion')
 
-    const parent =
-        region.parent.length === 0
-            ? base
-            : `childAt(${base}, ${JSON.stringify(region.parent)})`
-    if (region.parent.length > 0) used.add('childAt')
-    lines.push(`const ${name} = regionAt(${parent}, ${region.index})`)
+    lines.push(
+        `const ${name} = ${lowering.use('regionAt')}(${step('childAt', region.parent, root, lowering, false)}, ${region.index})`,
+    )
 
     // Which arm takes, as one expression. `{:else}` carries no condition and is the floor.
     let take = '-1'
     for (let at = region.branches.length - 1; at >= 0; at -= 1) {
         const branch = region.branches[at] as (typeof region.branches)[number]
         take =
-            branch.subject === ''
+            branch.branch.subject === ''
                 ? String(at)
-                : `(${lowerNames(branch.subject, reactive)}) ? ${at} : ${take}`
+                : `(${lowering.expression(branch.branch)}) ? ${at} : ${take}`
     }
 
     // Each arm's markup, for the swap. The server's own emitter is not reachable here, so the
@@ -215,189 +279,172 @@ function emitBlock(
     for (let at = 0; at < region.branches.length; at += 1) {
         const branch = region.branches[at] as (typeof region.branches)[number]
         const armLines: string[] = []
-        emitRegion(
-            branch.plan,
-            name,
-            name,
-            reactive,
-            armLines,
-            helpers,
-            used,
-            counter,
-        )
+        // A NESTED REGION'S HELPERS BELONG TO THE SCOPE THAT OWNS THEM. Hoisted to `mount` they
+        // read names this arm binds and nothing else does, which is a ReferenceError at the first
+        // swap rather than at compile time.
+        const armHelpers: string[] = []
+        emitRegion(branch.plan, name, lowering, armLines, armHelpers, counter)
         armMount.push(
-            `    if (arm === ${at}) {\n${armLines.map((line) => `        ${line}`).join('\n')}\n    }`,
+            `if (arm === ${at}) {`,
+            ...[...armHelpers, ...armLines].map((line) => `    ${line}`),
+            `}`,
         )
-        const markup = emitMarkup(branch.children, reactive)
-        if (markup.includes('escapeText(')) used.add('escapeText')
-        if (markup.includes('escapeAttribute(')) used.add('escapeAttribute')
-        armHtml.push(`    if (arm === ${at}) return ${markup}`)
+        armHtml.push(
+            `    if (arm === ${at}) return ${emitMarkup(branch.branch.children, lowering)}`,
+        )
     }
 
-    // EVERY BINDING AN ARM OPENS IS COLLECTED, and the arm it replaces is stopped. Without it a
-    // swap leaves the old arm's readers alive: they wake on every write, write into nodes that
-    // are no longer in the document, and the page looks right while doing the work twice.
     helpers.push(
-        `const ${name}_mount = (${name}, arm) => {\n    const stops = []\n    const watch = (effect) => { stops.push(watchEffect(effect)) }\n${armMount.join('\n')}\n    return () => { for (const stop of stops) stop() }\n}`,
+        mountFunction(
+            name,
+            `${name}, arm`,
+            armMount,
+            `${fillRegion}(${name}, ${name}_html(arm))`,
+            lowering,
+        ),
     )
-
-    lines.push(`let ${name}_at = ${take}`)
-    lines.push(`let ${name}_stop = ${name}_mount(${name}, ${name}_at)`)
-    lines.push(`${inside === '' ? 'watchEffect' : 'watch'}(() => {
-    const next = ${take}
-    if (next === ${name}_at) return
-    ${name}_at = next
-    ${name}_stop()
-    fillRegion(${name}, ${name}_html(next))
-    ${name}_stop = ${name}_mount(${name}, next)
-})`)
     helpers.push(
         `function ${name}_html(arm) {\n${armHtml.join('\n')}\n    return ''\n}`,
     )
+
+    lines.push(`let ${name}_at`)
+    lines.push(`let ${name}_scope`)
+    lines.push(`${SCOPE}.watch(() => {
+    const next = ${take}
+    if (next === ${name}_at) return
+    ${name}_at = next
+    if (${name}_scope !== undefined) {
+        ${name}_scope.stop()
+        ${fillRegion}(${name}, ${name}_html(next))
+    }
+    ${name}_scope = ${name}_mount(${name}, next)
+})`)
 }
 
-// 32.14 — the list. The server already rendered the rows, so the first mount HYDRATES them:
+// 32.14 — the list. The server already rendered the rows, so the first update HYDRATES them:
 // every row's element is already in the document and only its bindings are missing. Only a change
 // to the list reconciles, and only the rows that moved move.
 //
 // 32.23 — the subject is read ONCE for the block. 32.24 — an absent subject iterates zero times.
 function emitList(
     region: ListPlan,
-    base: string,
-    inside: string,
-    reactive: ReadonlySet<string>,
+    root: string,
+    lowering: Lowering,
     lines: string[],
     helpers: string[],
-    used: Set<string>,
-    counter: { next: number },
+    counter: Counter,
 ): void {
     const name = `ls${counter.next}`
     counter.next += 1
-    for (const runtime of ['regionAt', 'rowsIn', 'reconcile'] as const)
-        used.add(runtime)
-    used.add('watch')
+    counter.live = true
 
-    const parent =
-        region.parent.length === 0
-            ? base
-            : `childAt(${base}, ${JSON.stringify(region.parent)})`
-    if (region.parent.length > 0) used.add('childAt')
-
-    const subject = lowerNames(region.subject, reactive)
-    const at = region.at === '' ? '__at' : region.at
+    const parent = step('childAt', region.parent, root, lowering, false)
+    const block = region.block
+    const subject = lowering.expression(block)
+    // THE ROW BINDS ITS OWN NAME. Every emitted row function takes the author's item and index as
+    // its parameters, so the body's expressions read exactly what the author wrote and nothing
+    // rewrites already-emitted source — a rename by regex reaches inside static text and cannot
+    // reach a nested region's helper at all.
+    const item = block.item
+    const at = block.index === '' ? '__at' : block.index
     // 41.9 — with no `by`, the key is the POSITION, which is 32.14's positional reconcile: a row
     // is whatever is in that slot, and a reorder rewrites the rows rather than moving them.
-    const key =
-        region.key === ''
-            ? '__at'
-            : lowerNames(region.key, reactive).replaceAll(
-                  new RegExp(`\\b${region.item}\\b`, 'g'),
-                  '__row',
-              )
+    // 31.12 — the item and the index SHADOW the page's names for the row, and the projection is
+    // what says so: they are a `for … of` binding there, so no read in the body or the key reaches
+    // the page's name of the same spelling.
+    const key = block.key === '' ? at : lowering.key(block)
 
-    // The row's own bindings, against the row element the server wrote or the reconcile made.
-    const single = isSingleRooted(region.children)
-    const rowMarkup = emitMarkup(region.children, reactive).replaceAll(
-        new RegExp(`\\b${region.item}\\b`, 'g'),
-        '__row',
-    )
-    if (rowMarkup.includes('escapeText(')) used.add('escapeText')
-    if (rowMarkup.includes('escapeAttribute(')) used.add('escapeAttribute')
+    const single = isSingleRooted(block.children)
 
     const rowLines: string[] = []
-    emitRegion(
-        region.plan,
-        '__node',
-        '',
-        reactive,
-        rowLines,
-        helpers,
-        used,
-        counter,
-    )
+    const rowHelpers: string[] = []
+    emitRegion(region.plan, '__nodes', lowering, rowLines, rowHelpers, counter)
 
     helpers.push(
         [
-            `const ${name}_list = () => { const __l = ${subject}; return __l == null ? [] : [...__l] }`,
-            `const ${name}_key = (__row, __at) => ${key.replaceAll('__at', '__at')}`,
+            // What the subject iterates as is `listOf`'s question, asked inside the runtime.
+            `const ${name}_subject = () => ${subject}`,
+            `const ${name}_key = (${item}, ${at}) => ${key}`,
             // EVERY node the body produced, not just the first. A multi-rooted row also gets its
-            // anchor, so what `make` hands back matches what `rowsIn` found.
-            `const ${name}_make = (__row, ${at}) => { const __t = document.createElement('template'); __t.innerHTML = ${single ? rowMarkup : `'<!--${'r'}-->' + ${rowMarkup}`}; return [...__t.content.childNodes] }`,
-            `const ${name}_mount = (__nodes, __row, ${at}) => {`,
-            `    const __node = __nodes[${single ? '0' : '1'}]`,
-            `    const stops = []`,
-            `    const watch = (effect) => { stops.push(watchEffect(effect)) }`,
-            ...rowLines.map((line) => `    ${line}`),
-            `    return () => { for (const stop of stops) stop() }`,
-            `}`,
+            // anchor, so what `make` hands back matches what hydration found. Parsed in the MOUNT
+            // ROOT'S document (see `parseMarkup`); `root` is `mount`'s own parameter, so it is in
+            // scope from every helper whatever region owns it.
+            `const ${name}_make = (${item}, ${at}) => ${lowering.use('markupNodes')}(root, ${emitRow(block.children, lowering)})`,
+            // A row that cannot be hydrated is REBUILT from the same markup `make` uses, in place
+            // and into the same array, so the reconcile still holds every node the row has.
+            mountFunction(
+                name,
+                `__nodes, ${item}, ${at}`,
+                [...rowHelpers, ...rowLines],
+                `${lowering.use('replaceNodes')}(__nodes, ${name}_make(${item}, ${at}))`,
+                lowering,
+            ),
         ].join('\n'),
     )
 
-    lines.push(`const ${name} = regionAt(${parent}, ${region.index})`)
-    // HYDRATION, NOT RENDERING. The rows are already there; wiring them is all that is left.
-    lines.push(`let ${name}_rows = rowsIn(${name}, ${single ? 'false' : 'true'}).map((__nodes, __i) => {
-    const __row = ${name}_list()[__i]
-    return { key: ${name}_key(__row, __i), data: __row, nodes: __nodes, stop: ${name}_mount(__nodes, __row, __i) }
-})`)
-    lines.push(`${inside === '' ? 'watchEffect' : 'watch'}(() => {
-    const __l = ${name}_list()
-    ${name}_rows = reconcile(
-        ${name},
-        ${name}_rows,
-        __l.map((__row, __i) => ${name}_key(__row, __i)),
-        __l,
-        (__i) => ${name}_make(__l[__i], __i),
-        (__nodes, __i) => ${name}_mount(__nodes, __l[__i], __i),
+    lines.push(
+        `const ${name} = ${lowering.use('regionAt')}(${parent}, ${region.index})`,
     )
-})`)
+    lines.push(
+        `const ${name}_list = ${lowering.use('listAt')}(${name}, ${single ? 'false' : 'true'}, ${name}_key, ${name}_make, ${name}_mount)`,
+    )
+    lines.push(
+        `${SCOPE}.watch(() => ${lowering.use('updateList')}(${name}_list, ${name}_subject()))`,
+    )
 }
 
-// A path step, rendered against whatever this region's base is. A NEGATIVE first step is a
-// reference to a sibling region: `-1 - n` is region n in this parent, and the step after it is
-// how many nodes past its closing anchor to count.
+// ONE ADDRESSING CALL: the helper, whatever this region's base turned out to be, and the whole
+// path. A NEGATIVE step is a region reference — `-1 - n` is region n directly inside what the walk
+// has reached, and the step after it counts nodes past its closing anchor — and it is decoded by
+// the WALK rather than here, so a reference standing in the MIDDLE of a path is the same thing as
+// one standing at its head. Emitting only the head case left `[0,-1,0,0]` read as `childNodes[-1]`.
+//
+// An EMPTY path is the root ITSELF, which is what a nested region asks for: `regionAt(rg0, 0)` is
+// region 0 of the arm, where resolving a step that is not there asked for region 0 of the arm's
+// first CHILD, and no page holding one hydrated at all.
+//
+// `wrap` is false where the caller wants the base rather than a checked read of it — `regionAt`
+// does its own checking. `blank` is passed through to `textAt`, the one helper that can be asked
+// for a node the server had nothing to write.
 function step(
     fn: string,
     path: number[],
     base: string,
-    inside: string,
-    used: Set<string>,
-    checked = false,
+    lowering: Lowering,
+    wrap = true,
+    blank = false,
 ): string {
-    if (inside !== '' && base === inside) {
-        // Inside an arm, the first index counts from the region's OPENING anchor.
-        used.add('insideRegion')
-        const [first, ...rest] = path
-        const node = `insideRegion(${inside}, ${first ?? 0})`
-        return rest.length === 0 && !checked
-            ? node
-            : `${fn}(${node}, ${JSON.stringify(rest)})`
+    if (path.length === 0 && !wrap) return base
+    return `${lowering.use(fn)}(${base}, ${JSON.stringify(path)}${blank ? ', true' : ''})`
+}
+
+// Document order. A path sorts lexicographically over its steps and a PREFIX comes first, which is
+// what puts an anchor ahead of every binding under it and a blank run ahead of everything its
+// missing node shifts.
+function byPath(left: { path: number[] }, right: { path: number[] }): number {
+    const shared = Math.min(left.path.length, right.path.length)
+    for (let at = 0; at < shared; at += 1) {
+        const one = left.path[at] as number
+        const other = right.path[at] as number
+        if (one === other) continue
+        // A step AFTER a region stands later in the document than any child index in the same
+        // parent — everything indexed is before the first region — and `-1 - n` is region n, so
+        // the more negative of two negatives is the later one.
+        if (one < 0 && other < 0) return other - one
+        if (one < 0) return 1
+        if (other < 0) return -1
+        return one - other
     }
-    const first = path[0]
-    if (first !== undefined && first < 0) {
-        used.add('regionAt')
-        used.add('afterRegion')
-        const region = -1 - first
-        const offset = path[1] ?? 0
-        const node = `afterRegion(regionAt(${base}, ${region}), ${offset})`
-        return `${fn}(${node}, ${JSON.stringify(path.slice(2))})`
-    }
-    return `${fn}(${base}, ${JSON.stringify(path)})`
+    return left.path.length - right.path.length
 }
 
 // Whether any expression in the run reads a name the checker called reactive. A run of static
 // parts and unreactive expressions is written once by the server and never again; opening a
 // binding for it is one waking reader per run on a page for nothing.
-function readsReactive(run: TextRun, reactive: ReadonlySet<string>): boolean {
-    for (const part of run.parts) {
-        if (part.kind !== 'expression') continue
-        if (lowerNames(part.text, reactive) !== part.text) return true
-    }
+//
+// ASKED OF THE READS, not of the rewrite — see `Lowering.readsIn`.
+function readsReactive(run: TextRun, lowering: Lowering): boolean {
+    for (const part of run.parts)
+        if (part.holder !== null && lowering.readsIn(part.holder)) return true
     return false
-}
-
-function indent(text: string): string {
-    const lines = text.split('\n')
-    let out = ''
-    for (const line of lines) out += line.trim() === '' ? '\n' : `    ${line}\n`
-    return out.trimEnd()
 }

@@ -52,13 +52,22 @@ export function isFailed(value: unknown): value is Failed<string, unknown> {
 // nothing downstream meets two shapes. 15.4: INERT. Nothing here throws, nothing is
 // registered, and no caller is told — a `Failed` nobody returns is an object nobody reads,
 // which is what makes 15.10 a compile-time rule rather than a runtime one.
+// `message` IS ASSIGNED RATHER THAN LEFT TO THE CONSTRUCTOR. `new Error(m)` writes an
+// own property that is NOT enumerable, so `JSON.stringify` of a refusal dropped it — the wire
+// carried `{"name":"HttpError","status":503}` and `isFailed` answered FALSE for what came back,
+// because the message is one of the three fields 15.6 tests. The type's whole point is surviving
+// that trip. `name`, `status` and `data` are ordinary assignments and already enumerable.
 export function failed<Name extends string, Data>(
     name: Name,
     status: number,
     message: string,
     data: Data,
 ): Failed<Name, Data> {
-    const refusal = new Error(message) as Failed<Name, Data>
+    // Constructed with NO argument the `Error` installs no own `message` at all, so the
+    // assignment below is the first writer and lands enumerable like the other three —
+    // where redefining the constructor's own property reconfigures a property already there.
+    const refusal = new Error() as Failed<Name, Data>
+    refusal.message = message
     refusal.name = name
     refusal.status = status
     refusal.data = data

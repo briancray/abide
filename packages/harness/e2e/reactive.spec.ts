@@ -24,7 +24,7 @@ type Row = {
 
 const built = execFileSync(
     'bun',
-    ['packages/harness/scripts/buildReactiveInjectable.ts'],
+    ['packages/harness/scripts/buildBench.ts', 'reactive'],
     { cwd: REPO, encoding: 'utf8' },
 ).trim()
 

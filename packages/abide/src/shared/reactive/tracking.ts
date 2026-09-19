@@ -90,6 +90,22 @@ export function dropReader(source: Tracked, reader: Subscriber): void {
     removeFrom(source.readers, reader)
 }
 
+// 4.7's frame: `run` with no reader on the stack, restored however it exits. Arguments rather than
+// a closure, so a caller on a per-write path allocates nothing to use it.
+export function untracked<First, Second, Result>(
+    run: (first: First, second: Second) => Result,
+    first: First,
+    second: Second,
+): Result {
+    const previous = TRACKING.reader
+    TRACKING.reader = null
+    try {
+        return run(first, second)
+    } finally {
+        TRACKING.reader = previous
+    }
+}
+
 // The probe edge's half of the same thing, for a reader registered on it outside a run —
 // a `then` waiter, which settles on a probe moving rather than on a value.
 export function dropProbeReader(source: Tracked, reader: Subscriber): void {
@@ -124,11 +140,56 @@ export function detachProbes(reader: Subscriber): void {
 }
 
 // Everything from `cursor` on is a value the previous run read and this one has not.
+//
+// A SLOT IS NOT A SUBSCRIPTION. `sources` is POSITIONAL — one slot per read, so a body
+// that reads one value twice holds two slots for it — where `source.readers` is a SET,
+// deduped by `track` below. Dropping per slot therefore unsubscribed a value a SURVIVING
+// slot still lists, and the shorter run is what did it:
+// `reactive(() => name() ? name().toUpperCase() : 'anon')` reads `name` twice on the
+// truthy run and once on the falsy one, so the falsy run's truncation took the whole
+// subscription with it and the value never recomputed again — right at the moment it
+// looked right. The kept prefix is what says whether this slot was the last of its value.
+//
+// THE SCAN RUNS PER DROPPED SLOT, so what it costs is kept x dropped: a body reading 1000
+// values on its wide branch and 500 on its narrow one paid 250,000 pointer compares on
+// every flip — 9.3x the pre-change truncate, +105 us a flip, which crosses a frame at six.
+// A `Set` over the kept prefix is the O(kept + dropped) form and is taken WHERE IT WINS
+// rather than always: at 1000/999 the scan is one probe per dropped slot and building the
+// Set doubled the flip, so the two are priced against each other instead.
+//
+// A duplicate inside the DROPPED tail needs no test — `removeFrom` takes one occurrence
+// and the second call finds none.
+const SET_OVER_SCAN = 20
+
 function truncate(reader: Subscriber): void {
     const sources = reader.sources
-    for (let index = reader.cursor; index < sources.length; index += 1)
-        dropReader(sources[index] as Tracked, reader)
-    sources.length = reader.cursor
+    const kept = reader.cursor
+    const dropped = sources.length - kept
+    if (dropped === 0) return
+    if (kept * dropped > (kept + dropped) * SET_OVER_SCAN) {
+        const survives = new Set<Tracked>()
+        for (let index = 0; index < kept; index += 1)
+            survives.add(sources[index] as Tracked)
+        for (let index = kept; index < sources.length; index += 1) {
+            const source = sources[index] as Tracked
+            if (survives.has(source)) continue
+            dropReader(source, reader)
+        }
+        sources.length = kept
+        return
+    }
+    for (let index = kept; index < sources.length; index += 1) {
+        const source = sources[index] as Tracked
+        if (stillRead(sources, source, kept)) continue
+        dropReader(source, reader)
+    }
+    sources.length = kept
+}
+
+function stillRead(sources: Tracked[], source: Tracked, kept: number): boolean {
+    for (let index = 0; index < kept; index += 1)
+        if (sources[index] === source) return true
+    return false
 }
 
 // THE READER IS PASSED IN, not re-read. Every call site has already tested

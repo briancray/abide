@@ -4,7 +4,16 @@
 // (15.9). None of those can be read off the value that comes back.
 
 import { expect, test } from 'bun:test'
-import { isFailed, notFound, refuse, validationError } from '#shared'
+import {
+    flushSync,
+    isFailed,
+    jsonSchema,
+    notFound,
+    reactive,
+    refuse,
+    validationError,
+    watch,
+} from '#shared'
 
 // 15.3. The status an app gets without asking, and it is the one that says "what you sent
 // cannot be worked with" — which is what a declared refusal almost always is.
@@ -193,4 +202,105 @@ test('a refusal schema runs before the message function', () => {
     )
     mine({ n: 1 })
     expect(order.join(', ')).toBe('schema, message')
+})
+
+// 15.4 IS UNCONDITIONAL, and `runSchema` has TWO exits: a report for a bad VALUE, and a THROW for
+// a bad SCHEMA. The test above covers the one form `runSchema` catches inside itself — a plain
+// function that throws — so it was green while all three of the throws `runSchema` raises ITSELF
+// took the `Failed` with them.
+//
+// THE REVERT: remove the try/catch around `runSchema` in `make`. This test then reports
+// `built: no` where `built: yes` is due for a predicate (19.4) and an async schema (19.13). A JSON
+// Schema keyword the validator does not implement is the third case, and it is refused inside
+// `jsonSchema`'s own `validate` rather than thrown past it.
+test('a refusal survives a schema that is itself wrong', () => {
+    const asyncSchema = {
+        '~standard': {
+            version: 1,
+            vendor: 'test',
+            validate: () => Promise.resolve({ value: 1 }),
+        },
+    }
+    const schemas: [string, unknown][] = [
+        ['predicate', (value: unknown) => typeof value === 'object'],
+        ['async', asyncSchema],
+        ['unknown keyword', jsonSchema({ type: 'object', format: 'x' })],
+    ]
+    const built: string[] = []
+    for (const [what, schema] of schemas) {
+        const mine = refuse.typed<'Mine', { n: number }>(
+            'Mine',
+            400,
+            undefined,
+            {
+                schema: schema as never,
+            },
+        )
+        let refusal: { name: string; status: number } | undefined
+        try {
+            refusal = mine({ n: 1 })
+        } catch {
+            refusal = undefined
+        }
+        built.push(
+            `${what}: ${refusal === undefined ? 'no' : `${refusal.name} ${refusal.status}`}`,
+        )
+    }
+    expect(built).toEqual([
+        'predicate: Mine 400',
+        'async: Mine 400',
+        'unknown keyword: Mine 400',
+    ])
+})
+
+// 15.6 IS STRUCTURAL BECAUSE OF THIS TRIP, so the trip is what tests it. `new Error(m)` writes
+// `message` as a NON-ENUMERABLE own property, and `JSON.stringify` walks enumerable ones.
+//
+// THE REVERT: drop the `Object.defineProperty` in `failed` and let the constructor's own
+// `message` stand. Every line below then reports `message: undefined` and `isFailed: false` —
+// the refusal crosses the wire and stops being one, for all three factories.
+test('a refusal survives JSON and is still a refusal', () => {
+    const made = [
+        refuse(503, 'upstream is down'),
+        notFound({ path: '/a', method: 'GET' }),
+        validationError<{ email: string }>({ email: ['is required'] }),
+    ]
+    const seen: string[] = []
+    for (const refusal of made) {
+        const revived = JSON.parse(JSON.stringify(refusal)) as {
+            message?: unknown
+        }
+        seen.push(
+            `${refusal.name}: message: ${revived.message} isFailed: ${isFailed(revived)}`,
+        )
+    }
+    expect(seen).toEqual([
+        'HttpError: message: upstream is down isFailed: true',
+        'NotFound: message: NotFound isFailed: true',
+        'ValidationError: message: ValidationError isFailed: true',
+    ])
+})
+
+// 4.7 GOVERNS EVERY SCHEMA RUN, NOT THE TWO `Reactive.ts` OWNS. Cleared at the write path alone,
+// a refusal built inside an effect subscribed that effect to whatever its schema read — a value
+// the body never read, spliced into the body's cursor-ordered sources besides. THE REVERT: drop
+// the save/restore from `runSchema` in `#shared/Schema.ts`; `runs` below reports 2.
+test("a refusal's schema runs untracked", () => {
+    const other = reactive(1)
+    const mine = refuse.typed<'Mine', { n: number }>('Mine', 400, undefined, {
+        schema: (value: unknown) => {
+            other()
+            return value as { n: number }
+        },
+    })
+    let runs = 0
+    watch(() => {
+        runs += 1
+        mine({ n: 1 })
+    })
+    flushSync()
+    expect(runs).toBe(1)
+    other.set(2)
+    flushSync()
+    expect(runs).toBe(1)
 })

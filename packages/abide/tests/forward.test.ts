@@ -12,9 +12,12 @@
 // it does.
 
 import { afterAll, expect, test } from 'bun:test'
-import { emitClient, parseAbide, planTemplate } from '#compiler'
+import { parseAbide, planTemplate } from '#compiler'
 import { elementAt, textAt } from '#ui'
 import { removeTemporaryModules } from './temporaryModule.ts'
+import { closeTyped, clientOf } from './typed.ts'
+
+afterAll(closeTyped)
 
 afterAll(removeTemporaryModules)
 
@@ -45,9 +48,9 @@ test('a run of static text and expressions plans as one node', () => {
     const plan = planTemplate(parseAbide(SOURCE).template)
     expect(plan.runs).toHaveLength(2)
     expect(plan.runs[1]?.path).toEqual([1, 0, 0])
-    expect(plan.runs[1]?.parts).toEqual([
-        { kind: 'expression', text: 'b' },
-        { kind: 'static', text: ' tail' },
+    expect(plan.runs[1]?.parts).toMatchObject([
+        { text: 'b' },
+        { text: ' tail', holder: null },
     ])
     expect(plan.handlers[0]?.path).toEqual([1, 1])
 })
@@ -62,16 +65,24 @@ test('a binding that finds the wrong kind of node says so', () => {
     expect(() => elementAt(document.body, [0, 0])).toThrow('41.11')
 })
 
-test('the emitted binding walks a path and adds nothing to the document', () => {
-    const client = emitClient(parseAbide(SOURCE), new Set(['a', 'b']))
+test('the emitted binding walks a path and adds nothing to the document', async () => {
+    const client = await clientOf(SOURCE, ['a', 'b'])
     // The `<span>`'s text and the `<button>` both sit under the `<div>` at [1], so that walk is
     // taken once and both reference it. The `<p>` at [0] has no company and walks alone.
-    expect(client).toContain('const at0 = childAt(root, [1])')
-    expect(client).toContain('textAt(at0, [0,0])')
-    expect(client).toContain('elementAt(at0, [1])')
-    expect(client).toContain('textAt(root, [0,0])')
+    expect(client).toContain('const at0 = __childAt(root, [1])')
+    // `{b} tail` carries a static piece, so it always renders a node. `{a}` is every part an
+    // expression and can render none, which is the `true` — `textAt` puts one back.
+    expect(client).toContain('__textAt(at0, [0,0])')
+    expect(client).toContain('__elementAt(at0, [1])')
+    expect(client).toContain('__textAt(root, [0,0], true)')
     expect(client).not.toContain('data-a')
     expect(client).not.toContain('slots(')
+    // RESOLVED ONCE AT MOUNT, and the binding writes the node it holds. THE REVERT: emit
+    // `setText(<address>, …)` inside the watch; every write then re-walks its path — 0.47 µs a
+    // write against 0.22 in Chromium, the walk being 0.21 of it.
+    expect(client).toContain('const __t1_0_0 = __textAt(at0, [0,0])')
+    expect(client).toContain('__setText(__t1_0_0,')
+    expect(client).not.toContain('__setText(__textAt(')
 })
 
 // STILL NOT BUILT, and the next thing forward pressure is owed. A region whose shape depends on a
@@ -95,7 +106,7 @@ test('a region that may not render moves its siblings — 32.13 and 32.14 need a
 // THE REVERT: return `{ base: 'root', rest: path }` from `hoistPaths`' `reference` and emit no
 // anchors; every binding then walks its whole path, which this reports as 0 `childAt` lines where
 // 1 is due and four full paths where four one-step ones are.
-test('bindings under one parent share the walk to it', () => {
+test('bindings under one parent share the walk to it', async () => {
     const source = `<script>
 import { reactive } from 'abide'
 let a = reactive(1)
@@ -104,11 +115,11 @@ let c = reactive(3)
 </script>
 <section><div><p>{a}</p><p>{b}</p><p>{c}</p></div></section>`
 
-    const client = emitClient(parseAbide(source), new Set(['a', 'b', 'c']))
+    const client = await clientOf(source, ['a', 'b', 'c'])
     // One anchor down to the shared `<div>`, then a step per binding.
     expect(client.match(/childAt\(/g) ?? []).toHaveLength(1)
-    expect(client).toContain('childAt(root, [0,0])')
-    expect(client).toContain('textAt(at0, [0,0])')
-    expect(client).toContain('textAt(at0, [1,0])')
-    expect(client).toContain('textAt(at0, [2,0])')
+    expect(client).toContain('__childAt(root, [0,0])')
+    expect(client).toContain('__textAt(at0, [0,0], true)')
+    expect(client).toContain('__textAt(at0, [1,0], true)')
+    expect(client).toContain('__textAt(at0, [2,0], true)')
 })

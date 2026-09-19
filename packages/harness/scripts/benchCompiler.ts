@@ -18,6 +18,7 @@
 import {
     compileFile,
     emitClient,
+    emitComponent,
     parseAbide,
     TypeSession,
 } from 'abide/compiler'
@@ -67,9 +68,9 @@ async function armsFor(session: TypeSession): Promise<Arm[]> {
         for (const source of abideSources) {
             const text = await Bun.file(new URL(source, EXAMPLES)).text()
             const file = parseAbide(text)
-            let names: ReadonlySet<string>
+            let names: Awaited<ReturnType<typeof session.reads>>
             try {
-                names = await session.reactiveNames(
+                names = await session.reads(
                     new URL(source, EXAMPLES).pathname,
                     file,
                 )
@@ -83,7 +84,7 @@ async function armsFor(session: TypeSession): Promise<Arm[]> {
             const client = emitClient(file, names)
             if (client !== '') shippedAbide += codeLines(client)
             // The server module is not charged here: it never reaches a browser.
-            compileFile(text, names)
+            emitComponent(file, names)
         }
         arms.push({
             name,
@@ -138,16 +139,16 @@ async function compileCeiling(
         REPO,
     ).pathname
     const sample = parseAbide(sources[0]?.text ?? '')
-    await session.reactiveNames(`${fixture}warm.abide`, sample)
+    await session.reads(`${fixture}warm.abide`, sample)
 
     const knownStart = Bun.nanoseconds()
     for (let at = 0; at < ROUNDS; at += 1)
-        await session.reactiveNames(`${fixture}warm.abide`, sample)
+        await session.reads(`${fixture}warm.abide`, sample)
     const knownNanoseconds = (Bun.nanoseconds() - knownStart) / ROUNDS
 
     const freshStart = Bun.nanoseconds()
     for (let at = 0; at < ROUNDS; at += 1)
-        await session.reactiveNames(`${fixture}fresh-${at}.abide`, sample)
+        await session.reads(`${fixture}fresh-${at}.abide`, sample)
     const freshNanoseconds = (Bun.nanoseconds() - freshStart) / ROUNDS
 
     // THE SAME FILES IN ONE SNAPSHOT, which is what a build does. The gap between this and the
@@ -157,7 +158,7 @@ async function compileCeiling(
     for (let at = 0; at < ROUNDS; at += 1)
         batched.push({ path: `${fixture}batch-${at}.abide`, file: sample })
     const batchStart = Bun.nanoseconds()
-    await session.reactiveNamesFor(batched)
+    await session.readsFor(batched)
     const batchNanoseconds = (Bun.nanoseconds() - batchStart) / ROUNDS
 
     console.log('\nCOMPILE TIME — a ceiling, not a ratio (44.22)')

@@ -83,6 +83,17 @@ places a value belongs, so the name reads. A position whose declared type is a
 | `style:prop={value}` | Sets one style property. | 32.11, 32.21 |
 | `{...expr}` | Spreads props or attributes. | 32.12, 33.12, 33.13 |
 
+Static text is markup. An author-written `&amp;` or `&copy;` renders the same in body text and
+in an attribute value, and only an interpolated value is escaped — the one exception being a
+URL-typed attribute, where the encoding is what stops an entity forming a scheme.
+
+### Raw markup
+
+| Name | Signature | Meaning |
+| --- | --- | --- |
+| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. |
+| `Raw` | `class Raw { html: string }` | What `raw` hands back. |
+
 ### Control flow
 
 | Spelling | Branches | Meaning |

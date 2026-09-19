@@ -3,19 +3,25 @@
 // paid for on every page (CLAUDE.md, "seams and imports"). The list IS the budget.
 //
 // The shared walk a region's bindings start from, the text node for a binding, the element for
-// a listener, the write, the stringify a run's parts go through — and the four names a DYNAMIC
-// region needs, which are the only ones that put anything in the document. Nothing that finds a node by something added to the
-// document, because a compiler may not invent structure an author's CSS or queries can see.
+// a listener, the write, the stringify a run's parts go through — and what a DYNAMIC region
+// needs: the one that ADDRESSES one (`regionAt`; the rest of the addressing is one walk over a
+// path, whatever kind of root it starts from), what WRITES into one (`fillRegion` for an arm,
+// `listAt` and `updateList` for a `{#for}` — which reconciles an array and appends an async
+// subject, 32.16 — and `replaceNodes` for a row), what a hydration mismatch is answered with
+// (`warnMismatch`, 41.11), what every region's bindings are stopped through (`Scope`), what a
+// row's markup is parsed with (`markupNodes`)
+// and the anchors they are all counted from. `List` and `reconcile` are here for the
+// harness's list bench, which prices the reconcile alone. Nothing that
+// finds a node by something added to the document, because a compiler may not invent structure an
+// author's CSS or queries can see.
 
 export { escapeless } from './escapeless.ts'
+export { List, listAt, updateList } from './List.ts'
+export { warnMismatch } from './Mismatch.ts'
 export { childAt, elementAt, textAt } from './nodeAt.ts'
+export { markupNodes } from './parseMarkup.ts'
 export { REGION_CLOSE, REGION_OPEN } from './REGION.ts'
-export { type Row, reconcile, rowsIn } from './reconcile.ts'
-export {
-    afterRegion,
-    fillRegion,
-    insideRegion,
-    type Region,
-    regionAt,
-} from './regionAt.ts'
+export { type Row, reconcile, replaceNodes } from './reconcile.ts'
+export { fillRegion, type Region, type Root, regionAt } from './regionAt.ts'
+export { Scope } from './Scope.ts'
 export { setText } from './setText.ts'

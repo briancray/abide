@@ -6,6 +6,8 @@ covers:
   - `{expr}`
   - `{await expr}`
   - `{raw(...)}`
+  - `raw`
+  - `Raw`
   - `name={expr}`
   - `name="…{expr}…"`
   - `{...expr}`
@@ -51,6 +53,11 @@ hostile.
 `{raw(expr)}` is the opt-out, spelled at the site rather than configured. It is the one place
 in a template where a value becomes markup, so it is also the only place to look when asking
 whether it could.
+
+`raw` is an ordinary import, and the slot spelling is that same call. It hands back a `Raw`,
+the brand a hole reads to leave the value alone. So a value branded in a `<script>` and a value
+branded in the hole render identically, and a `Raw` that reaches a hole you forgot about is
+still markup. Brand it as late as you can.
 
 ## An attribute follows its value, whole or interpolated
 

@@ -9,8 +9,8 @@
 
 import { expect, test } from 'bun:test'
 import {
-    compileFile,
     emitClient,
+    emitComponent,
     parseAbide,
     TypeSession,
 } from 'abide/compiler'
@@ -41,11 +41,11 @@ test('every example compiles, and its output parses', async () => {
             const text = await Bun.file(path).text()
             try {
                 const file = parseAbide(text)
-                const names = await session.reactiveNames(path, file)
+                const names = await session.reads(path, file)
                 // BOTH lanes, and both have to PARSE. An emitter can produce a plausible-looking
                 // string that is not a program, and only running it through a parser says so —
                 // `import { n() }` looked fine in a diff and was not valid in any grammar.
-                transpiler.transformSync(compileFile(text, names))
+                transpiler.transformSync(emitComponent(file, names))
                 const client = emitClient(file, names)
                 if (client !== '') transpiler.transformSync(client)
             } catch (thrown) {

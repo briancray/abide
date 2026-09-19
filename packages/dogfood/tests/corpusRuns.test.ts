@@ -6,13 +6,16 @@
 // exercise is not what a fixture written beside the implementation exercises, which is the whole
 // reason to run them rather than more of my own pages.
 //
-// A RATCHET, like its neighbour: the ones that do not run are LISTED with what stops them, so one
-// that starts running fails this test and has to leave the list.
+// A FLOOR RATHER THAN A LIST, which is where it parts company with its neighbour: `corpus.test.ts`
+// names every file that does not compile, and most of what stops one RUNNING is runtime surface
+// the rulebook decided and nobody has written, so a list of fifty would be a list of one fact. The
+// cost is stated where the assertion is — a floor cannot tell a fix in one file from a regression
+// in another — and the grouped output below is what a reader looks at instead.
 
 import { expect, test } from 'bun:test'
 import {
-    compileFile,
     emitClient,
+    emitComponent,
     parseAbide,
     TypeSession,
 } from 'abide/compiler'
@@ -34,13 +37,39 @@ test('every example renders on the server and mounts on the client', async () =>
     const session = await TypeSession.open(TSCONFIG)
     const broken: string[] = []
 
+    // A MOUNT'S FAILURE CAN ARRIVE AFTER THE MOUNT. The effects a mount schedules run in a later
+    // turn, so a page that throws there throws outside the `try` below and the file was counted as
+    // RUNNING. Nothing here can tear a mount down — the emitted `mount` hands back no disposer —
+    // so the escape is caught and counted instead, and the drain after each mount is what puts it
+    // in the right file's turn.
+    //
+    // EACH FILE GETS ITS OWN ROOT, AND THAT IS NOT DECORATION. Mounting every page into
+    // `document.body` and then overwriting `innerHTML` for the next one leaves the PREVIOUS page's
+    // readers holding a root whose children have been deleted, and a value that lands 200 ms later
+    // — `memo-await` has one — then walks a tree nobody emptied on purpose. It reported
+    // `no node at [1,0,2,0]` against whichever file happened to be mounting at the time, which is
+    // not even the file that owns the binding: run alone, that page renders
+    // `showing 12 of 12 for all`. A root per file is what a browser gives each page anyway.
+    //
+    // ON THE WINDOW, NOT ON THE PROCESS. happy-dom wraps every queued task in its own try/catch
+    // and turns a throw into an `error` event it also prints, so `process.on('uncaughtException')`
+    // never sees one — tried, and the count did not move.
+    const escaped = (event: Event): void => {
+        const thrown =
+            (event as ErrorEvent).error ??
+            (event as PromiseRejectionEvent).reason
+        broken.push(String(thrown).split('\n')[0] ?? '')
+    }
+    addEventListener('error', escaped)
+    addEventListener('unhandledrejection', escaped)
+
     try {
         for (const relative of sources) {
             const path = new URL(relative, EXAMPLES).pathname
             const text = await Bun.file(path).text()
             try {
                 const file = parseAbide(text)
-                const names = await session.reactiveNames(path, file)
+                const names = await session.reads(path, file)
                 // EACH EXAMPLE IS ITS OWN APP, with its own `#server` / `#shared` / `#ui`, and
                 // the emitted module imports through them exactly as the source did. A temp
                 // directory is not that app, so the specifiers are rewritten to the example's own
@@ -60,7 +89,7 @@ test('every example renders on the server and mounts on the client', async () =>
                     )
 
                 const dir = temporaryModule({
-                    'Page.ts': resolve(compileFile(text, names)),
+                    'Page.ts': resolve(emitComponent(file, names)),
                     'Page.client.ts': resolve(
                         emitClient(file, names) || 'export default () => {}',
                     ),
@@ -71,17 +100,26 @@ test('every example renders on the server and mounts on the client', async () =>
                 for await (const chunk of render(Component, SHELL))
                     html += new TextDecoder().decode(chunk)
 
-                document.body.innerHTML = html.slice(
+                const host = document.createElement('div')
+                host.innerHTML = html.slice(
                     html.indexOf('<body>') + '<body>'.length,
                     html.indexOf('</body>'),
                 )
+                document.body.replaceChildren(host)
                 const { default: mount } = await import(`${dir}/Page.client.ts`)
-                mount(document.body)
+                mount(host)
+                await new Promise((resolve) => setTimeout(resolve, 0))
             } catch (thrown) {
                 broken.push(String(thrown).split('\n')[0] ?? '')
             }
         }
+        // ONE LONG DRAIN AT THE END, because the per-file one is a single macrotask and the
+        // comment above names a value that lands 200 ms later. Without it a failure the LAST
+        // file defers arrives after the listeners are gone, and that file is scored as running.
+        await new Promise((resolve) => setTimeout(resolve, 300))
     } finally {
+        removeEventListener('error', escaped)
+        removeEventListener('unhandledrejection', escaped)
         session.close()
         removeTemporaryModules()
     }
@@ -114,5 +152,11 @@ test('every example renders on the server and mounts on the client', async () =>
     // A FLOOR, ratcheted. It is not a pass/fail of the corpus — most of what is missing is
     // runtime surface the rulebook decided and nobody has written — but it must not go DOWN, and
     // a change that takes it up should move this number in the same commit.
-    expect(sources.length - broken.length).toBeGreaterThanOrEqual(33)
+    //
+    // 35 AFTER THE REGION ADDRESSING WAS DEEPENED, and the +2 is the root-per-file above rather
+    // than the compiler: nothing in this corpus nests a region or renders a text run empty beside
+    // a sibling, which is exactly why those shapes went unbuilt — `nesting.test.ts` is where they
+    // are held now. THE FLOOR IS WHAT THE CORPUS REACHES, not a round number under it: one unit
+    // of slack is one file that may stop running with nothing reporting it.
+    expect(sources.length - broken.length).toBeGreaterThanOrEqual(35)
 })

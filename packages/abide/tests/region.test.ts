@@ -13,6 +13,9 @@ import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { closeTyped, clientOf } from './typed.ts'
+
+afterAll(closeTyped)
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
@@ -36,7 +39,7 @@ let name = reactive('ada')
 
 async function mountPage(source: string) {
     const file = parseAbide(source)
-    const names = await session.reactiveNames(`${ROOT}src/page.abide`, file)
+    const names = await session.reads(`${ROOT}src/page.abide`, file)
     const dir = temporaryModule({
         'Page.ts': compileFile(source, names),
         'Page.client.ts': emitClient(file, names),
@@ -74,12 +77,15 @@ test('a sibling after the region is bound through the anchor, not by index', asy
     const foot = document.querySelector('#foot') as HTMLElement
     expect(foot.textContent).toBe('ada')
 
-    // THE REVERT: address the footer by child index in `planTemplate` — drop the `afterRegion`
-    // branch and keep counting — and the taken arm's length decides which node `[2,0]` is. With
-    // the else arm rendered it lands on the footer by luck; swap to the if arm below and it lands
-    // on nothing, which is how this was found.
-    const client = emitClient(parseAbide(PAGE), new Set(['open', 'name']))
-    expect(client).toContain('afterRegion(regionAt(root, 0), 0)')
+    // THE REVERT: address the footer by child index in `planTemplate` — drop the region-reference
+    // branch in `place()` and keep counting — and the taken arm's length decides which node `[2,0]`
+    // is. With the else arm rendered it lands on the footer by luck; swap to the if arm below and
+    // it lands on nothing, which is how this was found.
+    //
+    // `-1` is region 0 of the root and the `0` after it is how many nodes past its closing anchor
+    // to count; the walk in `nodeAt` is what decodes the pair.
+    const client = await clientOf(PAGE, ['open', 'name'])
+    expect(client).toContain('__textAt(root, [-1,0,0]')
 })
 
 test('a branch swap replaces the arm and nothing around it', async () => {
@@ -147,4 +153,65 @@ test('the arm a swap replaced stops waking', async () => {
         flushSync()
     })
     expect(after.bindingRuns).toBe(2)
+})
+
+// WHICH REGION THIS IS AMONG ITS PARENT'S. `regionAt` counts opening anchors directly inside one
+// node, so a region's index has to be counted the same way — per PARENT, not across the template.
+//
+// THE REVERT: number regions with `plan.regions.length`, which is flat because the walk recurses
+// into an element's children with the same plan. The second `{#if}` below is then asked for as
+// region 1 of the `<span>` that holds only one, and the mount throws `region 1 is not in the
+// rendered document`. One region, or several under ONE parent, never sees it — which is every
+// fixture there was.
+const SPREAD = `<script>
+import { reactive } from 'abide'
+
+let open = reactive(true)
+let name = reactive('ada')
+</script>
+
+<div id="left">{#if open}<b>{name}</b>{/if}</div>
+<span id="right">{#if open}<i>{name}</i>{/if}</span>`
+
+test('two regions under different parents each find their own', async () => {
+    const { mount } = await mountPage(SPREAD)
+    mount(document.body)
+    expect((document.querySelector('#left b') as HTMLElement).textContent).toBe(
+        'ada',
+    )
+    expect(
+        (document.querySelector('#right i') as HTMLElement).textContent,
+    ).toBe('ada')
+})
+
+// A REGION THAT IS NOT IN A DOCUMENT IS A MISMATCH, not a no-op. `fillRegion` cleared everything
+// between the anchors unconditionally and then inserted through `region.close.parentNode?.`, so a
+// detached close anchor emptied the region and dropped the new arm on the floor — the one silent
+// failure in a module where every other one throws with the clause on it.
+//
+// THE REVERT: read the parent back off `region.close.parentNode?.insertBefore(...)` and remove the
+// guard. This test then reports `no throw, content "" ` where the framed 41.11 error is due, and
+// the arm that was there is gone as well.
+test('filling a region that is not in a document is refused, not silent', async () => {
+    const { fillRegion, regionAt } = await import('#ui')
+    const holder = document.createElement('div')
+    holder.innerHTML = '<!--[-->before<!--]-->'
+    document.body.append(holder)
+    const region = regionAt(holder, 0)
+    expect(region.open.nextSibling?.textContent).toBe('before')
+    // Detached: the anchors are still each other's siblings, but they have no parent.
+    const orphan = document.createDocumentFragment()
+    while (holder.firstChild !== null) orphan.append(holder.firstChild)
+    orphan.removeChild(region.open)
+    orphan.removeChild(region.close)
+
+    let said = ''
+    try {
+        fillRegion(region, '<b>after</b>')
+    } catch (thrown) {
+        said = (thrown as Error).message
+    }
+    expect(said).toContain('not in a document')
+    expect(said).toContain('41.11')
+    holder.remove()
 })

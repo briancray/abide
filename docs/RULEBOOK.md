@@ -361,6 +361,11 @@ miss falls back to.
 
 8.17 A `Store`'s `get` answering `undefined` MUST be a miss.
 
+8.18 A `Store`'s `get` MUST NOT run while a write to that `Store` is in flight or held per 8.10,
+the value of that write standing in its place.
+
+8.19 A `Store`'s `get` answering a miss with nothing left to serve MUST land an error on `s.error`.
+
 # 9. History and streams
 
 9.1 `s.publish` on a wired `Reactive` MUST send the production to every subscriber.
@@ -594,6 +599,14 @@ naming the value.
 
 11.64 A body a `NotLanded` aborted that something probes MUST re-run in the turn that lands the
 value it named.
+
+11.65 Reaching a `Keyed` with an `Args` member 11.24 cannot write — anything outside `JsonValue`
+but a `Date`, or a number that is not finite — MUST throw, naming the path to the member.
+
+11.66 An adoption that would close a cycle of adopting `Reactive`s MUST be refused where it forms,
+naming the cycle.
+
+11.67 `s.set` MUST throw 11.66's refusal, and a body whose answer 11.66 refuses MUST fail with it.
 
 # 12. Effects
 
@@ -960,6 +973,11 @@ optional.
 `Schema` MUST widen.
 
 19.13 A `Schema` that answers asynchronously MUST be refused.
+
+19.14 A page that does not call `jsonSchema` MUST NOT carry `validateJson`.
+
+19.15 A `JsonSchema` given as a `Schema` without `jsonSchema` MUST be refused, naming
+`jsonSchema`.
 
 # 20. Generated surfaces
 
@@ -1330,6 +1348,17 @@ MUST NOT be built as a string.
 
 32.25 A template expression a `NotLanded` aborted MUST leave what it last rendered in place.
 
+32.26 `raw` MUST hand back a value branded as raw markup.
+
+32.27 `{raw(...)}` MUST lower to a call to `raw`.
+
+32.28 A slot MUST render a value branded by `raw` without escaping it.
+
+32.29 Static text in a `.abide` template MUST render as markup, in body text and in an attribute
+value alike.
+
+32.30 A static value in an attribute 32.22 scheme-checks MUST be escaped the way `{expr}` is.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
@@ -1550,6 +1579,11 @@ NOT be awaited to the end of the animation.
 39.11 A browser with no `view-transition-name` support MUST navigate as it otherwise would, and an
 app MUST NOT be required to feature-detect.
 
+39.12 A `<head>` contribution's merge key MUST be the tag for `<title>` and `<base>`, the `name` or
+`property` attribute for `<meta>`, and `rel` with `href` for `<link>`.
+
+39.13 The last `<head>` contribution for a key within one file MUST win.
+
 # 40. Documentation
 
 *Free-standing: these clauses govern the documentation system, which REGISTRY does not name — a
@@ -1678,6 +1712,11 @@ mismatch, per 41.11.
 
 41.14 The seed buffer MUST be filled from the production the render already had, and a handler
 MUST NOT be run a second time to fill it.
+
+41.15 A `{#for}` key the list repeats MUST reconcile the last row under that key, and MUST stop and
+remove every row it shadows.
+
+41.16 A repeated `{#for}` key MUST warn once for the block on `abide:hydrate`.
 
 # 42. The app object
 

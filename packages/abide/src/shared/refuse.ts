@@ -51,10 +51,27 @@ refuse.typed = function typed<
         // is 15.4 holding even against this. The schema is the app checking its own
         // refusal payload; getting that wrong is a bug in the app's error path, and taking
         // the refusal down with it means the caller receives nothing at all — the original
-        // failure disappears behind a second one. The line on `abide:refuse` waits on
-        // `log.named` (section 28); what is built is that construction survives.
+        // failure disappears behind a second one.
+        //
+        // 15.4 IS UNCONDITIONAL, so the call is wrapped. `runSchema` has two exits — a `Checked`
+        // for a bad VALUE and a THROW for a bad SCHEMA (a predicate, 19.4; an async one, 19.13;
+        // a `JsonSchema` keyword `validateJson` does not implement) — and only the first was
+        // being handled here. The three that throw took the `Failed` with them, which is exactly
+        // the harm 15.15 above says it exists to prevent.
+        //
+        // BOTH EXITS WARN, which is the rest of 15.15. Wrapped and discarded, the call had no
+        // observable effect at all: an app whose refusal payload does not match its own schema
+        // paid the walk and was told nothing, and neither did a schema this cannot run. The
+        // `console.warn` is the stand-in for `log.named` (section 28), the same one
+        // `ui/Mismatch.ts` carries for 41.11.
         if (options?.schema !== undefined && data !== undefined)
-            runSchema(options.schema, data)
+            try {
+                const checked = runSchema(options.schema, data)
+                if (checked.issues !== null)
+                    console.warn('abide:refuse', name, checked.issues)
+            } catch (thrown) {
+                console.warn('abide:refuse', name, thrown)
+            }
         return failed(
             name,
             status,

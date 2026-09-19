@@ -1,8 +1,10 @@
 import { afterAll, expect, test } from 'bun:test'
+import { rmSync, symlinkSync } from 'node:fs' // bun has no sync symlink/rm of its own
 import { compileFile, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { namesRead } from './typed.ts'
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const TSCONFIG = `${ROOT}tsconfig.json`
@@ -28,12 +30,10 @@ const fromHelper = makeCount()
 const step = 1
 const aliased = 'reactive(0)'
 </script>
-<p>{rows}</p>`)
+<p>{rows}{count}{fromHelper}{step}{aliased}</p>`)
 
-    const names = await session.reactiveNames(PAGE, file)
-    expect([...names].sort()).toEqual(['count', 'fromHelper', 'rows'])
-    expect(names.has('step')).toBe(false)
-    expect(names.has('aliased')).toBe(false)
+    const names = namesRead(file, await session.reads(PAGE, file))
+    expect(names).toEqual(['count', 'fromHelper', 'rows'])
 })
 
 // 19.12 — where inference fails the compiler reads rather than refuses. An unresolved import is
@@ -44,8 +44,7 @@ import { mystery } from './nowhere.ts'
 const value = mystery()
 </script>
 <p>{value}</p>`)
-    const names = await session.reactiveNames(PAGE, file)
-    expect(names.has('value')).toBe(false)
+    expect(namesRead(file, await session.reads(PAGE, file))).toEqual([])
 })
 
 afterAll(removeTemporaryModules)
@@ -69,8 +68,8 @@ count = count + step
 <p>{count * 2}</p>`
 
     const file = parseAbide(source)
-    const names = await session.reactiveNames(PAGE, file)
-    expect([...names]).toEqual(['count'])
+    const names = await session.reads(PAGE, file)
+    expect(namesRead(file, names)).toEqual(['count'])
 
     const module = `${temporaryModule({ 'Page.ts': compileFile(source, names) })}/Page.ts`
 
@@ -96,18 +95,18 @@ test('a second file in the same session is not answered from the first', async (
     const first = parseAbide(
         `<script>\nimport { reactive } from 'abide'\nconst a = reactive(1)\nconst b = 2\n</script><p>{a}</p>`,
     )
-    expect([...(await session.reactiveNames(PAGE, first))]).toEqual(['a'])
+    expect(namesRead(first, await session.reads(PAGE, first))).toEqual(['a'])
 
     const second = parseAbide(
         `<script>\nimport { reactive } from 'abide'\nconst a = 1\nconst b = reactive(2)\n</script><p>{b}</p>`,
     )
-    expect([...(await session.reactiveNames(PAGE, second))]).toEqual(['b'])
+    expect(namesRead(second, await session.reads(PAGE, second))).toEqual(['b'])
 })
 
 // COMPILE TIME IS A SNAPSHOT COUNT, and asserting it as one is what makes the claim survive a
 // loaded machine. Adding a file to the project's ROOT SET is what costs — 19.7 ms against 0.8 ms
 // for a file it already has — so a build that takes a snapshot per file pays that on every file
-// it has. THE REVERT: have `reactiveNamesFor` loop over `reactiveNames`; the answers are
+// it has. THE REVERT: have `readsFor` loop over `reads`; the answers are
 // identical and this reports 12 snapshots where 1 is due, which is ~19 ms a file rather than
 // ~0.8 ms and is 99.8% of the time a build spends.
 test('a whole build takes ONE snapshot, not one per file', async () => {
@@ -122,13 +121,68 @@ test('a whole build takes ONE snapshot, not one per file', async () => {
                 ),
             })
 
-        const answers = await batch.reactiveNamesFor(sources)
+        const answers = await batch.readsFor(sources)
         expect(batch.snapshots).toBe(1)
         expect(answers).toHaveLength(12)
         // And every answer is the one the per-file path would have given.
         for (let at = 0; at < 12; at += 1)
-            expect([...(answers[at] as Set<string>)]).toEqual([`v${at}`])
+            expect(
+                namesRead(
+                    (sources[at] as (typeof sources)[number]).file,
+                    answers[at] ?? [],
+                ),
+            ).toEqual([`v${at}`])
     } finally {
         batch.close()
     }
+})
+
+const PROBE = `<script>
+import { reactive } from 'abide'
+let rows = reactive([1])
+</script>
+<p>{rows}</p>`
+
+// A DANGLING SYMLINK IS NOT A CRASH. The listing was walked with a `statSync` per entry, which
+// FOLLOWS a symlink — so an Emacs `.#page.abide` lock file beside a page threw ENOENT out of a
+// directory listing and took the whole build down with it, from a name the compiler was only
+// counting. THE REVERT: `statSync(join(directory, entry)).isDirectory()` over a plain
+// `readdirSync(directory)`; this test then reports `ENOENT` where 1 typed name is due, and it is
+// N syscalls for an answer the listing already carried.
+test('a dangling symlink beside a page does not take the build down', async () => {
+    const dir = temporaryModule({
+        'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+                strict: true,
+                target: 'esnext',
+                module: 'preserve',
+                moduleResolution: 'bundler',
+                allowImportingTsExtensions: true,
+                types: [],
+            },
+            include: ['.'],
+        }),
+    })
+    symlinkSync(`${dir}/nothing-is-here.ts`, `${dir}/.#page.abide`)
+    const local = await TypeSession.open(`${dir}/tsconfig.json`)
+    try {
+        const probe = parseAbide(PROBE)
+        const names = await local.reads(`${dir}/page.abide`, probe)
+        expect(namesRead(probe, names)).toEqual(['rows'])
+    } finally {
+        local.close()
+        rmSync(`${dir}/.#page.abide`, { force: true })
+    }
+})
+
+// TWO PATHS TO ONE DIRECTORY ARE ONE DIRECTORY, and the place to settle that is the KEY rather
+// than the comparison: the shadow was registered under the path as it arrived, so a doubled
+// separator made it invisible to its own directory listing AND named a file the checker could not
+// open. THE REVERT: key the shadow on `${source.path}.shadow.ts`; this test then reports
+// `is not inside the project` where 1 typed name is due, with the app's tsconfig blamed for a
+// path this class had mangled.
+test('a page path with a doubled separator still finds its shadow', async () => {
+    const probe = parseAbide(PROBE)
+    const names = await session.reads(`${ROOT}src//doubled.abide`, probe)
+    expect(namesRead(probe, names)).toEqual(['rows'])
 })

@@ -9,8 +9,13 @@
 // 31.11 wants the same question answered from the TYPE rather than from the name, which is a
 // checker query this does not make yet. A value whose own type declares `set` or `peek` therefore
 // resolves to the `Reactive`'s, and 31.15 asks for a warning naming exactly that case.
+//
+// WHICH IS WHY A NAME THE `Reactive` DOES NOT DECLARE MUST NOT BE HERE: it takes a member the
+// value really has and resolves it to nothing. This list is exactly `MEMBERS` in
+// `shared/reactive/Reactive.ts`, which already declares `then`, `catch` and `finally` — `value`
+// and `args` are fields of `Cell` and of `ReactiveOptions`, neither of which the `Reactive`
+// exposes.
 export const REACTIVE_MEMBERS: ReadonlySet<string> = new Set([
-    'args',
     'busy',
     'error',
     'history',
@@ -22,7 +27,6 @@ export const REACTIVE_MEMBERS: ReadonlySet<string> = new Set([
     'ready',
     'refresh',
     'set',
-    'value',
     'watch',
     // A `Reactive` is thenable (1.4), and `catch`/`finally` derive from `then` (1.5).
     'then',

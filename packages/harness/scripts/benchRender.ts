@@ -7,9 +7,9 @@
 // in a browser, for the same reason.
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
-import { compileFile, parseAbide, TypeSession } from 'abide/compiler'
+import { emitComponent, parseAbide, TypeSession } from 'abide/compiler'
 import { render } from 'abide/server'
-import { batch, ratio, type Sample } from 'harness/report'
+import { batch, type Sample } from 'harness/report'
 import {
     abideLoopSource,
     abideSource,
@@ -36,22 +36,22 @@ async function main(): Promise<void> {
                 JSON.stringify(list),
             )
             const file = parseAbide(source)
-            const names = await session.reactiveNames(
+            const names = await session.reads(
                 `${REPO}packages/abide/tests/fixtures/typed/src/render.abide`,
                 file,
             )
-            const Component = await load(compileFile(source, names))
+            const Component = await load(emitComponent(file, names))
 
             const loopSource = abideLoopSource().replace(
                 'CARDS',
                 JSON.stringify(list),
             )
             const loopFile = parseAbide(loopSource)
-            const loopNames = await session.reactiveNames(
+            const loopNames = await session.reads(
                 `${REPO}packages/abide/tests/fixtures/typed/src/loop.abide`,
                 loopFile,
             )
-            const Loop = await load(compileFile(loopSource, loopNames))
+            const Loop = await load(emitComponent(loopFile, loopNames))
 
             const measured = batch({
                 case: `render ${size} cards`,

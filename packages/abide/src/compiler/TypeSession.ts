@@ -1,8 +1,11 @@
 import { readdirSync, statSync } from 'node:fs' // Bun exposes no sync directory listing of its own
-import { dirname, join } from 'node:path' // Bun exposes no path helpers of its own
+import { basename, dirname, join, resolve } from 'node:path' // Bun exposes no path helpers of its own
+import type { Node } from 'typescript/unstable/ast'
+import { isIdentifier, isVariableStatement } from 'typescript/unstable/ast/is'
 import { API } from 'typescript/unstable/async'
-import { declaredNames } from './declaredNames.ts'
+import { classifyRead, type Read } from './classifyRead.ts'
 import type { AbideFile } from './parseAbide.ts'
+import { projectShadow } from './projectShadow.ts'
 
 // Where 31.3 gets its answer. A `.abide` file is projected into a SHADOW `.ts` held in a virtual
 // filesystem and never written to disk, and TypeScript's own checker is asked what each declared
@@ -17,6 +20,9 @@ import type { AbideFile } from './parseAbide.ts'
 // What a name must be typed as to be read and written by name. A type alias over `Reactive` is not
 // recognised, and that is a real limit rather than a decision — see the test beside this.
 const REACTIVE_PREFIX = 'Reactive<'
+
+// Whether a script can declare a name at all — a file that cannot is never handed to the checker.
+const DECLARES = /\b(?:const|let|var)\b/
 
 export class TypeSession {
     private api: API
@@ -55,76 +61,103 @@ export class TypeSession {
     private entriesIn(
         directory: string,
     ): { files: string[]; directories: string[] } | undefined {
+        // TWO PATHS TO ONE DIRECTORY ARE ONE DIRECTORY. A raw string compare said otherwise on a
+        // doubled separator, a trailing slash or a relative path, and the shadow then appeared in
+        // nobody's listing — so the checker never read it and the refusal below blamed the app's
+        // tsconfig for a path this class had mangled.
+        const here = this.canonical(directory)
         const mine: string[] = []
+        // The key is canonical where it is registered (`shadowPath` below), so only the
+        // incoming directory needs resolving — one `resolve` a call rather than one a shadow.
         for (const path of this.shadows.keys())
-            if (dirname(path) === directory)
-                mine.push(path.slice(directory.length + 1))
+            if (dirname(path) === here) mine.push(basename(path))
         if (mine.length === 0) return undefined
 
         const files: string[] = []
         const directories: string[] = []
-        for (const entry of readdirSync(directory)) {
-            if (statSync(join(directory, entry)).isDirectory())
-                directories.push(entry)
-            else files.push(entry)
+        // THE LISTING ALREADY KNOWS. A `statSync` per entry was N syscalls for an answer
+        // `readdirSync` hands back with the name, and it THREW on a dangling symlink — an Emacs
+        // `.#page.abide` lock beside a page took the whole build down with it.
+        for (const entry of readdirSync(directory, { withFileTypes: true })) {
+            // A symlink is the one entry the listing cannot answer for, and a dangling one has no
+            // answer at all — which is a file as far as this is concerned.
+            if (entry.isSymbolicLink()) {
+                let followed = false
+                try {
+                    followed = statSync(
+                        join(directory, entry.name),
+                    ).isDirectory()
+                } catch {
+                    // Dangling: a file, as `followed` already says.
+                }
+                if (followed) directories.push(entry.name)
+                else files.push(entry.name)
+                continue
+            }
+            if (entry.isDirectory()) directories.push(entry.name)
+            else files.push(entry.name)
         }
         for (const name of mine) if (!files.includes(name)) files.push(name)
         return { files, directories }
     }
 
-    // The names in `file` whose type is a `Reactive`. Everything else is left exactly as
-    // written. ONE FILE, for a watch rebuild; a build wants `reactiveNamesFor`.
-    async reactiveNames(
-        abidePath: string,
-        file: AbideFile,
-    ): Promise<Set<string>> {
-        const answers = await this.reactiveNamesFor([{ path: abidePath, file }])
-        return answers[0] ?? new Set()
+    // A relative path from the checker is relative to the API's own cwd, which is the tsconfig's
+    // directory rather than the process's.
+    private canonical(path: string): string {
+        return resolve(dirname(this.tsconfig), path)
+    }
+
+    // THE READS IN `file`: every occurrence of a name bound to a `Reactive` (31.3), classified, in
+    // its projection (`projectShadow`). Everything else is left exactly as written. ONE FILE; a
+    // build wants `readsFor`.
+    async reads(abidePath: string, file: AbideFile): Promise<Read[]> {
+        const answers = await this.readsFor([{ path: abidePath, file }])
+        return answers[0] ?? []
     }
 
     // EVERY FILE IN ONE SNAPSHOT, which is the whole of the compiler's build time. Measured at
     // 19.7 ms a file taking a snapshot each against 0.8 ms a file sharing one — 25x, because
-    // adding a file to the project's root set is what costs, not asking about it. The per-file
-    // entry above is kept for the watch rebuild it is right for, where the file is already known
-    // and a snapshot costs 3 ms rather than 16.
-    async reactiveNamesFor(
+    // adding a file to the project's root set is what costs, not asking about it.
+    //
+    // THE CHECKER'S OWN TREE ANSWERS BOTH QUESTIONS. Which names the file declares is its
+    // top-level `const`/`let`/`var` statements — an inner block's name is not the page's — and
+    // which occurrences reach one is the references to that symbol. A parameter, a row's item, a
+    // key, a member, a label and a class field of the same spelling are other symbols, and are
+    // absent. What each reference DOES — a read, a write, an update, a shorthand — is read off its
+    // parents by `classifyRead`, so no token walk re-derives the grammar.
+    async readsFor(
         sources: { path: string; file: AbideFile }[],
-    ): Promise<Set<string>[]> {
-        const queries: {
-            shadowPath: string
-            names: string[]
-            offsets: number[]
-        }[] = []
+    ): Promise<Read[][]> {
+        // Per source, its shadow's path and where its scripts end, or '' where nothing is declared.
+        const queries: { shadowPath: string; scriptsEnd: number }[] = []
         const created: string[] = []
         const changed: string[] = []
 
         for (const source of sources) {
-            const names = declaredNames(source.file.scripts.join('\n'))
-            if (names.length === 0) {
-                queries.push({ shadowPath: '', names, offsets: [] })
+            const projection = projectShadow(source.file)
+            // 34.2 — A `<script module>` DECLARES NAMES TOO, and the `<script>` under it is inside
+            // that scope on both sides. The projection holds both from offset 0.
+            const scripts = projection.text.slice(0, projection.scripts.end)
+            if (!DECLARES.test(scripts)) {
+                queries.push({ shadowPath: '', scriptsEnd: 0 })
                 continue
             }
-            const shadowPath = `${source.path}.shadow.ts`
-            const offsets: number[] = []
-            let shadow = `${source.file.scripts.join('\n')}\n`
-            for (const name of names) {
-                offsets.push(shadow.length)
-                shadow += `${name};\n`
-            }
+            // CANONICAL AT THE KEY, not at the comparison. A doubled separator or a relative
+            // path is the same file and a raw string is not the same string — registered as it
+            // arrived, the shadow appeared in nobody's directory listing AND named a file the
+            // checker could not open, and the refusal below blamed the app's tsconfig for it.
+            const shadowPath = `${this.canonical(source.path)}.shadow.ts`
             // A shadow STAYS registered for the life of the session and the snapshot is told it
             // changed. Deleting and re-adding under the same path does not invalidate the
             // source-file cache, and the checker then answers about the PREVIOUS file at these
             // offsets — right-looking types for the wrong names, with nothing to say so.
             ;(this.shadows.has(shadowPath) ? changed : created).push(shadowPath)
-            this.shadows.set(shadowPath, shadow)
-            queries.push({ shadowPath, names, offsets })
+            this.shadows.set(shadowPath, projection.text)
+            queries.push({ shadowPath, scriptsEnd: projection.scripts.end })
         }
 
-        const answers: Set<string>[] = []
-        if (created.length === 0 && changed.length === 0) {
-            for (const _ of sources) answers.push(new Set())
-            return answers
-        }
+        const answers: Read[][] = sources.map(() => [])
+        if (created.length === 0 && changed.length === 0) return answers
 
         this.snapshots += 1
         const snapshot = await this.api.updateSnapshot({
@@ -132,45 +165,74 @@ export class TypeSession {
             fileChanges: { created, changed },
         })
         const project = snapshot.getProjects()[0]
-        if (project === undefined) {
-            for (const _ of sources) answers.push(new Set())
-            return answers
-        }
+        if (project === undefined) return answers
+        const checker = project.checker
 
-        for (let at = 0; at < queries.length; at += 1) {
-            const query = queries[at] as (typeof queries)[number]
-            if (query.shadowPath === '') {
-                answers.push(new Set())
-                continue
-            }
-            let types: Awaited<
-                ReturnType<typeof project.checker.getTypeAtPosition>
-            >
-            try {
-                types = await project.checker.getTypeAtPosition(
+        await Promise.all(
+            queries.map(async (query, at) => {
+                if (query.shadowPath === '') return
+                const sourceFile = await project.program.getSourceFile(
                     query.shadowPath,
-                    query.offsets,
                 )
-            } catch (thrown) {
                 // The shadow has to be INSIDE the opened project or the checker never reads it.
-                // Refusing loudly rather than answering an empty set: an empty set is a file
-                // whose every name lowers as written, which renders `[object Object]` where a
-                // value was due — a wrong page, with nothing about it saying so.
-                throw new Error(
-                    `abide: ${sources[at]?.path} is not inside the project ${this.tsconfig}, so no name in it can be typed (31.3). Give the app a tsconfig whose include reaches it.`,
-                    { cause: thrown },
+                // Refusing loudly rather than answering nothing: no reads is a file whose every
+                // name lowers as written, which renders `[object Object]` where a value was due —
+                // a wrong page, with nothing about it saying so.
+                if (sourceFile === undefined)
+                    throw new Error(
+                        `abide: ${sources[at]?.path} is not inside the project ${this.tsconfig}, so no name in it can be typed (31.3). Give the app a tsconfig whose include reaches it.`,
+                    )
+                // A destructuring pattern binds names this does not see, and that is 31.14's case.
+                const names: Node[] = []
+                const spelled = new Set<string>()
+                for (const statement of sourceFile.statements) {
+                    if (statement.getStart() >= query.scriptsEnd) break
+                    if (!isVariableStatement(statement)) continue
+                    for (const declaration of statement.declarationList
+                        .declarations) {
+                        const name = declaration.name
+                        if (!isIdentifier(name) || spelled.has(name.text))
+                            continue
+                        spelled.add(name.text)
+                        names.push(name)
+                    }
+                }
+                if (names.length === 0) return
+                const symbols = await checker.getSymbolAtLocation(names)
+                const reactive = await Promise.all(
+                    symbols.map(async (symbol) => {
+                        if (symbol === undefined) return undefined
+                        const type = await checker.getTypeOfSymbol(symbol)
+                        if (type === undefined) return undefined
+                        const text = await checker.typeToString(type)
+                        return text.startsWith(REACTIVE_PREFIX)
+                            ? symbol
+                            : undefined
+                    }),
                 )
-            }
-            const reactive = new Set<string>()
-            for (let i = 0; i < query.names.length; i += 1) {
-                const type = types[i]
-                if (type === undefined) continue
-                const text = await project.checker.typeToString(type)
-                if (text.startsWith(REACTIVE_PREFIX))
-                    reactive.add(query.names[i] as string)
-            }
-            answers.push(reactive)
-        }
+                const nodes = await Promise.all(
+                    reactive.map(async (symbol) => {
+                        if (symbol === undefined) return []
+                        const references =
+                            await checker.getReferencesToSymbolInFile(
+                                query.shadowPath,
+                                symbol,
+                            )
+                        return Promise.all(
+                            references.map((reference) => reference.resolve()),
+                        )
+                    }),
+                )
+                const reads = answers[at] as Read[]
+                for (const resolved of nodes)
+                    for (const node of resolved) {
+                        if (node === undefined) continue
+                        const read = classifyRead(node)
+                        if (read !== undefined) reads.push(read)
+                    }
+                reads.sort((left, right) => left.start - right.start)
+            }),
+        )
         return answers
     }
 

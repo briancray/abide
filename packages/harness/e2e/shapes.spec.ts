@@ -5,7 +5,7 @@ import { test } from '@playwright/test'
 const REPO = new URL('../../../', import.meta.url).pathname
 const built = execFileSync(
     'bun',
-    ['packages/harness/scripts/buildShapesInjectable.ts'],
+    ['packages/harness/scripts/buildBench.ts', 'shapes'],
     { cwd: REPO, encoding: 'utf8' },
 ).trim()
 

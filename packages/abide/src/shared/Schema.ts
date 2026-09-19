@@ -1,4 +1,4 @@
-// THE THREE FORMS A SHAPE MAY BE DECLARED IN, and one place that runs them. RULEBOOK 4.3
+// THE TWO FORMS A SHAPE MAY BE DECLARED IN, and one place that runs them. RULEBOOK 4.3
 // puts a schema first on every way in, so this is reached from a write, a publish, a body's
 // production (11.47) and an adoption (11.48) alike — one statement of what "the schema
 // refused" means, rather than four that drift apart.
@@ -11,8 +11,8 @@
 // 19.7 IS THE OTHER HALF: coercion belongs to the pipeline and is never asked of a schema.
 // Together they are what lets 19.4 be enforced at all — see `runSchema`.
 
-import type { JsonValue } from './JsonValue.ts'
-import { validateJson } from './validateJson.ts'
+import { untracked } from './reactive/tracking.ts'
+import { note } from './note.ts'
 
 // The Standard Schema contract, declared here rather than depended on: it is an interface
 // a library implements, so an import would put a package in this seam's graph to gain a
@@ -44,10 +44,9 @@ export type StandardSchemaV1<Output = unknown> = {
     }
 }
 
-export type Schema<T> =
-    | ((value: unknown) => T)
-    | StandardSchemaV1<T>
-    | JsonValue
+// A JSON Schema document is the Standard form once `jsonSchema` wraps it — see that module for
+// why the document does not stand here on its own.
+export type Schema<T> = ((value: unknown) => T) | StandardSchemaV1<T>
 
 // ISSUES RATHER THAN A REFUSAL, and that is what keeps this module out of a cycle: a
 // `validationError` is built by `refuse`, `refuse` runs a schema (15.11), and the two
@@ -102,7 +101,15 @@ function pathOf(
     return parts.join('.')
 }
 
+// 4.7 — A SCHEMA RUNS UNTRACKED, and the clearing is HERE because running one is what the clause
+// is about. Held in the two callers `Reactive.ts` owns, `refuse.typed`'s gate and `Keyed`'s
+// argument gate ran tracked: a refusal built inside an effect subscribed that effect to whatever
+// its schema read, and the read was spliced into the body's cursor-ordered `sources` besides.
 export function runSchema(schema: unknown, value: unknown): Checked {
+    return untracked(runSchemaTracked, schema, value)
+}
+
+function runSchemaTracked(schema: unknown, value: unknown): Checked {
     if (typeof schema === 'function') {
         let returned: unknown
         try {
@@ -128,10 +135,15 @@ export function runSchema(schema: unknown, value: unknown): Checked {
         if (standard !== undefined) return runStandard(standard, value)
     }
 
-    // What is left is the native form, and it is the only one that reports WHERE.
-    const issues = validateJson<Found>(schema as JsonValue, value)
-    if (issues === null) return accepted(value)
-    return refusedAs(issues as Found)
+    // 19.15: A BARE DOCUMENT IS REFUSED, never accepted. Accepting would be a declared constraint
+    // that silently does not apply — `validateJson`'s own header calls that the one failure a
+    // validation layer must not have — and the sentence reaches the author the way every other
+    // bad schema does, on the `''` entry.
+    return fromThrow(
+        new Error(
+            'A JSON Schema document is not a Schema on its own: wrap it as `jsonSchema(document)`, which brings the validator that reads it (RULEBOOK 19.15).',
+        ),
+    )
 }
 
 function runStandard(
@@ -155,18 +167,25 @@ function runStandard(
     // load. `busy` moves with it: a settled write flips `loading` for a microtask, so a
     // `{#if s.busy()}` spinner flickers on every keystroke of a bound input. Making a write
     // asynchronous is the app's to ask for by passing a promise, not a schema's to impose.
+    // The `try` above covers the CALL, not what came back: an adapter answering `undefined` or
+    // `null` threw a TypeError off the `.then` probe, out of `runSchema` and into whatever called
+    // `s.set` — the one thing every other arm here turns into a refusal instead.
+    if (result === null || typeof result !== 'object')
+        return fromThrow(
+            new Error(
+                `The schema from "${standard.vendor}" answered ${result === null ? 'null' : typeof result}. A Standard Schema must answer a result object.`,
+            ),
+        )
     if (typeof (result as PromiseLike<unknown>).then === 'function')
         throw new Error(
             `The schema from "${standard.vendor}" answered asynchronously. A Schema must be synchronous (RULEBOOK 19.13): validate what is already settled, or make the write a load by passing a promise.`,
         )
     const settled = result as StandardResult<unknown>
     if (settled.issues === undefined) return accepted(settled.value)
+    // A path is built from the offending KEY, which for a record schema is the caller's — `note`
+    // is why `constructor` and `__proto__` land as members rather than as the prototype's.
     const found: Found = {}
-    for (const issue of settled.issues) {
-        const key = pathOf(issue.path)
-        const standing = found[key]
-        if (standing === undefined) found[key] = [issue.message]
-        else standing.push(issue.message)
-    }
+    for (const issue of settled.issues)
+        note(found, pathOf(issue.path), issue.message)
     return refusedAs(found)
 }

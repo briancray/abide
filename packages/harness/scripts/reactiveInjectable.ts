@@ -8,7 +8,7 @@
 // carries the refusals that matter here: it measures the clock's resolution rather
 // than assuming it, and a browser's is ~100 µs against bun's 41 ns.
 
-import { batch, ratio, type Sample } from 'harness/report'
+import { batch, claimOf, ratio, type Sample } from 'harness/report'
 import { reactiveCases } from './reactiveCases.ts'
 
 type Row = {
@@ -49,12 +49,7 @@ function run(): Row[] {
             case: kase.name,
             abide: abideSample.nanoseconds,
             vanilla: vanillaSample.nanoseconds,
-            claim:
-                result.kind === 'ratio'
-                    ? `${result.value.toFixed(2)}x`
-                    : result.kind === 'underTheFloor'
-                      ? `under the floor (${(measured.floor * 100).toFixed(1)}%)`
-                      : 'under one frame',
+            claim: claimOf(result),
             n: measured.n,
             floor: measured.floor,
             substrate: measured.substrate,

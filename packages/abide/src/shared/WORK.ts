@@ -8,9 +8,12 @@
 // against a counter that was never wired (44.24). Publishing two of three is worse than
 // publishing none, because the third looks measured.
 //
-// WHAT IT COSTS, measured rather than assumed: one integer increment on the propagation walk and
-// one per effect run, priced on `bun run bench:reactive` against the run before it landed. The
-// numbers are in the commit that added this.
+// WHAT IT COSTS is one integer increment on the propagation walk and one per effect run, and it
+// is UNDER THE NOISE FLOOR rather than priced: two runs of `bun run bench:reactive` put the
+// largest consistent signal at +3.0% then +4.9% on fan-out-to-1000, against +0.0% then +7.1% on
+// `read a settled value`, which has no counter anywhere near it. The floor is wider than every
+// signal, so this is a trade taken deliberately and NOT a number — read it that way before
+// widening the set.
 export const WORK = {
     // Effect body runs. A reader that woke when nothing it reads changed still reads the right
     // value, which is why this is asserted and the value is not.

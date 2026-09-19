@@ -108,16 +108,19 @@ subscriber.
 
 | Name | Signature | Meaning |
 | --- | --- | --- |
-| `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T> \| JsonSchema` | The three forms a shape may be declared in. |
+| `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T>` | The two forms a shape may be declared in. |
 | `JsonValue` | `null \| boolean \| number \| string \| JsonValue[] \| { [k: string]: JsonValue }` | What an `Args` may hold. |
 | `Issues<T>` | `T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. |
 | `Paths<T>` | `string` | The dot-joined leaf paths of a type. |
 | `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. |
+| `jsonSchema` | `<T>(document: JsonSchema) => StandardSchemaV1<T>` | A JSON Schema document as a `Schema`, carrying its validator. |
 | `validateJson` | `<T>(schema: JsonSchema, value: unknown) => Issues<T> \| null` | The native validator. |
 
 A `Schema<T>` **returns what it accepts**, so it normalises as well as refuses — which is why
 the function form is `=> T` rather than a predicate. `JsonSchema` is the native form and the
-only one publishable to a tool definition or an OpenAPI operation.
+only one publishable to a tool definition or an OpenAPI operation. A document is data, so it
+becomes a `Schema` through `jsonSchema`, which brings the validator with it — and a page that never
+calls `jsonSchema` never carries one (19.14).
 
 ## Headers abide generates
 

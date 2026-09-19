@@ -7,7 +7,7 @@ import { dirname } from 'node:path' // bun exposes no path helpers of its own
 import { parseArgs } from 'node:util' // bun exposes no argv parser of its own yet
 
 import type { AbideFile } from '#compiler'
-import { compileFile, emitClient, parseAbide } from '#compiler'
+import { emitClient, emitComponent, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 
 const USAGE = `abide <command>
@@ -43,21 +43,21 @@ async function build(root: string, out: string): Promise<number> {
         // ONE SNAPSHOT FOR THE WHOLE BUILD. Asking file by file costs 19.7 ms each against 0.8 ms
         // sharing one, because what is expensive is adding a file to the project's root set
         // rather than asking about it — and a fresh build adds every file it has.
-        const names = await session?.reactiveNamesFor(parsed)
+        const reads = await session?.readsFor(parsed)
 
         for (let at = 0; at < parsed.length; at += 1) {
             const entry = parsed[at] as (typeof parsed)[number]
             const relative = entry.path.slice(root.length + 1)
-            const reactive = names?.[at]
+            const fileReads = reads?.[at]
             await Bun.write(
                 `${out}/${relative.replace(/\.abide$/, '.ts')}`,
-                compileFile(entry.text, reactive),
+                emitComponent(entry.file, fileReads),
             )
 
             // The client module is emitted only where there is something to hydrate. A static
             // page has no `.client.ts` beside it, which is what makes "this page ships no
             // runtime" a fact about the build rather than a claim about the bundler.
-            const client = emitClient(entry.file, reactive)
+            const client = emitClient(entry.file, fileReads)
             if (client !== '')
                 await Bun.write(
                     `${out}/${relative.replace(/\.abide$/, '.client.ts')}`,

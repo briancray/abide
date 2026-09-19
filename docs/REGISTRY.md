@@ -57,14 +57,14 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `Failures` | union of `Failed` | What a read hands back in place of a value. | 1.3 |
 | `Shaped` | `unknown` | What a `transform` hands back: the value to store, or a refusal. | 4.6, 4.9 |
 | `Produced` | `unknown` | What a production carries, where that differs from what is stored. | 1.2, 9.7 |
-| `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.9, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31 |
-| `reactive` | `<Computed, Shaped = Awaited<Computed>>(body: () => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never> & { transform?: (value: Awaited<Computed>) => Shaped }) => Reactive<Kept<Shaped>, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | The unkeyed body overload. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.51, 11.52, 11.53, 11.54, 11.55, 11.58, 11.59, 41.7, 11.63, 11.64 |
+| `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.9, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31, 11.65 |
+| `reactive` | `<Computed, Shaped = Awaited<Computed>>(body: () => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never> & { transform?: (value: Awaited<Computed>) => Shaped }) => Reactive<Kept<Shaped>, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | The unkeyed body overload. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.51, 11.52, 11.53, 11.54, 11.55, 11.58, 11.59, 41.7, 11.63, 11.64, 11.66, 11.67 |
 | `reactive` | `<Chunk, Shaped = Chunk[]>(body: () => AsyncGenerator<Chunk>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never> & { transform?: (value: Chunk[]) => Shaped }) => Reactive<Kept<Shaped>, Chunk[], Refused<Shaped>, Chunk>` | The streaming body overload. | 3.7, 3.8, 4.8, 9.2, 9.3, 9.20, 9.21, 9.22, 9.23 |
 | `reactive` | `<Chunk, Args, Shaped = Chunk[]>(body: (args: Args) => AsyncGenerator<Chunk>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never, Args> & { transform?: (value: Chunk[]) => Shaped }) => Keyed<Kept<Shaped>, Args, Chunk[], Refused<Shaped>, Chunk>` | The keyed streaming body overload. | 9.20, 9.23 |
 | `reactive` | `<Computed, Args, Shaped = Awaited<Computed>>(body: (args: Args) => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never, Args> & { transform?: (value: Awaited<Computed>) => Shaped }) => Keyed<Kept<Shaped>, Args, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed body overload. | 11.2, 11.3, 11.4, 11.6, 11.7, 11.23, 11.56, 11.63 |
 | `reactive` | `<Accepted, Shaped = Accepted>(initial?: Accepted \| Promise<Accepted>, options?: ReactiveOptions<Accepted, Kept<Shaped>, never> & { transform?: (value: Accepted) => Shaped }) => Reactive<Kept<Shaped>, Accepted, Refused<Shaped>>` | The value overload, for what the scope owns outright. | 4.1, 4.2, 4.14, 4.15, 4.16 |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | The shape of a `transform`. | 4.6, 4.7, 4.8 |
-| `Store` | `{ get: () => Stored \| Promise<Stored>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void> }` | Where a value lives when this process does not. | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17 |
+| `Store` | `{ get: () => Stored \| Promise<Stored>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void> }` | Where a value lives when this process does not. | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19 |
 | `Shared` | `interface Shared {}` | The app's declaration-merged registry of shared keys. | 10.3 |
 | `reactive.share` | `<Key extends string, Value>(key: Key, create: () => Reactive<Value>) => Key extends keyof Shared ? Reactive<Shared[Key]> : Reactive<Value>` | Get-or-create a reactive value in the component's scope by key. | 10.1, 10.2, 10.4, 10.5, 10.6, 10.7 |
 
@@ -114,7 +114,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `s.set` | `(value: Accepted \| Promise<Accepted> \| Reactive<Accepted>) => void \| Failures` | Write the current value here, gated by `identity`. | 3.6, 4.1, 4.2, 4.9, 4.13, 5.6, 9.4, 9.9, 9.25, 9.26, 11.60, 11.62 |
+| `s.set` | `(value: Accepted \| Promise<Accepted> \| Reactive<Accepted>) => void \| Failures` | Write the current value here, gated by `identity`. | 3.6, 4.1, 4.2, 4.9, 4.13, 5.6, 9.4, 9.9, 9.25, 9.26, 11.60, 11.62, 11.66, 11.67 |
 | `s.publish` | `(value: Accepted \| Promise<Accepted>) => number \| Failures` | Mint a production whatever `identity` says, and send it to every subscriber. | 5.6, 9.1, 9.5, 9.6, 9.8, 9.12, 9.13, 9.14, 11.60 |
 | `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutate in place and mint a production for it. | 5.7, 5.8, 9.27, 11.60 |
 
@@ -274,12 +274,13 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T> \| JsonSchema` | The three forms a shape may be declared in. | 19.3, 19.4, 19.5, 19.7, 19.9, 19.10, 19.11, 19.12, 19.13 |
+| `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T>` | The two forms a shape may be declared in. | 19.3, 19.4, 19.5, 19.7, 19.9, 19.10, 19.11, 19.12, 19.13 |
 | `JsonValue` | `null \| boolean \| number \| string \| JsonValue[] \| { [k: string]: JsonValue }` | What an `Args` may hold. | — |
 | `Issues<T>` | `T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. | — |
 | `Paths<T>` | `string` | The dot-joined leaf paths of a type. | 19.6 |
-| `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. | 19.8 |
-| `validateJson` | `<T>(schema: JsonSchema, value: unknown) => Issues<T> \| null` | The native validator. | — |
+| `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. | 19.8, 19.15 |
+| `jsonSchema` | `<T>(document: JsonSchema) => StandardSchemaV1<T>` | A JSON Schema document as a `Schema`, carrying its validator. | 19.14, 19.15, 20.11 |
+| `validateJson` | `<T>(schema: JsonSchema, value: unknown) => Issues<T> \| null` | The native validator. | 19.14 |
 
 ## Headers abide generates
 
@@ -436,7 +437,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `abide:refuse` | `warning` | A message formatter that threw. | 15.13, 28.8 |
 | `abide:reactive` | `warning` | A failed revalidation over a value still being served. | 4.12, 28.8 |
 | `abide:watch` | `warning` | A `watch` effect or `Disposer` that threw. | 12.6, 28.8 |
-| `abide:hydrate` / `abide:navigate` | `warning` | The browser lane. | 28.8, 41.11 |
+| `abide:hydrate` / `abide:navigate` | `warning` | The browser lane. | 28.8, 41.11, 41.16 |
 
 ## `csp`
 
@@ -489,7 +490,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `{expr}` | Reactive text, escaped. | 32.1, 32.25 |
 | formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
 | `{await expr}` | A blocking read of the expression. | 31.10, 32.2 |
-| `{raw(...)}` | Raw HTML. | 32.3 |
+| `{raw(...)}` | Raw HTML. | 32.3, 32.27, 32.28 |
 | `name={expr}` | A reactive attribute or property. | 32.4, 32.22, 32.25 |
 | `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.5 |
 | `name="…{expr}…"` | An interpolated quoted value. | 32.4 |
@@ -503,13 +504,21 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `class:name={cond}` | Toggles a class. | 32.11 |
 | `style:prop={value}` | Sets one style property. | 32.11, 32.21 |
 | `{...expr}` | Spreads props or attributes. | 32.12, 33.12, 33.13 |
+| static template text | What an author writes outside a slot, in body text and in an attribute value. | 32.29, 32.30 |
+
+### Raw markup
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.3, 32.26, 32.28 |
+| `Raw` | `class Raw { html: string }` | What `raw` hands back. | 32.26 |
 
 ### Control flow
 
 | Spelling | Branches | Meaning | Rules |
 | --- | --- | --- | --- |
 | `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 32.13, 32.23 |
-| `{#for item, index of list by key}` | `{:catch}` | Repeats markup over a list, or over a cursor as it produces. | 18.16, 32.14, 32.15, 32.16, 32.24, 41.9 |
+| `{#for item, index of list by key}` | `{:catch}` | Repeats markup over a list, or over a cursor as it produces. | 18.16, 32.14, 32.15, 32.16, 32.24, 41.9, 41.15, 41.16 |
 | `{#try}` | `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.17 |
 
 ### Components
@@ -545,7 +554,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Path | Meaning | Rules |
 | --- | --- | --- |
-| `<head>` | A page's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.7 |
+| `<head>` | A page's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.7, 39.12, 39.13 |
 | `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.8, 39.9, 39.10, 39.11 |
 | `[name]` | A required dynamic segment. | 23.5, 30.3 |
 | `[[name]]` | An optional segment. | 23.5, 30.4 |

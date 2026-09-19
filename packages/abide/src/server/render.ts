@@ -24,31 +24,59 @@ export async function* render(
     shell?: Shell,
 ): AsyncGenerator<Uint8Array> {
     const rendered = (component as () => { head: string; body: string })()
-    const document = await shellText(shell)
+    // GUARDED, because the string form is already settled: `shellText` is `async`, so awaiting it
+    // unconditionally wrapped a promise and spent a microtask turn per request for nothing.
+    const document = typeof shell === 'string' ? shell : await shellText(shell)
 
-    const headAt = document.lastIndexOf('</head>')
-    const bodyAt = document.lastIndexOf('</body>')
-    if (bodyAt === -1) {
-        yield ENCODER.encode(document + rendered.body)
-        return
-    }
+    // TWO INSERTION POINTS, CLAMPED AND ORDERED — not three shapes. `</head>` and `</body>` are
+    // both OPTIONAL end tags, so a valid shell can carry neither, and the three hand-written arms
+    // this replaces dropped `rendered.head` on the floor in two of them: a page's `<title>`,
+    // `<meta>` and stylesheet links vanished with no error. A shell whose `</head>` came AFTER its
+    // `</body>` made `slice(headAt, bodyAt)` empty and duplicated the head region on top of that.
+    // An absent anchor now means "the end of the document", and the clamp is what keeps the head
+    // ahead of the body whatever order the shell wrote them in.
+    const bodyFound = document.lastIndexOf('</body>')
+    const bodyAt = bodyFound === -1 ? document.length : bodyFound
+    // THE OPENING `<body` IS THE FALLBACK, not the body anchor. Collapsed onto `bodyAt`, a shell
+    // with no `</head>` put the page's `<title>`, `<meta>` and stylesheet links after the mount
+    // point and inside `<body>` — still rendered, in the one place a document says they are not
+    // head content.
+    const headClose = document.lastIndexOf('</head>')
+    const headFound = headClose === -1 ? bodyOpen(document) : headClose
+    const headAt = headFound === -1 || headFound > bodyAt ? bodyAt : headFound
     // Two chunks, split at the head, so what the document needs to start fetching is on the wire
     // before the body is built. 41.1 makes that a requirement rather than a courtesy and is not
     // implemented yet — this is the shape it will need, not the guarantee.
-    if (headAt === -1) {
-        yield ENCODER.encode(document.slice(0, bodyAt))
-        yield ENCODER.encode(rendered.body + document.slice(bodyAt))
-        return
-    }
     yield ENCODER.encode(document.slice(0, headAt) + rendered.head)
     yield ENCODER.encode(
         document.slice(headAt, bodyAt) + rendered.body + document.slice(bodyAt),
     )
 }
 
-async function shellText(shell: Shell): Promise<string> {
-    if (typeof shell === 'string') return shell
-    if (shell instanceof URL) return await Bun.file(shell).text()
-    const dflt = Bun.file('src/ui/app.html')
-    return (await dflt.exists()) ? await dflt.text() : BARE_SHELL
+// Where `<body` opens, or -1. Matched on the tag name rather than on `<body>` so an attribute on
+// it — `<body class="…">`, which a shell usually has — is still found. Case-insensitive without
+// lowercasing a copy of the whole shell.
+function bodyOpen(document: string): number {
+    return document.search(/<body(?=[\s>]|$)/i)
+}
+
+// The URL and absent forms only — the string form is already settled and its caller above takes
+// it without a turn, so a second copy of that test here is a branch nothing reaches and a second
+// owner of the question.
+async function shellText(shell: URL | undefined): Promise<string> {
+    if (shell !== undefined) return await Bun.file(shell).text()
+    // One syscall rather than two: `.text()` already fails when the file is not there, which is
+    // the question `.exists()` was asked ahead of it. The read itself still happens per render —
+    // 20 µs and 98% of the op — and caching it is a decision about a dev server nothing has
+    // written yet, so it is not taken here.
+    try {
+        return await Bun.file('src/ui/app.html').text()
+    } catch (thrown) {
+        // NARROWED TO THE ONE CASE THE LINE ABOVE ARGUES FOR. A bare catch made every failure look
+        // like an absent file, so a project that HAS a shell which is momentarily unreadable —
+        // EACCES, EISDIR, EMFILE under load — was served the bare shell with no stylesheet, no
+        // client script and nothing said, on one request in a thousand.
+        if ((thrown as { code?: unknown }).code !== 'ENOENT') throw thrown
+        return BARE_SHELL
+    }
 }
