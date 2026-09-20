@@ -261,21 +261,89 @@ let volume = reactive.share(key, () => reactive(4))
     expect(refused).toContain('RULEBOOK 10.2')
 })
 
-// 32.19 INSIDE A REGION IS REFUSED, and the refusal is the honest half of what is built: the
-// client builds a new row's markup itself, and a component's markup is in the child's own SERVER
-// module — which the browser may not reach. Served without the refusal, the page renders and the
-// rows inside it are dead, which is the failure nothing on screen reports.
-test('a component inside a {#for} is refused rather than served dead — 32.19', async () => {
-    const file = parseAbide(`<script>
-import Row from './Row.abide'
-const titles = ['one', 'two']
+// 32.19 INSIDE A `{#for}` — the case a list of components is, and the one the client could not
+// build: a row the server never wrote has to be built in the BROWSER, and the child's markup is in
+// the child's server module. So the child's client module carries the same template, and the row
+// builder asks it (`Row.html(props)`) where the server asks `renderComponent`.
+//
+// THE ADDED ROW IS THE ASSERTION. The server-rendered rows hydrate whatever the row builder does,
+// so a test that only mounts distinguishes nothing — the failure waits for the first row the list
+// grows by. THE REVERT: emit the invocation's SERVER form in the row builder (drop the `client`
+// arm in `emitInvocation`); the module then imports `renderComponent` from `abide/runtime`, which
+// does not export it, and the page does not mount at all.
+const ROW = `<script>
+import { props } from 'abide'
+
+const { title } = props<{ title: string }>()
 </script>
-<ul>{#for title of titles}<Row title={title}/>{/for}</ul>`)
-    let refused = ''
-    try {
-        emitClient(file, [])
-    } catch (thrown) {
-        refused = String(thrown)
-    }
-    expect(refused).toContain('RULEBOOK 32.19')
+
+<li>{title}</li>`
+
+test('a component in a {#for} renders, hydrates, and builds the row it grows by — 32.19', async () => {
+    const { html, mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Row from './Row.abide'
+
+let titles = reactive(['one', 'two'])
+</script>
+
+<ul>{#for title of titles}<Row title={title}/>{/for}</ul>
+<button onclick={() => { titles = [...titles, 'three'] }}>add</button>`,
+        { Row: ROW },
+    )
+
+    expect(html).toContain('<li>one</li>')
+    expect(html).toContain('<li>two</li>')
+
+    mount(document.body)
+    flushSync()
+    const first: unknown = document.querySelector('li')
+
+    ;(document.querySelector('button') as HTMLElement).click()
+    flushSync()
+
+    const rows = [...document.querySelectorAll('li')].map(
+        (row) => row.textContent,
+    )
+    expect(rows).toEqual(['one', 'two', 'three'])
+    // 41.9 — the rows that survive are MOVED, never remade: the first row is the same node.
+    expect(document.querySelector('li') as unknown).toBe(first)
+})
+
+// 10.5 THROUGH A ROW ADDED LATER — a descendant is a descendant whenever it was created. The row
+// the list grows by is mounted from a `watch` effect, with no caller on the stack, so the instance
+// captures its own share scope at mount and the deferred mount puts it back.
+// THE REVERT: drop the `resumes` arm in `mountFunction`; the added row reads `nothing` — it opened
+// a chain of its own and built the value the page already holds, which is the one failure mode a
+// scope has: two values under one key and each half of the page reading a different one.
+test('a row added after mount shares with the page above it — 10.5', async () => {
+    const row = `<script>
+import { reactive } from 'abide'
+
+let playing = reactive.share('nowPlaying', () => reactive('nothing'))
+</script>
+
+<li>{playing}</li>`
+    const { mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Row from './Row.abide'
+
+reactive.share('nowPlaying', () => reactive('Kind of Blue'))
+let titles = reactive(['one'])
+</script>
+
+<ul>{#for title of titles}<Row/>{/for}</ul>
+<button onclick={() => { titles = [...titles, 'two'] }}>add</button>`,
+        { Row: row },
+    )
+    mount(document.body)
+    flushSync()
+    ;(document.querySelector('button') as HTMLElement).click()
+    flushSync()
+
+    expect(
+        [...document.querySelectorAll('li')].map((row) => row.textContent),
+    ).toEqual(['Kind of Blue', 'Kind of Blue'])
 })

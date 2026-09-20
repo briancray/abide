@@ -19,14 +19,19 @@ export { type Failed, isFailed } from './Failed.ts'
 export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
 export { jsonSchema } from './jsonSchema.ts'
+// 32.16's run-time half. In this seam because BOTH sides ask it what a `{#for}` subject iterates
+// as — the server's emitted block, the client's `updateList`, and the markup a client builds for a
+// row — so the one function is the one answer.
+export { listOf } from './listOf.ts'
 export { props } from './props.ts'
 export { Raw, raw } from './Raw.ts'
 export {
     busy,
-    type Disposer,
-    type Effect,
     // 10.5's pair — not an app's names: an emitted component opens its instance's share scope
     // with them, on both sides, and `importClause` binds them under `__`.
+    currentShare,
+    type Disposer,
+    type Effect,
     enterShare,
     flushSync,
     type History,
@@ -41,6 +46,7 @@ export {
     reactive,
     ready,
     refresh,
+    resumeShare,
     type Selection,
     type Shared,
     type Store,

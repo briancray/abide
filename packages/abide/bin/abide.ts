@@ -7,7 +7,12 @@ import { dirname } from 'node:path' // bun exposes no path helpers of its own
 import { parseArgs } from 'node:util' // bun exposes no argv parser of its own yet
 
 import type { AbideFile } from '#compiler'
-import { emitClient, emitComponent, parseAbide } from '#compiler'
+import {
+    emitClient,
+    emitComponent,
+    invokedComponents,
+    parseAbide,
+} from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 
 const USAGE = `abide <command>
@@ -45,19 +50,10 @@ async function build(root: string, out: string): Promise<number> {
         // rather than asking about it — and a fresh build adds every file it has.
         const reads = await session?.readsFor(parsed)
 
-        // 32.19 — WHICH FILES ARE INVOKED AS COMPONENTS, read off the imports the sources
-        // themselves wrote. A caller's client module imports its child's, so a child with nothing
-        // to hydrate still needs one to exist — see the no-op below.
-        const invoked = new Set<string>()
-        for (const entry of parsed)
-            for (const match of entry.text.matchAll(
-                /from\s*'([^']*\.abide)'|from\s*"([^"]*\.abide)"/g,
-            ))
-                invoked.add(
-                    (match[1] ?? match[2] ?? '').slice(
-                        (match[1] ?? match[2] ?? '').lastIndexOf('/') + 1,
-                    ),
-                )
+        // 32.19 — WHICH FILES ARE INVOKED AS COMPONENTS. A caller's client module imports its
+        // child's, so a child with nothing to hydrate still needs one to exist (the no-op below),
+        // and only a child carries its own markup (`emitClient`).
+        const invoked = invokedComponents(parsed.map((entry) => entry.text))
 
         for (let at = 0; at < parsed.length; at += 1) {
             const entry = parsed[at] as (typeof parsed)[number]
@@ -75,8 +71,8 @@ async function build(root: string, out: string): Promise<number> {
             // A COMPONENT SOMEBODY INVOKES IS THE EXCEPTION, and it is the import that forces it:
             // the caller's client module names the child's, so a child with nothing to hydrate
             // needs a module for that name to resolve to. The no-op is what it ships.
-            const client = emitClient(entry.file, fileReads)
             const name = relative.slice(relative.lastIndexOf('/') + 1)
+            const client = emitClient(entry.file, fileReads, invoked.has(name))
             if (client !== '' || invoked.has(name))
                 await Bun.write(
                     `${out}/${relative.replace(/\.abide$/, '.client.ts')}`,

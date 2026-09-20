@@ -130,7 +130,6 @@ test('the compiler is not reachable from the server seam', async () => {
             'PATCH',
             'POST',
             'PUT',
-            'listOf',
             'render',
             'renderComponent',
         ].sort(),

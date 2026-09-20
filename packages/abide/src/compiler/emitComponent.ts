@@ -58,12 +58,12 @@ export function emitComponent(
             continue
         }
         assertNoNestedHead([node], '')
-        body.push(emitNode(node, lowering))
+        body.push(emitNode(node, lowering, false))
     }
 
     const head: string[] = []
     for (const child of mergeHead(contributions))
-        head.push(emitNode(child, lowering))
+        head.push(emitNode(child, lowering, false))
 
     // 31.1 and 31.4 hold INSIDE a `.abide` file, not just in its template, so the script block is
     // lowered with the same rewrite the slots get.
@@ -112,7 +112,14 @@ ${heads ? `    const ${HEADS} = []\n` : ''}\
 `
 }
 
-function emitNode(node: TemplateNode, lowering: Lowering): string {
+// `client` is the LANE this markup is for. The server writes a component by CALLING it; the
+// client builds a row's markup in the browser, where the child's server module is not reachable —
+// so there it asks the child's own client module for the same markup instead.
+function emitNode(
+    node: TemplateNode,
+    lowering: Lowering,
+    client: boolean,
+): string {
     if (node.kind === 'text') return JSON.stringify(node.text)
 
     if (node.kind === 'expression') {
@@ -125,7 +132,7 @@ function emitNode(node: TemplateNode, lowering: Lowering): string {
         // the guard is for rather than a `?? []` that would also swallow a genuine mistake.
         // 32.23: the subject is read ONCE for the whole block, not once per row.
         const subject = lowering.expression(node)
-        const row = emitRow(node.children, lowering)
+        const row = emitRow(node.children, lowering, client)
         const index = node.index === '' ? '__at' : node.index
         const item = node.item
         // 32.16 and 41.3 — AN ASYNC SUBJECT WRITES NO ROWS INLINE. The render is not held for an
@@ -152,7 +159,7 @@ function emitNode(node: TemplateNode, lowering: Lowering): string {
         // branch changes, which is what keeps every sibling after the region addressable.
         const arms = node.branches.map((branch) => ({
             subject: branch.subject === '' ? '' : lowering.expression(branch),
-            body: emitMarkup(branch.children, lowering),
+            body: emitMarkup(branch.children, lowering, client),
         }))
         let expression = "''"
         for (let at = arms.length - 1; at >= 0; at -= 1) {
@@ -167,7 +174,7 @@ function emitNode(node: TemplateNode, lowering: Lowering): string {
 
     // 32.19 — A CAPITALISED TAG IS AN INVOCATION, and the capital is the whole of the
     // distinction. It is emitted as a CALL, so the child's own module renders it.
-    if (isComponentTag(node.tag)) return emitInvocation(node, lowering)
+    if (isComponentTag(node.tag)) return emitInvocation(node, lowering, client)
 
     const parts: string[] = []
     let open = `<${node.tag}`
@@ -225,7 +232,7 @@ function emitNode(node: TemplateNode, lowering: Lowering): string {
         return parts.join(' + ')
     return [
         ...parts,
-        ...emitChildren(node.children, lowering),
+        ...emitChildren(node.children, lowering, client),
         JSON.stringify(`</${node.tag}>`),
     ].join(' + ')
 }
@@ -241,6 +248,7 @@ function emitNode(node: TemplateNode, lowering: Lowering): string {
 function emitInvocation(
     node: Extract<TemplateNode, { kind: 'element' }>,
     lowering: Lowering,
+    client: boolean,
 ): string {
     if (node.children.length > 0)
         throw new Error(
@@ -263,21 +271,43 @@ function emitInvocation(
             : JSON.stringify(attribute.value)
         props.push(`${JSON.stringify(attribute.name)}: () => (${value})`)
     }
-    return `${lowering.use('renderComponent')}(${node.tag}, { ${props.join(', ')} }, ${HEADS})`
+    // IN THE BROWSER THE CHILD ANSWERS FOR ITSELF. `Row.html(props)` is the same template this
+    // emitter writes on the server, emitted a second time into the child's client module — which
+    // is the scheme `{#if}` and `{#for}` already use for their own markup, and the reason
+    // `escapeText` is in #shared. A `<head>` contribution is the one thing it cannot carry: a row
+    // built after the document was written has no head to add to (39.1).
+    // THE ANCHORS ARE THE CALLER'S EITHER WAY. `renderComponent` writes them on the server, so the
+    // client's own markup has to carry the same pair — the row is hydrated by `regionAt`, which
+    // counts them, and a row built without them addresses the wrong nodes on its first update.
+    // THE CALLER WRITES THE ANCHORS AND THE CHILD FILLS THEM. In the browser the child's markup is
+    // the child's own business (see `emitClient`), so a row builder writes the empty pair and the
+    // mount that follows puts the markup in. On the server the child is CALLED, its markup landing
+    // between the same two anchors.
+    return client
+        ? JSON.stringify(`<!--${REGION_OPEN}--><!--${REGION_CLOSE}-->`)
+        : `${lowering.use('renderComponent')}(${node.tag}, { ${props.join(', ')} }, ${HEADS})`
 }
 
 // The markup for a set of nodes, as an expression. Exported because a `{#if}` arm's markup is
 // needed on the CLIENT too — a branch swap re-renders the region — and a second emitter for it
 // would be a second escaping rule.
-export function emitMarkup(nodes: TemplateNode[], lowering: Lowering): string {
-    return concat(emitChildren(nodes, lowering))
+export function emitMarkup(
+    nodes: TemplateNode[],
+    lowering: Lowering,
+    client = false,
+): string {
+    return concat(emitChildren(nodes, lowering, client))
 }
 
 // One `{#for}` row's markup, which the client's `make` builds from too. A row with several
 // top-level nodes has no node that IS the row, so it carries one anchor; a single-element row
 // carries nothing.
-export function emitRow(children: TemplateNode[], lowering: Lowering): string {
-    const markup = emitMarkup(children, lowering)
+export function emitRow(
+    children: TemplateNode[],
+    lowering: Lowering,
+    client = false,
+): string {
+    const markup = emitMarkup(children, lowering, client)
     return isSingleRooted(children)
         ? markup
         : `${JSON.stringify(`<!--${ROW_OPEN}-->`)} + ${markup}`
@@ -303,9 +333,13 @@ export function importClause(names: string[]): string {
 // The client finds it by its position, so nothing has to be put in the document to mark it — and
 // nothing added is the only scheme that leaves CSS and `childNodes` answering what they would
 // have answered for the page the author wrote.
-function emitChildren(nodes: TemplateNode[], lowering: Lowering): string[] {
+function emitChildren(
+    nodes: TemplateNode[],
+    lowering: Lowering,
+    client: boolean,
+): string[] {
     const out: string[] = []
-    for (const node of nodes) out.push(emitNode(node, lowering))
+    for (const node of nodes) out.push(emitNode(node, lowering, client))
     return out
 }
 

@@ -205,14 +205,6 @@ function walk(
         }
 
         if (node.kind === 'element' && isComponentTag(node.tag)) {
-            // A ROW AND AN ARM ARE BUILT BY THE CLIENT, and the child's markup is in the child's
-            // own SERVER module — which a browser may not reach, the seams being one-directional.
-            // Rendered inline the row would hydrate against markup nothing here can rebuild, so it
-            // is refused where it is written rather than served dead.
-            if (plan.inRegion)
-                throw new Error(
-                    `abide: <${node.tag}> inside a {#if} or a {#for} is not built yet — the client builds a row's markup, and a component's lives in its own module. RULEBOOK 32.19.`,
-                )
             plan.regions.push({
                 kind: 'component',
                 index: regionIndex,
@@ -276,8 +268,15 @@ export function isHead(node: TemplateNode): boolean {
 // Formatting whitespace is already gone by here (33.17, 33.18), so a body written across lines is
 // still single-rooted.
 export function isSingleRooted(children: TemplateNode[]): boolean {
+    const only = children[0]
     return (
         children.length === 1 &&
-        (children[0] as TemplateNode).kind === 'element'
+        only !== undefined &&
+        only.kind === 'element' &&
+        // A COMPONENT IS NOT ONE NODE. How many top-level nodes it writes is a fact about another
+        // file, so a row that is one invocation carries its own anchor like any multi-root row —
+        // without it, `rowsIn` counts the CHILD's elements and finds as many rows as the child
+        // has top-level elements.
+        !isComponentTag(only.tag)
     )
 }

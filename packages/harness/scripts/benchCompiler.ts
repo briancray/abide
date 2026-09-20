@@ -19,6 +19,7 @@ import {
     compileFile,
     emitClient,
     emitComponent,
+    invokedComponents,
     parseAbide,
     TypeSession,
 } from 'abide/compiler'
@@ -65,6 +66,16 @@ async function armsFor(session: TypeSession): Promise<Arm[]> {
         // hydrate emits none, and counts zero — which is the point of that emptiness.
         let shippedAbide = 0
         let typeable = true
+        // 32.19 — only a file another one INVOKES carries its own markup, so the example's whole
+        // set is read before any of it is emitted. Charging every page for one is 34% of this
+        // number.
+        const invoked = invokedComponents(
+            await Promise.all(
+                abideSources.map((source) =>
+                    Bun.file(new URL(source, EXAMPLES)).text(),
+                ),
+            ),
+        )
         for (const source of abideSources) {
             const text = await Bun.file(new URL(source, EXAMPLES)).text()
             const file = parseAbide(text)
@@ -81,7 +92,11 @@ async function armsFor(session: TypeSession): Promise<Arm[]> {
                 typeable = false
                 break
             }
-            const client = emitClient(file, names)
+            const client = emitClient(
+                file,
+                names,
+                invoked.has(source.slice(source.lastIndexOf('/') + 1)),
+            )
             if (client !== '') shippedAbide += codeLines(client)
             // The server module is not charged here: it never reaches a browser.
             emitComponent(file, names)

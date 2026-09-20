@@ -17,6 +17,7 @@ import { relative as relativePath } from 'node:path' // bun has no path helpers 
 import {
     emitClient,
     emitComponent,
+    invokedComponents,
     parseAbide,
     TypeSession,
 } from 'abide/compiler'
@@ -65,7 +66,15 @@ async function exampleTree(
             await Bun.file(`${root}${path}`).text(),
             path.slice(0, path.lastIndexOf('/')),
         )
-    for (const path of new Bun.Glob('src/**/*.abide').scanSync({ cwd: root })) {
+    const abide = [...new Bun.Glob('src/**/*.abide').scanSync({ cwd: root })]
+    // 32.19 — which of the example's files another one invokes, which is what decides whether a
+    // module carries its own markup for a row built in the browser.
+    const invoked = invokedComponents(
+        await Promise.all(
+            abide.map((path) => Bun.file(`${root}${path}`).text()),
+        ),
+    )
+    for (const path of abide) {
         const from = path.slice(0, path.lastIndexOf('/'))
         const file = parseAbide(await Bun.file(`${root}${path}`).text())
         const reads = await session.reads(`${root}${path}`, file)
@@ -75,7 +84,11 @@ async function exampleTree(
         // `emitClient` answers '' for a static file — that is what makes a static page ship no
         // runtime — so the no-op stands in wherever a caller has to have something to call.
         tree[`${stem}.client.ts`] = seams(
-            emitClient(file, reads) || 'export default () => {}',
+            emitClient(
+                file,
+                reads,
+                invoked.has(path.slice(path.lastIndexOf('/') + 1)),
+            ) || 'export default () => {}',
             from,
         )
     }
@@ -223,11 +236,14 @@ test('every example renders on the server and mounts on the client', async () =>
     // six of them want `reactive.share`, which is not built. The other two are components whose
     // props nobody passes, this corpus having no caller for a file it compiles on its own.
     //
-    // 43 WITH `reactive.share`: six pages wanted it, and three of those spend the gain again on
-    // the refusal beside it — a component inside a `{#for}` is refused rather than served with
-    // dead rows in it.
+    // 43 WITH `reactive.share`: six pages wanted it, and three of those spent the gain again on
+    // the refusal that stood beside it for one change — a component inside a `{#for}`.
+    //
+    // 45 ONCE A COMPONENT IN A ROW BUILDS ITSELF. The caller writes the anchor pair and the child
+    // fills it from its own template, which is what a list of components needs and what the
+    // refusal was standing in for.
     //
     // A RATCHET STILL, and the direction is the rule: this may not go down under a change that
     // does not change what is being counted.
-    expect(sources.length - broken.length).toBeGreaterThanOrEqual(43)
+    expect(sources.length - broken.length).toBeGreaterThanOrEqual(45)
 })

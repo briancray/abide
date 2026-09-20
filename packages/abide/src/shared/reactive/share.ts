@@ -61,3 +61,18 @@ export function enterShare(): ShareScope | null {
 export function leaveShare(previous: ShareScope | null): void {
     CURRENT = previous
 }
+
+// 10.5 THROUGH A MOUNT THAT HAPPENS LATER. A row the list grows by is mounted from a `watch`
+// effect, not from inside its caller's mount — so nothing is on the stack and `CURRENT` is null,
+// and a child that shares would open a chain of its own and miss the key its page holds. The
+// instance captures its own scope at mount and the deferred mount resumes it, which is what makes
+// a row added after the click a descendant of the same page as the rows the server wrote.
+export function currentShare(): ShareScope | null {
+    return CURRENT
+}
+
+export function resumeShare(scope: ShareScope | null): ShareScope | null {
+    const previous = CURRENT
+    CURRENT = scope
+    return previous
+}

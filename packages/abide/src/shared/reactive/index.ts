@@ -43,10 +43,11 @@ export {
     type Transformer,
 } from './Reactive.ts'
 export {
+    currentShare,
     enterShare,
     leaveShare,
+    resumeShare,
     type Shared,
-    type ShareScope,
 } from './share.ts'
 export { structural } from './structural.ts'
 export { type Disposer, type Effect, watch } from './watch.ts'

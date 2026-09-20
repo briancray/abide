@@ -99,6 +99,18 @@ export function nodeAfter(region: Region, at: number): Node | undefined {
 
 // Everything between a region's anchors, replaced. The anchors themselves stay, which is what
 // keeps every sibling after them addressable across a branch change.
+// 32.19 — WHETHER A REGION IS WAITING TO BE FILLED. A component the SERVER rendered arrives with
+// its markup between its anchors and is hydrated; one a row builder wrote in the browser arrives
+// as the anchor pair alone, and the child fills it from its own template. The empty pair is the
+// whole of the signal, so nothing is added to the document to carry it.
+export function isEmptyRegion(root: Root): boolean {
+    return (
+        !Array.isArray(root) &&
+        'open' in root &&
+        root.open.nextSibling === root.close
+    )
+}
+
 export function fillRegion(region: Region, markup: string): void {
     // THE PARENT IS READ BEFORE ANYTHING IS REMOVED, and the removal only happens if there is
     // one. Written as an unguarded removal followed by a `?.`-guarded insert, a region whose

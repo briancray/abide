@@ -22,6 +22,12 @@ export { childAt, elementAt, textAt } from './nodeAt.ts'
 export { markupNodes } from './parseMarkup.ts'
 export { REGION_CLOSE, REGION_OPEN } from './REGION.ts'
 export { type Row, reconcile, replaceNodes } from './reconcile.ts'
-export { fillRegion, type Region, type Root, regionAt } from './regionAt.ts'
+export {
+    fillRegion,
+    isEmptyRegion,
+    type Region,
+    type Root,
+    regionAt,
+} from './regionAt.ts'
 export { Scope } from './Scope.ts'
 export { setText } from './setText.ts'

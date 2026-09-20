@@ -13,4 +13,6 @@ export const SHARED_NAMES: ReadonlySet<string> = new Set([
     // is where the one scope chain lives.
     'enterShare',
     'leaveShare',
+    'currentShare',
+    'resumeShare',
 ])

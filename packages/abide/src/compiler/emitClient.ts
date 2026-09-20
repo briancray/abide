@@ -33,9 +33,16 @@ import { componentImports, splitImports, withoutProps } from './splitImports.ts'
 // LIVE has been emitted anywhere in the page.
 type Counter = { next: number; live: boolean }
 
+// `invoked` is whether another file invokes this one as a component (32.19). Only then can this
+// module be mounted against an EMPTY region — a row a list grew by — and only then does it carry
+// its own markup. A page is never invoked, and a page carrying a second copy of its template is
+// 34% more client than it needs: measured at 1797 -> 2405 shipped lines over the corpus with every
+// file carrying one. WHICH FILES ARE INVOKED IS THE BUILD'S KNOWLEDGE, being a fact about the
+// import graph rather than about this file, so it arrives rather than being guessed here.
 export function emitClient(
     file: AbideFile,
     reads: readonly Read[] = [],
+    invoked = true,
 ): string {
     const plan = planTemplate(file.template.filter((node) => !isHead(node)))
     const lowering = new Lowering(file, reads)
@@ -60,8 +67,40 @@ export function emitClient(
     // mount of the same page reads what the first one left.
     const moduleSetup = splitImports(lowering.modules())
     const setup = splitImports(lowering.scripts())
+    // 32.19 IN A ROW — what a CALLER's client calls to build markup for a row the server never
+    // wrote. The same template the server emitter writes, emitted a second time into this module,
+    // which is the scheme an `{#if}` arm and a `{#for}` row already use for their own markup. It
+    // hangs off `mount` rather than being a second export, so the caller's own
+    // `import Row from './Row.abide'` reaches both halves.
+    //
+    // A PAGE SHIPS ONE TOO, and nothing calls it: which files are INVOKED is the build's knowledge
+    // (see `bin/abide.ts`), not this emitter's. The markup is a string concatenation over the same
+    // template this module already holds — the cost is the template's own bytes, once.
+    const body = invoked
+        ? emitMarkup(
+              file.template.filter((node) => !isHead(node)),
+              lowering,
+              true,
+          )
+        : "''"
+    // 32.19 — A COMPONENT FILLS ITS OWN REGION where the server wrote none. A row the list grew by
+    // is built in the browser, and the child's markup is in the child's SERVER module — which the
+    // browser may not reach. So the caller writes the anchor pair alone and the child fills it
+    // from the template this module already holds, once, inside the instance whose setup just ran.
+    // Rendering it from the caller instead would mean the child's setup running twice per row: one
+    // run for the markup and another for the bindings.
+    const fills =
+        !invoked || body === "''"
+            ? ''
+            : `if (${lowering.use('isEmptyRegion')}(root)) ${lowering.use('fillRegion')}(root, ${body})\n`
+
     // 10.5 on the other side, and the same scope: the child's `mount` is called from inside the
     // parent's, so the chain a key is looked up is the component tree here too.
+    // 10.5 — CAPTURED WHERE A DEFERRED MOUNT CAN NEED IT. A row or an arm mounted after the fact
+    // runs from a `watch` effect, with nothing on the stack; this is the scope it resumes.
+    const captured = holdsComponent(plan)
+        ? `const ${SHARE_AT} = ${lowering.use('currentShare')}()\n`
+        : ''
     const shares = lowering.opensShareScope()
     const opened = shares
         ? `const ${SHARED} = ${lowering.use('enterShare')}()\ntry {\n`
@@ -94,7 +133,7 @@ ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}\
 export default function mount(root${lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
 ${opened}${setup.body}
 ${helpers.join('\n')}
-const ${SCOPE} = new ${scope}()
+${fills}${captured}${fills}const ${SCOPE} = new ${scope}()
 try {
 ${lines.join('\n')}
 } catch (thrown) { if (!${warnMismatch}(thrown)) throw thrown }${closed}
@@ -213,6 +252,22 @@ function emitRegion(
         else emitBlock(region, root, lowering, lines, helpers, counter)
 }
 
+// Whether a component is invoked anywhere below this plan, which is what decides whether a
+// deferred mount has to resume its instance's share scope (10.5). Walked rather than flagged: a
+// component three regions down is as much a descendant as one in the page's own template.
+function holdsComponent(plan: TemplatePlan): boolean {
+    for (const region of plan.regions) {
+        if (region.kind === 'component') return true
+        if (region.kind === 'for') {
+            if (holdsComponent(region.plan)) return true
+            continue
+        }
+        for (const branch of region.branches)
+            if (holdsComponent(branch.plan)) return true
+    }
+    return false
+}
+
 // A path cut at its first region reference, the reference's own first number kept, so every
 // PROPER prefix `hoistPaths` counts is one a walk can stop at.
 function beforeRegion(path: number[]): number[] {
@@ -226,6 +281,10 @@ function beforeRegion(path: number[]): number[] {
 // parameter in the same scope.
 const SCOPE = '__scope'
 
+// The share scope an instance captures for its deferred mounts (10.5), named apart from the one an
+// instance OPENS (`SHARED`): a page that shares nothing still carries this for a child that does.
+const SHARE_AT = '__shareAt'
+
 // 41.11 — A MISMATCH REBUILDS THIS BLOCK OR ROW AND NOTHING WIDER. What the server wrote is what
 // hydration walks; where it disagrees, it is re-rendered from the same markup a swap or a new row
 // uses (`rebuild`) and wired again. `__rebuilt` is what stops a document that disagrees for some
@@ -236,9 +295,18 @@ function mountFunction(
     body: string[],
     rebuild: string,
     lowering: Lowering,
+    resumes = false,
 ): string {
     return [
         `const ${name}_mount = (${parameters}, __rebuilt) => {`,
+        // 10.5 — the instance's own scope, put back for a mount that happens later than its
+        // caller's. Only where a component stands below this region: nothing else can read it.
+        ...(resumes
+            ? [
+                  `    const __back = ${lowering.use('resumeShare')}(${SHARE_AT})`,
+                  `    try {`,
+              ]
+            : []),
         `    const ${SCOPE} = new ${lowering.use('Scope')}()`,
         `    try {`,
         ...body.map((line) => `        ${line}`),
@@ -249,6 +317,9 @@ function mountFunction(
         `        return ${name}_mount(${parameters}, true)`,
         `    }`,
         `    return ${SCOPE}`,
+        ...(resumes
+            ? [`    } finally { ${lowering.use('leaveShare')}(__back) }`]
+            : []),
         `}`,
     ].join('\n')
 }
@@ -330,7 +401,7 @@ function emitBlock(
             `}`,
         )
         armHtml.push(
-            `    if (arm === ${at}) return ${emitMarkup(branch.branch.children, lowering)}`,
+            `    if (arm === ${at}) return ${emitMarkup(branch.branch.children, lowering, true)}`,
         )
     }
 
@@ -341,6 +412,7 @@ function emitBlock(
             armMount,
             `${fillRegion}(${name}, ${name}_html(arm))`,
             lowering,
+            region.branches.some((branch) => holdsComponent(branch.plan)),
         ),
     )
     helpers.push(
@@ -409,7 +481,7 @@ function emitList(
             // anchor, so what `make` hands back matches what hydration found. Parsed in the MOUNT
             // ROOT'S document (see `parseMarkup`); `root` is `mount`'s own parameter, so it is in
             // scope from every helper whatever region owns it.
-            `const ${name}_make = (${item}, ${at}) => ${lowering.use('markupNodes')}(root, ${emitRow(block.children, lowering)})`,
+            `const ${name}_make = (${item}, ${at}) => ${lowering.use('markupNodes')}(root, ${emitRow(block.children, lowering, true)})`,
             // A row that cannot be hydrated is REBUILT from the same markup `make` uses, in place
             // and into the same array, so the reconcile still holds every node the row has.
             mountFunction(
@@ -418,6 +490,7 @@ function emitList(
                 [...rowHelpers, ...rowLines],
                 `${lowering.use('replaceNodes')}(__nodes, ${name}_make(${item}, ${at}))`,
                 lowering,
+                holdsComponent(region.plan),
             ),
         ].join('\n'),
     )

@@ -12,9 +12,6 @@
 // emitted module reaches through here: 32.1's escaping and 32.3's `raw`, which both sides render
 // markup with, 32.22's `safeUrl`, and 31.9's `writePath`.
 export * from '#shared'
-// 32.16 and 32.24's run-time half: what a `{#for}` subject iterates as, asked by the server's emitted
-// block and by the client's `updateList` through the one function, so the two cannot disagree.
-export { listOf } from '#shared/listOf.ts'
 export { type Component, render, type Shell } from './render.ts'
 // 32.19's run-time half: one invocation, rendered where it stands, with the anchors that make the
 // child's markup one thing for the client to walk to.

@@ -10,6 +10,7 @@
 export { compileFile } from './compileFile.ts'
 export { emitClient } from './emitClient.ts'
 export { emitComponent } from './emitComponent.ts'
+export { invokedComponents } from './invokedComponents.ts'
 export { type AbideFile, parseAbide } from './parseAbide.ts'
 export { planTemplate, type TemplatePlan } from './planTemplate.ts'
 export type { Attribute, TemplateNode } from './TemplateNode.ts'
