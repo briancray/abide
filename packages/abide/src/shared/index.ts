@@ -29,6 +29,9 @@ export { listOf } from './listOf.ts'
 // widen the public surface with names no clause or registry row gives an author, and drag both
 // modules into the static closure of the entry every page imports.
 export { navigate } from './navigate.ts'
+// EMITTED CODE'S, not an author's — no REGISTRY row, the way `escapeText` and `listOf` have
+// none. A slot that aborts on an unlanded read (32.25) is the compiler's business.
+export { renderSlot, slotValue } from './renderSlot.ts'
 export { props } from './props.ts'
 export { Raw, raw } from './Raw.ts'
 export {

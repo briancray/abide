@@ -121,7 +121,20 @@ function emitNode(
 
     if (node.kind === 'expression') {
         // 32.1 — escaped at run time, never at compile time: the value is not known here.
-        return `${lowering.use('escapeText')}(${lowering.slot(node)})`
+        // 32.25 and 41.4 — THE SLOT ABORTS, NOT THE DOCUMENT. Passed as a thunk because the throw
+        // happens while the expression is being evaluated, so nothing a helper is HANDED can catch
+        // it; `renderSlot` says what that costs.
+        //
+        // ONLY WHERE A `Reactive` IS READ, because only that can be unlanded. A row body reading
+        // its own item — `{row.title}`, which is most slots on most pages — cannot throw this, and
+        // wrapping it anyway put a closure in the hot loop: the card bench went 0.9 µs -> 1.7 µs at
+        // 10 cards and 0.70x -> 1.20x against the hand-written page, which is the headline ratio
+        // inverted for a guard that could never fire. `readsIn` is asked of the READS rather than
+        // of the rewrite, which is the distinction its own note draws.
+        const lowered = lowering.slot(node)
+        return lowering.readsIn(node)
+            ? `${lowering.use('renderSlot')}(() => ${lowered})`
+            : `${lowering.use('escapeText')}(${lowered})`
     }
 
     if (node.kind === 'block' && node.block === 'for') {
@@ -142,13 +155,21 @@ function emitNode(
         // convenience `[Symbol.iterator]` was async here and sync there, so the page was blank
         // without JS and whole after hydration.
         const listOf = lowering.use('listOf')
+        // AND 41.4 FOR A SUBJECT STILL IN FLIGHT. The read is the block's one expression, so an
+        // unlanded one aborts it and nothing else: `slotValue` answers `undefined`, `listOf` reads
+        // that as absent, and 32.24's zero rows is already what absent means here. Read ONCE for
+        // the block (32.23), so the thunk is per block rather than per row — and still only where
+        // the subject is a `Reactive`, for the slot's reason above.
+        const guarded = lowering.readsIn(node)
+            ? `${lowering.use('slotValue')}(() => ${subject})`
+            : subject
         return `${JSON.stringify(`<!--${REGION_OPEN}-->`)} + ((__list) => {
         if (!Array.isArray(__list)) return ''
         let __out = ''
         let ${index} = 0
         for (const ${item} of __list) { __out += ${row}; ${index} += 1 }
         return __out
-    })(${listOf}(${subject})) + ${JSON.stringify(`<!--${REGION_CLOSE}-->`)}`
+    })(${listOf}(${guarded})) + ${JSON.stringify(`<!--${REGION_CLOSE}-->`)}`
     }
 
     if (node.kind === 'block') {

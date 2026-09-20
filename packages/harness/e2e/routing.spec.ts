@@ -17,7 +17,13 @@ import { join, normalize } from 'node:path'
 import { expect, test } from '@playwright/test'
 
 const REPO = new URL('../../../', import.meta.url).pathname
-const APP = join(REPO, '.test-modules/e2e-routeapp')
+// ONE FIXTURE TREE PER PROJECT, and the project name is what separates them. This spec runs in
+// BOTH engines, playwright runs the two as separate workers at the same time, and a `beforeAll`
+// that begins by deleting a fixed directory is then two processes racing one path: the loser
+// reports `ENOENT` writing a page it just created, or `ENOTEMPTY` removing a tree the other is
+// filling. It passed under `--project=harness` alone for as long as it existed, which is the
+// reading CLAUDE.md calls honest and the one that hid this.
+let APP = join(REPO, '.test-modules/e2e-routeapp')
 
 const HOME = `<head><title>Home</title><meta name="description" content="the home page"></head>
 <main id="home"><h1>Home</h1><p id="n">{count}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button><a id="go" href="/about">about</a></main>`
@@ -31,7 +37,8 @@ let PAINTED_HEAD = ''
 let server: Server | null = null
 let port = 0
 
-test.beforeAll(async () => {
+test.beforeAll(async ({}, testInfo) => {
+    APP = join(REPO, `.test-modules/e2e-routeapp-${testInfo.project.name}`)
     // WRITTEN FROM HERE, not from a `bun -e`. Nothing about laying the fixture out is bun-only —
     // only the build and the server render below are — and a heredoc inside an argv string is
     // three layers of quoting to get right every time the page changes.

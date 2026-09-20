@@ -82,14 +82,23 @@ export function listAt(
 
 // HYDRATION, NOT RENDERING. The rows are already there; wiring them is all that is left. 41.3 — an
 // async subject rendered no rows, so it finds none here.
-function hydrate(list: List, items: unknown[]): void {
+//
+// FALSE WHERE THERE IS NOTHING TO HYDRATE AGAINST, and the caller reconciles instead. 41.4 lets a
+// render continue past a subject still in flight, which writes the anchors and no rows — and the
+// watch that would have hydrated them THREW on that same subject, so `hydrating` was still set
+// when the value landed a turn later. Hydrating then means walking zero server rows against a
+// full list and keeping neither: an empty `{#for}` that never fills, on a page that otherwise
+// looks right. Nothing is in the region, so building the rows cannot duplicate one.
+function hydrate(list: List, items: unknown[]): boolean {
     const found = rowsIn(list.region, list.anchored)
+    if (found.length === 0 && items.length !== 0) return false
     for (let at = 0; at < found.length; at += 1) {
         const item = items[at]
         list.rows.push(
             rowOf(list, list.key(item, at), item, found[at] as Node[], at),
         )
     }
+    return true
 }
 
 // 32.16 — AN ARRAY RECONCILES AND AN ASYNC SUBJECT APPENDS AS ITEMS ARRIVE. There is no list to
@@ -103,10 +112,7 @@ export function updateList(list: List, subject: unknown): void {
         appendRows(list, items)
         return
     }
-    if (hydrating) {
-        hydrate(list, items)
-        return
-    }
+    if (hydrating && hydrate(list, items)) return
     list.pumping = null
     reconcile(list, items)
 }

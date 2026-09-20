@@ -151,3 +151,83 @@ const label = 'clicks'
 test('a static page emits no client module', async () => {
     expect(await clientOf('<h1>static</h1>', [])).toBe('')
 })
+
+// 41.4 — A RENDER MUST CONTINUE PAST A VALUE STILL IN FLIGHT, and 32.25 is what the slot itself
+// does: a template expression a `NotLanded` aborted leaves what it last rendered, which on a first
+// server render is nothing. Together they are one page with a hole in it, not no page at all.
+//
+// THE WHOLE DOCUMENT WAS LOST. `emitComponent` builds the body as ONE concatenation, so the first
+// unlanded read threw out of `Component()` and `render` died on its first `next()` — the static
+// markup around the slot, every other slot, and the `<head>` with it. Twelve corpus examples
+// stopped here, and what made it invisible is that each of them is a page whose ONLY interesting
+// value is the one in flight, so "the page did not render" and "the slot did not render" look the
+// same until you ask for the markup beside it.
+//
+// THE SLOT IS ADDRESSABLE AFTERWARDS, which is the half that makes the hole legal rather than a
+// mismatch waiting to happen: a run every part of which is an expression is marked `blank` by
+// `planTemplate`, and `textAt`'s `blank` arm puts the text node back when the value lands. That
+// mechanism predates this and is why the fix is a catch rather than a placeholder node.
+//
+// THE REVERT: drop the `renderSlot` wrapper from `emitNode`'s expression arm and emit
+// `escapeText(...)` directly — `render` throws `NotLanded: reactive has not landed` and this test
+// reports no document at all rather than a document with one empty slot.
+test('a render continues past a value still in flight — 41.4, 32.25', async () => {
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
+</script>
+
+<main><h1 id="static">Invoice</h1><strong id="slot">{invoice.number}</strong></main>`)
+
+    // THE PAGE IS THERE. The static markup either side of the hole is what the old behaviour
+    // dropped, so asserting the hole alone would pass against a render that emitted nothing.
+    expect(html).toContain('<h1 id="static">Invoice</h1>')
+    expect(html).toContain('<strong id="slot">')
+    expect(document.querySelector('#static')?.textContent).toBe('Invoice')
+    // The hole: 32.25 leaves what it last rendered, and nothing has been rendered yet.
+    expect(document.querySelector('#slot')?.textContent).toBe('')
+
+    // AND IT FILLS. The client re-runs the body (41.7), the value lands, and the binding writes
+    // into a text node that was not in the document the server wrote — which is `blank`'s arm.
+    mount(document.body)
+    await Promise.resolve()
+    await Promise.resolve()
+    flushSync()
+    expect(document.querySelector('#slot')?.textContent).toBe('INV-1')
+})
+
+// 41.4 THROUGH A BLOCK'S ONE EXPRESSION. A `{#for}` reads its subject once for the whole block
+// (32.23), so an unlanded subject took the page down the same way a slot did — and the fallback
+// needs no deciding, because 32.24 already says an absent subject iterates zero times and
+// `listOf` already answers `[]` for absent. The abort just makes "in flight" reach it.
+//
+// TWO REVERTS, BECAUSE THE SERVER HALF ALONE IS THE WORSE BUG. Drop the `slotValue` wrapper from
+// the `{#for}` arm of `emitNode` and `render` throws: no document, loudly. Drop `hydrate`'s
+// `found.length === 0` bail instead and the document is served, the list is empty, and it stays
+// empty for ever — the watch that would have hydrated the rows threw on the same subject, so
+// `hydrating` was still set when the value landed and the rows were walked against nothing. This
+// test reports [] against [north, south] either way, and only the second one looks fine on screen.
+test('a render continues past a {#for} subject still in flight — 41.4, 32.24', async () => {
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+const rows = reactive(() => Promise.resolve(['north', 'south']))
+</script>
+
+<main><h1 id="static">Regions</h1><ul id="list">{#for row of rows by row}<li>{row}</li>{/for}</ul></main>`)
+
+    expect(html).toContain('<h1 id="static">Regions</h1>')
+    // The block rendered its anchors and no rows, which is 32.24's zero times.
+    expect(document.querySelectorAll('#list li')).toHaveLength(0)
+
+    mount(document.body)
+    // A MACROTASK, NOT TWO MICROTASKS. The subject lands in a microtask, the list reconciles in
+    // the turn the write wakes, and a slot that is one read is ready a tick sooner than a block
+    // that has to build rows — which is why the text case above needs less than this one.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    flushSync()
+    expect(
+        [...document.querySelectorAll('#list li')].map((n) => n.textContent),
+    ).toEqual(['north', 'south'])
+})

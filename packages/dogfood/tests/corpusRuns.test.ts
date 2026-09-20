@@ -243,6 +243,13 @@ test('every example renders on the server and mounts on the client', async () =>
     // fills it from its own template, which is what a list of components needs and what the
     // refusal was standing in for.
     //
+    // 66 ONCE A RENDER CONTINUES PAST A VALUE STILL IN FLIGHT (41.4). Twelve of these pages read
+    // an unlanded value in a slot and the throw took the whole document with it; the slot aborts
+    // now and the document is served with a hole the client fills. The one left is `element-ref`,
+    // whose unlanded read is in a `bind:` the compiler writes into the markup as a literal
+    // attribute — 33.7 and 33.8, which are not built, so wrapping that read would buy a page that
+    // renders `bind:element=""` instead of one that refuses.
+    //
     // 55 ONCE THE EXAMPLES SHIP THE `database.ts` THEIR HANDLERS IMPORT. The biggest group here
     // was never a fact about abide: 23 files stopped at a module the example does not contain,
     // which is this test reporting the corpus to itself. Clearing it moved ten files and, more to
@@ -252,5 +259,5 @@ test('every example renders on the server and mounts on the client', async () =>
     //
     // A RATCHET STILL, and the direction is the rule: this may not go down under a change that
     // does not change what is being counted.
-    expect(sources.length - broken.length).toBeGreaterThanOrEqual(55)
+    expect(sources.length - broken.length).toBeGreaterThanOrEqual(66)
 })

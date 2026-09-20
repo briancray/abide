@@ -537,12 +537,13 @@ test('a for item shadows a reactive name of the same spelling', async () => {
     expect(server).toContain('for (const rows of __list)')
     expect(server).toContain('__escapeText(rows.name)')
     expect(server).not.toContain('rows().name')
-    // The SUBJECT is outside the binding and keeps the page's set.
+    // The SUBJECT is outside the binding and keeps the page's set. Wrapped for 41.4 because
+    // it reads a `Reactive`; the row's own item, which cannot be unlanded, is not.
     const subject = await serverOf(
         '<script>let rows = reactive([])</script>{#for row of rows}<li>{row}</li>{/for}',
         ['rows'],
     )
-    expect(subject).toContain('})(__listOf(rows()))')
+    expect(subject).toContain('__listOf(__slotValue(() => rows()))')
 })
 
 // A DEFAULT VALUE IS READ, NOT BOUND. The row's pattern binds `tone`, so the body's `{tone}` is the
@@ -556,14 +557,14 @@ test('a default value in a binding pattern is read, not bound — 31.12', async 
         names,
     )
     expect(server).toContain('__escapeText(tone)')
-    expect(server).toContain('__escapeText(rows())')
+    expect(server).toContain('__renderSlot(() => rows())')
     // A rename binds the right of the `:` and reads the left.
     const renamed = await serverOf(
         '{#for { id: rows } of items}<i>{rows}{tone}</i>{/for}',
         names,
     )
     expect(renamed).toContain('__escapeText(rows)')
-    expect(renamed).toContain('__escapeText(tone())')
+    expect(renamed).toContain('__renderSlot(() => tone())')
 })
 
 // THE CLIENT HALF IS ITS OWN GATE, because the row's MARKUP and the row's BINDINGS are emitted by
@@ -1052,7 +1053,7 @@ test('a default value holding an `=` is skipped whole — 31.12', async () => {
         ['rows', 'tone', 'items', 'seed'],
     )
     expect(server).toContain('__escapeText(tone)')
-    expect(server).toContain('__escapeText(rows())')
+    expect(server).toContain('__renderSlot(() => rows())')
 })
 
 // THE TWO EMITTERS FILTER THE SAME `<head>`, and a tag name is ASCII case-INSENSITIVE. Only the
@@ -1063,7 +1064,7 @@ test('a default value holding an `=` is skipped whole — 31.12', async () => {
 test('an uppercase head is hoisted by both emitters', async () => {
     const source = '<HEAD><title>t</title></HEAD><p>{n}</p>'
     expect(await serverOf(source, ['n'])).toContain(
-        '__body = "<p>" + __escapeText(n()) + "</p>"',
+        '__body = "<p>" + __renderSlot(() => n()) + "</p>"',
     )
     expect(await clientOf(source, ['n'])).toContain(
         '__textAt(root, [0,0], true)',
