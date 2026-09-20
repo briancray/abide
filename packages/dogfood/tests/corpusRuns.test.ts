@@ -243,7 +243,14 @@ test('every example renders on the server and mounts on the client', async () =>
     // fills it from its own template, which is what a list of components needs and what the
     // refusal was standing in for.
     //
+    // 55 ONCE THE EXAMPLES SHIP THE `database.ts` THEIR HANDLERS IMPORT. The biggest group here
+    // was never a fact about abide: 23 files stopped at a module the example does not contain,
+    // which is this test reporting the corpus to itself. Clearing it moved ten files and, more to
+    // the point, made the rest of the list mean something — what stands at the top now is twelve
+    // pages reading an unlanded value (2.2) where the throw escapes as a rejection instead of the
+    // tracked body catching it, and that IS a fact about abide.
+    //
     // A RATCHET STILL, and the direction is the rule: this may not go down under a change that
     // does not change what is being counted.
-    expect(sources.length - broken.length).toBeGreaterThanOrEqual(45)
+    expect(sources.length - broken.length).toBeGreaterThanOrEqual(55)
 })
