@@ -21,7 +21,14 @@ const SHELL = '<!doctype html><html><head></head><body></body></html>'
 
 export type CompiledPage = { markup: string; script: string }
 
-export async function buildCompiledPage(source: string): Promise<CompiledPage> {
+// `components` are the `.abide` files the page INVOKES (32.19), keyed by the name it imports them
+// as. Each compiles to the pair a caller reaches — `Name.ts` for the server render and
+// `Name.client.ts` for the mount — so a page with a component in it is built the way the build
+// builds one rather than by a second scheme that only the bench has.
+export async function buildCompiledPage(
+    source: string,
+    components: Record<string, string> = {},
+): Promise<CompiledPage> {
     const session = await TypeSession.open(
         `${REPO}packages/abide/tsconfig.json`,
     )
@@ -33,8 +40,27 @@ export async function buildCompiledPage(source: string): Promise<CompiledPage> {
             `${REPO}packages/abide/tests/fixtures/typed/src/browser.abide`,
             file,
         )
+        for (const [name, text] of Object.entries(components)) {
+            const child = parseAbide(text)
+            const childNames = await session.reads(
+                `${REPO}packages/abide/tests/fixtures/typed/src/${name}.abide`,
+                child,
+            )
+            writeFileSync(
+                `${scratch}/${name}.ts`,
+                emitComponent(child, childNames),
+            )
+            writeFileSync(
+                `${scratch}/${name}.client.ts`,
+                emitClient(child, childNames, true) ||
+                    'export default () => {}\n',
+            )
+        }
         writeFileSync(`${scratch}/Page.ts`, emitComponent(file, names))
-        writeFileSync(`${scratch}/Page.client.ts`, emitClient(file, names))
+        writeFileSync(
+            `${scratch}/Page.client.ts`,
+            emitClient(file, names, false),
+        )
         writeFileSync(
             `${scratch}/entry.ts`,
             // `flushSync` is exposed beside `mount` because a drain is batched to the end of a

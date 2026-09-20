@@ -14,6 +14,22 @@ export class Scope {
         this.stops.push(watch(effect))
     }
 
+    // 32.19 — A CHILD'S BINDINGS BELONG TO WHOEVER CAN REMOVE ITS NODES. A component opens its
+    // own scope inside its own mount, and the caller is the one that knows when the row or the arm
+    // holding it leaves — so the child's stops are taken over rather than left where nothing can
+    // reach them. The disposers are moved rather than wrapped: a closure per invocation per row is
+    // the allocation this class exists to avoid.
+    //
+    // `undefined` IS A STATIC CHILD. A component with nothing to hydrate compiles to the no-op
+    // module its caller still has to import (`bin/abide.ts`), and a no-op opens no scope — there
+    // is nothing to stop, and making it allocate one per row to say so is a cost for a message.
+    adopt(child: Scope | undefined): void {
+        if (child === undefined) return
+        const stops = child.stops
+        for (let at = 0; at < stops.length; at += 1)
+            this.stops.push(stops[at] as Disposer)
+    }
+
     stop(): void {
         for (const stop of this.stops) stop()
     }

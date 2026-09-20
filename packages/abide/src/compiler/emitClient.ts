@@ -136,7 +136,8 @@ ${helpers.join('\n')}
 ${fills}${captured}${fills}const ${SCOPE} = new ${scope}()
 try {
 ${lines.join('\n')}
-} catch (thrown) { if (!${warnMismatch}(thrown)) throw thrown }${closed}
+} catch (thrown) { if (!${warnMismatch}(thrown)) throw thrown }
+return ${SCOPE}${closed}
 }
 `
 }
@@ -347,8 +348,11 @@ function emitInvocation(
             : JSON.stringify(attribute.value)
         props.push(`${JSON.stringify(attribute.name)}: () => (${value})`)
     }
+    // THE CHILD'S SCOPE IS ADOPTED. Its bindings live as long as its nodes do, and what removes
+    // those nodes is this region — a row that leaves, an arm that swaps — so the scope that stops
+    // them has to be the one this region holds.
     lines.push(
-        `${region.node.tag}(${lowering.use('regionAt')}(${step('childAt', region.parent, root, lowering, false)}, ${region.index}), { ${props.join(', ')} })`,
+        `${SCOPE}.adopt(${region.node.tag}(${lowering.use('regionAt')}(${step('childAt', region.parent, root, lowering, false)}, ${region.index}), { ${props.join(', ')} }))`,
     )
 }
 

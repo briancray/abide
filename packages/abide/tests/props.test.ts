@@ -347,3 +347,53 @@ let titles = reactive(['one'])
         [...document.querySelectorAll('li')].map((row) => row.textContent),
     ).toEqual(['Kind of Blue', 'Kind of Blue'])
 })
+
+// A REMOVED ROW STOPS ITS CHILD'S BINDINGS TOO. Every binding a region opens goes on a `Scope` so
+// that what replaced it can stop it — and a component opens its own, inside its own mount. Left
+// where the caller cannot reach it, a dropped row's child goes on waking for every write and
+// writing into nodes that are not in the document: the page looks right and does the work twice.
+//
+// THE WORK IS THE ASSERTION, because the output cannot see this at all — the detached nodes are
+// gone from the page whether or not anything is still writing into them. THE REVERT: have the
+// emitted invocation discard what the child's mount hands back; `bindingRuns` reads 2 where 1 is
+// due, and it is 2 whatever the page shows.
+test('a row that leaves stops the bindings its component opened — 41.9', async () => {
+    const row = `<script>
+import { props } from 'abide'
+
+const { label } = props<{ label: string }>()
+</script>
+
+<li>{label}</li>`
+    const { mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Row from './Row.abide'
+
+let rows = reactive(['one', 'two'])
+let mark = reactive('')
+</script>
+
+<ul>{#for row of rows by row}<Row label={row + mark}/>{/for}</ul>
+<button id="drop" onclick={() => { rows = ['one'] }}>drop</button>
+<button id="bump" onclick={() => { mark = '!' }}>bump</button>`,
+        { Row: row },
+    )
+    mount(document.body)
+    flushSync()
+    expect(document.querySelectorAll('li').length).toBe(2)
+
+    const click = (id: string): void => {
+        ;(document.querySelector(id) as HTMLElement).click()
+        flushSync()
+    }
+    click('#drop')
+    expect(document.querySelectorAll('li').length).toBe(1)
+
+    // ONE ROW IS LEFT, so one binding may run. The dropped row's child reads `mark` too.
+    const work = measure(() => {
+        click('#bump')
+    })
+    expect(work.bindingRuns).toBe(1)
+    expect(document.querySelector('li')?.textContent).toBe('one!')
+})

@@ -80,3 +80,25 @@ function escape(value: string): string {
         .replaceAll('<', '&lt;')
         .replaceAll('>', '&gt;')
 }
+
+// THE SAME CARD, AS A COMPONENT. The row body is identical to `abideLoopSource`'s, so the only
+// difference between the two arms is the invocation: a call, an anchor pair, and one accessor per
+// prop. What that costs a row is the whole question 32.19 and 33 owe an answer to.
+export function abideCardSource(): string {
+    return `<script>
+import { props } from 'abide'
+
+const { title, body, count } = props<{ title: string; body: string; count: number }>()
+</script>
+<article class="card"><h2>{title}</h2><p>{body}</p><span class="n">{count}</span></article>`
+}
+
+export function abideComponentSource(): string {
+    return `<script>
+import { reactive } from 'abide'
+import Card from './Card.abide'
+
+let rows = reactive(CARDS)
+</script>
+<main id="list">{#for row of rows by row.id}<Card title={row.title} body={row.body} count={row.count}/>{/for}</main>`
+}
