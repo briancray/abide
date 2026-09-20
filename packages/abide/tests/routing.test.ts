@@ -1,0 +1,265 @@
+// 30.7 — NAVIGATION THAT DOES NOT RELOAD THE DOCUMENT, end to end. The destination's markup is
+// not fetched: a page the reader navigated to is handed the empty anchor pair and fills it from
+// the template its own module carries, which is `emitClient`'s `isEmptyRegion` guard doing for a
+// PAGE exactly what it already did for an invoked component (32.19).
+//
+// THE SAME MODULE BOTH WAYS IN is the claim worth holding: the page the server painted hydrates
+// where it stands because its region is not empty, and the page navigated to fills because it is.
+
+import { afterAll, expect, test } from 'bun:test'
+import { emitClient, emitComponent, parseAbide } from '#compiler'
+import { TypeSession } from '#compiler/TypeSession.ts'
+import { render } from '#server'
+import { flushSync, navigate } from '#shared'
+import { CURRENT_ROUTER } from '#shared/CURRENT_ROUTER.ts'
+import { matchRoute } from '#shared/matchRoute.ts'
+import {
+    compareRoutes,
+    parseRoutePattern,
+    routeOf,
+} from '#shared/routePattern.ts'
+import { applyHead } from '#ui/applyHead.ts'
+import { listenForRoutes, type PageMount, startRouter } from '#ui/routing.ts'
+import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+
+const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
+const session = await TypeSession.open(`${ROOT}tsconfig.json`)
+afterAll(() => {
+    session.close()
+    removeTemporaryModules()
+    CURRENT_ROUTER.current = null
+})
+
+const HOME = `<script>
+import { reactive } from 'abide'
+
+let count = reactive(0)
+</script>
+
+<main id="home"><h1>Home</h1><p>{count}</p>
+<button id="bump" onclick={() => { count = count + 1 }}>+</button>
+<a id="to-invoice" href="/invoices/42">invoice 42</a></main>`
+
+const INVOICE = `<script>
+import { reactive } from 'abide'
+
+let rows = reactive(['one', 'two'])
+</script>
+
+<main id="invoice"><h1>Invoice</h1><ul>{#for row of rows by row}<li>{row}</li>{/for}</ul></main>`
+
+async function pages(): Promise<Record<string, PageMount>> {
+    const modules: Record<string, string> = {}
+    for (const [name, source] of Object.entries({
+        Home: HOME,
+        Invoice: INVOICE,
+    })) {
+        const file = parseAbide(source)
+        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
+        modules[`${name}.ts`] = emitComponent(file, reads)
+        // ROUTABLE, so the module carries its own markup — what the build now passes for a page.
+        modules[`${name}.client.ts`] = emitClient(file, reads, true)
+    }
+    const dir = temporaryModule(modules)
+    const home = (await import(`${dir}/Home.client.ts`)).default as PageMount
+    const invoice = (await import(`${dir}/Invoice.client.ts`))
+        .default as PageMount
+    // The server's painting of the HOME page only — the one the reader arrived at.
+    const { default: Component } = await import(`${dir}/Home.ts`)
+    let html = ''
+    for await (const chunk of render(
+        Component,
+        '<!doctype html><html><head></head><body></body></html>',
+    ))
+        html += new TextDecoder().decode(chunk)
+    document.body.innerHTML = html.slice(
+        html.indexOf('<body>') + '<body>'.length,
+        html.indexOf('</body>'),
+    )
+    return { home, invoice }
+}
+
+function router(mounts: Record<string, PageMount>) {
+    return startRouter([
+        {
+            pattern: '/invoices/[id]',
+            load: async () => ({ default: mounts.invoice as PageMount }),
+        },
+        {
+            pattern: '/',
+            load: async () => ({ default: mounts.home as PageMount }),
+        },
+    ])
+}
+
+test('a page the server painted hydrates, and the one navigated to builds itself — 30.7', async () => {
+    history.replaceState(null, '', '/')
+    const mounts = await pages()
+    const r = router(mounts)
+
+    // ARRIVED AT: the markup is the server's and the region is not empty, so nothing is filled.
+    await r.hydrate()
+    flushSync()
+    expect(document.querySelector('#home h1')?.textContent).toBe('Home')
+    ;(document.querySelector('#bump') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelector('#home p')?.textContent).toBe('1')
+
+    // NAVIGATED TO: no server, no fetch. The module fills the region it was handed.
+    await navigate('/invoices/42')
+    flushSync()
+    expect(location.pathname).toBe('/invoices/42')
+    expect(document.querySelector('#home')).toBeNull()
+    expect(document.querySelector('#invoice h1')?.textContent).toBe('Invoice')
+    expect(
+        [...document.querySelectorAll('#invoice li')].map((n) => n.textContent),
+    ).toEqual(['one', 'two'])
+})
+
+// 12.13 through the router: the page it replaced owned a scope, and the router is the only thing
+// that can remove its nodes. THE REVERT: drop `this.stop()` from `Router.go` — the old page's
+// binding goes on waking for every write into nodes no longer in the document.
+test('the page a navigation replaced stops its bindings — 12.13', async () => {
+    history.replaceState(null, '', '/')
+    const mounts = await pages()
+    const r = router(mounts)
+    await r.hydrate()
+    flushSync()
+    const scope = r.scope
+    expect(scope?.stops.length).toBeGreaterThan(0)
+
+    await navigate('/invoices/42')
+    flushSync()
+    expect(scope?.stops.length).toBe(0)
+})
+
+test('a click on a routed link navigates and does not reload — 30.7', async () => {
+    history.replaceState(null, '', '/')
+    const mounts = await pages()
+    const r = router(mounts)
+    await r.hydrate()
+    flushSync()
+    const stop = listenForRoutes(r)
+
+    const link = document.querySelector('#to-invoice') as HTMLElement
+    const event = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+    })
+    link.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    await Promise.resolve()
+    await Promise.resolve()
+    flushSync()
+    expect(document.querySelector('#invoice h1')?.textContent).toBe('Invoice')
+    stop()
+})
+
+test('a route literal is matched in the spelling its directory is filed under — 30.3, 30.5', () => {
+    expect(routeOf('src/ui/pages/invoices/[id]/page.abide')).toBe(
+        '/invoices/[id]',
+    )
+    expect(routeOf('src/ui/pages/page.abide')).toBe('/')
+    expect(
+        matchRoute(parseRoutePattern('/invoices/[id]'), '/invoices/42'),
+    ).toEqual({ id: '42' })
+    expect(
+        matchRoute(parseRoutePattern('/invoices/[id]'), '/invoices'),
+    ).toBeNull()
+    expect(
+        matchRoute(parseRoutePattern('/files/[...rest]'), '/files/a/b'),
+    ).toEqual({ rest: ['a', 'b'] })
+    expect(matchRoute(parseRoutePattern('/x/[[y]]'), '/x')).toEqual({})
+})
+
+// 30.9 — THE MOST SPECIFIC ROUTE WINS, and every case here is one where TWO patterns match the
+// same path, which is the only situation the order decides anything in. A table matched in the
+// wrong order renders the wrong page and says nothing, so nothing about the output can catch it.
+//
+// THE REVERT: the scalar this replaced — `segments.length * 10` plus 4/3/2 a kind, sorted
+// descending. `/x` scores 14 against `/[[a]]/[[b]]`'s 24, so the first pair comes out reversed;
+// `/[id]/edit` and `/new/[tab]` both score 27, so the third pair is decided by whichever the
+// build walked first. A sum over the whole pattern can carry neither the ordering nor the
+// position, and those are the two things 30.9 is.
+test('the most specific of two matching routes is tried first — 30.9', () => {
+    const order = (patterns: string[]): string[] =>
+        [...patterns]
+            .map((pattern) => ({
+                pattern,
+                segments: parseRoutePattern(pattern),
+            }))
+            .sort((a, b) => compareRoutes(a.segments, b.segments))
+            .map((route) => route.pattern)
+
+    // A STATIC SEGMENT ABOVE AN OPTIONAL, and length must not overturn it: both match `/x`.
+    expect(order(['/[[a]]/[[b]]', '/x'])).toEqual(['/x', '/[[a]]/[[b]]'])
+    // The three kind steps the clause names, each against the one below it.
+    expect(order(['/[id]', '/new'])).toEqual(['/new', '/[id]'])
+    expect(order(['/[[id]]', '/[id]'])).toEqual(['/[id]', '/[[id]]'])
+    expect(order(['/[...rest]', '/[[id]]'])).toEqual(['/[[id]]', '/[...rest]'])
+    // POSITION, which a sum erases: both match `/new/edit`, and the FIRST segment decides.
+    expect(order(['/[id]/edit', '/new/[tab]'])).toEqual([
+        '/new/[tab]',
+        '/[id]/edit',
+    ])
+    // An exhausted prefix is the only tie left, and the shorter pattern is the narrower claim:
+    // `/a` admits one address where `/a/[[b]]` admits two, and both answer `/a`.
+    expect(order(['/a/[[b]]', '/a'])).toEqual(['/a', '/a/[[b]]'])
+})
+
+// 39.7 — THE INCOMING PAGE'S KEYED CONTRIBUTIONS REPLACE THE OUTGOING PAGE'S, BY KEY. The head a
+// navigation arrives with was never rendered by a server, so it comes from the page's own module
+// (39.12 gives the key, 39.13 the winner within a file).
+//
+// THE REVERT: append every contribution instead of replacing the one under its key — the document
+// ends with two `<title>`s and the browser keeps showing the first.
+test('a navigation replaces head contributions by key and appends the keyless — 39.7', () => {
+    document.head.innerHTML =
+        '<title>Home</title><meta name="description" content="home"><meta property="og:title" content="Home"><link rel="icon" href="/a.ico">'
+
+    applyHead(
+        '<title>Invoice</title><meta name="description" content="an invoice"><meta charset="utf-8"><link rel="icon" href="/a.ico">',
+    )
+
+    const titles = document.head.querySelectorAll('title')
+    expect(titles).toHaveLength(1)
+    expect(titles[0]?.textContent).toBe('Invoice')
+
+    const description = document.head.querySelectorAll(
+        'meta[name="description"]',
+    )
+    expect(description).toHaveLength(1)
+    expect(description[0]?.getAttribute('content')).toBe('an invoice')
+
+    // 39.12 — `property` keys a `<meta>` too, and the outgoing page's is left alone where the
+    // incoming page makes no contribution under that key.
+    expect(
+        document.head.querySelectorAll('meta[property="og:title"]'),
+    ).toHaveLength(1)
+
+    // Same `rel` AND same `href` is one key, so the icon is replaced rather than doubled.
+    expect(document.head.querySelectorAll('link[rel="icon"]')).toHaveLength(1)
+
+    // 39.5 — a `<meta charset>` has no key, so it appends rather than replacing anything.
+    expect(document.head.querySelectorAll('meta[charset]')).toHaveLength(1)
+})
+
+// The head a page carries is emitted into its own module, merged by 39.13 before it gets there —
+// so the LAST `<title>` in the file is the only one the client can ever apply.
+test("a routable page's client module carries its merged head — 39.13", async () => {
+    const file = parseAbide(
+        `<head><title>First</title><meta name="a" content="1"></head>
+<head><title>Second</title></head>
+<p>body</p>`,
+    )
+    const reads = await session.reads(`${ROOT}src/Head.abide`, file)
+    const client = emitClient(file, reads, true)
+    expect(client).toContain('export function head()')
+    expect(client).toContain('Second')
+    expect(client).not.toContain('First')
+    // A page nobody navigates to needs none of it.
+    expect(emitClient(file, reads, false)).not.toContain(
+        'export function head()',
+    )
+})

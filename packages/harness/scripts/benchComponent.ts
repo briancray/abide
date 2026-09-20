@@ -69,10 +69,10 @@ async function main(): Promise<void> {
             const flat = measured.samples.inline as Sample
             const child = measured.samples.component as Sample
             console.log(
-                `  ${String(size).padStart(4)} cards   vanilla ${µs(vanilla)}   inline ${µs(flat)} (${ratio(flat, vanilla)})   component ${µs(child)} (${ratio(child, vanilla)})`,
+                `  ${String(size).padStart(4)} cards   vanilla ${µs(vanilla)}   inline ${µs(flat)} (${times(flat, vanilla)})   component ${µs(child)} (${times(child, vanilla)})`,
             )
             console.log(
-                `              ${perRow(flat, size)} ns a row inline, ${perRow(child, size)} ns a row as a component — ${ratio(child, flat)} for the invocation`,
+                `              ${perRow(flat, size)} ns a row inline, ${perRow(child, size)} ns a row as a component — ${times(child, flat)} for the invocation`,
             )
             if (size === SIZES[SIZES.length - 1]) {
                 bytes(inline.render().body, nested.render().body, size)
@@ -102,39 +102,39 @@ function bytes(flat: string, nested: string, size: number): void {
 // record to hold them — so this is the number that says whether one shape per prop (33.10) is
 // paid for by the list or by the author.
 function allocations(flat: Render, nested: Render, size: number): void {
-    const flatClosures = closures(() => {
-        flat()
-    })
-    const nestedClosures = closures(() => {
-        nested()
-    })
-    const flatHeap = allocated(() => {
-        flat()
-    }, 20)
-    const nestedHeap = allocated(() => {
-        nested()
-    }, 20)
+    // `closures` and `allocated` both take a `() => unknown`, which a `Render` already is — a
+    // wrapper here would only put another frame inside the body being measured.
+    const flatClosures = closures(flat).Function
+    const nestedClosures = closures(nested).Function
+    const flatObjects = allocated(flat, 20).perRep.Object ?? 0
+    const nestedObjects = allocated(nested, 20).perRep.Object ?? 0
     console.log(
-        `  CLOSURES — inline ${flatClosures.Function}, component ${nestedClosures.Function} (${(
-            (nestedClosures.Function - flatClosures.Function) / size
+        `  CLOSURES — inline ${flatClosures}, component ${nestedClosures} (${(
+            (nestedClosures - flatClosures) / size
         ).toFixed(2)} a row)`,
     )
-    const objects = (heap: { perRep: Record<string, number> }): number =>
-        heap.perRep.Object ?? 0
     console.log(
-        `  OBJECTS — inline ${objects(flatHeap).toFixed(1)}, component ${objects(nestedHeap).toFixed(1)} a render (${(
-            (objects(nestedHeap) - objects(flatHeap)) / size
+        `  OBJECTS — inline ${flatObjects.toFixed(1)}, component ${nestedObjects.toFixed(1)} a render (${(
+            (nestedObjects - flatObjects) / size
         ).toFixed(2)} a row)`,
     )
 }
 
 const µs = (sample: Sample): string =>
     `${(sample.nanoseconds / 1000).toFixed(1)} µs`
-const ratio = (sample: Sample, against: Sample): string =>
+// NOT `harness/report`'s `ratio`, deliberately, and the name says so. That one refuses any sample
+// `batch()` took unbatched and under a frame — which is click -> paint being frame quantised, and
+// is every size above 10 cards here. This lane is a bun clock over a string render with nothing
+// waiting on a frame, so the refusal does not apply and the division is the honest report.
+const times = (sample: Sample, against: Sample): string =>
     `${(sample.nanoseconds / against.nanoseconds).toFixed(2)}x`
 const perRow = (sample: Sample, size: number): string =>
     (sample.nanoseconds / size).toFixed(0)
 
+// The emitted module, written where the tests write theirs — outside `packages/abide`, so
+// `conventions.test.ts`'s glob does not scan it. ITS OWN DIR PER CALL, because `Inline` and `Page`
+// are compiled once per size and an import path is cached: a second `Page.ts` at a path already
+// imported hands back the first size's module.
 async function compile(
     session: TypeSession,
     name: string,

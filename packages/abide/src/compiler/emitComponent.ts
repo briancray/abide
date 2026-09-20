@@ -1,4 +1,5 @@
 import { escapeAttribute } from '#shared/escapeText.ts'
+import { headKeyOf } from '#shared/headKeyOf.ts'
 import { safeUrl } from '#shared/safeUrl.ts'
 import { REGION_CLOSE, REGION_OPEN, ROW_OPEN } from '#ui/REGION.ts'
 import type { Read } from './classifyRead.ts'
@@ -45,25 +46,21 @@ export function emitComponent(
     const lowering = new Lowering(file, reads)
     const used = lowering.used
 
-    // COLLECTED BEFORE ANY OF IT IS EMITTED. 39.13 merges across the whole FILE, so a second
-    // `<head>` further down the template shadows the first one's `<title>` — and `emitNode` adds
-    // to `used`, so emitting a contribution the merge then drops leaves the module importing a
-    // name nothing calls.
-    const contributions: TemplateNode[] = []
     const body: string[] = []
     for (const node of file.template) {
         if (node.kind === 'element' && isHead(node)) {
             assertNoNestedHead(node.children, '<head>')
-            for (const child of node.children) contributions.push(child)
             continue
         }
         assertNoNestedHead([node], '')
         body.push(emitNode(node, lowering, false))
     }
 
-    const head: string[] = []
-    for (const child of mergeHead(contributions))
-        head.push(emitNode(child, lowering, false))
+    // EMITTED AFTER THE BODY, NOT BEFORE. 39.13 merges across the whole FILE, so a second `<head>`
+    // further down the template shadows the first one's `<title>` — and `emitNode` adds to `used`,
+    // so emitting a contribution the merge then drops leaves the module importing a name nothing
+    // calls. `emitHead` is the client lane's too, which is what keeps the two from drifting.
+    const head = emitHead(file, lowering, false)
 
     // 31.1 and 31.4 hold INSIDE a `.abide` file, not just in its template, so the script block is
     // lowered with the same rewrite the slots get.
@@ -105,7 +102,7 @@ ${opened}${componentBody}
 ${heads ? `    const ${HEADS} = []\n` : ''}\
     const ${BODY} = ${concat(body)}
     return {
-        head: ${concat(head)}${heads ? ` + ${HEADS}.join('')` : ''},
+        head: ${head}${heads ? ` + ${HEADS}.join('')` : ''},
         body: ${BODY},
     }${closed}
 }
@@ -288,6 +285,23 @@ function emitInvocation(
         : `${lowering.use('renderComponent')}(${node.tag}, { ${props.join(', ')} }, ${HEADS})`
 }
 
+// 39.7 — THE CONTRIBUTIONS A PAGE MAKES TO THE DOCUMENT HEAD, as an expression, for the lane that
+// has no document to have written them. A page the reader NAVIGATED to was never rendered by a
+// server, so its `<title>` and its `<meta>` exist nowhere unless its own client module carries
+// them — the same second copy the body already gets (32.19), through the same merge (39.13) so
+// the two lanes cannot disagree about which contribution won.
+export function emitHead(
+    file: AbideFile,
+    lowering: Lowering,
+    client = false,
+): string {
+    const contributions: TemplateNode[] = []
+    for (const node of file.template)
+        if (node.kind === 'element' && isHead(node))
+            for (const child of node.children) contributions.push(child)
+    return emitMarkup(mergeHead(contributions), lowering, client)
+}
+
 // The markup for a set of nodes, as an expression. Exported because a `{#if}` arm's markup is
 // needed on the CLIENT too — a branch swap re-renders the region — and a second emitter for it
 // would be a second escaping rule.
@@ -427,26 +441,18 @@ function mergeHead(children: TemplateNode[]): TemplateNode[] {
     return kept
 }
 
-// 39.12 — a contribution's merge key, or `undefined` where it has none. A key the compiler cannot
-// READ is no key: `<meta name={x}>` carries a name only the run time knows, so it appends under
-// 39.5 rather than merging against a string that is not its value.
+// 39.12 THROUGH THE ONE GRAMMAR (`headKeyOf`), asked with what the COMPILER can read. A key the
+// compiler cannot read is no key: `<meta name={x}>` carries a name only the run time knows, so it
+// appends under 39.5 rather than merging against a string that is not its value. `<TITLE>` is the
+// same singleton as `<title>`, which `lowerTag` already gives.
 function headKey(node: TemplateNode): string | undefined {
     if (node.kind !== 'element') return undefined
-    // `<TITLE>` is the same singleton as `<title>`.
-    const tag = node.lowerTag
-    if (tag === 'title' || tag === 'base') return tag
-    if (tag === 'meta') {
-        const named =
-            staticAttribute(node, 'name') ?? staticAttribute(node, 'property')
-        return named === undefined ? undefined : `meta ${named}`
-    }
-    if (tag !== 'link') return undefined
-    const rel = staticAttribute(node, 'rel')
-    if (rel === undefined) return undefined
     // An `href` that is an EXPRESSION is a different URL per render, so the pair is not a key —
     // told apart from an ABSENT one, which is, and which two `<link rel="canonical">` share.
-    if (attributeOf(node, 'href')?.expression === true) return undefined
-    return `link ${rel} ${staticAttribute(node, 'href') ?? ''}`
+    // `headKeyOf` cannot tell the two apart, both reaching it as `undefined`, so the bail is here.
+    if (node.lowerTag === 'link' && attributeOf(node, 'href')?.expression)
+        return undefined
+    return headKeyOf(node.lowerTag, (name) => staticAttribute(node, name))
 }
 
 function attributeOf(

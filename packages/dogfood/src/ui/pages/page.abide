@@ -1,0 +1,20 @@
+<script>
+import { reactive } from 'abide'
+import '#ui/served.css'
+
+let clicks = reactive(0)
+</script>
+
+<head>
+    <title>abide</title>
+    <meta name="description" content="An isomorphic type-safe framework for reactive async interfaces." />
+</head>
+
+<main>
+    <header>
+        <h1>abide</h1>
+        <p>Painted on the server, hydrated where it stands.</p>
+    </header>
+    <p><button id="clicks" onclick={() => { clicks = clicks + 1 }}>clicked {clicks} times</button></p>
+    <p><a id="to-about" href="/about">about</a></p>
+</main>

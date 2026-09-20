@@ -35,6 +35,18 @@ globalThis.__WIRED__ = nodes
 `
 }
 
+// THE CARD ROW, ONCE. Three `.abide` arms write this row — a `{#for}`, the unrolled page and the
+// component — and the whole premise of the render and component benches is that they differ in
+// nothing but how the three values reach the slots. Interpolating one template is what makes that
+// true by construction; four hand-kept literals is what made it a comment.
+//
+// `vanillaMarkup` DOES NOT CALL THIS, and the reason is the clock: it builds a row per card INSIDE
+// a `batch()` arm, so a call frame per row would be a change to the baseline every ratio in both
+// benches is against. Its literal is kept beside this one deliberately.
+function cardRow(title: string, body: string, count: string): string {
+    return `<article class="card"><h2>${title}</h2><p>${body}</p><span class="n">${count}</span></article>`
+}
+
 // The same page written with `{#for}`, which is how anybody would write it. The unrolled one
 // below is kept beside it because the difference between them is a finding: straight-line emitted
 // code never gets warm, and a loop is what fixes it.
@@ -44,13 +56,17 @@ import { reactive } from 'abide'
 
 let rows = reactive(CARDS)
 </script>
-<main id="list">{#for row of rows by row.id}<article class="card"><h2>{row.title}</h2><p>{row.body}</p><span class="n">{row.count}</span></article>{/for}</main>`
+<main id="list">{#for row of rows by row.id}${cardRow('{row.title}', '{row.body}', '{row.count}')}{/for}</main>`
 }
 
 export function abideSource(n: number): string {
     let template = ''
     for (let at = 0; at < n; at += 1)
-        template += `<article class="card"><h2>{rows[${at}].title}</h2><p>{rows[${at}].body}</p><span class="n">{rows[${at}].count}</span></article>`
+        template += cardRow(
+            `{rows[${at}].title}`,
+            `{rows[${at}].body}`,
+            `{rows[${at}].count}`,
+        )
     return `<script>
 import { reactive } from 'abide'
 
@@ -81,16 +97,16 @@ function escape(value: string): string {
         .replaceAll('>', '&gt;')
 }
 
-// THE SAME CARD, AS A COMPONENT. The row body is identical to `abideLoopSource`'s, so the only
-// difference between the two arms is the invocation: a call, an anchor pair, and one accessor per
-// prop. What that costs a row is the whole question 32.19 and 33 owe an answer to.
+// THE SAME CARD, AS A COMPONENT — the same `cardRow`, so the only difference between this arm and
+// `abideLoopSource` is the invocation: a call, an anchor pair, and one accessor per prop. What
+// that costs a row is the whole question 32.19 and 33 owe an answer to.
 export function abideCardSource(): string {
     return `<script>
 import { props } from 'abide'
 
 const { title, body, count } = props<{ title: string; body: string; count: number }>()
 </script>
-<article class="card"><h2>{title}</h2><p>{body}</p><span class="n">{count}</span></article>`
+${cardRow('{title}', '{body}', '{count}')}`
 }
 
 export function abideComponentSource(): string {

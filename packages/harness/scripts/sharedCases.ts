@@ -1,11 +1,11 @@
 // TWO ALLOCATIONS, PRICED IN BOTH ENGINES: a canonical-key level and a combinator's scratch report.
 // Each case runs the shape before the change beside the shape shipped — the revert arm, kept as a
 // copy — plus SHARE rows pricing the layer against the whole op somebody waits on. JSC with
-// `bun packages/harness/scripts/benchShared.ts`, V8 with `bunx playwright test -c
-// playwright.harness.config.ts --project=harness packages/harness/e2e/shared.spec.ts`.
+// `bun packages/harness/scripts/benchShared.ts`, V8 with `bunx playwright test
+// --project=harness packages/harness/e2e/shared.spec.ts`.
 import { jsonSchema, reactive } from 'abide'
-import { canonicalKey } from '../../abide/src/shared/reactive/canonicalKey.ts'
 import { putOwn } from '../../abide/src/shared/putOwn.ts'
+import { canonicalKey } from '../../abide/src/shared/reactive/canonicalKey.ts'
 import { validateJson } from '../../abide/src/shared/validateJson.ts'
 import { validateJsonScratch } from './validateJsonScratch.ts'
 

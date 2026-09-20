@@ -63,12 +63,18 @@ const SUITES: Record<string, () => Promise<SuiteRun>> = {
     browser: () =>
         runSuite({
             label: 'Browser, chromium and webkit',
+            // THE HARNESS PAIR OF THE ONE CONFIG. They were a config of their own while
+            // `abide start` threw and `webServer` could not boot; naming the projects is
+            // what replaced that, and it keeps this row the measure lane rather than the
+            // whole browser gate.
             command: [
                 'bunx',
                 'playwright',
                 'test',
-                '--config',
-                'playwright.harness.config.ts',
+                '--project',
+                'harness',
+                '--project',
+                'harness-webkit',
             ],
             reportTo: PLAYWRIGHT_REPORT,
             cwd: REPO,

@@ -7,8 +7,8 @@ import {
 import type { Read } from '#compiler/classifyRead.ts'
 import { Lowering } from '#compiler/Lowering.ts'
 import { projectShadow } from '#compiler/projectShadow.ts'
-import { type Token, tokenise } from '#compiler/tokenise.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
+import { type Token, tokenise } from '#compiler/tokenise.ts'
 
 // THE CHECKER DECIDES WHAT IS REACTIVE, so a test that means "`n` is a `Reactive` here" has to say
 // so in a way the checker reads. `typed` declares every name it is given as one at module scope —

@@ -15,13 +15,15 @@
 // makes the count the rest of the page assumes true.
 
 import { afterAll, expect, test } from 'bun:test'
+import { measure } from 'harness/measure'
 import { compileFile, emitClient, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
 import { textAt } from '#ui/nodeAt.ts'
+import type { Scope } from '#ui/Scope.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-import { closeTyped, clientOf } from './typed.ts'
+import { clientOf, closeTyped } from './typed.ts'
 
 afterAll(closeTyped)
 
@@ -31,6 +33,11 @@ afterAll(() => {
     session.close()
     removeTemporaryModules()
 })
+
+// THE SCOPE THE LAST `mountPage` OPENED. A gate about what a region still HOLDS cannot be read
+// from the work counters — an accumulated scope that was already stopped runs nothing — so the
+// page's own scope is the only place that fact is visible.
+let mounted: Scope | undefined
 
 async function mountPage(source: string): Promise<string> {
     const file = parseAbide(source)
@@ -51,8 +58,13 @@ async function mountPage(source: string): Promise<string> {
         html.indexOf('</body>'),
     )
     const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(document.body)
+    mounted = mount(document.body) as Scope
     return html
+}
+
+const click = (id: string): void => {
+    ;(document.querySelector(id) as HTMLElement).click()
+    flushSync()
 }
 
 // Everything `console.warn` was told while the body ran. 41.11's warning is the only thing the
@@ -561,4 +573,90 @@ test('a blank run inside a row element does not join the row', () => {
 
     expect(rowNodes).toHaveLength(1)
     expect(text.parentNode).toBe(row)
+})
+
+// 12.13 — A REGION STOPS EVERY SCOPE OPENED BENEATH IT. A row's own disposers were always stopped
+// when the row left, but an arm or a list standing INSIDE that row opens a scope of its own, and
+// nothing reached those: `Scope.stop` walked its own `stops` and stopped. The dropped row's arm
+// went on waking for every write and writing into nodes no longer in the document.
+//
+// THE WORK IS THE ASSERTION, because the output cannot see it — the detached nodes are gone from
+// the page whether or not anything is still writing into them, so the page reads correct either
+// way. THE REVERT for both: drop the `children` walk from `Scope.stop`. `bindingRuns` reads 2
+// where 1 is due, and it is 2 whatever the page shows.
+test('a row that leaves stops an {#if} arm opened inside it — 12.13', async () => {
+    await mountPage(`<script>
+import { reactive } from 'abide'
+
+let rows = reactive(['one', 'two'])
+let mark = reactive('')
+let on = reactive(true)
+</script>
+
+<ul>{#for row of rows by row}<li>{#if on}<b>{row + mark}</b>{/if}</li>{/for}</ul>
+<button id="drop" onclick={() => { rows = ['one'] }}>drop</button>
+<button id="bump" onclick={() => { mark = '!' }}>bump</button>`)
+    flushSync()
+    expect(document.querySelectorAll('b')).toHaveLength(2)
+    click('#drop')
+    expect(document.querySelectorAll('b')).toHaveLength(1)
+
+    // ONE ARM IS LEFT, so one binding may run. The dropped row's arm reads `mark` too.
+    const work = measure(() => {
+        click('#bump')
+    })
+    expect(work.bindingRuns).toBe(1)
+    expect(document.querySelector('b')?.textContent).toBe('one!')
+})
+
+// The same clause for the other nested region: a `{#for}` removed WHOLE drops no rows, so
+// `dropRow` — which is what stops a row as a list churns — never runs for any of them.
+test('a row that leaves stops a {#for} opened inside it — 12.13', async () => {
+    await mountPage(`<script>
+import { reactive } from 'abide'
+
+let rows = reactive(['one', 'two'])
+let mark = reactive('')
+let inner = reactive(['x'])
+</script>
+
+<ul>{#for row of rows by row}<li>{#for i of inner by i}<b>{row + i + mark}</b>{/for}</li>{/for}</ul>
+<button id="drop" onclick={() => { rows = ['one'] }}>drop</button>
+<button id="bump" onclick={() => { mark = '!' }}>bump</button>`)
+    flushSync()
+    expect(document.querySelectorAll('b')).toHaveLength(2)
+    click('#drop')
+    expect(document.querySelectorAll('b')).toHaveLength(1)
+
+    const work = measure(() => {
+        click('#bump')
+    })
+    expect(work.bindingRuns).toBe(1)
+    expect(document.querySelector('b')?.textContent).toBe('onex!')
+})
+
+// A TOGGLE DOES NOT ACCUMULATE. The block holds ONE scope for its whole life and REFILLS it on
+// each swap, so what the region above it owns stays one entry however many times the arm changes.
+// Owning a fresh scope per swap is correct and unbounded: the page outlives the block, so every
+// arm ever mounted stays reachable from it.
+//
+// THE WORK COUNTERS CANNOT SEE THIS — an accumulated scope has already been stopped, so it holds
+// no disposer and running it runs nothing. What grows is the ARRAY, so the array is the
+// assertion. THE REVERT: `${name}_scope = ${SCOPE}.own(${name}_mount(...))` per swap in
+// `emitClient` — `children` is 12 long after eleven flips instead of 1.
+test('an arm that swaps leaves one scope on the region above it — 12.13', async () => {
+    await mountPage(`<script>
+import { reactive } from 'abide'
+
+let on = reactive(true)
+</script>
+
+<div>{#if on}<b>yes</b>{:else}<i>no</i>{/if}</div>
+<button id="flip" onclick={() => { on = !on }}>flip</button>`)
+    flushSync()
+    const page = mounted as Scope
+    expect(page.children).toHaveLength(1)
+    for (let at = 0; at < 11; at += 1) click('#flip')
+    expect(document.querySelector('i')?.textContent).toBe('no')
+    expect(page.children).toHaveLength(1)
 })

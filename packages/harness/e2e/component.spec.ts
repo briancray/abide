@@ -50,47 +50,44 @@ test('the mount of a list of components, against the same rows inline', async ({
     test.setTimeout(5 * 60 * 1000)
     const lines = [`\n=== ${testInfo.project.name} — a component per row ===`]
 
-    for (const built of pages) {
-        const measure = async (arm: Arm): Promise<number> => {
-            await page.goto('about:blank')
-            await page.setContent('<!doctype html><html><body></body></html>')
-            await page.addScriptTag({
-                content: `${arm.script}\nglobalThis.__MARKUP__ = ${JSON.stringify(arm.markup)};`,
-            })
-            return page.evaluate((size) => {
-                const mount = (
-                    globalThis as unknown as {
-                        __MOUNT_INTO__: (root: Node) => void
-                    }
-                ).__MOUNT_INTO__
-                // THE MARKUP IS THE PAGE'S OWN, written by its own server render: the two arms
-                // hydrate different documents on purpose — one with a component's anchors in it —
-                // and that difference is part of what is being priced.
-                const markup = (globalThis as unknown as { __MARKUP__: string })
-                    .__MARKUP__
-                const reps = size >= 1000 ? 20 : 100
-                const host = document.createElement('div')
-                document.body.appendChild(host)
-                for (let at = 0; at < 3; at += 1) {
-                    host.innerHTML = markup
-                    mount(host)
+    // EACH ARM HYDRATES THE DOCUMENT ITS OWN SERVER WROTE, anchors and all: the component page's
+    // markup carries a pair per row that the inline page's does not, and that difference is part
+    // of what is being priced rather than something to equalise away.
+    const measure = async (arm: Arm, size: number): Promise<number> => {
+        await page.goto('about:blank')
+        await page.setContent('<!doctype html><html><body></body></html>')
+        await page.addScriptTag({
+            content: `${arm.script}\nglobalThis.__MARKUP__ = ${JSON.stringify(arm.markup)};`,
+        })
+        return page.evaluate((rows) => {
+            const mount = (
+                globalThis as unknown as {
+                    __MOUNT_INTO__: (root: Node) => void
                 }
-                const start = performance.now()
-                for (let at = 0; at < reps; at += 1) {
-                    host.innerHTML = markup
-                    mount(host)
-                }
-                const elapsed = performance.now() - start
-                host.remove()
-                return (elapsed * 1e6) / reps
-            }, built.size)
-        }
+            ).__MOUNT_INTO__
+            const markup = (globalThis as unknown as { __MARKUP__: string })
+                .__MARKUP__
+            const reps = rows >= 1000 ? 20 : 100
+            const host = document.createElement('div')
+            document.body.appendChild(host)
+            for (let at = 0; at < 3; at += 1) {
+                host.innerHTML = markup
+                mount(host)
+            }
+            const start = performance.now()
+            for (let at = 0; at < reps; at += 1) {
+                host.innerHTML = markup
+                mount(host)
+            }
+            const elapsed = performance.now() - start
+            host.remove()
+            return (elapsed * 1e6) / reps
+        }, size)
+    }
 
-        // EACH ARM HYDRATES THE DOCUMENT ITS OWN SERVER WROTE, anchors and all: the component
-        // page's markup carries a pair per row that the inline page's does not, and that
-        // difference is part of what is being priced rather than something to equalise away.
-        const inline = await measure(built.inline)
-        const nested = await measure(built.nested)
+    for (const built of pages) {
+        const inline = await measure(built.inline, built.size)
+        const nested = await measure(built.nested, built.size)
         lines.push(
             `  ${String(built.size).padStart(4)} rows   inline ${(inline / 1000).toFixed(1)} µs   component ${(nested / 1000).toFixed(1)} µs   ${(nested / inline).toFixed(2)}x` +
                 `\n              ${(inline / built.size).toFixed(0)} ns a row inline, ${(nested / built.size).toFixed(0)} ns a row as a component`,

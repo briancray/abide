@@ -49,6 +49,17 @@ export class List {
         this.make = make
         this.mount = mount
     }
+
+    // 12.13 — WHAT THE BLOCK'S OWN SCOPE STOPS WHEN THE REGION HOLDING IT LEAVES. A row's bindings
+    // are stopped by `dropRow` as the list churns, but a `{#for}` removed whole — a row above it
+    // dropping, an arm swapping out — drops no rows at all, and every row it still holds would go
+    // on waking. The nodes go with the region, so only the scopes are stopped here.
+    stop(): void {
+        const rows = this.rows
+        for (const row of rows) row.scope.stop()
+        rows.length = 0
+        this.pumping = null
+    }
 }
 
 // A `{#for}` whose rows the SERVER wrote. Nothing is wired until the first update, which is the

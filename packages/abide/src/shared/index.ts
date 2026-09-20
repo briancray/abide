@@ -23,6 +23,12 @@ export { jsonSchema } from './jsonSchema.ts'
 // as — the server's emitted block, the client's `updateList`, and the markup a client builds for a
 // row — so the one function is the one answer.
 export { listOf } from './listOf.ts'
+// `navigate` ALONE, of everything routing needs. This barrel is what an app resolves through the
+// bare `abide` specifier, and the matcher, the pattern grammar and `routeOf` are reached by path
+// from the two places that have them — the build and the client router. Putting them here would
+// widen the public surface with names no clause or registry row gives an author, and drag both
+// modules into the static closure of the entry every page imports.
+export { navigate } from './navigate.ts'
 export { props } from './props.ts'
 export { Raw, raw } from './Raw.ts'
 export {

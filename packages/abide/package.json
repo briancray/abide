@@ -10,6 +10,7 @@
     "exports": {
         ".": "./src/shared/index.ts",
         "./runtime": "./src/ui/index.ts",
+        "./routing": "./src/ui/routing.ts",
         "./server": "./src/server/index.ts",
         "./compiler": "./src/compiler/index.ts",
         "./package.json": "./package.json"

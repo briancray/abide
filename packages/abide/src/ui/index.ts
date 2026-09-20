@@ -15,6 +15,10 @@
 // finds a node by something added to the document, because a compiler may not invent structure an
 // author's CSS or queries can see.
 
+// THE ROUTER IS NOT HERE. It has its own entry (`ui/routing.ts`, `abide/routing`), which is what
+// keeps the list below the budget this header calls it — a subsystem only the emitted route table
+// reaches does not belong on what every compiled module resolves through.
+
 export { escapeless } from './escapeless.ts'
 export { List, listAt, updateList } from './List.ts'
 export { warnMismatch } from './Mismatch.ts'

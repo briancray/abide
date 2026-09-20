@@ -15,7 +15,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { parseAbide, planTemplate } from '#compiler'
 import { elementAt, textAt } from '#ui'
 import { removeTemporaryModules } from './temporaryModule.ts'
-import { closeTyped, clientOf } from './typed.ts'
+import { clientOf, closeTyped } from './typed.ts'
 
 afterAll(closeTyped)
 

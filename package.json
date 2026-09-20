@@ -20,7 +20,6 @@
         "e2e": "playwright test",
         "e2e:changed": "playwright test --only-changed",
         "e2e:failed": "playwright test --last-failed",
-        "e2e:harness": "playwright test -c playwright.harness.config.ts",
         "verify": "bun run lint && bun run typecheck && bun run test",
         "bench": "bun packages/harness/scripts/bench.ts",
         "status": "bun packages/harness/scripts/serveStatus.ts",

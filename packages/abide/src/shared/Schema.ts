@@ -11,8 +11,8 @@
 // 19.7 IS THE OTHER HALF: coercion belongs to the pipeline and is never asked of a schema.
 // Together they are what lets 19.4 be enforced at all — see `runSchema`.
 
-import { untracked } from './reactive/tracking.ts'
 import { note } from './note.ts'
+import { untracked } from './reactive/tracking.ts'
 
 // The Standard Schema contract, declared here rather than depended on: it is an interface
 // a library implements, so an import would put a package in this seam's graph to gain a

@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os' // bun exposes no temp-directory helper of its 
 import {
     emitClient,
     emitComponent,
+    invokedComponents,
     parseAbide,
     TypeSession,
 } from 'abide/compiler'
@@ -23,8 +24,8 @@ export type CompiledPage = { markup: string; script: string }
 
 // `components` are the `.abide` files the page INVOKES (32.19), keyed by the name it imports them
 // as. Each compiles to the pair a caller reaches — `Name.ts` for the server render and
-// `Name.client.ts` for the mount — so a page with a component in it is built the way the build
-// builds one rather than by a second scheme that only the bench has.
+// `Name.client.ts` for the mount — and the page goes through that same loop, so a page with a
+// component in it is built the way the build builds one rather than by a second scheme.
 export async function buildCompiledPage(
     source: string,
     components: Record<string, string> = {},
@@ -34,33 +35,45 @@ export async function buildCompiledPage(
     )
     const scratch = mkdtempSync(`${REPO}.test-modules/page-`)
     try {
-        const file = parseAbide(source)
-        // The fixture path is what puts the shadow inside a project the checker has opened.
-        const names = await session.reads(
-            `${REPO}packages/abide/tests/fixtures/typed/src/browser.abide`,
-            file,
-        )
-        for (const [name, text] of Object.entries(components)) {
-            const child = parseAbide(text)
-            const childNames = await session.reads(
-                `${REPO}packages/abide/tests/fixtures/typed/src/${name}.abide`,
-                child,
+        // THE PAGE IS ONE OF THE FILES, not a case beside them: same parse, same snapshot, same
+        // emit pair. Its shadow goes at the `browser.abide` fixture because that is the one the
+        // checker has already opened; a component's goes at its own name beside it.
+        const named: [string, string][] = [
+            ['Page', source],
+            ...Object.entries(components),
+        ]
+        const files = named.map(([name, text]) => ({
+            name,
+            text,
+            path: `${REPO}packages/abide/tests/fixtures/typed/src/${
+                name === 'Page' ? 'browser' : name
+            }.abide`,
+            file: parseAbide(text),
+        }))
+        // ONE SNAPSHOT FOR EVERY FILE, which is what `bin/abide.ts` takes. `reads` per file adds
+        // each to the project's root set on its own, and `TypeSession` prices that at 25x.
+        const reads = await session.readsFor(files)
+        // WHICH FILES ARE INVOKED IS THE BUILD'S KNOWLEDGE and already has a name, so a component
+        // that itself invokes one is answered here rather than by a flag this file guesses.
+        const invoked = invokedComponents(named.map(([, text]) => text))
+        let at = 0
+        for (const entry of files) {
+            const names = reads[at] ?? []
+            at += 1
+            writeFileSync(
+                `${scratch}/${entry.name}.ts`,
+                emitComponent(entry.file, names),
+            )
+            const client = emitClient(
+                entry.file,
+                names,
+                invoked.has(`${entry.name}.abide`),
             )
             writeFileSync(
-                `${scratch}/${name}.ts`,
-                emitComponent(child, childNames),
-            )
-            writeFileSync(
-                `${scratch}/${name}.client.ts`,
-                emitClient(child, childNames, true) ||
-                    'export default () => {}\n',
+                `${scratch}/${entry.name}.client.ts`,
+                client === '' ? 'export default () => {}\n' : client,
             )
         }
-        writeFileSync(`${scratch}/Page.ts`, emitComponent(file, names))
-        writeFileSync(
-            `${scratch}/Page.client.ts`,
-            emitClient(file, names, false),
-        )
         writeFileSync(
             `${scratch}/entry.ts`,
             // `flushSync` is exposed beside `mount` because a drain is batched to the end of a

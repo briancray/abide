@@ -56,7 +56,8 @@ async function mountPage(
         const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
         modules[`${name}.ts`] = emitComponent(file, reads)
         modules[`${name}.client.ts`] =
-            emitClient(file, reads) || 'export default () => {}'
+            emitClient(file, reads, name !== 'Page') ||
+            'export default () => {}'
     }
     const dir = temporaryModule(modules)
 
@@ -135,8 +136,14 @@ import Total from './Total.abide'
 // caller's client module imports one by name. "A static page ships no client" is the rule this is
 // the exception to, and the import is what forces it: the child is static, the page is not, and
 // the page's `import Static from './Static.client.ts'` has to resolve to something.
-// THE REVERT: write the client module on `client !== ''` alone, as the build did before — the
-// page's client module imports a file that is not there, and nothing until a browser says so.
+//
+// AND THE MODULE FILLS, which is why this is not a no-op. The caller writes the anchor pair and
+// nothing between it (32.19), so the child's markup is the child's to put there — a row the
+// server painted has it already and a row the browser GREW does not. Shipping
+// `export default () => {}` here satisfied the import and left every grown row empty, and the
+// page looked right because the only rows anybody checked were the server's.
+// THE REVERT: return '' from `emitClient` on `!counter.live` alone — `Static.client.ts` is the
+// no-op again, and the second row below comes out `<!--[--><!--]-->`.
 test('an invoked static component still gets a client module — 32.19', async () => {
     const source = temporaryModule({
         'Static.abide': '<strong>nothing moves here</strong>',
@@ -160,12 +167,40 @@ let count = reactive(0)
     ])
     expect(built.exitCode).toBe(0)
 
-    expect(await Bun.file(`${out}/Static.client.ts`).text()).toBe(
-        'export default () => {}\n',
-    )
+    const client = await Bun.file(`${out}/Static.client.ts`).text()
+    expect(client).not.toBe('export default () => {}\n')
+    expect(client).toContain('nothing moves here')
     expect(await Bun.file(`${out}/page.client.ts`).text()).toContain(
         "from './Static.client.ts'",
     )
+})
+
+// THE OTHER HALF, in a document: a row the browser grows has to come out the same as a row the
+// server painted, and a static child is where the two can differ silently — the caller writes its
+// anchors and stops, so nothing but the child's own module can put markup between them.
+test('a static child fills the anchors of a row the browser grew — 32.19', async () => {
+    const { mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Tag from './Tag.abide'
+
+let rows = reactive(['one'])
+</script>
+
+<ul>{#for row of rows by row}<li>{row}<Tag/></li>{/for}</ul>
+<button id="add" onclick={() => { rows = ['one', 'two'] }}>add</button>`,
+        { Tag: '<b class="tag">static</b>' },
+    )
+    mount(document.body)
+    flushSync()
+    ;(document.querySelector('#add') as HTMLElement).click()
+    flushSync()
+
+    const painted = document.querySelectorAll('li')[0] as HTMLElement
+    const grown = document.querySelectorAll('li')[1] as HTMLElement
+    expect(grown.querySelector('b.tag')?.textContent).toBe('static')
+    // The same markup either way round, which is the whole claim.
+    expect(grown.innerHTML.replace('two', 'one')).toBe(painted.innerHTML)
 })
 
 // 10 — `reactive.share(key, create)`, and the three shapes the corpus writes. A scope is the
@@ -357,7 +392,7 @@ let titles = reactive(['one'])
 // gone from the page whether or not anything is still writing into them. THE REVERT: have the
 // emitted invocation discard what the child's mount hands back; `bindingRuns` reads 2 where 1 is
 // due, and it is 2 whatever the page shows.
-test('a row that leaves stops the bindings its component opened — 41.9', async () => {
+test('a row that leaves stops the bindings its component opened — 12.4', async () => {
     const row = `<script>
 import { props } from 'abide'
 

@@ -1,10 +1,14 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// Two projects over the ONE app: served at the root, and again under a sub-path.
-// The sub-path arm is what catches a URL the framework built by assuming '/'. The
-// measure lane's both-substrates gate needs a browser and no app, and `webServer` is
-// a whole-run option rather than a per-project one — so it is a second config,
-// `playwright.harness.config.ts`, and not a third project here.
+// FOUR PROJECTS, TWO QUESTIONS. The dogfood app is served at the root and again under
+// a sub-path — the sub-path arm is what catches a URL the framework built by assuming
+// '/'. The harness pair is the measure lane's both-substrates gate, which needs a
+// browser and no app, and runs in each of the two engines a reader actually brings.
+//
+// THEY SHARE ONE CONFIG AGAIN. `webServer` is a whole-run option rather than a
+// per-project one, so while `abide start` threw, a project that serves nothing could
+// not run beside the one that serves everything and the harness pair lived in a
+// `playwright.harness.config.ts` of its own. `abide start` boots, so it does not.
 const PORT = 3131
 const BASE = `http://localhost:${PORT}`
 const SUB_PATH = '/docs'
@@ -27,9 +31,26 @@ export default defineConfig({
             testDir: './packages/dogfood/e2e',
             use: { ...devices['Desktop Chrome'], baseURL: BASE + SUB_PATH },
         },
+        // TWO ENGINES, because the measure lane runs in whatever browser a READER
+        // brought. V8 and JSC are the two that reach a card in practice, and the whole
+        // claim of this lane is that one case counts the same in each.
+        {
+            name: 'harness',
+            testDir: './packages/harness/e2e',
+            use: { ...devices['Desktop Chrome'] },
+        },
+        {
+            name: 'harness-webkit',
+            testDir: './packages/harness/e2e',
+            use: { ...devices['Desktop Safari'] },
+        },
     ],
     webServer: {
-        command: 'bun run --filter dogfood start',
+        // BUILT, THEN STARTED. `abide start` boots what `abide build` produced (38.6), so a gate
+        // that only starts is a gate against whatever was last built — a page edited and not
+        // rebuilt passes or fails on the previous markup, which cost a debugging session.
+        command:
+            'bun run --filter dogfood build && bun run --filter dogfood start',
         url: BASE,
         reuseExistingServer: !process.env.CI,
         stdout: 'pipe',

@@ -640,6 +640,9 @@ rejection.
 12.12 A read MUST answer what the writes in its turn left, whether or not the `Effect` values they
 woke have run.
 
+12.13 A `watch` registered inside a `{#if}` arm or a `{#for}` row MUST stop when the region
+holding that arm or row is removed.
+
 # 13. Selections
 
 13.1 A `Selection` MUST be one `Reactive`, one `Keyed`, one `Rpc`, or a set of `tags`.
@@ -1252,6 +1255,23 @@ segment.
 
 30.7 `navigate` MUST navigate, and MUST NOT reload the document.
 
+30.8 A route MUST be the directory path of a `page.abide` under `pages`, in the segment spelling
+`url` takes.
+
+30.9 `navigate` MUST match the most specific route, ranking a static segment above a required
+one, a required above an optional, and an optional above a rest.
+
+30.10 An address `navigate` matches no route for MUST be left to the document, and MUST NOT be
+refused.
+
+30.11 A page `navigate` reached MUST build its own markup, and a page the server painted MUST be
+hydrated where it stands.
+
+30.12 `navigate` MUST stop the bindings of the page it replaced, per 12.13.
+
+30.13 A plain click on a same-origin link a route matches MUST reach `navigate`, and a click
+carrying a modifier, a `target` or a `download` MUST NOT.
+
 # 31. Reading and writing by name
 
 31.1 Inside a `.abide` file a name bound to a `Reactive` MUST be read wherever 31.3 does not hold it.
@@ -1554,6 +1574,16 @@ MUST be served by the dev worker rather than out of the bundle.
 the manifest 38.5 emits.
 
 38.20 `abide dev` MUST answer a file under `src/ui/public` out of the source tree, per 38.17.
+
+38.21 `abide start` MUST answer what `abide build` bundled under `/__abide/client`, and MUST answer
+nothing else there.
+
+38.22 `abide start` MUST answer 404 at an address no route matches, per 30.8.
+
+38.23 The document `abide start` serves MUST load the client entry, and MUST load it from the head.
+
+38.24 The document `abide start` serves MUST link the stylesheet `abide build` bundled, and MUST
+link none where the build bundled none.
 
 # 39. Head and view transitions
 

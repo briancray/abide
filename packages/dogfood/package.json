@@ -14,7 +14,7 @@
     },
     "scripts": {
         "build": "abide build --root ./src",
-        "start": "abide start --root ./src",
+        "start": "abide start --root ./src --port 3131",
         "dev": "abide dev --root ./src",
         "typecheck": "tsc -p tsconfig.json",
         "docs": "bun run scripts/buildDocs.ts",

@@ -13,7 +13,7 @@ import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-import { closeTyped, clientOf } from './typed.ts'
+import { clientOf, closeTyped } from './typed.ts'
 
 afterAll(closeTyped)
 

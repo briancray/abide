@@ -155,7 +155,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- | --- |
 | `Disposer` | `() => void` | What tears down the previous run. | 12.1 |
 | `Effect` | `() => void \| Disposer` | What runs on change. | 12.2, 12.8, 14.6 |
-| `watch` | `(effect: Effect) => () => void` | Begins a watch over whatever the effect reads. | 12.2, 12.4, 12.5, 12.6, 12.7, 12.10 |
+| `watch` | `(effect: Effect) => () => void` | Begins a watch over whatever the effect reads. | 12.2, 12.4, 12.5, 12.6, 12.7, 12.10, 12.13 |
 | `watch` | `<Stored>(sources: Reactive<Stored> \| Reactive<Stored>[], effect: Effect) => () => void` | The narrowed form, over named sources. | 12.3 |
 | `flushSync` | `() => void` | Ends the turn: every `Effect` a write woke runs now. | 9.24, 12.11, 12.12 |
 
@@ -454,7 +454,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `url` | `<P extends string>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query] : [params?: ParamsOf<P>, queryParams?: Query]) => string` | Builds an address from a route literal. | 30.1, 30.2 |
+| `url` | `<P extends string>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query] : [params?: ParamsOf<P>, queryParams?: Query]) => string` | Builds an address from a route literal. | 30.1, 30.2, 30.8 |
 | `HasParams<P>` | `boolean` | Whether the literal carries a required segment. | 30.2 |
 | `HasSegments<P>` | `boolean` | Whether the literal carries a segment of any kind. | 30.2 |
 | `RequiredNames<P>` | `string` | The required segment names. | 30.3 |
@@ -467,7 +467,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7 |
+| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13 |
 
 # `.abide` files
 
@@ -664,7 +664,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3 |
 | `abide dev [--port <n>]` | Watches the project and keeps the app up. | 38.4, 38.15, 38.16, 38.17, 38.18, 38.20 |
 | `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.5, 38.19 |
-| `abide start [--port <n>]` | Boots the built app. | 38.6 |
+| `abide start [--port <n>]` | Boots the built app. | 38.6, 38.21, 38.22, 38.23, 38.24 |
 | `abide connect [url]` | The interactive shell against a running app. | 38.7 |
 | `abide call <address> [args]` | One call to one handler. | 38.8 |
 | `abide openapi [--out <file>] [--url <origin>]` | The OpenAPI document written rather than served. | 38.9 |

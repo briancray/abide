@@ -1,0 +1,16 @@
+<script>
+import '#ui/served.css'
+</script>
+
+<head>
+    <title>about · abide</title>
+    <meta name="description" content="What this app is, and what painted it." />
+</head>
+
+<main>
+    <header>
+        <h1>about</h1>
+        <p>This page is a directory under <code>pages/</code>, which is the whole of its address.</p>
+    </header>
+    <p><a id="to-home" href="/">home</a></p>
+</main>

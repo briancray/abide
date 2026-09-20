@@ -1,0 +1,19 @@
+/* THE STYLESHEET THE SERVED APP IMPORTS — `app.css` plus what these two pages need on top, and
+   nothing on top is a colour, a size or a typeface. `app.css` is the token set and the site's
+   design (BRAND), and it lays the DOCS out: a 15.5rem rail beside a column. The served app has no
+   rail yet, so `main` lands in the rail and is squeezed to it. The two rules below neutralise
+   that one assumption and change nothing else.
+
+   THIS FILE GOES when the served app grows the nav the grid is for. */
+@import './app.css';
+
+body {
+    grid-template-columns: minmax(0, 1fr);
+    place-items: center;
+    min-height: 100vh;
+}
+
+main {
+    padding: 3rem 2.5rem;
+    gap: var(--gap-section);
+}

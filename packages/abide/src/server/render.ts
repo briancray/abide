@@ -35,15 +35,8 @@ export async function* render(
     // `</body>` made `slice(headAt, bodyAt)` empty and duplicated the head region on top of that.
     // An absent anchor now means "the end of the document", and the clamp is what keeps the head
     // ahead of the body whatever order the shell wrote them in.
-    const bodyFound = document.lastIndexOf('</body>')
-    const bodyAt = bodyFound === -1 ? document.length : bodyFound
-    // THE OPENING `<body` IS THE FALLBACK, not the body anchor. Collapsed onto `bodyAt`, a shell
-    // with no `</head>` put the page's `<title>`, `<meta>` and stylesheet links after the mount
-    // point and inside `<body>` — still rendered, in the one place a document says they are not
-    // head content.
-    const headClose = document.lastIndexOf('</head>')
-    const headFound = headClose === -1 ? bodyOpen(document) : headClose
-    const headAt = headFound === -1 || headFound > bodyAt ? bodyAt : headFound
+    const bodyAt = bodyAnchor(document)
+    const headAt = headAnchor(document)
     // Two chunks, split at the head, so what the document needs to start fetching is on the wire
     // before the body is built. 41.1 makes that a requirement rather than a courtesy and is not
     // implemented yet — this is the shape it will need, not the guarantee.
@@ -51,6 +44,28 @@ export async function* render(
     yield ENCODER.encode(
         document.slice(headAt, bodyAt) + rendered.body + document.slice(bodyAt),
     )
+}
+
+// Where the body's content ends, which is where a page's markup goes.
+function bodyAnchor(document: string): number {
+    const found = document.lastIndexOf('</body>')
+    return found === -1 ? document.length : found
+}
+
+// Where a shell's head ends, clamped ahead of its body.
+//
+// NOT PUBLIC SURFACE: `server/index.ts` does not re-export it. `serveBuild` is the second caller —
+// a shell has to carry the client entry's script tag (38.23), and putting that anywhere but the
+// head this finds is the same clamped-and-ordered question over again.
+export function headAnchor(document: string): number {
+    const bodyAt = bodyAnchor(document)
+    // THE OPENING `<body` IS THE FALLBACK, not the body anchor. Collapsed onto `bodyAt`, a shell
+    // with no `</head>` put the page's `<title>`, `<meta>` and stylesheet links after the mount
+    // point and inside `<body>` — still rendered, in the one place a document says they are not
+    // head content.
+    const headClose = document.lastIndexOf('</head>')
+    const found = headClose === -1 ? bodyOpen(document) : headClose
+    return found === -1 || found > bodyAt ? bodyAt : found
 }
 
 // Where `<body` opens, or -1. Matched on the tag name rather than on `<body>` so an attribute on
@@ -65,12 +80,20 @@ function bodyOpen(document: string): number {
 // owner of the question.
 async function shellText(shell: URL | undefined): Promise<string> {
     if (shell !== undefined) return await Bun.file(shell).text()
+    return await shellUnder('src')
+}
+
+// 35.6's default, read from a ROOT rather than from the process's directory. `render` on its own
+// is called from wherever the app is, so `src` is the root it passes; `serveBuild` is handed the
+// root `abide build` compiled and the two need not be the same directory. NOT PUBLIC SURFACE —
+// `server/index.ts` does not re-export it.
+export async function shellUnder(root: string): Promise<string> {
     // One syscall rather than two: `.text()` already fails when the file is not there, which is
-    // the question `.exists()` was asked ahead of it. The read itself still happens per render —
-    // 20 µs and 98% of the op — and caching it is a decision about a dev server nothing has
-    // written yet, so it is not taken here.
+    // the question `.exists()` was asked ahead of it. The read still happens per render for a
+    // bare `render` call — 20 µs and 98% of the op — and `serveBuild` is the caller that hoists
+    // it, reading the shell once at boot rather than once a request.
     try {
-        return await Bun.file('src/ui/app.html').text()
+        return await Bun.file(`${root}/ui/app.html`).text()
     } catch (thrown) {
         // NARROWED TO THE ONE CASE THE LINE ABOVE ARGUES FOR. A bare catch made every failure look
         // like an absent file, so a project that HAS a shell which is momentarily unreadable —

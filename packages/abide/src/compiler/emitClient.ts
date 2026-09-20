@@ -1,5 +1,11 @@
 import type { Read } from './classifyRead.ts'
-import { emitMarkup, emitRow, importClause, SHARED } from './emitComponent.ts'
+import {
+    emitHead,
+    emitMarkup,
+    emitRow,
+    importClause,
+    SHARED,
+} from './emitComponent.ts'
 import { hoistPaths } from './hoistPaths.ts'
 import { Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
@@ -33,16 +39,18 @@ import { componentImports, splitImports, withoutProps } from './splitImports.ts'
 // LIVE has been emitted anywhere in the page.
 type Counter = { next: number; live: boolean }
 
-// `invoked` is whether another file invokes this one as a component (32.19). Only then can this
-// module be mounted against an EMPTY region — a row a list grew by — and only then does it carry
-// its own markup. A page is never invoked, and a page carrying a second copy of its template is
-// 34% more client than it needs: measured at 1797 -> 2405 shipped lines over the corpus with every
-// file carrying one. WHICH FILES ARE INVOKED IS THE BUILD'S KNOWLEDGE, being a fact about the
-// import graph rather than about this file, so it arrives rather than being guessed here.
+// `carriesOwnMarkup` is whether this module can be mounted against an EMPTY region, which is true
+// of exactly two files: one another file INVOKES as a component (32.19), mounted against a row a
+// list grew by, and one a ROUTE reaches (30.11), mounted against a page no server painted. Both
+// then need a second copy of the template, and one that needs neither is 34% more client than it
+// needs: measured at 1797 -> 2405 shipped lines over the corpus with every file carrying one.
+// WHICH FILES THOSE ARE IS THE BUILD'S KNOWLEDGE, being a fact about the import graph and the file
+// tree rather than about this file, so it arrives rather than being guessed here — and it DEFAULTS
+// TO NEITHER, because the wrong answer costs a static page the "ships no runtime" fact above.
 export function emitClient(
     file: AbideFile,
     reads: readonly Read[] = [],
-    invoked = true,
+    carriesOwnMarkup = false,
 ): string {
     const plan = planTemplate(file.template.filter((node) => !isHead(node)))
     const lowering = new Lowering(file, reads)
@@ -51,16 +59,6 @@ export function emitClient(
     const helpers: string[] = []
     const counter = { next: 0, live: false }
     emitRegion(plan, 'root', lowering, lines, helpers, counter)
-    // NOTHING LIVE IS NO MODULE. `lines.length === 0` stopped meaning that the moment a BLANK run
-    // started being addressed whether or not it reads anything reactive: a page whose only
-    // expression is `{new Date().getFullYear()}` emitted a `mount` holding one `textAt` and
-    // nothing else, so `bin/abide.ts` wrote a `.client.ts` beside a page that has nothing to
-    // hydrate — and "this page ships no runtime" stopped being a fact about the build. A blank
-    // address is only load-bearing because a LATER index counts through it, so with no binding,
-    // no listener and no region anywhere in the page there is nothing for it to hold a place for.
-    if (!counter.live) return ''
-    const warnMismatch = lowering.use('warnMismatch')
-    const scope = lowering.use('Scope')
 
     // 34.2 — A `<script module>` IS PROCESS-WIDE IN A BROWSER, which is MODULE SCOPE: it is
     // evaluated once when this module is first imported rather than once per `mount`, so a second
@@ -76,7 +74,7 @@ export function emitClient(
     // A PAGE SHIPS ONE TOO, and nothing calls it: which files are INVOKED is the build's knowledge
     // (see `bin/abide.ts`), not this emitter's. The markup is a string concatenation over the same
     // template this module already holds — the cost is the template's own bytes, once.
-    const body = invoked
+    const body = carriesOwnMarkup
         ? emitMarkup(
               file.template.filter((node) => !isHead(node)),
               lowering,
@@ -90,9 +88,46 @@ export function emitClient(
     // Rendering it from the caller instead would mean the child's setup running twice per row: one
     // run for the markup and another for the bindings.
     const fills =
-        !invoked || body === "''"
+        !carriesOwnMarkup || body === "''"
             ? ''
             : `if (${lowering.use('isEmptyRegion')}(root)) ${lowering.use('fillRegion')}(root, ${body})\n`
+
+    // 39.7 — THE HEAD A NAVIGATION HAS TO APPLY. Only a module that carries its own markup can be
+    // reached without a server having rendered it, so only that module needs one; a page the
+    // server painted arrives with its head already in the document.
+    const headMarkup = carriesOwnMarkup ? emitHead(file, lowering, true) : "''"
+    const headExport =
+        headMarkup === "''"
+            ? ''
+            : `export function head() { return ${headMarkup} }\n`
+
+    // NOTHING LIVE IS NO MODULE. `lines.length === 0` stopped meaning that the moment a BLANK run
+    // started being addressed whether or not it reads anything reactive: a page whose only
+    // expression is `{new Date().getFullYear()}` emitted a `mount` holding one `textAt` and
+    // nothing else, so `bin/abide.ts` wrote a `.client.ts` beside a page that has nothing to
+    // hydrate — and "this page ships no runtime" stopped being a fact about the build. A blank
+    // address is only load-bearing because a LATER index counts through it, so with no binding,
+    // no listener and no region anywhere in the page there is nothing for it to hold a place for.
+    //
+    // A FILL IS SOMETHING TO DO, which is why this asks `fills` rather than `counter.live` alone.
+    // An INVOKED component with no binding in it still owns the markup for a row the browser grew
+    // — the caller writes the anchor pair and nothing else (32.19) — so returning '' here shipped
+    // the no-op module and left every browser-grown row of a static child empty, while the rows
+    // the server painted looked right.
+    if (!counter.live && fills === '' && headExport === '') return ''
+
+    // A SCOPE IS WHAT THERE IS TO STOP, so a module with nothing live opens none. A static child
+    // still ships a module — it fills the anchors of a row the browser grew — and making it
+    // allocate a `Scope`, its `stops` array and an entry in the caller's `children` per row is
+    // three allocations a row for a mount whose body is empty. `Scope.own(undefined)` already
+    // reads a mount that returns nothing, which is the same answer the no-op module gives.
+    const bindings = counter.live
+        ? `const ${SCOPE} = new ${lowering.use('Scope')}()
+try {
+${lines.join('\n')}
+} catch (thrown) { if (!${lowering.use('warnMismatch')}(thrown)) throw thrown }
+return ${SCOPE}`
+        : ''
 
     // 10.5 on the other side, and the same scope: the child's `mount` is called from inside the
     // parent's, so the chain a key is looked up is the component tree here too.
@@ -130,14 +165,11 @@ export function emitClient(
     return `${sharedImport}import { ${importClause(runtime.sort())} } from '${RUNTIME_SPECIFIER}'
 ${componentImports(withoutProps(moduleSetup.imports), '.client')}${componentImports(withoutProps(setup.imports), '.client')}
 ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}\
+${headExport}\
 export default function mount(root${lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
 ${opened}${setup.body}
 ${helpers.join('\n')}
-${fills}${captured}${fills}const ${SCOPE} = new ${scope}()
-try {
-${lines.join('\n')}
-} catch (thrown) { if (!${warnMismatch}(thrown)) throw thrown }
-return ${SCOPE}${closed}
+${fills}${captured}${bindings}${closed}
 }
 `
 }
@@ -348,11 +380,12 @@ function emitInvocation(
             : JSON.stringify(attribute.value)
         props.push(`${JSON.stringify(attribute.name)}: () => (${value})`)
     }
-    // THE CHILD'S SCOPE IS ADOPTED. Its bindings live as long as its nodes do, and what removes
+    // THE CHILD'S SCOPE IS OWNED. Its bindings live as long as its nodes do, and what removes
     // those nodes is this region — a row that leaves, an arm that swaps — so the scope that stops
-    // them has to be the one this region holds.
+    // them has to be the one this region holds. Held rather than drained, because a child holding
+    // an arm or a list of its own owns scopes that its disposer list does not reach.
     lines.push(
-        `${SCOPE}.adopt(${region.node.tag}(${lowering.use('regionAt')}(${step('childAt', region.parent, root, lowering, false)}, ${region.index}), { ${props.join(', ')} }))`,
+        `${SCOPE}.own(${region.node.tag}(${lowering.use('regionAt')}(${step('childAt', region.parent, root, lowering, false)}, ${region.index}), { ${props.join(', ')} }))`,
     )
 }
 
@@ -423,17 +456,25 @@ function emitBlock(
         `function ${name}_html(arm) {\n${armHtml.join('\n')}\n    return ''\n}`,
     )
 
+    // ONE SCOPE FOR THE BLOCK'S WHOLE LIFE, owned by the region above it and REFILLED on every
+    // swap rather than replaced. A fresh scope per swap would have to be handed up per swap too,
+    // and a toggle clicked a thousand times would leave a thousand of them on the region that
+    // outlives it; `stop()` clears, so the same one holds only the arm currently standing.
+    // `undefined` IS "NOT YET MOUNTED" and nothing else: `take` is an arm index or the `-1` floor,
+    // never `undefined`, so the assignment moving below the guard is the whole of the flag.
     lines.push(`let ${name}_at`)
-    lines.push(`let ${name}_scope`)
+    lines.push(
+        `const ${name}_scope = ${SCOPE}.own(new ${lowering.use('Scope')}())`,
+    )
     lines.push(`${SCOPE}.watch(() => {
     const next = ${take}
     if (next === ${name}_at) return
-    ${name}_at = next
-    if (${name}_scope !== undefined) {
+    if (${name}_at !== undefined) {
         ${name}_scope.stop()
         ${fillRegion}(${name}, ${name}_html(next))
     }
-    ${name}_scope = ${name}_mount(${name}, next)
+    ${name}_at = next
+    ${name}_scope.own(${name}_mount(${name}, next))
 })`)
 }
 
@@ -502,8 +543,10 @@ function emitList(
     lines.push(
         `const ${name} = ${lowering.use('regionAt')}(${parent}, ${region.index})`,
     )
+    // OWNED BY THE REGION ABOVE IT: `dropRow` stops a row as the list churns, but a block removed
+    // whole drops no rows, so `List.stop` is what reaches the ones still standing.
     lines.push(
-        `const ${name}_list = ${lowering.use('listAt')}(${name}, ${single ? 'false' : 'true'}, ${name}_key, ${name}_make, ${name}_mount)`,
+        `const ${name}_list = ${SCOPE}.own(${lowering.use('listAt')}(${name}, ${single ? 'false' : 'true'}, ${name}_key, ${name}_make, ${name}_mount))`,
     )
     lines.push(
         `${SCOPE}.watch(() => ${lowering.use('updateList')}(${name}_list, ${name}_subject()))`,
