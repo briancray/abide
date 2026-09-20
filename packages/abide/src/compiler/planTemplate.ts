@@ -54,6 +54,17 @@ export type ListPlan = {
     plan: TemplatePlan
 }
 
+// 32.19 — AN INVOCATION IS A REGION, and it is one for a reason the blocks are not: how many
+// top-level nodes the child writes is a fact about ANOTHER FILE. Every sibling after it would
+// otherwise be addressed by counting through a shape this file cannot see, so the anchor pair the
+// server wrote is what the walk stops at — and the child mounts against it.
+export type ComponentPlan = {
+    kind: 'component'
+    index: number
+    parent: number[]
+    node: TemplateNode & { kind: 'element' }
+}
+
 // A `{#if}` and its arms. Each arm is planned as its OWN region — its bindings are addressed from
 // the region's own root, so two arms may hold the same paths and neither can see the other's.
 export type RegionPlan = {
@@ -72,7 +83,7 @@ export type RegionPlan = {
 export type TemplatePlan = {
     runs: TextRun[]
     handlers: HandlerBinding[]
-    regions: (RegionPlan | ListPlan)[]
+    regions: (RegionPlan | ListPlan | ComponentPlan)[]
 }
 
 // `first` is the index the root's first node stands at — 0, except in a row that carries its own
@@ -185,6 +196,21 @@ function walk(
             continue
         }
 
+        if (node.kind === 'element' && isComponentTag(node.tag)) {
+            plan.regions.push({
+                kind: 'component',
+                index: regionIndex,
+                parent: [...path],
+                node,
+            })
+            afterRegion = regionIndex
+            regionIndex += 1
+            sinceRegion = 0
+            childIndex += 1
+            at += 1
+            continue
+        }
+
         if (node.kind === 'element') {
             const here = place()
             for (const attribute of node.attributes) {
@@ -209,6 +235,15 @@ function walk(
 // `onclick={f}` is a listener, never an attribute — the plan records it and the server writes
 // nothing for it, so the two emitters have to agree on the test. One copy is that agreement.
 // Given the FOLDED name (`Attribute.lowerName`).
+// 32.19 — `<Row/>` is a component and `<row/>` is the element. An HTML tag is matched
+// case-insensitively everywhere else (`lowerTag`), and this is the one comparison where the
+// author's own spelling decides. Here rather than beside the emitter that calls it most, because
+// the plan is what both emitters read and the edge the other way round is a cycle.
+export function isComponentTag(tag: string): boolean {
+    const first = tag.charCodeAt(0)
+    return first >= 65 && first <= 90
+}
+
 export function isEventName(lowerName: string): boolean {
     return lowerName.length > 2 && lowerName.startsWith('on')
 }

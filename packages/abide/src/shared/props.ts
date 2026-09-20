@@ -1,0 +1,23 @@
+// 33 — a component's props, as the child declares them.
+//
+// NOTHING HERE RUNS IN A COMPILED PAGE. `props<Props>()` is LOWERED: the compiler replaces the
+// call with the record of accessors the caller passed, and every name the pattern binds becomes a
+// read of its accessor (33.4, 33.5, 33.9). The export exists because the import an author writes
+// has to resolve — 19.12 has valid TypeScript go on compiling — and because the TYPE is what makes
+// a prop's shape the one the child declared.
+//
+// THE RETURN TYPE IS THE PLAIN SHAPE, not one accessor per key, and that is the point of the
+// lowering rather than a gap in it: `amount.toFixed(2)` is what an author writes and what the
+// checker sees, and the accessor is the compiler's business. 33.6 — a plain prop has no
+// `Reactive` face at all.
+
+export function props<Props = Record<string, unknown>>(): {
+    [Key in keyof Props]: Props[Key]
+} {
+    // Reached only from a `.abide` nothing compiled, or from a `.ts` that imported it. Either way
+    // there is no instance to read, and answering an empty record would make a missing prop read
+    // `undefined` instead of saying so.
+    throw new Error(
+        'abide: props() is compiled away inside a .abide file, and there is no component instance to read outside one. RULEBOOK 33.1.',
+    )
+}

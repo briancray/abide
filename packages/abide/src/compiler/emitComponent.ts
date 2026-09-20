@@ -2,13 +2,23 @@ import { escapeAttribute } from '#shared/escapeText.ts'
 import { safeUrl } from '#shared/safeUrl.ts'
 import { REGION_CLOSE, REGION_OPEN, ROW_OPEN } from '#ui/REGION.ts'
 import type { Read } from './classifyRead.ts'
-import { Lowering } from './Lowering.ts'
+import { Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
-import { isEventName, isHead, isSingleRooted } from './planTemplate.ts'
+import {
+    isComponentTag,
+    isEventName,
+    isHead,
+    isSingleRooted,
+} from './planTemplate.ts'
 import { SERVER_SPECIFIER } from './SPECIFIERS.ts'
-import { splitImports } from './splitImports.ts'
+import { componentImports, splitImports, withoutProps } from './splitImports.ts'
 import type { Attribute, TemplateNode } from './TemplateNode.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
+
+// Where a component's own head contributions land, and the name the body is bound to while they
+// do. Under `__` for the reason every framework name in an emitted module is.
+const HEADS = '__heads'
+const BODY = '__body'
 
 // A parsed `.abide` file becomes one ESM module exporting a component. The `<script>` body is
 // copied VERBATIM into the component function, which is the whole of 19.12 at this stage: the
@@ -69,13 +79,20 @@ export function emitComponent(
     // THE SETUP IS NOT RE-INDENTED. Adding a margin to every line rewrites the INSIDE of a
     // multi-line template literal, so `\`line one\nline two\`` gains four spaces it never had —
     // a changed string constant, in a file nobody reads.
+    // 39.1 THROUGH A COMPONENT. A child contributes to the document head as a page does, and the
+    // call that renders it stands inside the BODY expression — so the heads are collected as the
+    // body is built and the body is bound to a name before the return reads them. The array is
+    // emitted only where the page invokes something: a page with no component pays nothing.
+    const heads = body.some((part) => part.includes(HEADS))
     return `${names.length === 0 ? '' : `import { ${importClause(names)} } from '${SERVER_SPECIFIER}'\n`}\
-${moduleSetup.imports}${setup.imports}
-export default function Component() {
+${componentImports(withoutProps(moduleSetup.imports), '')}${componentImports(withoutProps(setup.imports), '')}
+export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
 ${componentBody}
+${heads ? `    const ${HEADS} = []\n` : ''}\
+    const ${BODY} = ${concat(body)}
     return {
-        head: ${concat(head)},
-        body: ${concat(body)},
+        head: ${concat(head)}${heads ? ` + ${HEADS}.join('')` : ''},
+        body: ${BODY},
     }
 }
 `
@@ -133,6 +150,10 @@ function emitNode(node: TemplateNode, lowering: Lowering): string {
         }
         return `${JSON.stringify(`<!--${REGION_OPEN}-->`)} + ${expression} + ${JSON.stringify(`<!--${REGION_CLOSE}-->`)}`
     }
+
+    // 32.19 — A CAPITALISED TAG IS AN INVOCATION, and the capital is the whole of the
+    // distinction. It is emitted as a CALL, so the child's own module renders it.
+    if (isComponentTag(node.tag)) return emitInvocation(node, lowering)
 
     const parts: string[] = []
     let open = `<${node.tag}`
@@ -193,6 +214,42 @@ function emitNode(node: TemplateNode, lowering: Lowering): string {
         ...emitChildren(node.children, lowering),
         JSON.stringify(`</${node.tag}>`),
     ].join(' + ')
+}
+
+// One invocation. The child is a function taking a record of ACCESSORS (33.4, 33.5): the prop is
+// the caller's expression, not a snapshot of it, so the child re-reads when the parent's value
+// moves and neither of them arranges that.
+//
+// A REGION, ANCHORED. The child's markup is written inline, and how many top-level nodes it has is
+// a fact about ANOTHER FILE — so the parent cannot address the siblings that follow it by
+// counting, the way it does for an element whose shape it can see. The anchors are what make the
+// child's nodes one addressable thing, and they are the same pair `{#if}` uses.
+function emitInvocation(
+    node: Extract<TemplateNode, { kind: 'element' }>,
+    lowering: Lowering,
+): string {
+    if (node.children.length > 0)
+        throw new Error(
+            `abide: <${node.tag}> is given children, and <slot/> is not built yet. RULEBOOK 32.20.`,
+        )
+    const props: string[] = []
+    for (const attribute of node.attributes) {
+        if (attribute.name.startsWith('...'))
+            throw new Error(
+                `abide: a spread on <${node.tag}> is not built yet. RULEBOOK 33.12.`,
+            )
+        if (attribute.name.includes(':'))
+            throw new Error(
+                `abide: ${attribute.name} on <${node.tag}> is not built yet. RULEBOOK 33.8.`,
+            )
+        // A STATIC PROP IS STILL AN ACCESSOR. One shape per prop whatever the call site spelled
+        // (33.10), so the child reads every key the same way and a literal is not a second case.
+        const value = attribute.expression
+            ? lowering.expression(attribute)
+            : JSON.stringify(attribute.value)
+        props.push(`${JSON.stringify(attribute.name)}: () => (${value})`)
+    }
+    return `${lowering.use('renderComponent')}(${node.tag}, { ${props.join(', ')} }, ${HEADS})`
 }
 
 // The markup for a set of nodes, as an expression. Exported because a `{#if}` arm's markup is

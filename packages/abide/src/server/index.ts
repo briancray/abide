@@ -16,6 +16,9 @@ export * from '#shared'
 // block and by the client's `updateList` through the one function, so the two cannot disagree.
 export { listOf } from '#shared/listOf.ts'
 export { type Component, render, type Shell } from './render.ts'
+// 32.19's run-time half: one invocation, rendered where it stands, with the anchors that make the
+// child's markup one thing for the client to walk to.
+export { renderComponent } from './renderComponent.ts'
 export {
     DELETE,
     GET,

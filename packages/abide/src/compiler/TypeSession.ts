@@ -4,12 +4,14 @@ import type { Node, TypeNode } from 'typescript/unstable/ast'
 import {
     isArrayLiteralExpression,
     isArrowFunction,
+    isBindingElement,
     isCallExpression,
     isFunctionDeclaration,
     isFunctionExpression,
     isIdentifier,
     isMethodDeclaration,
     isNewExpression,
+    isObjectBindingPattern,
     isParenthesizedExpression,
     isReturnStatement,
     isVariableDeclaration,
@@ -22,7 +24,7 @@ import {
     TypeFlags,
     type UnionType,
 } from 'typescript/unstable/async'
-import { classifyRead, type Read } from './classifyRead.ts'
+import { classifyPropRead, classifyRead, type Read } from './classifyRead.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { projectShadow } from './projectShadow.ts'
 
@@ -216,7 +218,21 @@ export class TypeSession {
                         names.push(name)
                     }
                 }
-                if (names.length === 0) return
+                // 33's pass runs whatever 31.3's found: a `props` pattern binds no name the walk
+                // above collects — `const { amount } = props()` declares a PATTERN — so a file
+                // whose only declaration is one would have returned with its props unread.
+                const props = propsReads(
+                    checker,
+                    sourceFile,
+                    query.shadowPath,
+                    query.scriptsEnd,
+                    answers[at] as Read[],
+                )
+                if (names.length === 0) {
+                    await props
+                    ;(answers[at] as Read[]).sort(byPosition)
+                    return
+                }
                 const symbols = await checker.getSymbolAtLocation(names)
                 const reactive = await Promise.all(
                     symbols.map(async (symbol) => {
@@ -267,7 +283,8 @@ export class TypeSession {
                             )
                     }
                 await Promise.all(holding)
-                reads.sort((left, right) => left.start - right.start)
+                await props
+                reads.sort(byPosition)
             }),
         )
         return answers
@@ -365,4 +382,114 @@ async function isReactiveTyped(checker: Checker, type: Type): Promise<boolean> {
         reactive = true
     }
     return reactive
+}
+
+// 33 — WHAT `props<Props>()` BINDS, and it is a second question from 31.3's rather than a case of
+// it: a prop is not a `Reactive` and is not typed as one (33.6), so no type answers this. The
+// SPELLING does. `props` is the name 33 gives the call, the pattern is flat (33.14), and every
+// name it binds is one accessor (33.4).
+//
+// THREE KINDS OF READ COME BACK: the call itself, which lowers to the record the caller passed;
+// each default, which lowers to an accessor answering it; and every occurrence of every name the
+// pattern bound.
+async function propsReads(
+    checker: Checker,
+    sourceFile: { statements: readonly Node[] },
+    shadowPath: string,
+    scriptsEnd: number,
+    reads: Read[],
+): Promise<void> {
+    const bound: Node[] = []
+    for (const statement of sourceFile.statements) {
+        if (statement.getStart() >= scriptsEnd) break
+        if (!isVariableStatement(statement)) continue
+        for (const declaration of statement.declarationList.declarations) {
+            const call = declaration.initializer
+            if (
+                call === undefined ||
+                !isCallExpression(call) ||
+                !isIdentifier(call.expression) ||
+                call.expression.text !== 'props'
+            )
+                continue
+            reads.push(spliced(call.getStart(), call.end, 'props'))
+            const pattern = declaration.name
+            // 33.3 — `const all = props()` is the untyped record itself, and there is no pattern
+            // to walk. Its members are read through `all`, which the lowering leaves alone.
+            if (!isObjectBindingPattern(pattern)) continue
+            for (const element of pattern.elements) {
+                // 33.14 — FLAT: a rename, a default and a rest element, and no nested pattern.
+                const name = element.name
+                if (name === undefined || !isIdentifier(name))
+                    throw new Error(
+                        'abide: a props pattern is flat — a rename, a default and a rest element, and no nested pattern. RULEBOOK 33.14.',
+                    )
+                if (element.initializer !== undefined) {
+                    const open = element.initializer.getStart()
+                    reads.push(spliced(open, open, 'defaultOpen'))
+                    reads.push(
+                        spliced(
+                            element.initializer.end,
+                            element.initializer.end,
+                            'defaultClose',
+                        ),
+                    )
+                }
+                bound.push(name)
+            }
+        }
+    }
+    if (bound.length === 0) return
+
+    const symbols = await checker.getSymbolAtLocation(bound)
+    const found = await Promise.all(
+        symbols.map(async (symbol) =>
+            symbol === undefined
+                ? []
+                : Promise.all(
+                      (
+                          await checker.getReferencesToSymbolInFile(
+                              shadowPath,
+                              symbol,
+                          )
+                      ).map((reference) => reference.resolve()),
+                  ),
+        ),
+    )
+    for (const references of found)
+        for (const node of references) {
+            if (node === undefined) continue
+            const read = classifyPropRead(node)
+            if (read !== undefined) reads.push(read)
+        }
+}
+
+// ASCENDING, AND AN INSERTION KNOWS WHICH SIDE IT IS ON. A default's open stands at the same
+// offset as the first read inside it — `currency = fallback` — and a sort by offset alone leaves
+// which comes first to the order the two passes happened to push in.
+function byPosition(left: Read, right: Read): number {
+    return left.start - right.start || side(left) - side(right)
+}
+
+function side(read: Read): number {
+    if (read.shape === 'defaultOpen') return -1
+    return read.shape === 'defaultClose' ? 1 : 0
+}
+
+// A read that is a SPLICE rather than a name: the span it replaces, and what it becomes. A span of
+// zero width is an INSERTION, and the walk goes on from where it stood.
+function spliced(start: number, end: number, shape: Read['shape']): Read {
+    return {
+        start,
+        end,
+        shape,
+        from: start,
+        to: end,
+        operator: '',
+        prefix: false,
+        discarded: false,
+        arguments: 0,
+        path: [],
+        value: undefined,
+    }
 }

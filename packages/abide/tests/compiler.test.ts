@@ -132,6 +132,7 @@ test('the compiler is not reachable from the server seam', async () => {
             'PUT',
             'listOf',
             'render',
+            'renderComponent',
         ].sort(),
     )
 })
@@ -1063,7 +1064,7 @@ test('a default value holding an `=` is skipped whole — 31.12', async () => {
 test('an uppercase head is hoisted by both emitters', async () => {
     const source = '<HEAD><title>t</title></HEAD><p>{n}</p>'
     expect(await serverOf(source, ['n'])).toContain(
-        'body: "<p>" + __escapeText(n()) + "</p>"',
+        '__body = "<p>" + __escapeText(n()) + "</p>"',
     )
     expect(await clientOf(source, ['n'])).toContain(
         '__textAt(root, [0,0], true)',

@@ -26,7 +26,20 @@ export type Read = {
     // `value` lowers to `n()`; `asWritten` stays as written (`n.set(v)`, 31.5); `call` is the
     // explicit `n()` (31.7), which `arguments` says was given any; `shorthand` is `{ n }`;
     // `write` and `update` are 31.4, and 31.9 where `path` is not empty.
-    shape: 'value' | 'asWritten' | 'call' | 'shorthand' | 'write' | 'update'
+    // 33's three: the `props<Props>()` call, which lowers to the record the caller passed, and the
+    // pair that brackets a binding element's initializer, which together make a default an
+    // accessor. The pair are INSERTIONS — zero-width, so what stands between them goes on being
+    // lowered by the same walk, and a default reading a `Reactive` still reads it.
+    shape:
+        | 'value'
+        | 'asWritten'
+        | 'call'
+        | 'shorthand'
+        | 'write'
+        | 'update'
+        | 'props'
+        | 'defaultOpen'
+        | 'defaultClose'
     // What the rewrite replaces: the name, or a whole write or update from its first token.
     from: number
     to: number
@@ -40,6 +53,60 @@ export type Read = {
     // computed segment, which may itself hold reads.
     path: { name: string | undefined; start: number; end: number }[]
     value: Span | undefined
+}
+
+// ONE OCCURRENCE OF A NAME THE `props` PATTERN BOUND (33.4, 33.9). Every one of them is a read of
+// that key's accessor, which is where this parts company with `classifyRead`: `onsave()` is the
+// prop's own value being CALLED and lowers to `onsave()()`, where the same spelling on a
+// `Reactive` is 31.7's explicit read; and `amount.set` is the value's member, there being no
+// `Reactive` face on a plain prop at all (33.6).
+export function classifyPropRead(node: Node): Read | undefined {
+    const parent = node.parent
+    switch (parent.kind) {
+        case SyntaxKind.BindingElement:
+            // The binding itself, and the key it renames from — neither is a read.
+            if ((parent as { name?: Node }).name === node) return undefined
+            if ((parent as { propertyName?: Node }).propertyName === node)
+                return undefined
+            break
+        case SyntaxKind.ImportSpecifier:
+        case SyntaxKind.ImportClause:
+        case SyntaxKind.NamespaceImport:
+        case SyntaxKind.ExportSpecifier:
+        case SyntaxKind.TypeQuery:
+            return undefined
+    }
+    // 33.5, 33.6 — A PROP IS A LIVE READ AND HAS NO WRITE. `const` already refuses this in the
+    // checker; a `let` pattern does not, and lowering it as a read would emit `amount() = 5` —
+    // a module that does not parse, reported against the emitter rather than against the page.
+    if (
+        (isBinaryExpression(parent) &&
+            parent.left === node &&
+            parent.operatorToken.kind >= SyntaxKind.FirstAssignment &&
+            parent.operatorToken.kind <= SyntaxKind.LastAssignment) ||
+        ((isPrefixUnaryExpression(parent) ||
+            isPostfixUnaryExpression(parent)) &&
+            (parent.operator === SyntaxKind.PlusPlusToken ||
+                parent.operator === SyntaxKind.MinusMinusToken))
+    )
+        throw new Error(
+            `abide: ${(node as { text?: string }).text ?? ''} is a prop, which is a live read of the caller's expression and has no write. RULEBOOK 33.5, 33.6.`,
+        )
+    const start = node.getStart()
+    const read: Read = {
+        start,
+        end: node.end,
+        shape: isShorthandPropertyAssignment(parent) ? 'shorthand' : 'value',
+        from: start,
+        to: node.end,
+        operator: '',
+        prefix: false,
+        discarded: false,
+        arguments: 0,
+        path: [],
+        value: undefined,
+    }
+    return read
 }
 
 // `undefined` for an occurrence that is not a read at all: the declaration itself, an import or

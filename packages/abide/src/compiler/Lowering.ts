@@ -40,6 +40,14 @@ export class Lowering {
         this.reads = reads
     }
 
+    // 33 — WHETHER THIS FILE IS A COMPONENT THAT TAKES PROPS, which is the one thing the emitters
+    // need from the props pass: the emitted function takes the record, and a file that never
+    // calls `props` takes none (33.2).
+    takesProps(): boolean {
+        for (const read of this.reads) if (read.shape === 'props') return true
+        return false
+    }
+
     // A framework name as emitted code calls it, registered for the import in the same breath —
     // which is the whole reason it is one call. See `importClause` for the alias.
     use(name: string): string {
@@ -170,6 +178,18 @@ export class Lowering {
             // to stay `n` and only the value lowers — `{ n() }` is a method with no body.
             case 'shorthand':
                 return `${name}: ${name}()`
+            // 33.4 — the call IS the record of accessors the caller passed, so the pattern an
+            // author wrote destructures that rather than a value nothing has.
+            case 'props':
+                return PROPS
+            // 33.4 again, on the other side of the `=`: every key is an accessor, so a default
+            // has to be one too — bound as written, `currency` would be a string where every
+            // read of it is a call. The two insertions BRACKET the author's expression rather
+            // than replacing it, so a default that reads a `Reactive` still lowers inside.
+            case 'defaultOpen':
+                return '() => ('
+            case 'defaultClose':
+                return ')'
         }
         const value =
             read.value === undefined ? '1' : this.lower(read.value, raw).trim()
@@ -247,6 +267,11 @@ export class Lowering {
 }
 
 const NO_CALLS: number[] = []
+
+// What the emitted component function calls its props record. Under `__` for the reason every
+// framework name in an emitted module is (`importClause`): an author's own `props` is a name they
+// may have bound themselves.
+export const PROPS = '__props'
 
 // 31.4 — the write a name and an assignment operator stand for. THE SIXTEEN ARE ONE MECHANISM:
 // the operator is the token's own text without its `=`, so completeness is a property rather

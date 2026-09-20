@@ -168,3 +168,37 @@ function endOfAttributes(
     }
     return end
 }
+
+// 32.19 — A `.abide` IMPORT IS AN IMPORT OF THE MODULE THAT FILE COMPILES TO, and which of the two
+// it is is the LANE's business: the server module renders the child, the client module mounts it.
+// The path is left exactly as the author wrote it — where the compiled tree lives is the build's
+// business, and an emitter that rewrote the path would be deciding a layout it cannot see.
+export function componentImports(
+    imports: string,
+    lane: '' | '.client',
+): string {
+    return imports.includes('.abide')
+        ? imports.replace(/(\.abide)(?=['"])/g, `${lane}.ts`)
+        : imports
+}
+
+// 33 — `props` IS COMPILED AWAY, so the import an author wrote for it is a name the emitted module
+// never calls. Left in, every component module imports the stub that exists to throw, and the
+// app's own tooling reports it unused in a file nobody wrote.
+export function withoutProps(imports: string): string {
+    if (!imports.includes('props')) return imports
+    return imports
+        .replace(
+            /^import \{([^}]*)\} from ('abide'|"abide")\s*;?$/gm,
+            (statement, clause: string, specifier: string) => {
+                const kept: string[] = []
+                for (const name of clause.split(','))
+                    if (name.trim() !== 'props' && name.trim() !== '')
+                        kept.push(name.trim())
+                return kept.length === 0
+                    ? ''
+                    : `import { ${kept.join(', ')} } from ${specifier}`
+            },
+        )
+        .replace(/\n{2,}/g, '\n')
+}

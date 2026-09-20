@@ -40,15 +40,24 @@ function seams(module: string, from: string): string {
     return module.replace(
         /from '#(server|shared|ui)(\/[^']*)?'/g,
         (_, seam: string, rest: string | undefined) => {
-            const target = `src/${seam}${rest === undefined ? '/index' : rest}.ts`
+            // A SPECIFIER MAY ALREADY CARRY ITS EXTENSION. 32.19's `.abide` import is rewritten by
+            // the compiler to the module that file becomes, so appending here made `Total.ts.ts`.
+            const named = rest === undefined ? '/index' : rest
+            const target = `src/${seam}${named}${named.endsWith('.ts') ? '' : '.ts'}`
             const path = relativePath(from === '' ? '.' : from, target)
             return `from '${path.startsWith('.') ? path : `./${path}`}'`
         },
     )
 }
 
-// Every `.ts` under an example's `files/src`, keyed by where it goes in the copy.
-async function exampleTree(example: string): Promise<Record<string, string>> {
+// AN EXAMPLE, COMPILED WHOLE: every `.ts` copied and every `.abide` compiled to the pair it
+// becomes, each keyed by where it goes in the copy. A page that invokes a component (32.19) imports
+// the module its child compiled to, so compiling the page alone leaves that import pointing at a
+// `.abide` nothing can load — which is a fact about the harness rather than about the page.
+async function exampleTree(
+    example: string,
+    session: TypeSession,
+): Promise<Record<string, string>> {
     const root = new URL(`${example}/files/`, EXAMPLES).pathname
     const tree: Record<string, string> = {}
     for (const path of new Bun.Glob('src/**/*.ts').scanSync({ cwd: root }))
@@ -56,6 +65,20 @@ async function exampleTree(example: string): Promise<Record<string, string>> {
             await Bun.file(`${root}${path}`).text(),
             path.slice(0, path.lastIndexOf('/')),
         )
+    for (const path of new Bun.Glob('src/**/*.abide').scanSync({ cwd: root })) {
+        const from = path.slice(0, path.lastIndexOf('/'))
+        const file = parseAbide(await Bun.file(`${root}${path}`).text())
+        const reads = await session.reads(`${root}${path}`, file)
+        const stem = path.slice(0, -'.abide'.length)
+        tree[`${stem}.ts`] = seams(emitComponent(file, reads), from)
+        // A CHILD WITH NOTHING TO HYDRATE STILL NEEDS A MODULE, because its caller imports one.
+        // `emitClient` answers '' for a static file — that is what makes a static page ship no
+        // runtime — so the no-op stands in wherever a caller has to have something to call.
+        tree[`${stem}.client.ts`] = seams(
+            emitClient(file, reads) || 'export default () => {}',
+            from,
+        )
+    }
     return tree
 }
 
@@ -91,31 +114,26 @@ test('every example renders on the server and mounts on the client', async () =>
 
     try {
         for (const relative of sources) {
-            const path = new URL(relative, EXAMPLES).pathname
-            const text = await Bun.file(path).text()
             try {
-                const file = parseAbide(text)
-                const names = await session.reads(path, file)
                 // EACH EXAMPLE IS ITS OWN APP, with its own `#server` / `#shared` / `#ui`, and a
-                // temp directory is not that app. So the example's WHOLE `src` is copied beside the
-                // page with every module's seam specifiers rewritten to the copy — not the page's
-                // alone. Rewriting only the page left a handler's own `#server/database` to
+                // temp directory is not that app. So the example's WHOLE `src` is copied and
+                // compiled with every module's seam specifiers rewritten to the copy — not the
+                // page's alone. Rewriting only the page left a handler's own `#server/database` to
                 // resolve through `packages/dogfood/package.json`, to the DOCS APP's database, and
                 // an example ran against another app's module with nothing saying so. An `imports`
                 // map was tried and bun did not resolve one pointing outside its own package; a
                 // runtime `onResolve` does not fire for a bare `#shared` that fails its lookup.
                 const example = relative.slice(0, relative.indexOf('/files/'))
-                const tree = await exampleTree(example)
-                const dir = temporaryModule({
-                    ...tree,
-                    'Page.ts': seams(emitComponent(file, names), ''),
-                    'Page.client.ts': seams(
-                        emitClient(file, names) || 'export default () => {}',
-                        '',
-                    ),
-                })
+                const dir = temporaryModule(await exampleTree(example, session))
+                // THE FILE UNDER TEST IS THE ONE IN THE TREE, at its own path rather than at the
+                // root of the copy: a component's caller reaches it by the path it was written
+                // with, and a page lifted to the root is a page whose relative imports mean
+                // something else.
+                const stem = relative
+                    .slice(relative.indexOf('/files/') + '/files/'.length)
+                    .slice(0, -'.abide'.length)
 
-                const { default: Component } = await import(`${dir}/Page.ts`)
+                const { default: Component } = await import(`${dir}/${stem}.ts`)
                 let html = ''
                 for await (const chunk of render(Component, SHELL))
                     html += new TextDecoder().decode(chunk)
@@ -126,7 +144,9 @@ test('every example renders on the server and mounts on the client', async () =>
                     html.indexOf('</body>'),
                 )
                 document.body.replaceChildren(host)
-                const { default: mount } = await import(`${dir}/Page.client.ts`)
+                const { default: mount } = await import(
+                    `${dir}/${stem}.client.ts`
+                )
                 mount(host)
                 await new Promise((resolve) => setTimeout(resolve, 0))
             } catch (thrown) {
@@ -190,5 +210,15 @@ test('every example renders on the server and mounts on the client', async () =>
     //
     // 44 WITH `GET` AND THE MUTATIONS IN PROCESS. It read 51 first, and 7 of those were the docs
     // app's database answering an example's handler — see `exampleTree`.
-    expect(sources.length - broken.length).toBeGreaterThanOrEqual(44)
+    //
+    // 40 WITH COMPONENTS, AND THE NUMBER WENT DOWN BECAUSE THE MEASUREMENT GOT HONEST — the same
+    // way it did at 51 -> 44. A page invoking `<TrackRow/>` used to emit the tag as MARKUP: the
+    // child never ran, so whatever it needed was never missed and the page counted as running.
+    // The child is compiled and invoked now, so a page is worth what its components are worth —
+    // six of them want `reactive.share`, which is not built. The other two are components whose
+    // props nobody passes, this corpus having no caller for a file it compiles on its own.
+    //
+    // A RATCHET STILL, and the direction is the rule: this may not go down under a change that
+    // does not change what is being counted.
+    expect(sources.length - broken.length).toBeGreaterThanOrEqual(40)
 })

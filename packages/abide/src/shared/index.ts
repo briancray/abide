@@ -19,6 +19,7 @@ export { type Failed, isFailed } from './Failed.ts'
 export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
 export { jsonSchema } from './jsonSchema.ts'
+export { props } from './props.ts'
 export { Raw, raw } from './Raw.ts'
 export {
     busy,

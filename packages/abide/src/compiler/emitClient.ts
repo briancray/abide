@@ -1,9 +1,10 @@
 import type { Read } from './classifyRead.ts'
 import { emitMarkup, emitRow, importClause } from './emitComponent.ts'
 import { hoistPaths } from './hoistPaths.ts'
-import { Lowering } from './Lowering.ts'
+import { Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
+    type ComponentPlan,
     isHead,
     isSingleRooted,
     type ListPlan,
@@ -14,7 +15,7 @@ import {
 } from './planTemplate.ts'
 import { SHARED_NAMES } from './SHARED_NAMES.ts'
 import { RUNTIME_SPECIFIER, SHARED_SPECIFIER } from './SPECIFIERS.ts'
-import { splitImports } from './splitImports.ts'
+import { componentImports, splitImports, withoutProps } from './splitImports.ts'
 
 // The client half of one `.abide`. It reads the SAME plan the server emitter did, so the position
 // the server wrote to and the position the client walks to cannot drift.
@@ -79,9 +80,9 @@ export function emitClient(
     // THE PAGE OPENS A SCOPE LIKE EVERY ARM AND ROW, and nothing ever stops it: the page's
     // bindings live as long as the page. One object a page buys one way of opening a binding.
     return `${sharedImport}import { ${importClause(runtime.sort())} } from '${RUNTIME_SPECIFIER}'
-${moduleSetup.imports}${setup.imports}
+${componentImports(withoutProps(moduleSetup.imports), '.client')}${componentImports(withoutProps(setup.imports), '.client')}
 ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}\
-export default function mount(root) {
+export default function mount(root${lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
 ${setup.body}
 ${helpers.join('\n')}
 const ${SCOPE} = new ${scope}()
@@ -198,6 +199,8 @@ function emitRegion(
     for (const region of plan.regions)
         if (region.kind === 'for')
             emitList(region, root, lowering, lines, helpers, counter)
+        else if (region.kind === 'component')
+            emitInvocation(region, root, lowering, lines, counter)
         else emitBlock(region, root, lowering, lines, helpers, counter)
 }
 
@@ -239,6 +242,34 @@ function mountFunction(
         `    return ${SCOPE}`,
         `}`,
     ].join('\n')
+}
+
+// 32.19 ON THE CLIENT — the child mounts ITSELF, against the region its markup was written into.
+// The parent hands over the same accessors it handed the server emitter (33.5), so the prop is the
+// caller's expression on both sides and the child re-reads it when the parent's value moves.
+//
+// THE CHILD'S MOUNT IS ITS OWN MODULE'S. `import Total from './Total.abide'` is the default export
+// of the client module that file compiled to (`componentImports`), so the binding the author wrote
+// is the function called here — the parent emits no copy of the child's bindings, and a child
+// changed in place is re-emitted alone.
+function emitInvocation(
+    region: ComponentPlan,
+    root: string,
+    lowering: Lowering,
+    lines: string[],
+    counter: Counter,
+): void {
+    counter.live = true
+    const props: string[] = []
+    for (const attribute of region.node.attributes) {
+        const value = attribute.expression
+            ? lowering.expression(attribute)
+            : JSON.stringify(attribute.value)
+        props.push(`${JSON.stringify(attribute.name)}: () => (${value})`)
+    }
+    lines.push(
+        `${region.node.tag}(${lowering.use('regionAt')}(${step('childAt', region.parent, root, lowering, false)}, ${region.index}), { ${props.join(', ')} })`,
+    )
 }
 
 // 32.13 — one arm renders. The SERVER already rendered one, so the first run HYDRATES it rather

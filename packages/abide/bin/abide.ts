@@ -45,6 +45,20 @@ async function build(root: string, out: string): Promise<number> {
         // rather than asking about it — and a fresh build adds every file it has.
         const reads = await session?.readsFor(parsed)
 
+        // 32.19 — WHICH FILES ARE INVOKED AS COMPONENTS, read off the imports the sources
+        // themselves wrote. A caller's client module imports its child's, so a child with nothing
+        // to hydrate still needs one to exist — see the no-op below.
+        const invoked = new Set<string>()
+        for (const entry of parsed)
+            for (const match of entry.text.matchAll(
+                /from\s*'([^']*\.abide)'|from\s*"([^"]*\.abide)"/g,
+            ))
+                invoked.add(
+                    (match[1] ?? match[2] ?? '').slice(
+                        (match[1] ?? match[2] ?? '').lastIndexOf('/') + 1,
+                    ),
+                )
+
         for (let at = 0; at < parsed.length; at += 1) {
             const entry = parsed[at] as (typeof parsed)[number]
             const relative = entry.path.slice(root.length + 1)
@@ -57,11 +71,16 @@ async function build(root: string, out: string): Promise<number> {
             // The client module is emitted only where there is something to hydrate. A static
             // page has no `.client.ts` beside it, which is what makes "this page ships no
             // runtime" a fact about the build rather than a claim about the bundler.
+            //
+            // A COMPONENT SOMEBODY INVOKES IS THE EXCEPTION, and it is the import that forces it:
+            // the caller's client module names the child's, so a child with nothing to hydrate
+            // needs a module for that name to resolve to. The no-op is what it ships.
             const client = emitClient(entry.file, fileReads)
-            if (client !== '')
+            const name = relative.slice(relative.lastIndexOf('/') + 1)
+            if (client !== '' || invoked.has(name))
                 await Bun.write(
                     `${out}/${relative.replace(/\.abide$/, '.client.ts')}`,
-                    client,
+                    client === '' ? 'export default () => {}\n' : client,
                 )
         }
     } finally {
