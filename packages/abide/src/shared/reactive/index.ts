@@ -26,6 +26,7 @@ import {
     readyOverTags,
     refreshOverTags,
 } from './Reactive.ts'
+import { share } from './share.ts'
 
 export { canonicalKey } from './canonicalKey.ts'
 export type { History } from './History.ts'
@@ -41,6 +42,12 @@ export {
     type Store,
     type Transformer,
 } from './Reactive.ts'
+export {
+    enterShare,
+    leaveShare,
+    type Shared,
+    type ShareScope,
+} from './share.ts'
 export { structural } from './structural.ts'
 export { type Disposer, type Effect, watch } from './watch.ts'
 
@@ -239,3 +246,7 @@ export function invalidate<Chosen extends Selection>(
     if (tags !== null) invalidateOverTags(tags)
     else (chosen as { invalidate(pattern: unknown): void }).invalidate(pattern)
 }
+
+// 10.1 — `reactive.share` is a static on the factory rather than a free name, the registry's own
+// spelling: it CREATES where nothing holds the key, so it belongs with the factory it calls.
+reactive.share = share

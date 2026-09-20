@@ -174,12 +174,17 @@ test('every example renders on the server and mounts on the client', async () =>
         // `files/` — and a package nothing installed are facts about the CORPUS, not the runtime.
         const absent =
             /Cannot find (module|package) '(?:[./]*\/)?([^']+)'/.exec(line)
+        // A REFUSAL NAMES ITS CLAUSE, so the group is the clause rather than the word `Error` —
+        // what the compiler refuses on purpose reads apart from what fell over.
+        const refused = /abide: .*RULEBOOK (\d+\.\d+)/.exec(line)
         const key =
-            missing !== null
-                ? `\`${missing[1]}\` is not exported — that surface is not built`
-                : absent !== null
-                  ? `\`${absent[2]}\` ${absent[1] === 'module' ? 'is not in the example' : 'is not installed'} — the corpus is missing it`
-                  : (line.split(':')[0] ?? line)
+            refused !== null
+                ? `refused by RULEBOOK ${refused[1]} — that shape is not built`
+                : missing !== null
+                  ? `\`${missing[1]}\` is not exported — that surface is not built`
+                  : absent !== null
+                    ? `\`${absent[2]}\` ${absent[1] === 'module' ? 'is not in the example' : 'is not installed'} — the corpus is missing it`
+                    : (line.split(':')[0] ?? line)
         reasons.set(key, (reasons.get(key) ?? 0) + 1)
     }
     const ranked = [...reasons].sort((left, right) => right[1] - left[1])
@@ -218,7 +223,11 @@ test('every example renders on the server and mounts on the client', async () =>
     // six of them want `reactive.share`, which is not built. The other two are components whose
     // props nobody passes, this corpus having no caller for a file it compiles on its own.
     //
+    // 43 WITH `reactive.share`: six pages wanted it, and three of those spend the gain again on
+    // the refusal beside it — a component inside a `{#for}` is refused rather than served with
+    // dead rows in it.
+    //
     // A RATCHET STILL, and the direction is the rule: this may not go down under a change that
     // does not change what is being counted.
-    expect(sources.length - broken.length).toBeGreaterThanOrEqual(40)
+    expect(sources.length - broken.length).toBeGreaterThanOrEqual(43)
 })

@@ -23,6 +23,9 @@ const TSCONFIG = new URL('../examples/tsconfig.json', import.meta.url).pathname
 const NOT_YET = new Set<string>([
     // 32.17 — the render-time boundary. Not built.
     'try-region/files/src/ui/components/Total.abide',
+    // 32.19 inside a region — the client builds a new row's markup, and a component's markup is
+    // in the child's own server module. Refused rather than served with dead rows in it.
+    'share-agree/files/src/ui/pages/library/page.abide',
 ])
 
 const sources = [

@@ -48,6 +48,36 @@ export class Lowering {
         return false
     }
 
+    // 10.5 — WHETHER THIS FILE OPENS A SHARE SCOPE, which is the one thing the emitters need from
+    // 10: a component that calls `reactive.share` gets a scope of its own, and one that does not
+    // is a link a descendant's walk passes through. So two `<Shelf/>` each hold their own `queued`
+    // and a `<TrackRow/>` finds the page's `nowPlaying` — with no node, and nothing to pay, on
+    // every file that shares nothing.
+    //
+    // 10.2 IS CHECKED IN THE SAME SCAN: the key is a literal or it is a build error. Found by
+    // SPELLING, as `raw` is — a file that binds its own `reactive` is not something the token walk
+    // can see, and that is the same limit 32.27 already carries.
+    opensShareScope(): boolean {
+        const text = this.projection.text
+        if (!text.includes('.share')) return false
+        const tokens = tokenise(text)
+        let found = false
+        for (let at = 0; at < tokens.length - 3; at += 1) {
+            if ((tokens[at] as Token).text !== 'reactive') continue
+            if ((tokens[at + 1] as Token).kind !== SyntaxKind.DotToken) continue
+            if ((tokens[at + 2] as Token).text !== 'share') continue
+            const open = tokens[at + 3] as Token
+            if (open.kind !== SyntaxKind.OpenParenToken) continue
+            const key = tokens[at + 4] as Token | undefined
+            if (key?.kind !== SyntaxKind.StringLiteral)
+                throw new Error(
+                    'abide: a reactive.share key is a literal — the scope it gets or creates in is decided where it is written. RULEBOOK 10.2.',
+                )
+            found = true
+        }
+        return found
+    }
+
     // A framework name as emitted code calls it, registered for the import in the same breath —
     // which is the whole reason it is one call. See `importClause` for the alias.
     use(name: string): string {

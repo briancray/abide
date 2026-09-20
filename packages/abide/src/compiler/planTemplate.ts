@@ -81,6 +81,8 @@ export type RegionPlan = {
 }
 
 export type TemplatePlan = {
+    // Whether these nodes stand inside a block's body — see `planTemplate`.
+    inRegion: boolean
     runs: TextRun[]
     handlers: HandlerBinding[]
     regions: (RegionPlan | ListPlan | ComponentPlan)[]
@@ -88,11 +90,16 @@ export type TemplatePlan = {
 
 // `first` is the index the root's first node stands at — 0, except in a row that carries its own
 // anchor at the head of its nodes.
+// `inRegion` is whether these nodes are a block's body rather than the page's own template. A
+// region is the one place the CLIENT builds markup — a new row, a swapped arm — and the child's
+// markup lives in its own server module, which a browser may not reach.
 export function planTemplate(
     template: TemplateNode[],
     first = 0,
+    inRegion = false,
 ): TemplatePlan {
     const plan: TemplatePlan = {
+        inRegion,
         runs: [],
         handlers: [],
         regions: [],
@@ -174,6 +181,7 @@ function walk(
                     plan: planTemplate(
                         node.children,
                         isSingleRooted(node.children) ? 0 : 1,
+                        true,
                     ),
                 })
             } else {
@@ -185,7 +193,7 @@ function walk(
                     parent: [...path],
                     branches: node.branches.map((branch: Branch) => ({
                         branch,
-                        plan: planTemplate(branch.children),
+                        plan: planTemplate(branch.children, 0, true),
                     })),
                 })
             }
@@ -197,6 +205,14 @@ function walk(
         }
 
         if (node.kind === 'element' && isComponentTag(node.tag)) {
+            // A ROW AND AN ARM ARE BUILT BY THE CLIENT, and the child's markup is in the child's
+            // own SERVER module — which a browser may not reach, the seams being one-directional.
+            // Rendered inline the row would hydrate against markup nothing here can rebuild, so it
+            // is refused where it is written rather than served dead.
+            if (plan.inRegion)
+                throw new Error(
+                    `abide: <${node.tag}> inside a {#if} or a {#for} is not built yet — the client builds a row's markup, and a component's lives in its own module. RULEBOOK 32.19.`,
+                )
             plan.regions.push({
                 kind: 'component',
                 index: regionIndex,

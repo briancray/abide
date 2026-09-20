@@ -1,5 +1,5 @@
 import type { Read } from './classifyRead.ts'
-import { emitMarkup, emitRow, importClause } from './emitComponent.ts'
+import { emitMarkup, emitRow, importClause, SHARED } from './emitComponent.ts'
 import { hoistPaths } from './hoistPaths.ts'
 import { Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
@@ -60,6 +60,15 @@ export function emitClient(
     // mount of the same page reads what the first one left.
     const moduleSetup = splitImports(lowering.modules())
     const setup = splitImports(lowering.scripts())
+    // 10.5 on the other side, and the same scope: the child's `mount` is called from inside the
+    // parent's, so the chain a key is looked up is the component tree here too.
+    const shares = lowering.opensShareScope()
+    const opened = shares
+        ? `const ${SHARED} = ${lowering.use('enterShare')}()\ntry {\n`
+        : ''
+    const closed = shares
+        ? `\n} finally { ${lowering.use('leaveShare')}(${SHARED}) }`
+        : ''
     // The escaping is an APP's (`abide`); everything else is the client runtime's (`abide/runtime`).
     const shared: string[] = []
     const runtime: string[] = []
@@ -83,12 +92,12 @@ export function emitClient(
 ${componentImports(withoutProps(moduleSetup.imports), '.client')}${componentImports(withoutProps(setup.imports), '.client')}
 ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}\
 export default function mount(root${lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
-${setup.body}
+${opened}${setup.body}
 ${helpers.join('\n')}
 const ${SCOPE} = new ${scope}()
 try {
 ${lines.join('\n')}
-} catch (thrown) { if (!${warnMismatch}(thrown)) throw thrown }
+} catch (thrown) { if (!${warnMismatch}(thrown)) throw thrown }${closed}
 }
 `
 }

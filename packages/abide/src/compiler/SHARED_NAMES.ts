@@ -9,4 +9,8 @@ export const SHARED_NAMES: ReadonlySet<string> = new Set([
     'raw',
     'writePath',
     'listOf',
+    // 10.5's pair: a share scope is opened by the emitted component on both sides, and `#shared`
+    // is where the one scope chain lives.
+    'enterShare',
+    'leaveShare',
 ])

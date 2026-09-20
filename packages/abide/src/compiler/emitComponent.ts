@@ -20,6 +20,10 @@ import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 const HEADS = '__heads'
 const BODY = '__body'
 
+// The share scope an instance opens (10.5), named apart from the client's binding `Scope`: one is
+// what a component's descendants look a key up through, the other is what stops its bindings.
+export const SHARED = '__shared'
+
 // A parsed `.abide` file becomes one ESM module exporting a component. The `<script>` body is
 // copied VERBATIM into the component function, which is the whole of 19.12 at this stage: the
 // compiler does not read the expression grammar, so anything TypeScript accepts survives.
@@ -74,6 +78,17 @@ export function emitComponent(
         .filter((part) => part !== '')
         .join('\n')
 
+    const heads = body.some((part) => part.includes(HEADS))
+    // 10.5 — the instance's own scope, opened around everything the instance does: the setup that
+    // calls `reactive.share`, and the body whose children are rendered inside it and find it on
+    // the way up. Closed in a `finally`, so a component that threw leaves the scope it entered.
+    const shares = lowering.opensShareScope()
+    const opened = shares
+        ? `    const ${SHARED} = ${lowering.use('enterShare')}()\n    try {\n`
+        : ''
+    const closed = shares
+        ? `\n    } finally { ${lowering.use('leaveShare')}(${SHARED}) }`
+        : ''
     const names = [...used].sort()
 
     // THE SETUP IS NOT RE-INDENTED. Adding a margin to every line rewrites the INSIDE of a
@@ -83,17 +98,16 @@ export function emitComponent(
     // call that renders it stands inside the BODY expression — so the heads are collected as the
     // body is built and the body is bound to a name before the return reads them. The array is
     // emitted only where the page invokes something: a page with no component pays nothing.
-    const heads = body.some((part) => part.includes(HEADS))
     return `${names.length === 0 ? '' : `import { ${importClause(names)} } from '${SERVER_SPECIFIER}'\n`}\
 ${componentImports(withoutProps(moduleSetup.imports), '')}${componentImports(withoutProps(setup.imports), '')}
 export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
-${componentBody}
+${opened}${componentBody}
 ${heads ? `    const ${HEADS} = []\n` : ''}\
     const ${BODY} = ${concat(body)}
     return {
         head: ${concat(head)}${heads ? ` + ${HEADS}.join('')` : ''},
         body: ${BODY},
-    }
+    }${closed}
 }
 `
 }
