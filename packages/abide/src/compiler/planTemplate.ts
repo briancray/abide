@@ -10,7 +10,7 @@ import type { Attribute, Branch, TemplateNode } from './TemplateNode.ts'
 // address up here rather than recomputing it beside the markup.
 //
 // WHAT BOTH EMITTERS READ IS THE PREDICATES — `isComponentTag`, `isEventName`, `isHead`,
-// `isSingleRooted`, `isStyleProperty`. THAT is what stops the two lanes drifting: an `onclick` the
+// `isSingleRooted`, `isStyleProperty`, `isClassToggle`. THAT is what stops the two lanes drifting: an `onclick` the
 // server declines to write and the client binds as a listener is one predicate answering twice,
 // and one copy is that agreement. So a decision that must bind BOTH lanes belongs in a predicate
 // here, not in the walk below — the walk is a place only one lane will ever reach.
@@ -57,13 +57,15 @@ export type HandlerBinding = {
 // value standing at render and nothing ever writes it again. The path is the ELEMENT's, reached by
 // the same walk a listener's is, so nothing is added to the document to find it.
 //
-// `property` IS THE `style:prop` NAME and `undefined` for an ordinary attribute. The two are one
-// binding site with two writes rather than two plans, because what differs is only the call the
-// value is handed to — 32.11 sets one property, everything else sets one attribute.
+// `write` NAMES WHICH OF THE THREE WRITES THE VALUE GOES TO and `name` what it goes under. One
+// binding site with three writes rather than three plans, because what differs is only the call:
+// 32.11 sets one class or one style property, and everything else sets the whole attribute.
 export type AttributeBinding = {
     path: number[]
     attribute: Attribute
-    property: string | undefined
+    write: 'attribute' | 'class' | 'style'
+    // The class, the style property, or the attribute's own name.
+    name: string
 }
 
 // A `{#for}`: ONE body, planned once and instantiated per row. A row's paths are the row's own,
@@ -262,11 +264,12 @@ function walk(
                 // 32.12's spread is not built, and an emitter that planned one would bind a name
                 // beginning `...` as an attribute.
                 if (attribute.name.startsWith('...')) continue
-                // 32.11, 32.21 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE,
-                // merged by the server emitter. So a plain `style={expr}` standing beside one
-                // cannot be written back on its own: `setAttribute('style', …)` replaces the whole
-                // declaration list and takes the `style:` props with it, and the two bindings then
-                // overwrite each other in whichever order they re-ran.
+                // 32.11, 32.21 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE and
+                // every `class:name` ONE `class`, merged by the server emitter. So a plain
+                // `style={expr}` or `class={expr}` standing beside one cannot be written back on
+                // its own: `setAttribute` replaces the whole value and takes the directives'
+                // halves with it, and the two bindings then overwrite each other in whichever
+                // order they re-ran.
                 //
                 // ALLOWED AND LEFT UNBOUND, rather than refused. The page still RENDERS right —
                 // the server writes both halves into the one merged attribute — so the only thing
@@ -274,24 +277,13 @@ function walk(
                 // is not built. What it costs is the hole: this one attribute keeps the value
                 // standing at render where 32.4 says it moves, and nothing reports that.
                 //
-                // 32.21 IS WHAT CLOSES IT, not a binding here: an interpolated `style` lowers to
-                // `style:prop` under a static name and is never built as a string, and then there
-                // is no whole-attribute write left to clobber anything. This exception leaves with
-                // it — until then a binding would be wrong half the time, because
-                // `setAttribute('style', …)` replaces the whole declaration list and takes the
-                // `style:` props with it, whichever order the two re-ran in.
-                if (
-                    attribute.lowerName === 'style' &&
-                    node.attributes.some(isStyleProperty)
-                )
-                    continue
-                plan.attributes.push({
-                    path: here,
-                    attribute,
-                    property: isStyleProperty(attribute)
-                        ? attribute.name.slice('style:'.length)
-                        : undefined,
-                })
+                // 32.21 IS WHAT CLOSES THE `style` HALF, not a binding here: an interpolated
+                // `style` lowers to `style:prop` under a static name and is never built as a
+                // string, and then there is no whole-attribute write left to clobber anything. No
+                // clause spells the same road for `class`, and until one does the two share this
+                // answer rather than each getting its own.
+                if (isMergedPlain(node, attribute)) continue
+                plan.attributes.push(bindingOf(attribute, here))
             }
             walk(node.children, here, plan)
         }
@@ -317,15 +309,63 @@ export function isEventName(lowerName: string): boolean {
     return lowerName.length > 2 && lowerName.startsWith('on')
 }
 
-// 32.11 — `style:prop` sets ONE style property. Here rather than beside the emitter that writes
-// the declaration out, for `isComponentTag`'s reason: the plan is what both emitters read, and an
-// edge from the plan to an emitter is a cycle. The prefix is matched on the FOLDED name; the
-// property itself is read from the author's spelling, because a custom property is case-sensitive.
+// 32.11 — `style:prop` sets ONE style property and `class:name` ONE class. Here rather than beside
+// the emitter that writes them out, for `isComponentTag`'s reason: the plan is what both emitters
+// read, and an edge from the plan to an emitter is a cycle. The prefix is matched on the FOLDED
+// name; the part after it is read from the author's spelling, because a custom property and a
+// class are both case-sensitive.
+//
+// A BARE `style:` OR `class:` IS NOT ONE — the prefix with nothing after it names no property and
+// no class, so it stays an ordinary attribute and renders as the author wrote it.
 export function isStyleProperty(attribute: Attribute): boolean {
     return (
         attribute.lowerName.length > 6 &&
         attribute.lowerName.startsWith('style:')
     )
+}
+
+export function isClassToggle(attribute: Attribute): boolean {
+    return (
+        attribute.lowerName.length > 6 &&
+        attribute.lowerName.startsWith('class:')
+    )
+}
+
+// Which of the three writes an attribute's value goes to, and under what name — see
+// `AttributeBinding`. One function rather than the two predicates plus a slice at each emitter,
+// because the prefix's length and the predicate that found it are the same fact twice.
+function bindingOf(
+    attribute: Attribute,
+    path: number[],
+): AttributeBinding {
+    if (isStyleProperty(attribute))
+        return {
+            path,
+            attribute,
+            write: 'style',
+            name: attribute.name.slice('style:'.length),
+        }
+    if (isClassToggle(attribute))
+        return {
+            path,
+            attribute,
+            write: 'class',
+            name: attribute.name.slice('class:'.length),
+        }
+    return { path, attribute, write: 'attribute', name: attribute.name }
+}
+
+// Whether an attribute is the plain `class` or `style` the server MERGED a directive group into —
+// the one attribute on an element 32.4 does not move. See where it is asked.
+function isMergedPlain(
+    node: TemplateNode & { kind: 'element' },
+    attribute: Attribute,
+): boolean {
+    if (attribute.lowerName === 'style')
+        return node.attributes.some(isStyleProperty)
+    if (attribute.lowerName === 'class')
+        return node.attributes.some(isClassToggle)
+    return false
 }
 
 export function isHead(node: TemplateNode): boolean {

@@ -377,9 +377,7 @@ function emitRegion(
             // did not move. `setAttribute`'s compare would swallow the DOM cost, and the wake
             // would still be there — which is the half a correctness test cannot see.
             writes.push(
-                bound.property === undefined
-                    ? `${SCOPE}.watch(() => ${lowering.use('setAttribute')}(${element}, ${JSON.stringify(bound.attribute.name)}, ${guarded}))`
-                    : `${SCOPE}.watch(() => ${lowering.use('setStyleProperty')}(${element}, ${JSON.stringify(bound.property)}, ${guarded}))`,
+                `${SCOPE}.watch(() => ${lowering.use(WRITES[bound.write])}(${element}, ${JSON.stringify(bound.name)}, ${guarded}))`,
             )
         }
         lines.push(
@@ -423,6 +421,15 @@ function beforeRegion(path: number[]): number[] {
 // `Scope`). In the framework's own `__` namespace because a row binds the AUTHOR's item name as a
 // parameter in the same scope.
 const SCOPE = '__scope'
+
+// Which runtime write each kind of `AttributeBinding` is handed to. A record rather than a chain
+// of ternaries, so a fourth kind is a row here and the call site stays one line — all three take
+// the same three arguments, which is what makes them one site at all.
+const WRITES = {
+    attribute: 'setAttribute',
+    class: 'setClass',
+    style: 'setStyleProperty',
+} as const
 
 // The share scope an instance captures for its deferred mounts (10.5), named apart from the one an
 // instance OPENS (`SHARED`): a page that shares nothing still carries this for a child that does.

@@ -6,6 +6,7 @@ import type { Read } from './classifyRead.ts'
 import { Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
+    isClassToggle,
     isComponentTag,
     isEventName,
     isHead,
@@ -251,34 +252,21 @@ function emitNode(
 
     const parts: string[] = []
     let open = `<${node.tag}`
-    // 32.11, 32.21 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE. Written apart
-    // they are two `style=` attributes on one tag, and a browser keeps the first: the second
-    // declaration is dropped in silence, by the markup rather than by anything the compiler said.
-    // The combined attribute stands where the FIRST of them did, so the tag keeps the author's
-    // attribute order.
-    const styles = node.attributes.filter(isStyleProperty)
-    let stylesPending = styles.length > 0
-    // A PLAIN `style` IS THE SAME ATTRIBUTE AND JOINS THE SAME MERGE. `isStyleProperty` answers
-    // only for the `style:` prefix, so `<div style="color: red" style:width={w}>` wrote TWO
-    // `style=` attributes and a browser keeps the first — the reactive declaration dropped in
-    // silence, which is the loss the merge above exists to stop, arriving by the one spelling it
-    // did not cover. Whichever of the two the author wrote first carries the merged attribute, so
-    // the tag keeps its order either way.
-    const plainStyle = stylesPending ? attributeOf(node, 'style') : undefined
+    const merges = mergesOf(node, lowering)
     for (const attribute of node.attributes) {
-        if (isStyleProperty(attribute) || attribute === plainStyle) {
-            if (!stylesPending) continue
-            stylesPending = false
-            parts.push(JSON.stringify(`${open} style="`))
-            if (plainStyle !== undefined) {
-                if (plainStyle.expression) {
-                    parts.push(
-                        `${lowering.use('escapeAttribute')}(${unlandable(lowering, plainStyle, lowering.slot(plainStyle))})`,
-                    )
-                } else parts.push(JSON.stringify(quoteOnly(plainStyle.value)))
-                parts.push(JSON.stringify('; '))
-            }
-            parts.push(styleValue(styles, lowering), "'\"'")
+        const merge = merges.find((candidate) =>
+            candidate.members.has(attribute),
+        )
+        if (merge !== undefined) {
+            // THE FIRST MEMBER CARRIES THE WHOLE GROUP and the rest write nothing, which is what
+            // keeps the tag in the author's attribute order.
+            if (!merge.pending) continue
+            merge.pending = false
+            parts.push(
+                JSON.stringify(`${open} ${merge.name}="`),
+                merge.value,
+                "'\"'",
+            )
             open = ''
             continue
         }
@@ -576,12 +564,72 @@ function assertNoNestedHead(nodes: TemplateNode[], within: string): void {
     }
 }
 
-// The declaration list a set of `style:prop` attributes renders as, as one expression. Each value
-// takes the same rewrite the whole-value path takes, so one attribute has one answer however the
-// author spelled it: 32.29 for a STATIC declaration, which is the author's own markup, and the
-// full escape for an interpolated one, which is 32.1's.
-function styleValue(styles: Attribute[], lowering: Lowering): string {
+// 32.11, 32.21 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE, and every
+// `class:name` is ONE `class`. Written apart they are two attributes of the same name on one tag,
+// and a browser keeps the first: the second is dropped in silence, by the markup rather than by
+// anything the compiler said.
+//
+// THE AUTHOR'S OWN PLAIN `style=` OR `class=` IS A MEMBER OF THE GROUP, not an attribute beside
+// it. `isStyleProperty` answers only for the prefix, so `<div style="color: red"
+// style:width={w}>` wrote TWO `style=` attributes and a browser kept the first — the reactive
+// declaration dropped in silence, which is the loss the merge exists to stop, arriving by the one
+// spelling it did not cover.
+type Merge = {
+    // The attribute the group is written under.
+    name: string
+    // Every attribute the group swallows, the plain one included.
+    members: Set<Attribute>
+    // The value, as the one expression it renders as.
+    value: string
+    // Whether the group still has to be written — see where it is read.
+    pending: boolean
+}
+
+// TWO GROUPS, ONE FRAME. What differs between them is the value expression alone, so the finding,
+// the ordering and the quoting are written once and each kind supplies only its own `value`.
+const MERGED = [
+    { name: 'style', is: isStyleProperty, value: styleValue },
+    { name: 'class', is: isClassToggle, value: classValue },
+] as const
+
+function mergesOf(
+    node: TemplateNode & { kind: 'element' },
+    lowering: Lowering,
+): Merge[] {
+    const merges: Merge[] = []
+    for (const kind of MERGED) {
+        const directives = node.attributes.filter(kind.is)
+        if (directives.length === 0) continue
+        const plain = attributeOf(node, kind.name)
+        merges.push({
+            name: kind.name,
+            members: new Set(
+                plain === undefined ? directives : [plain, ...directives],
+            ),
+            value: kind.value(plain, directives, lowering),
+            pending: true,
+        })
+    }
+    return merges
+}
+
+// The declaration list a set of `style:prop` attributes renders as. Each value takes the same
+// rewrite the whole-value path takes, so one attribute has one answer however the author spelled
+// it: 32.29 for a STATIC declaration, which is the author's own markup, and the full escape for an
+// interpolated one, which is 32.1's.
+function styleValue(
+    plain: Attribute | undefined,
+    styles: readonly Attribute[],
+    lowering: Lowering,
+): string {
     const parts: string[] = []
+    if (plain !== undefined)
+        parts.push(
+            plain.expression
+                ? `${lowering.use('escapeAttribute')}(${unlandable(lowering, plain, lowering.slot(plain))})`
+                : JSON.stringify(quoteOnly(plain.value)),
+            JSON.stringify('; '),
+        )
     for (const attribute of styles) {
         const property = attribute.name.slice('style:'.length)
         const lead = parts.length === 0 ? '' : '; '
@@ -596,6 +644,44 @@ function styleValue(styles: Attribute[], lowering: Lowering): string {
         parts.push(
             JSON.stringify(`${lead}${property}: `),
             `${lowering.use('escapeStyleValue')}(${unlandable(lowering, attribute, lowering.slot(attribute))})`,
+        )
+    }
+    return concat(parts)
+}
+
+// 32.11 — the class list a set of `class:name` attributes renders as. A NAME IS MARKUP AND A VALUE
+// IS A CONDITION, which is the whole of what makes this shorter than its `style` sibling: the name
+// is the author's own source and takes 32.29's rewrite where the module is emitted, and the
+// expression decides only whether it is written at all.
+//
+// EACH NAME CARRIES ITS OWN LEADING SPACE rather than a separator being computed between them,
+// because how many of them render is not known until the values are read. A run of spaces and a
+// leading one are both nothing in a class attribute — the value is split on whitespace — where
+// `style`'s `;` has to be counted.
+function classValue(
+    plain: Attribute | undefined,
+    classes: readonly Attribute[],
+    lowering: Lowering,
+): string {
+    const parts: string[] = []
+    if (plain !== undefined)
+        parts.push(
+            plain.expression
+                ? `${lowering.use('escapeAttribute')}(${unlandable(lowering, plain, lowering.slot(plain))})`
+                : JSON.stringify(quoteOnly(plain.value)),
+        )
+    for (const attribute of classes) {
+        const written = JSON.stringify(
+            ` ${quoteOnly(attribute.name.slice('class:'.length))}`,
+        )
+        // A `class:name` WITH NO EXPRESSION is a name with no condition on it — `class:active`
+        // alone, or `class:active="anything"` — and a name that is always written is exactly what
+        // the author's own `class` attribute is. Rendered as one rather than refused: there is
+        // nothing about it a clause forbids and nothing for a build error to save.
+        parts.push(
+            attribute.expression
+                ? `(${unlandable(lowering, attribute, lowering.slot(attribute))} ? ${written} : '')`
+                : written,
         )
     }
     return concat(parts)

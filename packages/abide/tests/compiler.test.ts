@@ -1047,6 +1047,63 @@ test('a static style merges with its style: directives', () => {
     expect(server).toContain('width: 3px')
 })
 
+// 32.11 — A `class:name` IS ONE CLASS, and the author's own `class` is a member of the same
+// merge. THE REVERT: drop `class` from `MERGED`; this emits the literal attribute
+// `class:overdue="true"` beside `class="badge"` — two `class`-ish attributes, one of which no
+// stylesheet can match and no browser reads as a class at all.
+test('a class: directive merges into the one class attribute', async () => {
+    const server = await serverOf(
+        '<p class="badge" class:overdue={late}>x</p>',
+        ['late'],
+    )
+    expect(server).not.toContain('class:overdue')
+    expect(server.split('class=').length - 1).toBe(1)
+    // THE NAME IS MARKUP AND THE VALUE IS A CONDITION: the name is written where the expression
+    // is truthy and nothing is written where it is not, which is what makes a class different
+    // from every other attribute value.
+    expect(server).toContain('"badge"')
+    expect(server).toContain('" overdue" : \'\'')
+})
+
+// TWO OF THEM ON ONE TAG ARE STILL ONE ATTRIBUTE, which is the whole reason the merge exists —
+// written apart they are two `class=` attributes and a browser keeps the first, so the second
+// name never reaches the document. THE REVERT: drop `class` from `MERGED`; the count below reads
+// 0, because what is emitted then is `class:a=` and `class:b=`, which is not a class attribute at
+// all rather than two of them.
+test('every class: directive on a tag is one class attribute', async () => {
+    const server = await serverOf('<p class:a={x} class:b={y}>t</p>', [
+        'x',
+        'y',
+    ])
+    expect(server.split('class=').length - 1).toBe(1)
+    expect(server).toContain('" a" : \'\'')
+    expect(server).toContain('" b" : \'\'')
+})
+
+// A `class:name` WITH NO EXPRESSION is a name with no condition on it, and a name always written
+// is what the author's own `class` attribute already is — so it renders as one rather than being
+// refused. A BARE `class:` names nothing and stays an ordinary attribute, which is the same floor
+// `style:` has.
+test('a class: directive with no condition is a plain class', () => {
+    const always = compileFile('<p class="a" class:b>t</p>')
+    expect(always.split('class=').length - 1).toBe(1)
+    expect(always).toContain('"a"')
+    expect(always).toContain('" b"')
+    expect(compileFile('<p class:>t</p>')).toContain('class:')
+})
+
+// 32.11 ON THE CLIENT — the binding goes through `classList`, not through the merged attribute.
+// THE REVERT: give the `class` write `setAttribute`; the emitted binding then writes the whole
+// attribute from one name and takes `badge` off the element on its first run.
+test('a class: directive binds one class and not the attribute', async () => {
+    const client = await clientOf(
+        '<p class="badge" class:overdue={late}>x</p>',
+        ['late'],
+    )
+    expect(client).toContain('__setClass(__a0, "overdue", late())')
+    expect(client).not.toContain('__setAttribute')
+})
+
 // An HTML tag name is case-insensitive, and `<HEAD>` was never hoisted.
 test('a head contributes under any casing', () => {
     const out = compileFile('<HEAD><title>T</title></HEAD><p>x</p>')
@@ -1220,6 +1277,27 @@ test("an author's module-scope name cannot collide with a runtime import", async
         thrown = error
     }
     expect(thrown).toBeUndefined()
+})
+
+// THE SAME EXCEPTION ON THE SAME GROUNDS, one attribute over. A plain reactive `class={expr}`
+// beside a `class:name` is merged by the server and left unbound, because `setAttribute('class',
+// …)` replaces the whole token list and takes the directive's name with it — the two bindings
+// would then overwrite each other in whichever order they re-ran. No clause spells `class`'s road
+// out of it the way 32.21 does `style`'s, so the two share this answer rather than each getting
+// its own. THE REVERT: drop the `class` arm of `isMergedPlain`; `__setAttribute` appears here.
+test('a class beside a class: directive compiles and is left unbound', async () => {
+    const both = await clientOf('<div class={c} class:on={x}>t</div>', [
+        'c',
+        'x',
+    ])
+    expect(await refusal(Promise.resolve(both))).toBe('')
+    expect(both).toContain('__setClass')
+    expect(both).not.toContain('__setAttribute')
+    // ALONE IT IS AN ORDINARY BINDING, which is what makes the case above an exception rather
+    // than the rule.
+    expect(await clientOf('<div class={c}>t</div>', ['c'])).toContain(
+        '__setAttribute',
+    )
 })
 
 // A PLAIN `style={expr}` BESIDE A `style:prop` COMPILES AND IS NOT BOUND, and this pins both

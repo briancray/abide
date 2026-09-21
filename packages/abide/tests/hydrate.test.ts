@@ -378,6 +378,49 @@ const kind = 'card'
     expect(mountWork.attributesSet).toBe(0)
 })
 
+// 32.11 END TO END — a `class:name` keeps moving after hydration, and the author's own `class`
+// survives it. THE TWO HALVES ARE ONE CASE: the server MERGED `class="badge"` and `class:overdue`
+// into a single attribute, so a binding that wrote that attribute back would produce the right
+// class and take `badge` off the element in the same write. Only the element's own class list can
+// part them, and only a page carrying both names can tell that it did.
+//
+// THE REVERT: point the `class` row of `WRITES` at `setAttribute`. The document the server writes
+// is byte-identical; this reports `badge` where `badge overdue` is due — the name a class binding
+// carries is the CLASS and not the attribute, so the reverted write puts an attribute called
+// `overdue` on the element and the class list never moves at all.
+test('a class: directive toggles one class and keeps the others — 32.11', async () => {
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+let late = reactive(false)
+</script>
+
+<main><p id="out" class="badge" class:overdue={late}>x</p>
+<button id="go" onclick={() => { late = true }}>go</button></main>`)
+
+    // ONE `class` ATTRIBUTE ON THE TAG, holding what the condition said at render — which is the
+    // page being right with no JS at all.
+    expect(html).toContain('class="badge"')
+    expect(html).not.toContain('overdue')
+
+    mount(document.body)
+    flushSync()
+
+    const out = document.querySelector('#out') as HTMLElement
+    const work = measure(() => {
+        ;(document.querySelector('#go') as HTMLElement).click()
+        flushSync()
+    })
+    // THE WHOLE LIST, not the one name: `contains('overdue')` is true of an element whose `badge`
+    // the write took with it, which is exactly the failure the class list is chosen to avoid.
+    expect(out.className).toBe('badge overdue')
+    // ONE CLASS WRITE AND NO ATTRIBUTE WRITE. The counter counts the CALL rather than the
+    // mutation, so this says which write the binding chose and not what the DOM then did with it
+    // — see `setClass` for why the second question has no instrument in this substrate.
+    expect(work.classWrites).toBe(1)
+    expect(work.attributesSet).toBe(0)
+})
+
 // 41.11 — A MISMATCH MUST NOT REBUILD THE PAGE, and the page is the one region with no block
 // around it to rebuild instead. `Mismatch` was written against exactly the failure this guards:
 // an ordinary throw out of `mount` skips every binding and listener after the one that refused,
