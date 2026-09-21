@@ -59,8 +59,9 @@ export function emitClient(
     const used = lowering.used
     const lines: string[] = []
     const helpers: string[] = []
+    const declarations: string[] = []
     const counter = { next: 0, live: false }
-    emitRegion(plan, 'root', lowering, lines, helpers, counter)
+    emitRegion(plan, 'root', lowering, lines, helpers, counter, declarations)
 
     // 34.2 — A `<script module>` IS PROCESS-WIDE IN A BROWSER, which is MODULE SCOPE: it is
     // evaluated once when this module is first imported rather than once per `mount`, so a second
@@ -123,11 +124,29 @@ export function emitClient(
     // allocate a `Scope`, its `stops` array and an entry in the caller's `children` per row is
     // three allocations a row for a mount whose body is empty. `Scope.own(undefined)` already
     // reads a mount that returns nothing, which is the same answer the no-op module gives.
+    //
+    // 41.11 — THE PAGE IS THE ONE REGION THAT CANNOT REBUILD, so it is the one that has to survive
+    // a refusal binding by binding. Every other region answers a mismatch by re-rendering itself
+    // from its own markup (`mountFunction`); the page has no block around it and rebuilding it
+    // would throw away the document the server sent, focus, scroll and all, which is exactly what
+    // the clause forbids.
+    //
+    // ONE `try` AROUND ALL OF THEM WAS THE SAME FAILURE `Mismatch` WAS WRITTEN AGAINST: it traded
+    // the throw for a warning and still skipped every binding and listener after the one that
+    // refused, so a page whose first slot disagreed was served looking right and completely dead
+    // below that point. Guarded per unit, what is lost is the unit that actually disagreed.
+    //
+    // A UNIT IS WHAT EACH EMITTER PUSHES — an anchor, an address and its binding, a listener, a
+    // bound attribute, a whole block or list — and it is independent by construction: every name a
+    // unit declares is read inside it, the anchors excepted, and those are declared above. The
+    // wrapper is the SAME BYTES every time, which is what makes the repetition nearly free once
+    // gzipped, where a `guard(() => …)` helper would be a closure allocated per binding at mount.
+    const guard = (unit: string): string =>
+        `try {\n${unit}\n} catch (thrown) { if (!${lowering.use('warnMismatch')}(thrown)) throw thrown }`
     const bindings = counter.live
         ? `const ${SCOPE} = new ${lowering.use('Scope')}()
-try {
-${lines.join('\n')}
-} catch (thrown) { if (!${lowering.use('warnMismatch')}(thrown)) throw thrown }
+${declarations.length === 0 ? '' : `let ${declarations.join(', ')}\n`}\
+${lines.map(guard).join('\n')}
 return ${SCOPE}`
         : ''
 
@@ -185,6 +204,12 @@ ${fills}${captured}${bindings}${closed}
 // handed back, and neither has an element that contains them. Every addressing helper takes all
 // three, so which kind a root is belongs to the runtime and is not a case here: the emitter hands
 // over the root's NAME and a path, whatever the root turned out to be.
+//
+// `declarations` collects the ANCHOR NAMES this region binds. They are the one name that crosses
+// from one emitted unit into another — every other name a unit declares is read inside it — and a
+// caller that guards its units apart (see `emitClient`) has to declare them outside those guards
+// or the second unit cannot see the first one's `const`. Handed back rather than emitted here, so
+// where the `let` stands is the caller's to decide.
 function emitRegion(
     plan: TemplatePlan,
     root: string,
@@ -192,6 +217,7 @@ function emitRegion(
     lines: string[],
     helpers: string[],
     counter: Counter,
+    declarations: string[],
 ): void {
     const live = new Set<TextRun>()
     for (const run of plan.runs) if (readsReactive(run, lowering)) live.add(run)
@@ -243,16 +269,22 @@ function emitRegion(
     const addresses: { path: number[]; text: string }[] = []
 
     // `anchor.from` is a BASE, not a function: the walk itself is always `childAt`.
-    for (const anchor of hoisted.anchors)
+    // DECLARED APART FROM ITS ASSIGNMENT — see `declarations`. An anchor whose own walk refused
+    // then leaves `undefined` behind, and every binding under it walks from `undefined` and
+    // refuses in its own right, which is one warning per binding actually lost rather than one
+    // for the whole region.
+    for (const anchor of hoisted.anchors) {
+        declarations.push(anchor.name)
         addresses.push({
             path: anchor.path,
-            text: `const ${anchor.name} = ${step(
+            text: `${anchor.name} = ${step(
                 'childAt',
                 anchor.steps,
                 anchor.from,
                 lowering,
             )}`,
         })
+    }
 
     for (const run of plan.runs) {
         const bound = live.has(run)
@@ -484,9 +516,11 @@ function emitBlock(
     counter.live = true
     const fillRegion = lowering.use('fillRegion')
 
-    lines.push(
-        `const ${name} = ${lowering.use('regionAt')}(${step('childAt', region.parent, root, lowering, false)}, ${region.index})`,
-    )
+    // HELD RATHER THAN PUSHED, because a block is ONE unit: `${name}` is read by the watch below
+    // and a caller that guards its units apart (`emitClient`) would put a `const` in one block and
+    // its only reader in the next. Every name a unit declares is read inside it — that is what
+    // makes a unit independent, and it is the property the page's per-binding guard rests on.
+    const address = `const ${name} = ${lowering.use('regionAt')}(${step('childAt', region.parent, root, lowering, false)}, ${region.index})`
 
     // Which arm takes, as one expression. `{:else}` carries no condition and is the floor.
     let take = '-1'
@@ -509,9 +543,24 @@ function emitBlock(
         // read names this arm binds and nothing else does, which is a ReferenceError at the first
         // swap rather than at compile time.
         const armHelpers: string[] = []
-        emitRegion(branch.plan, name, lowering, armLines, armHelpers, counter)
+        // AND SO DO ITS ANCHORS, for the same reason and one step further: each arm is a block of
+        // its own inside `${name}_mount`, so two arms may hoist an anchor of the same name and
+        // neither can see the other's.
+        const armDeclarations: string[] = []
+        emitRegion(
+            branch.plan,
+            name,
+            lowering,
+            armLines,
+            armHelpers,
+            counter,
+            armDeclarations,
+        )
         armMount.push(
             `if (arm === ${at}) {`,
+            ...(armDeclarations.length === 0
+                ? []
+                : [`    let ${armDeclarations.join(', ')}`]),
             ...[...armHelpers, ...armLines].map((line) => `    ${line}`),
             `}`,
         )
@@ -540,14 +589,20 @@ function emitBlock(
     // outlives it; `stop()` clears, so the same one holds only the arm currently standing.
     // `undefined` IS "NOT YET MOUNTED" and nothing else: `take` is an arm index or the `-1` floor,
     // never `undefined`, so the assignment moving below the guard is the whole of the flag.
-    lines.push(`let ${name}_at`)
-    lines.push(
-        `const ${name}_scope = ${SCOPE}.own(new ${lowering.use('Scope')}())`,
-    )
-    lines.push(`${SCOPE}.watch(() => {
+    //
+    // AND THE FIRST RUN FILLS AN EMPTY REGION RATHER THAN HYDRATING ONE. 41.4 lets a render
+    // continue past a subject still in flight, and what the server writes then is the anchor pair
+    // with nothing between it (see `emitComponent`'s `{#if}` arm) — so hydrating here walks for
+    // nodes that were never painted. `isEmptyRegion` is the same signal an invoked component
+    // already reads (32.19), asked ONCE on the first run: from the second onward `${name}_at` is
+    // set and the fill happens anyway, so the region is never scanned twice for it.
+    lines.push(`${address}
+let ${name}_at
+const ${name}_scope = ${SCOPE}.own(new ${lowering.use('Scope')}())
+${SCOPE}.watch(() => {
     const next = ${take}
     if (next === ${name}_at) return
-    if (${name}_at !== undefined) {
+    if (${name}_at !== undefined || ${lowering.use('isEmptyRegion')}(${name})) {
         ${name}_scope.stop()
         ${fillRegion}(${name}, ${name}_html(next))
     }
@@ -593,7 +648,16 @@ function emitList(
 
     const rowLines: string[] = []
     const rowHelpers: string[] = []
-    emitRegion(region.plan, '__nodes', lowering, rowLines, rowHelpers, counter)
+    const rowDeclarations: string[] = []
+    emitRegion(
+        region.plan,
+        '__nodes',
+        lowering,
+        rowLines,
+        rowHelpers,
+        counter,
+        rowDeclarations,
+    )
 
     helpers.push(
         [
@@ -610,7 +674,17 @@ function emitList(
             mountFunction(
                 name,
                 `__nodes, ${item}, ${at}`,
-                [...rowHelpers, ...rowLines],
+                // The row's anchors, declared where the page declares its own. INSIDE the mount's
+                // one `try` rather than above it, because a row rebuilds whole: an anchor that
+                // refused is the row disagreeing, and re-rendering it from its own markup is the
+                // answer the page does not have.
+                [
+                    ...(rowDeclarations.length === 0
+                        ? []
+                        : [`let ${rowDeclarations.join(', ')}`]),
+                    ...rowHelpers,
+                    ...rowLines,
+                ],
                 `${lowering.use('replaceNodes')}(__nodes, ${name}_make(${item}, ${at}))`,
                 lowering,
                 holdsComponent(region.plan),
@@ -618,16 +692,14 @@ function emitList(
         ].join('\n'),
     )
 
-    lines.push(
-        `const ${name} = ${lowering.use('regionAt')}(${parent}, ${region.index})`,
-    )
+    // ONE UNIT, for `emitBlock`'s reason: the list's region and the `List` built over it are both
+    // read by the watch, so the three lines cannot be guarded apart.
     // OWNED BY THE REGION ABOVE IT: `dropRow` stops a row as the list churns, but a block removed
     // whole drops no rows, so `List.stop` is what reaches the ones still standing.
     lines.push(
-        `const ${name}_list = ${SCOPE}.own(${lowering.use('listAt')}(${name}, ${single ? 'false' : 'true'}, ${name}_key, ${name}_make, ${name}_mount))`,
-    )
-    lines.push(
-        `${SCOPE}.watch(() => ${lowering.use('updateList')}(${name}_list, ${name}_subject()))`,
+        `const ${name} = ${lowering.use('regionAt')}(${parent}, ${region.index})
+const ${name}_list = ${SCOPE}.own(${lowering.use('listAt')}(${name}, ${single ? 'false' : 'true'}, ${name}_key, ${name}_make, ${name}_mount))
+${SCOPE}.watch(() => ${lowering.use('updateList')}(${name}_list, ${name}_subject()))`,
     )
 }
 

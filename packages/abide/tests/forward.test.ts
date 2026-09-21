@@ -69,7 +69,11 @@ test('the emitted binding walks a path and adds nothing to the document', async 
     const client = await clientOf(SOURCE, ['a', 'b'])
     // The `<span>`'s text and the `<button>` both sit under the `<div>` at [1], so that walk is
     // taken once and both reference it. The `<p>` at [0] has no company and walks alone.
-    expect(client).toContain('const at0 = __childAt(root, [1])')
+    //
+    // DECLARED APART FROM ITS ASSIGNMENT, because the page guards each binding on its own (41.11,
+    // `emitClient`) and an anchor is the one name that crosses from one guard into the next.
+    expect(client).toContain('let at0')
+    expect(client).toContain('at0 = __childAt(root, [1])')
     // `{b} tail` carries a static piece, so it always renders a node. `{a}` is every part an
     // expression and can render none, which is the `true` — `textAt` puts one back.
     expect(client).toContain('__textAt(at0, [0,0])')

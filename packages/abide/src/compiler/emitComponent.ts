@@ -110,6 +110,43 @@ ${heads ? `    const ${HEADS} = []\n` : ''}\
 `
 }
 
+// 32.25 and 41.4 — THE POSITION ABORTS, NOT THE DOCUMENT. `emitComponent` builds the markup as
+// ONE concatenation, so an unlanded read anywhere in it threw out of `Component()` and took the
+// static markup, every other position and the `<head>` with it. Passed as a THUNK because the
+// throw happens while the expression is being evaluated, so nothing a helper is HANDED can catch
+// it; `slotValue` says what that costs.
+//
+// EVERY MARKUP POSITION THAT EVALUATES AN AUTHOR EXPRESSION, rather than the two that were found
+// first. A GUARD HERE IS HALF A MECHANISM — it trades a throw for a HOLE, and something on the
+// client has to fill that hole once the value lands: a text slot has `textAt`'s `blank` arm, a
+// `{#for}` has `List.hydrate`'s count check, an attribute has its own binding re-running on the
+// value that landed (32.4), and the `{#if}` chain has `isEmptyRegion` — which is why that one is
+// guarded at the REGION rather than per subject, and says so at its own arm. The ESCAPER STAYS
+// OUTSIDE: absence is `undefined` here and what it means is already decided where it lands (see
+// `slotValue`).
+//
+// ONLY WHERE A `Reactive` IS READ, because only that can be unlanded. A row body reading its own
+// item — `{row.title}`, which is most slots on most pages — cannot throw this, and wrapping it
+// anyway put a closure in the hot loop: the card bench went 0.9 µs -> 1.7 µs at 10 cards and
+// 0.70x -> 1.20x against the hand-written page, which is the headline ratio inverted for a guard
+// that could never fire. `readsIn` is asked of the READS rather than of the rewrite, which is the
+// distinction its own note draws.
+function unlandable(
+    lowering: Lowering,
+    holder: object,
+    lowered: string,
+): string {
+    if (!lowering.readsIn(holder)) return lowered
+    return slotValueOf(lowering, lowered)
+}
+
+// The wrap itself, apart from the `readsIn` that decides it. The `{#if}` chain asks that question
+// of its BRANCHES rather than of one holder (see its arm), so it cannot call `unlandable` — but it
+// emits the same call, and one spelling is what keeps it the same call.
+function slotValueOf(lowering: Lowering, lowered: string): string {
+    return `${lowering.use('slotValue')}(() => ${lowered})`
+}
+
 // `client` is the LANE this markup is for. The server writes a component by CALLING it; the
 // client builds a row's markup in the browser, where the child's server module is not reachable —
 // so there it asks the child's own client module for the same markup instead.
@@ -122,20 +159,9 @@ function emitNode(
 
     if (node.kind === 'expression') {
         // 32.1 — escaped at run time, never at compile time: the value is not known here.
-        // 32.25 and 41.4 — THE SLOT ABORTS, NOT THE DOCUMENT. Passed as a thunk because the throw
-        // happens while the expression is being evaluated, so nothing a helper is HANDED can catch
-        // it; `renderSlot` says what that costs.
-        //
-        // ONLY WHERE A `Reactive` IS READ, because only that can be unlanded. A row body reading
-        // its own item — `{row.title}`, which is most slots on most pages — cannot throw this, and
-        // wrapping it anyway put a closure in the hot loop: the card bench went 0.9 µs -> 1.7 µs at
-        // 10 cards and 0.70x -> 1.20x against the hand-written page, which is the headline ratio
-        // inverted for a guard that could never fire. `readsIn` is asked of the READS rather than
-        // of the rewrite, which is the distinction its own note draws.
-        const lowered = lowering.slot(node)
-        return lowering.readsIn(node)
-            ? `${lowering.use('renderSlot')}(() => ${lowered})`
-            : `${lowering.use('escapeText')}(${lowered})`
+        // The escaping is OUTSIDE the guard: `escapeText` reads the abort's `undefined` as '',
+        // so a slot still in flight and one that genuinely answered nothing render the same.
+        return `${lowering.use('escapeText')}(${unlandable(lowering, node, lowering.slot(node))})`
     }
 
     if (node.kind === 'block' && node.block === 'for') {
@@ -157,13 +183,10 @@ function emitNode(
         // without JS and whole after hydration.
         const listOf = lowering.use('listOf')
         // AND 41.4 FOR A SUBJECT STILL IN FLIGHT. The read is the block's one expression, so an
-        // unlanded one aborts it and nothing else: `slotValue` answers `undefined`, `listOf` reads
+        // unlanded one aborts it and nothing else: the abort answers `undefined`, `listOf` reads
         // that as absent, and 32.24's zero rows is already what absent means here. Read ONCE for
-        // the block (32.23), so the thunk is per block rather than per row — and still only where
-        // the subject is a `Reactive`, for the slot's reason above.
-        const guarded = lowering.readsIn(node)
-            ? `${lowering.use('slotValue')}(() => ${subject})`
-            : subject
+        // the block (32.23), so the thunk is per block rather than per row.
+        const guarded = unlandable(lowering, node, subject)
         return `${JSON.stringify(`<!--${REGION_OPEN}-->`)} + ((__list) => {
         if (!Array.isArray(__list)) return ''
         let __out = ''
@@ -176,6 +199,25 @@ function emitNode(
     if (node.kind === 'block') {
         // 32.13 — ONE branch renders. The anchors go in whichever one that is, and stay when the
         // branch changes, which is what keeps every sibling after the region addressable.
+        //
+        // 41.4 ABORTS THE REGION, NOT THE ARM, and that is why the guard is around the WHOLE
+        // chain rather than around each subject the way every other position takes it. Guarded
+        // per subject, an unlanded first condition is `undefined`, which is falsy — so the chain
+        // walks on and paints the `{:else}` arm, a decision the client then has no way to know
+        // was never really made. It reads the landed value a turn later, picks the other arm, and
+        // hydrates its bindings against the arm the server actually wrote; where that arm has no
+        // bindings there is nothing to walk, so 41.11 never fires and the region stays wrong for
+        // as long as the condition does not CHANGE.
+        //
+        // AN EMPTY REGION IS THE ONE SIGNAL THAT ALREADY MEANS "NOBODY PAINTED THIS" — 32.19 gave
+        // it to a component whose row the browser grew, and `isEmptyRegion` is how the client
+        // reads it. So an aborted chain writes the anchor pair and nothing between it, and the
+        // block's first run fills it from the arm it picks instead of hydrating markup that is
+        // not there. Nothing is added to the document to carry any of this.
+        //
+        // A GENUINELY EMPTY ARM TAKES THE SAME PATH and costs a `fillRegion` with an empty string
+        // — no node removed and none parsed. One answer for both beats a second way of saying
+        // which arm was painted.
         const arms = node.branches.map((branch) => ({
             subject: branch.subject === '' ? '' : lowering.expression(branch),
             body: emitMarkup(branch.children, lowering, client),
@@ -188,6 +230,18 @@ function emitNode(
                     ? `(${arm.body})`
                     : `(${arm.subject} ? ${arm.body} : ${expression})`
         }
+        // ONLY WHERE A SUBJECT READS A `Reactive`, for `unlandable`'s reason: nothing else can be
+        // unlanded, and the thunk is a closure per region per render where it is emitted. Asked
+        // of the SUBJECTS alone — a slot inside an arm carries its own guard already, so a body
+        // cannot be what throws through here.
+        const guardable = node.branches.some(
+            (branch) =>
+                branch.subject !== '' && lowering.readsIn(branch as object),
+        )
+        // `?? ''` IS THE ABORT'S OWN ANSWER, not a fallback decided twice: `slotValue` hands back
+        // `undefined` and what `undefined` MEANS here is the empty region above.
+        if (guardable)
+            expression = `(${slotValueOf(lowering, expression)} ?? '')`
         return `${JSON.stringify(`<!--${REGION_OPEN}-->`)} + ${expression} + ${JSON.stringify(`<!--${REGION_CLOSE}-->`)}`
     }
 
@@ -219,7 +273,7 @@ function emitNode(
             if (plainStyle !== undefined) {
                 if (plainStyle.expression) {
                     parts.push(
-                        `${lowering.use('escapeAttribute')}(${lowering.slot(plainStyle)})`,
+                        `${lowering.use('escapeAttribute')}(${unlandable(lowering, plainStyle, lowering.slot(plainStyle))})`,
                     )
                 } else parts.push(JSON.stringify(quoteOnly(plainStyle.value)))
                 parts.push(JSON.stringify('; '))
@@ -396,12 +450,13 @@ function emitAttribute(
         // which is the one of the two where untrusted data actually arrives. The value is not
         // known here, so the guard is a call in the emitted markup — the same shape the escaping
         // already is, and the same one on both sides.
-        const value = lowering.slot(attribute)
-        const guarded = isUrlAttribute(attribute.lowerName)
-            ? `${lowering.use('safeUrl')}(${value})`
-            : value
+        //
+        // 41.4 INSIDE BOTH GUARDS. The abort is nearest the read and the scheme check wraps it,
+        // so a `href` still in flight is checked as the empty value it renders as rather than
+        // skipping 32.22 on its way past.
+        const value = unlandable(lowering, attribute, lowering.slot(attribute))
         return {
-            value: `${lowering.use('escapeAttribute')}(${guarded})`,
+            value: `${lowering.use('escapeAttribute')}(${urlGuarded(lowering, attribute.lowerName, value)})`,
         }
     }
     // Dropped where the guard did not hand the value back — an empty `href` is its own answer and
@@ -540,7 +595,7 @@ function styleValue(styles: Attribute[], lowering: Lowering): string {
         }
         parts.push(
             JSON.stringify(`${lead}${property}: `),
-            `${lowering.use('escapeStyleValue')}(${lowering.slot(attribute)})`,
+            `${lowering.use('escapeStyleValue')}(${unlandable(lowering, attribute, lowering.slot(attribute))})`,
         )
     }
     return concat(parts)

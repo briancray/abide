@@ -131,9 +131,13 @@ export async function serveBuild(
         : Bun.serve({ port: options.port, fetch })
 }
 
-// 35.5's generator, as a body. Pulled a chunk at a time rather than collected, so the head goes
-// out while the body is still being built — which is the shape 41.1 needs and the reason `render`
-// yields twice rather than returning a string.
+// 35.5's generator, as a body. Pulled a chunk at a time rather than collected, which is the shape
+// 41.1 needs and the reason `render` yields twice rather than returning a string.
+//
+// IT IS NOT AN EARLY FLUSH. `render` calls the component before its first yield, so the body is
+// already built by the time the head chunk is pulled — what a reader gains today is that the head
+// is a chunk of its own and goes out without waiting on the encode of the rest. 41.1 is the flush,
+// it is not implemented, and it lands in `render` rather than here.
 function streamOf(
     chunks: AsyncGenerator<Uint8Array>,
 ): ReadableStream<Uint8Array> {

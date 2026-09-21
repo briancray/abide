@@ -1,5 +1,5 @@
 import { listOf } from '#shared/listOf.ts'
-import { warnMismatch } from './Mismatch.ts'
+import { Mismatch, warnMismatch } from './Mismatch.ts'
 import {
     dropRow,
     makeRow,
@@ -8,7 +8,7 @@ import {
     rowOf,
     rowsIn,
 } from './reconcile.ts'
-import type { Region } from './regionAt.ts'
+import { isEmptyRegion, type Region } from './regionAt.ts'
 import type { Scope } from './Scope.ts'
 
 // ONE RECORD PER `{#for}`, owned by the emitted block, holding everything the two arms — the
@@ -83,22 +83,36 @@ export function listAt(
 // HYDRATION, NOT RENDERING. The rows are already there; wiring them is all that is left. 41.3 — an
 // async subject rendered no rows, so it finds none here.
 //
-// FALSE WHERE THERE IS NOTHING TO HYDRATE AGAINST, and the caller reconciles instead. 41.4 lets a
-// render continue past a subject still in flight, which writes the anchors and no rows — and the
-// watch that would have hydrated them THREW on that same subject, so `hydrating` was still set
-// when the value landed a turn later. Hydrating then means walking zero server rows against a
-// full list and keeping neither: an empty `{#for}` that never fills, on a page that otherwise
-// looks right. Nothing is in the region, so building the rows cannot duplicate one.
+// FALSE WHERE THERE IS NOTHING TO RETURN ON, and the caller reconciles what was hydrated instead.
+// TWO DIFFERENT QUESTIONS REACH THIS, and answering both with one length compare hid the second:
+//
+// NOBODY PAINTED THIS REGION is 41.4 — a render continues past a subject still in flight, which
+// writes the anchors and no rows. That is not a disagreement, because there is nothing to disagree
+// with, so it builds in silence. `isEmptyRegion` is the signal the rest of the block machinery
+// already reads for exactly this (32.19), rather than a zero this function infers on its own.
+//
+// THE SERVER'S ROWS ARE NOT THE CLIENT'S ITEMS is 41.11, and it MUST warn. Hydration wires row
+// `at` to item `at` BY POSITION, so a run where the two lengths disagree has items with no node,
+// nodes with no item, or both — every one of them a `{#for}` that looks right and is dead, because
+// `updateList` returned before `reconcile` could fix it. Repairing that silently is the clause
+// half-applied: the divergence is a document and a client that disagree, which is the one thing
+// the channel exists to report.
 function hydrate(list: List, items: unknown[]): boolean {
     const found = rowsIn(list.region, list.anchored)
-    if (found.length === 0 && items.length !== 0) return false
+    if (found.length === 0 && isEmptyRegion(list.region)) return false
     for (let at = 0; at < found.length; at += 1) {
         const item = items[at]
         list.rows.push(
             rowOf(list, list.key(item, at), item, found[at] as Node[], at),
         )
     }
-    return true
+    if (found.length === items.length) return true
+    warnMismatch(
+        new Mismatch(
+            `abide: the document holds ${found.length} rows where this {#for} computes ${items.length}, so the client and the server disagree about this region's shape (41.11).`,
+        ),
+    )
+    return false
 }
 
 // 32.16 — AN ARRAY RECONCILES AND AN ASYNC SUBJECT APPENDS AS ITEMS ARRIVE. There is no list to

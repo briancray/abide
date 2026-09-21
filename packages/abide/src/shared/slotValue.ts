@@ -9,18 +9,18 @@
 // concatenation — so the first unlanded read threw out of `Component()` and `render` died on its
 // first `next()`, losing the static markup, every other slot and the `<head>` with them. Passing
 // the read rather than its result is what gives the slot the body the client's binding already
-// has, and it is one closure per dynamic slot per render.
+// has, and it is one closure per guarded position per render.
 //
-// ONLY THE READ IS INSIDE THE TRY. Escaping cannot throw this and wrapping it too would catch a
-// `NotLanded` from somewhere that is not the expression, which is the one thing a brand is for.
+// ONLY THE READ IS INSIDE THE TRY, and the escaping stays OUTSIDE it. Escaping cannot throw a
+// `NotLanded`, and a guard wide enough to cover it would catch one from somewhere that is not the
+// expression — which is the one thing a brand is for. It is also what lets every markup position
+// share this: the value's absence is `undefined` here, and what `undefined` MEANS is already
+// decided where it lands. `escapeText`, `escapeAttribute` and `escapeStyleValue` all read it as
+// '' through `textOf`, `listOf` reads it as absent and iterates zero times (32.24), and an `{#if}`
+// subject reads it as false. One abort, five positions, no fallback decided twice.
 
-import { escapeText } from './escapeText.ts'
 import { NotLanded } from './reactive/NotLanded.ts'
 
-// WHAT THE EXPRESSION ANSWERED, or `undefined` where it has not landed. The two positions that
-// need this want DIFFERENT absences and neither wants a string: a `{#for}` subject that is absent
-// iterates zero times (32.24, and `listOf` already answers `[]` for it), where a text slot renders
-// empty. One abort, two fallbacks, and the fallback stays where it is already decided.
 export function slotValue(read: () => unknown): unknown {
     try {
         return read()
@@ -30,10 +30,4 @@ export function slotValue(read: () => unknown): unknown {
         if (thrown instanceof NotLanded) return undefined
         throw thrown
     }
-}
-
-// `escapeText` reads `undefined` as '' already, so the abort and an expression that genuinely
-// answered nothing render the same — which they should.
-export function renderSlot(read: () => unknown): string {
-    return escapeText(slotValue(read))
 }

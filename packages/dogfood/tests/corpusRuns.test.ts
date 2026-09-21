@@ -243,21 +243,26 @@ test('every example renders on the server and mounts on the client', async () =>
     // fills it from its own template, which is what a list of components needs and what the
     // refusal was standing in for.
     //
-    // 66 ONCE A RENDER CONTINUES PAST A VALUE STILL IN FLIGHT (41.4). Twelve of these pages read
-    // an unlanded value in a slot and the throw took the whole document with it; the slot aborts
-    // now and the document is served with a hole the client fills. The one left is `element-ref`,
-    // whose unlanded read is in a `bind:` the compiler writes into the markup as a literal
-    // attribute — 33.7 and 33.8, which are not built, so wrapping that read would buy a page that
-    // renders `bind:element=""` instead of one that refuses.
-    //
     // 55 ONCE THE EXAMPLES SHIP THE `database.ts` THEIR HANDLERS IMPORT. The biggest group here
     // was never a fact about abide: 23 files stopped at a module the example does not contain,
     // which is this test reporting the corpus to itself. Clearing it moved ten files and, more to
-    // the point, made the rest of the list mean something — what stands at the top now is twelve
-    // pages reading an unlanded value (2.2) where the throw escapes as a rejection instead of the
-    // tracked body catching it, and that IS a fact about abide.
+    // the point, made the rest of the list mean something — what stood at the top after it was
+    // twelve pages reading an unlanded value (2.2) where the throw escapes as a rejection instead
+    // of the tracked body catching it, and that IS a fact about abide.
+    //
+    // 67 ONCE A RENDER CONTINUES PAST A VALUE STILL IN FLIGHT (41.4). The throw took the whole
+    // document with it; the position aborts now and the document is served with a hole. The
+    // twelve were text slots and `{#for}` subjects, and `element-ref` behind them is the one page
+    // reading an unlanded value from an ATTRIBUTE — the page that showed guarding the two shapes
+    // that had been TRIED was not the same as guarding the class. ALL FIVE MARKUP POSITIONS ARE
+    // GUARDED now; no corpus page reads an unlanded `{#if}` subject, which is exactly the kind of
+    // gap a floor cannot report.
+    //
+    // `element-ref` RENDERS `bind:element=""` INTO THE MARKUP, inert and ignored by a browser:
+    // the compiler has no `bind:` handling at all, so a `bind:` attribute falls through the
+    // ordinary computed path. 32.6-32.10 are that surface and none of it is built.
     //
     // A RATCHET STILL, and the direction is the rule: this may not go down under a change that
     // does not change what is being counted.
-    expect(sources.length - broken.length).toBeGreaterThanOrEqual(66)
+    expect(sources.length - broken.length).toBeGreaterThanOrEqual(67)
 })

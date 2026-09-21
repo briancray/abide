@@ -936,3 +936,71 @@ test('a subject building fresh items keeps the rows the server sent', async () =
     expect(sent).toHaveLength(3)
     expect(kept).toHaveLength(3)
 })
+
+// 41.11 THROUGH THE COUNTS, which is the only truth hydration has. A hydrating run wires row `at`
+// to item `at` BY POSITION, so a document holding fewer rows than the client computes items has
+// items with no node — and `updateList` used to RETURN on the hydrate, so reconcile never ran and
+// the missing rows never arrived. The list looked right and was dead: the `{#for}` kept whatever
+// the server happened to send for the life of the page.
+//
+// 41.4 IS THE ZERO CASE OF THIS and is what found it — a subject still in flight paints no rows at
+// all — but zero is not the shape to gate on, because a guard written for it (`found.length === 0`)
+// is right at one end and wrong everywhere else. Three-of-five is the case that tells a count
+// check from a zero check, the way CLAUDE.md's two-row swap tells a reconcile from a rebuild.
+//
+// THE REVERT: return `true` from `hydrate` whenever `found.length === 0` is false — this reports
+// 3 rows where 5 are due, with no warning and no throw.
+const FIVE = `<script>
+import { reactive } from 'abide'
+
+let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }, { id: 'e' }])
+</script>
+
+<ul id="five">{#for row of rows by row.id}<li>{row.id}</li>{/for}</ul>`
+
+test('a document holding fewer rows than the client computes reconciles — 41.11', async () => {
+    const file = parseAbide(FIVE)
+    const names = await session.reads(`${ROOT}src/five.abide`, file)
+    const dir = temporaryModule({
+        'Page.ts': compileFile(FIVE, names),
+        'Page.client.ts': emitClient(file, names),
+    })
+    const { default: Component } = await import(`${dir}/Page.ts`)
+    let html = ''
+    for await (const chunk of render(
+        Component,
+        '<!doctype html><html><head></head><body></body></html>',
+    ))
+        html += new TextDecoder().decode(chunk)
+    document.body.innerHTML = html.slice(
+        html.indexOf('<body>') + '<body>'.length,
+        html.indexOf('</body>'),
+    )
+    // THE DIVERGENCE, made by hand because no shape in this suite produces one: the document is
+    // short two rows, exactly as a server that rendered against a smaller list would leave it.
+    const painted = [...document.querySelectorAll('#five li')]
+    expect(painted).toHaveLength(5)
+    for (const node of painted.slice(3)) node.remove()
+    expect(document.querySelectorAll('#five li')).toHaveLength(3)
+
+    const { default: mount } = await import(`${dir}/Page.client.ts`)
+    const said: string[] = []
+    const warn = console.warn
+    console.warn = (...parts: unknown[]): void => {
+        said.push(parts.map(String).join(' '))
+    }
+    try {
+        mount(document.body)
+    } finally {
+        console.warn = warn
+    }
+    expect(
+        [...document.querySelectorAll('#five li')].map((n) => n.textContent),
+    ).toEqual(['a', 'b', 'c', 'd', 'e'])
+    // AND IT SAID SO. Repairing the divergence in silence is 41.11 half applied \u2014 the rows come
+    // back either way, so the warning is the only thing that reports a document and a client that
+    // disagree. THE REVERT: return `false` from `hydrate` without warning; the rows still arrive
+    // and this reports [].
+    expect(said.filter((line) => line.includes('41.11'))).toHaveLength(1)
+    expect(said.join(' ')).toContain('holds 3 rows')
+})

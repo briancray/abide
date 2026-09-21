@@ -564,14 +564,14 @@ test('a default value in a binding pattern is read, not bound — 31.12', async 
         names,
     )
     expect(server).toContain('__escapeText(tone)')
-    expect(server).toContain('__renderSlot(() => rows())')
+    expect(server).toContain('__escapeText(__slotValue(() => rows()))')
     // A rename binds the right of the `:` and reads the left.
     const renamed = await serverOf(
         '{#for { id: rows } of items}<i>{rows}{tone}</i>{/for}',
         names,
     )
     expect(renamed).toContain('__escapeText(rows)')
-    expect(renamed).toContain('__renderSlot(() => tone())')
+    expect(renamed).toContain('__escapeText(__slotValue(() => tone()))')
 })
 
 // THE CLIENT HALF IS ITS OWN GATE, because the row's MARKUP and the row's BINDINGS are emitted by
@@ -635,7 +635,9 @@ test('an interpolated quoted attribute is one expression', async () => {
     const emitted = await serverOf('<div class="badge {tone}">x</div>', [
         'tone',
     ])
-    expect(emitted).toContain('__escapeAttribute(`badge ${tone()}`)')
+    expect(emitted).toContain(
+        '__escapeAttribute(__slotValue(() => `badge ${tone()}`))',
+    )
     expect(emitted).not.toContain('badge {tone}')
     // Several slots and the text between them.
     expect(compileFile('<div title="a{b}c{d}e">x</div>')).toContain(
@@ -676,7 +678,7 @@ test('an interpolated style lowers to one attribute per property', async () => {
         ['c', 'w'],
     )
     expect(emitted).toContain(
-        '"<div style=\\"" + "color: " + __escapeStyleValue(`${c()}`) + "; width: " + __escapeStyleValue(`${w()}px`)',
+        '"<div style=\\"" + "color: " + __escapeStyleValue(__slotValue(() => `${c()}`)) + "; width: " + __escapeStyleValue(__slotValue(() => `${w()}px`))',
     )
     expect(emitted.match(/style=\\"/g)).toHaveLength(1)
 
@@ -1060,7 +1062,7 @@ test('a default value holding an `=` is skipped whole — 31.12', async () => {
         ['rows', 'tone', 'items', 'seed'],
     )
     expect(server).toContain('__escapeText(tone)')
-    expect(server).toContain('__renderSlot(() => rows())')
+    expect(server).toContain('__escapeText(__slotValue(() => rows()))')
 })
 
 // THE TWO EMITTERS FILTER THE SAME `<head>`, and a tag name is ASCII case-INSENSITIVE. Only the
@@ -1071,7 +1073,7 @@ test('a default value holding an `=` is skipped whole — 31.12', async () => {
 test('an uppercase head is hoisted by both emitters', async () => {
     const source = '<HEAD><title>t</title></HEAD><p>{n}</p>'
     expect(await serverOf(source, ['n'])).toContain(
-        '__body = "<p>" + __renderSlot(() => n()) + "</p>"',
+        '__body = "<p>" + __escapeText(__slotValue(() => n())) + "</p>"',
     )
     expect(await clientOf(source, ['n'])).toContain(
         '__textAt(root, [0,0], true)',
@@ -1083,10 +1085,10 @@ test('an uppercase head is hoisted by both emitters', async () => {
 // and past the `safeUrl` 32.22 asks a URL attribute for.
 test('a slot in an unquoted attribute value is an expression', async () => {
     expect(await serverOf('<a href=/x/{id}>y</a>', ['id'])).toContain(
-        '__escapeAttribute(__safeUrl(`/x/${id()}`))',
+        '__escapeAttribute(__safeUrl(__slotValue(() => `/x/${id()}`)))',
     )
     expect(await serverOf('<a class=badge-{tone}>y</a>', ['tone'])).toContain(
-        '__escapeAttribute(`badge-${tone()}`)',
+        '__escapeAttribute(__slotValue(() => `badge-${tone()}`))',
     )
     // A value with no slot in it stays a literal.
     expect(compileFile('<a href=/plain>y</a>')).toContain('href=\\"/plain\\"')
@@ -1097,12 +1099,12 @@ test('a slot in an unquoted attribute value is an expression', async () => {
 // here; a value off the wire then writes a whole declaration list into the merged attribute.
 test('an interpolated style property cannot set a second one', async () => {
     expect(await serverOf('<div style:color={v}>x</div>', ['v'])).toContain(
-        '__escapeStyleValue(v())',
+        '__escapeStyleValue(__slotValue(() => v()))',
     )
     expect(escapeStyleValue('red; position: fixed; top: 0')).toBe('red')
     // A WHOLE `style={expr}` IS A DECLARATION LIST and keeps the attribute escaping.
     expect(await serverOf('<div style={s}>x</div>', ['s'])).toContain(
-        '__escapeAttribute(s())',
+        '__escapeAttribute(__slotValue(() => s()))',
     )
 })
 
@@ -1112,7 +1114,7 @@ test('an interpolated style property cannot set a second one', async () => {
 // holding only `escapeAttribute, safeUrl` — a ReferenceError at render.
 test('a raw call lowers in an attribute value too', async () => {
     const emitted = await serverOf('<a href={raw(u)}>x</a>', ['u'])
-    expect(emitted).toContain('__safeUrl(__raw(u()))')
+    expect(emitted).toContain('__safeUrl(__slotValue(() => __raw(u())))')
     expect(emitted).toContain('raw as __raw')
 })
 

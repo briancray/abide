@@ -168,9 +168,9 @@ test('a static page emits no client module', async () => {
 // `planTemplate`, and `textAt`'s `blank` arm puts the text node back when the value lands. That
 // mechanism predates this and is why the fix is a catch rather than a placeholder node.
 //
-// THE REVERT: drop the `renderSlot` wrapper from `emitNode`'s expression arm and emit
-// `escapeText(...)` directly — `render` throws `NotLanded: reactive has not landed` and this test
-// reports no document at all rather than a document with one empty slot.
+// THE REVERT: make `unlandable` answer `lowered` unconditionally, so `emitNode`'s expression arm
+// emits `escapeText(...)` directly — `render` throws `NotLanded: reactive has not landed` and this
+// test reports no document at all rather than a document with one empty slot.
 test('a render continues past a value still in flight — 41.4, 32.25', async () => {
     const { html, mount } = await mountPage(`<script>
 import { reactive } from 'abide'
@@ -232,6 +232,95 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
     ).toEqual(['north', 'south'])
 })
 
+// 41.4 AT THE TWO POSITIONS THE FIRST PASS DID NOT REACH. A text slot and a `{#for}` subject were
+// guarded; an attribute value and a `style:` value were not, and nothing noticed because only
+// `element-ref` reads an unlanded value from an attribute and no corpus page reads one from a
+// `style:`. One class of bug, closed in the two shapes that happened to be tried.
+//
+// AND THE HOLE FILLS, which is the half that makes guarding legal rather than a silent wrong
+// value: 32.4's binding re-runs on the value that landed and writes it into the attribute the
+// server left empty, exactly as `blank` does for a text run. Before that binding existed the
+// empty attribute was permanent, and the test below asserted it and called that the answer.
+//
+// EACH ABSENCE IS THE ONE ALREADY DECIDED WHERE IT LANDS — `escapeAttribute` and
+// `escapeStyleValue` both read `undefined` as '' through `textOf`, so nothing new was decided to
+// make this work.
+//
+// THE REVERT: make `unlandable` answer `lowered` unconditionally and `render` throws
+// `NotLanded: reactive has not landed` — no document at all, on a page whose static markup is
+// most of it. This test then reports nothing rendered rather than a page with two empty values.
+test('a render continues past an unlanded attribute and style — 41.4', async () => {
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+const tone = reactive(() => Promise.resolve('warm'))
+const width = reactive(() => Promise.resolve('40px'))
+</script>
+
+<main><h1 id="static">Panel</h1><p id="attr" title={tone}>t</p><b id="styled" style:width={width}>w</b></main>`)
+
+    // THE PAGE IS THERE, which is the whole claim — asserting the holes alone would pass against
+    // a render that emitted nothing at all.
+    expect(html).toContain('<h1 id="static">Panel</h1>')
+    expect(document.querySelector('#static')?.textContent).toBe('Panel')
+    // The holes: both values are still in flight, so both render as the absence they escape to.
+    expect(document.querySelector('#attr')?.getAttribute('title')).toBe('')
+    expect(html).not.toContain('40px')
+    expect(document.querySelector('#styled')?.getAttribute('style')).toBe(
+        'width: ',
+    )
+
+    // AND BOTH FILL. THE REVERT: drop the `plan.attributes` loop in `emitRegion` — the document
+    // is identical and both values stay empty for the life of the page.
+    mount(document.body)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    flushSync()
+    expect(document.querySelector('#attr')?.getAttribute('title')).toBe('warm')
+    expect((document.querySelector('#styled') as HTMLElement).style.width).toBe(
+        '40px',
+    )
+})
+
+// 41.4 AT THE LAST POSITION, and the one that needed a signal rather than a fallback. An `{#if}`
+// subject guarded to `undefined` is FALSY, so the chain walks on and paints the `{:else}` arm —
+// a decision the client cannot tell from one the author's own value made. It reads the landed
+// value a turn later, picks the other arm, and hydrates against the arm the server actually
+// wrote; where that arm holds no binding there is nothing to walk and 41.11 never fires, so the
+// region is wrong until the condition CHANGES.
+//
+// SO THE ABORT EMPTIES THE REGION, and `isEmptyRegion` — 32.19's signal for a component whose row
+// the browser grew — is what the block's first run reads to fill instead of hydrate. Nothing was
+// added to the document to carry it.
+//
+// THE `{:else}` ARM IS WHAT MAKES THE CASE DISTINGUISH. Without it an aborted chain and a chain
+// that took the false arm both render nothing, so the test passes against the bug; with it, the
+// old behaviour puts `off` in the document and leaves it there.
+//
+// TWO REVERTS. Drop the `slotValue` wrapper from the `{#if}` arm of `emitNode` and `render`
+// throws `NotLanded` — no document at all. Drop the `isEmptyRegion` arm of the block's watch in
+// `emitClient` instead and the document is served with an empty region that never fills.
+test('a render continues past an {#if} subject still in flight — 41.4, 32.13', async () => {
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+const shown = reactive(() => Promise.resolve(true))
+</script>
+
+<main><h1 id="static">Panel</h1>{#if shown}<span id="arm">on</span>{:else}<span id="off">off</span>{/if}</main>`)
+
+    // THE PAGE IS THERE, and NEITHER ARM IS. The region carries its anchors and nothing between
+    // them, which is the whole of what the client reads.
+    expect(html).toContain('<h1 id="static">Panel</h1>')
+    expect(html).not.toContain('id="arm"')
+    expect(html).not.toContain('id="off"')
+
+    mount(document.body)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    flushSync()
+    expect(document.querySelector('#arm')?.textContent).toBe('on')
+    expect(document.querySelector('#off')).toBeNull()
+})
+
 // 32.4 — `name={expr}` IS REACTIVE, and the binding is what makes it so. The server writes the
 // value standing at render and, without this, nothing ever writes it again: a page whose `{tone}`
 // text moved while its `title={tone}` stayed behind is what shipped, and no assertion on the slot
@@ -287,4 +376,47 @@ const kind = 'card'
     // it reports 0, because hydration re-runs every binding on a value that has not moved.
     expect(work.attributesSet).toBe(1)
     expect(mountWork.attributesSet).toBe(0)
+})
+
+// 41.11 — A MISMATCH MUST NOT REBUILD THE PAGE, and the page is the one region with no block
+// around it to rebuild instead. `Mismatch` was written against exactly the failure this guards:
+// an ordinary throw out of `mount` skips every binding and listener after the one that refused,
+// so a page whose first slot disagrees is served looking right and completely dead below it.
+//
+// ONE `try` AROUND THE WHOLE ROOT WAS THAT SAME FAILURE WITH A WARNING ON IT. It caught the throw
+// and still lost the rest, so the clause read as satisfied while the page was as dead as before.
+//
+// THE SECOND SLOT AND THE LISTENER ARE BOTH ASSERTED, because they fail differently: the binding
+// is a `watch` that never opened and the listener is an `addEventListener` that never ran, and a
+// test that only clicked would pass against a page whose text bindings were all lost.
+//
+// THE REVERT: put `lines.join('\n')` back inside one `try` in `emitClient`. The first binding
+// still warns, and this reports `B` where `B2` is due.
+test('a mismatch in one root binding does not stop the next — 41.11', async () => {
+    const { mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+let a = reactive('A')
+let b = reactive('B')
+</script>
+
+<main><p id="one">a{a}</p><p id="two">b{b}</p>
+<button id="go" onclick={() => { b = 'B2' }}>go</button></main>`)
+
+    // THE SHAPE THE SERVER WROTE, BROKEN ON PURPOSE. An element where the run's text node stands
+    // is what a server and a client that disagree about a region produce, and the run carries a
+    // static character so it is not `blank` — a blank run would have its node put back rather
+    // than refusing, which is the other arm and not this one.
+    const one = document.querySelector('#one') as HTMLElement
+    one.innerHTML = '<em>aA</em>'
+
+    mount(document.body)
+    flushSync()
+
+    // THE BINDING AFTER THE REFUSAL IS LIVE.
+    ;(document.querySelector('#go') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelector('#two')?.textContent).toBe('bB2')
+    // And so is the listener, which stands in a later unit again.
+    expect(document.querySelector('#one')?.textContent).toBe('aA')
 })
