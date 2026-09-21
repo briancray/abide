@@ -84,7 +84,8 @@ export class Router {
             location.href = target.href
             return
         }
-        const ticket = (this.navigation += 1)
+        this.navigation += 1
+        const ticket = this.navigation
         const page = await found.route.load()
         // SUPERSEDED, so this navigation is over. Nothing has been touched yet, which is the whole
         // reason the ticket is checked here rather than after the mount.
@@ -114,7 +115,8 @@ export class Router {
         // so a click during the page module's own load is a `go` that supersedes it — and
         // hydrating on top of the markup that navigation had already put in the region wired the
         // arriving page's bindings to the departing page's nodes.
-        const ticket = (this.navigation += 1)
+        this.navigation += 1
+        const ticket = this.navigation
         // NO `applyHead` HERE. The document's head is the one the server wrote for this very
         // page, and re-applying would replace each contribution with an identical copy — which is
         // a `<link rel=stylesheet>` refetched and a flash of unstyled document on every load.

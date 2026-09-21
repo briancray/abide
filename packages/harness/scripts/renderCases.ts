@@ -85,12 +85,12 @@ let rows = reactive(CARDS)
 export function vanillaMarkup(list: Card[]): string {
     let out = '<main id="list">'
     for (const card of list)
-        out += `<article class="card"><h2>${escape(card.title)}</h2><p>${escape(card.body)}</p><span class="n">${escape(String(card.count))}</span></article>`
+        out += `<article class="card"><h2>${escapeByHand(card.title)}</h2><p>${escapeByHand(card.body)}</p><span class="n">${escapeByHand(String(card.count))}</span></article>`
     return `${out}</main>`
 }
 
 // What a person writes when they escape by hand, which is a `replace` chain rather than a scan.
-function escape(value: string): string {
+function escapeByHand(value: string): string {
     return value
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')

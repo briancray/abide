@@ -4,7 +4,6 @@ import type { Node, TypeNode } from 'typescript/unstable/ast'
 import {
     isArrayLiteralExpression,
     isArrowFunction,
-    isBindingElement,
     isCallExpression,
     isFunctionDeclaration,
     isFunctionExpression,

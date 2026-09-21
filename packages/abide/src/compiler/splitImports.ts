@@ -190,7 +190,7 @@ export function withoutProps(imports: string): string {
     return imports
         .replace(
             /^import \{([^}]*)\} from ('abide'|"abide")\s*;?$/gm,
-            (statement, clause: string, specifier: string) => {
+            (_statement, clause: string, specifier: string) => {
                 const kept: string[] = []
                 for (const name of clause.split(','))
                     if (name.trim() !== 'props' && name.trim() !== '')

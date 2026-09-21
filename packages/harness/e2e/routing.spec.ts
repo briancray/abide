@@ -37,6 +37,10 @@ let PAINTED_HEAD = ''
 let server: Server | null = null
 let port = 0
 
+// Playwright reads the FIRST parameter to decide which fixtures to build, and `{}` is how it is
+// told "none" while still handing back `testInfo` in the second. A named parameter there asks for
+// the whole fixtures object instead.
+// biome-ignore lint/correctness/noEmptyPattern: playwright's "no fixtures" spelling — see above.
 test.beforeAll(async ({}, testInfo) => {
     APP = join(REPO, `.test-modules/e2e-routeapp-${testInfo.project.name}`)
     // WRITTEN FROM HERE, not from a `bun -e`. Nothing about laying the fixture out is bun-only —

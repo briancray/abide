@@ -26,6 +26,7 @@ import {
 } from './tracking.ts'
 
 export type Disposer = () => void
+// biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
 export type Effect = () => void | Disposer
 
 export function watch(effect: Effect): Disposer
@@ -58,6 +59,7 @@ export function watchOver(
     adopter: Tracked | null,
     effect: Effect,
 ): Disposer {
+    // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
     let dispose: Disposer | void
     const reader: Subscriber = {
         // Declared rather than tracked. `detach` still tears this down: it truncates from
@@ -119,6 +121,7 @@ export function watchOver(
 }
 
 function watchTracked(effect: Effect): Disposer {
+    // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
     let dispose: Disposer | void
     const reader: Subscriber = {
         sources: [],

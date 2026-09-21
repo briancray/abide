@@ -31,6 +31,10 @@ const EXAMPLES = new URL('../examples/', import.meta.url)
 const TSCONFIG = new URL('../examples/tsconfig.json', import.meta.url).pathname
 const SHELL = '<!doctype html><html><head></head><body></body></html>'
 
+// The tag a component's own failure carries out of the loop. A marker rather than a message test:
+// see where it is pushed.
+const NO_CALLER = '[no caller]'
+
 const sources = [
     ...new Bun.Glob('*/files/**/*.abide').scanSync({ cwd: EXAMPLES.pathname }),
 ].sort()
@@ -125,8 +129,31 @@ test('every example renders on the server and mounts on the client', async () =>
     addEventListener('error', escaped)
     addEventListener('unhandledrejection', escaped)
 
+    // WHICH FILES ARE COMPONENTS, per example. A component is INVOKED by another file and is
+    // exercised through it; mounted on its own it has no caller, so `props()` answers {} and a
+    // required prop is `undefined` — which is this test asking a component to be a page rather
+    // than anything about abide. Computed once per example because the answer is the example's.
+    const componentsOf = new Map<string, Set<string>>()
+    for (const example of new Set(
+        sources.map((path) => path.slice(0, path.indexOf('/files/'))),
+    )) {
+        const root = new URL(`${example}/files/`, EXAMPLES).pathname
+        const abide = [
+            ...new Bun.Glob('src/**/*.abide').scanSync({ cwd: root }),
+        ]
+        componentsOf.set(
+            example,
+            invokedComponents(
+                await Promise.all(
+                    abide.map((path) => Bun.file(`${root}${path}`).text()),
+                ),
+            ),
+        )
+    }
+
     try {
         for (const relative of sources) {
+            const example = relative.slice(0, relative.indexOf('/files/'))
             try {
                 // EACH EXAMPLE IS ITS OWN APP, with its own `#server` / `#shared` / `#ui`, and a
                 // temp directory is not that app. So the example's WHOLE `src` is copied and
@@ -136,7 +163,6 @@ test('every example renders on the server and mounts on the client', async () =>
                 // an example ran against another app's module with nothing saying so. An `imports`
                 // map was tried and bun did not resolve one pointing outside its own package; a
                 // runtime `onResolve` does not fire for a bare `#shared` that fails its lookup.
-                const example = relative.slice(0, relative.indexOf('/files/'))
                 const dir = temporaryModule(await exampleTree(example, session))
                 // THE FILE UNDER TEST IS THE ONE IN THE TREE, at its own path rather than at the
                 // root of the copy: a component's caller reaches it by the path it was written
@@ -163,7 +189,15 @@ test('every example renders on the server and mounts on the client', async () =>
                 mount(host)
                 await new Promise((resolve) => setTimeout(resolve, 0))
             } catch (thrown) {
-                broken.push(String(thrown).split('\n')[0] ?? '')
+                const line = String(thrown).split('\n')[0] ?? ''
+                // TAGGED HERE, not matched on the message later: what makes this a corpus fact is
+                // WHICH FILE it is, and the message is an engine's phrasing for `undefined()`.
+                const base = relative.slice(relative.lastIndexOf('/') + 1)
+                broken.push(
+                    componentsOf.get(example)?.has(base) === true
+                        ? `${NO_CALLER} ${line}`
+                        : line,
+                )
             }
         }
         // ONE LONG DRAIN AT THE END, because the per-file one is a single macrotask and the
@@ -190,6 +224,10 @@ test('every example renders on the server and mounts on the client', async () =>
         // A REFUSAL NAMES ITS CLAUSE, so the group is the clause rather than the word `Error` —
         // what the compiler refuses on purpose reads apart from what fell over.
         const refused = /abide: .*RULEBOOK (\d+\.\d+)/.exec(line)
+        // A NAMED CAUSE BEATS "IT IS A COMPONENT". Asked first, the tag took two `principal`
+        // failures with it — a component that falls over on surface nobody built IS that missing
+        // surface, and calling it a caller problem hides the one fact worth having. So the tag is
+        // the last thing asked, after every cause that names itself.
         const key =
             refused !== null
                 ? `refused by RULEBOOK ${refused[1]} — that shape is not built`
@@ -197,7 +235,9 @@ test('every example renders on the server and mounts on the client', async () =>
                   ? `\`${missing[1]}\` is not exported — that surface is not built`
                   : absent !== null
                     ? `\`${absent[2]}\` ${absent[1] === 'module' ? 'is not in the example' : 'is not installed'} — the corpus is missing it`
-                    : (line.split(':')[0] ?? line)
+                    : line.startsWith(NO_CALLER)
+                      ? 'a component mounted with no caller — it is exercised through the page that invokes it'
+                      : (line.split(':')[0] ?? line)
         reasons.set(key, (reasons.get(key) ?? 0) + 1)
     }
     const ranked = [...reasons].sort((left, right) => right[1] - left[1])
@@ -261,6 +301,14 @@ test('every example renders on the server and mounts on the client', async () =>
     // `element-ref` RENDERS `bind:element=""` INTO THE MARKUP, inert and ignored by a browser:
     // the compiler has no `bind:` handling at all, so a `bind:` attribute falls through the
     // ordinary computed path. 32.6-32.10 are that surface and none of it is built.
+    //
+    // THE FLOOR DID NOT MOVE FOR THE GROUPING, and that is the point of it. What had been the
+    // biggest bucket left was five `TypeError`s, which read as five faults in abide and were one
+    // fact about this test: it globs EVERY `.abide` and mounts each on its own, so a component
+    // gets no caller, `props()` answers {} and a required prop is `undefined`. Those five
+    // components are already exercised through the pages that invoke them — every one of those
+    // pages renders. Naming the group changes no count; it stops the list claiming five bugs
+    // that are not there, and the list is what this test is FOR.
     //
     // A RATCHET STILL, and the direction is the rule: this may not go down under a change that
     // does not change what is being counted.

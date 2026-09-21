@@ -153,6 +153,7 @@ export type Reactive<
     // taking it through that arm is exactly the settle-to-a-snapshot 1.6 refuses.
     set(
         value: Accepted | PromiseLike<Accepted> | Reactive<Accepted>,
+        // biome-ignore lint/suspicious/noConfusingVoidType: same reason as `watch` below — a `set` that returns nothing infers `void`, and 9.5's refusal is the other arm.
     ): void | Failures
     // Ungated, and fans out. Returns the production's ordinal, or the standing one
     // where the write collapsed (RULEBOOK 9.8 generalised), or the refusal (9.5). A load
@@ -161,6 +162,7 @@ export type Reactive<
     patch(mutate: (value: Stored) => void): void
     refresh(): void
     invalidate(): void
+    // biome-ignore lint/suspicious/noConfusingVoidType: `void` is the RETURN POSITION of an author's effect, and it is load-bearing. `undefined` there refuses `(v) => { read(v) }` — a block body returning nothing infers `void`, which is not assignable to `undefined` — so the rule's fix would reject the ordinary effect.
     watch(effect: (value: Stored) => void | (() => void)): () => void
     // 2.5, 2.6: the retained productions, replayed to the depth asked for, and then live.
     // `Stored` RATHER THAN `Produced`, which are the same type on every producer but a streaming
@@ -2440,6 +2442,7 @@ function settled(cell: Cell): Promise<unknown> {
 // and never throws `NotLanded` from this source.
 function watchCell(
     cell: Cell,
+    // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
     effect: (value: unknown) => void | (() => void),
 ): () => void {
     return watchOver([cell], null, () => {
@@ -3086,6 +3089,7 @@ const MEMBERS = {
     },
     watch(
         this: Callable,
+        // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
         effect: (value: unknown) => void | (() => void),
     ): () => void {
         return watchCell(this[CELL], effect)
