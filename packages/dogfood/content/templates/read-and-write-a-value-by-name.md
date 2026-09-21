@@ -56,9 +56,9 @@ settled value written to `paid` goes through to what it adopted (11.60), and onl
 `Reactive` re-points it (11.62).
 
 `await foo` is a read like any other position: it lowers to `await foo()`, which takes what has
-landed and throws where nothing has. To await the **value** — the settling a `Reactive` is a
-promise for — put it in a position whose type says so: `const held: Reactive<number> = total`, and
-then `await held`.
+landed and throws where nothing has. To await the **settling** instead, reach the `Reactive`'s own
+promise face, which is a member and so reaches the `Reactive` rather than the value:
+`await foo.then((v) => v)`. In a `.ts` file there is no sugar and `await foo` is already that.
 
 Read on: [Local state](../values/show-a-value-that-changes.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md) ·

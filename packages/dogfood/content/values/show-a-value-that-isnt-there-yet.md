@@ -182,10 +182,12 @@ neither of them stops the document.
 | --- | --- |
 | `{invoice}` | no — the read renders nothing and opens a sink the value fills later |
 | `{#if invoice.ready()}` | no — the `{:else}` renders while it loads |
-| `await held`, `held` typed `Reactive<…>` | yes — and that is the value being awaited, not a position |
+| `await invoice.then((v) => v)` | yes — and that is the value being awaited, not a position |
 
 The last one is the section below, and it is not a template form at all. Waiting is something you
-do to a **value**; no place in the markup does it to a page.
+do to a **value**; no place in the markup does it to a page. Inside a `.abide` a bare `invoice` is
+the read, so the promise face is reached through `then` — a member, which reaches the `Reactive`
+rather than what it holds.
 
 Read on: [Conditionals](../templates/show-markup-conditionally.md)
 
@@ -194,8 +196,9 @@ Read on: [Conditionals](../templates/show-markup-conditionally.md)
 It is the same `await` a handler writes, the value carrying the wait itself. `await invoice`
 resolves where `invoice.busy()` becomes false (2.8), and `then`, `catch` and `finally` reach that
 same promise by hand. Awaited mid-refresh it gets what the refresh lands, and awaited
-over a stream it gets the whole accumulation at close. Nothing about the read changes: `invoice()` still returns what has landed and
-never blocks, and the `await` is the opt-in here exactly as it is in a template.
+over a stream it gets the whole accumulation at close. Nothing about the read changes: `invoice()`
+still returns what has landed and never blocks. This is the only place waiting is spelled at all —
+there is no template form for it.
 
 `catch` fires for a producer that failed with nothing landed, which is the one failure a read
 throws (2.9). A refused write and a failed reload both fill `error()`, and neither reaches `catch`.

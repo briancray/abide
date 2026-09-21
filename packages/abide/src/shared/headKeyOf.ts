@@ -1,7 +1,7 @@
-// 39.12 — A HEAD CONTRIBUTION'S MERGE KEY, or `undefined` where it has none. ONE GRAMMAR, because
+// 39.11 — A HEAD CONTRIBUTION'S MERGE KEY, or `undefined` where it has none. ONE GRAMMAR, because
 // two lanes decide by it and they have to agree about which contribution replaces which: the
-// COMPILER keys a `<head>` child at build time to apply 39.13 within a file, and the CLIENT keys
-// the standing document head against an incoming page's on a navigation (39.7). A second spelling
+// COMPILER keys a `<head>` child at build time to apply 39.12 within a file, and the CLIENT keys
+// the standing document head against an incoming page's on a navigation (39.6). A second spelling
 // is a navigation appending a duplicate `<title>` where the server replaced one — silent, and
 // visible only in a browser.
 //

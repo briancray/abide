@@ -95,7 +95,7 @@ export function emitClient(
             ? ''
             : `if (${lowering.use('isEmptyRegion')}(root)) ${lowering.use('fillRegion')}(root, ${body})\n`
 
-    // 39.7 — THE HEAD A NAVIGATION HAS TO APPLY. Only a module that carries its own markup can be
+    // 39.6 — THE HEAD A NAVIGATION HAS TO APPLY. Only a module that carries its own markup can be
     // reached without a server having rendered it, so only that module needs one; a page the
     // server painted arrives with its head already in the document.
     const headMarkup = carriesOwnMarkup ? emitHead(file, lowering, true) : "''"

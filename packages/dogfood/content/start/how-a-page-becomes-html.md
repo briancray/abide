@@ -156,8 +156,8 @@ The walk never pauses at a read, nothing is buffered waiting for the row, and no
 re-sent. Appending the fill at the tail rather than at the hole is also what frees a value from
 arriving somewhere it would be illegal — inside a `<title>`, between two `<tr>`s.
 
-**The document closes on the last blocking sink, not on the last value.** A row still in flight
-at that point is never filled at all, and the browser's own request picks it up instead.
+**The document closes when the walk is done, not when the values are.** A row still in flight at
+that point is never filled at all, and the browser's own request picks it up instead.
 
 **The cost is a client with no script.** Nothing filled after the first flush reaches it, because
 the script does the filling. A page that must work without one is a page whose values have to be

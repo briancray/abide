@@ -1591,28 +1591,25 @@ link none where the build bundled none.
 
 39.5 A `<head>` contribution with no merge key MUST append in tree order.
 
-39.6 Nothing in a `<head>` MUST hold the flush by default, and holding MUST be opt-in and spelled
-as it is anywhere else.
-
-39.7 On a client navigation the incoming page's keyed `<head>` contributions MUST replace the
+39.6 On a client navigation the incoming page's keyed `<head>` contributions MUST replace the
 outgoing page's by key, and a layout's MUST NOT move.
 
-39.8 View transitions MUST be turned on by a `<style>` rule naming a view-transition selector or
+39.7 View transitions MUST be turned on by a `<style>` rule naming a view-transition selector or
 property, and MUST NOT be turned on by a separate option.
 
-39.9 Whether an app uses view transitions MUST be decided at build time from the compiled `<style>`
+39.8 Whether an app uses view transitions MUST be decided at build time from the compiled `<style>`
 blocks, and MUST NOT be decided by a runtime walk of the document's stylesheets.
 
-39.10 A `view-transition-name` transition MUST be awaited to the point the DOM is written, and MUST
+39.9 A `view-transition-name` transition MUST be awaited to the point the DOM is written, and MUST
 NOT be awaited to the end of the animation.
 
-39.11 A browser with no `view-transition-name` support MUST navigate as it otherwise would, and an
+39.10 A browser with no `view-transition-name` support MUST navigate as it otherwise would, and an
 app MUST NOT be required to feature-detect.
 
-39.12 A `<head>` contribution's merge key MUST be the tag for `<title>` and `<base>`, the `name` or
+39.11 A `<head>` contribution's merge key MUST be the tag for `<title>` and `<base>`, the `name` or
 `property` attribute for `<meta>`, and `rel` with `href` for `<link>`.
 
-39.13 The last `<head>` contribution for a key within one file MUST win.
+39.12 The last `<head>` contribution for a key within one file MUST win.
 
 # 40. Documentation
 

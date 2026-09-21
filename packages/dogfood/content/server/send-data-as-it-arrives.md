@@ -123,8 +123,8 @@ Read on: [Channels](../values/let-anything-publish-and-anything-read.md) · [Soc
 
 ## A page in flight is not held for an unfinished stream
 
-The document is **not held** for one. What the stream produced by the time every blocking hole
-had filled is already inline; the client's own request picks the rest up from where the render
+The document is **not held** for one — nothing holds it. What the stream produced by the time the
+walk finished is already inline; the client's own request picks the rest up from where the render
 reached, and the rows keep appending.
 
 Seeding holds the jsonl transcript whichever framing the caller asked for — SSE is that

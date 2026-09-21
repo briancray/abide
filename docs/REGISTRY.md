@@ -557,8 +557,8 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Path | Meaning | Rules |
 | --- | --- | --- |
-| `<head>` | A page's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.7, 39.12, 39.13 |
-| `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.8, 39.9, 39.10, 39.11 |
+| `<head>` | A page's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12 |
+| `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.7, 39.8, 39.9, 39.10 |
 | `[name]` | A required dynamic segment. | 23.5, 30.3 |
 | `[[name]]` | An optional segment. | 23.5, 30.4 |
 | `[...name]` | A rest segment, terminal. | 23.5, 30.5 |

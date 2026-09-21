@@ -84,9 +84,9 @@ that silently does nothing.
 the probes and the triggers are on the **result** of the call, and a promise's one answer is not
 what a button waiting on it needs.
 
-`busy()` beside `ready()` tells a reload from a first load, `await invoice` waits, and
-`invoice.refresh()` reloads — which is why the reminder button above stays live across the second
-load and only goes back to disabled when there is genuinely nothing held. The hand-written arm
+`busy()` beside `ready()` tells a reload from a first load, and `invoice.refresh()` reloads. That
+is why the reminder button above stays live across the second load, and goes back to disabled only
+when there is genuinely nothing held. The hand-written arm
 tracks two variables of its own to say the same thing, because a promise answers once and
 everything after that is the caller's to remember.
 

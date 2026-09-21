@@ -208,13 +208,13 @@ test('the most specific of two matching routes is tried first — 30.9', () => {
     expect(order(['/a/[[b]]', '/a'])).toEqual(['/a', '/a/[[b]]'])
 })
 
-// 39.7 — THE INCOMING PAGE'S KEYED CONTRIBUTIONS REPLACE THE OUTGOING PAGE'S, BY KEY. The head a
+// 39.6 — THE INCOMING PAGE'S KEYED CONTRIBUTIONS REPLACE THE OUTGOING PAGE'S, BY KEY. The head a
 // navigation arrives with was never rendered by a server, so it comes from the page's own module
-// (39.12 gives the key, 39.13 the winner within a file).
+// (39.11 gives the key, 39.12 the winner within a file).
 //
 // THE REVERT: append every contribution instead of replacing the one under its key — the document
 // ends with two `<title>`s and the browser keeps showing the first.
-test('a navigation replaces head contributions by key and appends the keyless — 39.7', () => {
+test('a navigation replaces head contributions by key and appends the keyless — 39.6', () => {
     document.head.innerHTML =
         '<title>Home</title><meta name="description" content="home"><meta property="og:title" content="Home"><link rel="icon" href="/a.ico">'
 
@@ -232,7 +232,7 @@ test('a navigation replaces head contributions by key and appends the keyless �
     expect(description).toHaveLength(1)
     expect(description[0]?.getAttribute('content')).toBe('an invoice')
 
-    // 39.12 — `property` keys a `<meta>` too, and the outgoing page's is left alone where the
+    // 39.11 — `property` keys a `<meta>` too, and the outgoing page's is left alone where the
     // incoming page makes no contribution under that key.
     expect(
         document.head.querySelectorAll('meta[property="og:title"]'),
@@ -245,9 +245,9 @@ test('a navigation replaces head contributions by key and appends the keyless �
     expect(document.head.querySelectorAll('meta[charset]')).toHaveLength(1)
 })
 
-// The head a page carries is emitted into its own module, merged by 39.13 before it gets there —
+// The head a page carries is emitted into its own module, merged by 39.12 before it gets there —
 // so the LAST `<title>` in the file is the only one the client can ever apply.
-test("a routable page's client module carries its merged head — 39.13", async () => {
+test("a routable page's client module carries its merged head — 39.12", async () => {
     const file = parseAbide(
         `<head><title>First</title><meta name="a" content="1"></head>
 <head><title>Second</title></head>

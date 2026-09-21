@@ -58,7 +58,7 @@ export function emitComponent(
         body.push(emitNode(node, lowering, false))
     }
 
-    // EMITTED AFTER THE BODY, NOT BEFORE. 39.13 merges across the whole FILE, so a second `<head>`
+    // EMITTED AFTER THE BODY, NOT BEFORE. 39.12 merges across the whole FILE, so a second `<head>`
     // further down the template shadows the first one's `<title>` — and `emitNode` adds to `used`,
     // so emitting a contribution the merge then drops leaves the module importing a name nothing
     // calls. `emitHead` is the client lane's too, which is what keeps the two from drifting.
@@ -349,10 +349,10 @@ function emitInvocation(
         : `${lowering.use('renderComponent')}(${node.tag}, { ${props.join(', ')} }, ${HEADS})`
 }
 
-// 39.7 — THE CONTRIBUTIONS A PAGE MAKES TO THE DOCUMENT HEAD, as an expression, for the lane that
+// 39.6 — THE CONTRIBUTIONS A PAGE MAKES TO THE DOCUMENT HEAD, as an expression, for the lane that
 // has no document to have written them. A page the reader NAVIGATED to was never rendered by a
 // server, so its `<title>` and its `<meta>` exist nowhere unless its own client module carries
-// them — the same second copy the body already gets (32.18), through the same merge (39.13) so
+// them — the same second copy the body already gets (32.18), through the same merge (39.12) so
 // the two lanes cannot disagree about which contribution won.
 export function emitHead(
     file: AbideFile,
@@ -430,8 +430,8 @@ function emitAttribute(
         // 32.4 — `on<event>` is a listener, never markup. The server writes nothing, so a handler
         // cannot fire from a document that never hydrated.
         if (isEventName(attribute.lowerName)) return ''
-        // 32.3 — an expression attribute is reactive. Its CURRENT value is written here; the
-        // client binding that keeps it live is not built yet.
+        // 32.3 — an expression attribute is reactive. Its CURRENT value is written here, and
+        // `emitClient`'s own attribute loop is what keeps writing it after hydration.
         //
         // 32.21 IS THE INTERPOLATION'S CLAUSE, and the check used to run on the path it does not
         // name: the literal `href` was scheme-checked and `<a href={u}>` was served verbatim,
@@ -478,8 +478,8 @@ function quoteOnly(value: string): string {
     return value.includes('"') ? value.replaceAll('"', '&quot;') : value
 }
 
-// 39.4, 39.12, 39.13 — the contributions a `<head>` makes, merged by key, the LAST one for a key
-// kept. 39.12 gives the key: the tag for the two elements a document holds one of, the `name` or
+// 39.4, 39.11, 39.12 — the contributions a `<head>` makes, merged by key, the LAST one for a key
+// kept. 39.11 gives the key: the tag for the two elements a document holds one of, the `name` or
 // `property` for a `<meta>`, and `rel` with `href` for a `<link>`. Anything else has no key and
 // keeps its place, which is 39.5 and is what walking the list once and dropping only the shadowed
 // entries gives.
@@ -506,7 +506,7 @@ function mergeHead(children: TemplateNode[]): TemplateNode[] {
     return kept
 }
 
-// 39.12 THROUGH THE ONE GRAMMAR (`headKeyOf`), asked with what the COMPILER can read. A key the
+// 39.11 THROUGH THE ONE GRAMMAR (`headKeyOf`), asked with what the COMPILER can read. A key the
 // compiler cannot read is no key: `<meta name={x}>` carries a name only the run time knows, so it
 // appends under 39.5 rather than merging against a string that is not its value. `<TITLE>` is the
 // same singleton as `<title>`, which `lowerTag` already gives.

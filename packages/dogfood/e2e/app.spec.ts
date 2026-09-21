@@ -43,7 +43,7 @@ test('a link to another page navigates without reloading — 30.7', async ({
     await page.click('#to-about')
 
     await expect(page.locator('h1')).toHaveText('about')
-    // 39.7 — the incoming page's head replaced the outgoing page's, by key.
+    // 39.6 — the incoming page's head replaced the outgoing page's, by key.
     await expect(page).toHaveTitle('about · abide')
     expect(
         await page.evaluate(() => (window as { __KEPT__?: string }).__KEPT__),

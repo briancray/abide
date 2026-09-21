@@ -53,12 +53,15 @@ turn into ten times the bytes.
 
 Read on: [Streaming data](../server/send-data-as-it-arrives.md)
 
-## What holds the flush is spelled
+## Nothing holds the flush
 
-Nothing holds it by default, including the head. Holding is an `await` in the component's
-`<script>` — `const invoice = await getInvoice()`, which leaves `invoice` the value it was and
-holds the render until it settles. It is worth reaching for in one place: metadata a crawler
-reads, which does not come back for the second version.
+Not a hole, not the head, not the `<script>`. The document is a stream, and a value that has not
+arrived is a hole in it. There is no form that turns one back into a wait — which is what makes
+"the page goes out first" a property rather than a default you keep choosing.
+
+The case that wants otherwise is metadata a crawler reads, which does not come back for the
+second version. That value has to be there before the render starts, and getting it there is the
+server's problem — not a spelling in the template.
 
 Read on: [Request to paint](../start/how-a-page-becomes-html.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md)

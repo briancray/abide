@@ -443,6 +443,35 @@ const rows = await Promise.resolve({ ok: 'yes' })
     expect(html).toContain('<p id="out">yes</p>')
 })
 
+// 31.6 — AND THE ONE SPELLING THAT WAITS, which the docs point readers at and nothing gated until
+// this. Inside a `.abide` a bare `total` is a READ (31.1), so `await total` lowers to
+// `await total()` and takes what has landed — nothing, at this point. `then` is a member the
+// `Reactive` declares, so `total.then(…)` reaches the `Reactive` API instead and the `await` is
+// the settling (1.4, 2.8).
+//
+// WRITTEN BECAUSE THE DOCS GOT IT WRONG FIRST. They said `const held: Reactive<number> = total`
+// and then `await held` — but 31.3 holds the `Reactive` at the ANNOTATED POSITION, which is the
+// initializer, not at every later occurrence of the name it bound. `await held` is a read like any
+// other, and the page rendered nothing.
+//
+// THE REVERT: drop `then` from `REACTIVE_MEMBERS`. 31.5 then sends the member to the VALUE, the
+// emitted line is `await total().then(…)`, and this throws `NotLanded` instead of rendering 42.
+test('a member reaches the Reactive, which is how a script waits — 31.6', async () => {
+    const { html } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+const total = reactive(async () => {
+    await Bun.sleep(20)
+    return 42
+})
+const settled = await total.then((value) => value)
+</script>
+
+<p id="out">{settled}</p>`)
+
+    expect(html).toContain('<p id="out">42</p>')
+})
+
 // 41.10 — A MISMATCH MUST NOT REBUILD THE PAGE, and the page is the one region with no block
 // around it to rebuild instead. `Mismatch` was written against exactly the failure this guards:
 // an ordinary throw out of `mount` skips every binding and listener after the one that refused,

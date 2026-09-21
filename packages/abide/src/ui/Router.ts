@@ -107,7 +107,7 @@ export class Router {
         const full = `${target.pathname}${target.search}${target.hash}`
         if (options.replace === true) history.replaceState(null, '', full)
         else history.pushState(null, '', full)
-        // 39.7 — BEFORE THE BODY IS WIRED, so a `<title>` the reader sees is the page they are
+        // 39.6 — BEFORE THE BODY IS WIRED, so a `<title>` the reader sees is the page they are
         // arriving at rather than the one they left, for however long the mount takes.
         if (page.head !== undefined) applyHead(page.head())
         // GUARDED, not awaited: a page that holds nothing answers its `Scope` outright, and an

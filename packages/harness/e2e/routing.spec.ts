@@ -195,7 +195,7 @@ test('a navigation swaps the page without reloading the document — 30.7', asyn
     await page.click('#go')
 
     await expect(page.locator('#about h1')).toHaveText('About')
-    // 39.7 — THE INCOMING PAGE'S CONTRIBUTIONS REPLACED THE OUTGOING PAGE'S, BY KEY. The head the
+    // 39.6 — THE INCOMING PAGE'S CONTRIBUTIONS REPLACED THE OUTGOING PAGE'S, BY KEY. The head the
     // server wrote for `/` is what is being replaced here, which is the whole clause: there is one
     // `<title>` afterwards and it is the page the reader is on.
     await expect(page).toHaveTitle('About')

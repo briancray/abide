@@ -103,10 +103,10 @@ A hole is never the thing that waits. `{invoice.total}` renders nothing while th
 flight and fills when it lands, and `{#if invoice.ready()}` gives you a branch to render in the
 meantime — a page a reader can look at rather than a page that is not there yet.
 
-Where a page genuinely should not be served without a value, the `<script>` is what says so:
-`const invoice = await getInvoice()` holds the render until it settles, and `invoice` goes on
-being the value it was. That is one place per component rather than one per hole, which is the
-granularity the decision actually has.
+Nor is anything else. There is no form — in a hole, in the `<head>`, in the `<script>` — that
+makes the document wait for a value. A page that genuinely cannot be served without one is a page
+whose value has to be there before the render starts, which is a question for the server rather
+than for the markup.
 
 Read on: [Values by name](read-and-write-a-value-by-name.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md)

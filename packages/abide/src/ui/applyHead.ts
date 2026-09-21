@@ -1,4 +1,4 @@
-// 39.7 — ON A CLIENT NAVIGATION THE INCOMING PAGE'S KEYED CONTRIBUTIONS REPLACE THE OUTGOING
+// 39.6 — ON A CLIENT NAVIGATION THE INCOMING PAGE'S KEYED CONTRIBUTIONS REPLACE THE OUTGOING
 // PAGE'S BY KEY. The outgoing page's were written by a server on the first load and by this
 // function on every one after, so they are found the same way either time: by their key, read off
 // the document. Nothing is added to the head to mark ownership — a marker would be a fact about
@@ -41,7 +41,7 @@ export function applyHead(markup: string): void {
     }
 }
 
-// 39.12 THROUGH THE ONE GRAMMAR (`headKeyOf`), asked with a RESOLVED attribute. The compiler
+// 39.11 THROUGH THE ONE GRAMMAR (`headKeyOf`), asked with a RESOLVED attribute. The compiler
 // answers the same question for a STATIC one and appends where it cannot (`<meta name={x}>` has a
 // name only the run time knows) — here every attribute is resolved, so a contribution the compiler
 // had to append arrives with a key. That is the same rule reaching further, not a different one.

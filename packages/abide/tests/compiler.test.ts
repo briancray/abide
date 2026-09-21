@@ -844,7 +844,7 @@ test('the raw spelling lowers to the framework’s own name, on both sides', asy
     expect(client).toContain('__escapeless(__raw(snippet()))')
 })
 
-// 39.12, 39.13 — THE MERGE KEY, and the last contribution for one wins. Two `<title>` elements in
+// 39.11, 39.12 — THE MERGE KEY, and the last contribution for one wins. Two `<title>` elements in
 // one file put two into the document and a browser keeps the first, so the page's own later
 // answer was the one dropped — silently, by the markup rather than by anything the compiler said.
 //
