@@ -475,16 +475,15 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Spelling | Means | Rules |
 | --- | --- | --- |
-| `foo` wherever the declared type of its position is not a `Reactive` | a live read | 31.1, 31.2, 31.13 |
+| `foo` wherever the declared type of its position is not a `Reactive` | a live read | 31.1, 31.2, 31.10 |
 | `const x: Reactive<…> = foo` / a `Reactive<…>`-typed parameter, return or `bind:` operand | the `Reactive` | 31.3 |
 | `foo = bar` | a write | 31.4, 11.62 |
-| `foo.bar = v` | a write through a path | 31.11 |
-| `foo.push(v)` | the same | 31.11, 31.12 |
-| `const [a, b] = foo` / `...foo` | one read of the value | 31.15 |
-| `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where it declares one | 31.5, 31.16 |
+| `foo.bar = v` | a write through a path | 31.8 |
+| `foo.push(v)` | the same | 31.8, 31.9 |
+| `const [a, b] = foo` / `...foo` | one read of the value | 31.12 |
+| `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where it declares one | 31.5, 31.13 |
 | `foo.bar(…)` | the `Reactive` API where `bar` is a member | 31.6 |
-| `foo()` / `foo.set(v)` | the explicit forms | 31.7, 31.14 |
-| `const x = await foo` in a `<script>` | the `Reactive`, with the render held until it settles | 31.8, 31.9, 31.10 |
+| `foo()` / `foo.set(v)` | the explicit forms | 31.7, 31.11 |
 
 ## Templating
 

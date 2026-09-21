@@ -5219,7 +5219,7 @@ test('a debounce on a keyed stream opens one stream for a burst of reaches', asy
     expect(await settled).toEqual(['nor'])
 })
 
-// 31.11 — A WRITE THROUGH A MEMBER PATH COPIES DOWN THE PATH AND THEN WRITES, AND THE COPY IS NOT
+// 31.8 — A WRITE THROUGH A MEMBER PATH COPIES DOWN THE PATH AND THEN WRITES, AND THE COPY IS NOT
 // OPTIMISED AWAY. The copy is the whole of the clause: a `Reactive` wakes its readers on IDENTITY,
 // so the value being right says nothing about whether anything saw it change. THE REVERT: have
 // `copyOf` in `writePath` hand the value back instead of copying it. Every assertion about the
@@ -5289,7 +5289,7 @@ test('an Args member named __proto__ keeps its own key', () => {
     )
 })
 
-// 31.11's copy-down write, through a path whose segments are runtime values. `__proto__` assigned
+// 31.8's copy-down write, through a path whose segments are runtime values. `__proto__` assigned
 // rather than defined lost the write entirely, and a two-step path re-pointed the state object so
 // the value read back while `JSON.stringify` had never heard of it.
 test('a write through a __proto__ segment lands as a member', () => {

@@ -14,9 +14,10 @@ import type { Scope } from './Scope.ts'
 // A PAGE'S CLIENT MODULE, mounted against the region the router owns. The same default export a
 // page already has — the router is a CALLER of a page exactly as a page is a caller of a
 // component, which is why nothing about the emitted module changes to be routable.
-// 31.9 — A PAGE WHOSE `<script>` AWAITS MOUNTS ASYNCHRONOUSLY, the same way its server half
-// answers a promise (35.5). Both call sites below already stand in an `async` method, so the
-// guard is the only thing the router needs.
+// A PAGE WHOSE `<script>` AWAITS MOUNTS ASYNCHRONOUSLY, the same way its server half answers a
+// promise (35.5) — the emitted function body holds the author's own `await` and has to be `async`
+// to. Both call sites below already stand in an `async` method, so the guard is all the router
+// needs.
 export type PageMount = (
     root: Region,
     props?: Record<string, unknown>,

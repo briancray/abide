@@ -10,7 +10,7 @@ import { type Token, tokenise } from './tokenise.ts'
 // WHICH BINDING AN OCCURRENCE REACHES, AND WHAT IT DOES THERE, ARE THE CHECKER'S ANSWERS, not this
 // file's. `TypeSession` asks them of the file's projection (`projectShadow`) and hands back READS,
 // each classified off TypeScript's own syntax tree (`classifyRead`). A parameter, a loop variable,
-// a row's item (31.13), a destructured name, a label, a key, a member and a class field reach
+// a row's item (31.10), a destructured name, a label, a key, a member and a class field reach
 // something else, and are absent. What is left here is the splice: what a read, a write, an update
 // and a shorthand lower TO.
 
@@ -94,11 +94,10 @@ export class Lowering {
         return this.lower(this.projection.scripts, false)
     }
 
-    // 35.5 — WHETHER THE EMITTED COMPONENT IS `async`. Any top-level `await` in the `<script>`
-    // makes it one: the two 31.8 tells apart both leave an `await` in the body — one where the
-    // author wrote it, one at 31.10's barrier — so this is a question about the script rather
-    // than about what the checker answered.
-    holdsRender(): boolean {
+    // 35.5 — WHETHER THE EMITTED COMPONENT IS `async`. A `<script>` holding a top-level `await`
+    // is a function body holding one, and abide gives that `await` no meaning of its own: it is
+    // the author's JavaScript, and the only thing the emitters owe it is a body it can stand in.
+    holdsAwait(): boolean {
         return this.projection.holds
     }
 
@@ -199,13 +198,13 @@ export class Lowering {
         switch (read.shape) {
             case 'asWritten':
                 return undefined
-            // 31.7 — the explicit spelling keeps compiling. 31.14 — AND IT TAKES NO ARGUMENTS.
+            // 31.7 — the explicit spelling keeps compiling. 31.11 — AND IT TAKES NO ARGUMENTS.
             // Passed through, `count(5)` calls the read with a value the read ignores: an author
             // who meant a write, silently given one.
             case 'call':
                 if (read.arguments > 0)
                     throw new Error(
-                        `abide: ${name}() is a read by name and takes no arguments, and this one is given one. Write ${name}.set(…) to write it. RULEBOOK 31.14.`,
+                        `abide: ${name}() is a read by name and takes no arguments, and this one is given one. Write ${name}.set(…) to write it. RULEBOOK 31.11.`,
                     )
                 return undefined
             // 31.1 — a read. A member that is not the `Reactive`'s own reaches the value (31.5,
@@ -228,14 +227,6 @@ export class Lowering {
                 return '() => ('
             case 'defaultClose':
                 return ')'
-            // 31.8 — the operand was not a `Reactive` after all, so the keyword the projection
-            // blanked goes back and the statement is the one the author wrote.
-            case 'awaitKeyword':
-                return 'await'
-            // 31.9 — the hold, moved down to where 31.10 put it. A `Reactive` is thenable (1.4)
-            // and the work is already running (1.7), so this waits rather than starts.
-            case 'awaitBarrier':
-                return `;await ${read.awaited}\n`
         }
         const value =
             read.value === undefined ? '1' : this.lower(read.value, raw).trim()
@@ -253,7 +244,7 @@ export class Lowering {
         }))(${name}())`
     }
 
-    // 31.11 — A WRITE THROUGH A MEMBER PATH COPIES DOWN THE PATH AND THEN WRITES. Read as a plain
+    // 31.8 — A WRITE THROUGH A MEMBER PATH COPIES DOWN THE PATH AND THEN WRITES. Read as a plain
     // member, `user.name = 'x'` emits `user().name = 'x'`: the held object mutated in place, so
     // the value is right, no `set` is called, the identity never changes and not one reader
     // wakes. A SEGMENT IS EMITTED SOURCE RATHER THAN A NAME, because a computed one is an

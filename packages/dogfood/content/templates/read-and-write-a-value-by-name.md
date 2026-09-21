@@ -12,7 +12,6 @@ covers:
   - `foo.bar`
   - `foo.bar(…)`
   - `foo()` / `foo.set(v)`
-  - `const x = await foo` in a `<script>`
 examples:
   - packages/dogfood/examples/name-path-write
 ---
@@ -32,7 +31,6 @@ both of those keep compiling in the same file.
 | `foo.bar` | the value's `bar` |
 | `foo.bar` / `foo.bar(…)` where `bar` is one of its members | the `Reactive` API |
 | `foo()` / `foo.set(v)` | the two explicit forms |
-| `const x = await foo` in a `<script>` | the `Reactive`, with the render held until it settles |
 
 The rule is **position**, not decoration. An operand is a place a value belongs, so the name
 reads; a position whose declared type is a `Reactive` — an annotated binding, a parameter, a
@@ -57,14 +55,10 @@ following it as it produces — the same thing a body returning a `Reactive` doe
 settled value written to `paid` goes through to what it adopted (11.60), and only another
 `Reactive` re-points it (11.62).
 
-An `await` is the third thing a name can be put to, and it is the odd one: `const x = await foo`
-does **not** hand you the value. It hands you `foo` — still the `Reactive`, still read by name
-everywhere below — and holds this component's render until it has settled. So the page's markup
-is written exactly as it would be without the `await`, and the only thing the `await` decides is
-whether the document waits.
-
-Two awaits beside each other settle **together**. Where one's operand reads what the other is
-bound to, that pair settles in the order you wrote it, which is the only way to serialise them.
+`await foo` is a read like any other position: it lowers to `await foo()`, which takes what has
+landed and throws where nothing has. To await the **value** — the settling a `Reactive` is a
+promise for — put it in a position whose type says so: `const held: Reactive<number> = total`, and
+then `await held`.
 
 Read on: [Local state](../values/show-a-value-that-changes.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md) ·

@@ -41,15 +41,12 @@ The head goes out as soon as it is known, and a value still in flight does **not
 That is the whole reason a title can be wrong for a moment: the alternative is a blank tab
 while the invoice loads, and a blank tab is worse.
 
-Holding is opt-in, and it is spelled the way holding is spelled anywhere else — an `await` in the
-`<script>`. It is worth it for exactly one thing: metadata a crawler reads, which does not come
-back for the second version.
+Nothing is opt-in here either: a `<title>` is a sink like any other, and it fills when the value
+lands. Metadata a crawler reads — which does not come back for the second version — is the one
+case that wants the value before the first flush, and that is the server's business rather than
+the head's.
 
 ```abide #ui/pages/invoices/[id]/page.abide — excerpt
-<script>
-const invoice = await getInvoice({ id: route.params.id })
-</script>
-
 <head>
     <title>Invoice {invoice.reference}</title>
 </head>

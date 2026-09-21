@@ -1293,28 +1293,19 @@ declared as one.
 
 31.7 `s` and `s.set` MUST keep compiling inside a `.abide` file.
 
-31.8 An `await` whose operand is a `Reactive` MUST answer that `Reactive`, and MUST NOT answer the
-value it holds.
-
-31.9 Such an `await` in a `<script>` MUST hold the render of the component it stands in until the
-`Reactive` has settled.
-
-31.10 Where such an `await`'s operand reads what an earlier one in the same `<script>` is bound to,
-41.2 MUST NOT start the two together.
-
-31.11 A write through a member path MUST copy down that path and then write, and the copy MUST NOT
+31.8 A write through a member path MUST copy down that path and then write, and the copy MUST NOT
 be optimised away.
 
-31.12 A mutator lifted per 31.11 MUST be resolved from the type of the `Reactive` rather than from
+31.9 A mutator lifted per 31.8 MUST be resolved from the type of the `Reactive` rather than from
 the member name.
 
-31.13 A template-local binding MUST shadow a name bound to a `Reactive` for the body it is bound in.
+31.10 A template-local binding MUST shadow a name bound to a `Reactive` for the body it is bound in.
 
-31.14 A read spelled `foo()` MUST take no arguments, and an argument MUST be a compile error.
+31.11 A read spelled `foo()` MUST take no arguments, and an argument MUST be a compile error.
 
-31.15 A destructuring pattern or a spread over such a name MUST read it once.
+31.12 A destructuring pattern or a spread over such a name MUST read it once.
 
-31.16 The compiler MUST warn where 31.5 reaches a `Reactive` member the value's type also declares,
+31.13 The compiler MUST warn where 31.5 reaches a `Reactive` member the value's type also declares,
 naming the explicit read.
 
 # 32. Templating

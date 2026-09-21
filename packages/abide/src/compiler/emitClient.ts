@@ -187,7 +187,7 @@ return ${SCOPE}`
 ${componentImports(withoutProps(moduleSetup.imports), '.client')}${componentImports(withoutProps(setup.imports), '.client')}
 ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}\
 ${headExport}\
-export default ${lowering.holdsRender() ? 'async ' : ''}function mount(root${lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
+export default ${lowering.holdsAwait() ? 'async ' : ''}function mount(root${lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
 ${opened}${setup.body}
 ${helpers.join('\n')}
 ${fills}${captured}${bindings}${closed}
@@ -646,7 +646,7 @@ function emitList(
     const at = block.index === '' ? '__at' : block.index
     // 41.8 — with no `by`, the key is the POSITION, which is 32.13's positional reconcile: a row
     // is whatever is in that slot, and a reorder rewrites the rows rather than moving them.
-    // 31.13 — the item and the index SHADOW the page's names for the row, and the projection is
+    // 31.10 — the item and the index SHADOW the page's names for the row, and the projection is
     // what says so: they are a `for … of` binding there, so no read in the body or the key reaches
     // the page's name of the same spelling.
     const key = block.key === '' ? at : lowering.key(block)

@@ -201,7 +201,7 @@ test('every name in a declarator list is declared', async () => {
             'b',
         ]),
     ).toEqual(['a', 'b'])
-    // 31.15's case, not this one: a pattern binds names this does not see.
+    // 31.12's case, not this one: a pattern binds names this does not see.
     expect(
         await declared('const { x, y } = { x: reactive(0), y: reactive(1) }', [
             'x',
@@ -531,7 +531,7 @@ test('escaping keeps everything between and after the escapes', () => {
     )
 })
 
-// 31.13 — A TEMPLATE-LOCAL BINDING SHADOWS A NAME BOUND TO A `Reactive` FOR THE BODY IT IS BOUND
+// 31.10 — A TEMPLATE-LOCAL BINDING SHADOWS A NAME BOUND TO A `Reactive` FOR THE BODY IT IS BOUND
 // IN. THE REVERT: pass `reactive` rather than `inner` to `emitChildren` in `emitComponent`'s
 // `{#for}` branch and to `emitMarkup`/`emitRegion` in `emitClient`'s `emitList`. Both emitters
 // then write `for (const rows of __list) { … rows().name … }` — 2 bodies calling a row as a
@@ -557,7 +557,7 @@ test('a for item shadows a reactive name of the same spelling', async () => {
 // row's own; `rows` is only READ by a default, so the page's `rows` is still what `{rows}` reaches.
 // THE REVERT: project a `{#for}` body flat in `projectShadow`, with no `for … of` binding its item;
 // `{tone}` then reaches the page's `tone` and lowers to `tone()` — a call on the row's string.
-test('a default value in a binding pattern is read, not bound — 31.13', async () => {
+test('a default value in a binding pattern is read, not bound — 31.10', async () => {
     const names = ['rows', 'tone', 'items']
     const server = await serverOf(
         '{#for { id, tone = pick(rows) } of items}<i>{tone}{rows}</i>{/for}',
@@ -1113,7 +1113,7 @@ test('a head contributes under any casing', () => {
 
 // A DEFAULT VALUE HOLDING ITS OWN `=` IS STILL ONE DEFAULT. The checker parses the pattern, so the
 // `=` inside `pick(seed = 1)` cannot end it and `rows` after it is a read.
-test('a default value holding an `=` is skipped whole — 31.13', async () => {
+test('a default value holding an `=` is skipped whole — 31.10', async () => {
     const server = await serverOf(
         '{#for { id, tone = pick(seed = 1) + rows } of items}<i>{tone}{rows}</i>{/for}',
         ['rows', 'tone', 'items', 'seed'],

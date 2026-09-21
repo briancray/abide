@@ -93,7 +93,7 @@ it by number, so where the two disagree the rulebook is right and the claim is s
 | **One type back.** | 1.1 — every producer hands back `Reactive`. 11.2, 16.4 — the keyed forms hand back a factory you call with its arguments first |
 | **Same name, both sides.** | 16.28, 22.1, 23.7, 23.8 — a name resolves on either side, each answering from what its side has, and where one genuinely cannot it throws rather than no-opping |
 | **Reaching loads it.** | 1.7, 1.8 — reaching a value starts the work it is for, and a second reach joins the standing work. 11.4, 11.5 — a keyed entry is computed when its key is reached, and an unkeyed derived value re-runs when what it read moves. 11.6 — `ttl`, `invalidate` and `refresh` are a keyed value's ways back. 41.7, 41.13 — the browser's read is answered by what the render already fetched |
-| **It does not block.** | 2.1 — a read returns what it has, and never awaits. 2.11 — `s.peek` answers where nothing has landed yet. 3.4 — a busy value with nothing to serve opens a sink and the hole fills. 11.21 — that reaches a derived value. 31.11 — holding is opt-in, and it is the script that asks |
+| **It does not block.** | 2.1 — a read returns what it has, and never awaits. 2.11 — `s.peek` answers where nothing has landed yet. 3.4 — a busy value with nothing to serve opens a sink and the hole fills. 11.21 — that reaches a derived value |
 | **A refusal is a value.** | 15.1, 15.2, 15.6 — declared, structural, and landing in the `Failures` of the value that produced it. 4.9, 4.10, 4.11 — a refused write keeps the last accepted value on screen beside the message |
 | **The schema is the type.** | 19.10, 19.11 — derived from the annotation and the argument defaults. 19.12 — where inference cannot reach, the schema WIDENS rather than the file being refused. 16.27 — a shape rides on the `Reactive`. 38.3 — `abide check` reports on the `.abide` line |
 | **Bun and web standards, not a wrapper over them.** | 22.2 — `cookies` is one name on both sides, over Bun's own `CookieMap`. 36.1 — the port is read from the environment rather than from a config of ours. 17.1, 16.37 — handlers speak `Values`, `Request` and `Response` |
@@ -311,9 +311,9 @@ three pages later.
   word that is not in their file. Name the property, then introduce the type under it. `Reactive`
   and `Accepted` are fair — nothing else is spelled those.
 * **A heading may not state an absolute the page then qualifies.** "A read never awaits" was
-  false two sections above the `await` that holds a render, and the reader who believes the
-  heading is the one the page then contradicts. Say "by default" in the heading and put the opt-in
-  under it.
+  false two sections above the section on awaiting the value itself, and the reader who believes
+  the heading is the one the page then contradicts. Say "by default" in the heading and put the
+  qualification under it.
 * **A heading belongs to its page's subject.** On a page about caching, "A body that takes args
   is a keyed value" is about the factory; "A keyed value's cache is one entry per args key" is
   about the cache.

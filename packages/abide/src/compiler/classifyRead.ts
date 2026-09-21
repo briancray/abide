@@ -25,15 +25,11 @@ export type Read = {
     end: number
     // `value` lowers to `n()`; `asWritten` stays as written (`n.set(v)`, 31.5); `call` is the
     // explicit `n()` (31.7), which `arguments` says was given any; `shorthand` is `{ n }`;
-    // `write` and `update` are 31.4, and 31.11 where `path` is not empty.
+    // `write` and `update` are 31.4, and 31.8 where `path` is not empty.
     // 33's three: the `props<Props>()` call, which lowers to the record the caller passed, and the
     // pair that brackets a binding element's initializer, which together make a default an
     // accessor. The pair are INSERTIONS — zero-width, so what stands between them goes on being
     // lowered by the same walk, and a default reading a `Reactive` still reads it.
-    // 31.8's two are not name occurrences at all, the way `defaultOpen`/`defaultClose` are not:
-    // `awaitKeyword` puts back an `await` the projection blanked over an operand that turned out
-    // not to be a `Reactive`, and `awaitBarrier` is the zero-width insertion that discharges one
-    // it did — 31.9's hold, placed where 31.10 says it goes.
     shape:
         | 'value'
         | 'asWritten'
@@ -44,8 +40,6 @@ export type Read = {
         | 'props'
         | 'defaultOpen'
         | 'defaultClose'
-        | 'awaitKeyword'
-        | 'awaitBarrier'
     // What the rewrite replaces: the name, or a whole write or update from its first token.
     from: number
     to: number
@@ -55,14 +49,10 @@ export type Read = {
     // An update whose value nothing reads — the statement form, and a `for`'s incrementor.
     discarded: boolean
     arguments: number
-    // 31.11 — the member path between the name and the write: a property's name, or the span of a
+    // 31.8 — the member path between the name and the write: a property's name, or the span of a
     // computed segment, which may itself hold reads.
     path: { name: string | undefined; start: number; end: number }[]
     value: Span | undefined
-    // The name an `awaitBarrier` discharges, and '' on every other shape. A barrier stands
-    // somewhere the name does not, so it cannot be read back out of the projection the way every
-    // other shape's is.
-    awaited: string
 }
 
 // ONE OCCURRENCE OF A NAME THE `props` PATTERN BOUND (33.4, 33.9). Every one of them is a read of
@@ -115,7 +105,6 @@ export function classifyPropRead(node: Node): Read | undefined {
         arguments: 0,
         path: [],
         value: undefined,
-        awaited: '',
     }
     return read
 }
@@ -148,7 +137,6 @@ export function classifyRead(node: Node): Read | undefined {
         arguments: 0,
         path: [],
         value: undefined,
-        awaited: '',
     }
 
     if (isCallExpression(parent) && parent.expression === node) {

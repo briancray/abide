@@ -52,8 +52,9 @@ The consequence worth internalising:
 > A read of a value that has not arrived throws `NotLanded`, and the output keeps a hole where it
 > was. It does not block. The document goes out; the hole fills when the value lands.
 
-Want to wait instead? Say so — `const invoice = await getInvoice()` in the `<script>`. Holding is
-a decision you make in one place, not something the position in the file decides for you.
+Nothing waits for it. The document goes out, the hole fills, and `{#if invoice.ready()}` is the
+branch to show in the meantime — so a slow value is a page that is late rather than a page that
+is not there.
 
 ## Same name, both sides
 

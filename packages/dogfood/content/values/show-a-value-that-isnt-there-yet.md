@@ -77,8 +77,8 @@ difference shows on a derived value. Its body aborts on a source still in flight
 nothing (11.53), so it is absent for a moment that says nothing about the answer — and `busy()` is
 what says one is on its way (11.21).
 
-*By default*, because a render can be made to hold on purpose — an `await` in the component's
-`<script>` is that opt-in.
+*By default* is the whole of it: nothing in a template holds, and a hole that has not filled is
+the shape a page takes while it loads.
 
 Read on: [Streaming HTML](../pages/send-the-page-before-the-data-lands.md) ·
 [Expressions](../templates/put-a-value-in-the-markup.md)
@@ -172,25 +172,20 @@ something reads it.
 Read on: [Failures](../server/refuse-a-request-and-say-why.md) ·
 [Error pages](../pages/show-a-page-when-something-fails.md)
 
-## `await` is how a render holds on purpose
+## Nothing in a template holds
 
-Not blocking is the default; holding is the opt-in, and the `<script>` is where it is spelled.
-`const invoice = await getInvoice()` leaves `invoice` the value it always was — the `await`
-answers the value itself, not what it holds — and holds this component's render until it settles.
-
-Set against a plain read, **the tell is the `await`**:
+There is no form that waits. A read renders nothing and opens a sink the value fills later, and
+`{#if invoice.ready()}` gives you something to show in the meantime — those are the two, and
+neither of them stops the document.
 
 | Form | Holds |
 | --- | --- |
-| `const invoice = getInvoice()` | no — the read renders nothing and opens a sink the value fills later |
+| `{invoice}` | no — the read renders nothing and opens a sink the value fills later |
 | `{#if invoice.ready()}` | no — the `{:else}` renders while it loads |
-| `const invoice = await getInvoice()` | yes — the whole component waits |
+| `await held`, `held` typed `Reactive<…>` | yes — and that is the value being awaited, not a position |
 
-Two of them side by side settle **together**, not one after the other; one that reads what the
-other is bound to is the exception, and that pair settles in the order you wrote it.
-
-`await` holds over a stream until the stream **closes**, the same way it holds until a value
-settles. A source that never closes holds forever; that is the author's to resolve.
+The last one is the section below, and it is not a template form at all. Waiting is something you
+do to a **value**; no place in the markup does it to a page.
 
 Read on: [Conditionals](../templates/show-markup-conditionally.md)
 

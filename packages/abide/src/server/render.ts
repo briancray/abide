@@ -29,8 +29,8 @@ export async function* render(
     component: Component,
     shell?: Shell,
 ): AsyncGenerator<Uint8Array> {
-    // 35.5 — A COMPONENT WHOSE `<script>` AWAITS ANSWERS A PROMISE (31.9), and one whose does not
-    // answers the record outright. GUARDED rather than awaited unconditionally, for the reason the
+    // 35.5 — A COMPONENT WHOSE `<script>` HOLDS A TOP-LEVEL `await` ANSWERS A PROMISE, and one
+    // whose does not answers the record outright. GUARDED rather than awaited unconditionally, for the reason the
     // shell below is: most components hold nothing, and an `await` on a settled value is a promise
     // wrap and a microtask turn per render.
     const answered = (component as () => Rendered | PromiseLike<Rendered>)()

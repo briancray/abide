@@ -120,17 +120,15 @@ const invoice = reactive(() => getInvoice({ id: route.params.id }))
 
 Three sinks, one document, no loading branch.
 
-Waiting is the opt-in, and `await` asks for it:
+There is no waiting form at all:
 
 | You write | The document |
 | --- | --- |
 | `{invoice.total}` | flushes now, fills later |
 | `{#if invoice.ready()}` | flushes now, with the `{:else}` to swap |
-| `const invoice = await getInvoice()` | holds the whole component until the value lands |
 
-The `await` goes in the `<script>`, not in a hole. It leaves `invoice` the value it was, so every
-hole below reads it exactly as before — what changed is that the document does not go out until it
-has settled. Two awaits side by side settle together.
+Neither of them waits, and there is no third row that does. The document is a stream, and a value
+that is not there yet is a hole in it rather than a reason to hold it back.
 
 Read on: [Streaming HTML](../pages/send-the-page-before-the-data-lands.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md)
@@ -162,8 +160,8 @@ arriving somewhere it would be illegal — inside a `<title>`, between two `<tr>
 at that point is never filled at all, and the browser's own request picks it up instead.
 
 **The cost is a client with no script.** Nothing filled after the first flush reaches it, because
-the script does the filling. A page that must work without one awaits its values in the
-`<script>`, per step 4, and pays the delay to first byte deliberately.
+the script does the filling. A page that must work without one is a page whose values have to be
+there before the first flush, which is the server's business rather than the template's.
 
 ## 6. The browser takes over
 

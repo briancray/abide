@@ -115,7 +115,7 @@ test('an object shorthand keeps its key', async () => {
     expect(await lower('f({ ...n })', N)).toBe('f({ ...n() })')
 })
 
-// 31.15 — a destructuring pattern BINDS. THE REVERT: take reads by SPELLING rather than the
+// 31.12 — a destructuring pattern BINDS. THE REVERT: take reads by SPELLING rather than the
 // checker's references; `const { n } = x` lowers to `const { n: n() } = x`, which declares nothing and does not parse.
 test('a destructuring pattern is not a read', async () => {
     expect(await lower('const { n } = x', N)).toBe('const { n } = x')
@@ -428,7 +428,7 @@ test('a regular expression literal is not tokens', async () => {
     expect(await lower('n = a / b', N)).toBe('n.set(a / b)')
 })
 
-// 31.11 — A WRITE THROUGH A MEMBER PATH COPIES DOWN THE PATH AND THEN WRITES. THE REVERT: delete
+// 31.8 — A WRITE THROUGH A MEMBER PATH COPIES DOWN THE PATH AND THEN WRITES. THE REVERT: delete
 // the path walk in `classifyRead`, so the member READ takes the write.
 // This test then reports `user().name = 'x'` where `user.set(__writePath(…))` is due — 4 writes
 // that mutate the held object instead of minting one: the right value, no `set` called, the
@@ -472,14 +472,14 @@ test('a member path that is not assigned is left to the read paths', async () =>
     expect(await lower('user.name == 1', U)).toBe('user().name == 1')
 })
 
-// 31.14 — `foo()` TAKES NO ARGUMENTS. THE REVERT: drop the `arguments` check from
+// 31.11 — `foo()` TAKES NO ARGUMENTS. THE REVERT: drop the `arguments` check from
 // `Lowering`'s `call` case; `count(5)` is then passed through as written and calls the read with a
 // value the read ignores — 3 silent no-ops where 3 compile errors are due, and an author who
 // wrote a write is given a read.
 test('an argument to a read by name is a compile error', async () => {
-    expect(await refusal(lower('n(5)', N))).toContain('31.14')
-    expect(await refusal(lower('n(x)', N))).toContain('31.14')
-    expect(await refusal(lower('const v = n(a, b)', N))).toContain('31.14')
+    expect(await refusal(lower('n(5)', N))).toContain('31.11')
+    expect(await refusal(lower('n(x)', N))).toContain('31.11')
+    expect(await refusal(lower('const v = n(a, b)', N))).toContain('31.11')
     // And the empty call is 31.7's explicit read, untouched.
     expect(await lower('n()', N)).toBe('n()')
     expect(await lower('n( )', N)).toBe('n( )')
@@ -567,7 +567,7 @@ test('an increment and a decrement are writes — 31.4', async () => {
     // safe: JavaScript refuses to insert a semicolon in front of a `(`, so the value-preserving
     // form on this line would have emitted a call on `f()`'s result.
     expect(await lower('f()\nn++', N)).toBe('f()\nn.set(n() + 1)')
-    // 31.11 — and through a member path it is the same copy-down write `+= 1` makes.
+    // 31.8 — and through a member path it is the same copy-down write `+= 1` makes.
     const U = new Set(['user'])
     expect(await lower('user.count++', U)).toBe(
         'user.set(__writePath(user(), ["count"], user()["count"] + (1)))',

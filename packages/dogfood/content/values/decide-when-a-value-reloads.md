@@ -88,9 +88,9 @@ underneath (7.8) — the one way the eager trigger blanks a page. Press **Mark s
 end, and the page blank in between.
 `invalidate(); refresh()` over a scope is how an app blanks itself, and either one alone is fine.
 
-Neither one holds rendering by itself. Whether the render waits is the component's own choice,
-made once in its `<script>`: `const invoice = await getInvoice()` waits, and the same line
-without the `await` does not.
+Neither one holds rendering by itself. Nothing does: a value still in flight is a hole in the
+document that fills when it lands, and a reload is that hole reopening rather than the page
+stopping.
 
 Both are inert on a value with no producer (7.6). `s.invalidate()` on a `reactive(0)` has nothing
 to fetch, so it does nothing rather than clearing what you put there. A load handed in at

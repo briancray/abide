@@ -6,9 +6,9 @@
 // `Reactive` itself, which reaches that. Without the list every `n.foo` reads as the API and the
 // value's own members are unreachable, which is what `regions.join is not a function` was.
 //
-// 31.12 wants the same question answered from the TYPE rather than from the name, which is a
+// 31.9 wants the same question answered from the TYPE rather than from the name, which is a
 // checker query this does not make yet. A value whose own type declares `set` or `peek` therefore
-// resolves to the `Reactive`'s, and 31.16 asks for a warning naming exactly that case.
+// resolves to the `Reactive`'s, and 31.13 asks for a warning naming exactly that case.
 //
 // WHICH IS WHY A NAME THE `Reactive` DOES NOT DECLARE MUST NOT BE HERE: it takes a member the
 // value really has and resolves it to nothing. This list is exactly `MEMBERS` in
