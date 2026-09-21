@@ -13,14 +13,25 @@ import { buildPages } from './buildPages.ts'
 const DOGFOOD = new URL('../', import.meta.url).pathname
 const ABIDE = new URL('../../abide/bin/abide.ts', import.meta.url).pathname
 
+// THE SOCKET `abide start` USES, so the address is the same whichever way the docs are being
+// served and the browser gate does not need a second one. `--port` on this command wins, and
+// `PORT` wins over the default — which is what the CLI does on its own and what the docs say.
+const PORT = '3131'
+
 // The same settle the dev server uses: an editor's save is more than one event, and one
 // regeneration per event is three passes over eighty-five pages for one keystroke.
 const SETTLE_MILLISECONDS = 25
 
 await buildPages()
 
+// Everything after `bun run dev` is the command's, so `--port 4000` reaches `abide dev`.
+const given = Bun.argv.slice(2)
+const port = given.includes('--port')
+    ? []
+    : ['--port', process.env.PORT ?? PORT]
+
 const app = Bun.spawn(
-    ['bun', ABIDE, 'dev', '--root', `${DOGFOOD}src`, '--port', '3131'],
+    ['bun', ABIDE, 'dev', '--root', `${DOGFOOD}src`, ...port, ...given],
     { stdout: 'inherit', stderr: 'inherit' },
 )
 

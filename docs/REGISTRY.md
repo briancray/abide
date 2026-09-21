@@ -662,9 +662,9 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `abide scaffold <name>` | Writes a starter project. | 38.1 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2 |
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3 |
-| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 38.4, 38.15, 38.16, 38.17, 38.18, 38.20, 38.25 |
-| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.5, 38.19 |
-| `abide start [--port <n>]` | Boots the built app. | 38.6, 38.21, 38.22, 38.23, 38.24 |
+| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 38.4, 38.15, 38.16, 38.17, 38.18, 38.20, 38.25, 38.26, 38.27 |
+| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.5, 38.19, 38.26, 38.27, 38.28 |
+| `abide start [--port <n>]` | Boots the built app. | 38.6, 38.21, 38.22, 38.23, 38.24, 38.26, 38.27, 38.28 |
 | `abide connect [url]` | The interactive shell against a running app. | 38.7 |
 | `abide call <address> [args]` | One call to one handler. | 38.8 |
 | `abide openapi [--out <file>] [--url <origin>]` | The OpenAPI document written rather than served. | 38.9 |

@@ -1583,6 +1583,13 @@ link none where the build bundled none.
 38.25 A request in flight when `abide dev` replaces the worker MUST be answered by the
 replacement.
 
+38.26 `--root` MUST default to `src` where that holds a `src/ui`, and to the working directory
+where that holds a `ui`.
+
+38.27 A command that finds no app at its `--root` MUST fail, naming where it looked.
+
+38.28 `--out` MUST default beside the app rather than beside the working directory.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

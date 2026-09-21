@@ -21,7 +21,13 @@ abide --help
 
 * `--port <n>` — the listen port for `dev` and `start`. Defaults to `PORT`, then to the
   platform default.
-* `--out <file>` — where `openapi` and `compile` write, rather than to standard output.
+* `--root <dir>` — the app's source directory, the one `ui/` sits under. Defaults to `src`
+  where you are standing, and to where you are standing when `ui/` is right there — so
+  `cd ledger && abide dev` and `abide dev --root ./src` are the same command. A directory with
+  neither is not an app, and the command says so rather than building nothing.
+* `--out <dir>` — where `build` writes, beside the app rather than beside you: building
+  `packages/ledger/src` from anywhere leaves `packages/ledger/.abide`, which is where `start`
+  looks. It is also the file `openapi` and `compile` write, rather than standard output.
 * `--url <origin>` — the running app `openapi`, `mcp`, `connect` and `call` talk to. Defaults
   to `ABIDE_APP_URL`, then to the local app.
 * `--target`, `--platforms` — what `compile` builds for.

@@ -3,7 +3,7 @@
 // rather than a file each until one of them grows a reason to move.
 
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
-import { resolve } from 'node:path' // bun exposes no path helpers of its own
+import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
 import { parseArgs } from 'node:util' // bun exposes no argv parser of its own yet
 
 import { type AppRoute, compileApp } from '#compiler/compileApp.ts'
@@ -21,7 +21,9 @@ const USAGE = `abide <command>
   start    serve a built app (--port to choose the socket)
   dev      serve with the compiler in the loop
 
-  --root   the app's source directory, the one ui/ sits under
+  --root   the app's source directory, the one ui/ sits under —
+           src/ where you stand, or where you stand, whichever has one
+  --out    where the build goes, beside the app by default
 `
 
 async function build(root: string, out: string): Promise<number> {
@@ -112,8 +114,11 @@ async function main(argv: string[]): Promise<number | undefined> {
     const { values, positionals } = parseArgs({
         args: argv,
         options: {
-            root: { type: 'string', default: process.cwd() },
-            out: { type: 'string', default: '.abide' },
+            // NO DEFAULT HERE EITHER. `cd ledger && abide dev` is what the docs tell an author to
+            // type and `--root ./src` is what an app's own scripts write, so which directory is
+            // meant is a question `appRoot` answers rather than one the parser assumes.
+            root: { type: 'string' },
+            out: { type: 'string' },
             // NO DEFAULT, which is not an omission: `Bun.serve` given no port already reads
             // `PORT` and then falls back to 3000, and a default written here would take that
             // away from every host that sets it.
@@ -122,28 +127,57 @@ async function main(argv: string[]): Promise<number | undefined> {
         allowPositionals: true,
     })
     const command = positionals[0]
-    // ABSOLUTE, ONCE, HERE. `--root ./src` is what an app's own scripts write, and every consumer
-    // below needs the resolved form for a different reason: the checker panics on a relative
-    // tsconfig, `import()` of the emitted route table has no base to resolve against, and the
-    // walk slices a source path against the root's length.
-    const root = resolve(values.root)
-    const out = resolve(values.out)
+    if (command === undefined || command === 'help') {
+        console.log(USAGE)
+        return 0
+    }
+    if (command !== 'build' && command !== 'start' && command !== 'dev') {
+        console.error(`abide: unknown command '${command}'\n\n${USAGE}`)
+        return 1
+    }
+
+    // ABSOLUTE, ONCE, HERE. Every consumer below needs the resolved form for a different reason:
+    // the checker panics on a relative tsconfig, `import()` of the emitted route table has no
+    // base to resolve against, and the walk slices a source path against the root's length.
+    const root = appRoot(values.root)
+    if (root === undefined) {
+        console.error(
+            `abide ${command}: no app here. Looked for ui/ in ${process.cwd()} and in ${resolve('src')}. Point --root at the directory ui/ sits under.`,
+        )
+        return 1
+    }
+    // BESIDE THE APP RATHER THAN BESIDE THE SHELL. An app's build belongs to the app, so
+    // `abide build --root packages/app/src` run from anywhere puts it in `packages/app/.abide` —
+    // and `abide start --root packages/app/src` then finds it without being told twice.
+    const out =
+        values.out === undefined
+            ? `${dirname(root)}/.abide`
+            : resolve(values.out)
 
     switch (command) {
         case 'build':
             return await build(root, out)
         case 'start':
             return await start(root, out, values.port)
-        case 'dev':
-            return await dev(root, values.port)
-        case undefined:
-        case 'help':
-            console.log(USAGE)
-            return 0
         default:
-            console.error(`abide: unknown command '${command}'\n\n${USAGE}`)
-            return 1
+            return await dev(root, values.port)
     }
+}
+
+// THE DIRECTORY `ui/` SITS UNDER. Given, or found in the two places it can be: `cd ledger &&
+// abide dev` is the flow the docs teach and `--root ./src` is what an app's own scripts write,
+// so a command run from an app's own directory has to mean the same thing either way.
+//
+// `undefined` IS A REFUSAL AND NOT A GUESS. Defaulting to the working directory is what made
+// `abide dev` at a repo root compile every `.abide` in every package against a package.json with
+// no seams in it — eighty-five pages that could not resolve their own imports, a bundle that
+// failed, and a 500 at every address rather than a sentence saying there is no app here.
+function appRoot(given: string | undefined): string | undefined {
+    if (given !== undefined) return resolve(given)
+    const here = process.cwd()
+    if (existsSync(`${here}/ui`)) return here
+    const under = resolve('src')
+    return existsSync(`${under}/ui`) ? under : undefined
 }
 
 // 38.4 — the project, watched, with the app kept up. Hands back no exit code for `start`'s
