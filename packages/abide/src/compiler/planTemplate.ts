@@ -53,13 +53,13 @@ export type HandlerBinding = {
     attribute: Attribute
 }
 
-// 32.4 — `name={expr}` IS REACTIVE, which the server half alone cannot make it: it writes the
+// 32.3 — `name={expr}` IS REACTIVE, which the server half alone cannot make it: it writes the
 // value standing at render and nothing ever writes it again. The path is the ELEMENT's, reached by
 // the same walk a listener's is, so nothing is added to the document to find it.
 //
 // `write` NAMES WHICH OF THE THREE WRITES THE VALUE GOES TO and `name` what it goes under. One
 // binding site with three writes rather than three plans, because what differs is only the call:
-// 32.11 sets one class or one style property, and everything else sets the whole attribute.
+// 32.10 sets one class or one style property, and everything else sets the whole attribute.
 export type AttributeBinding = {
     path: number[]
     attribute: Attribute
@@ -80,7 +80,7 @@ export type ListPlan = {
     plan: TemplatePlan
 }
 
-// 32.19 — AN INVOCATION IS A REGION, and it is one for a reason the blocks are not: how many
+// 32.18 — AN INVOCATION IS A REGION, and it is one for a reason the blocks are not: how many
 // top-level nodes the child writes is a fact about ANOTHER FILE. Every sibling after it would
 // otherwise be addressed by counting through a shape this file cannot see, so the anchor pair the
 // server wrote is what the walk stops at — and the child mounts against it.
@@ -196,7 +196,7 @@ function walk(
             const index = regionIndex
             regionIndex += 1
             if (node.block === 'for') {
-                // 32.14 — the body is planned ONCE. Every row instantiates the same plan, so a
+                // 32.13 — the body is planned ONCE. Every row instantiates the same plan, so a
                 // thousand rows emit one binding site rather than a thousand, which is the shape
                 // the server bench found straight-line emission losing 6x to.
                 plan.regions.push({
@@ -213,7 +213,7 @@ function walk(
                     ),
                 })
             } else {
-                // 32.13 — the block is a REGION. Its arms are planned apart, each from its own
+                // 32.12 — the block is a REGION. Its arms are planned apart, each from its own
                 // root, so the same paths in two arms mean two different things.
                 plan.regions.push({
                     kind: 'if',
@@ -252,7 +252,7 @@ function walk(
             for (const attribute of node.attributes) {
                 if (!attribute.expression) continue
                 if (isEventName(attribute.lowerName)) {
-                    // 32.5 — a native listener on the element itself, reached by the same walk a
+                    // 32.4 — a native listener on the element itself, reached by the same walk a
                     // text node is, so nothing is added to the document to find it.
                     plan.handlers.push({
                         path: here,
@@ -261,10 +261,10 @@ function walk(
                     })
                     continue
                 }
-                // 32.12's spread is not built, and an emitter that planned one would bind a name
+                // 32.11's spread is not built, and an emitter that planned one would bind a name
                 // beginning `...` as an attribute.
                 if (attribute.name.startsWith('...')) continue
-                // 32.11, 32.21 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE and
+                // 32.10, 32.20 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE and
                 // every `class:name` ONE `class`, merged by the server emitter. So a plain
                 // `style={expr}` or `class={expr}` standing beside one cannot be written back on
                 // its own: `setAttribute` replaces the whole value and takes the directives'
@@ -275,9 +275,9 @@ function walk(
                 // the server writes both halves into the one merged attribute — so the only thing
                 // a build error would buy is breaking a page that works today for a clause that
                 // is not built. What it costs is the hole: this one attribute keeps the value
-                // standing at render where 32.4 says it moves, and nothing reports that.
+                // standing at render where 32.3 says it moves, and nothing reports that.
                 //
-                // 32.21 IS WHAT CLOSES THE `style` HALF, not a binding here: an interpolated
+                // 32.20 IS WHAT CLOSES THE `style` HALF, not a binding here: an interpolated
                 // `style` lowers to `style:prop` under a static name and is never built as a
                 // string, and then there is no whole-attribute write left to clobber anything. No
                 // clause spells the same road for `class`, and until one does the two share this
@@ -296,7 +296,7 @@ function walk(
 // `onclick={f}` is a listener, never an attribute — the plan records it and the server writes
 // nothing for it, so the two emitters have to agree on the test. One copy is that agreement.
 // Given the FOLDED name (`Attribute.lowerName`).
-// 32.19 — `<Row/>` is a component and `<row/>` is the element. An HTML tag is matched
+// 32.18 — `<Row/>` is a component and `<row/>` is the element. An HTML tag is matched
 // case-insensitively everywhere else (`lowerTag`), and this is the one comparison where the
 // author's own spelling decides. Here rather than beside the emitter that calls it most, because
 // the plan is what both emitters read and the edge the other way round is a cycle.
@@ -309,7 +309,7 @@ export function isEventName(lowerName: string): boolean {
     return lowerName.length > 2 && lowerName.startsWith('on')
 }
 
-// 32.11 — `style:prop` sets ONE style property and `class:name` ONE class. Here rather than beside
+// 32.10 — `style:prop` sets ONE style property and `class:name` ONE class. Here rather than beside
 // the emitter that writes them out, for `isComponentTag`'s reason: the plan is what both emitters
 // read, and an edge from the plan to an emitter is a cycle. The prefix is matched on the FOLDED
 // name; the part after it is read from the author's spelling, because a custom property and a
@@ -334,10 +334,7 @@ export function isClassToggle(attribute: Attribute): boolean {
 // Which of the three writes an attribute's value goes to, and under what name — see
 // `AttributeBinding`. One function rather than the two predicates plus a slice at each emitter,
 // because the prefix's length and the predicate that found it are the same fact twice.
-function bindingOf(
-    attribute: Attribute,
-    path: number[],
-): AttributeBinding {
+function bindingOf(attribute: Attribute, path: number[]): AttributeBinding {
     if (isStyleProperty(attribute))
         return {
             path,
@@ -356,7 +353,7 @@ function bindingOf(
 }
 
 // Whether an attribute is the plain `class` or `style` the server MERGED a directive group into —
-// the one attribute on an element 32.4 does not move. See where it is asked.
+// the one attribute on an element 32.3 does not move. See where it is asked.
 function isMergedPlain(
     node: TemplateNode & { kind: 'element' },
     attribute: Attribute,

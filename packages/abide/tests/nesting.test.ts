@@ -67,7 +67,7 @@ const click = (id: string): void => {
     flushSync()
 }
 
-// Everything `console.warn` was told while the body ran. 41.11's warning is the only thing the
+// Everything `console.warn` was told while the body ran. 41.10's warning is the only thing the
 // clause leaves visible when a block rebuilds, so a test that does not read it is reading the
 // output of a page that may have been rebuilt three times.
 async function warningsWhile(body: () => Promise<void>): Promise<string[]> {
@@ -90,7 +90,7 @@ async function warningsWhile(body: () => Promise<void>): Promise<string[]> {
 // THE REVERT: resolve an empty path as the root's first CHILD in `emitClient`'s `step`
 // (`childAt(rg0, [0])`), which is what it did. The inner region is then looked for inside the
 // `<p>`, and this reports TWO `abide:hydrate abide: region 0 is not in the rendered document
-// ... (41.11)` warnings where none is due — one from the block, one from the rebuild that fails
+// ... (41.10)` warnings where none is due — one from the block, one from the rebuild that fails
 // the same way — with `#deep` dead behind them.
 test('an {#if} inside an arm is found, and its binding is live', async () => {
     const source = `<script>
@@ -121,7 +121,7 @@ let name = reactive('ada')
 //
 // THE REVERT: the same one. The region is then looked for inside the row's own opening anchor —
 // a comment with no children — and this reports two `abide:hydrate abide: region 0 is not in the
-// rendered document ... (41.11)` warnings where none is due, with neither row wired.
+// rendered document ... (41.10)` warnings where none is due, with neither row wired.
 test('an {#if} inside a {#for} row is found, and so is the sibling after it', async () => {
     const source = `<script>
 import { reactive } from 'abide'
@@ -175,7 +175,7 @@ let count = reactive(1)
 //
 // THE REVERT: decode a negative only at `at === 0` in `nodeAt`'s walk, which is where the emitter
 // used to put one. The rest is read as `childNodes[-1]` and this reports one
-// `abide:hydrate abide: no node at [0,-1,0,0] ... (41.11)` where none is due, `#tail` unwired.
+// `abide:hydrate abide: no node at [0,-1,0,0] ... (41.10)` where none is due, `#tail` unwired.
 test('a region reference is decoded wherever it stands in a path', async () => {
     const source = `<script>
 import { reactive } from 'abide'
@@ -205,7 +205,7 @@ let count = reactive(1)
 //
 // THE REVERT: emit `textAt` without the `blank` argument, so a node of the wrong kind is refused
 // rather than a missing one inserted. This reports one `abide:hydrate abide: [0,0] is a B where
-// this binding's text was rendered ... (41.11)` where none is due, and `<p>` holding one child
+// this binding's text was rendered ... (41.10)` where none is due, and `<p>` holding one child
 // where two are.
 test('a blank run gets its node back, at the position it belongs', async () => {
     const source = `<script>
@@ -262,7 +262,7 @@ let count = reactive(0)
 //
 // THE REVERT: sort the addresses so every anchor comes before every run in `emitRegion`, which is
 // what it did. The anchor then walks a `<p>` holding one child and this reports one
-// `abide:hydrate abide: no node at [1] ... (41.11)` where none is due, `#one` and `#two` unwired.
+// `abide:hydrate abide: no node at [1] ... (41.10)` where none is due, `#one` and `#two` unwired.
 test('an anchor past a blank run is walked after the run is filled', async () => {
     const source = `<script>
 import { reactive } from 'abide'
@@ -292,7 +292,7 @@ let b = reactive('B')
 //
 // THE REVERT: skip a run with no live binding in `emitRegion` (`if (!bound) continue`), which is
 // what the filter did. The `<b>` is then at `[0,0]` where the plan says `[0,1]`, and this reports
-// one `abide:hydrate abide: no node at [0,1,0] ... (41.11)` where none is due.
+// one `abide:hydrate abide: no node at [0,1,0] ... (41.10)` where none is due.
 test('a static blank run is addressed even though it is never bound', async () => {
     const source = `<script>
 import { reactive } from 'abide'
@@ -315,13 +315,13 @@ let a = reactive('A')
     expect(client.match(/watch(Effect)?\(/g) ?? []).toHaveLength(1)
 })
 
-// 41.11 — A MISMATCH REBUILDS THE ENCLOSING BLOCK AND WARNS, and rebuilds NOTHING WIDER. The
+// 41.10 — A MISMATCH REBUILDS THE ENCLOSING BLOCK AND WARNS, and rebuilds NOTHING WIDER. The
 // document is corrupted between the render and the mount, which is what a real mismatch is: the
 // client's plan and the served nodes disagree, and the clause says the block re-renders rather
 // than the page throwing.
 //
 // THE REVERT: drop the `try`/`catch` from the emitted `rgN_mount` in `emitBlock`. The mismatch then
-// reaches the page's own catch, which 41.11 forbids rebuilding, and this reports `#body` NULL
+// reaches the page's own catch, which 41.10 forbids rebuilding, and this reports `#body` NULL
 // where the re-rendered `<p>` is due — one block's failure taking the block away for good.
 test('a mismatch inside a block rebuilds the block and warns', async () => {
     const source = `<script>
@@ -365,7 +365,7 @@ let name = reactive('ada')
 
     expect(said).toHaveLength(1)
     expect(said[0]).toContain('abide:hydrate')
-    expect(said[0]).toContain('41.11')
+    expect(said[0]).toContain('41.10')
 
     // THE BLOCK CAME BACK, wired, and the page around it never stopped working.
     const body = document.querySelector('#body') as HTMLElement
@@ -384,7 +384,7 @@ let name = reactive('ada')
     )
 })
 
-// AN AUTHOR'S OWN THROW IS NOT A MISMATCH and comes straight back out. The catch 41.11 asks for is
+// AN AUTHOR'S OWN THROW IS NOT A MISMATCH and comes straight back out. The catch 41.10 asks for is
 // a brand test, not a blanket one — a page that swallows every throw at mount is a page whose
 // first bug is invisible.
 //
@@ -461,7 +461,7 @@ let msg = reactive('')
 //
 // THE REVERT: drop the `holder.splice(last, 0, text)` in `textAt`. The array is then one node
 // short of the document for the rest of the row's walk, and this reports TWO
-// `abide:hydrate abide: no node at [2,0] ... (41.11)` warnings — one a row — where none is due.
+// `abide:hydrate abide: no node at [2,0] ... (41.10)` warnings — one a row — where none is due.
 test('a blank run inside a row goes into the row’s nodes as well', async () => {
     const source = `<script>
 import { reactive } from 'abide'
@@ -492,7 +492,7 @@ function swap() {
     expect(list.textContent).toBe('ba')
 })
 
-// 41.11 IN A ROW. The block that rebuilds is the ROW, and nothing outside it is touched — which is
+// 41.10 IN A ROW. The block that rebuilds is the ROW, and nothing outside it is touched — which is
 // what `replaceNodes` is for: the fresh nodes go in where the old ones were AND into the array the
 // reconcile holds, so the row is still one row afterwards.
 //

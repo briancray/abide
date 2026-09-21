@@ -127,7 +127,7 @@ console.log(
     '  WHERE A MARKER STILL EARNS ITS BYTES: a region whose shape depends on a value shifts',
 )
 console.log(
-    "  its siblings' child indices, so 32.13 and 32.14 need an ANCHOR the document keeps",
+    "  its siblings' child indices, so 32.12 and 32.13 need an ANCHOR the document keeps",
 )
 console.log(
     '  whether the region rendered or not. A comment is the right anchor — selector-safe,',

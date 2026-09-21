@@ -3,7 +3,7 @@ title: Send the page before the data lands
 nav: Streaming HTML
 intent: Flush the document early and fill the holes as the values arrive.
 covers:
-  - `href={await x}`, any attribute
+  - `href={x}`, any attribute
   - `class:`, `style:`, `bind:`
   - `<title>{name}</title>`
   - `<textarea>{v}</textarea>`
@@ -21,7 +21,7 @@ now, and the value is written into the place it left.
 
 | The hole | What is filled |
 | --- | --- |
-| `href={await x}`, any attribute | the attribute or property, on the element itself |
+| `href={x}`, any attribute | the attribute or property, on the element itself |
 | `class:`, `style:`, `bind:` | the class, the style property, the bound property |
 | `<title>{name}</title>` | the element's `.textContent` |
 | `<textarea>{v}</textarea>` | the element's `.defaultValue` |
@@ -55,9 +55,10 @@ Read on: [Streaming data](../server/send-data-as-it-arrives.md)
 
 ## What holds the flush is spelled
 
-Nothing holds it by default, including the head. Holding is `{await}` around the expression,
-spelled the same way it is spelled anywhere else, and it is worth reaching for in one place:
-metadata a crawler reads, which does not come back for the second version.
+Nothing holds it by default, including the head. Holding is an `await` in the component's
+`<script>` — `const invoice = await getInvoice()`, which leaves `invoice` the value it was and
+holds the render until it settles. It is worth reaching for in one place: metadata a crawler
+reads, which does not come back for the second version.
 
 Read on: [Request to paint](../start/how-a-page-becomes-html.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md)

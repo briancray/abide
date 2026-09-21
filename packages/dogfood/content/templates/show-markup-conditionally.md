@@ -36,9 +36,10 @@ value, and `{:else}` is what shows until then. A probe in the condition subscrib
 alone, and `ready()` does not move for a reload in flight, so the branch stays mounted through a
 `refresh()` and its body is **updated** when the new value lands rather than rebuilt.
 
-Where the render should wait for the value instead of showing something in the meantime,
-`{await invoice}` holds it — and over a stream, until the **close**. That is what a calculation
-wants, where a half-arrived value is not a smaller answer but a wrong one.
+Where the render should wait for the value instead of showing something in the meantime, the
+`<script>` is what says so: `const invoice = await getInvoice()` holds it — and over a stream,
+until the **close**. That is what a calculation wants, where a half-arrived value is not a smaller
+answer but a wrong one.
 
 Read on: [Loading states](../values/show-a-value-that-isnt-there-yet.md) ·
 [Streaming data](../server/send-data-as-it-arrives.md)

@@ -72,7 +72,7 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
     expect(html).toContain('<p id="out">clicks: 0</p>')
     expect(html).not.toContain('<!--')
     expect(html).not.toContain('data-a')
-    // 32.5 — the handler is a listener, and the server writes no `onclick` for it to fire from.
+    // 32.4 — the handler is a listener, and the server writes no `onclick` for it to fire from.
     expect(html).not.toContain('onclick')
 
     // MEASURED AT MOUNT, not only at the click, and the difference is where the gate lives.
@@ -152,7 +152,7 @@ test('a static page emits no client module', async () => {
     expect(await clientOf('<h1>static</h1>', [])).toBe('')
 })
 
-// 41.4 — A RENDER MUST CONTINUE PAST A VALUE STILL IN FLIGHT, and 32.25 is what the slot itself
+// 41.4 — A RENDER MUST CONTINUE PAST A VALUE STILL IN FLIGHT, and 32.24 is what the slot itself
 // does: a template expression a `NotLanded` aborted leaves what it last rendered, which on a first
 // server render is nothing. Together they are one page with a hole in it, not no page at all.
 //
@@ -171,7 +171,7 @@ test('a static page emits no client module', async () => {
 // THE REVERT: make `unlandable` answer `lowered` unconditionally, so `emitNode`'s expression arm
 // emits `escapeText(...)` directly — `render` throws `NotLanded: reactive has not landed` and this
 // test reports no document at all rather than a document with one empty slot.
-test('a render continues past a value still in flight — 41.4, 32.25', async () => {
+test('a render continues past a value still in flight — 41.4, 32.24', async () => {
     const { html, mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 
@@ -185,10 +185,10 @@ const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
     expect(html).toContain('<h1 id="static">Invoice</h1>')
     expect(html).toContain('<strong id="slot">')
     expect(document.querySelector('#static')?.textContent).toBe('Invoice')
-    // The hole: 32.25 leaves what it last rendered, and nothing has been rendered yet.
+    // The hole: 32.24 leaves what it last rendered, and nothing has been rendered yet.
     expect(document.querySelector('#slot')?.textContent).toBe('')
 
-    // AND IT FILLS. The client re-runs the body (41.7), the value lands, and the binding writes
+    // AND IT FILLS. The client re-runs the body (41.6), the value lands, and the binding writes
     // into a text node that was not in the document the server wrote — which is `blank`'s arm.
     mount(document.body)
     await Promise.resolve()
@@ -198,8 +198,8 @@ const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
 })
 
 // 41.4 THROUGH A BLOCK'S ONE EXPRESSION. A `{#for}` reads its subject once for the whole block
-// (32.23), so an unlanded subject took the page down the same way a slot did — and the fallback
-// needs no deciding, because 32.24 already says an absent subject iterates zero times and
+// (32.22), so an unlanded subject took the page down the same way a slot did — and the fallback
+// needs no deciding, because 32.23 already says an absent subject iterates zero times and
 // `listOf` already answers `[]` for absent. The abort just makes "in flight" reach it.
 //
 // TWO REVERTS, BECAUSE THE SERVER HALF ALONE IS THE WORSE BUG. Drop the `slotValue` wrapper from
@@ -208,7 +208,7 @@ const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
 // empty for ever — the watch that would have hydrated the rows threw on the same subject, so
 // `hydrating` was still set when the value landed and the rows were walked against nothing. This
 // test reports [] against [north, south] either way, and only the second one looks fine on screen.
-test('a render continues past a {#for} subject still in flight — 41.4, 32.24', async () => {
+test('a render continues past a {#for} subject still in flight — 41.4, 32.23', async () => {
     const { html, mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 
@@ -218,7 +218,7 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
 <main><h1 id="static">Regions</h1><ul id="list">{#for row of rows by row}<li>{row}</li>{/for}</ul></main>`)
 
     expect(html).toContain('<h1 id="static">Regions</h1>')
-    // The block rendered its anchors and no rows, which is 32.24's zero times.
+    // The block rendered its anchors and no rows, which is 32.23's zero times.
     expect(document.querySelectorAll('#list li')).toHaveLength(0)
 
     mount(document.body)
@@ -238,7 +238,7 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
 // `style:`. One class of bug, closed in the two shapes that happened to be tried.
 //
 // AND THE HOLE FILLS, which is the half that makes guarding legal rather than a silent wrong
-// value: 32.4's binding re-runs on the value that landed and writes it into the attribute the
+// value: 32.3's binding re-runs on the value that landed and writes it into the attribute the
 // server left empty, exactly as `blank` does for a text run. Before that binding existed the
 // empty attribute was permanent, and the test below asserted it and called that the answer.
 //
@@ -285,10 +285,10 @@ const width = reactive(() => Promise.resolve('40px'))
 // subject guarded to `undefined` is FALSY, so the chain walks on and paints the `{:else}` arm —
 // a decision the client cannot tell from one the author's own value made. It reads the landed
 // value a turn later, picks the other arm, and hydrates against the arm the server actually
-// wrote; where that arm holds no binding there is nothing to walk and 41.11 never fires, so the
+// wrote; where that arm holds no binding there is nothing to walk and 41.10 never fires, so the
 // region is wrong until the condition CHANGES.
 //
-// SO THE ABORT EMPTIES THE REGION, and `isEmptyRegion` — 32.19's signal for a component whose row
+// SO THE ABORT EMPTIES THE REGION, and `isEmptyRegion` — 32.18's signal for a component whose row
 // the browser grew — is what the block's first run reads to fill instead of hydrate. Nothing was
 // added to the document to carry it.
 //
@@ -299,7 +299,7 @@ const width = reactive(() => Promise.resolve('40px'))
 // TWO REVERTS. Drop the `slotValue` wrapper from the `{#if}` arm of `emitNode` and `render`
 // throws `NotLanded` — no document at all. Drop the `isEmptyRegion` arm of the block's watch in
 // `emitClient` instead and the document is served with an empty region that never fills.
-test('a render continues past an {#if} subject still in flight — 41.4, 32.13', async () => {
+test('a render continues past an {#if} subject still in flight — 41.4, 32.12', async () => {
     const { html, mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 
@@ -321,7 +321,7 @@ const shown = reactive(() => Promise.resolve(true))
     expect(document.querySelector('#off')).toBeNull()
 })
 
-// 32.4 — `name={expr}` IS REACTIVE, and the binding is what makes it so. The server writes the
+// 32.3 — `name={expr}` IS REACTIVE, and the binding is what makes it so. The server writes the
 // value standing at render and, without this, nothing ever writes it again: a page whose `{tone}`
 // text moved while its `title={tone}` stayed behind is what shipped, and no assertion on the slot
 // could see it — the two read the same value, so the one that worked hid the one that did not.
@@ -332,7 +332,7 @@ const shown = reactive(() => Promise.resolve(true))
 //
 // THE REVERT: drop the `plan.attributes` loop in `emitRegion`. The document is byte-identical and
 // the text beside it still moves; this reports `calm` where `urgent` is due.
-test('an attribute expression keeps moving after hydration — 32.4', async () => {
+test('an attribute expression keeps moving after hydration — 32.3', async () => {
     const { html, mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 
@@ -378,7 +378,7 @@ const kind = 'card'
     expect(mountWork.attributesSet).toBe(0)
 })
 
-// 32.11 END TO END — a `class:name` keeps moving after hydration, and the author's own `class`
+// 32.10 END TO END — a `class:name` keeps moving after hydration, and the author's own `class`
 // survives it. THE TWO HALVES ARE ONE CASE: the server MERGED `class="badge"` and `class:overdue`
 // into a single attribute, so a binding that wrote that attribute back would produce the right
 // class and take `badge` off the element in the same write. Only the element's own class list can
@@ -388,7 +388,7 @@ const kind = 'card'
 // is byte-identical; this reports `badge` where `badge overdue` is due — the name a class binding
 // carries is the CLASS and not the attribute, so the reverted write puts an attribute called
 // `overdue` on the element and the class list never moves at all.
-test('a class: directive toggles one class and keeps the others — 32.11', async () => {
+test('a class: directive toggles one class and keeps the others — 32.10', async () => {
     const { html, mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 
@@ -421,7 +421,7 @@ let late = reactive(false)
     expect(work.attributesSet).toBe(0)
 })
 
-// 41.11 — A MISMATCH MUST NOT REBUILD THE PAGE, and the page is the one region with no block
+// 41.10 — A MISMATCH MUST NOT REBUILD THE PAGE, and the page is the one region with no block
 // around it to rebuild instead. `Mismatch` was written against exactly the failure this guards:
 // an ordinary throw out of `mount` skips every binding and listener after the one that refused,
 // so a page whose first slot disagrees is served looking right and completely dead below it.
@@ -435,7 +435,7 @@ let late = reactive(false)
 //
 // THE REVERT: put `lines.join('\n')` back inside one `try` in `emitClient`. The first binding
 // still warns, and this reports `B` where `B2` is due.
-test('a mismatch in one root binding does not stop the next — 41.11', async () => {
+test('a mismatch in one root binding does not stop the next — 41.10', async () => {
     const { mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 

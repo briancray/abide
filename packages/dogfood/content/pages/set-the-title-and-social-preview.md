@@ -41,13 +41,17 @@ The head goes out as soon as it is known, and a value still in flight does **not
 That is the whole reason a title can be wrong for a moment: the alternative is a blank tab
 while the invoice loads, and a blank tab is worse.
 
-Holding is opt-in, and it is spelled the way holding is spelled anywhere else — `{await}`
-around the expression. It is worth it for exactly one thing: metadata a crawler reads, which
-does not come back for the second version.
+Holding is opt-in, and it is spelled the way holding is spelled anywhere else — an `await` in the
+`<script>`. It is worth it for exactly one thing: metadata a crawler reads, which does not come
+back for the second version.
 
 ```abide #ui/pages/invoices/[id]/page.abide — excerpt
+<script>
+const invoice = await getInvoice({ id: route.params.id })
+</script>
+
 <head>
-    <title>Invoice {await invoice.reference}</title>
+    <title>Invoice {invoice.reference}</title>
 </head>
 ```
 

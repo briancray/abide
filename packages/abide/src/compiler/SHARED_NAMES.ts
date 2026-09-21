@@ -9,7 +9,7 @@ export const SHARED_NAMES: ReadonlySet<string> = new Set([
     'raw',
     'writePath',
     'listOf',
-    // 32.25's abort, which only the server lane can need: a client binding is its own `watch`
+    // 32.24's abort, which only the server lane can need: a client binding is its own `watch`
     // and gets one from 2.13. Emitted on both sides because `emitMarkup` is both sides.
     'slotValue',
     // 10.5's pair: a share scope is opened by the emitted component on both sides, and `#shared`

@@ -22,7 +22,7 @@ const SHELL = '<!doctype html><html><head></head><body></body></html>'
 
 export type CompiledPage = { markup: string; script: string }
 
-// `components` are the `.abide` files the page INVOKES (32.19), keyed by the name it imports them
+// `components` are the `.abide` files the page INVOKES (32.18), keyed by the name it imports them
 // as. Each compiles to the pair a caller reaches — `Name.ts` for the server render and
 // `Name.client.ts` for the mount — and the page goes through that same loop, so a page with a
 // component in it is built the way the build builds one rather than by a second scheme.

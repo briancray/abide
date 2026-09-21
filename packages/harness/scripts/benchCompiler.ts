@@ -66,7 +66,7 @@ async function armsFor(session: TypeSession): Promise<Arm[]> {
         // hydrate emits none, and counts zero — which is the point of that emptiness.
         let shippedAbide = 0
         let typeable = true
-        // 32.19 — only a file another one INVOKES carries its own markup, so the example's whole
+        // 32.18 — only a file another one INVOKES carries its own markup, so the example's whole
         // set is read before any of it is emitted. Charging every page for one is 34% of this
         // number.
         const invoked = invokedComponents(

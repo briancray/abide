@@ -19,7 +19,7 @@ export { type Failed, isFailed } from './Failed.ts'
 export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
 export { jsonSchema } from './jsonSchema.ts'
-// 32.16's run-time half. In this seam because BOTH sides ask it what a `{#for}` subject iterates
+// 32.15's run-time half. In this seam because BOTH sides ask it what a `{#for}` subject iterates
 // as — the server's emitted block, the client's `updateList`, and the markup a client builds for a
 // row — so the one function is the one answer.
 export { listOf } from './listOf.ts'
@@ -64,7 +64,7 @@ export { notFound, refuse, validationError } from './refuse.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'
 export { safeUrl } from './safeUrl.ts'
 // EMITTED CODE'S, not an author's — no REGISTRY row, the way `escapeText` and `listOf` have
-// none. A markup position that aborts on an unlanded read (32.25) is the compiler's business.
+// none. A markup position that aborts on an unlanded read (32.24) is the compiler's business.
 export { slotValue } from './slotValue.ts'
 export { validateJson } from './validateJson.ts'
 export { writePath } from './writePath.ts'

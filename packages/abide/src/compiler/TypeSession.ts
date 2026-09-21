@@ -202,7 +202,7 @@ export class TypeSession {
                     throw new Error(
                         `abide: ${sources[at]?.path} is not inside the project ${this.tsconfig}, so no name in it can be typed (31.3). Give the app a tsconfig whose include reaches it.`,
                     )
-                // A destructuring pattern binds names this does not see, and that is 31.14's case.
+                // A destructuring pattern binds names this does not see, and that is 31.15's case.
                 const names: Node[] = []
                 const spelled = new Set<string>()
                 for (const statement of sourceFile.statements) {

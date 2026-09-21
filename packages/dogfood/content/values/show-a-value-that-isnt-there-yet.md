@@ -77,7 +77,8 @@ difference shows on a derived value. Its body aborts on a source still in flight
 nothing (11.53), so it is absent for a moment that says nothing about the answer — and `busy()` is
 what says one is on its way (11.21).
 
-*By default*, because a read can be made to hold on purpose — `{await invoice}` is that opt-in.
+*By default*, because a render can be made to hold on purpose — an `await` in the component's
+`<script>` is that opt-in.
 
 Read on: [Streaming HTML](../pages/send-the-page-before-the-data-lands.md) ·
 [Expressions](../templates/put-a-value-in-the-markup.md)
@@ -171,19 +172,22 @@ something reads it.
 Read on: [Failures](../server/refuse-a-request-and-say-why.md) ·
 [Error pages](../pages/show-a-page-when-something-fails.md)
 
-## `await` is how a read holds on purpose
+## `await` is how a render holds on purpose
 
-Not blocking is the default; holding is the opt-in. `await` governs the whole **expression**, not
-the name — every reactive read inside it blocks — and the reads are started before they are
-awaited, so `{await a.x + b.y}` is one round trip rather than two loads serialized behind one hole.
+Not blocking is the default; holding is the opt-in, and the `<script>` is where it is spelled.
+`const invoice = await getInvoice()` leaves `invoice` the value it always was — the `await`
+answers the value itself, not what it holds — and holds this component's render until it settles.
 
 Set against a plain read, **the tell is the `await`**:
 
 | Form | Holds |
 | --- | --- |
-| `{invoice}` | no — the read renders nothing and opens a sink the value fills later |
+| `const invoice = getInvoice()` | no — the read renders nothing and opens a sink the value fills later |
 | `{#if invoice.ready()}` | no — the `{:else}` renders while it loads |
-| `{await invoice}` | yes |
+| `const invoice = await getInvoice()` | yes — the whole component waits |
+
+Two of them side by side settle **together**, not one after the other; one that reads what the
+other is bound to is the exception, and that pair settles in the order you wrote it.
 
 `await` holds over a stream until the stream **closes**, the same way it holds until a value
 settles. A source that never closes holds forever; that is the author's to resolve.
@@ -192,9 +196,9 @@ Read on: [Conditionals](../templates/show-markup-conditionally.md)
 
 ## On a server the value carries its own `await`
 
-A handler has no template to spell `{await}` in, so the value carries the wait itself. `await
-invoice` resolves where `invoice.busy()` becomes false (2.8), and `then`, `catch` and `finally`
-reach that same promise by hand. Awaited mid-refresh it gets what the refresh lands, and awaited
+It is the same `await` a handler writes, the value carrying the wait itself. `await invoice`
+resolves where `invoice.busy()` becomes false (2.8), and `then`, `catch` and `finally` reach that
+same promise by hand. Awaited mid-refresh it gets what the refresh lands, and awaited
 over a stream it gets the whole accumulation at close. Nothing about the read changes: `invoice()` still returns what has landed and
 never blocks, and the `await` is the opt-in here exactly as it is in a template.
 

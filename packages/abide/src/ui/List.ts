@@ -21,7 +21,7 @@ export class List {
     // THE ASYNC ITERABLE BEING PUMPED, or null. The newest source wins and the pump it replaced
     // stops at its next item, and a list arriving in its place stops it the same way.
     pumping: unknown
-    // 41.16 — once for the block, not once a reconcile.
+    // 41.15 — once for the block, not once a reconcile.
     warned: boolean
     // WHETHER THE ROWS ARE STILL THE SERVER'S. The first update HYDRATES them rather than
     // reconciling, and clears this.
@@ -89,9 +89,9 @@ export function listAt(
 // NOBODY PAINTED THIS REGION is 41.4 — a render continues past a subject still in flight, which
 // writes the anchors and no rows. That is not a disagreement, because there is nothing to disagree
 // with, so it builds in silence. `isEmptyRegion` is the signal the rest of the block machinery
-// already reads for exactly this (32.19), rather than a zero this function infers on its own.
+// already reads for exactly this (32.18), rather than a zero this function infers on its own.
 //
-// THE SERVER'S ROWS ARE NOT THE CLIENT'S ITEMS is 41.11, and it MUST warn. Hydration wires row
+// THE SERVER'S ROWS ARE NOT THE CLIENT'S ITEMS is 41.10, and it MUST warn. Hydration wires row
 // `at` to item `at` BY POSITION, so a run where the two lengths disagree has items with no node,
 // nodes with no item, or both — every one of them a `{#for}` that looks right and is dead, because
 // `updateList` returned before `reconcile` could fix it. Repairing that silently is the clause
@@ -109,13 +109,13 @@ function hydrate(list: List, items: unknown[]): boolean {
     if (found.length === items.length) return true
     warnMismatch(
         new Mismatch(
-            `abide: the document holds ${found.length} rows where this {#for} computes ${items.length}, so the client and the server disagree about this region's shape (41.11).`,
+            `abide: the document holds ${found.length} rows where this {#for} computes ${items.length}, so the client and the server disagree about this region's shape (41.10).`,
         ),
     )
     return false
 }
 
-// 32.16 — AN ARRAY RECONCILES AND AN ASYNC SUBJECT APPENDS AS ITEMS ARRIVE. There is no list to
+// 32.15 — AN ARRAY RECONCILES AND AN ASYNC SUBJECT APPENDS AS ITEMS ARRIVE. There is no list to
 // diff an async subject against: the items are not all there, and the arrival of one says nothing
 // about the ones behind it.
 export function updateList(list: List, subject: unknown): void {
@@ -131,7 +131,7 @@ export function updateList(list: List, subject: unknown): void {
     reconcile(list, items)
 }
 
-// 41.3 IS THE SERVER'S HALF OF 32.16 — the render is not held for an unfinished stream, so an
+// 41.3 IS THE SERVER'S HALF OF 32.15 — the render is not held for an unfinished stream, so an
 // async subject writes no rows inline and the region arrives empty. The pump fills it.
 function appendRows(list: List, source: AsyncIterable<unknown>): void {
     // A RE-RUN IS NOT A NEW SOURCE. The subject is read inside a watch, so any other reactive

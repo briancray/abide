@@ -10,7 +10,7 @@ import { type Token, tokenise } from './tokenise.ts'
 // WHICH BINDING AN OCCURRENCE REACHES, AND WHAT IT DOES THERE, ARE THE CHECKER'S ANSWERS, not this
 // file's. `TypeSession` asks them of the file's projection (`projectShadow`) and hands back READS,
 // each classified off TypeScript's own syntax tree (`classifyRead`). A parameter, a loop variable,
-// a row's item (31.12), a destructured name, a label, a key, a member and a class field reach
+// a row's item (31.13), a destructured name, a label, a key, a member and a class field reach
 // something else, and are absent. What is left here is the splice: what a read, a write, an update
 // and a shorthand lower TO.
 
@@ -56,7 +56,7 @@ export class Lowering {
     //
     // 10.2 IS CHECKED IN THE SAME SCAN: the key is a literal or it is a build error. Found by
     // SPELLING, as `raw` is — a file that binds its own `reactive` is not something the token walk
-    // can see, and that is the same limit 32.27 already carries.
+    // can see, and that is the same limit 32.26 already carries.
     opensShareScope(): boolean {
         const text = this.projection.text
         if (!text.includes('.share')) return false
@@ -94,7 +94,7 @@ export class Lowering {
         return this.lower(this.projection.scripts, false)
     }
 
-    // A template expression. 32.27 — a SLOT's `raw(x)` lowers to the framework's own `raw`, which
+    // A template expression. 32.26 — a SLOT's `raw(x)` lowers to the framework's own `raw`, which
     // is why the markup-writing holders (an expression, an attribute value) ask for it and a
     // subject, a key and a listener do not.
     slot(holder: object): string {
@@ -191,13 +191,13 @@ export class Lowering {
         switch (read.shape) {
             case 'asWritten':
                 return undefined
-            // 31.7 — the explicit spelling keeps compiling. 31.13 — AND IT TAKES NO ARGUMENTS.
+            // 31.7 — the explicit spelling keeps compiling. 31.14 — AND IT TAKES NO ARGUMENTS.
             // Passed through, `count(5)` calls the read with a value the read ignores: an author
             // who meant a write, silently given one.
             case 'call':
                 if (read.arguments > 0)
                     throw new Error(
-                        `abide: ${name}() is a read by name and takes no arguments, and this one is given one. Write ${name}.set(…) to write it. RULEBOOK 31.13.`,
+                        `abide: ${name}() is a read by name and takes no arguments, and this one is given one. Write ${name}.set(…) to write it. RULEBOOK 31.14.`,
                     )
                 return undefined
             // 31.1 — a read. A member that is not the `Reactive`'s own reaches the value (31.5,
@@ -237,7 +237,7 @@ export class Lowering {
         }))(${name}())`
     }
 
-    // 31.9 — A WRITE THROUGH A MEMBER PATH COPIES DOWN THE PATH AND THEN WRITES. Read as a plain
+    // 31.11 — A WRITE THROUGH A MEMBER PATH COPIES DOWN THE PATH AND THEN WRITES. Read as a plain
     // member, `user.name = 'x'` emits `user().name = 'x'`: the held object mutated in place, so
     // the value is right, no `set` is called, the identity never changes and not one reader
     // wakes. A SEGMENT IS EMITTED SOURCE RATHER THAN A NAME, because a computed one is an
@@ -266,7 +266,7 @@ export class Lowering {
         return short ? `${current} ${op} ${write}` : write
     }
 
-    // 32.27, 32.3 — THE SLOT SPELLING `raw(x)` IS A CALL TO THE FRAMEWORK'S `raw`, the export an
+    // 32.26, 32.2 — THE SLOT SPELLING `raw(x)` IS A CALL TO THE FRAMEWORK'S `raw`, the export an
     // app imports, so a value branded in a `<script>` and one branded in a slot are the same
     // object. A member (`markdown.raw(x)`) is that object's own method, and a bare `raw` that is
     // not called is whatever the file bound. Found by spelling, so it holds with no checker too.

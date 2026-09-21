@@ -1,7 +1,7 @@
 import { REGION_CLOSE, REGION_OPEN } from '#ui/REGION.ts'
 import type { Component } from './render.ts'
 
-// 32.19 on the server — one invocation, rendered where it stands. The child is a function of its
+// 32.18 on the server — one invocation, rendered where it stands. The child is a function of its
 // props record and hands back its head and its body apart, the same pair a page hands `render`.
 //
 // THE ANCHORS ARE THE PARENT'S PROBLEM, not the child's: how many top-level nodes the child writes

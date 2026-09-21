@@ -17,7 +17,7 @@ import { Raw, textOf } from './Raw.ts'
 const SPECIAL = /[&<>]/
 
 export function escapeText(value: unknown): string {
-    // 32.28 — a branded raw value renders unescaped, and the brand is read FIRST: `String(value)`
+    // 32.27 — a branded raw value renders unescaped, and the brand is read FIRST: `String(value)`
     // below turns a `Raw` into its html and the scan then escapes exactly the markup the brand
     // was put on to keep. What the check costs is in `Raw.ts`.
     if (value instanceof Raw) return value.html
@@ -48,17 +48,17 @@ function escapeMarkup(text: string): string {
 // rather than a flag: the flag would be read on every slot to answer a question the call site
 // already knows.
 //
-// 32.28 IS A SLOT'S CLAUSE, NOT AN ATTRIBUTE'S. Delegating straight to `escapeText` handed the
+// 32.27 IS A SLOT'S CLAUSE, NOT AN ATTRIBUTE'S. Delegating straight to `escapeText` handed the
 // brand this path too, so `<iframe srcdoc={raw(html)}>` copied markup into a value a browser
 // parses as a document, and `title={raw('AT&T')}` lost the `&` encoding — which is the only thing
-// standing behind `safeUrl`'s scheme check, per 32.30. A `Raw` here is escaped like the string it
+// standing behind `safeUrl`'s scheme check, per 32.29. A `Raw` here is escaped like the string it
 // holds, which is why this runs the rewrite rather than `escapeText`.
 export function escapeAttribute(value: unknown): string {
     const text = escapeMarkup(textOf(value))
     return text.includes('"') ? text.replaceAll('"', '&quot;') : text
 }
 
-// 32.11 — A `style:prop` SETS ONE PROPERTY, and `;` is the one character that lets a value say
+// 32.10 — A `style:prop` SETS ONE PROPERTY, and `;` is the one character that lets a value say
 // otherwise. The attribute escaping cannot see it, because `;` is ordinary in every other
 // attribute: `style:color={v}` with `v` off the wire wrote `color: red; position: fixed; top: 0;
 // …` — seven declarations from the slot that declares one, and an overlay over the page. Cut at

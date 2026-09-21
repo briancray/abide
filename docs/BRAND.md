@@ -92,8 +92,8 @@ it by number, so where the two disagree the rulebook is right and the claim is s
 | **One handler, four surfaces.** A page, an OpenAPI operation, an MCP tool, a CLI command. | 20.1 — all four DERIVED from the route table, so none can describe a handler that does not exist. 38.9 — the CLI derives from the same table. 20.2, 20.3, 20.4 — `clients` withholds a surface and is not access control |
 | **One type back.** | 1.1 — every producer hands back `Reactive`. 11.2, 16.4 — the keyed forms hand back a factory you call with its arguments first |
 | **Same name, both sides.** | 16.28, 22.1, 23.7, 23.8 — a name resolves on either side, each answering from what its side has, and where one genuinely cannot it throws rather than no-opping |
-| **Reaching loads it.** | 1.7, 1.8 — reaching a value starts the work it is for, and a second reach joins the standing work. 11.4, 11.5 — a keyed entry is computed when its key is reached, and an unkeyed derived value re-runs when what it read moves. 11.6 — `ttl`, `invalidate` and `refresh` are a keyed value's ways back. 41.8, 41.14 — the browser's read is answered by what the render already fetched |
-| **It does not block.** | 2.1 — a read returns what it has, and never awaits. 2.11 — `s.peek` answers where nothing has landed yet. 3.4 — a busy value with nothing to serve opens a sink and the hole fills. 11.21 — that reaches a derived value. 32.2 — holding is opt-in |
+| **Reaching loads it.** | 1.7, 1.8 — reaching a value starts the work it is for, and a second reach joins the standing work. 11.4, 11.5 — a keyed entry is computed when its key is reached, and an unkeyed derived value re-runs when what it read moves. 11.6 — `ttl`, `invalidate` and `refresh` are a keyed value's ways back. 41.7, 41.13 — the browser's read is answered by what the render already fetched |
+| **It does not block.** | 2.1 — a read returns what it has, and never awaits. 2.11 — `s.peek` answers where nothing has landed yet. 3.4 — a busy value with nothing to serve opens a sink and the hole fills. 11.21 — that reaches a derived value. 31.11 — holding is opt-in, and it is the script that asks |
 | **A refusal is a value.** | 15.1, 15.2, 15.6 — declared, structural, and landing in the `Failures` of the value that produced it. 4.9, 4.10, 4.11 — a refused write keeps the last accepted value on screen beside the message |
 | **The schema is the type.** | 19.10, 19.11 — derived from the annotation and the argument defaults. 19.12 — where inference cannot reach, the schema WIDENS rather than the file being refused. 16.27 — a shape rides on the `Reactive`. 38.3 — `abide check` reports on the `.abide` line |
 | **Bun and web standards, not a wrapper over them.** | 22.2 — `cookies` is one name on both sides, over Bun's own `CookieMap`. 36.1 — the port is read from the environment rather than from a config of ours. 17.1, 16.37 — handlers speak `Values`, `Request` and `Response` |
@@ -226,7 +226,7 @@ three pages later.
 | reactive value | state, memo (as kinds of value) | There is one factory, `reactive`, and the by-name rule, the probes and `Reactive` reach every value it hands back. Where the kind matters it is said by what the value has — a value the scope owns, a derived value, a keyed value, a channel — and calling a derived value or `route.url` "a state" made the by-name guide read as a rule about one of them |
 | selection | group, set, query, batch | What `busy`, `refresh` and `invalidate` take — one value, one keyed value, or every entry carrying a tag. A selection names entries; it does not run a query over them |
 | probe | flag, status boolean | `busy()`, `ready()`, `error()` — what a probe will not do is 3.1 and 3.2 |
-| sink, hole | placeholder, suspense boundary, slot | What 35.7 defines. TWO REGISTERS OF ONE THING, the way `Reactive` and "reactive value" are: the SINK is the mechanism and the HOLE is what a reader sees, so "opens a sink; the hole fills" is one sentence about one thing. `slot` is `<slot/>` and nothing else — a value's position in text is a text position — and a `<slot/>` takes CHILDREN, never "holes" |
+| sink, hole | placeholder, suspense boundary, slot | What 35.8 defines. TWO REGISTERS OF ONE THING, the way `Reactive` and "reactive value" are: the SINK is the mechanism and the HOLE is what a reader sees, so "opens a sink; the hole fills" is one sentence about one thing. `slot` is `<slot/>` and nothing else — a value's position in text is a text position — and a `<slot/>` takes CHILDREN, never "holes" |
 | adoption, adopt | wrapping, proxying, unwrapping, transparent forwarding | A body returning a `Reactive` ADOPTS it, per 11.13 and 11.15, so the outer is always its own `Reactive` and every option applies to itself. What mirroring carries and what delegation carries are different halves, so "forwards" names the one it is not |
 | production | value, message, chunk, item (as the general noun for what is retained) | What the rulebook's Terms table defines. `Produced` is the separate word for what a producer YIELDED, which on a stream is a chunk and is not a production. `history` and `ttl` count productions, so reaching for any of the four as the general noun breaks the unit rule |
 | seed buffer | sink, hydration data, embedded state | The seed buffer is how DATA reaches the client, by answering the client's own request; a sink is a hole in the MARKUP a late value fills. Two mechanisms, two lifetimes, and a document carries no copy of any answer |
@@ -311,8 +311,9 @@ three pages later.
   word that is not in their file. Name the property, then introduce the type under it. `Reactive`
   and `Accepted` are fair — nothing else is spelled those.
 * **A heading may not state an absolute the page then qualifies.** "A read never awaits" was
-  false two sections above `{await invoice}`, and the reader who believes the heading is the one
-  the page then contradicts. Say "by default" in the heading and put the opt-in under it.
+  false two sections above the `await` that holds a render, and the reader who believes the
+  heading is the one the page then contradicts. Say "by default" in the heading and put the opt-in
+  under it.
 * **A heading belongs to its page's subject.** On a page about caching, "A body that takes args
   is a keyed value" is about the factory; "A keyed value's cache is one entry per args key" is
   about the cache.

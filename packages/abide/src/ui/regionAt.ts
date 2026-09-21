@@ -80,7 +80,7 @@ export function regionAt(root: Root, at: number): Region {
             return { open, close: node as Comment }
     }
     throw new Mismatch(
-        `abide: region ${at} is not in the rendered document, so the client and the server disagree about this region's shape (41.11).`,
+        `abide: region ${at} is not in the rendered document, so the client and the server disagree about this region's shape (41.10).`,
     )
 }
 
@@ -99,7 +99,7 @@ export function nodeAfter(region: Region, at: number): Node | undefined {
 
 // Everything between a region's anchors, replaced. The anchors themselves stay, which is what
 // keeps every sibling after them addressable across a branch change.
-// 32.19 — WHETHER A REGION IS WAITING TO BE FILLED. A component the SERVER rendered arrives with
+// 32.18 — WHETHER A REGION IS WAITING TO BE FILLED. A component the SERVER rendered arrives with
 // its markup between its anchors and is hydrated; one a row builder wrote in the browser arrives
 // as the anchor pair alone, and the child fills it from its own template. The empty pair is the
 // whole of the signal, so nothing is added to the document to carry it.
@@ -115,11 +115,11 @@ export function fillRegion(region: Region, markup: string): void {
     // THE PARENT IS READ BEFORE ANYTHING IS REMOVED, and the removal only happens if there is
     // one. Written as an unguarded removal followed by a `?.`-guarded insert, a region whose
     // close anchor had been detached emptied itself and then dropped the new content on the
-    // floor — the one silent failure in a module where every other one refuses with 41.11 on it.
+    // floor — the one silent failure in a module where every other one refuses with 41.10 on it.
     const parent = region.close.parentNode
     if (parent === null)
         throw new Mismatch(
-            `abide: this region is not in a document, so the client and the server disagree about this region's shape (41.11).`,
+            `abide: this region is not in a document, so the client and the server disagree about this region's shape (41.10).`,
         )
     let node = region.open.nextSibling
     while (node !== null && node !== region.close) {

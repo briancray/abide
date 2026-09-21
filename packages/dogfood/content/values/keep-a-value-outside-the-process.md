@@ -122,7 +122,11 @@ ever written in — and it holds the accumulation at close, which `set` is hande
 seeds:
 
 ```abide abide
-{await answer({ messageId })}
+<script>
+const answered = await answer({ messageId })
+</script>
+
+{answered}
 ```
 
 A restored stream **finished**: `ready()` is true and `busy()` is false (8.7). It is a value that

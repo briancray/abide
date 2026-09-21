@@ -168,7 +168,8 @@ body declared `async function*` declares a stream, and no chunk it yields is a w
 | stream | a **chunk** of one value | until the stream **closes** (3.7) | the accumulation so far | the close |
 
 A channel does not finish, so being live is not being busy. `{inbox}` is the latest message, and a
-subscriber's `{await inbox}` holds for the first message to arrive (9.29). A stream keeps no
+subscriber whose script writes `const inbox = await joined()` holds for the first message to
+arrive (9.29). A stream keeps no
 `history`, which on one retains finished runs rather than chunks (6.17).
 
 Read on: [Streaming data](../server/send-data-as-it-arrives.md)

@@ -169,7 +169,7 @@ function endOfAttributes(
     return end
 }
 
-// 32.19 — A `.abide` IMPORT IS AN IMPORT OF THE MODULE THAT FILE COMPILES TO, and which of the two
+// 32.18 — A `.abide` IMPORT IS AN IMPORT OF THE MODULE THAT FILE COMPILES TO, and which of the two
 // it is is the LANE's business: the server module renders the child, the client module mounts it.
 // The path is left exactly as the author wrote it — where the compiled tree lives is the build's
 // business, and an emitter that rewrote the path would be deciding a layout it cannot see.

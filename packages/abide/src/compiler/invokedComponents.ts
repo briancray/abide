@@ -1,4 +1,4 @@
-// 32.19 — WHICH FILES ANOTHER FILE INVOKES AS A COMPONENT, read off the imports the sources
+// 32.18 — WHICH FILES ANOTHER FILE INVOKES AS A COMPONENT, read off the imports the sources
 // themselves wrote. A build knows its whole tree; an emitter sees one file, so this is the
 // build's answer to hand it (`emitClient`'s `invoked`).
 //

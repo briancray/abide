@@ -28,7 +28,7 @@ let APP = ''
 const HOME = `<head><title>Home</title><meta name="description" content="the home page"></head>
 <main id="home"><h1>Home</h1><p id="n">{count}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button><a id="go" href="/about">about</a></main>`
 // WHAT THE SERVER ACTUALLY RENDERS, taken from the page's own server module rather than written
-// out here. A hand-copied shell is a hydration mismatch waiting to happen, and 41.11 answers one
+// out here. A hand-copied shell is a hydration mismatch waiting to happen, and 41.10 answers one
 // by warning and stopping — so the page comes up looking right and dead, which is the failure
 // this arm exists to catch and would instead have been written into it.
 let PAINTED = ''

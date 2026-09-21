@@ -75,7 +75,7 @@ export function elementAt(root: Root, path: number[]): Element {
     const node = walk(root, path)
     if (node === undefined || node.nodeType !== 1)
         throw new Mismatch(
-            `abide: [${path.join(',')}] is ${node === undefined ? 'missing' : node.nodeName} where this listener's element was rendered, so the client and the server disagree about this region's shape (41.11).`,
+            `abide: [${path.join(',')}] is ${node === undefined ? 'missing' : node.nodeName} where this listener's element was rendered, so the client and the server disagree about this region's shape (41.10).`,
         )
     return node as Element
 }
@@ -99,13 +99,13 @@ function insertText(parent: Node, before: Node | null): Text {
 
 function noNode(path: number[]): Mismatch {
     return new Mismatch(
-        `abide: no node at [${path.join(',')}], so the client and the server disagree about this region's shape (41.11).`,
+        `abide: no node at [${path.join(',')}], so the client and the server disagree about this region's shape (41.10).`,
     )
 }
 
 function wrongKind(path: number[], found: Node | undefined): Mismatch {
     return new Mismatch(
-        `abide: [${path.join(',')}] is ${found === undefined ? 'missing' : `a ${found.nodeName}`} where this binding's text was rendered, so the client and the server disagree about this region's shape (41.11).`,
+        `abide: [${path.join(',')}] is ${found === undefined ? 'missing' : `a ${found.nodeName}`} where this binding's text was rendered, so the client and the server disagree about this region's shape (41.10).`,
     )
 }
 

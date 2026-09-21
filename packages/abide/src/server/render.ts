@@ -1,4 +1,4 @@
-// 35.4 and 35.5 — `render` takes a component already bound to its props and produces the
+// 35.4 and 35.6 — `render` takes a component already bound to its props and produces the
 // document as an async generator of bytes.
 
 // REGISTRY declares `Component` opaque. What a compiled component IS today is a function
@@ -10,7 +10,7 @@
 // biome-ignore lint/suspicious/noEmptyInterface: REGISTRY declares `interface Component {}`.
 export interface Component {}
 
-// 35.6 — the document a render renders into, defaulting to `src/ui/app.html`.
+// 35.7 — the document a render renders into, defaulting to `src/ui/app.html`.
 export type Shell = string | URL | undefined
 
 // Where a shell was not given and `src/ui/app.html` is not there either. The rulebook does not
@@ -83,7 +83,7 @@ async function shellText(shell: URL | undefined): Promise<string> {
     return await shellUnder('src')
 }
 
-// 35.6's default, read from a ROOT rather than from the process's directory. `render` on its own
+// 35.7's default, read from a ROOT rather than from the process's directory. `render` on its own
 // is called from wherever the app is, so `src` is the root it passes; `serveBuild` is handed the
 // root `abide build` compiled and the two need not be the same directory. NOT PUBLIC SURFACE —
 // `server/index.ts` does not re-export it.

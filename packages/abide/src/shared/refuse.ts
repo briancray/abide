@@ -63,7 +63,7 @@ refuse.typed = function typed<
         // observable effect at all: an app whose refusal payload does not match its own schema
         // paid the walk and was told nothing, and neither did a schema this cannot run. The
         // `console.warn` is the stand-in for `log.named` (section 28), the same one
-        // `ui/Mismatch.ts` carries for 41.11.
+        // `ui/Mismatch.ts` carries for 41.10.
         if (options?.schema !== undefined && data !== undefined)
             try {
                 const checked = runSchema(options.schema, data)

@@ -30,11 +30,11 @@ import { componentImports, splitImports, withoutProps } from './splitImports.ts'
 //
 // NOTHING IS ADDED TO THE DOCUMENT to make this work. A text run and a listener element are both
 // reached by walking child indices from the region root, which is exact for a region whose shape
-// is static — and a compiled template's is, up to the boundaries where 32.13, 32.14 and 32.16
+// is static — and a compiled template's is, up to the boundaries where 32.12, 32.13 and 32.15
 // make it depend on a value. Those boundaries are where a marker earns its place; nowhere before
 // them does.
 //
-// 41.7 — hydration re-executes the setup, so the values the client starts from are the values the
+// 41.6 — hydration re-executes the setup, so the values the client starts from are the values the
 // document was rendered with.
 
 // What the emitters thread through every region: the next region's number, and whether anything
@@ -42,7 +42,7 @@ import { componentImports, splitImports, withoutProps } from './splitImports.ts'
 type Counter = { next: number; live: boolean }
 
 // `carriesOwnMarkup` is whether this module can be mounted against an EMPTY region, which is true
-// of exactly two files: one another file INVOKES as a component (32.19), mounted against a row a
+// of exactly two files: one another file INVOKES as a component (32.18), mounted against a row a
 // list grew by, and one a ROUTE reaches (30.11), mounted against a page no server painted. Both
 // then need a second copy of the template, and one that needs neither is 34% more client than it
 // needs: measured at 1797 -> 2405 shipped lines over the corpus with every file carrying one.
@@ -68,7 +68,7 @@ export function emitClient(
     // mount of the same page reads what the first one left.
     const moduleSetup = splitImports(lowering.modules())
     const setup = splitImports(lowering.scripts())
-    // 32.19 IN A ROW — what a CALLER's client calls to build markup for a row the server never
+    // 32.18 IN A ROW — what a CALLER's client calls to build markup for a row the server never
     // wrote. The same template the server emitter writes, emitted a second time into this module,
     // which is the scheme an `{#if}` arm and a `{#for}` row already use for their own markup. It
     // hangs off `mount` rather than being a second export, so the caller's own
@@ -84,7 +84,7 @@ export function emitClient(
               true,
           )
         : "''"
-    // 32.19 — A COMPONENT FILLS ITS OWN REGION where the server wrote none. A row the list grew by
+    // 32.18 — A COMPONENT FILLS ITS OWN REGION where the server wrote none. A row the list grew by
     // is built in the browser, and the child's markup is in the child's SERVER module — which the
     // browser may not reach. So the caller writes the anchor pair alone and the child fills it
     // from the template this module already holds, once, inside the instance whose setup just ran.
@@ -114,7 +114,7 @@ export function emitClient(
     //
     // A FILL IS SOMETHING TO DO, which is why this asks `fills` rather than `counter.live` alone.
     // An INVOKED component with no binding in it still owns the markup for a row the browser grew
-    // — the caller writes the anchor pair and nothing else (32.19) — so returning '' here shipped
+    // — the caller writes the anchor pair and nothing else (32.18) — so returning '' here shipped
     // the no-op module and left every browser-grown row of a static child empty, while the rows
     // the server painted looked right.
     if (!counter.live && fills === '' && headExport === '') return ''
@@ -125,7 +125,7 @@ export function emitClient(
     // three allocations a row for a mount whose body is empty. `Scope.own(undefined)` already
     // reads a mount that returns nothing, which is the same answer the no-op module gives.
     //
-    // 41.11 — THE PAGE IS THE ONE REGION THAT CANNOT REBUILD, so it is the one that has to survive
+    // 41.10 — THE PAGE IS THE ONE REGION THAT CANNOT REBUILD, so it is the one that has to survive
     // a refusal binding by binding. Every other region answers a mismatch by re-rendering itself
     // from its own markup (`mountFunction`); the page has no block around it and rebuilding it
     // would throw away the document the server sent, focus, scroll and all, which is exactly what
@@ -176,7 +176,7 @@ return ${SCOPE}`
             : `import { ${importClause(shared.sort())} } from '${SHARED_SPECIFIER}'\n`
     // THE SETUP IS NOT RE-INDENTED. Adding a margin to every line rewrites the INSIDE of a
     // multi-line template literal, so a string constant gains four spaces it never had.
-    // 41.11 — A MISMATCH MUST NOT REBUILD THE PAGE, and the page is the one region with no block
+    // 41.10 — A MISMATCH MUST NOT REBUILD THE PAGE, and the page is the one region with no block
     // around it. So the root's own bindings warn and stop rather than rebuilding, while every
     // block inside rebuilds itself; an author's own throw is not a mismatch and comes straight
     // back out.
@@ -221,7 +221,7 @@ function emitRegion(
 ): void {
     const live = new Set<TextRun>()
     for (const run of plan.runs) if (readsReactive(run, lowering)) live.add(run)
-    // 32.4's bindings, grouped by the element they write to. ONE grouping with two readers: the
+    // 32.3's bindings, grouped by the element they write to. ONE grouping with two readers: the
     // anchors are counted off it and the bindings are emitted off it, and a second loop doing the
     // same filter and the same key would be byte-identical to this one — two sites a change has to
     // land on and no way to tell from a diff which of them it landed on.
@@ -245,7 +245,7 @@ function emitRegion(
     for (const run of live) sharable.push(beforeRegion(run.path))
     for (const handler of plan.handlers)
         sharable.push(beforeRegion(handler.path))
-    // 32.4's bindings walk to an ELEMENT exactly as a listener does, so they share the same
+    // 32.3's bindings walk to an ELEMENT exactly as a listener does, so they share the same
     // anchors — and an element carrying both a listener and a bound attribute is the common case,
     // which is the shape `hoistPaths` counts rather than the one it would miss.
     //
@@ -339,7 +339,7 @@ function emitRegion(
         )
     }
 
-    // 32.4 — THE ATTRIBUTE BINDING. The server wrote the value standing at render; this is what
+    // 32.3 — THE ATTRIBUTE BINDING. The server wrote the value standing at render; this is what
     // keeps writing it. Emitted after the runs for no reason but reading order — an attribute
     // writes into an element that already exists and shifts no index, so unlike a blank run it has
     // no place it has to take in the walk's order.
@@ -362,7 +362,7 @@ function emitRegion(
         const element = `__a${path.join('_').replaceAll('-', 'm')}`
         const writes: string[] = []
         for (const bound of group) {
-            // 32.22 IS THE INTERPOLATION'S CLAUSE ON THIS SIDE TOO. The server scheme-checks the
+            // 32.21 IS THE INTERPOLATION'S CLAUSE ON THIS SIDE TOO. The server scheme-checks the
             // value it writes; a binding that wrote the next one unchecked would let
             // `javascript:` into an `href` the moment the value moved, which is the one road
             // untrusted data actually takes. The same call, from the same module, so there is one
@@ -435,7 +435,7 @@ const WRITES = {
 // instance OPENS (`SHARED`): a page that shares nothing still carries this for a child that does.
 const SHARE_AT = '__shareAt'
 
-// 41.11 — A MISMATCH REBUILDS THIS BLOCK OR ROW AND NOTHING WIDER. What the server wrote is what
+// 41.10 — A MISMATCH REBUILDS THIS BLOCK OR ROW AND NOTHING WIDER. What the server wrote is what
 // hydration walks; where it disagrees, it is re-rendered from the same markup a swap or a new row
 // uses (`rebuild`) and wired again. `__rebuilt` is what stops a document that disagrees for some
 // other reason from rebuilding forever — the second failure is the author's to see.
@@ -474,7 +474,7 @@ function mountFunction(
     ].join('\n')
 }
 
-// 32.19 ON THE CLIENT — the child mounts ITSELF, against the region its markup was written into.
+// 32.18 ON THE CLIENT — the child mounts ITSELF, against the region its markup was written into.
 // The parent hands over the same accessors it handed the server emitter (33.5), so the prop is the
 // caller's expression on both sides and the child re-reads it when the parent's value moves.
 //
@@ -506,7 +506,7 @@ function emitInvocation(
     )
 }
 
-// 32.13 — one arm renders. The SERVER already rendered one, so the first run HYDRATES it rather
+// 32.12 — one arm renders. The SERVER already rendered one, so the first run HYDRATES it rather
 // than replacing it: a page that re-renders every region on load creates every node twice and
 // throws away the document it was sent. The condition is evaluated once a run, the first run
 // included — the arm hydrated is the arm the watch then compares against.
@@ -601,7 +601,7 @@ function emitBlock(
     // continue past a subject still in flight, and what the server writes then is the anchor pair
     // with nothing between it (see `emitComponent`'s `{#if}` arm) — so hydrating here walks for
     // nodes that were never painted. `isEmptyRegion` is the same signal an invoked component
-    // already reads (32.19), asked ONCE on the first run: from the second onward `${name}_at` is
+    // already reads (32.18), asked ONCE on the first run: from the second onward `${name}_at` is
     // set and the fill happens anyway, so the region is never scanned twice for it.
     lines.push(`${address}
 let ${name}_at
@@ -618,11 +618,11 @@ ${SCOPE}.watch(() => {
 })`)
 }
 
-// 32.14 — the list. The server already rendered the rows, so the first update HYDRATES them:
+// 32.13 — the list. The server already rendered the rows, so the first update HYDRATES them:
 // every row's element is already in the document and only its bindings are missing. Only a change
 // to the list reconciles, and only the rows that moved move.
 //
-// 32.23 — the subject is read ONCE for the block. 32.24 — an absent subject iterates zero times.
+// 32.22 — the subject is read ONCE for the block. 32.23 — an absent subject iterates zero times.
 function emitList(
     region: ListPlan,
     root: string,
@@ -644,9 +644,9 @@ function emitList(
     // reach a nested region's helper at all.
     const item = block.item
     const at = block.index === '' ? '__at' : block.index
-    // 41.9 — with no `by`, the key is the POSITION, which is 32.14's positional reconcile: a row
+    // 41.8 — with no `by`, the key is the POSITION, which is 32.13's positional reconcile: a row
     // is whatever is in that slot, and a reorder rewrites the rows rather than moving them.
-    // 31.12 — the item and the index SHADOW the page's names for the row, and the projection is
+    // 31.13 — the item and the index SHADOW the page's names for the row, and the projection is
     // what says so: they are a `for … of` binding there, so no read in the body or the key reaches
     // the page's name of the same spelling.
     const key = block.key === '' ? at : lowering.key(block)

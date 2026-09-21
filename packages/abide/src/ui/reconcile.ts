@@ -3,7 +3,7 @@ import { ROW_OPEN } from './REGION.ts'
 import type { Region } from './regionAt.ts'
 import type { Scope } from './Scope.ts'
 
-// 41.9 — a KEYED list, reconciled by moving the nodes that are already there rather than by
+// 41.8 — a KEYED list, reconciled by moving the nodes that are already there rather than by
 // rebuilding them. A rebuild produces the right screen and the wrong document: focus, selection,
 // scroll position and anything a row was in the middle of go with the nodes that were replaced.
 //
@@ -33,7 +33,7 @@ export type Row = {
     at: number
 }
 
-// 41.11 — a row that cannot be hydrated is REBUILT, and a row IS its nodes: the reconcile moves
+// 41.10 — a row that cannot be hydrated is REBUILT, and a row IS its nodes: the reconcile moves
 // and removes exactly what this array holds, so a replacement has to land in the ARRAY as well as
 // in the document or the row leaves half of itself behind on the first reorder.
 export function replaceNodes(nodes: Node[], next: Node[]): void {
@@ -77,7 +77,7 @@ export function reconcile(list: List, data: unknown[]): void {
     const keys = new Array<unknown>(wanted)
     for (let at = 0; at < wanted; at += 1) keys[at] = list.key(data[at], at)
     const held = new Map<unknown, Row>()
-    // 41.15 — A KEY THE LIST REPEATS IS STILL A ROW, and the map cannot hold two under one key.
+    // 41.14 — A KEY THE LIST REPEATS IS STILL A ROW, and the map cannot hold two under one key.
     // Overwritten silently, the shadowed row became unreachable from `held`, from `next` and from
     // the cleanup below: its `stop` was never called, so its readers woke on every write for the
     // life of the page and wrote into nodes still standing in the document, and the list grew by
@@ -229,7 +229,7 @@ export function dropRow(row: Row): void {
     for (const node of row.nodes) (node as ChildNode).remove()
 }
 
-// 41.16 — ONCE FOR THE BLOCK, not once a reconcile. A repeated key is a property of the `by`
+// 41.15 — ONCE FOR THE BLOCK, not once a reconcile. A repeated key is a property of the `by`
 // expression rather than of one write, so it holds for every reconcile the region ever runs and a
 // warning per write is a console nobody reads.
 //
@@ -243,7 +243,7 @@ function warnRepeatedKey(list: List): void {
     list.warned = true
     console.warn(
         'abide:hydrate',
-        'abide: a {#for} key is repeated in this list, so the last row under it is the one kept and the rows it shadows are dropped. RULEBOOK 41.15.',
+        'abide: a {#for} key is repeated in this list, so the last row under it is the one kept and the rows it shadows are dropped. RULEBOOK 41.14.',
     )
 }
 

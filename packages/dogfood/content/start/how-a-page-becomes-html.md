@@ -125,12 +125,12 @@ Waiting is the opt-in, and `await` asks for it:
 | You write | The document |
 | --- | --- |
 | `{invoice.total}` | flushes now, fills later |
-| `{await invoice.total}` | holds until the value lands |
 | `{#if invoice.ready()}` | flushes now, with the `{:else}` to swap |
+| `const invoice = await getInvoice()` | holds the whole component until the value lands |
 
-`await` governs the expression, not the name. `{await invoice}` holds for the whole row,
-`{await invoice.total}` holds for the one field, and `{await a.x + b.y}` holds for both values —
-every reactive read under an `await` blocks, so there is no form of it to learn separately.
+The `await` goes in the `<script>`, not in a hole. It leaves `invoice` the value it was, so every
+hole below reads it exactly as before — what changed is that the document does not go out until it
+has settled. Two awaits side by side settle together.
 
 Read on: [Streaming HTML](../pages/send-the-page-before-the-data-lands.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md)
@@ -162,8 +162,8 @@ arriving somewhere it would be illegal — inside a `<title>`, between two `<tr>
 at that point is never filled at all, and the browser's own request picks it up instead.
 
 **The cost is a client with no script.** Nothing filled after the first flush reaches it, because
-the script does the filling — so a page that must work without one uses `{await}` from step 4
-and pays the delay to first byte deliberately.
+the script does the filling. A page that must work without one awaits its values in the
+`<script>`, per step 4, and pays the delay to first byte deliberately.
 
 ## 6. The browser takes over
 

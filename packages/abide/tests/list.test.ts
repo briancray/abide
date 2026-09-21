@@ -1,4 +1,4 @@
-// `{#for}` — 32.14, and the first place `nodesMoved` means anything.
+// `{#for}` — 32.13, and the first place `nodesMoved` means anything.
 //
 // TWO CASES, AND THEY ARE DIFFERENT CASES. A two-row swap tells a minimal keyed reconcile from a
 // rebuild: both put the right text on screen and only the counts differ. A full REVERSE cannot
@@ -246,7 +246,7 @@ test('a single-element row still carries no anchor', async () => {
 // single-rooted shape below then walks one step past the text node it was looking for, `textAt`
 // puts the run's node INSIDE that text node where nothing can see it, and this reports `0`/`0`
 // where `1`/`1` is due with nothing thrown at all. The multi-rooted one reports two
-// `abide:hydrate abide: no node at [1,0] ... (41.11)` warnings. Both were green before this,
+// `abide:hydrate abide: no node at [1,0] ... (41.10)` warnings. Both were green before this,
 // because no fixture bound anything below a row's first child.
 const NESTED = `<script>
 import { reactive } from 'abide'
@@ -544,7 +544,7 @@ test('a row whose value is NaN is not remade', async () => {
     ])
 })
 
-// 32.16 — `{#for}` OVER AN ASYNC ITERABLE RENDERS EACH ITEM AS IT ARRIVES AND APPENDS RATHER THAN
+// 32.15 — `{#for}` OVER AN ASYNC ITERABLE RENDERS EACH ITEM AS IT ARRIVES AND APPENDS RATHER THAN
 // RECONCILING, and 41.3 is the server's half: the render is not held for an unfinished stream, so
 // the region goes out empty and the client fills it.
 //
@@ -601,7 +601,7 @@ test('a for over an async iterable appends each item as it arrives', async () =>
     ).toEqual(['first', 'second', 'third'])
 })
 
-// 41.15, 41.16 — A REPEATED `by` KEY. Two tasks sharing a status is the ordinary way to reach one,
+// 41.14, 41.15 — A REPEATED `by` KEY. Two tasks sharing a status is the ordinary way to reach one,
 // and the map a reconcile holds its rows in cannot hold two under one key. The row it shadowed was
 // unreachable from every one of the three places the reconcile cleans up through, so it was never
 // stopped and its nodes were never removed: the list grew by one on EVERY reconcile and a watch
@@ -688,11 +688,11 @@ test('a repeated {#for} key keeps the last row, drops what it shadows, and warns
         })
         expect(woke.bindingRuns).toBe(3)
 
-        // 41.16 — ONCE FOR THE BLOCK. The key repeats on every reconcile the region ever runs, and
+        // 41.15 — ONCE FOR THE BLOCK. The key repeats on every reconcile the region ever runs, and
         // three writes have now gone through it.
         expect(said.filter((line) => line.startsWith('abide:hydrate'))).toEqual(
             [
-                'abide:hydrate abide: a {#for} key is repeated in this list, so the last row under it is the one kept and the rows it shadows are dropped. RULEBOOK 41.15.',
+                'abide:hydrate abide: a {#for} key is repeated in this list, so the last row under it is the one kept and the rows it shadows are dropped. RULEBOOK 41.14.',
             ],
         )
     } finally {
@@ -937,7 +937,7 @@ test('a subject building fresh items keeps the rows the server sent', async () =
     expect(kept).toHaveLength(3)
 })
 
-// 41.11 THROUGH THE COUNTS, which is the only truth hydration has. A hydrating run wires row `at`
+// 41.10 THROUGH THE COUNTS, which is the only truth hydration has. A hydrating run wires row `at`
 // to item `at` BY POSITION, so a document holding fewer rows than the client computes items has
 // items with no node — and `updateList` used to RETURN on the hydrate, so reconcile never ran and
 // the missing rows never arrived. The list looked right and was dead: the `{#for}` kept whatever
@@ -958,7 +958,7 @@ let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }, { id: '
 
 <ul id="five">{#for row of rows by row.id}<li>{row.id}</li>{/for}</ul>`
 
-test('a document holding fewer rows than the client computes reconciles — 41.11', async () => {
+test('a document holding fewer rows than the client computes reconciles — 41.10', async () => {
     const file = parseAbide(FIVE)
     const names = await session.reads(`${ROOT}src/five.abide`, file)
     const dir = temporaryModule({
@@ -997,10 +997,10 @@ test('a document holding fewer rows than the client computes reconciles — 41.1
     expect(
         [...document.querySelectorAll('#five li')].map((n) => n.textContent),
     ).toEqual(['a', 'b', 'c', 'd', 'e'])
-    // AND IT SAID SO. Repairing the divergence in silence is 41.11 half applied \u2014 the rows come
+    // AND IT SAID SO. Repairing the divergence in silence is 41.10 half applied \u2014 the rows come
     // back either way, so the warning is the only thing that reports a document and a client that
     // disagree. THE REVERT: return `false` from `hydrate` without warning; the rows still arrive
     // and this reports [].
-    expect(said.filter((line) => line.includes('41.11'))).toHaveLength(1)
+    expect(said.filter((line) => line.includes('41.10'))).toHaveLength(1)
     expect(said.join(' ')).toContain('holds 3 rows')
 })

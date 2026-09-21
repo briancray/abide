@@ -58,7 +58,7 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `Shaped` | `unknown` | What a `transform` hands back: the value to store, or a refusal. | 4.6, 4.9 |
 | `Produced` | `unknown` | What a production carries, where that differs from what is stored. | 1.2, 9.7 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.9, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31, 11.65 |
-| `reactive` | `<Computed, Shaped = Awaited<Computed>>(body: () => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never> & { transform?: (value: Awaited<Computed>) => Shaped }) => Reactive<Kept<Shaped>, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | The unkeyed body overload. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.51, 11.52, 11.53, 11.54, 11.55, 11.58, 11.59, 41.7, 11.63, 11.64, 11.66, 11.67 |
+| `reactive` | `<Computed, Shaped = Awaited<Computed>>(body: () => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never> & { transform?: (value: Awaited<Computed>) => Shaped }) => Reactive<Kept<Shaped>, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | The unkeyed body overload. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.51, 11.52, 11.53, 11.54, 11.55, 11.58, 11.59, 41.6, 11.63, 11.64, 11.66, 11.67 |
 | `reactive` | `<Chunk, Shaped = Chunk[]>(body: () => AsyncGenerator<Chunk>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never> & { transform?: (value: Chunk[]) => Shaped }) => Reactive<Kept<Shaped>, Chunk[], Refused<Shaped>, Chunk>` | The streaming body overload. | 3.7, 3.8, 4.8, 9.2, 9.3, 9.20, 9.21, 9.22, 9.23 |
 | `reactive` | `<Chunk, Args, Shaped = Chunk[]>(body: (args: Args) => AsyncGenerator<Chunk>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never, Args> & { transform?: (value: Chunk[]) => Shaped }) => Keyed<Kept<Shaped>, Args, Chunk[], Refused<Shaped>, Chunk>` | The keyed streaming body overload. | 9.20, 9.23 |
 | `reactive` | `<Computed, Args, Shaped = Awaited<Computed>>(body: (args: Args) => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never, Args> & { transform?: (value: Awaited<Computed>) => Shaped }) => Keyed<Kept<Shaped>, Args, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed body overload. | 11.2, 11.3, 11.4, 11.6, 11.7, 11.23, 11.56, 11.63 |
@@ -204,7 +204,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.9, 16.12, 16.26, 16.27, 16.28, 16.29, 16.30, 16.34, 16.45, 41.6, 41.8, 41.13 |
+| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.9, 16.12, 16.26, 16.27, 16.28, 16.29, 16.30, 16.34, 16.45, 41.5, 41.7, 41.12 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.31 |
 | `Produced` | `unknown` | What it yields, per the unit rule. | 1.2, 16.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.19 |
@@ -441,7 +441,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `abide:refuse` | `warning` | A message formatter that threw. | 15.13, 28.8 |
 | `abide:reactive` | `warning` | A failed revalidation over a value still being served. | 4.12, 28.8 |
 | `abide:watch` | `warning` | A `watch` effect or `Disposer` that threw. | 12.6, 28.8 |
-| `abide:hydrate` / `abide:navigate` | `warning` | The browser lane. | 28.8, 41.11, 41.16 |
+| `abide:hydrate` / `abide:navigate` | `warning` | The browser lane. | 28.8, 41.10, 41.15 |
 
 ## `csp`
 
@@ -475,15 +475,16 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Spelling | Means | Rules |
 | --- | --- | --- |
-| `foo` wherever the declared type of its position is not a `Reactive` | a live read | 31.1, 31.2, 31.8, 31.12 |
+| `foo` wherever the declared type of its position is not a `Reactive` | a live read | 31.1, 31.2, 31.13 |
 | `const x: Reactive<…> = foo` / a `Reactive<…>`-typed parameter, return or `bind:` operand | the `Reactive` | 31.3 |
 | `foo = bar` | a write | 31.4, 11.62 |
-| `foo.bar = v` | a write through a path | 31.9 |
-| `foo.push(v)` | the same | 31.9, 31.11 |
-| `const [a, b] = foo` / `...foo` | one read of the value | 31.14 |
-| `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where it declares one | 31.5, 31.15 |
+| `foo.bar = v` | a write through a path | 31.11 |
+| `foo.push(v)` | the same | 31.11, 31.12 |
+| `const [a, b] = foo` / `...foo` | one read of the value | 31.15 |
+| `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where it declares one | 31.5, 31.16 |
 | `foo.bar(…)` | the `Reactive` API where `bar` is a member | 31.6 |
-| `foo()` / `foo.set(v)` | the explicit forms | 31.7, 31.13 |
+| `foo()` / `foo.set(v)` | the explicit forms | 31.7, 31.14 |
+| `const x = await foo` in a `<script>` | the `Reactive`, with the render held until it settles | 31.8, 31.9, 31.10 |
 
 ## Templating
 
@@ -491,56 +492,55 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Spelling | Meaning | Rules |
 | --- | --- | --- |
-| `{expr}` | Reactive text, escaped. | 32.1, 32.25 |
+| `{expr}` | Reactive text, escaped. | 32.1, 32.24 |
 | formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
-| `{await expr}` | A blocking read of the expression. | 31.10, 32.2 |
-| `{raw(...)}` | Raw HTML. | 32.3, 32.27, 32.28 |
-| `name={expr}` | A reactive attribute or property. | 32.4, 32.22, 32.25 |
-| `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.5 |
-| `name="…{expr}…"` | An interpolated quoted value. | 32.4 |
-| `bind:value` | Two-way bind on an element. | 5.17, 32.6 |
-| `bind:prop={state}` | Adds the write path to a component prop. | 32.7 |
-| `bind:checked` | A boolean bind on an input. | 32.8 |
-| `bind:open` | The same, on a `<details>`. | 32.8 |
-| `bind:group` | Radio or checkbox membership. | 32.9 |
-| `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair. | 32.6 |
-| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.10 |
-| `class:name={cond}` | Toggles a class. | 32.11 |
-| `style:prop={value}` | Sets one style property. | 32.11, 32.21 |
-| `{...expr}` | Spreads props or attributes. | 32.12, 33.12, 33.13 |
-| static template text | What an author writes outside a slot, in body text and in an attribute value. | 32.29, 32.30 |
+| `{raw(...)}` | Raw HTML. | 32.2, 32.26, 32.27 |
+| `name={expr}` | A reactive attribute or property. | 32.3, 32.21, 32.24 |
+| `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4 |
+| `name="…{expr}…"` | An interpolated quoted value. | 32.3 |
+| `bind:value` | Two-way bind on an element. | 5.17, 32.5 |
+| `bind:prop={state}` | Adds the write path to a component prop. | 32.6 |
+| `bind:checked` | A boolean bind on an input. | 32.7 |
+| `bind:open` | The same, on a `<details>`. | 32.7 |
+| `bind:group` | Radio or checkbox membership. | 32.8 |
+| `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair. | 32.5 |
+| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9 |
+| `class:name={cond}` | Toggles a class. | 32.10 |
+| `style:prop={value}` | Sets one style property. | 32.10, 32.20 |
+| `{...expr}` | Spreads props or attributes. | 32.11, 33.12, 33.13 |
+| static template text | What an author writes outside a slot, in body text and in an attribute value. | 32.28, 32.29 |
 
 ### Raw markup
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.3, 32.26, 32.28 |
-| `Raw` | `class Raw { html: string }` | What `raw` hands back. | 32.26 |
+| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.2, 32.25, 32.27 |
+| `Raw` | `class Raw { html: string }` | What `raw` hands back. | 32.25 |
 
 ### Control flow
 
 | Spelling | Branches | Meaning | Rules |
 | --- | --- | --- | --- |
-| `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 32.13, 32.23 |
-| `{#for item, index of list by key}` | `{:catch}` | Repeats markup over a list, or over a cursor as it produces. | 18.16, 32.14, 32.15, 32.16, 32.24, 41.9, 41.15, 41.16 |
-| `{#try}` | `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.17 |
+| `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 32.12, 32.22 |
+| `{#for item, index of list by key}` | `{:catch}` | Repeats markup over a list, or over a cursor as it produces. | 18.16, 32.13, 32.14, 32.15, 32.23, 41.8, 41.14, 41.15 |
+| `{#try}` | `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.16 |
 
 ### Components
 
 | Spelling | Meaning | Rules |
 | --- | --- | --- |
-| `{#component Name(pattern)}` | An inline component. | 32.18 |
-| `<Name/>` | A component invocation. | 32.19 |
-| `<slot/>` | The position children render into. | 32.20 |
-| `<slot>fallback</slot>` | Renders children, or a fallback. | 32.20 |
-| `<Tag>…</Tag>` | Children passed to a component's slot. | 32.20 |
+| `{#component Name(pattern)}` | An inline component. | 32.17 |
+| `<Name/>` | A component invocation. | 32.18 |
+| `<slot/>` | The position children render into. | 32.19 |
+| `<slot>fallback</slot>` | Renders children, or a fallback. | 32.19 |
+| `<Tag>…</Tag>` | Children passed to a component's slot. | 32.19 |
 
 ## Props
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `props` | `<Props>() => { [K in keyof Props]: Props[K] }` | One live accessor per prop the component declares. | 33.1, 33.2, 33.3, 33.4, 33.5, 33.6, 33.7, 33.8, 33.9, 33.10, 33.11, 33.14, 33.15 |
-| `children` | always accepted | What a caller passes between the tags. | 33.16, 32.20 |
+| `children` | always accepted | What a caller passes between the tags. | 33.16, 32.19 |
 
 ## Script / style blocks
 
@@ -569,18 +569,18 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Component` | `interface Component {}` | A component bound to its props. | 32.19, 35.4 |
-| `render` | `(component: Component, shell?: Shell) => AsyncGenerator<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 41.1, 41.2, 41.3, 41.4, 41.5, 41.10, 41.14 |
-| `Shell` | `string \| URL \| undefined` | The document a render renders into. | 35.6 |
+| `Component` | `interface Component {}` | A component bound to its props. | 32.18, 35.4 |
+| `render` | `(component: Component, shell?: Shell) => AsyncGenerator<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.6, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13 |
+| `Shell` | `string \| URL \| undefined` | The document a render renders into. | 35.7 |
 
 ## Sinks
 
 | Spelling | Sink | Filled | Rules |
 | --- | --- | --- | --- |
-| `href={await x}`, any attribute | the element | the attribute or property | 35.7, 35.8 |
-| `class:`, `style:`, `bind:` | the element | the class, the style property, the bound property | 35.7 |
-| `<title>{name}</title>` | `<title data-abide-sink="…">` | `.textContent` | 35.9, 35.10 |
-| `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` | 35.9 |
+| `href={x}`, any attribute | the element | the attribute or property | 35.8, 35.9 |
+| `class:`, `style:`, `bind:` | the element | the class, the style property, the bound property | 35.8 |
+| `<title>{name}</title>` | `<title data-abide-sink="…">` | `.textContent` | 35.10, 35.11 |
+| `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` | 35.10 |
 
 # Configuration
 
@@ -619,12 +619,12 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `src/ui/**` | Browser-related source. | 36.10 |
 | `src/shared/**` | Source shared by both. | 36.10 |
 | `src/server/app.ts` | The lifecycle hooks. | 37.1 |
-| `src/ui/app.html` | The document its pages are served in. | 35.6 |
+| `src/ui/app.html` | The document its pages are served in. | 35.7 |
 | `src/ui/public/**` | The files answered as authored, at their path below that directory. | 36.11, 36.12, 36.13, 36.14, 21.12, 21.13, 21.14, 38.19, 38.20 |
 | `src/ui/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
 | `src/ui/public/robots.txt` | The file answered at `/robots.txt`. | 36.11 |
 | `src/ui/pages/**/page.abide` | A route. | 23.3, 23.4 |
-| `src/ui/pages/**/layout.abide` | A layout, rendering its child page through a slot. | 35.1, 41.12 |
+| `src/ui/pages/**/layout.abide` | A layout, rendering its child page through a slot. | 35.1, 41.11 |
 | `src/ui/pages/**/error.abide` | The page a refusal renders in. | 35.2, 35.3 |
 | `src/server/rpc/**/*.ts` | The rpc handlers. | 19.1 |
 | `src/server/sockets/**/*.ts` | The socket handlers. | 19.1 |

@@ -1,7 +1,7 @@
 import { textOf } from '#shared/Raw.ts'
 import { WORK } from '#shared/WORK.ts'
 
-// 32.4 — what an attribute binding writes, and the client half the server never had: `emitComponent`
+// 32.3 — what an attribute binding writes, and the client half the server never had: `emitComponent`
 // writes the value standing at render and, without this, nothing writes it again. A page whose
 // `{count}` moved while its `class={tone}` did not is the shape that was shipping, and no
 // correctness test of the first slot could see the second.
@@ -19,7 +19,7 @@ import { WORK } from '#shared/WORK.ts'
 // AN ABSENT VALUE WRITES THE EMPTY STRING rather than removing the attribute, because that is what
 // the server wrote for it: `escapeAttribute(undefined)` is '', so the document already carries
 // `name=""` and removing it here would be the client disagreeing with the markup it is hydrating.
-// A boolean attribute wanting the other answer is 32.8, which is not built on either side.
+// A boolean attribute wanting the other answer is 32.7, which is not built on either side.
 export function setAttribute(
     element: Element,
     name: string,

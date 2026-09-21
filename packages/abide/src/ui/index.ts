@@ -7,10 +7,10 @@
 // needs: the one that ADDRESSES one (`regionAt`; the rest of the addressing is one walk over a
 // path, whatever kind of root it starts from), what WRITES into one (`fillRegion` for an arm,
 // `listAt` and `updateList` for a `{#for}` — which reconciles an array and appends an async
-// subject, 32.16 — and `replaceNodes` for a row), what a hydration mismatch is answered with
-// (`warnMismatch`, 41.11), what every region's bindings are stopped through (`Scope`), what a
+// subject, 32.15 — and `replaceNodes` for a row), what a hydration mismatch is answered with
+// (`warnMismatch`, 41.10), what every region's bindings are stopped through (`Scope`), what a
 // row's markup is parsed with (`markupNodes`)
-// and the anchors they are all counted from. 32.4's writes are THREE names rather than one
+// and the anchors they are all counted from. 32.3's writes are THREE names rather than one
 // (`setAttribute`, `setStyleProperty`, `setClass`) for one reason said once: every `style:prop`
 // and every `class:name` on an element is merged by the server into the single `style` or `class`
 // attribute beside the author's own, so neither of those two attributes can be written back whole

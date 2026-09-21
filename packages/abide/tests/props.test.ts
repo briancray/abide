@@ -1,4 +1,4 @@
-// 32.19 AND 33 — A COMPONENT AND ITS PROPS, END TO END. The parent renders the child where it
+// 32.18 AND 33 — A COMPONENT AND ITS PROPS, END TO END. The parent renders the child where it
 // stands, the child mounts against the anchors the parent's markup put round it, and a prop is a
 // LIVE READ: the parent's value moves and the child re-reads with nobody arranging it.
 //
@@ -81,12 +81,12 @@ async function mountPage(
 // a literal `<Total amount="1240">` tag, the child never runs, and `1240.00` is nowhere on the
 // page. It is also what makes the anchors worth their bytes: without them the `<button>` after the
 // list is addressed by counting through a shape that lives in another file.
-test('a component renders where it stands, and its prop is the caller expression — 32.19, 33.5', async () => {
+test('a component renders where it stands, and its prop is the caller expression — 32.18, 33.5', async () => {
     const { html } = await mountPage(PAGE, { Total: TOTAL })
 
     expect(html).toContain('<strong>USD 1240.00</strong>')
     expect(html).not.toContain('<Total')
-    // The child's markup is one region, anchored: 32.19's pair, and nothing else added.
+    // The child's markup is one region, anchored: 32.18's pair, and nothing else added.
     expect(html).toContain(
         '<li><!--[--><strong>USD 1240.00</strong><!--]--></li>',
     )
@@ -132,19 +132,19 @@ import Total from './Total.abide'
     expect(html).toContain('<strong>USD 7.00</strong>')
 })
 
-// 32.19 THROUGH THE BUILD — A CHILD WITH NOTHING TO HYDRATE STILL SHIPS A MODULE, because the
+// 32.18 THROUGH THE BUILD — A CHILD WITH NOTHING TO HYDRATE STILL SHIPS A MODULE, because the
 // caller's client module imports one by name. "A static page ships no client" is the rule this is
 // the exception to, and the import is what forces it: the child is static, the page is not, and
 // the page's `import Static from './Static.client.ts'` has to resolve to something.
 //
 // AND THE MODULE FILLS, which is why this is not a no-op. The caller writes the anchor pair and
-// nothing between it (32.19), so the child's markup is the child's to put there — a row the
+// nothing between it (32.18), so the child's markup is the child's to put there — a row the
 // server painted has it already and a row the browser GREW does not. Shipping
 // `export default () => {}` here satisfied the import and left every grown row empty, and the
 // page looked right because the only rows anybody checked were the server's.
 // THE REVERT: return '' from `emitClient` on `!counter.live` alone — `Static.client.ts` is the
 // no-op again, and the second row below comes out `<!--[--><!--]-->`.
-test('an invoked static component still gets a client module — 32.19', async () => {
+test('an invoked static component still gets a client module — 32.18', async () => {
     const source = temporaryModule({
         'Static.abide': '<strong>nothing moves here</strong>',
         'page.abide': `<script>
@@ -178,7 +178,7 @@ let count = reactive(0)
 // THE OTHER HALF, in a document: a row the browser grows has to come out the same as a row the
 // server painted, and a static child is where the two can differ silently — the caller writes its
 // anchors and stops, so nothing but the child's own module can put markup between them.
-test('a static child fills the anchors of a row the browser grew — 32.19', async () => {
+test('a static child fills the anchors of a row the browser grew — 32.18', async () => {
     const { mount } = await mountPage(
         `<script>
 import { reactive } from 'abide'
@@ -296,7 +296,7 @@ let volume = reactive.share(key, () => reactive(4))
     expect(refused).toContain('RULEBOOK 10.2')
 })
 
-// 32.19 INSIDE A `{#for}` — the case a list of components is, and the one the client could not
+// 32.18 INSIDE A `{#for}` — the case a list of components is, and the one the client could not
 // build: a row the server never wrote has to be built in the BROWSER, and the child's markup is in
 // the child's server module. So the child's client module carries the same template, and the row
 // builder asks it (`Row.html(props)`) where the server asks `renderComponent`.
@@ -314,7 +314,7 @@ const { title } = props<{ title: string }>()
 
 <li>{title}</li>`
 
-test('a component in a {#for} renders, hydrates, and builds the row it grows by — 32.19', async () => {
+test('a component in a {#for} renders, hydrates, and builds the row it grows by — 32.18', async () => {
     const { html, mount } = await mountPage(
         `<script>
 import { reactive } from 'abide'
@@ -342,7 +342,7 @@ let titles = reactive(['one', 'two'])
         (row) => row.textContent,
     )
     expect(rows).toEqual(['one', 'two', 'three'])
-    // 41.9 — the rows that survive are MOVED, never remade: the first row is the same node.
+    // 41.8 — the rows that survive are MOVED, never remade: the first row is the same node.
     expect(document.querySelector('li') as unknown).toBe(first)
 })
 

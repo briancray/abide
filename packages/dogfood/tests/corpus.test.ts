@@ -21,7 +21,7 @@ const TSCONFIG = new URL('../examples/tsconfig.json', import.meta.url).pathname
 // The surface these need is decided (REGISTRY) and not built. Each line is a file and the FIRST
 // thing in it the compiler does not know — so the list reads as a work queue rather than a tally.
 const NOT_YET = new Set<string>([
-    // 32.17 — the render-time boundary. Not built.
+    // 32.16 — the render-time boundary. Not built.
     'try-region/files/src/ui/components/Total.abide',
 ])
 

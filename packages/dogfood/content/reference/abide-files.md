@@ -49,6 +49,7 @@ presentational component usually is.
 | `foo.bar` | the value's `bar` | A property access is a read of the value, and throws `NotLanded` before it lands; a member of the `Reactive` itself reaches the `Reactive`, bound. |
 | `foo.bar(…)` | the `Reactive` API where `bar` is a member | A call reaches the `Reactive` where the name is one of its members. |
 | `foo()` / `foo.set(v)` | the explicit forms | The two members, which keep compiling. |
+| `const x = await foo` in a `<script>` | the `Reactive` | The `await` answers the `Reactive` rather than its value, and holds the component's render until it settles. |
 
 
 The rule is **position**. An operand, a text hole, an attribute and a value-typed argument are
@@ -67,21 +68,20 @@ places a value belongs, so the name reads. A position whose declared type is a
 
 | formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
 | --- | --- | --- |
-| `{await expr}` | Blocks rendering until the expression resolves. | 31.10, 32.2 |
-| `{raw(...)}` | Raw HTML. | 32.3 |
-| `name={expr}` | A reactive attribute or property. | 32.4, 32.22 |
-| `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.5 |
-| `name="…{expr}…"` | An interpolated quoted value. | 32.4 |
-| `bind:value` | Two-way bind on an element. | 5.17, 32.6 |
-| `bind:prop={state}` | Adds the write path to a component prop. | 32.7 |
-| `bind:checked` | A boolean bind on an input. | 32.8 |
-| `bind:open` | The same, on a `<details>`. | 32.8 |
-| `bind:group` | Radio or checkbox membership. | 32.9 |
-| `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair. | 32.6 |
-| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.10 |
-| `class:name={cond}` | Toggles a class. | 32.11 |
-| `style:prop={value}` | Sets one style property. | 32.11, 32.21 |
-| `{...expr}` | Spreads props or attributes. | 32.12, 33.12, 33.13 |
+| `{raw(...)}` | Raw HTML. | 32.2 |
+| `name={expr}` | A reactive attribute or property. | 32.3, 32.21 |
+| `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4 |
+| `name="…{expr}…"` | An interpolated quoted value. | 32.3 |
+| `bind:value` | Two-way bind on an element. | 5.17, 32.5 |
+| `bind:prop={state}` | Adds the write path to a component prop. | 32.6 |
+| `bind:checked` | A boolean bind on an input. | 32.7 |
+| `bind:open` | The same, on a `<details>`. | 32.7 |
+| `bind:group` | Radio or checkbox membership. | 32.8 |
+| `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair. | 32.5 |
+| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9 |
+| `class:name={cond}` | Toggles a class. | 32.10 |
+| `style:prop={value}` | Sets one style property. | 32.10, 32.20 |
+| `{...expr}` | Spreads props or attributes. | 32.11, 33.12, 33.13 |
 
 Static text is markup. An author-written `&amp;` or `&copy;` renders the same in body text and
 in an attribute value, and only an interpolated value is escaped — the one exception being a

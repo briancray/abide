@@ -45,7 +45,7 @@ function seams(module: string, from: string): string {
     return module.replace(
         /from '#(server|shared|ui)(\/[^']*)?'/g,
         (_, seam: string, rest: string | undefined) => {
-            // A SPECIFIER MAY ALREADY CARRY ITS EXTENSION. 32.19's `.abide` import is rewritten by
+            // A SPECIFIER MAY ALREADY CARRY ITS EXTENSION. 32.18's `.abide` import is rewritten by
             // the compiler to the module that file becomes, so appending here made `Total.ts.ts`.
             const named = rest === undefined ? '/index' : rest
             const target = `src/${seam}${named}${named.endsWith('.ts') ? '' : '.ts'}`
@@ -56,7 +56,7 @@ function seams(module: string, from: string): string {
 }
 
 // AN EXAMPLE, COMPILED WHOLE: every `.ts` copied and every `.abide` compiled to the pair it
-// becomes, each keyed by where it goes in the copy. A page that invokes a component (32.19) imports
+// becomes, each keyed by where it goes in the copy. A page that invokes a component (32.18) imports
 // the module its child compiled to, so compiling the page alone leaves that import pointing at a
 // `.abide` nothing can load — which is a fact about the harness rather than about the page.
 async function exampleTree(
@@ -71,7 +71,7 @@ async function exampleTree(
             path.slice(0, path.lastIndexOf('/')),
         )
     const abide = [...new Bun.Glob('src/**/*.abide').scanSync({ cwd: root })]
-    // 32.19 — which of the example's files another one invokes, which is what decides whether a
+    // 32.18 — which of the example's files another one invokes, which is what decides whether a
     // module carries its own markup for a row built in the browser.
     const invoked = invokedComponents(
         await Promise.all(
@@ -300,7 +300,7 @@ test('every example renders on the server and mounts on the client', async () =>
     //
     // `element-ref` RENDERS `bind:element=""` INTO THE MARKUP, inert and ignored by a browser:
     // the compiler has no `bind:` handling at all, so a `bind:` attribute falls through the
-    // ordinary computed path. 32.6-32.10 are that surface and none of it is built.
+    // ordinary computed path. 32.5-32.9 are that surface and none of it is built.
     //
     // THE FLOOR DID NOT MOVE FOR THE GROUPING, and that is the point of it. What had been the
     // biggest bucket left was five `TypeError`s, which read as five faults in abide and were one

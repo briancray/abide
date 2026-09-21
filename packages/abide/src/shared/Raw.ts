@@ -1,4 +1,4 @@
-// 32.26 — the value `raw` hands back, and the brand a slot reads to know not to escape it. In
+// 32.25 — the value `raw` hands back, and the brand a slot reads to know not to escape it. In
 // #shared because both sides render: the server writes the markup and a client swapping a `{#if}`
 // branch re-renders that region, so one brand has to be readable from both.
 //
@@ -32,7 +32,7 @@ export function textOf(value: unknown): string {
     return value == null ? '' : String(value)
 }
 
-// 32.3, 32.27 — the one mechanism. `{raw(x)}` lowers to this call and an imported `raw` IS this
+// 32.2, 32.26 — the one mechanism. `{raw(x)}` lowers to this call and an imported `raw` IS this
 // call, so a value branded in a `<script>` and a value branded in a slot are the same object.
 export function raw(value: unknown): Raw {
     return new Raw(textOf(value))

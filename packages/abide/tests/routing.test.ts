@@ -1,7 +1,7 @@
 // 30.7 — NAVIGATION THAT DOES NOT RELOAD THE DOCUMENT, end to end. The destination's markup is
 // not fetched: a page the reader navigated to is handed the empty anchor pair and fills it from
 // the template its own module carries, which is `emitClient`'s `isEmptyRegion` guard doing for a
-// PAGE exactly what it already did for an invoked component (32.19).
+// PAGE exactly what it already did for an invoked component (32.18).
 //
 // THE SAME MODULE BOTH WAYS IN is the claim worth holding: the page the server painted hydrates
 // where it stands because its region is not empty, and the page navigated to fills because it is.

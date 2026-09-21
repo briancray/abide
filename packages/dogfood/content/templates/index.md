@@ -11,7 +11,6 @@ instead of it.
 | In markup | In .ts | Gives you |
 | --- | --- | --- |
 | `{invoice}` | `invoice()` | the value |
-| `{await invoice}` | `await invoice` | the value, once it lands |
 | `{#for item of items}` | `for (… of items())` | each item, kept in step with the list |
 | `{#if !invoice.ready()}` | `invoice.ready()` | whether there is a value to show yet |
 

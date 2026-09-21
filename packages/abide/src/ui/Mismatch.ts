@@ -1,4 +1,4 @@
-// 41.11 — A HYDRATION MISMATCH REBUILDS THE ENCLOSING BLOCK AND WARNS, and what it must not do is
+// 41.10 — A HYDRATION MISMATCH REBUILDS THE ENCLOSING BLOCK AND WARNS, and what it must not do is
 // take the page down. An ordinary throw out of `mount` does exactly that: every binding and every
 // listener after the one that refused is never installed, so a page whose one slot disagrees is
 // served looking right and completely dead. Every refusal in this seam cited the clause while
@@ -11,7 +11,7 @@
 export class Mismatch extends Error {}
 
 // Whether a throw was a mismatch, WARNING when it was. One call rather than a predicate with a
-// warn beside it: the warning is the other half of 41.11, and a caller that only asked would have
+// warn beside it: the warning is the other half of 41.10, and a caller that only asked would have
 // to remember it at every catch.
 //
 // `console.warn` under the clause's own namespace is the stand-in for `log.named`, the same way

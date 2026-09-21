@@ -33,7 +33,7 @@ export const SHARED = '__shared'
 //
 // The component returns its head and its body apart. 39.3 is why the split is HERE and not in
 // `render`: the hoist is a compile-time partition of the template, so the emitted function has
-// two returns rather than one string a renderer has to go looking through. 35.5 is answered by
+// two returns rather than one string a renderer has to go looking through. 35.6 is answered by
 // `render`, which turns the two into the byte stream a document is served as.
 
 export function emitComponent(
@@ -70,7 +70,7 @@ export function emitComponent(
     // 34.2 — A `<script module>` IS REQUEST-LOCAL ON A SERVER, which is the head of the component
     // rather than module scope: at module scope it is evaluated once per PROCESS and every request
     // after the first sees the first one's values. One `Component()` call is one request today,
-    // and this moves the moment 32.19 lets a component be invoked more than once inside one.
+    // and this moves the moment 32.18 lets a component be invoked more than once inside one.
     const moduleSetup = splitImports(lowering.modules())
     const setup = splitImports(lowering.scripts())
     const componentBody = [moduleSetup.body, setup.body]
@@ -111,7 +111,7 @@ ${heads ? `    const ${HEADS} = []\n` : ''}\
 `
 }
 
-// 32.25 and 41.4 — THE POSITION ABORTS, NOT THE DOCUMENT. `emitComponent` builds the markup as
+// 32.24 and 41.4 — THE POSITION ABORTS, NOT THE DOCUMENT. `emitComponent` builds the markup as
 // ONE concatenation, so an unlanded read anywhere in it threw out of `Component()` and took the
 // static markup, every other position and the `<head>` with it. Passed as a THUNK because the
 // throw happens while the expression is being evaluated, so nothing a helper is HANDED can catch
@@ -121,7 +121,7 @@ ${heads ? `    const ${HEADS} = []\n` : ''}\
 // first. A GUARD HERE IS HALF A MECHANISM — it trades a throw for a HOLE, and something on the
 // client has to fill that hole once the value lands: a text slot has `textAt`'s `blank` arm, a
 // `{#for}` has `List.hydrate`'s count check, an attribute has its own binding re-running on the
-// value that landed (32.4), and the `{#if}` chain has `isEmptyRegion` — which is why that one is
+// value that landed (32.3), and the `{#if}` chain has `isEmptyRegion` — which is why that one is
 // guarded at the REGION rather than per subject, and says so at its own arm. The ESCAPER STAYS
 // OUTSIDE: absence is `undefined` here and what it means is already decided where it lands (see
 // `slotValue`).
@@ -166,14 +166,14 @@ function emitNode(
     }
 
     if (node.kind === 'block' && node.block === 'for') {
-        // 32.14 — the body repeats. 32.24: an absent subject iterates zero times, which is what
+        // 32.13 — the body repeats. 32.23: an absent subject iterates zero times, which is what
         // the guard is for rather than a `?? []` that would also swallow a genuine mistake.
-        // 32.23: the subject is read ONCE for the whole block, not once per row.
+        // 32.22: the subject is read ONCE for the whole block, not once per row.
         const subject = lowering.expression(node)
         const row = emitRow(node.children, lowering, client)
         const index = node.index === '' ? '__at' : node.index
         const item = node.item
-        // 32.16 and 41.3 — AN ASYNC SUBJECT WRITES NO ROWS INLINE. The render is not held for an
+        // 32.15 and 41.3 — AN ASYNC SUBJECT WRITES NO ROWS INLINE. The render is not held for an
         // unfinished stream, and an async iterable has produced nothing at the moment a document
         // is generated; the client appends each item as it arrives instead.
         //
@@ -185,8 +185,8 @@ function emitNode(
         const listOf = lowering.use('listOf')
         // AND 41.4 FOR A SUBJECT STILL IN FLIGHT. The read is the block's one expression, so an
         // unlanded one aborts it and nothing else: the abort answers `undefined`, `listOf` reads
-        // that as absent, and 32.24's zero rows is already what absent means here. Read ONCE for
-        // the block (32.23), so the thunk is per block rather than per row.
+        // that as absent, and 32.23's zero rows is already what absent means here. Read ONCE for
+        // the block (32.22), so the thunk is per block rather than per row.
         const guarded = unlandable(lowering, node, subject)
         return `${JSON.stringify(`<!--${REGION_OPEN}-->`)} + ((__list) => {
         if (!Array.isArray(__list)) return ''
@@ -198,7 +198,7 @@ function emitNode(
     }
 
     if (node.kind === 'block') {
-        // 32.13 — ONE branch renders. The anchors go in whichever one that is, and stay when the
+        // 32.12 — ONE branch renders. The anchors go in whichever one that is, and stay when the
         // branch changes, which is what keeps every sibling after the region addressable.
         //
         // 41.4 ABORTS THE REGION, NOT THE ARM, and that is why the guard is around the WHOLE
@@ -207,10 +207,10 @@ function emitNode(
         // walks on and paints the `{:else}` arm, a decision the client then has no way to know
         // was never really made. It reads the landed value a turn later, picks the other arm, and
         // hydrates its bindings against the arm the server actually wrote; where that arm has no
-        // bindings there is nothing to walk, so 41.11 never fires and the region stays wrong for
+        // bindings there is nothing to walk, so 41.10 never fires and the region stays wrong for
         // as long as the condition does not CHANGE.
         //
-        // AN EMPTY REGION IS THE ONE SIGNAL THAT ALREADY MEANS "NOBODY PAINTED THIS" — 32.19 gave
+        // AN EMPTY REGION IS THE ONE SIGNAL THAT ALREADY MEANS "NOBODY PAINTED THIS" — 32.18 gave
         // it to a component whose row the browser grew, and `isEmptyRegion` is how the client
         // reads it. So an aborted chain writes the anchor pair and nothing between it, and the
         // block's first run fills it from the arm it picks instead of hydrating markup that is
@@ -246,7 +246,7 @@ function emitNode(
         return `${JSON.stringify(`<!--${REGION_OPEN}-->`)} + ${expression} + ${JSON.stringify(`<!--${REGION_CLOSE}-->`)}`
     }
 
-    // 32.19 — A CAPITALISED TAG IS AN INVOCATION, and the capital is the whole of the
+    // 32.18 — A CAPITALISED TAG IS AN INVOCATION, and the capital is the whole of the
     // distinction. It is emitted as a CALL, so the child's own module renders it.
     if (isComponentTag(node.tag)) return emitInvocation(node, lowering, client)
 
@@ -313,7 +313,7 @@ function emitInvocation(
 ): string {
     if (node.children.length > 0)
         throw new Error(
-            `abide: <${node.tag}> is given children, and <slot/> is not built yet. RULEBOOK 32.20.`,
+            `abide: <${node.tag}> is given children, and <slot/> is not built yet. RULEBOOK 32.19.`,
         )
     const props: string[] = []
     for (const attribute of node.attributes) {
@@ -352,7 +352,7 @@ function emitInvocation(
 // 39.7 — THE CONTRIBUTIONS A PAGE MAKES TO THE DOCUMENT HEAD, as an expression, for the lane that
 // has no document to have written them. A page the reader NAVIGATED to was never rendered by a
 // server, so its `<title>` and its `<meta>` exist nowhere unless its own client module carries
-// them — the same second copy the body already gets (32.19), through the same merge (39.13) so
+// them — the same second copy the body already gets (32.18), through the same merge (39.13) so
 // the two lanes cannot disagree about which contribution won.
 export function emitHead(
     file: AbideFile,
@@ -427,13 +427,13 @@ function emitAttribute(
     lowering: Lowering,
 ): string | { value: string } {
     if (attribute.expression) {
-        // 32.5 — `on<event>` is a listener, never markup. The server writes nothing, so a handler
+        // 32.4 — `on<event>` is a listener, never markup. The server writes nothing, so a handler
         // cannot fire from a document that never hydrated.
         if (isEventName(attribute.lowerName)) return ''
-        // 32.4 — an expression attribute is reactive. Its CURRENT value is written here; the
+        // 32.3 — an expression attribute is reactive. Its CURRENT value is written here; the
         // client binding that keeps it live is not built yet.
         //
-        // 32.22 IS THE INTERPOLATION'S CLAUSE, and the check used to run on the path it does not
+        // 32.21 IS THE INTERPOLATION'S CLAUSE, and the check used to run on the path it does not
         // name: the literal `href` was scheme-checked and `<a href={u}>` was served verbatim,
         // which is the one of the two where untrusted data actually arrives. The value is not
         // known here, so the guard is a call in the emitted markup — the same shape the escaping
@@ -441,7 +441,7 @@ function emitAttribute(
         //
         // 41.4 INSIDE BOTH GUARDS. The abort is nearest the read and the scheme check wraps it,
         // so a `href` still in flight is checked as the empty value it renders as rather than
-        // skipping 32.22 on its way past.
+        // skipping 32.21 on its way past.
         const value = unlandable(lowering, attribute, lowering.slot(attribute))
         return {
             value: `${lowering.use('escapeAttribute')}(${urlGuarded(lowering, attribute.lowerName, value)})`,
@@ -455,13 +455,13 @@ function emitAttribute(
     )
         return ''
     if (attribute.value === '') return ` ${attribute.name}`
-    // 32.29 — STATIC TEMPLATE TEXT IS MARKUP, in an attribute value as much as in body text. A
+    // 32.28 — STATIC TEMPLATE TEXT IS MARKUP, in an attribute value as much as in body text. A
     // static value is the AUTHOR'S OWN SOURCE and never a place untrusted data arrives, so the
     // rewrite is not a trust boundary here — it was a second answer to "is this markup?", and
     // `title="AT&amp;T"` rendered `AT&amp;T` on the page while the same six characters between
     // two tags rendered `AT&T`. The `"` is still encoded: it would end the attribute.
     //
-    // 32.30 — AN ATTRIBUTE 32.22 SCHEME-CHECKS KEEPS THE WHOLE REWRITE, and that one IS a
+    // 32.29 — AN ATTRIBUTE 32.21 SCHEME-CHECKS KEEPS THE WHOLE REWRITE, and that one IS a
     // boundary. `safeUrl` reads the bytes, and `&#106;avascript:` is not `javascript:` until a
     // browser decodes the entity — so encoding the `&` is what stops the entity forming at all,
     // and it is the only thing that does.
@@ -564,7 +564,7 @@ function assertNoNestedHead(nodes: TemplateNode[], within: string): void {
     }
 }
 
-// 32.11, 32.21 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE, and every
+// 32.10, 32.20 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE, and every
 // `class:name` is ONE `class`. Written apart they are two attributes of the same name on one tag,
 // and a browser keeps the first: the second is dropped in silence, by the markup rather than by
 // anything the compiler said.
@@ -615,7 +615,7 @@ function mergesOf(
 
 // The declaration list a set of `style:prop` attributes renders as. Each value takes the same
 // rewrite the whole-value path takes, so one attribute has one answer however the author spelled
-// it: 32.29 for a STATIC declaration, which is the author's own markup, and the full escape for an
+// it: 32.28 for a STATIC declaration, which is the author's own markup, and the full escape for an
 // interpolated one, which is 32.1's.
 function styleValue(
     plain: Attribute | undefined,
@@ -649,9 +649,9 @@ function styleValue(
     return concat(parts)
 }
 
-// 32.11 — the class list a set of `class:name` attributes renders as. A NAME IS MARKUP AND A VALUE
+// 32.10 — the class list a set of `class:name` attributes renders as. A NAME IS MARKUP AND A VALUE
 // IS A CONDITION, which is the whole of what makes this shorter than its `style` sibling: the name
-// is the author's own source and takes 32.29's rewrite where the module is emitted, and the
+// is the author's own source and takes 32.28's rewrite where the module is emitted, and the
 // expression decides only whether it is written at all.
 //
 // EACH NAME CARRIES ITS OWN LEADING SPACE rather than a separator being computed between them,
@@ -688,7 +688,7 @@ function classValue(
 }
 
 // Given the FOLDED name (`Attribute.lowerName`): compared as written, `<a HREF={u}>` took the
-// ordinary computed branch with no `safeUrl` around it — 32.22's check, skipped by a capital letter.
+// ordinary computed branch with no `safeUrl` around it — 32.21's check, skipped by a capital letter.
 //
 // A LEAF OF NAMES RATHER THAN FOUR COMPARISONS, because four was not the set: `xlink:href` is how
 // an `<a>` inside `<svg>` spells the same attribute and `<svg><a xlink:href="javascript:…">`
@@ -716,7 +716,7 @@ function isUrlAttribute(lowerName: string): boolean {
     return URL_ATTRIBUTES.has(lowerName)
 }
 
-// 32.22's scheme check, as the emitted call both lanes write. ONE FUNCTION RATHER THAN THE
+// 32.21's scheme check, as the emitted call both lanes write. ONE FUNCTION RATHER THAN THE
 // PREDICATE PLUS THE BRANCH TWICE: the server writes the value standing at render and the client's
 // binding writes every one after it, so a `javascript:` the server refuses and the client lets
 // through is the guard being half applied. The STATIC arms below ask the predicate instead —

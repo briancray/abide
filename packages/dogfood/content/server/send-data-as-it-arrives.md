@@ -80,7 +80,7 @@ included (16.3). `rows` adopts it, so to a cursor, a guard and an await `rows` *
 | `{#for row of rows}` | every row the run has produced so far, and each one after as it lands (9.2) |
 | `{rows}` | the **accumulation so far**, materialised on the read that asks for it (9.2) |
 | `rows.busy()` | true until the stream **closes**; `ready()` is true from the first chunk (3.7, 3.8) |
-| `{await rows}` | hold for the whole thing — the accumulation at close (2.8) |
+| `const rows = await stream()` | hold for the whole thing — the accumulation at close (2.8) |
 
 Nothing copies the accumulation per chunk (9.3), and a reader is woken at most once per task
 however many chunks landed in it (9.23).

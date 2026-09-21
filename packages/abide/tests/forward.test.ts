@@ -7,7 +7,7 @@
 // region root and adds nothing to the document at all.
 //
 // WHAT THAT BUYS is below. WHAT IT DOES NOT is the last test: a region whose shape depends on a
-// value still moves the indices of its siblings, so 32.13 and 32.14 need an ANCHOR in the
+// value still moves the indices of its siblings, so 32.12 and 32.13 need an ANCHOR in the
 // document at the boundary — which is exactly where a marker earns its place, and the only place
 // it does.
 
@@ -55,14 +55,14 @@ test('a run of static text and expressions plans as one node', () => {
     expect(plan.handlers[0]?.path).toEqual([1, 1])
 })
 
-// 41.11 — addressing by position is SILENT when it is wrong, so the kind is checked. THE REVERT:
+// 41.10 — addressing by position is SILENT when it is wrong, so the kind is checked. THE REVERT:
 // return the node without the `nodeType` test; the binding then writes `data` onto an ELEMENT,
 // which is a no-op that leaves the page rendering the server's values forever with nothing said.
 test('a binding that finds the wrong kind of node says so', () => {
     document.body.innerHTML = '<p id="one">A</p><div><span>B</span></div>'
-    expect(() => textAt(document.body, [1])).toThrow('41.11')
+    expect(() => textAt(document.body, [1])).toThrow('41.10')
     expect(() => textAt(document.body, [1])).toThrow('DIV')
-    expect(() => elementAt(document.body, [0, 0])).toThrow('41.11')
+    expect(() => elementAt(document.body, [0, 0])).toThrow('41.10')
 })
 
 test('the emitted binding walks a path and adds nothing to the document', async () => {
@@ -70,7 +70,7 @@ test('the emitted binding walks a path and adds nothing to the document', async 
     // The `<span>`'s text and the `<button>` both sit under the `<div>` at [1], so that walk is
     // taken once and both reference it. The `<p>` at [0] has no company and walks alone.
     //
-    // DECLARED APART FROM ITS ASSIGNMENT, because the page guards each binding on its own (41.11,
+    // DECLARED APART FROM ITS ASSIGNMENT, because the page guards each binding on its own (41.10,
     // `emitClient`) and an anchor is the one name that crosses from one guard into the next.
     expect(client).toContain('let at0')
     expect(client).toContain('at0 = __childAt(root, [1])')
@@ -94,13 +94,13 @@ test('the emitted binding walks a path and adds nothing to the document', async 
 // their siblings by position alone — the boundary needs an ANCHOR the document keeps whether the
 // region rendered or not. That is the one place a marker is worth its bytes, and this records the
 // requirement rather than the solution.
-test('a region that may not render moves its siblings — 32.13 and 32.14 need an anchor', () => {
+test('a region that may not render moves its siblings — 32.12 and 32.13 need an anchor', () => {
     document.body.innerHTML = '<p>before</p><p>after</p>'
     expect(textAt(document.body, [1, 0]).data).toBe('after')
 
     // The same page with a conditional region absent between them. Nothing marks where it was.
     document.body.innerHTML = '<p>before</p>'
-    expect(() => textAt(document.body, [1, 0])).toThrow('41.11')
+    expect(() => textAt(document.body, [1, 0])).toThrow('41.10')
 })
 
 // THE WALK IS SHARED WHERE IT CAN BE. Four bindings under one parent walk the parent once, not

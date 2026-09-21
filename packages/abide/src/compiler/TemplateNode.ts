@@ -4,7 +4,7 @@
 // AN HTML TAG OR ATTRIBUTE NAME IS ASCII CASE-INSENSITIVE, so every comparison reads the `lower`
 // form the parser folded once, and the author's spelling is what the emitters write. Folded at each
 // comparison instead, every site that forgot was its own bug: `<HEAD>` never hoisted, `HREF=`
-// skipped 32.22's check, `ONCLICK=` shipped as a live attribute, `</BR>` was emitted.
+// skipped 32.21's check, `ONCLICK=` shipped as a live attribute, `</BR>` was emitted.
 export type Attribute = {
     name: string
     lowerName: string
@@ -34,11 +34,11 @@ export type TemplateNode =
     | { kind: 'text'; text: string }
     // The source between the braces, verbatim. 32.1 renders it escaped.
     | { kind: 'expression'; source: string }
-    // 32.13 — a control block renders ONE branch. A REGION: its shape depends on a value, which
+    // 32.12 — a control block renders ONE branch. A REGION: its shape depends on a value, which
     // makes it the one place a marker earns its bytes. `invariance.spec.ts` is why that marker
     // has to be a comment, and `benchGrid.ts` is why there are none anywhere else.
     | { kind: 'block'; block: 'if'; branches: Branch[] }
-    // 32.14 — repeats its body over a list. A REGION like `{#if}`, and the body is planned once
+    // 32.13 — repeats its body over a list. A REGION like `{#if}`, and the body is planned once
     // and instantiated per row, so a row's paths are the row's own.
     | {
           kind: 'block'

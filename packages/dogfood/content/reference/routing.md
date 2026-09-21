@@ -72,7 +72,7 @@ That is what the page pipeline streams, and what `page()` takes directly.
 
 | Spelling | Sink | Filled |
 | --- | --- | --- |
-| `href={await x}`, any attribute | the element | the attribute or property |
+| `href={x}`, any attribute | the element | the attribute or property |
 | `class:`, `style:`, `bind:` | the element | the class, the style property, the bound property |
 | `<title>{name}</title>` | `<title data-abide-sink="…">` | `.textContent` |
 | `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` |

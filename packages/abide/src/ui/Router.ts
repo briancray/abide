@@ -93,7 +93,7 @@ export class Router {
         const mount = page.default
         this.scope?.stop()
         // EMPTIED THROUGH THE PRIMITIVE EVERY OTHER REGION IS. `fillRegion(region, '')` is this
-        // removal, and it carries the 41.11 refusal for a region no longer in a document that a
+        // removal, and it carries the 41.10 refusal for a region no longer in a document that a
         // hand-written walk swallows.
         fillRegion(this.region, '')
         const full = `${target.pathname}${target.search}${target.hash}`

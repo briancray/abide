@@ -94,7 +94,7 @@ test('escapeText rewrites only what a parse would read', () => {
     expect(escapeText(null)).toBe('')
 })
 
-// 32.22 — a scheme outside http:, https:, mailto: or tel: is dropped. THE REVERT: return the
+// 32.21 — a scheme outside http:, https:, mailto: or tel: is dropped. THE REVERT: return the
 // value unconditionally from `safeUrl`; the emitted markup then carries 1 `javascript:` href where
 // 0 is due, and this test reports it.
 test('an unsafe url scheme is dropped and a relative reference is kept', () => {
@@ -126,7 +126,7 @@ test('a static page emits no client runtime import', () => {
 test('the compiler is not reachable from the server seam', async () => {
     const server = await import('#server')
     // THE WHOLE ISOMORPHIC SURFACE CROSSES, so the list is the shared seam's plus what the server
-    // owns: `listOf` is 32.16's — the emitted `{#for}` and the client's `updateList` ask the one
+    // owns: `listOf` is 32.15's — the emitted `{#for}` and the client's `updateList` ask the one
     // function what a subject iterates as — `render` is 35.4's, and the five methods are 16.2's.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
@@ -201,7 +201,7 @@ test('every name in a declarator list is declared', async () => {
             'b',
         ]),
     ).toEqual(['a', 'b'])
-    // 31.14's case, not this one: a pattern binds names this does not see.
+    // 31.15's case, not this one: a pattern binds names this does not see.
     expect(
         await declared('const { x, y } = { x: reactive(0), y: reactive(1) }', [
             'x',
@@ -338,7 +338,7 @@ test('a for head splits outside its string literals', () => {
     expect(block.subject).toBe('names.filter(n => n !== "run by me")')
     expect(block.key).toBe('')
 
-    // A `{#for}` with nothing to iterate rendered zero rows forever and said nothing. 32.24 is an
+    // A `{#for}` with nothing to iterate rendered zero rows forever and said nothing. 32.23 is an
     // ABSENT subject, which is a value; this is a missing one, which is a mistake.
     expect(() => compileFile('{#for rows}y{/for}')).toThrow('has no ` of `')
     // And one with no item has no binding for the row. THE REVERT is the `item === ''` refusal in
@@ -373,7 +373,7 @@ test('a comment or a regular expression inside a slot does not end it', () => {
     expect(compileFile('{#for r of rs}<li>x</li>{/for}')).toContain('</li>')
 })
 
-// 32.22 NAMES THE INTERPOLATION, and the check ran on the path the clause does not name: a literal
+// 32.21 NAMES THE INTERPOLATION, and the check ran on the path the clause does not name: a literal
 // `javascript:` href was dropped while `<a href={u}>` was served verbatim — the one of the two
 // where untrusted data actually arrives. THE REVERT: return from the expression branch of
 // `emitAttribute` before the URL guard; the rendered document below then carries 1 live
@@ -453,7 +453,7 @@ test('a head inside a control block or inside a head is refused', () => {
 })
 
 // AN HTML ATTRIBUTE NAME IS ASCII CASE-INSENSITIVE, so the parser answers `href` for every
-// spelling of it and 32.22 has to as well. Compared as written, a capital letter walked past the
+// spelling of it and 32.21 has to as well. Compared as written, a capital letter walked past the
 // check on BOTH paths — the interpolated one lost its `safeUrl` wrapper and the literal one was
 // copied through byte for byte.
 //
@@ -531,7 +531,7 @@ test('escaping keeps everything between and after the escapes', () => {
     )
 })
 
-// 31.12 — A TEMPLATE-LOCAL BINDING SHADOWS A NAME BOUND TO A `Reactive` FOR THE BODY IT IS BOUND
+// 31.13 — A TEMPLATE-LOCAL BINDING SHADOWS A NAME BOUND TO A `Reactive` FOR THE BODY IT IS BOUND
 // IN. THE REVERT: pass `reactive` rather than `inner` to `emitChildren` in `emitComponent`'s
 // `{#for}` branch and to `emitMarkup`/`emitRegion` in `emitClient`'s `emitList`. Both emitters
 // then write `for (const rows of __list) { … rows().name … }` — 2 bodies calling a row as a
@@ -557,7 +557,7 @@ test('a for item shadows a reactive name of the same spelling', async () => {
 // row's own; `rows` is only READ by a default, so the page's `rows` is still what `{rows}` reaches.
 // THE REVERT: project a `{#for}` body flat in `projectShadow`, with no `for … of` binding its item;
 // `{tone}` then reaches the page's `tone` and lowers to `tone()` — a call on the row's string.
-test('a default value in a binding pattern is read, not bound — 31.12', async () => {
+test('a default value in a binding pattern is read, not bound — 31.13', async () => {
     const names = ['rows', 'tone', 'items']
     const server = await serverOf(
         '{#for { id, tone = pick(rows) } of items}<i>{tone}{rows}</i>{/for}',
@@ -625,10 +625,10 @@ test('a for index and a destructured item shadow as the item does', async () => 
     expect(keyed).toContain('const ls0_key = (id, __at) => id')
 })
 
-// 32.4 — A `name={expr}` ATTRIBUTE IS REACTIVE, WHOLE OR INTERPOLATED. THE REVERT: drop the
+// 32.3 — A `name={expr}` ATTRIBUTE IS REACTIVE, WHOLE OR INTERPOLATED. THE REVERT: drop the
 // `pushQuoted` call in `readTag` and push the raw quoted value as a literal again; the braces then
 // reach the document verbatim — `class="badge {tone}"` is served as the author's source, and the
-// scheme check 32.22 asks for never runs on the interpolated `href` at all.
+// scheme check 32.21 asks for never runs on the interpolated `href` at all.
 // biome-ignore-start lint/suspicious/noTemplateCurlyInString: the emitted template literal IS the
 // subject — an interpolated attribute lowers to one, and asserting it means spelling it.
 test('an interpolated quoted attribute is one expression', async () => {
@@ -643,7 +643,7 @@ test('an interpolated quoted attribute is one expression', async () => {
     expect(compileFile('<div title="a{b}c{d}e">x</div>')).toContain(
         '__escapeAttribute(`a${b}c${d}e`)',
     )
-    // 32.22 — an interpolated URL-typed attribute is scheme-checked where the value arrives.
+    // 32.21 — an interpolated URL-typed attribute is scheme-checked where the value arrives.
     expect(compileFile('<a href="/x/{id}">x</a>')).toContain(
         '__safeUrl(`/x/${id}`)',
     )
@@ -657,7 +657,7 @@ test('an interpolated quoted attribute is one expression', async () => {
     )
 })
 
-// 32.21 — AN INTERPOLATED `style` LOWERS TO `style:prop` UNDER A STATIC PROPERTY NAME. THE REVERT:
+// 32.20 — AN INTERPOLATED `style` LOWERS TO `style:prop` UNDER A STATIC PROPERTY NAME. THE REVERT:
 // have `pushQuoted` take the `style` branch as it takes every other name, so the whole declaration
 // list becomes one interpolated string; the emitted attribute is then a string built from a value,
 // which is the half of the clause the property name exists to stop.
@@ -671,7 +671,7 @@ test('an interpolated style lowers to one attribute per property', async () => {
         'style:width',
     ])
 
-    // 32.11 — every `style:prop` on one element is ONE `style` attribute. Two of them on a tag is
+    // 32.10 — every `style:prop` on one element is ONE `style` attribute. Two of them on a tag is
     // markup a browser reads as the first only.
     const emitted = await serverOf(
         '<div style="color: {c}; width: {w}px">x</div>',
@@ -688,7 +688,7 @@ test('an interpolated style lowers to one attribute per property', async () => {
     ).toContain('<div class=\\"a\\" style=\\"')
 
     // A STATIC `style` IS NOT INTERPOLATED and keeps the literal path; a WHOLE `style={expr}` is
-    // 32.4's and keeps the computed one.
+    // 32.3's and keeps the computed one.
     expect(compileFile('<div style="color: red">x</div>')).toContain(
         '<div style=\\"color: red\\">',
     )
@@ -697,8 +697,8 @@ test('an interpolated style lowers to one attribute per property', async () => {
     )
 
     // A PROPERTY NAME THAT IS NOT STATIC has no property to bind and is refused.
-    expect(() => compileFile('<div style="{p}: red">x</div>')).toThrow('32.21')
-    expect(() => compileFile('<div style="red {c}">x</div>')).toThrow('32.21')
+    expect(() => compileFile('<div style="{p}: red">x</div>')).toThrow('32.20')
+    expect(() => compileFile('<div style="red {c}">x</div>')).toThrow('32.20')
 })
 // biome-ignore-end lint/suspicious/noTemplateCurlyInString: the emitted template literal IS the
 // subject.
@@ -781,8 +781,8 @@ async function renderPage(source: string): Promise<string> {
     return out
 }
 
-// 32.26, 32.27, 32.28 — `{raw(...)}` IS A CALL TO A NAME THAT EXISTS. It lowered to
-// `escapeText(raw(html))` against a `raw` no seam exported, so 32.3's one spelling was a
+// 32.25, 32.26, 32.27 — `{raw(...)}` IS A CALL TO A NAME THAT EXISTS. It lowered to
+// `escapeText(raw(html))` against a `raw` no seam exported, so 32.2's one spelling was a
 // `ReferenceError` at render — and had it resolved, the escape around it would have escaped the
 // markup the call was made to keep. ONE MECHANISM: the slot lowers to the same export an author
 // imports, so the two rows below are the same object taking the same road.
@@ -794,7 +794,7 @@ async function renderPage(source: string): Promise<string> {
 // AND THE SECOND REVERT, which the first page cannot make: drop `rawCalls` from `Lowering`'s splice.
 // The page above still passes, its own `<script>` having imported `raw` — so the second page below
 // carries no import, and without the lowering it reports
-// `ReferenceError: Can't find variable: raw` and no document at all. That is what 32.3's one
+// `ReferenceError: Can't find variable: raw` and no document at all. That is what 32.2's one
 // spelling did before any of this.
 const RAW_PAGE = `<script>
 import { raw } from 'abide'
@@ -807,7 +807,7 @@ const branded = raw(snippet)
 <p id="imported">{branded}</p>
 <p id="escaped">{snippet}</p>`
 
-// 32.27, WITHOUT THE IMPORT. The spelling is the template's, so the name it lowers to has to be
+// 32.26, WITHOUT THE IMPORT. The spelling is the template's, so the name it lowers to has to be
 // the compiler's own — this is the page the one above cannot stand in for.
 const RAW_UNIMPORTED = `<script>
 const snippet = '<b>bold</b>'
@@ -899,11 +899,11 @@ test('a head contribution merges by key, and the last one for a key wins', async
     expect(head).toContain('charset="utf-8"')
 })
 
-// 32.29, 32.30 — STATIC TEMPLATE TEXT IS MARKUP. `title="AT&amp;T"` went through the same rewrite
+// 32.28, 32.29 — STATIC TEMPLATE TEXT IS MARKUP. `title="AT&amp;T"` went through the same rewrite
 // an interpolated value takes and rendered `AT&amp;T` on the page, while the same six characters
 // between two tags rendered `AT&T` — one template answering one question two ways.
 //
-// AND 32.30 IS WHY THE NARROWING STOPS AT A URL. `safeUrl` reads the bytes, so
+// AND 32.29 IS WHY THE NARROWING STOPS AT A URL. `safeUrl` reads the bytes, so
 // `&#106;avascript:` is a relative reference to it and `javascript:` to the browser that decodes
 // the entity — encoding the `&` is the only thing between the two.
 //
@@ -931,7 +931,7 @@ test('a static attribute value is markup, and a URL attribute is still escaped',
     expect(out).toContain('<p>AT&amp;T &copy; &nbsp;</p>')
     expect(out).toContain('title="AT&amp;T &copy;"')
 
-    // 32.30 — the entity never forms, so the scheme check behind it is never reached past.
+    // 32.29 — the entity never forms, so the scheme check behind it is never reached past.
     expect(out).toContain('href="&amp;#106;avascript:alert(1)"')
     expect(out).not.toContain('href="&#106;avascript:alert(1)"')
     expect(out).toContain('href="/search?q=1&amp;amp;page=2"')
@@ -1024,7 +1024,7 @@ test('a close directive unwinds an element left open inside it', () => {
     ).toEqual(['div', 'p'])
 })
 
-// 32.22's scheme check is keyed on the attribute NAME, and four names was not the set.
+// 32.21's scheme check is keyed on the attribute NAME, and four names was not the set.
 test('a URL-typed attribute is scheme-checked under every spelling of one', () => {
     const svg = compileFile(
         '<svg><a xlink:href="javascript:alert(1)">x</a></svg>',
@@ -1047,7 +1047,7 @@ test('a static style merges with its style: directives', () => {
     expect(server).toContain('width: 3px')
 })
 
-// 32.11 — A `class:name` IS ONE CLASS, and the author's own `class` is a member of the same
+// 32.10 — A `class:name` IS ONE CLASS, and the author's own `class` is a member of the same
 // merge. THE REVERT: drop `class` from `MERGED`; this emits the literal attribute
 // `class:overdue="true"` beside `class="badge"` — two `class`-ish attributes, one of which no
 // stylesheet can match and no browser reads as a class at all.
@@ -1092,7 +1092,7 @@ test('a class: directive with no condition is a plain class', () => {
     expect(compileFile('<p class:>t</p>')).toContain('class:')
 })
 
-// 32.11 ON THE CLIENT — the binding goes through `classList`, not through the merged attribute.
+// 32.10 ON THE CLIENT — the binding goes through `classList`, not through the merged attribute.
 // THE REVERT: give the `class` write `setAttribute`; the emitted binding then writes the whole
 // attribute from one name and takes `badge` off the element on its first run.
 test('a class: directive binds one class and not the attribute', async () => {
@@ -1113,7 +1113,7 @@ test('a head contributes under any casing', () => {
 
 // A DEFAULT VALUE HOLDING ITS OWN `=` IS STILL ONE DEFAULT. The checker parses the pattern, so the
 // `=` inside `pick(seed = 1)` cannot end it and `rows` after it is a read.
-test('a default value holding an `=` is skipped whole — 31.12', async () => {
+test('a default value holding an `=` is skipped whole — 31.13', async () => {
     const server = await serverOf(
         '{#for { id, tone = pick(seed = 1) + rows } of items}<i>{tone}{rows}</i>{/for}',
         ['rows', 'tone', 'items', 'seed'],
@@ -1137,9 +1137,9 @@ test('an uppercase head is hoisted by both emitters', async () => {
     )
 })
 
-// 32.4 HOLDS WHETHER OR NOT THE VALUE IS QUOTED. THE REVERT: push the unquoted value as a literal
+// 32.3 HOLDS WHETHER OR NOT THE VALUE IS QUOTED. THE REVERT: push the unquoted value as a literal
 // attribute; this reports the author's own `{id}` braces served as the attribute text, unlowered
-// and past the `safeUrl` 32.22 asks a URL attribute for.
+// and past the `safeUrl` 32.21 asks a URL attribute for.
 test('a slot in an unquoted attribute value is an expression', async () => {
     expect(await serverOf('<a href=/x/{id}>y</a>', ['id'])).toContain(
         '__escapeAttribute(__safeUrl(__slotValue(() => `/x/${id()}`)))',
@@ -1151,7 +1151,7 @@ test('a slot in an unquoted attribute value is an expression', async () => {
     expect(compileFile('<a href=/plain>y</a>')).toContain('href=\\"/plain\\"')
 })
 
-// 32.11 — a `style:prop` sets ONE property, and `escapeAttribute` cannot see the character that
+// 32.10 — a `style:prop` sets ONE property, and `escapeAttribute` cannot see the character that
 // says otherwise: `;` is ordinary in every other attribute. THE REVERT: emit `escapeAttribute`
 // here; a value off the wire then writes a whole declaration list into the merged attribute.
 test('an interpolated style property cannot set a second one', async () => {
@@ -1165,7 +1165,7 @@ test('an interpolated style property cannot set a second one', async () => {
     )
 })
 
-// 32.27 — `{raw(x)}` LOWERS IN AN ATTRIBUTE THE WAY IT DOES IN A TEXT SLOT. Left out of the
+// 32.26 — `{raw(x)}` LOWERS IN AN ATTRIBUTE THE WAY IT DOES IN A TEXT SLOT. Left out of the
 // attribute paths, the emitted markup called a bare `raw` no import binds. THE REVERT: drop
 // `rawCalls` from `Lowering`'s splice; this reports `__safeUrl(raw(u))` against an import clause
 // holding only `escapeAttribute, safeUrl` — a ReferenceError at render.
@@ -1283,7 +1283,7 @@ test("an author's module-scope name cannot collide with a runtime import", async
 // beside a `class:name` is merged by the server and left unbound, because `setAttribute('class',
 // …)` replaces the whole token list and takes the directive's name with it — the two bindings
 // would then overwrite each other in whichever order they re-ran. No clause spells `class`'s road
-// out of it the way 32.21 does `style`'s, so the two share this answer rather than each getting
+// out of it the way 32.20 does `style`'s, so the two share this answer rather than each getting
 // its own. THE REVERT: drop the `class` arm of `isMergedPlain`; `__setAttribute` appears here.
 test('a class beside a class: directive compiles and is left unbound', async () => {
     const both = await clientOf('<div class={c} class:on={x}>t</div>', [
@@ -1303,12 +1303,12 @@ test('a class beside a class: directive compiles and is left unbound', async () 
 // A PLAIN `style={expr}` BESIDE A `style:prop` COMPILES AND IS NOT BOUND, and this pins both
 // halves of that. The page RENDERS right \u2014 the server merges the two into one `style` attribute
 // \u2014 so refusing it would break a page that works for a clause that is not built; what it costs
-// is that this one attribute keeps the value standing at render where 32.4 says it moves.
+// is that this one attribute keeps the value standing at render where 32.3 says it moves.
 //
 // THE HOLE IS THE POINT OF THE TEST. `style:width` beside it still gets its binding, so the
 // assertion is not "nothing is bound here" \u2014 it is that the MERGED one is skipped and the
-// property one is not. 32.21 is what closes it, and this test is what fails when it lands.
-test('a style beside a style: property compiles and is left unbound \u2014 32.21', async () => {
+// property one is not. 32.20 is what closes it, and this test is what fails when it lands.
+test('a style beside a style: property compiles and is left unbound \u2014 32.20', async () => {
     const both = await clientOf('<div style={s} style:width={w}>x</div>', [
         's',
         'w',
@@ -1328,7 +1328,7 @@ test('a style beside a style: property compiles and is left unbound \u2014 32.21
 
 // AN ELEMENT THAT IS BOTH A SHARED PARENT AND A BINDING SITE OF ITS OWN walks to a node an anchor
 // is already holding. `hoistPaths`' `nearest` answers only PROPER prefixes, so the element
-// carrying a listener AND a bound attribute — the common case 32.4 creates — re-walked one step
+// carrying a listener AND a bound attribute — the common case 32.3 creates — re-walked one step
 // from the anchor above it, once for the listener and once for the attribute.
 //
 // THE REVERT: drop the exact-match arm from `hoistPaths`' `reference`. Both walks come back as

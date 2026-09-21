@@ -25,7 +25,7 @@ export type Read = {
     end: number
     // `value` lowers to `n()`; `asWritten` stays as written (`n.set(v)`, 31.5); `call` is the
     // explicit `n()` (31.7), which `arguments` says was given any; `shorthand` is `{ n }`;
-    // `write` and `update` are 31.4, and 31.9 where `path` is not empty.
+    // `write` and `update` are 31.4, and 31.11 where `path` is not empty.
     // 33's three: the `props<Props>()` call, which lowers to the record the caller passed, and the
     // pair that brackets a binding element's initializer, which together make a default an
     // accessor. The pair are INSERTIONS — zero-width, so what stands between them goes on being
@@ -49,7 +49,7 @@ export type Read = {
     // An update whose value nothing reads — the statement form, and a `for`'s incrementor.
     discarded: boolean
     arguments: number
-    // 31.9 — the member path between the name and the write: a property's name, or the span of a
+    // 31.11 — the member path between the name and the write: a property's name, or the span of a
     // computed segment, which may itself hold reads.
     path: { name: string | undefined; start: number; end: number }[]
     value: Span | undefined

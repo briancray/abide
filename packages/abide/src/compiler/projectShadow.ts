@@ -8,9 +8,9 @@ export type Span = { start: number; end: number }
 // text and answers, per occurrence, which binding a name reaches (31.3) — and the emitters lower
 // the same text, span by span, so an offset means one thing on both sides.
 //
-// 31.12 FALLS OUT OF THE SHAPE. A `{#for}` is a `for … of` binding its item and its index, so the
+// 31.13 FALLS OUT OF THE SHAPE. A `{#for}` is a `for … of` binding its item and its index, so the
 // body's slots reach the row's binding and never the page's name of the same spelling. The SUBJECT
-// stands before the loop, because 31.12's shadow does not reach it.
+// stands before the loop, because 31.13's shadow does not reach it.
 //
 // EVERY EXPRESSION IS ITS OWN STATEMENT, `;(…)`, so an author's script that ends without a
 // semicolon cannot run into the first slot, and a slot's own right-hand side ends at its `)`.

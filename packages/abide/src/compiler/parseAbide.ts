@@ -99,7 +99,7 @@ export function parseAbide(source: string): AbideFile {
             //
             // A COMMENT IS DROPPED RATHER THAN KEPT. It is a real `childNodes` entry, so keeping
             // one means `planTemplate` counting it and every emitter writing it, and the region
-            // anchors are already the only comments the document carries (41.11). The document
+            // anchors are already the only comments the document carries (41.10). The document
             // loses the author's note and the two sides still agree on every index.
             if (source.startsWith('<!--', at)) {
                 const close = source.indexOf('-->', at + 4)
@@ -275,7 +275,7 @@ export function parseAbide(source: string): AbideFile {
 }
 
 // An HTML tag name is ASCII case-INSENSITIVE, so `</DIV>` closes a `<div>`. A component name is
-// TitleCase (32.19) and an exact match is a case of this one, so there is no second rule here.
+// TitleCase (32.18) and an exact match is a case of this one, so there is no second rule here.
 function sameTag(left: string, right: string): boolean {
     return left.toLowerCase() === right.toLowerCase()
 }
@@ -423,7 +423,7 @@ function forBlock(
             by = token
     }
     // A `{#for}` with nothing to iterate rendered as a block over the subject '' — zero rows,
-    // forever, with nothing saying why (32.24 is an ABSENT subject, not a missing one).
+    // forever, with nothing saying why (32.23 is an ABSENT subject, not a missing one).
     if (of === undefined)
         throw new Error(
             `abide: {#for ${source}} has no \` of \`, so there is nothing to iterate. Write {#for item of list}.`,
@@ -534,24 +534,24 @@ function readTag(
             source[at] !== '>'
         )
             at += 1
-        // 32.4 HOLDS WHETHER OR NOT THE VALUE IS QUOTED. Pushed straight as a literal, a slot in
+        // 32.3 HOLDS WHETHER OR NOT THE VALUE IS QUOTED. Pushed straight as a literal, a slot in
         // an unquoted value — `<a href=/x/{id}>` — was served as the author's own braces, never
-        // lowered and never past the `safeUrl` 32.22 asks a URL attribute for.
+        // lowered and never past the `safeUrl` 32.21 asks a URL attribute for.
         pushQuoted(attributes, attrName, source.slice(valueStart, at), name)
     }
     return { name, attributes, selfClosing: false, end: at }
 }
 
-// 32.4 — A QUOTED VALUE WITH A SLOT IN IT IS AN EXPRESSION. Captured as a literal,
+// 32.3 — A QUOTED VALUE WITH A SLOT IN IT IS AN EXPRESSION. Captured as a literal,
 // `class="badge {tone}"` wrote the braces into the document verbatim, so the page carried the
 // author's source where a class was due.
 //
 // REWRITTEN AS A TEMPLATE LITERAL rather than given a parts array of its own, because that is one
 // expression and the whole `class={expr}` path already takes one: lowered by `Lowering`,
-// escaped by `escapeAttribute`, and scheme-checked by `safeUrl` where 32.22 asks for it. A second
+// escaped by `escapeAttribute`, and scheme-checked by `safeUrl` where 32.21 asks for it. A second
 // shape here would be a second copy of all three.
 //
-// 32.21 — AN INTERPOLATED `style` TAKES THE OTHER ROAD and lowers to one `style:prop` per
+// 32.20 — AN INTERPOLATED `style` TAKES THE OTHER ROAD and lowers to one `style:prop` per
 // declaration, which is why the split happens here, where the interpolated form is still told
 // apart from the whole `style={expr}` one.
 function pushQuoted(
@@ -576,12 +576,12 @@ function pushQuoted(
         // string it would let a value decide which property it sets.
         if (colon === -1 || declaration.slice(0, colon).includes('{'))
             throw new Error(
-                `abide: an interpolated style on <${tag}> sets one property per declaration under a static name, and \`${declaration.trim()}\` has none. Write style:prop={value}. RULEBOOK 32.21.`,
+                `abide: an interpolated style on <${tag}> sets one property per declaration under a static name, and \`${declaration.trim()}\` has none. Write style:prop={value}. RULEBOOK 32.20.`,
             )
         const property = declaration.slice(0, colon).trim()
         if (property === '')
             throw new Error(
-                `abide: an interpolated style on <${tag}> has a declaration with no property name. Write style:prop={value}. RULEBOOK 32.21.`,
+                `abide: an interpolated style on <${tag}> has a declaration with no property name. Write style:prop={value}. RULEBOOK 32.20.`,
             )
         const value = declaration.slice(colon + 1).trim()
         const slotted = interpolated(value)
@@ -666,7 +666,7 @@ function topLevelAt(source: string, target: string, from: number): number {
             continue
         }
         // A QUOTED VALUE IS NOT A LIST OF DECLARATIONS. The `;` inside
-        // `url('data:image/svg+xml;utf8,<svg/>')` split one style declaration into two and 32.21's
+        // `url('data:image/svg+xml;utf8,<svg/>')` split one style declaration into two and 32.20's
         // refusal named a fragment the author never wrote — a build failure on valid CSS.
         if (char === '"' || char === "'") {
             at = skipQuoted(source, at)

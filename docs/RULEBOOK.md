@@ -65,7 +65,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | adoption | What a `reactive` body does with a `Reactive` it returned. |
 | forwarding | The delegation between an adopting `Reactive` and the one it adopted. |
 | propagation | The derivation of a probe from the values a body read. |
-| sink | What 35.7 defines. |
+| sink | What 35.8 defines. |
 | implementation | Anything claiming conformance to this document. |
 
 RFC 2119 keywords are used as that document defines them: **MUST**, **MUST NOT**, **SHALL**,
@@ -1111,7 +1111,7 @@ composite.
 
 25.2 An app's own `onHealth` fields MUST win every collision.
 
-25.3 `health` MUST be seeded per 41.6.
+25.3 `health` MUST be seeded per 41.5.
 
 # 26. Principal
 
@@ -1149,7 +1149,7 @@ an anonymous caller.
 
 26.16 An implementation MUST keep no server-side principal store and no revocation list.
 
-26.17 `principal` MUST be seeded per 41.6.
+26.17 `principal` MUST be seeded per 41.5.
 
 26.18 The cookie the `principal` seal is carried in MUST be named `abide-principal`.
 
@@ -1293,97 +1293,98 @@ declared as one.
 
 31.7 `s` and `s.set` MUST keep compiling inside a `.abide` file.
 
-31.8 Reads inside one `{await expr}` MUST be started before they are awaited.
+31.8 An `await` whose operand is a `Reactive` MUST answer that `Reactive`, and MUST NOT answer the
+value it holds.
 
-31.9 A write through a member path MUST copy down that path and then write, and the copy MUST NOT
+31.9 Such an `await` in a `<script>` MUST hold the render of the component it stands in until the
+`Reactive` has settled.
+
+31.10 Where such an `await`'s operand reads what an earlier one in the same `<script>` is bound to,
+41.2 MUST NOT start the two together.
+
+31.11 A write through a member path MUST copy down that path and then write, and the copy MUST NOT
 be optimised away.
 
-31.10 A read inside an `{await expr}` operand that is not definitely evaluated MUST lower in place,
-and MUST NOT join the set 31.8 starts.
-
-31.11 A mutator lifted per 31.9 MUST be resolved from the type of the `Reactive` rather than from
+31.12 A mutator lifted per 31.11 MUST be resolved from the type of the `Reactive` rather than from
 the member name.
 
-31.12 A template-local binding MUST shadow a name bound to a `Reactive` for the body it is bound in.
+31.13 A template-local binding MUST shadow a name bound to a `Reactive` for the body it is bound in.
 
-31.13 A read spelled `foo()` MUST take no arguments, and an argument MUST be a compile error.
+31.14 A read spelled `foo()` MUST take no arguments, and an argument MUST be a compile error.
 
-31.14 A destructuring pattern or a spread over such a name MUST read it once.
+31.15 A destructuring pattern or a spread over such a name MUST read it once.
 
-31.15 The compiler MUST warn where 31.5 reaches a `Reactive` member the value's type also declares,
+31.16 The compiler MUST warn where 31.5 reaches a `Reactive` member the value's type also declares,
 naming the explicit read.
 
 # 32. Templating
 
 32.1 `{expr}` MUST render reactive text, escaped.
 
-32.2 `{await expr}` MUST block rendering until the expression resolves, and MUST govern the whole
-expression.
+32.2 `{raw(...)}` MUST render raw HTML.
 
-32.3 `{raw(...)}` MUST render raw HTML.
+32.3 A `name={expr}` attribute or property expression MUST be reactive, whole or interpolated.
 
-32.4 A `name={expr}` attribute or property expression MUST be reactive, whole or interpolated.
-
-32.5 `on<event>` MUST bind a native listener on an element, and MUST be an ordinary prop on a
+32.4 `on<event>` MUST bind a native listener on an element, and MUST be an ordinary prop on a
 component.
 
-32.6 `bind:value` MUST read the property and write it back on input or change.
+32.5 `bind:value` MUST read the property and write it back on input or change.
 
-32.7 `bind:prop` on a component MUST add the write path to a prop that already reads live.
+32.6 `bind:prop` on a component MUST add the write path to a prop that already reads live.
 
-32.8 A boolean bind MUST mirror a boolean DOM property as a boolean attribute, and MUST NOT write a
+32.7 A boolean bind MUST mirror a boolean DOM property as a boolean attribute, and MUST NOT write a
 string.
 
-32.9 `bind:group` MUST compare against the input's own value, and MUST NOT emit a `group` attribute.
+32.8 `bind:group` MUST compare against the input's own value, and MUST NOT emit a `group` attribute.
 
-32.10 `bind:element` MUST accept a `Reactive` of an element, or a callback returning an optional
+32.9 `bind:element` MUST accept a `Reactive` of an element, or a callback returning an optional
 `Disposer`.
 
-32.11 `class:name` and `style:prop` MUST set one class or one style property.
+32.10 `class:name` and `style:prop` MUST set one class or one style property.
 
-32.12 `{...expr}` MUST spread props on a component and attributes on an element.
+32.11 `{...expr}` MUST spread props on a component and attributes on an element.
 
-32.13 `{#if}` MUST render one branch.
+32.12 `{#if}` MUST render one branch.
 
-32.14 `{#for}` without a key MUST be positional.
+32.13 `{#for}` without a key MUST be positional.
 
-32.15 `{#for}` without a key over a stateful body MUST warn in development.
+32.14 `{#for}` without a key over a stateful body MUST warn in development.
 
-32.16 `{#for}` over an async iterable MUST render each item as it arrives, and MUST append rather
+32.15 `{#for}` over an async iterable MUST render each item as it arrives, and MUST append rather
 than reconcile.
 
-32.17 `{#try}` MUST be a render-time boundary over a region, and a failure MUST replace the whole
+32.16 `{#try}` MUST be a render-time boundary over a region, and a failure MUST replace the whole
 body.
 
-32.18 An inline `{#component Name(pattern)}` MUST be TitleCase.
+32.17 An inline `{#component Name(pattern)}` MUST be TitleCase.
 
-32.19 A capitalised tag `<Name/>` MUST be a component invocation.
+32.18 A capitalised tag `<Name/>` MUST be a component invocation.
 
-32.20 `<slot/>` MUST render children, and a fallback MUST render where none were passed.
+32.19 `<slot/>` MUST render children, and a fallback MUST render where none were passed.
 
-32.21 An interpolated `style` attribute MUST lower to `style:prop` under a static property name, and
+32.20 An interpolated `style` attribute MUST lower to `style:prop` under a static property name, and
 MUST NOT be built as a string.
 
-32.22 An interpolation in a URL-typed attribute MUST be scheme-checked, and a scheme outside
+32.21 An interpolation in a URL-typed attribute MUST be scheme-checked, and a scheme outside
 `http:`, `https:`, `mailto:`, `tel:` or a relative reference MUST be dropped and warned on
 `abide:render`.
 
-32.23 A control block MUST bind each reactive read and probe call in its subject once for the body.
+32.22 A control block MUST bind each reactive read and probe call in its subject once for the body.
 
-32.24 `{#for}` over an absent subject MUST iterate zero times.
+32.23 `{#for}` over an absent subject MUST iterate zero times.
 
-32.25 A template expression a `NotLanded` aborted MUST leave what it last rendered in place.
+32.24 A template expression a `NotLanded` aborted MUST leave what it last rendered in place.
 
-32.26 `raw` MUST hand back a value branded as raw markup.
+32.25 `raw` MUST hand back a value branded as raw markup.
 
-32.27 `{raw(...)}` MUST lower to a call to `raw`.
+32.26 `{raw(...)}` MUST lower to a call to `raw`.
 
-32.28 A slot MUST render a value branded by `raw` without escaping it.
+32.27 A slot MUST render a value branded by `raw` without escaping it.
 
-32.29 Static text in a `.abide` template MUST render as markup, in body text and in an attribute
+32.28 Static text in a `.abide` template MUST render as markup, in body text and in an attribute
 value alike.
 
-32.30 A static value in an attribute 32.22 scheme-checks MUST be escaped the way `{expr}` is.
+32.29 A static value in an attribute 32.21 scheme-checks MUST be escaped the way `{expr}` is.
 
 # 33. Props
 
@@ -1464,18 +1465,20 @@ dependency of that component.
 
 35.4 `render` MUST take a `Component` already bound to its props.
 
-35.5 `render` MUST produce a document as an async generator of bytes.
+35.5 `render` MUST await a `Component` that answers asynchronously.
 
-35.6 A `Shell` MUST default to `src/ui/app.html`.
+35.6 `render` MUST produce a document as an async generator of bytes.
 
-35.7 A sink MUST be an addressable hole in the output stream that a value still in flight fills
+35.7 A `Shell` MUST default to `src/ui/app.html`.
+
+35.8 A sink MUST be an addressable hole in the output stream that a value still in flight fills
 later.
 
-35.8 An attribute a sink fills MUST be filled on the element itself.
+35.9 An attribute a sink fills MUST be filled on the element itself.
 
-35.9 A sink inside RCDATA MUST fill through the element's own property rather than through markup.
+35.10 A sink inside RCDATA MUST fill through the element's own property rather than through markup.
 
-35.10 The batching unit of a sink fill MUST be the flush and MUST NOT be the production.
+35.11 The batching unit of a sink fill MUST be the flush and MUST NOT be the production.
 
 # 36. Environment and files
 
@@ -1721,38 +1724,35 @@ inline, and the rest MUST be picked up by the client's own request.
 
 41.4 A render MUST continue past a value still in flight, opening the sink 3.4 opens.
 
-41.5 A flush MUST wait for a sink a template asked to block on, and MUST NOT hold document
-generation for it.
-
-41.6 Data MUST reach a browser by answering that browser's own `Rpc` call from the seed buffer, and
+41.5 Data MUST reach a browser by answering that browser's own `Rpc` call from the seed buffer, and
 a document MUST NOT carry a copy of an answer.
 
-41.7 Hydration MUST re-execute setup: every `<script>` and every `reactive` body runs
+41.6 Hydration MUST re-execute setup: every `<script>` and every `reactive` body runs
 again, and a serialized setup result MUST NOT be adopted.
 
-41.8 The `Rpc` calls that re-execution makes MUST be answered from the seed buffer.
+41.7 The `Rpc` calls that re-execution makes MUST be answered from the seed buffer.
 
-41.9 A `{#for}` block over a cursor the server already painted MUST be reconciled against the replayed
+41.8 A `{#for}` block over a cursor the server already painted MUST be reconciled against the replayed
 productions by the block's key, and MUST NOT be appended to.
 
-41.10 `render` MUST emit markers rather than a tree to diff, and the client MUST walk the marker
+41.9 `render` MUST emit markers rather than a tree to diff, and the client MUST walk the marker
 list the document carried rather than the DOM.
 
-41.11 A hydration mismatch MUST rebuild the enclosing block and MUST NOT rebuild the page, warning
+41.10 A hydration mismatch MUST rebuild the enclosing block and MUST NOT rebuild the page, warning
 on `abide:hydrate`.
 
-41.12 A shared `layout.abide` MUST NOT be rebuilt between navigations.
+41.11 A shared `layout.abide` MUST NOT be rebuilt between navigations.
 
-41.13 An `Rpc` call re-execution makes that the seed buffer cannot answer MUST be a hydration
-mismatch, per 41.11.
+41.12 An `Rpc` call re-execution makes that the seed buffer cannot answer MUST be a hydration
+mismatch, per 41.10.
 
-41.14 The seed buffer MUST be filled from the production the render already had, and a handler
+41.13 The seed buffer MUST be filled from the production the render already had, and a handler
 MUST NOT be run a second time to fill it.
 
-41.15 A `{#for}` key the list repeats MUST reconcile the last row under that key, and MUST stop and
+41.14 A `{#for}` key the list repeats MUST reconcile the last row under that key, and MUST stop and
 remove every row it shadows.
 
-41.16 A repeated `{#for}` key MUST warn once for the block on `abide:hydrate`.
+41.15 A repeated `{#for}` key MUST warn once for the block on `abide:hydrate`.
 
 # 42. The app object
 

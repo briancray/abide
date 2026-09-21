@@ -1,4 +1,4 @@
-// 32.22 — a URL-typed attribute is scheme-checked and a scheme outside the safe set is DROPPED.
+// 32.21 — a URL-typed attribute is scheme-checked and a scheme outside the safe set is DROPPED.
 // In #shared beside the escaping because the check has to happen where the value does: a literal
 // `href` is checked at compile time, and an INTERPOLATION cannot be — its value arrives at run
 // time, which is also the only place untrusted data ever arrives. Checking only the literal read
@@ -26,9 +26,9 @@ export function safeUrl(value: unknown): string {
 // navigate — a regex over the raw value called all three of them relative and safe.
 //
 // An `&#106;avascript:` entity reaches the same place by a third road and is stopped one layer up
-// rather than here: `escapeAttribute` encodes the `&`, so the entity never forms. 32.29 narrowed
+// rather than here: `escapeAttribute` encodes the `&`, so the entity never forms. 32.28 narrowed
 // that rewrite off every OTHER static attribute — static text is the author's own markup — and
-// 32.30 is why this set keeps it: here the encoding is not a formatting rule, it is the whole of
+// 32.29 is why this set keeps it: here the encoding is not a formatting rule, it is the whole of
 // what stops the entity, and it is the only guard the scheme check has behind it.
 //
 // The scan stops at the first character no scheme can hold, so a relative reference — the common

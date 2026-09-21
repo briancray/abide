@@ -61,7 +61,7 @@ async function mountPage(source: string) {
 
 test('the server renders one branch, between anchors', async () => {
     const { html } = await mountPage(PAGE)
-    // 32.13 — ONE branch. `open` is false, so the else arm is what was sent.
+    // 32.12 — ONE branch. `open` is false, so the else arm is what was sent.
     expect(html).toContain('<em id="shut">closed</em>')
     expect(html).not.toContain('id="body"')
     // The anchors, and nothing else added: no `data-`, no wrapper, no per-slot marker.
@@ -102,7 +102,7 @@ test('a branch swap replaces the arm and nothing around it', async () => {
     button.click()
     flushSync()
 
-    // 32.13 — the other arm, and only it.
+    // 32.12 — the other arm, and only it.
     expect(document.querySelector('#shut')).toBeNull()
     expect((document.querySelector('#body') as HTMLElement).textContent).toBe(
         'hello ada',
@@ -190,7 +190,7 @@ test('two regions under different parents each find their own', async () => {
 // failure in a module where every other one throws with the clause on it.
 //
 // THE REVERT: read the parent back off `region.close.parentNode?.insertBefore(...)` and remove the
-// guard. This test then reports `no throw, content "" ` where the framed 41.11 error is due, and
+// guard. This test then reports `no throw, content "" ` where the framed 41.10 error is due, and
 // the arm that was there is gone as well.
 test('filling a region that is not in a document is refused, not silent', async () => {
     const { fillRegion, regionAt } = await import('#ui')
@@ -212,6 +212,6 @@ test('filling a region that is not in a document is refused, not silent', async 
         said = (thrown as Error).message
     }
     expect(said).toContain('not in a document')
-    expect(said).toContain('41.11')
+    expect(said).toContain('41.10')
     holder.remove()
 })

@@ -4,7 +4,6 @@ nav: Expressions
 intent: Text, attributes, classes and inline styles that follow a value.
 covers:
   - `{expr}`
-  - `{await expr}`
   - `{raw(...)}`
   - `raw`
   - `Raw`
@@ -28,7 +27,6 @@ tell the page that something changed.
 | --- | --- |
 | `{expr}` | a text node, escaped |
 | `{raw(expr)}` | a text node, as markup |
-| `{await expr}` | a text node, after the expression resolves |
 | `name={expr}` | one attribute or property, whole |
 | `name="…{expr}…"` | one attribute, interpolated into a string |
 | `class:name={cond}` | one class |
@@ -99,17 +97,18 @@ source order, there being nothing else to separate them.
 
 Read on: [Components](reuse-a-piece-of-markup.md)
 
-## `{await expr}` holds the render
+## A hole does not hold the render
 
-`{await invoice.total}` blocks rendering until the expression resolves, and it governs the
-**whole** expression rather than the nearest operand. Reads inside one are started before they
-are awaited, so two of them in a single hole are one round trip and not two.
+A hole is never the thing that waits. `{invoice.total}` renders nothing while the value is in
+flight and fills when it lands, and `{#if invoice.ready()}` gives you a branch to render in the
+meantime — a page a reader can look at rather than a page that is not there yet.
 
-It is the blunt instrument, and most pages want the other one. A plain `{invoice.total}` renders
-nothing and fills when the value lands, and `{#if invoice.ready()}` gives you a branch to render
-in the meantime — a page a reader can look at rather than a page that is not there yet.
+Where a page genuinely should not be served without a value, the `<script>` is what says so:
+`const invoice = await getInvoice()` holds the render until it settles, and `invoice` goes on
+being the value it was. That is one place per component rather than one per hole, which is the
+granularity the decision actually has.
 
-Read on: [Conditionals](show-markup-conditionally.md) ·
+Read on: [Values by name](read-and-write-a-value-by-name.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md)
 
 ## Next

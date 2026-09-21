@@ -61,7 +61,7 @@ async function build(root: string, out: string): Promise<number> {
         // rather than asking about it — and a fresh build adds every file it has.
         const reads = await session?.readsFor(parsed)
 
-        // 32.19 — WHICH FILES ARE INVOKED AS COMPONENTS. A caller's client module imports its
+        // 32.18 — WHICH FILES ARE INVOKED AS COMPONENTS. A caller's client module imports its
         // child's, so a child with nothing to hydrate still needs one to exist (the no-op below),
         // and only a child carries its own markup (`emitClient`).
         const invoked = invokedComponents(parsed.map((entry) => entry.text))
