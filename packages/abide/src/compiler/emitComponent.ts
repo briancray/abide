@@ -2,15 +2,18 @@ import { escapeAttribute } from '#shared/escapeText.ts'
 import { headKeyOf } from '#shared/headKeyOf.ts'
 import { safeUrl } from '#shared/safeUrl.ts'
 import { REGION_CLOSE, REGION_OPEN, ROW_OPEN } from '#ui/REGION.ts'
+import { CHILDREN } from './CHILDREN.ts'
 import type { Read } from './classifyRead.ts'
 import { Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
+    holdsSlot,
     isClassToggle,
     isComponentTag,
     isEventName,
     isHead,
     isSingleRooted,
+    isSlot,
     isStyleProperty,
 } from './planTemplate.ts'
 import { SERVER_SPECIFIER } from './SPECIFIERS.ts'
@@ -99,7 +102,7 @@ export function emitComponent(
     // emitted only where the page invokes something: a page with no component pays nothing.
     return `${names.length === 0 ? '' : `import { ${importClause(names)} } from '${SERVER_SPECIFIER}'\n`}\
 ${componentImports(withoutProps(moduleSetup.imports), '')}${componentImports(withoutProps(setup.imports), '')}
-export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
+export default function Component(${lowering.takesProps() || holdsSlot(file.template) ? `${PROPS} = {}` : ''}) {
 ${opened}${componentBody}
 ${heads ? `    const ${HEADS} = []\n` : ''}\
     const ${BODY} = ${concat(body)}
@@ -157,6 +160,8 @@ function emitNode(
     client: boolean,
 ): string {
     if (node.kind === 'text') return JSON.stringify(node.text)
+
+    if (isSlot(node)) return emitSlot(node as SlotNode, lowering, client)
 
     if (node.kind === 'expression') {
         // 32.1 — escaped at run time, never at compile time: the value is not known here.
@@ -298,6 +303,23 @@ function emitNode(
     ].join(' + ')
 }
 
+type SlotNode = TemplateNode & { kind: 'element' }
+
+// 32.19 — WHERE THE CALLER'S CHILDREN GO, and the fallback where there are none. A REGION, for
+// the reason an invocation is one: what stands here is another file's markup, so the siblings
+// after it cannot be addressed by counting through it.
+//
+// THE TWO LANES CARRY DIFFERENT THINGS UNDER THE SAME KEY. On the server the caller passes a
+// thunk of its rendered markup, because a server writes markup and never addresses it; in the
+// browser it passes markup AND the mount for it, because the bindings between those tags are the
+// CALLER's and only the caller's module has them.
+function emitSlot(node: SlotNode, lowering: Lowering, client: boolean): string {
+    const given = `${PROPS}[${JSON.stringify(CHILDREN)}]`
+    const fallback = emitMarkup(node.children, lowering, client)
+    const passed = client ? `${given}().html()` : `${given}()`
+    return `${JSON.stringify(`<!--${REGION_OPEN}-->`)} + (${given} === undefined ? ${fallback} : ${passed}) + ${JSON.stringify(`<!--${REGION_CLOSE}-->`)}`
+}
+
 // One invocation. The child is a function taking a record of ACCESSORS (33.4, 33.5): the prop is
 // the caller's expression, not a snapshot of it, so the child re-reads when the parent's value
 // moves and neither of them arranges that.
@@ -311,9 +333,15 @@ function emitInvocation(
     lowering: Lowering,
     client: boolean,
 ): string {
-    if (node.children.length > 0)
+    // 33.16 — `children` IS NEVER DECLARED, so a caller writing it as an attribute beside a body
+    // is passing the same prop twice; the record would carry the key twice and the last one
+    // would silently win.
+    if (
+        node.children.length > 0 &&
+        node.attributes.some((attribute) => attribute.name === CHILDREN)
+    )
         throw new Error(
-            `abide: <${node.tag}> is given children, and <slot/> is not built yet. RULEBOOK 32.19.`,
+            `abide: <${node.tag}> is given children as an attribute and between its tags. RULEBOOK 33.16.`,
         )
     const props: string[] = []
     for (const attribute of node.attributes) {
@@ -344,6 +372,15 @@ function emitInvocation(
     // the child's own business (see `emitClient`), so a row builder writes the empty pair and the
     // mount that follows puts the markup in. On the server the child is CALLED, its markup landing
     // between the same two anchors.
+    // 32.19 — THE CHILDREN ARE THE CALLER'S MARKUP, handed over as a thunk under the one key the
+    // compiler owns. Not a prop the child declares: `props<T>()` is a shape an author wrote and
+    // this is the tag's own body, so the child reaches it through `<slot/>` and nothing else.
+    // The client lane passes the pair instead (see `emitClient`), which is why nothing is added
+    // here for it.
+    if (!client && node.children.length > 0)
+        props.push(
+            `${JSON.stringify(CHILDREN)}: () => (${emitMarkup(node.children, lowering, client)})`,
+        )
     return client
         ? JSON.stringify(`<!--${REGION_OPEN}--><!--${REGION_CLOSE}-->`)
         : `${lowering.use('renderComponent')}(${node.tag}, { ${props.join(', ')} }, ${HEADS})`

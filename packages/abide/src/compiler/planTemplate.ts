@@ -89,6 +89,23 @@ export type ComponentPlan = {
     index: number
     parent: number[]
     node: TemplateNode & { kind: 'element' }
+    // 32.19 — what the caller wrote between the tags, planned as its own region for an arm's
+    // reason: the bindings are the CALLER's and their paths are addressed from the slot the
+    // child rendered them into, which is a position neither file can count to from the other.
+    children: TemplatePlan | undefined
+}
+
+// 32.19 — `<slot/>` IN THE CHILD, which is a region for the same reason an invocation is: what
+// stands there is another file's markup, so a sibling after it cannot be addressed by counting.
+// The fallback is the child's own and is planned from the region's root, exactly as an arm is.
+export type SlotPlan = {
+    kind: 'slot'
+    index: number
+    parent: number[]
+    // The `<slot>fallback</slot>` nodes, and their plan. Both, because the client needs the
+    // markup to fill an empty region with and the plan to bind what it filled.
+    node: TemplateNode & { kind: 'element' }
+    fallback: TemplatePlan
 }
 
 // A `{#if}` and its arms. Each arm is planned as its OWN region — its bindings are addressed from
@@ -112,7 +129,7 @@ export type TemplatePlan = {
     runs: TextRun[]
     handlers: HandlerBinding[]
     attributes: AttributeBinding[]
-    regions: (RegionPlan | ListPlan | ComponentPlan)[]
+    regions: (RegionPlan | ListPlan | ComponentPlan | SlotPlan)[]
 }
 
 // `first` is the index the root's first node stands at — 0, except in a row that carries its own
@@ -232,12 +249,32 @@ function walk(
             continue
         }
 
+        if (node.kind === 'element' && isSlot(node)) {
+            plan.regions.push({
+                kind: 'slot',
+                index: regionIndex,
+                parent: [...path],
+                node,
+                fallback: planTemplate(node.children, 0, true),
+            })
+            afterRegion = regionIndex
+            regionIndex += 1
+            sinceRegion = 0
+            childIndex += 1
+            at += 1
+            continue
+        }
+
         if (node.kind === 'element' && isComponentTag(node.tag)) {
             plan.regions.push({
                 kind: 'component',
                 index: regionIndex,
                 parent: [...path],
                 node,
+                children:
+                    node.children.length === 0
+                        ? undefined
+                        : planTemplate(node.children, 0, true),
             })
             afterRegion = regionIndex
             regionIndex += 1
@@ -303,6 +340,35 @@ function walk(
 export function isComponentTag(tag: string): boolean {
     const first = tag.charCodeAt(0)
     return first >= 65 && first <= 90
+}
+
+// 32.19 — `<slot/>` is the position children render into, and it is the one lowercase tag that is
+// not an element. Here for `isComponentTag`'s reason: the server writes the caller's markup
+// there and the client mounts the caller's bindings there, and a predicate each is the two lanes
+// disagreeing about which `<slot>` an author meant.
+export function isSlot(node: TemplateNode): boolean {
+    return node.kind === 'element' && node.lowerTag === 'slot'
+}
+
+// 32.19 — WHETHER THIS FILE HAS A SLOT ANYWHERE IN IT, which is what says its emitted function
+// takes the props record: the caller's children arrive on it, and a component whose only prop is
+// its own body never calls `props` (33.2) and would otherwise be handed nothing to read them
+// from. Over the NODES rather than the plan, because the server emitter reads the template
+// directly and never builds one — and one walk answering for both lanes is why it is here.
+export function holdsSlot(nodes: TemplateNode[]): boolean {
+    for (const node of nodes) {
+        if (isSlot(node)) return true
+        if (node.kind === 'element' && holdsSlot(node.children)) return true
+        if (node.kind === 'block') {
+            if (node.block === 'for') {
+                if (holdsSlot(node.children)) return true
+                continue
+            }
+            for (const branch of node.branches)
+                if (holdsSlot(branch.children)) return true
+        }
+    }
+    return false
 }
 
 export function isEventName(lowerName: string): boolean {

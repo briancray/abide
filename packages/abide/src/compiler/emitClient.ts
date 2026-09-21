@@ -1,3 +1,4 @@
+import { CHILDREN } from './CHILDREN.ts'
 import type { Read } from './classifyRead.ts'
 import {
     emitHead,
@@ -13,11 +14,13 @@ import type { AbideFile } from './parseAbide.ts'
 import {
     type AttributeBinding,
     type ComponentPlan,
+    holdsSlot,
     isHead,
     isSingleRooted,
     type ListPlan,
     planTemplate,
     type RegionPlan,
+    type SlotPlan,
     type TemplatePlan,
     type TextRun,
 } from './planTemplate.ts'
@@ -389,7 +392,9 @@ function emitRegion(
         if (region.kind === 'for')
             emitList(region, root, lowering, lines, helpers, counter)
         else if (region.kind === 'component')
-            emitInvocation(region, root, lowering, lines, counter)
+            emitInvocation(region, root, lowering, lines, helpers, counter)
+        else if (region.kind === 'slot')
+            emitSlot(region, root, lowering, lines, helpers, counter)
         else emitBlock(region, root, lowering, lines, helpers, counter)
 }
 
@@ -401,6 +406,10 @@ function holdsComponent(plan: TemplatePlan): boolean {
         if (region.kind === 'component') return true
         if (region.kind === 'for') {
             if (holdsComponent(region.plan)) return true
+            continue
+        }
+        if (region.kind === 'slot') {
+            if (holdsComponent(region.fallback)) return true
             continue
         }
         for (const branch of region.branches)
@@ -487,6 +496,7 @@ function emitInvocation(
     root: string,
     lowering: Lowering,
     lines: string[],
+    helpers: string[],
     counter: Counter,
 ): void {
     counter.live = true
@@ -497,6 +507,47 @@ function emitInvocation(
             : JSON.stringify(attribute.value)
         props.push(`${JSON.stringify(attribute.name)}: () => (${value})`)
     }
+    // 32.19 — THE CHILDREN ARE MARKUP AND A MOUNT, and they have to be both: the markup is what
+    // fills a slot the server never painted, and the mount is the CALLER's bindings — which only
+    // this module has, addressed from a region only the child knows where to put.
+    if (region.children !== undefined) {
+        const kids = `kd${counter.next}`
+        counter.next += 1
+        const kidLines: string[] = []
+        const kidHelpers: string[] = []
+        const kidDeclarations: string[] = []
+        emitRegion(
+            region.children,
+            kids,
+            lowering,
+            kidLines,
+            kidHelpers,
+            counter,
+            kidDeclarations,
+        )
+        helpers.push(
+            `function ${kids}_html() { return ${emitMarkup(region.node.children, lowering, true)} }`,
+        )
+        helpers.push(
+            mountFunction(
+                kids,
+                kids,
+                [
+                    ...(kidDeclarations.length === 0
+                        ? []
+                        : [`let ${kidDeclarations.join(', ')}`]),
+                    ...kidHelpers,
+                    ...kidLines,
+                ],
+                `${lowering.use('fillRegion')}(${kids}, ${kids}_html())`,
+                lowering,
+                holdsComponent(region.children),
+            ),
+        )
+        props.push(
+            `${JSON.stringify(CHILDREN)}: () => ({ html: ${kids}_html, mount: ${kids}_mount })`,
+        )
+    }
     // THE CHILD'S SCOPE IS OWNED. Its bindings live as long as its nodes do, and what removes
     // those nodes is this region — a row that leaves, an arm that swaps — so the scope that stops
     // them has to be the one this region holds. Held rather than drained, because a child holding
@@ -504,6 +555,65 @@ function emitInvocation(
     lines.push(
         `${SCOPE}.own(${region.node.tag}(${lowering.use('regionAt')}(${step('childAt', region.parent, root, lowering, false)}, ${region.index}), { ${props.join(', ')} }))`,
     )
+}
+
+// 32.19 ON THE CHILD'S SIDE — the position the caller's children render into. Not a watch and not
+// a swap: whether children were given is fixed at the call site, so this is read once and the
+// region holds whichever of the two was decided there for the rest of its life.
+//
+// THE FALLBACK IS THE CHILD'S OWN, so it is emitted here as an arm is — its markup for a region
+// nobody painted, its bindings for one somebody did.
+function emitSlot(
+    region: SlotPlan,
+    root: string,
+    lowering: Lowering,
+    lines: string[],
+    helpers: string[],
+    counter: Counter,
+): void {
+    const name = `sl${counter.next}`
+    counter.next += 1
+    counter.live = true
+
+    const fallbackLines: string[] = []
+    const fallbackHelpers: string[] = []
+    const fallbackDeclarations: string[] = []
+    emitRegion(
+        region.fallback,
+        name,
+        lowering,
+        fallbackLines,
+        fallbackHelpers,
+        counter,
+        fallbackDeclarations,
+    )
+    helpers.push(
+        `function ${name}_html() { return ${emitMarkup(region.node.children, lowering, true)} }`,
+    )
+    helpers.push(
+        mountFunction(
+            name,
+            name,
+            [
+                ...(fallbackDeclarations.length === 0
+                    ? []
+                    : [`let ${fallbackDeclarations.join(', ')}`]),
+                ...fallbackHelpers,
+                ...fallbackLines,
+            ],
+            `${lowering.use('fillRegion')}(${name}, ${name}_html())`,
+            lowering,
+            holdsComponent(region.fallback),
+        ),
+    )
+
+    // THE EMPTY REGION IS THE ONE THE SERVER DID NOT PAINT — a child built in the browser (32.18)
+    // or a page navigated to (30.7). Filled from whichever side owns what goes there, and then
+    // mounted from the same side, so the markup and the bindings can never come from two.
+    lines.push(`const ${name} = ${lowering.use('regionAt')}(${step('childAt', region.parent, root, lowering, false)}, ${region.index})
+const ${name}_kids = ${PROPS}[${JSON.stringify(CHILDREN)}] === undefined ? undefined : ${PROPS}[${JSON.stringify(CHILDREN)}]()
+if (${lowering.use('isEmptyRegion')}(${name})) ${lowering.use('fillRegion')}(${name}, ${name}_kids === undefined ? ${name}_html() : ${name}_kids.html())
+${SCOPE}.own(${name}_kids === undefined ? ${name}_mount(${name}) : ${name}_kids.mount(${name}))`)
 }
 
 // 32.12 — one arm renders. The SERVER already rendered one, so the first run HYDRATES it rather
