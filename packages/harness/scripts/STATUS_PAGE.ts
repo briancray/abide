@@ -1,6 +1,6 @@
-// THE STATUS PAGE, served rather than written. It used to be generated into `dist`
-// and that could not hold: `buildDocs` starts from an EMPTY `dist`, so every docs
-// build deleted the page, including the one `docs:serve` runs on its way to serving
+// THE STATUS PAGE, served rather than written. It used to be generated into the docs
+// output and that could not hold: the docs build starts from an empty one, so every
+// build deleted the page, including the one the status server ran on its way to serving
 // it. A page the server owns has no such ordering to get right.
 //
 // It holds no results. Every number on it arrives from an endpoint the reader

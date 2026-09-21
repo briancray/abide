@@ -42,32 +42,33 @@ goes.
 
 The docs are being written BEFORE the framework, on purpose: a capability that cannot be
 explained as a problem an app author has is not ready to be a capability. `packages/dogfood`
-holds the prose, and a throwaway static build renders it while `.abide` cannot yet compile.
+holds the prose, and THE DOCS ARE AN ABIDE APP: `content/**.md` is compiled into
+`src/ui/pages/**/page.abide`, and from there it is the three commands an app author runs.
 
-    bun run docs          render packages/dogfood/content -> packages/dogfood/dist
-    bun run docs:serve    the same, and serve it on :4000
+    bun run docs          compile packages/dogfood/content -> packages/dogfood/src/ui/pages
+    bun run dev           the same, watched, with `abide dev` serving it on :3131
+    bun run build         the pages, then `abide build`
 
-`content/**.md` is what you edit; `scripts/` is scaffolding and goes when `abide build` can
-serve those pages itself. The information architecture is `scripts/NAV.ts`; a page's `title`,
-short `nav` label, `intent`, `covers` claim and `examples` paths live in its own front matter.
+`content/**.md` is what you edit; the pages under `src/ui/` are generated and not checked in.
+The information architecture is `scripts/NAV.ts`; a page's `title`, short `nav` label,
+`intent`, `covers` claim and `examples` paths live in its own front matter.
 
-MARKDOWN IS THE PAGE and HTML is derived from it. A content link names the `.md`, and the
-renderer rewrites it to `.html` on the way out — so a content file is correct read where it
-LIES, on GitHub or as a download, and not only after a build. `examples:` names each embedded
+MARKDOWN IS THE PAGE and the app is derived from it. A content link names the `.md`, and the
+generator rewrites it to the ADDRESS that page answers — so a content file is correct read
+where it LIES, on GitHub or as a download, and not only after a build. `examples:` names each embedded
 example's directory repo-relative for the same reason: an agent reading the markdown alone
 knows where the files are without being told how `{% example <name> %}` resolves. `bun test`
 gates both — front matter against the directives in the body, every link against the nav.
 
-Every page is downloadable as markdown, and `dist/<slug>.md` is a byte COPY of the content
-file rather than a second render, so there is nothing to keep in sync. `dist/abide.md` is the
-one GENERATED markdown: every page in nav order with the examples expanded inline, for an
-agent that has the file and not the repo. It is built rather than checked in — an agent with
-the repo reads `packages/dogfood/content/` directly, which is the whole point of the two
-rules above.
+Every page is downloadable as markdown, served at its own address with `.md` on the end —
+`/values/show-a-value-that-changes.md` — with its directives expanded, so what a reader
+downloads is the page rather than the markers that build it. `/abide.md` is every page in nav
+order in one file, for an agent that has the file and not the repo. Both are generated rather
+than checked in — an agent with the repo reads `packages/dogfood/content/` directly.
 
-The site's stylesheet is `packages/dogfood/src/ui/app.css` — a real file at the address the
-app's own `import '#ui/app.css'` resolves to once `.abide` compiles, so the CSS does not move
-when the scaffold goes. RULEBOOK 34.6 carries that import: global rather than scoped, folded into
+The site's stylesheet is `packages/dogfood/src/ui/app.css`, which the page imports the way any
+abide component imports one (34.5): the build collects it and the document links what the
+build bundled (38.24). RULEBOOK 34.6 carries that import: global rather than scoped, folded into
 the route's content-hashed sheet ahead of the scoped blocks.
 
 An EXAMPLE is a DIRECTORY under `packages/dogfood/examples/`, not a fence, per RULEBOOK 40: real
@@ -111,7 +112,7 @@ a matching one there is what makes the home page stop being a map.
 There are no horizontal rules anywhere — not the `<hr>` element, and not a border doing
 its job on a heading, a footer or a nav group. Spacing and the heading colour carry the
 structure instead, and the renderer has no `---` branch, so one cannot come back by accident.
-The rules between pages in `dist/abide.md` are the exception that proves it: that file is
+The rules between pages in `/abide.md` are the exception that proves it: that file is
 plain text an agent reads, not a page, and nothing renders it.
 
 The rail renders on EVERY page, because it carries the markdown downloads. The "on this

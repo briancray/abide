@@ -16,7 +16,7 @@
 // would fire hardest on the tutorial, where addressing the reader is the form. Both were dropped.
 
 import { expect, test } from 'bun:test'
-import { readPages } from '../scripts/buildDocs.ts'
+import { readPages } from '../scripts/readContent.ts'
 
 // Prose only: a table cell, a fence, a directive and a heading are none of them sentences, and a
 // code span is one token however long it is — `Reactive<Stored, Failures, Produced>` is not nine

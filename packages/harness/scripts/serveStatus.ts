@@ -2,18 +2,16 @@
 // benchmark, the machinery triple, and a browser pass over every example card —
 // each behind an endpoint the reader triggers.
 //
-// IT HOLDS NO RESULTS AND WRITES NO FILE, and both of those were true the other way
-// an hour ago. A generated `dist/status.html` could not survive its own neighbours:
-// `buildDocs` starts from an EMPTY `dist`, so every docs build deleted it, including
-// the one `docs:serve` runs on the way to serving it. A page the server owns has no
-// ordering to get right — and a page that fetches has the property the static one
-// never could, which is that you leave it open while you work.
+// IT HOLDS NO RESULTS AND WRITES NO FILE. A generated page could not survive its own
+// neighbours — the docs build starts from an empty output and deleted it every time,
+// including on the way to serving it. A page the server owns has no ordering to get
+// right, and a page that fetches has the property the static one never could, which
+// is that you leave it open while you work.
 //
 // NOT IN THE DOCS NAV. A page in `content/` is governed as documentation — a lead on
 // the main overview, a `covers` line, the voice rules — and none of that is true of
 // an instrument.
 
-import { buildDocs } from '../../dogfood/scripts/buildDocs.ts'
 import { countExportedNames } from './countExportedNames.ts'
 import { countLines } from './countLines.ts'
 import { type CardReading, readExampleReadings } from './readExampleReadings.ts'
@@ -25,10 +23,10 @@ import {
 } from './runSuite.ts'
 import { STATUS_PAGE } from './STATUS_PAGE.ts'
 import { STATUS_SCRIPT } from './STATUS_SCRIPT.ts'
+import { serveDocsApp } from './serveDocsApp.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 const EXAMPLES = new URL('../../dogfood/examples/', import.meta.url)
-const DIST = new URL('../../dogfood/dist/', import.meta.url)
 
 const HARNESS_ENTRIES = [
     'harness/measure',
@@ -176,10 +174,11 @@ function streamedMeasure(): Response {
 }
 
 export async function serveStatus(): Promise<void> {
-    // The docs are built once at start: the measure pass drives the built cards, and
-    // the site is served from the same address so a card is one click away from the
-    // numbers about it.
-    await buildDocs()
+    // THE DOCS ARE AN APP NOW, so they are not files to read out of a directory: `abide start`
+    // serves them on a socket of its own and this forwards everything that is not the status
+    // page to it. One address either way, which is what keeps a card one click from the numbers
+    // about it.
+    const docs = await serveDocsApp()
 
     const server = Bun.serve({
         port: Number(process.env.DOCS_PORT ?? 4000),
@@ -200,11 +199,13 @@ export async function serveStatus(): Promise<void> {
             if (path === '/api/machinery') return json(await machinery())
             if (path === '/api/measure') return streamedMeasure()
 
-            const name = path === '/' ? 'index.html' : path.slice(1)
-            const file = Bun.file(new URL(name, DIST))
-            return (await file.exists())
-                ? new Response(file)
-                : new Response('not found', { status: 404 })
+            return await fetch(
+                `${docs.origin}${path}${new URL(request.url).search}`,
+                {
+                    method: request.method,
+                    headers: request.headers,
+                },
+            )
         },
     })
     console.log(`status: ${server.url}status`)

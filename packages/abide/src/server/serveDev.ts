@@ -24,13 +24,14 @@ export type DevOptions = {
     port?: number | undefined
 }
 
-// A request in flight, from the worker's point of view: which worker was asked, and what to do
-// with the answer. Held on this thread because a worker replaced mid-request answers nothing, and
-// the socket waiting on it has to be let go rather than left hanging.
+// A request in flight: what to do with the answer, and the request itself — because a worker
+// replaced mid-request answers nothing, and the ask has to be put to the app that exists.
 type InFlight = {
-    worker: Worker
+    method: string
+    url: string
+    headers: [string, string][]
+    body: ArrayBuffer | null
     settle: (answer: Answer) => void
-    fail: (thrown: Error) => void
 }
 
 type Answer = {
@@ -53,6 +54,11 @@ export async function serveDev(
     let worker: Worker | undefined
     let ready = false
     let nextId = 0
+    // ASKED BEFORE THERE IS ANYONE TO ASK. A replacement terminates the worker and the next one
+    // does not exist until its compile finishes, so a request arriving in that window has
+    // nowhere to go — posted to the terminated worker it is never answered, and the reader's
+    // tab hangs until they give up. It waits here instead.
+    const queued: InFlight[] = []
 
     // The worker, compiled and answering. A compile that threw is sent IN rather than thrown
     // here: 38.4 keeps the app up, so what a failure changes is what the worker serves.
@@ -87,20 +93,29 @@ export async function serveDev(
             modules,
             failure,
         })
+        // The worker holds every request behind its own compile, so what waited here only had
+        // to wait for one to EXIST.
+        const waiting = queued.splice(0)
+        for (const again of waiting) forward(again)
     }
 
     // 38.16 — THE REPLACEMENT. The old worker is terminated, every socket it could still be
     // answering is force-closed, and the new one is opened. The order matters: a socket closed
     // after the new worker is up is a reload client that reconnects to a server still compiling.
+    //
+    // A REQUEST IN FLIGHT IS RE-ASKED rather than failed, and that is the clause read for what it
+    // is FOR: nothing a replaced worker holds may go on answering. Failing it satisfies the
+    // letter and serves a reader a network error for asking while somebody saved — and during a
+    // regeneration of the whole docs tree that is every request. Re-asked, the reader waits and
+    // gets the app the source now says.
     function replace(): void {
         ready = false
         worker?.terminate()
-        for (const [id, waiting] of inFlight) {
-            inFlight.delete(id)
-            waiting.fail(new Error('abide dev: the app was replaced'))
-        }
+        worker = undefined
         for (const socket of sockets) socket.terminate()
         sockets.clear()
+        for (const again of inFlight.values()) queued.push(again)
+        inFlight.clear()
         void open()
     }
 
@@ -115,44 +130,50 @@ export async function serveDev(
         settling = setTimeout(replace, SETTLE_MILLISECONDS)
     })
 
-    function ask(request: Request): Promise<Response> {
-        const current = worker as Worker
-        const id = (nextId += 1)
-        return new Promise<Response>((resolve, reject) => {
-            const settle = (answer: Answer): void => {
-                resolve(
-                    new Response(answer.body, {
-                        status: answer.status,
-                        headers: answer.headers,
-                    }),
-                )
-            }
-            inFlight.set(id, { worker: current, settle, fail: reject })
-            void forward(current, id, request)
-        })
-    }
-
     // A REQUEST AS A MESSAGE. `Request` does not survive a structured clone, so what crosses is
     // the four things the worker rebuilds one from — and the body is collected here rather than
     // streamed, which is what the transport costs and the reason `abide start` is the arm any
     // streaming claim is measured against.
-    async function forward(
-        current: Worker,
-        id: number,
-        request: Request,
-    ): Promise<void> {
+    //
+    // COLLECTED ONCE, HERE, rather than inside `forward`: a body can only be read off a
+    // `Request` once, and a re-asked request is the second read that is not there.
+    async function ask(request: Request): Promise<Response> {
         const body = request.body === null ? null : await request.arrayBuffer()
-        current.postMessage(
-            {
-                kind: 'request',
-                id,
+        return await new Promise<Response>((resolve) => {
+            forward({
                 method: request.method,
                 url: request.url,
                 headers: [...request.headers.entries()],
                 body,
-            },
-            body === null ? [] : [body],
-        )
+                settle: (answer) => {
+                    resolve(
+                        new Response(answer.body, {
+                            status: answer.status,
+                            headers: answer.headers,
+                        }),
+                    )
+                },
+            })
+        })
+    }
+
+    // NOT TRANSFERRED. Handing the buffer over detaches it here, and a request re-asked of the
+    // replacement worker would post a body that is no longer there.
+    function forward(waiting: InFlight): void {
+        if (worker === undefined) {
+            queued.push(waiting)
+            return
+        }
+        const id = (nextId += 1)
+        inFlight.set(id, waiting)
+        worker.postMessage({
+            kind: 'request',
+            id,
+            method: waiting.method,
+            url: waiting.url,
+            headers: waiting.headers,
+            body: waiting.body,
+        })
     }
 
     const server = Bun.serve({

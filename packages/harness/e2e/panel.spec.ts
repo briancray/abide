@@ -13,67 +13,15 @@
 // fetched into a script tag. The build now parses its own inline scripts, and this
 // asserts the whole path actually runs.
 
-import { execFileSync } from 'node:child_process'
-import { createReadStream, existsSync, statSync } from 'node:fs'
-import { createServer, type Server } from 'node:http'
-import { join, normalize } from 'node:path'
 import { expect, test } from '@playwright/test'
 
-const REPO = new URL('../../../', import.meta.url).pathname
-const PAGE = 'values/patch-a-list-from-a-live-feed.html'
+import { BASE } from '../../../playwright.config.ts'
 
-// The panel is a docs artifact, so the docs have to be built before it exists.
-test.beforeAll(() => {
-    execFileSync('bun', ['run', 'docs'], { cwd: REPO, stdio: 'pipe' })
-})
-
-// `node:http` rather than `Bun.serve`: playwright runs on node, which is the same
-// reason `substrates.spec.ts` spawns bun for its bun-side half instead of importing
-// a lane.
-const TYPES: Record<string, string> = {
-    '.html': 'text/html',
-    '.css': 'text/css',
-    '.js': 'text/javascript',
-}
-let server: Server | null = null
-let port = 0
-
-test.beforeAll(async () => {
-    const root = join(REPO, 'packages/dogfood/dist')
-    server = createServer((request, response) => {
-        const asked = (request.url ?? '/').split('?')[0] ?? '/'
-        const file = join(
-            root,
-            normalize(asked.endsWith('/') ? `${asked}index.html` : asked),
-        )
-        if (
-            !file.startsWith(root) ||
-            !existsSync(file) ||
-            !statSync(file).isFile()
-        ) {
-            response.writeHead(404)
-            response.end('404')
-            return
-        }
-        const dot = file.lastIndexOf('.')
-        response.writeHead(200, {
-            'content-type':
-                TYPES[file.slice(dot)] ?? 'application/octet-stream',
-        })
-        createReadStream(file).pipe(response)
-    })
-    await new Promise<void>((resolve) => {
-        server?.listen(0, '127.0.0.1', resolve)
-    })
-    const address = server?.address()
-    if (!address || typeof address === 'string')
-        throw new Error('the docs server did not bind a port')
-    port = address.port
-})
-
-test.afterAll(() => {
-    server?.close()
-})
+// THE DOCS ARE AN APP, and the config's own `webServer` is what serves it — built and started
+// for the whole run (38.6). This spec used to build the docs itself and serve the output over
+// `node:http`, which was two answers to "what does this address serve" and a docs build per
+// browser project.
+const PAGE = `${BASE}/values/patch-a-list-from-a-live-feed`
 
 test('an example measures itself in the reader’s own browser', async ({
     page,
@@ -81,7 +29,7 @@ test('an example measures itself in the reader’s own browser', async ({
 }) => {
     const errors: string[] = []
     page.on('pageerror', (error) => errors.push(error.message))
-    await page.goto(`http://127.0.0.1:${port}/${PAGE}`)
+    await page.goto(PAGE)
 
     // The third card is the one whose manifest names a repeatable op, so it is the
     // one that exercises the timing half as well as the counts.
@@ -129,7 +77,7 @@ test('an example measures itself in the reader’s own browser', async ({
 test('a card naming no op reports counts and says why there is no duration', async ({
     page,
 }) => {
-    await page.goto(`http://127.0.0.1:${port}/${PAGE}`)
+    await page.goto(PAGE)
     const example = page.locator('.example').first()
     await example.getByRole('tab', { name: 'Bench' }).click()
     await example

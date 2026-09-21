@@ -3,7 +3,7 @@
     "version": "0.0.0",
     "private": true,
     "type": "module",
-    "description": "The abide documentation app, and the app abide is dogfooded on",
+    "description": "The abide documentation, as an abide app \u2014 and the app abide is dogfooded on",
     "imports": {
         "#shared": "./src/shared/index.ts",
         "#shared/*": "./src/shared/*",
@@ -13,12 +13,11 @@
         "#server/*": "./src/server/*"
     },
     "scripts": {
-        "build": "abide build --root ./src",
+        "pages": "bun run scripts/buildPages.ts",
+        "build": "bun run pages && abide build --root ./src",
         "start": "abide start --root ./src --port 3131",
-        "dev": "abide dev --root ./src",
-        "typecheck": "tsc -p tsconfig.json",
-        "docs": "bun run scripts/buildDocs.ts",
-        "docs:serve": "bun run scripts/buildDocs.ts --serve"
+        "dev": "bun run scripts/dev.ts",
+        "typecheck": "tsc -p tsconfig.json"
     },
     "dependencies": {
         "abide": "workspace:*"

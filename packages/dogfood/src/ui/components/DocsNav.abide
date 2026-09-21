@@ -1,0 +1,29 @@
+<script>
+// THE NAV, ONE MODULE FOR THE WHOLE SITE rather than markup generated into every page: it is the
+// same list on all eighty-five of them, and a copy per page is that list in every route chunk a
+// reader loads. `NAV_ITEMS.ts` is generated from the same front matter the pages are, so a
+// page's label has one home (`scripts/buildPages.ts`).
+//
+// TWO ARMS RATHER THAN ONE LINK WITH A CONDITIONAL ATTRIBUTE. Whether an attribute is OMITTED
+// where its expression is false is not decided anywhere in the rulebook, and what the compiler
+// does today is write it empty — which `a[aria-current]` in the stylesheet matches, so every
+// link in the nav rendered as the one you are on.
+import { props, raw } from 'abide'
+import { NAV_ITEMS } from '#ui/NAV_ITEMS.ts'
+
+const { current } = props<{ current: string }>()
+</script>
+
+<nav>
+    <a class="brand" href="/">abide<span>docs</span></a>
+    {#for group of NAV_ITEMS}
+        <section>
+            <h2>{group.section}</h2>
+            <ul>
+                {#for item of group.pages}
+                    <li>{#if item.slug === current}<a href={item.href} aria-current="page">{raw(item.nav)}</a>{:else}<a href={item.href}>{raw(item.nav)}</a>{/if}{#if item.stub}<span class="stub" title="Stub — not written yet"></span>{/if}</li>
+                {/for}
+            </ul>
+        </section>
+    {/for}
+</nav>

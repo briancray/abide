@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { readPages } from '../scripts/buildDocs.ts'
 import { NAV } from '../scripts/NAV.ts'
+import { readPages } from '../scripts/readContent.ts'
 import { RATIO_TAGS } from '../scripts/renderExample.ts'
 import { EXAMPLE, LEAD, SNIPPET } from '../scripts/renderMarkdown.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'

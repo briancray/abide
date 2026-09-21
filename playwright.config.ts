@@ -10,7 +10,11 @@ import { defineConfig, devices } from '@playwright/test'
 // not run beside the one that serves everything and the harness pair lived in a
 // `playwright.harness.config.ts` of its own. `abide start` boots, so it does not.
 const PORT = 3131
-const BASE = `http://localhost:${PORT}`
+// EXPORTED, because a spec that needs the APP rather than a blank page needs its address, and a
+// second copy of the port in a spec file is the one way the two can disagree. `panel.spec.ts` is
+// the reader: the measure panel is a docs artifact, so the docs have to be served for it to
+// exist at all.
+export const BASE = `http://localhost:${PORT}`
 const SUB_PATH = '/docs'
 
 export default defineConfig({

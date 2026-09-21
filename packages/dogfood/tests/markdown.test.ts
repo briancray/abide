@@ -1,10 +1,20 @@
 import { expect, test } from 'bun:test'
+import { directoryOf, pageSource, railOf } from '../scripts/buildPages.ts'
 import {
+    type Page,
     readPages,
+    renderBody,
     renderBundle,
-    renderPage,
     renderPageMarkdown,
-} from '../scripts/buildDocs.ts'
+    routeOf,
+} from '../scripts/readContent.ts'
+
+// THE PAGE AS THE APP HOLDS IT. What used to be one HTML document is now a body, a rail and a
+// `.abide` that carries both — so a gate on the prose asks the body, and a gate on what the page
+// OFFERS asks the two the generator writes around it.
+async function bodyOf(page: Page, pages: Page[]): Promise<string> {
+    return await renderBody(page, pages)
+}
 
 async function markdownPages() {
     const pages = await readPages()
@@ -115,16 +125,15 @@ test('every page offers its own markdown and the bundle', async () => {
     for (let index = 0; index < pages.length; index += 1) {
         const page = pages[index]
         if (!page) continue
-        const html = await renderPage(page, pages, index)
-        const name = page.slug.slice(page.slug.lastIndexOf('/') + 1)
-        const root = '../'.repeat(page.slug.split('/').length - 1)
-        if (!html.includes(`<a href="${name}.md" download>`))
+        const rail = railOf(page, await bodyOf(page, pages))
+        const source = pageSource(page, directoryOf(page.slug))
+        if (!rail.includes(`<a href="/${page.slug}.md" download>`))
             missing.push(`${page.slug}: page`)
-        if (!html.includes(`<a href="${root}abide.md" download>`))
+        if (!rail.includes('<a href="/abide.md" download>'))
             missing.push(`${page.slug}: bundle`)
         if (
-            !html.includes(
-                `<link rel="alternate" type="text/markdown" href="${name}.md"`,
+            !source.includes(
+                `<link rel="alternate" type="text/markdown" href="/${page.slug}.md"`,
             )
         )
             missing.push(`${page.slug}: alternate`)
@@ -132,30 +141,23 @@ test('every page offers its own markdown and the bundle', async () => {
     expect(missing).toEqual([])
 })
 
-// HTML is DERIVED from the markdown now, so a body link that still names its `.md` is a
-// 404 on the built site. The nav and the rail never had this problem — they are built from
-// slugs — so the gate is on the body the markdown produced.
-test('a rendered page links to html, and every link resolves', async () => {
+// THE BODY IS DERIVED from the markdown, so a link that still names its `.md` is a 404 on the
+// served app. The nav and the rail never had this problem — they are built from slugs — so the
+// gate is on the body the markdown produced, and what it must hold is an ADDRESS the app
+// answers rather than a file beside the page.
+test('a rendered body links to an address the app answers', async () => {
     const pages = await readPages()
-    const slugs = new Set(pages.map((page) => page.slug))
+    const addresses = new Set(pages.map((page) => routeOf(page.slug)))
     const broken: string[] = []
-    for (let index = 0; index < pages.length; index += 1) {
-        const page = pages[index]
-        if (!page) continue
-        const html = await renderPage(page, pages, index)
-        const main = html.slice(html.indexOf('<main'), html.indexOf('</main>'))
-        for (const match of main.matchAll(/href="(?!https?:|#)([^"]+)"/g)) {
+    for (const page of pages) {
+        const body = await bodyOf(page, pages)
+        for (const match of body.matchAll(/href="(?!https?:|#)([^"]+)"/g)) {
             const target = match[1] ?? ''
-            if (target.endsWith('.zip')) continue
-            const resolved = new URL(
-                target,
-                `file:///${page.slug}`,
-            ).pathname.slice(1)
-            if (
-                !resolved.endsWith('.html') ||
-                !slugs.has(resolved.slice(0, -'.html'.length))
-            )
-                broken.push(`${page.slug}: ${target}`)
+            // The example downloads and the markdown twins are files under `public`, which is
+            // the other half of what the app answers (36.11).
+            if (target.endsWith('.zip') || target.endsWith('.md')) continue
+            const [address] = target.split('#') as [string]
+            if (!addresses.has(address)) broken.push(`${page.slug}: ${target}`)
         }
     }
     expect(broken).toEqual([])
@@ -171,7 +173,7 @@ test('a verdict cell is marked up, and a sentence that opens on one is not', asy
     const holds = pages.find(
         (page) => page.slug === 'values/show-a-value-that-isnt-there-yet',
     )
-    const rendered = await renderPage(holds!, pages, 0)
+    const rendered = await bodyOf(holds as Page, pages)
     expect(rendered).toContain('<b class="verdict-no">no</b>')
     expect(rendered).toContain('<b class="verdict-yes">yes</b>')
     expect(rendered).toContain(
@@ -181,7 +183,7 @@ test('a verdict cell is marked up, and a sentence that opens on one is not', asy
     const failures = pages.find(
         (page) => page.slug === 'server/refuse-a-request-and-say-why',
     )
-    const prose = await renderPage(failures!, pages, 0)
+    const prose = await bodyOf(failures as Page, pages)
     expect(prose).toContain('<td>no route matched')
 })
 
@@ -205,9 +207,8 @@ test('no page ships inline markup the renderer could not read', async () => {
     for (let index = 0; index < pages.length; index += 1) {
         const page = pages[index]
         if (!page) continue
-        const html = await renderPage(page, pages, index)
+        const html = await bodyOf(page, pages)
         const prose = html
-            .slice(html.indexOf('<main'), html.indexOf('</main>'))
             .replace(/<script[\s\S]*?<\/script>/g, '')
             .replace(/srcdoc="[\s\S]*?"/g, '')
             .replace(/<pre>[\s\S]*?<\/pre>/g, '')
@@ -233,7 +234,7 @@ test('a table row has as many cells as its header declares', async () => {
     for (let index = 0; index < pages.length; index += 1) {
         const page = pages[index]
         if (!page) continue
-        const html = await renderPage(page, pages, index)
+        const html = await bodyOf(page, pages)
         for (const table of html.matchAll(/<table>([\s\S]*?)<\/table>/g)) {
             const body = table[1] ?? ''
             const columns = (body.match(/<th>/g) ?? []).length
@@ -260,7 +261,7 @@ test('no rendered table cell ships the backslash of an escaped pipe', async () =
     for (let index = 0; index < pages.length; index += 1) {
         const page = pages[index]
         if (!page) continue
-        const html = await renderPage(page, pages, index)
+        const html = await bodyOf(page, pages)
         for (const table of html.matchAll(/<table>[\s\S]*?<\/table>/g)) {
             if (/\\(?=\s*<\/(?:td|code)>)/.test(table[0])) stray.push(page.slug)
         }
@@ -284,7 +285,7 @@ test('every code caption names a syntax or a file', async () => {
     for (let index = 0; index < pages.length; index += 1) {
         const page = pages[index]
         if (!page) continue
-        const html = await renderPage(page, pages, index)
+        const html = await bodyOf(page, pages)
         for (const caption of html.matchAll(
             /<figcaption>([^<]*)<\/figcaption>/g,
         )) {

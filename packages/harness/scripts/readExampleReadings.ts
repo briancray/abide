@@ -8,8 +8,8 @@
 
 import { chromium, type Locator, type Page } from '@playwright/test'
 
-const REPO = new URL('../../../', import.meta.url).pathname
-const DIST = `${REPO}packages/dogfood/dist`
+import { readPages, routeOf } from '../../dogfood/scripts/readContent.ts'
+import { serveDocsApp } from './serveDocsApp.ts'
 
 type Reading = {
     op: string
@@ -45,26 +45,12 @@ export async function readExampleReadings(
     // than producing one at the end.
     onCard?: (card: CardReading, done: number, total: number) => void,
 ): Promise<CardReading[]> {
-    if (!(await Bun.file(`${DIST}/index.html`).exists()))
-        throw new Error('the docs are not built — run `bun run docs` first')
+    // BUILT AND SERVED HERE. The pass drives the app a reader gets, so it starts one.
+    const app = await serveDocsApp()
 
-    const server = Bun.serve({
-        port: 0,
-        async fetch(request) {
-            const path = new URL(request.url).pathname
-            const file = Bun.file(
-                DIST + (path.endsWith('/') ? `${path}index.html` : path),
-            )
-            return (await file.exists())
-                ? new Response(file)
-                : new Response('404', { status: 404 })
-        },
-    })
-
-    const pages: string[] = []
-    for (const path of new Bun.Glob('**/*.html').scanSync({ cwd: DIST }))
-        if (path !== 'status.html') pages.push(path)
-    pages.sort()
+    // THE ADDRESSES THE APP ANSWERS, off the same list the nav is built from rather than a walk
+    // of an output directory — there is no directory of pages to walk any more.
+    const pages = (await readPages()).map((page) => routeOf(page.slug))
 
     const browser = await chromium.launch()
     const cards: CardReading[] = []
@@ -72,11 +58,11 @@ export async function readExampleReadings(
     try {
         const page = await browser.newPage()
         for (const path of pages) {
-            await page.goto(`http://localhost:${server.port}/${path}`)
+            await page.goto(`${app.origin}${path}`)
             total += await page.locator('.example').count()
         }
         for (const path of pages) {
-            await page.goto(`http://localhost:${server.port}/${path}`)
+            await page.goto(`${app.origin}${path}`)
             const count = await page.locator('.example').count()
             for (let index = 0; index < count; index += 1) {
                 const card = page.locator('.example').nth(index)
@@ -91,7 +77,7 @@ export async function readExampleReadings(
         }
     } finally {
         await browser.close()
-        server.stop(true)
+        app.stop()
     }
     return cards
 }

@@ -144,7 +144,7 @@ export async function compileApp(root: string): Promise<CompiledApp> {
 
 // `page.abide` under a `pages/` directory. Both halves are load-bearing: the name is the address
 // and the directory is what says the address is a ROUTE rather than a component filed anywhere.
-export function isPage(relative: string): boolean {
+function isPage(relative: string): boolean {
     return (
         relative.endsWith('page.abide') &&
         (relative.startsWith('pages/') || relative.includes('/pages/'))

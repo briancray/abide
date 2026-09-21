@@ -99,10 +99,23 @@ async function answerAsk(ask: Ask): Promise<{
         headers: ask.headers,
         body: ask.body,
     })
-    const response =
-        app === undefined
-            ? failedDocument(failure)
-            : await answerRequest(app, request)
+    // A THROW HERE IS AN ANSWER, not a dropped message. The listener is waiting on a reply for
+    // this id and nothing else will send one, so an escape left the reader's tab hanging until
+    // they gave up — and the commonest escape is the whole point of a dev server: a page whose
+    // module does not parse throws when the route table imports it.
+    let response: Response
+    try {
+        response =
+            app === undefined
+                ? failedDocument(failure)
+                : await answerRequest(app, request)
+    } catch (thrown) {
+        response = failedDocument(
+            thrown instanceof Error
+                ? (thrown.stack ?? thrown.message)
+                : String(thrown),
+        )
+    }
     const body = await response.arrayBuffer()
     return {
         kind: 'response',

@@ -711,7 +711,7 @@ body { margin:0; padding:1.4rem; background:var(--paper); color:var(--ink);
     // come back: the attribute defers a FETCH, and a srcdoc frame has no fetch to defer.
     // Measured 2642px below the fold with the attribute set and the frame's own script
     // already run. What the page does instead is restart the arm on first intersection,
-    // which is in `buildDocs.ts` because only the parent can see where the frame is.
+    // which is in `assets/docs.js` because only the parent can see where the frame is.
     return `<div class="ex-browser">
 <p class="ex-live">Live</p>
 <iframe class="ex-result" title="The rendered output of ${escapeHtml(route)}" sandbox="allow-scripts" srcdoc="${escapeHtml(html)}"></iframe>

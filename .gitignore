@@ -17,3 +17,9 @@ blob-report
 
 # Emitted modules a test imports. See packages/abide/tests/temporaryModule.ts
 .test-modules/
+
+# The documentation, compiled into the app. `bun run docs` writes these from `content/`.
+# See packages/dogfood/scripts/buildPages.ts
+packages/dogfood/src/ui/pages/
+packages/dogfood/src/ui/public/
+packages/dogfood/src/ui/NAV_ITEMS.ts

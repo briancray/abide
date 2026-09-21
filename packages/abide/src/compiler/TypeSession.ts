@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'node:fs' // Bun exposes no sync directory listing of its own
+import { type Dirent, readdirSync, statSync } from 'node:fs' // Bun exposes no sync directory listing of its own
 import { basename, dirname, join, resolve } from 'node:path' // Bun exposes no path helpers of its own
 import type { Node, TypeNode } from 'typescript/unstable/ast'
 import {
@@ -95,10 +95,23 @@ export class TypeSession {
 
         const files: string[] = []
         const directories: string[] = []
+        // A DIRECTORY THAT IS NOT THERE IS A LISTING OF THE SHADOWS ALONE, not a throw. The
+        // checker calls this over the api and a throw crosses back as a remote error, which
+        // PANICS the checker process — so a directory deleted between the glob and the ask took
+        // the whole command down with it. `abide dev` is where that happens as a matter of
+        // course: a generator that rewrites a tree of pages deletes every one of them first, and
+        // the watcher fires while it is doing it.
+        let entries: Dirent[]
+        try {
+            entries = readdirSync(directory, { withFileTypes: true })
+        } catch (thrown) {
+            if ((thrown as { code?: unknown }).code !== 'ENOENT') throw thrown
+            return { files: mine, directories: [] }
+        }
         // THE LISTING ALREADY KNOWS. A `statSync` per entry was N syscalls for an answer
         // `readdirSync` hands back with the name, and it THREW on a dangling symlink — an Emacs
         // `.#page.abide` lock beside a page took the whole build down with it.
-        for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        for (const entry of entries) {
             // A symlink is the one entry the listing cannot answer for, and a dangling one has no
             // answer at all — which is a file as far as this is concerned.
             if (entry.isSymbolicLink()) {
