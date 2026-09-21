@@ -99,7 +99,7 @@ export function emitComponent(
     // emitted only where the page invokes something: a page with no component pays nothing.
     return `${names.length === 0 ? '' : `import { ${importClause(names)} } from '${SERVER_SPECIFIER}'\n`}\
 ${componentImports(withoutProps(moduleSetup.imports), '')}${componentImports(withoutProps(setup.imports), '')}
-export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
+export default ${lowering.holdsRender() ? 'async ' : ''}function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
 ${opened}${componentBody}
 ${heads ? `    const ${HEADS} = []\n` : ''}\
     const ${BODY} = ${concat(body)}

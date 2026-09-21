@@ -25,7 +25,11 @@ import {
 } from 'typescript/unstable/async'
 import { classifyPropRead, classifyRead, type Read } from './classifyRead.ts'
 import type { AbideFile } from './parseAbide.ts'
-import { projectShadow } from './projectShadow.ts'
+import {
+    type Projection,
+    projectShadow,
+    type ScriptAwait,
+} from './projectShadow.ts'
 
 // Where 31.3 gets its answer. A `.abide` file is projected into a SHADOW `.ts` held in a virtual
 // filesystem and never written to disk, and TypeScript's own checker is asked what each declared
@@ -150,11 +154,13 @@ export class TypeSession {
     ): Promise<Read[][]> {
         // Per source, its shadow's path and where its scripts end, or '' where nothing is declared.
         const queries: { shadowPath: string; scriptsEnd: number }[] = []
+        const projections: Projection[] = []
         const created: string[] = []
         const changed: string[] = []
 
         for (const source of sources) {
             const projection = projectShadow(source.file)
+            projections.push(projection)
             // 34.2 — A `<script module>` DECLARES NAMES TOO, and the `<script>` under it is inside
             // that scope on both sides. The projection holds both from offset 0.
             const scripts = projection.text.slice(0, projection.scripts.end)
@@ -283,6 +289,13 @@ export class TypeSession {
                     }
                 await Promise.all(holding)
                 await props
+                awaitSplices(
+                    projections[at] as Projection,
+                    reactiveNames(names, reactive),
+                    sourceFile,
+                    query.scriptsEnd,
+                    reads,
+                )
                 reads.sort(byPosition)
             }),
         )
@@ -475,6 +488,92 @@ function side(read: Read): number {
     return read.shape === 'defaultClose' ? 1 : 0
 }
 
+// The names the checker answered `Reactive<…>` for, out of the declarations the walk collected —
+// the two arrays are index-aligned, `names` holding the identifier and `reactive` its symbol or
+// `undefined`.
+function reactiveNames(
+    names: Node[],
+    reactive: (unknown | undefined)[],
+): Set<string> {
+    const found = new Set<string>()
+    for (let at = 0; at < names.length; at += 1)
+        if (reactive[at] !== undefined)
+            found.add((names[at] as unknown as { text: string }).text)
+    return found
+}
+
+// 31.8, 31.9, 31.10 — WHAT BECOMES OF THE `await`s THE PROJECTION BLANKED. Two answers, and the
+// checker is what tells them apart:
+//
+// AN OPERAND THAT IS NOT A `Reactive` gets its keyword back. `const rows = await fetch(url)` is an
+// ordinary promise and 31.8 does not reach it, so the blank is undone and nothing else happens.
+//
+// ONE THAT IS joins a BARRIER. The declaration keeps the `Reactive` (31.8) and the wait is moved
+// down to a `await name` statement — which is not a delay but the whole of 31.10: reaching a
+// `Reactive` starts its work (1.7), so two declarations that both started before either is awaited
+// settle together, where an `await` left where the author wrote it makes the second call wait for
+// the first to land before it is even made.
+//
+// WHERE THE BARRIER GOES is the exception 31.10 carves. It stands before the first top-level
+// statement that MENTIONS a name still pending — `getOrders({ id: user.id })` reads `user`, and a
+// read of a value that has not landed throws (2.10) — and at the end of the script otherwise. The
+// mention is asked of the statement's TEXT rather than of its reads: a name inside a function body
+// there does not run yet and would not have to close the group, but closing it early costs one
+// round trip and getting it wrong costs a `NotLanded`, so the cheap answer is the safe one.
+function awaitSplices(
+    projection: Projection,
+    reactiveNames: Set<string>,
+    sourceFile: { statements: readonly Node[] },
+    scriptsEnd: number,
+    reads: Read[],
+): void {
+    if (projection.awaits.length === 0) return
+    const held = new Map<string, ScriptAwait>()
+    for (const awaited of projection.awaits) {
+        if (!reactiveNames.has(awaited.name)) {
+            reads.push(
+                spliced(
+                    awaited.keyword.start,
+                    awaited.keyword.end,
+                    'awaitKeyword',
+                ),
+            )
+            continue
+        }
+        held.set(awaited.name, awaited)
+    }
+    if (held.size === 0) return
+
+    const barrier = (at: number, pending: string[]): void => {
+        for (const name of pending) {
+            const read = spliced(at, at, 'awaitBarrier')
+            read.awaited = name
+            reads.push(read)
+        }
+    }
+
+    let pending: string[] = []
+    for (const statement of sourceFile.statements) {
+        const start = statement.getStart()
+        if (start >= scriptsEnd) break
+        const text = projection.text.slice(start, statement.getEnd())
+        if (
+            pending.length > 0 &&
+            pending.some((name) => new RegExp(`\\b${name}\\b`).test(text))
+        ) {
+            barrier(start, pending)
+            pending = []
+        }
+        for (const [name, awaited] of held)
+            if (
+                awaited.keyword.start >= start &&
+                awaited.keyword.start < statement.getEnd()
+            )
+                pending.push(name)
+    }
+    barrier(projection.barrier, pending)
+}
+
 // A read that is a SPLICE rather than a name: the span it replaces, and what it becomes. A span of
 // zero width is an INSERTION, and the walk goes on from where it stood.
 function spliced(start: number, end: number, shape: Read['shape']): Read {
@@ -490,5 +589,6 @@ function spliced(start: number, end: number, shape: Read['shape']): Read {
         arguments: 0,
         path: [],
         value: undefined,
+        awaited: '',
     }
 }

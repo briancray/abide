@@ -94,6 +94,14 @@ export class Lowering {
         return this.lower(this.projection.scripts, false)
     }
 
+    // 35.5 — WHETHER THE EMITTED COMPONENT IS `async`. Any top-level `await` in the `<script>`
+    // makes it one: the two 31.8 tells apart both leave an `await` in the body — one where the
+    // author wrote it, one at 31.10's barrier — so this is a question about the script rather
+    // than about what the checker answered.
+    holdsRender(): boolean {
+        return this.projection.holds
+    }
+
     // A template expression. 32.26 — a SLOT's `raw(x)` lowers to the framework's own `raw`, which
     // is why the markup-writing holders (an expression, an attribute value) ask for it and a
     // subject, a key and a listener do not.
@@ -220,6 +228,14 @@ export class Lowering {
                 return '() => ('
             case 'defaultClose':
                 return ')'
+            // 31.8 — the operand was not a `Reactive` after all, so the keyword the projection
+            // blanked goes back and the statement is the one the author wrote.
+            case 'awaitKeyword':
+                return 'await'
+            // 31.9 — the hold, moved down to where 31.10 put it. A `Reactive` is thenable (1.4)
+            // and the work is already running (1.7), so this waits rather than starts.
+            case 'awaitBarrier':
+                return `;await ${read.awaited}\n`
         }
         const value =
             read.value === undefined ? '1' : this.lower(read.value, raw).trim()

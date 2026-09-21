@@ -421,6 +421,139 @@ let late = reactive(false)
     expect(work.attributesSet).toBe(0)
 })
 
+// 31.8, 31.9 — AN `await` IN A `<script>` HOLDS THE RENDER, AND LEAVES THE NAME THE `Reactive`.
+// TWO ASSERTIONS AND NEITHER IS OPTIONAL, which the first draft of this test got wrong: it
+// asserted only the rendered `42` and PASSED with the blanking reverted, because a `total` that
+// is a plain number renders `42` just as well. The hold and the binding are separate mechanisms
+// and only a WRITE tells them apart.
+//
+// THE REVERT: drop the `blanks.push` in `projectShadow`'s `blankAwaits`, leaving the `await` where
+// the author wrote it. The checker then types `total` as `Awaited<Reactive<number>>` — the VALUE,
+// a `Reactive` being thenable (1.4) — so the handler lowers as written and reports
+// `This assignment will throw because "total" is a constant` where the text should move to 7. The
+// DOCUMENT is byte-identical under that revert, which is why the first assertion alone is not a
+// gate and the click is.
+test('an await in a script holds the render and keeps the Reactive — 31.8, 31.9', async () => {
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+const total = await reactive(async () => {
+    await Bun.sleep(20)
+    return 42
+})
+</script>
+
+<p id="out">{total}</p>
+<button id="go" onclick={() => { total = 7 }}>go</button>`)
+
+    // 31.9 — THE DOCUMENT THE SERVER WROTE CARRIES THE VALUE, with no client at all. That is the
+    // whole of what holding buys and the one thing a hole cannot do.
+    expect(html).toContain('<p id="out">42</p>')
+
+    // 31.8 — AND `total` IS STILL THE `Reactive`, which is the half the markup cannot show.
+    // AWAITED, because the client re-executes the same setup (41.7): this page's mount holds
+    // exactly as its render did, so the listeners are attached a turn after the call.
+    await mount(document.body)
+    flushSync()
+    ;(document.querySelector('#go') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelector('#out')?.textContent).toBe('7')
+})
+
+// THE OTHER ARM OF THE SAME PAGE, and it is what makes the one above mean something: without the
+// `await` the position ABORTS (32.24) and the document goes out with a hole. A test that only
+// asserted the held page would pass against a compiler that blocked on every read.
+test('the same page without the await ships the hole — 32.24', async () => {
+    const { html } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+const total = reactive(async () => {
+    await Bun.sleep(20)
+    return 42
+})
+</script>
+
+<p id="out">{total}</p>`)
+
+    expect(html).toContain('<p id="out"></p>')
+})
+
+// 31.10 — TWO AWAITS SIDE BY SIDE SETTLE TOGETHER. The barrier is what buys it: reaching a
+// `Reactive` starts its work (1.7), so both declarations run before either is waited on.
+//
+// TIMED, BECAUSE NOTHING ELSE CAN SEE IT. Both arms render `AB`, so no assertion on the output
+// distinguishes them — this is the "does less work" shape with wall clock as the counter, and the
+// bound is loose on purpose: the claim is "one wait, not two", not a number.
+//
+// THE REVERT: in `awaitSplices`, close the group at every statement rather than only at one that
+// mentions a pending name. The document is identical — `AB` either way — and this reports
+// 144.9 ms against the 90 ms bound, which is the two 50 ms sleeps end to end.
+test('two awaits in one script settle together — 31.10', async () => {
+    const started = Bun.nanoseconds()
+    const { html } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+const first = await reactive(async () => {
+    await Bun.sleep(50)
+    return 'A'
+})
+const second = await reactive(async () => {
+    await Bun.sleep(50)
+    return 'B'
+})
+</script>
+
+<p id="out">{first}{second}</p>`)
+    const took = (Bun.nanoseconds() - started) / 1e6
+
+    expect(html).toContain('<p id="out">AB</p>')
+    expect(took).toBeLessThan(90)
+})
+
+// 31.10's EXCEPTION. `second`'s operand reads `first`, and a read of a value that has not landed
+// throws (2.10) — so this pair is the one that may NOT be started together, and the barrier
+// closes in front of it.
+//
+// THE REVERT: drop the mention check in `awaitSplices`, leaving one barrier at the group's end.
+// `first()` then runs before anything has landed and this throws `NotLanded: reactive has not
+// landed` out of `Component` rather than rendering `A!`.
+//
+// THE SUBJECT IS READ EAGERLY ON PURPOSE. Written `reactive(async () => first + '!')` the read is
+// inside a BODY, which does not run until after the barrier either way — that version passed with
+// the mention check reverted, and tested nothing. The value overload reads at the call.
+test('an await that reads an earlier one settles after it — 31.10', async () => {
+    const { html } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+const first = await reactive(async () => {
+    await Bun.sleep(20)
+    return 'A'
+})
+const second = await reactive(first + '!')
+</script>
+
+<p id="out">{second}</p>`)
+
+    expect(html).toContain('<p id="out">A!</p>')
+})
+
+// 31.8 REACHES A `Reactive` AND NOTHING ELSE. An ordinary promise keeps the `await` the author
+// wrote, so the binding is what `await` always gave them — the projection blanks every one of
+// these and only the checker can say which to put back.
+//
+// THE REVERT: drop the `awaitKeyword` arm of `awaitSplices`. The blank is never undone, `rows` is
+// bound to the PROMISE, and `rows.ok` is `undefined` — this reports an empty hole where `yes` is
+// due.
+test('an await over a plain promise is left alone — 31.8', async () => {
+    const { html } = await mountPage(`<script>
+const rows = await Promise.resolve({ ok: 'yes' })
+</script>
+
+<p id="out">{rows.ok}</p>`)
+
+    expect(html).toContain('<p id="out">yes</p>')
+})
+
 // 41.10 — A MISMATCH MUST NOT REBUILD THE PAGE, and the page is the one region with no block
 // around it to rebuild instead. `Mismatch` was written against exactly the failure this guards:
 // an ordinary throw out of `mount` skips every binding and listener after the one that refused,

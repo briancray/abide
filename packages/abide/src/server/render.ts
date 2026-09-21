@@ -1,5 +1,7 @@
-// 35.4 and 35.6 — `render` takes a component already bound to its props and produces the
-// document as an async generator of bytes.
+// 35.4, 35.5 and 35.6 — `render` takes a component already bound to its props, awaits it where it
+// answers asynchronously, and produces the document as an async generator of bytes.
+
+import { isThenable } from '#shared/reactive/isThenable.ts'
 
 // REGISTRY declares `Component` opaque. What a compiled component IS today is a function
 // returning its markup, and the cast lives here, in one place, rather than in the type an app
@@ -19,11 +21,20 @@ const BARE_SHELL = '<!doctype html><html><head></head><body></body></html>'
 
 const ENCODER = new TextEncoder()
 
+// What a compiled component answers. One reference beyond the cast that reads it — the `await`
+// guard needs the settled shape and the promise shape to be the same name.
+type Rendered = { head: string; body: string }
+
 export async function* render(
     component: Component,
     shell?: Shell,
 ): AsyncGenerator<Uint8Array> {
-    const rendered = (component as () => { head: string; body: string })()
+    // 35.5 — A COMPONENT WHOSE `<script>` AWAITS ANSWERS A PROMISE (31.9), and one whose does not
+    // answers the record outright. GUARDED rather than awaited unconditionally, for the reason the
+    // shell below is: most components hold nothing, and an `await` on a settled value is a promise
+    // wrap and a microtask turn per render.
+    const answered = (component as () => Rendered | PromiseLike<Rendered>)()
+    const rendered = isThenable(answered) ? await answered : answered
     // GUARDED, because the string form is already settled: `shellText` is `async`, so awaiting it
     // unconditionally wrapped a promise and spent a microtask turn per request for nothing.
     const document = typeof shell === 'string' ? shell : await shellText(shell)
