@@ -1,8 +1,19 @@
 import type { Attribute, Branch, TemplateNode } from './TemplateNode.ts'
 
-// ONE walk over the tree BOTH emitters read, so the position the server writes and the position
-// the client walks to cannot drift: the client looks a binding's address up here rather than
-// recomputing it beside the markup.
+// THE CLIENT'S ADDRESSES, and the CLASSIFICATION both emitters share. Two different things live
+// here and only the second is common to the two lanes, which is worth being exact about because
+// the file used to say the walk itself was:
+//
+// THE PLAN IS WALKED BY `emitClient` ALONE. A server writes markup in tree order and never
+// addresses a node, so it has nothing to look up — `emitComponent` reads the template directly
+// and does not call `planTemplate` at all. What the plan buys is that the client looks a binding's
+// address up here rather than recomputing it beside the markup.
+//
+// WHAT BOTH EMITTERS READ IS THE PREDICATES — `isComponentTag`, `isEventName`, `isHead`,
+// `isSingleRooted`, `isStyleProperty`. THAT is what stops the two lanes drifting: an `onclick` the
+// server declines to write and the client binds as a listener is one predicate answering twice,
+// and one copy is that agreement. So a decision that must bind BOTH lanes belongs in a predicate
+// here, not in the walk below — the walk is a place only one lane will ever reach.
 //
 // A TEXT RUN IS THE UNIT, not a slot. Adjacent text nodes MERGE when a browser parses markup, so
 // `<p>{label}: {count}</p>` arrives as the single text node `clicks: 0` however it was written.
@@ -40,6 +51,19 @@ export type HandlerBinding = {
     path: number[]
     event: string
     attribute: Attribute
+}
+
+// 32.4 — `name={expr}` IS REACTIVE, which the server half alone cannot make it: it writes the
+// value standing at render and nothing ever writes it again. The path is the ELEMENT's, reached by
+// the same walk a listener's is, so nothing is added to the document to find it.
+//
+// `property` IS THE `style:prop` NAME and `undefined` for an ordinary attribute. The two are one
+// binding site with two writes rather than two plans, because what differs is only the call the
+// value is handed to — 32.11 sets one property, everything else sets one attribute.
+export type AttributeBinding = {
+    path: number[]
+    attribute: Attribute
+    property: string | undefined
 }
 
 // A `{#for}`: ONE body, planned once and instantiated per row. A row's paths are the row's own,
@@ -85,6 +109,7 @@ export type TemplatePlan = {
     inRegion: boolean
     runs: TextRun[]
     handlers: HandlerBinding[]
+    attributes: AttributeBinding[]
     regions: (RegionPlan | ListPlan | ComponentPlan)[]
 }
 
@@ -102,6 +127,7 @@ export function planTemplate(
         inRegion,
         runs: [],
         handlers: [],
+        attributes: [],
         regions: [],
     }
     walk(template, [], plan, first)
@@ -222,14 +248,49 @@ function walk(
         if (node.kind === 'element') {
             const here = place()
             for (const attribute of node.attributes) {
-                if (!attribute.expression || !isEventName(attribute.lowerName))
+                if (!attribute.expression) continue
+                if (isEventName(attribute.lowerName)) {
+                    // 32.5 — a native listener on the element itself, reached by the same walk a
+                    // text node is, so nothing is added to the document to find it.
+                    plan.handlers.push({
+                        path: here,
+                        event: attribute.lowerName.slice(2),
+                        attribute,
+                    })
                     continue
-                // 32.5 — a native listener on the element itself, reached by the same walk a
-                // text node is, so nothing is added to the document to find it.
-                plan.handlers.push({
+                }
+                // 32.12's spread is not built, and an emitter that planned one would bind a name
+                // beginning `...` as an attribute.
+                if (attribute.name.startsWith('...')) continue
+                // 32.11, 32.21 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE,
+                // merged by the server emitter. So a plain `style={expr}` standing beside one
+                // cannot be written back on its own: `setAttribute('style', …)` replaces the whole
+                // declaration list and takes the `style:` props with it, and the two bindings then
+                // overwrite each other in whichever order they re-ran.
+                //
+                // ALLOWED AND LEFT UNBOUND, rather than refused. The page still RENDERS right —
+                // the server writes both halves into the one merged attribute — so the only thing
+                // a build error would buy is breaking a page that works today for a clause that
+                // is not built. What it costs is the hole: this one attribute keeps the value
+                // standing at render where 32.4 says it moves, and nothing reports that.
+                //
+                // 32.21 IS WHAT CLOSES IT, not a binding here: an interpolated `style` lowers to
+                // `style:prop` under a static name and is never built as a string, and then there
+                // is no whole-attribute write left to clobber anything. This exception leaves with
+                // it — until then a binding would be wrong half the time, because
+                // `setAttribute('style', …)` replaces the whole declaration list and takes the
+                // `style:` props with it, whichever order the two re-ran in.
+                if (
+                    attribute.lowerName === 'style' &&
+                    node.attributes.some(isStyleProperty)
+                )
+                    continue
+                plan.attributes.push({
                     path: here,
-                    event: attribute.lowerName.slice(2),
                     attribute,
+                    property: isStyleProperty(attribute)
+                        ? attribute.name.slice('style:'.length)
+                        : undefined,
                 })
             }
             walk(node.children, here, plan)
@@ -254,6 +315,17 @@ export function isComponentTag(tag: string): boolean {
 
 export function isEventName(lowerName: string): boolean {
     return lowerName.length > 2 && lowerName.startsWith('on')
+}
+
+// 32.11 — `style:prop` sets ONE style property. Here rather than beside the emitter that writes
+// the declaration out, for `isComponentTag`'s reason: the plan is what both emitters read, and an
+// edge from the plan to an emitter is a cycle. The prefix is matched on the FOLDED name; the
+// property itself is read from the author's spelling, because a custom property is case-sensitive.
+export function isStyleProperty(attribute: Attribute): boolean {
+    return (
+        attribute.lowerName.length > 6 &&
+        attribute.lowerName.startsWith('style:')
+    )
 }
 
 export function isHead(node: TemplateNode): boolean {

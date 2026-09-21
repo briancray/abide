@@ -231,3 +231,60 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
         [...document.querySelectorAll('#list li')].map((n) => n.textContent),
     ).toEqual(['north', 'south'])
 })
+
+// 32.4 — `name={expr}` IS REACTIVE, and the binding is what makes it so. The server writes the
+// value standing at render and, without this, nothing ever writes it again: a page whose `{tone}`
+// text moved while its `title={tone}` stayed behind is what shipped, and no assertion on the slot
+// could see it — the two read the same value, so the one that worked hid the one that did not.
+//
+// BOTH POSITIONS ON ONE PAGE, which is what makes the case distinguish. A page with only the
+// attribute reports the server's value on the first read whether a binding exists or not; it is
+// the SECOND read, after a write, that parts them.
+//
+// THE REVERT: drop the `plan.attributes` loop in `emitRegion`. The document is byte-identical and
+// the text beside it still moves; this reports `calm` where `urgent` is due.
+test('an attribute expression keeps moving after hydration — 32.4', async () => {
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+let tone = reactive('calm')
+const kind = 'card'
+</script>
+
+<main><p id="out" class="card" data-kind={kind} title={tone}>{tone}</p>
+<button id="go" onclick={() => { tone = 'urgent' }}>go</button></main>`)
+
+    // The server wrote the value standing at render, so the attribute is right with no JS at all.
+    expect(html).toContain('title="calm"')
+
+    // ONE BINDING PER LIVE POSITION AND NONE FOR THE OTHER TWO. `class="card"` never reaches the
+    // plan at all — it holds no expression — and `data-kind={kind}` does, which is the one the
+    // `readsIn` check is actually for: an expression that reads nothing reactive is written once
+    // by the server and never moves, and a binding for it is a reader woken on every page for
+    // nothing. The static attribute cannot distinguish that, and asserting it was the whole of
+    // this gate until the revert showed nothing failing.
+    // THE REVERT: drop the `readsIn` check in the attribute loop; this reports 3.
+    const mountWork = measure(() => {
+        mount(document.body)
+        flushSync()
+    })
+    expect(mountWork.bindingRuns).toBe(2)
+
+    const out = document.querySelector('#out') as HTMLElement
+    expect(out.getAttribute('title')).toBe('calm')
+
+    const work = measure(() => {
+        ;(document.querySelector('#go') as HTMLElement).click()
+        flushSync()
+    })
+    expect(out.getAttribute('title')).toBe('urgent')
+    expect(out.textContent).toBe('urgent')
+    // Both unbound attributes are untouched, and still carry what the server wrote.
+    expect(out.getAttribute('class')).toBe('card')
+    expect(out.getAttribute('data-kind')).toBe('card')
+    // ONE ATTRIBUTE WRITE FOR ONE ATTRIBUTE THAT MOVED. THE REVERT: drop the compare in
+    // `setAttribute` and this stays 1 here — but the mount above reports `attributesSet` 1 where
+    // it reports 0, because hydration re-runs every binding on a value that has not moved.
+    expect(work.attributesSet).toBe(1)
+    expect(mountWork.attributesSet).toBe(0)
+})

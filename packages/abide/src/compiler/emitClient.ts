@@ -5,11 +5,13 @@ import {
     emitRow,
     importClause,
     SHARED,
+    urlGuarded,
 } from './emitComponent.ts'
 import { hoistPaths } from './hoistPaths.ts'
 import { Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
+    type AttributeBinding,
     type ComponentPlan,
     isHead,
     isSingleRooted,
@@ -193,6 +195,22 @@ function emitRegion(
 ): void {
     const live = new Set<TextRun>()
     for (const run of plan.runs) if (readsReactive(run, lowering)) live.add(run)
+    // 32.4's bindings, grouped by the element they write to. ONE grouping with two readers: the
+    // anchors are counted off it and the bindings are emitted off it, and a second loop doing the
+    // same filter and the same key would be byte-identical to this one — two sites a change has to
+    // land on and no way to tell from a diff which of them it landed on.
+    //
+    // ONLY WHERE THE EXPRESSION READS A `Reactive`, which is `readsReactive`'s rule for a text run
+    // asked of one attribute: `data-kind={kind}` over a plain `const` is written once by the
+    // server and never moves, and a binding for it is a reader woken on every page for nothing.
+    const byElement = new Map<string, AttributeBinding[]>()
+    for (const bound of plan.attributes) {
+        if (!lowering.readsIn(bound.attribute)) continue
+        const key = bound.path.join(',')
+        const group = byElement.get(key)
+        if (group === undefined) byElement.set(key, [bound])
+        else group.push(bound)
+    }
     // A path through a REGION reference shares only what stands BEFORE the reference: a prefix
     // that ends between the two numbers a reference is written as addresses nothing, so an anchor
     // there would walk from nowhere. Cut at the first reference, the rest of the path is shared
@@ -201,6 +219,18 @@ function emitRegion(
     for (const run of live) sharable.push(beforeRegion(run.path))
     for (const handler of plan.handlers)
         sharable.push(beforeRegion(handler.path))
+    // 32.4's bindings walk to an ELEMENT exactly as a listener does, so they share the same
+    // anchors — and an element carrying both a listener and a bound attribute is the common case,
+    // which is the shape `hoistPaths` counts rather than the one it would miss.
+    //
+    // ONCE PER ELEMENT, because that is how many walks there are: the bindings on one element
+    // share a single `elementAt` below. Counted per ATTRIBUTE, `<a href={u} title={t}>` looked
+    // like two walks under one parent and bought an anchor there that saves nothing — a name and
+    // a line for a prefix only one walk ever starts from.
+    // Off the group's own path rather than by parsing its key back into numbers — the key is a
+    // map identity, and the array it was made from is right there.
+    for (const group of byElement.values())
+        sharable.push(beforeRegion((group[0] as AttributeBinding).path))
     // Where a path is walked from: its nearest anchor, or the region's own root.
     const hoisted = hoistPaths(sharable, root)
 
@@ -274,6 +304,54 @@ function emitRegion(
             `${step('elementAt', at.rest, at.base, lowering)}.addEventListener(${JSON.stringify(
                 handler.event,
             )}, ${lowering.expression(handler.attribute)})`,
+        )
+    }
+
+    // 32.4 — THE ATTRIBUTE BINDING. The server wrote the value standing at render; this is what
+    // keeps writing it. Emitted after the runs for no reason but reading order — an attribute
+    // writes into an element that already exists and shifts no index, so unlike a blank run it has
+    // no place it has to take in the walk's order.
+    //
+    // THE ELEMENT IS RESOLVED ONCE, OUTSIDE THE WATCH, for the reason a text run's node is — the
+    // node a path lands on is the same one on every run, so re-walking per write is the same
+    // answer bought again.
+    //
+    // AND ONCE PER ELEMENT, NOT PER ATTRIBUTE. `<a href={u} title={t} class={c}>` is one element
+    // and three bindings, and emitted apart each walked to it again — three `elementAt` calls and
+    // three names for one node. Grouped, a refusal still loses exactly what it should: every
+    // binding in the group needs the element the walk refused to find, so there is nothing left
+    // for a finer guard to save.
+    for (const group of byElement.values()) {
+        counter.live = true
+        const path = (group[0] as AttributeBinding).path
+        const at = hoisted.reference(path)
+        // NAMED OFF THE PATH, as the text run above is: the group IS keyed by that path, so one
+        // element has one name here however many of its attributes are bound.
+        const element = `__a${path.join('_').replaceAll('-', 'm')}`
+        const writes: string[] = []
+        for (const bound of group) {
+            // 32.22 IS THE INTERPOLATION'S CLAUSE ON THIS SIDE TOO. The server scheme-checks the
+            // value it writes; a binding that wrote the next one unchecked would let
+            // `javascript:` into an `href` the moment the value moved, which is the one road
+            // untrusted data actually takes. The same call, from the same module, so there is one
+            // answer rather than two.
+            const guarded = urlGuarded(
+                lowering,
+                bound.attribute.lowerName,
+                lowering.slot(bound.attribute),
+            )
+            // A WATCH PER ATTRIBUTE, not one over the group: two attributes reading two different
+            // values would otherwise each wake for the other's write and rewrite a string that
+            // did not move. `setAttribute`'s compare would swallow the DOM cost, and the wake
+            // would still be there — which is the half a correctness test cannot see.
+            writes.push(
+                bound.property === undefined
+                    ? `${SCOPE}.watch(() => ${lowering.use('setAttribute')}(${element}, ${JSON.stringify(bound.attribute.name)}, ${guarded}))`
+                    : `${SCOPE}.watch(() => ${lowering.use('setStyleProperty')}(${element}, ${JSON.stringify(bound.property)}, ${guarded}))`,
+            )
+        }
+        lines.push(
+            `const ${element} = ${step('elementAt', at.rest, at.base, lowering)}\n${writes.join('\n')}`,
         )
     }
 

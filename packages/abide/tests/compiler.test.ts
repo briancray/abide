@@ -2,7 +2,14 @@ import { afterAll, expect, test } from 'bun:test'
 import { compileFile, parseAbide } from '#compiler'
 import { escapeStyleValue, escapeText, render } from '#server'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-import { clientOf, closeTyped, namesRead, serverOf, typed } from './typed.ts'
+import {
+    clientOf,
+    closeTyped,
+    namesRead,
+    refusal,
+    serverOf,
+    typed,
+} from './typed.ts'
 
 afterAll(closeTyped)
 
@@ -1211,4 +1218,50 @@ test("an author's module-scope name cannot collide with a runtime import", async
         thrown = error
     }
     expect(thrown).toBeUndefined()
+})
+
+// A PLAIN `style={expr}` BESIDE A `style:prop` COMPILES AND IS NOT BOUND, and this pins both
+// halves of that. The page RENDERS right \u2014 the server merges the two into one `style` attribute
+// \u2014 so refusing it would break a page that works for a clause that is not built; what it costs
+// is that this one attribute keeps the value standing at render where 32.4 says it moves.
+//
+// THE HOLE IS THE POINT OF THE TEST. `style:width` beside it still gets its binding, so the
+// assertion is not "nothing is bound here" \u2014 it is that the MERGED one is skipped and the
+// property one is not. 32.21 is what closes it, and this test is what fails when it lands.
+test('a style beside a style: property compiles and is left unbound \u2014 32.21', async () => {
+    const both = await clientOf('<div style={s} style:width={w}>x</div>', [
+        's',
+        'w',
+    ])
+    expect(await refusal(Promise.resolve(both))).toBe('')
+    // The `style:` half binds through the CSSOM, which is the write that touches one property.
+    expect(both).toContain('__setStyleProperty')
+    // The merged half gets NO whole-attribute write \u2014 that is the exception.
+    expect(both).not.toContain('__setAttribute')
+    // ALONE IT IS AN ORDINARY BINDING, which is what makes the case above an exception rather
+    // than the rule. THE REVERT: drop the `lowerName === 'style'` skip in `planTemplate`; the
+    // first assertion below is unchanged and `__setAttribute` appears in `both` too.
+    expect(await clientOf('<div style={s}>x</div>', ['s'])).toContain(
+        '__setAttribute',
+    )
+})
+
+// AN ELEMENT THAT IS BOTH A SHARED PARENT AND A BINDING SITE OF ITS OWN walks to a node an anchor
+// is already holding. `hoistPaths`' `nearest` answers only PROPER prefixes, so the element
+// carrying a listener AND a bound attribute — the common case 32.4 creates — re-walked one step
+// from the anchor above it, once for the listener and once for the attribute.
+//
+// THE REVERT: drop the exact-match arm from `hoistPaths`' `reference`. Both walks come back as
+// `__elementAt(at0, [0])`, which is the anchor's parent plus the step the anchor already took.
+test('a bound element reuses the anchor standing at its own path', async () => {
+    const client = await clientOf(
+        '<section><div onclick={() => { n = n + 1 }} class={tone}><p>{n}</p><p>{tone}</p></div></section>',
+        ['n', 'tone'],
+    )
+    // `at1` IS the `<div>`, hoisted for the two text runs under it.
+    expect(client).toContain('at1 = __childAt(at0, [0])')
+    // So the listener and the binding read it rather than walking to it again.
+    expect(client).toContain('__elementAt(at1, []).addEventListener')
+    expect(client).toContain('= __elementAt(at1, [])')
+    expect(client).not.toContain('__elementAt(at0, [0])')
 })

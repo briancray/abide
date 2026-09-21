@@ -65,7 +65,15 @@ export function escapeAttribute(value: unknown): string {
 // the separator rather than encoded, because there is no encoding of `;` a CSS parser reads as a
 // literal semicolon inside a value.
 export function escapeStyleValue(value: unknown): string {
-    const text = escapeAttribute(value)
+    return oneStyleValue(escapeAttribute(value))
+}
+
+// The cut ALONE, with no escaping in front of it, because the client writes a `style:prop` through
+// the CSSOM and that is not a parse (`setStyleProperty`). Lifted out rather than copied: the guard
+// above and the client's write have to drop at the same character, and a CSSOM that refuses the
+// whole value where the server kept its first declaration is the two disagreeing about what one
+// `style:prop` rendered.
+export function oneStyleValue(text: string): string {
     const end = text.indexOf(';')
     return end === -1 ? text : text.slice(0, end)
 }

@@ -69,6 +69,13 @@ export function hoistPaths(paths: number[][], root = 'root'): Hoisted {
     return {
         anchors,
         reference(path: number[]): { base: string; rest: number[] } {
+            // THE ANCHOR ITSELF, where one stands at exactly this path. `nearest` answers only
+            // PROPER prefixes, so an element that is both a shared parent and a binding site of
+            // its own — the element carrying a listener AND a bound attribute, which is the
+            // common case — walked to a node an anchor was already holding. Only an ELEMENT path
+            // can match: an anchor has bindings strictly below it and a text node has no children.
+            const here = names.get(keyOf(path))
+            if (here !== undefined) return { base: here, rest: [] }
             const from = nearest(path, names, root)
             return { base: from.name, rest: path.slice(from.length) }
         },

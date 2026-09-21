@@ -10,6 +10,7 @@ import {
     isEventName,
     isHead,
     isSingleRooted,
+    isStyleProperty,
 } from './planTemplate.ts'
 import { SERVER_SPECIFIER } from './SPECIFIERS.ts'
 import { componentImports, splitImports, withoutProps } from './splitImports.ts'
@@ -520,16 +521,6 @@ function assertNoNestedHead(nodes: TemplateNode[], within: string): void {
     }
 }
 
-// 32.11 — `style:prop` sets ONE style property. The prefix is matched on the folded name; the
-// PROPERTY is read from the author's spelling, because a CSS custom property is case-sensitive and
-// `--Brand` is not `--brand`.
-function isStyleProperty(attribute: Attribute): boolean {
-    return (
-        attribute.lowerName.length > 6 &&
-        attribute.lowerName.startsWith('style:')
-    )
-}
-
 // The declaration list a set of `style:prop` attributes renders as, as one expression. Each value
 // takes the same rewrite the whole-value path takes, so one attribute has one answer however the
 // author spelled it: 32.29 for a STATIC declaration, which is the author's own markup, and the
@@ -582,4 +573,18 @@ const URL_ATTRIBUTES = new Set([
 
 function isUrlAttribute(lowerName: string): boolean {
     return URL_ATTRIBUTES.has(lowerName)
+}
+
+// 32.22's scheme check, as the emitted call both lanes write. ONE FUNCTION RATHER THAN THE
+// PREDICATE PLUS THE BRANCH TWICE: the server writes the value standing at render and the client's
+// binding writes every one after it, so a `javascript:` the server refuses and the client lets
+// through is the guard being half applied. The STATIC arms below ask the predicate instead —
+// there the value is known here, so the answer is a compile-time drop rather than a call.
+export function urlGuarded(
+    lowering: Lowering,
+    lowerName: string,
+    value: string,
+): string {
+    if (!isUrlAttribute(lowerName)) return value
+    return `${lowering.use('safeUrl')}(${value})`
 }

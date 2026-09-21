@@ -10,7 +10,10 @@
 // subject, 32.16 — and `replaceNodes` for a row), what a hydration mismatch is answered with
 // (`warnMismatch`, 41.11), what every region's bindings are stopped through (`Scope`), what a
 // row's markup is parsed with (`markupNodes`)
-// and the anchors they are all counted from. `List` and `reconcile` are here for the
+// and the anchors they are all counted from. 32.4's writes are two names rather than one
+// (`setAttribute`, `setStyleProperty`): every `style:prop` on an element is merged by the server
+// into a single `style` attribute, so what that attribute holds cannot be written back whole.
+// `List` and `reconcile` are here for the
 // harness's list bench, which prices the reconcile alone. Nothing that
 // finds a node by something added to the document, because a compiler may not invent structure an
 // author's CSS or queries can see.
@@ -34,4 +37,6 @@ export {
     regionAt,
 } from './regionAt.ts'
 export { Scope } from './Scope.ts'
+export { setAttribute } from './setAttribute.ts'
+export { setStyleProperty } from './setStyleProperty.ts'
 export { setText } from './setText.ts'
