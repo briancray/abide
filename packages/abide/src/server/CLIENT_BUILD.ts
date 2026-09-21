@@ -1,5 +1,6 @@
-// WHERE THE BROWSER BUNDLE IS, named once for the two commands that have to agree about it:
-// `abide build` writes it and `abide start` answers it. A leaf, with no imports of its own, for
+// WHERE THE BROWSER BUNDLE IS, named once for the commands that have to agree about it:
+// `abide build` writes it, `abide start` answers it, and `abide dev` builds it into memory and
+// answers it at the same address (38.17, 38.21). A leaf, with no imports of its own, for
 // the reason every constant crossing a seam is one — the build is in `bin/` and the server is in
 // `src/server/`, and a string spelled out in both is a build that silently serves nothing.
 //
@@ -8,7 +9,12 @@
 // is a directory under `pages/` and no directory there can be named `__abide` without an author
 // writing it, so nothing has to be checked at build time and nothing can be shadowed at run time.
 // 38.21 is the clause.
-export const CLIENT_ADDRESS = '/__abide/client'
+export const ABIDE_ADDRESS = '/__abide'
+
+// The bundle's own address below it. One request path answers everything under `ABIDE_ADDRESS`
+// and the command supplying the app decides what is there, so a command with a second address of
+// its own — the reload client `abide dev` serves (38.18) — adds one rather than a lane.
+export const CLIENT_ADDRESS = `${ABIDE_ADDRESS}/client`
 
 // The directory the bundle lands in, below the build's own output directory.
 export const CLIENT_DIRECTORY = 'client'
@@ -25,3 +31,9 @@ export const CLIENT_ENTRY = 'entry'
 // rather than the source tree: `abide start` boots what the build produced and reaches for nothing
 // an app might have moved since.
 export const PUBLIC_DIRECTORY = 'public'
+
+// 38.18 — the socket the reload client holds open. Here rather than in the dev server's own file
+// for the same reason as the address above: the LISTENER upgrades it on the main thread and the
+// dev WORKER serves the script that opens it, and a string spelled out in both is a reload that
+// silently never happens.
+export const DEV_ADDRESS = '/__abide/dev'

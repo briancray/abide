@@ -30,13 +30,27 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8"></head><body></b
 // dogfood app uses one too.
 const HOME = `<script>
 import { reactive } from 'abide'
+import Badge from '#ui/components/Badge.abide'
 import '#ui/home.css'
 
 let count = reactive(0)
 </script>
 
 <head><title>Home</title></head>
-<main id="home"><h1>Home</h1><p id="n">{count}</p></main>`
+<main id="home"><h1>Home</h1><p id="n">{count}</p><Badge label="live"/></main>`
+
+// 32.18 THROUGH A BUILD, which is the one arm that can say a component import RESOLVES. The
+// compiler swaps the extension and stops (`splitImports`), so the specifier the emitted page
+// carries is `#ui/components/Badge.ts` — a file that exists in the output tree and nowhere in the
+// source tree the import map points at. `compileApp` rewrites it relative; without that the page
+// compiles, the build succeeds, and the address 500s on the first request.
+const BADGE = `<script>
+import { props } from 'abide'
+
+const { label } = props<{ label: string }>()
+</script>
+
+<span id="badge">{label}</span>`
 
 // 33.4 through a page. The address supplies `id` and the page reads it, which is a prop read and
 // nothing else — so it lowers to an accessor call and only an accessor answers it.
@@ -56,6 +70,7 @@ beforeAll(async () => {
     const app = temporaryModule({
         'ui/app.html': SHELL,
         'ui/pages/page.abide': HOME,
+        'ui/components/Badge.abide': BADGE,
         // A SELECTOR RATHER THAN A DECLARATION, as the thing asserted on: the bundler normalises
         // a colour (`rgb(1, 2, 3)` came back `#010203`) and a class name it cannot touch.
         'ui/home.css': '.fixture-sheet-was-imported { color: red }',
@@ -154,6 +169,13 @@ test('an address a page matches is painted into the shell — 38.6', async () =>
 // THE REVERT: hand the page `{ params: found.params }` rather than `{ params: () => … }` in
 // `serveBuild` and this reports `params is not a function` instead of the id — which is the same
 // break `Router.paramsProp` carries on the client side of the same contract.
+// THE REVERT: drop `componentPaths` from `compileApp` and this address answers 500 — the module
+// the page imports resolves into the source tree, where the compiler wrote nothing.
+test('a page invoking a component is painted with it — 32.18, 38.6', async () => {
+    const html = await (await Bun.fetch(`${base}/`)).text()
+    expect(html).toContain('<span id="badge">live</span>')
+})
+
 test('a param in the address reaches the page as a prop — 33.4, 38.6', async () => {
     const response = await Bun.fetch(`${base}/invoices/42`)
     expect(response.status).toBe(200)
