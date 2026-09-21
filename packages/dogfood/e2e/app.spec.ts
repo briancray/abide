@@ -5,7 +5,7 @@
 //
 // THE APP IS THE DOCUMENTATION NOW, so these are gates on the real thing rather than on a pair
 // of demo pages: eighty-five markdown files compiled into pages, one nav, one rail, and the card
-// machinery `assets/docs.js` wires to whatever page is on screen.
+// machinery the page hands its own `<main>` to (32.9).
 
 import { expect, test } from '@playwright/test'
 
@@ -77,9 +77,10 @@ test('a link to another page navigates without reloading — 30.7', async ({
     )
 })
 
-// `assets/docs.js` is evaluated ONCE and a navigation re-runs none of it, so what this asserts
-// is the MutationObserver that finds the new page: the rail of the page a reader navigated to is
-// wired to its headings, not to the ones they arrived on.
+// `#ui/docs.ts` is a module and is evaluated ONCE, but the INSTALL is the page's own: the
+// arriving page hands `installDocs` its `<main>` and the page a reader left ran the `Disposer`
+// that took its listeners (32.9). So the rail here is wired to this page's headings rather than
+// to the ones they arrived on.
 test('the rail follows the page a reader navigated to', async ({ page }) => {
     await page.goto('/values/show-a-value-that-changes')
     await page.click('nav a[href="/values/patch-a-list-from-a-live-feed"]')
@@ -97,9 +98,9 @@ test('the rail follows the page a reader navigated to', async ({ page }) => {
     await expect(first).toHaveAttribute('aria-current', 'true')
 })
 
-// An example card is an iframe the page fills from a `srcdoc` it carries, and the fill is
-// `assets/docs.js` again — on a page the reader NAVIGATED to, which is the arm that was dead
-// while the docs were a tree of files and every page load ran the script fresh.
+// An example card is an iframe the page fills from a `srcdoc` it carries, and the fill is the
+// same install — on a page the reader NAVIGATED to, which is the arm that was dead while the
+// docs were a tree of files and every page load ran the script fresh.
 test('an example card runs on a page a reader navigated to', async ({
     page,
 }) => {

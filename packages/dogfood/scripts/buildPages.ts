@@ -152,8 +152,8 @@ export const CONTENT: DocsContent = ${JSON.stringify(record, null, 4)}
 }
 
 // THE PAGE, AND IT IS THE SAME PAGE EIGHTY-FIVE TIMES: the head it contributes (39.1), the nav
-// every page shares, and five slots over the record beside it. What differs is the record, which
-// is why the record is the import.
+// every page shares, five slots over the record beside it, and the node its own client code is
+// handed (32.9). What differs is the record, which is why the record is the import.
 //
 // `#ui/pages/…` RATHER THAN `./CONTENT.ts`. A relative specifier is left exactly as written and
 // the emitted module lives in the build tree, so `./CONTENT.ts` resolves beside the OUTPUT and
@@ -163,6 +163,7 @@ export function pageSource(page: Page, directory: string): string {
     return `<script>
 import { raw } from 'abide'
 import DocsNav from '#ui/components/DocsNav.abide'
+import { installDocs } from '#ui/docs.ts'
 import { CONTENT } from '#ui/pages/${directory}CONTENT.ts'
 import '#ui/app.css'
 </script>
@@ -174,7 +175,7 @@ import '#ui/app.css'
 
 <a class="skip" href="#content">Skip to content</a>
 <DocsNav current={CONTENT.slug}/>
-<main id="content">
+<main id="content" bind:element={installDocs}>
     <header>{raw(CONTENT.header)}</header>
     {raw(CONTENT.body)}
     <footer>{raw(CONTENT.footer)}</footer>

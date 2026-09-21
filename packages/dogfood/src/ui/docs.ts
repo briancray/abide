@@ -1,20 +1,23 @@
 // THE DOCS APP'S OWN CLIENT CODE — the scroll spy in the rail, and everything an example card
-// does: the tabs, the reload, the frame's height, and the measure panel.
+// does: the tabs, the reload, the frame's height, and the measure panel. Imperative DOM work
+// over nodes the page painted: a `srcdoc` frame, a message channel, a panel written through
+// `innerHTML`.
 //
-// A PLAIN MODULE RATHER THAN A PAGE, and that is a gap in the framework rather than a choice.
-// This is imperative DOM work over nodes a page painted — a `srcdoc` frame, a message channel, a
-// panel written through `innerHTML` — and the hook it wants is 32.9's `bind:element`, which the
-// compiler does not emit yet. When it does, each of these installs moves into the component whose
-// nodes it wires and this file goes.
-//
-// SO THE PAGE IS FOUND RATHER THAN HANDED OVER. A client navigation (30.7) replaces `main` with
-// another page's nodes and re-runs nothing here — a module is evaluated once — so the replacement
-// is watched for and the install is redone against the new nodes. One `AbortController` per
-// install is what takes the window listeners of the page a reader left with it.
+// THE PAGE HANDS ITS OWN NODES OVER (32.9). `<main id="content" bind:element={installDocs}>` is
+// the whole wiring: the callback is handed the element when it arrives and its `Disposer` is
+// what a navigation runs — so the window listeners of the page a reader left go with that page
+// rather than being watched for. It was a `MutationObserver` over the body until the compiler
+// emitted the binding, which is the same thing guessed at.
 
 // THE BRIDGE THE INSTRUMENTED FRAME GETS, appended after the harness and before the
 // arm. It belongs to the DOCUMENTATION rather than to the harness — 40.18 — so it
 // lives here beside the rest of the page's own script rather than in the injectable.
+// WHAT THE FRAME SENDS BACK, as loosely as the panel reads it. The shape is the measure lane's
+// (`harness/report`) and this file is the DOCUMENTATION's side of the bridge — typing it against
+// the lane would put an import from the harness in the app's own client bundle for a record that
+// arrives over `postMessage` as JSON.
+type Reading = Record<string, any>
+
 const MEASURE_BRIDGE = `
 // THE LOAD IS A CASE WITH NO BODY, armed here — before the arm's first line and after
 // the harness has installed its patches. Counting a load is the documentation's doing
@@ -94,12 +97,12 @@ setTimeout(announce, LOAD_CEILING_MILLISECONDS)
 // read in it. An IntersectionObserver band was tried first and got two cases wrong:
 // nothing was active at the top, and the last sections never activated because at max
 // scroll they never enter the band.
-function installScrollSpy(signal) {
+function installScrollSpy(signal: AbortSignal) {
     const headings = [...document.querySelectorAll('main h2[id], main h3[id]')]
     const links = headings.map((h) =>
         document.querySelector(`.toc a[href="#${h.id}"]`),
     )
-    let offsets = []
+    let offsets: number[] = []
     let current = -1
 
     function measure() {
@@ -113,7 +116,7 @@ function installScrollSpy(signal) {
         const line = window.scrollY + 80
         let next = 0
         for (let i = 0; i < offsets.length; i += 1)
-            if (offsets[i] <= line) next = i
+            if ((offsets[i] as number) <= line) next = i
         // At the bottom there is no room left to scroll the last heading up to the line.
         if (
             window.innerHeight + window.scrollY >=
@@ -149,11 +152,14 @@ function installScrollSpy(signal) {
 // both rather than a listener per button. RELOAD rides along, and it re-runs the arm from nothing
 // rather than replaying anything: the frame's transient states are the arm's own, so a first load
 // is something to do again rather than a strip to play.
-function installExamples(main, signal) {
+function installExamples(main: Element, signal: AbortSignal) {
     for (const example of main.querySelectorAll('.example')) {
         const browser = example.querySelector('.ex-browser')
-        const frame = browser?.querySelector('.ex-result')
-        const source = frame?.getAttribute('srcdoc')
+        // ONE CAST, at the one place the node is found: `querySelector` answers `Element` and
+        // every use below wants the frame — its `contentWindow`, its `srcdoc`, its height.
+        const frame = (browser?.querySelector('.ex-result') ??
+            null) as HTMLIFrameElement | null
+        const source = frame?.getAttribute('srcdoc') ?? null
 
         addEventListener(
             'message',
@@ -217,20 +223,21 @@ function installExamples(main, signal) {
         const ARMS = ['abide', 'hand-written']
         const NOTHING = '\u2014'
 
-        function escapeText(value) {
+        function escapeText(value: unknown) {
             return String(value).replace(
                 /[&<>]/g,
-                (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c],
+                (c) =>
+                    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] as string,
             )
         }
-        function millis(nanoseconds) {
+        function millis(nanoseconds: number) {
             if (nanoseconds >= 1e6)
                 return `${(nanoseconds / 1e6).toFixed(2)} ms`
             if (nanoseconds >= 1e3)
                 return `${(nanoseconds / 1e3).toFixed(2)} \u00b5s`
             return `${Math.round(nanoseconds)} ns`
         }
-        function refusalHtml(why) {
+        function refusalHtml(why: string) {
             return (
                 '<p class="ex-measure-refused">' +
                 escapeText(why) +
@@ -238,7 +245,7 @@ function installExamples(main, signal) {
                 '<button type="button" class="ex-measure-run" data-measure-run>Try again</button>'
             )
         }
-        function cell(value) {
+        function cell(value: unknown) {
             return (
                 '<td>' +
                 (value === null || value === undefined
@@ -251,7 +258,7 @@ function installExamples(main, signal) {
         // the whole reason: two values inside the measured floor do not divide, and a
         // frame-quantised pair divides to 1.01x, which is the claim the harness exists to
         // refuse.
-        function ratioCell(answer) {
+        function ratioCell(answer: Reading | null) {
             if (!answer)
                 return (
                     '<td class="ex-ratio"><span class="ex-tag">' +
@@ -276,11 +283,11 @@ function installExamples(main, signal) {
                 'x</code></td>'
             )
         }
-        function armCount(reading, arm, key) {
+        function armCount(reading: Reading, arm: string, key: string) {
             if (arm === reading.loadedArm) return reading.load[key]
             return null
         }
-        function tableHtml(caption, rows) {
+        function tableHtml(caption: string, rows: string) {
             if (!rows) return ''
             return (
                 '<table class="ex-bench"><thead><tr><th>' +
@@ -291,9 +298,9 @@ function installExamples(main, signal) {
                 '</tbody></table>'
             )
         }
-        function loadRows(reading) {
+        function loadRows(reading: Reading) {
             let rows = ''
-            for (const [label, key] of COUNTS) {
+            for (const [label, key] of COUNTS as [string, string][]) {
                 const value = reading.load[key]
                 // A NULL IS NOT A ZERO. Wakes, binding runs and descents are read off a record
                 // abide publishes, and nothing publishes one yet — so the cell says the lane
@@ -343,10 +350,10 @@ function installExamples(main, signal) {
                 '</tr>'
             return rows
         }
-        function opRows(reading) {
+        function opRows(reading: Reading) {
             if (!reading.timing) return ''
             let rows = ''
-            for (const [label, key] of COUNTS) {
+            for (const [label, key] of COUNTS as [string, string][]) {
                 const values = ARMS.map((arm) =>
                     reading.arms[arm] ? reading.arms[arm].work[key] : null,
                 )
@@ -387,9 +394,11 @@ function installExamples(main, signal) {
                 '</tr>'
             return rows
         }
-        function readingHtml(reading, windowMs) {
+        function readingHtml(reading: Reading | null, windowMs: number) {
             if (!reading) return refusalHtml('The frame reported nothing.')
-            const engine = ENGINES[reading.substrate] || reading.substrate
+            const engine =
+                (ENGINES as Record<string, string>)[reading.substrate] ??
+                reading.substrate
             let html = tableHtml('On load', loadRows(reading))
             html += tableHtml(escapeText(reading.op), opRows(reading))
             // WHY THE ABIDE COLUMN IS EMPTY, said once and plainly. An empty column with no
@@ -447,14 +456,19 @@ function installExamples(main, signal) {
         // so a reader who never opens the panel pays nothing at all.
         // Still the data-measure hook: the live half kept it when it moved into the Bench
         // panel, so nothing here has to know which tab it is under.
-        const measurePanel = example.querySelector('[data-measure]')
-        let harness = null
+        const measurePanel = example.querySelector(
+            '[data-measure]',
+        ) as HTMLElement | null
+        let harness: string | null = null
         let measuring = false
 
         function askToMeasure() {
             if (!measuring) return
-            const ask = { op: 'load', scriptBytes: (source || '').length }
-            if (measurePanel?.dataset.selector) {
+            const ask: Record<string, unknown> = {
+                op: 'load',
+                scriptBytes: (source ?? '').length,
+            }
+            if (measurePanel?.dataset.selector !== undefined) {
                 ask.op = measurePanel.dataset.op
                 ask.selector = measurePanel.dataset.selector
                 ask.event = measurePanel.dataset.event
@@ -462,7 +476,11 @@ function installExamples(main, signal) {
             frame?.contentWindow?.postMessage({ abideMeasure: ask }, '*')
         }
 
-        function paintReading(reading, refused, windowMs) {
+        function paintReading(
+            reading: Reading | null,
+            refused: string | null,
+            windowMs: number,
+        ) {
             measuring = false
             if (!measurePanel) return
             measurePanel.innerHTML = refused
@@ -513,7 +531,7 @@ function installExamples(main, signal) {
             // script ends at the first one a parser sees, which cost four separate escaping bugs
             // while this was a template literal inside a template literal. In a module it is a
             // string like any other.
-            frame.srcdoc =
+            ;(frame as HTMLIFrameElement).srcdoc =
                 '<script>' +
                 harness +
                 '</script><script>' +
@@ -553,15 +571,20 @@ function installExamples(main, signal) {
         }
 
         example.addEventListener('click', (event) => {
-            if (event.target.closest('[data-reload]')) {
+            // A DELEGATED LISTENER READS WHERE THE CLICK LANDED, which is an `EventTarget` to
+            // the type and always an element to a document that has no shadow roots in it.
+            const target = event.target as Element
+            if (target.closest('[data-reload]')) {
                 if (frame && source !== null) frame.srcdoc = source
                 return
             }
-            if (event.target.closest('[data-measure-run]')) {
+            if (target.closest('[data-measure-run]')) {
                 measureHere()
                 return
             }
-            const button = event.target.closest('button[role=tab]')
+            const button = target.closest(
+                'button[role=tab]',
+            ) as HTMLElement | null
             if (!button) return
             const panel = button.dataset.panel
             if (panel) {
@@ -570,44 +593,39 @@ function installExamples(main, signal) {
                 )) {
                     tab.setAttribute('aria-selected', String(tab === button))
                 }
-                for (const body of example.querySelectorAll('.ex-panel'))
+                for (const body of example.querySelectorAll<HTMLElement>(
+                    '.ex-panel',
+                ))
                     body.hidden = body.dataset.panel !== panel
                 return
             }
             const file = button.dataset.file
             if (!file) return
             const group = file.slice(0, file.indexOf(':') + 1)
-            for (const tab of example.querySelectorAll('.ex-files button')) {
-                if (tab.dataset.file.startsWith(group))
+            for (const tab of example.querySelectorAll<HTMLElement>(
+                '.ex-files button',
+            )) {
+                if (tab.dataset.file?.startsWith(group) === true)
                     tab.setAttribute('aria-selected', String(tab === button))
             }
-            for (const body of example.querySelectorAll(
+            for (const body of example.querySelectorAll<HTMLElement>(
                 '.ex-panel > [data-file]',
             )) {
-                if (body.dataset.file.startsWith(group))
+                if (body.dataset.file?.startsWith(group) === true)
                     body.hidden = body.dataset.file !== file
             }
         })
     }
 }
 
-let installed = null
-let installing = null
-
-function sync() {
-    const main = document.querySelector('main#content')
-    if (main === installed) return
-    installing?.abort()
-    installed = main
-    installing = null
-    if (main === null) return
-    installing = new AbortController()
+// 32.9's callback: the node, and the teardown for it. One `AbortController` per install, so the
+// window listeners a page's own cards and rail hang on the window leave with that page — which
+// is what a `Disposer` is for and what a navigation runs.
+export function installDocs(main: Element): () => void {
+    const installing = new AbortController()
     installScrollSpy(installing.signal)
     installExamples(main, installing.signal)
+    return () => {
+        installing.abort()
+    }
 }
-
-new MutationObserver(sync).observe(document.body, {
-    childList: true,
-    subtree: true,
-})
-sync()

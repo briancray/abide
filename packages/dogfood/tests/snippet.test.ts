@@ -389,7 +389,7 @@ test('every example class the build emits resolves in the stylesheet', async () 
         'renderExample.ts',
         'renderMarkdown.ts',
         'renderSnippet.ts',
-        '../assets/docs.js',
+        '../src/ui/docs.ts',
     ]) {
         const source = await Bun.file(
             new URL(`../scripts/${file}`, import.meta.url),
