@@ -23,6 +23,38 @@ const ENCODER = new TextEncoder()
 // guard needs the settled shape and the promise shape to be the same name.
 type Rendered = { head: string; body: string }
 
+// 35.1 — THE PAGE, INSIDE ITS LAYOUTS, outermost first. A layout renders its child through a
+// slot (32.19), so the composition is the same `children` thunk a caller writing markup between
+// two tags hands over — there is no layout API and no second kind of component, which is what
+// the documentation says a layout is and what this is.
+//
+// THE HEADS COME UP WITH THE BODY. A layout's own contributions are in the record it answers;
+// what the page under it contributed is pushed as the thunk runs, so the document carries both
+// and the order is the tree's (39.5).
+export function composePage(
+    layouts: Component[],
+    page: Component,
+    props: Record<string, () => unknown>,
+): Rendered {
+    const heads: string[] = []
+    const inner = (at: number): Rendered => {
+        const component = (at === layouts.length ? page : layouts[at]) as (
+            props: Record<string, () => unknown>,
+        ) => Rendered
+        if (at === layouts.length) return component(props)
+        return component({
+            ...props,
+            children: () => {
+                const below = inner(at + 1)
+                if (below.head !== '') heads.push(below.head)
+                return below.body
+            },
+        })
+    }
+    const outermost = inner(0)
+    return { head: outermost.head + heads.join(''), body: outermost.body }
+}
+
 export async function* render(
     component: Component,
     shell?: Shell,

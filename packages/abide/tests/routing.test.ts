@@ -10,6 +10,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { emitClient, emitComponent, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
+import { composePage } from '#server/render.ts'
 import { flushSync, navigate } from '#shared'
 import { CURRENT_ROUTER } from '#shared/CURRENT_ROUTER.ts'
 import { matchRoute } from '#shared/matchRoute.ts'
@@ -149,8 +150,10 @@ test('a click on a routed link navigates and does not reload — 30.7', async ()
     })
     link.dispatchEvent(event)
     expect(event.defaultPrevented).toBe(true)
-    await Promise.resolve()
-    await Promise.resolve()
+    // A CLICK IS FIRE AND FORGET: `listenForRoutes` calls `go` and keeps no promise, so the wait
+    // has to drain whatever the navigation queued rather than count turns. Two `Promise.resolve`
+    // was that count, and it went stale the moment the chain gained a level to load (35.1).
+    await Bun.sleep(0)
     flushSync()
     expect(document.querySelector('#invoice h1')?.textContent).toBe('Invoice')
     stop()
@@ -318,4 +321,124 @@ test('a superseded navigation does not mount over the one that replaced it', asy
     // AND THE WINNER'S SCOPE IS STILL THE ROUTER'S — the superseded mount never replaced it, so
     // there is no page left awake with nothing able to stop it.
     expect(r.scope).toBe(settled)
+})
+
+// 35.1 AND 41.11 ON THE CLIENT. A layout is mounted once and the page under it is what a
+// navigation replaces — which is the whole reason to put chrome in a layout rather than in each
+// page, and the one part of it a string assertion cannot see: the header keeps its scroll, an
+// open menu stays open, and a component mid-load is still mid-load.
+const CHROME = `<script>
+import { reactive } from 'abide'
+
+let opened = reactive(0)
+</script>
+
+<div id="chrome"><button id="open" onclick={() => { opened = opened + 1 }}>menu {opened}</button><slot/></div>`
+
+const SETTINGS = `<main id="settings"><h1>Settings</h1></main>`
+
+// The same three files the build would have compiled, as modules a table can name.
+async function chained(): Promise<{
+    layout: PageMount
+    home: PageMount
+    invoice: PageMount
+    settings: PageMount
+    painted: string
+}> {
+    const modules: Record<string, string> = {}
+    for (const [name, source] of Object.entries({
+        Chrome: CHROME,
+        Home: HOME,
+        Invoice: INVOICE,
+        Settings: SETTINGS,
+    })) {
+        const file = parseAbide(source)
+        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
+        modules[`${name}.ts`] = emitComponent(file, reads)
+        modules[`${name}.client.ts`] = emitClient(file, reads, true)
+    }
+    const dir = temporaryModule(modules)
+    const mount = async (name: string): Promise<PageMount> =>
+        (await import(`${dir}/${name}.client.ts`)).default as PageMount
+
+    // The document the SERVER painted for `/`: the page inside its layout, composed the one way
+    // `answerRequest` composes it.
+    const Layout = (await import(`${dir}/Chrome.ts`)).default
+    const Home = (await import(`${dir}/Home.ts`)).default
+    let html = ''
+    for await (const chunk of render(
+        () => composePage([Layout], Home, { params: () => ({}) }),
+        '<!doctype html><html><head></head><body></body></html>',
+    ))
+        html += new TextDecoder().decode(chunk)
+
+    return {
+        layout: await mount('Chrome'),
+        home: await mount('Home'),
+        invoice: await mount('Invoice'),
+        settings: await mount('Settings'),
+        painted: html,
+    }
+}
+
+test('a page hydrates inside the layout the server painted — 35.1', async () => {
+    history.replaceState(null, '', '/')
+    const parts = await chained()
+    document.body.innerHTML = parts.painted.slice(
+        parts.painted.indexOf('<body>') + '<body>'.length,
+        parts.painted.indexOf('</body>'),
+    )
+    const wrapping = async (): Promise<{ default: PageMount }> => ({
+        default: parts.layout,
+    })
+    const r = startRouter([
+        {
+            pattern: '/invoices/[id]',
+            load: async () => ({ default: parts.invoice }),
+            layouts: [wrapping],
+        },
+        {
+            pattern: '/settings',
+            load: async () => ({ default: parts.settings }),
+        },
+        {
+            pattern: '/',
+            load: async () => ({ default: parts.home }),
+            layouts: [wrapping],
+        },
+    ])
+    await r.hydrate()
+    flushSync()
+
+    // The layout's markup is the server's, and the page stands inside it rather than beside it.
+    const chrome = document.querySelector('#chrome') as HTMLElement
+    expect(chrome.querySelector('#home h1')?.textContent).toBe('Home')
+    // AND BOTH ARE ALIVE: the layout's own binding and the page's, which is the pair a
+    // composition that rendered but never mounted would fail.
+    ;(document.querySelector('#open') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelector('#open')?.textContent).toBe('menu 1')
+    ;(document.querySelector('#bump') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelector('#home p')?.textContent).toBe('1')
+
+    // 41.11 — THE SAME NODE AFTER A NAVIGATION, not an identical one. A marker on the element
+    // is the only way to tell a kept layout from a rebuilt one that looks the same.
+    ;(chrome as unknown as { __KEPT__?: string }).__KEPT__ = 'yes'
+    await navigate('/invoices/42')
+    flushSync()
+    expect(document.querySelector('#invoice h1')?.textContent).toBe('Invoice')
+    const after = document.querySelector('#chrome') as HTMLElement
+    expect((after as unknown as { __KEPT__?: string }).__KEPT__).toBe('yes')
+    // The layout's own state survived with its nodes, which is what the clause is FOR.
+    expect(document.querySelector('#open')?.textContent).toBe('menu 1')
+    // And the page it was holding is gone rather than left under the new one.
+    expect(document.querySelector('#home')).toBeNull()
+
+    // A PAGE UNDER NO LAYOUT REPLACES IT. The chain is part of the address, so leaving the
+    // section leaves its chrome.
+    await navigate('/settings')
+    flushSync()
+    expect(document.querySelector('#settings h1')?.textContent).toBe('Settings')
+    expect(document.querySelector('#chrome')).toBeNull()
 })

@@ -23,6 +23,10 @@ export type AppRoute = {
     pattern: string
     // The `.abide` this route paints, relative to the app root.
     source: string
+    // 35.1 — the `layout.abide` files this page renders inside, outermost first. A fact about
+    // the file tree, like the address itself, so a layout cannot be forgotten and cannot be
+    // declared twice.
+    layouts: string[]
 }
 
 export type CompiledApp = {
@@ -77,10 +81,19 @@ export async function compileApp(root: string): Promise<CompiledApp> {
         // server and hydrates, and a page they NAVIGATED to is handed the empty anchor pair and
         // fills it from the template in its own module. `emitClient`'s `isEmptyRegion` guard is
         // what makes one module serve both, so "routable" joins "invoked" rather than forking it.
+        const layouts: string[] = []
+        for (const entry of parsed) {
+            const relative = compiled.get(entry.path) as string
+            if (isLayout(relative)) layouts.push(relative)
+        }
         for (const entry of parsed) {
             const relative = compiled.get(entry.path) as string
             if (!isPage(relative)) continue
-            routes.push({ pattern: routeOf(relative), source: relative })
+            routes.push({
+                pattern: routeOf(relative),
+                source: relative,
+                layouts: layoutsAround(relative, layouts),
+            })
         }
 
         for (let at = 0; at < parsed.length; at += 1) {
@@ -105,13 +118,17 @@ export async function compileApp(root: string): Promise<CompiledApp> {
             // A COMPONENT SOMEBODY INVOKES IS THE EXCEPTION, and it is the import that forces it:
             // the caller's client module names the child's, so a child with nothing to hydrate
             // needs a module for that name to resolve to. The no-op is what it ships.
+            // 35.1 — A LAYOUT CARRIES ITS OWN MARKUP for the same reason a routable page does:
+            // nothing imports it, the router is what invokes it, and a reader who navigated to a
+            // page under it may arrive with the layout already standing or with nothing at all.
             const name = relative.slice(relative.lastIndexOf('/') + 1)
+            const routable = isPage(relative) || isLayout(relative)
             const client = emitClient(
                 entry.file,
                 fileReads,
-                invoked.has(name) || isPage(relative),
+                invoked.has(name) || routable,
             )
-            if (client !== '' || invoked.has(name))
+            if (client !== '' || invoked.has(name) || routable)
                 modules.set(
                     relative.replace(/\.abide$/, '.client.ts'),
                     client === ''
@@ -149,6 +166,29 @@ function isPage(relative: string): boolean {
         relative.endsWith('page.abide') &&
         (relative.startsWith('pages/') || relative.includes('/pages/'))
     )
+}
+
+// 35.1 — `layout.abide` under a `pages/` directory, read the same way for the same reason.
+function isLayout(relative: string): boolean {
+    return (
+        relative.endsWith('layout.abide') &&
+        (relative.startsWith('pages/') || relative.includes('/pages/'))
+    )
+}
+
+// THE LAYOUTS A PAGE RENDERS INSIDE, outermost first. Every `layout.abide` in a directory ON THE
+// WAY DOWN to the page wraps it and no other does, so the test is a prefix and the nesting order
+// is the depth — which is what makes a section's own chrome a file rather than a registration.
+function layoutsAround(page: string, layouts: string[]): string[] {
+    const within = page.slice(0, page.lastIndexOf('/') + 1)
+    const chain: string[] = []
+    for (const layout of layouts) {
+        const at = layout.slice(0, layout.lastIndexOf('/') + 1)
+        if (within.startsWith(at)) chain.push(layout)
+    }
+    // A shorter directory is an outer one: they are prefixes of each other by construction.
+    chain.sort((one, two) => one.length - two.length)
+    return chain
 }
 
 // A COMPONENT IMPORT IS A PATH IN THE OUTPUT TREE, NOT IN THE SOURCE TREE. The compiler swaps the
@@ -212,8 +252,15 @@ function tableOf(routes: AppRoute[], extension: string): string {
     const rows: string[] = []
     for (const route of routes) {
         const module = `./${route.source.replace(/\.abide$/, extension)}`
+        // 35.1 — THE CHAIN IS PART OF THE ADDRESS, so it is in the table rather than resolved at
+        // run time: which layouts wrap a page is a fact about the file tree, and the server and
+        // the client read it off the same walk for the reason the addresses are (30.8).
+        const wrapping = route.layouts.map(
+            (layout) =>
+                `() => import(${JSON.stringify(`./${layout.replace(/\.abide$/, extension)}`)})`,
+        )
         rows.push(
-            `    { pattern: ${JSON.stringify(route.pattern)}, load: () => import(${JSON.stringify(module)}) },`,
+            `    { pattern: ${JSON.stringify(route.pattern)}, load: () => import(${JSON.stringify(module)}), layouts: [${wrapping.join(', ')}] },`,
         )
     }
     return rows.join('\n')

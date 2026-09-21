@@ -15,7 +15,7 @@ import {
     type Segment,
 } from '#shared/routePattern.ts'
 import { ABIDE_ADDRESS, CLIENT_ADDRESS, CLIENT_ENTRY } from './CLIENT_BUILD.ts'
-import { type Component, headAnchor, render } from './render.ts'
+import { type Component, composePage, headAnchor, render } from './render.ts'
 
 // One row of the table the compiler writes to `<out>/server.ts`. The loader is a dynamic import
 // so a page's markup is off the boot path until an address asks for it, which is the same reason
@@ -23,12 +23,15 @@ import { type Component, headAnchor, render } from './render.ts'
 export type ServerRoute = {
     pattern: string
     load: () => Promise<{ default: Component }>
+    // 35.1 — the layouts this page renders inside, outermost first, as the compiler found them.
+    layouts: (() => Promise<{ default: Component }>)[]
 }
 
 export type Ranked = {
     pattern: string
     segments: Segment[]
     load: ServerRoute['load']
+    layouts: ServerRoute['layouts']
 }
 
 // A public file, read once at boot: where the bytes are, and the etag off them.
@@ -68,13 +71,17 @@ export async function answerRequest(
     // is where that address arrives and there is nothing behind it.
     if (found === undefined) return notFound()
 
-    const { default: page } = await found.route.load()
+    const loaded = await Promise.all([
+        found.route.load(),
+        ...found.route.layouts.map((layout) => layout()),
+    ])
+    const [page, ...layouts] = loaded.map((module) => module.default)
     // 35.3 — BOUND HERE, because `render` takes a component that already has its props.
     // 33.4 — a prop is an ACCESSOR, which is the contract `renderComponent` renders a child
     // under and the one the client router mounts a page under; the params are the record
     // `matchRoute` hands the client for this same address.
     const bound = (): unknown =>
-        (page as (props: Record<string, () => unknown>) => unknown)({
+        composePage(layouts as Component[], page as Component, {
             params: () => found.params,
         })
     return new Response(streamOf(render(bound, app.shell)), {
@@ -91,6 +98,9 @@ export function rankRoutes(table: ServerRoute[]): Ranked[] {
             pattern: route.pattern,
             segments: parseRoutePattern(route.pattern),
             load: route.load,
+            // A table written before layouts existed has no chain, and a page with none is the
+            // common case either way.
+            layouts: route.layouts ?? [],
         })
     routes.sort((a, b) => compareRoutes(a.segments, b.segments))
     return routes

@@ -190,7 +190,7 @@ return ${SCOPE}`
 ${componentImports(withoutProps(moduleSetup.imports), '.client')}${componentImports(withoutProps(setup.imports), '.client')}
 ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}\
 ${headExport}\
-export default function mount(root${lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
+export default function mount(root${lowering.takesProps() || holdsSlot(file.template) ? `, ${PROPS} = {}` : ''}) {
 ${opened}${setup.body}
 ${helpers.join('\n')}
 ${fills}${captured}${bindings}${closed}

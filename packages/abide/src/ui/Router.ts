@@ -24,9 +24,24 @@ export type Route = {
     // The route literal, in the bracket spelling the page's directory is already written in.
     pattern: string
     load: () => Promise<PageModule>
+    // 35.1 — the layouts this page renders inside, outermost first, as the build found them.
+    // Optional because a table may be written by hand and most pages have none.
+    layouts?: (() => Promise<PageModule>)[]
 }
 
 type Compiled = Route & { segments: Segment[] }
+
+// 41.11 — ONE LEVEL OF WHAT IS MOUNTED: the module standing there, the scope that stops it, and
+// the region its child occupies. The router holds these rather than letting each level own the
+// one below it, which is what makes a shared layout something it can KEEP: a scope stopped from
+// above takes its children with it, and a layout that survives a navigation must not take the
+// page it was holding a moment ago.
+type Level = {
+    module: PageModule
+    scope: Scope | undefined
+    // Where this level's `<slot/>` is, learned when the level below it mounted there.
+    slot: Region | undefined
+}
 
 // WHAT THE ROUTER PUT ON THE PAGE, so a navigation can take it back off. A page mounted into the
 // region owns a `Scope` (12.13) and the router is the only thing that can remove its nodes, so the
@@ -35,6 +50,8 @@ export class Router {
     region: Region
     routes: Compiled[]
     scope: Scope | undefined
+    // The chain standing in the document, outermost layout first and the page last.
+    levels: Level[]
     // WHICH NAVIGATION IS THE LIVE ONE. Both ways in await the destination's module before they
     // touch anything, and a dynamic import resolves in whatever order the chunks arrive — so two
     // clicks, or a click landing while `hydrate` is still loading, each mounted a page: the second
@@ -50,6 +67,7 @@ export class Router {
         this.region = region
         this.routes = routes
         this.scope = undefined
+        this.levels = []
         this.navigation = 0
     }
 
@@ -86,24 +104,101 @@ export class Router {
         }
         this.navigation += 1
         const ticket = this.navigation
-        const page = await found.route.load()
+        const arriving = await load(found.route)
         // SUPERSEDED, so this navigation is over. Nothing has been touched yet, which is the whole
         // reason the ticket is checked here rather than after the mount.
         if (this.navigation !== ticket) return
-        const mount = page.default
-        this.scope?.stop()
+
+        // 41.11 — WHAT THE TWO ADDRESSES SHARE IS NOT REBUILT. The comparison is by the MOUNT
+        // rather than by the loader or the module record: the table holds an arrow per row, so
+        // two routes under one layout name the same file through two different functions, and a
+        // table written by hand may answer with a fresh record each call. The function a module
+        // exports is the same function either way.
+        const shared = this.shares(arriving)
+        this.stopFrom(shared)
+        // The region the arriving part goes into: the page region where nothing is kept, and the
+        // deepest kept layout's own slot where something is.
+        const into =
+            shared === 0
+                ? this.region
+                : ((this.levels[shared - 1] as Level).slot as Region)
         // EMPTIED THROUGH THE PRIMITIVE EVERY OTHER REGION IS. `fillRegion(region, '')` is this
         // removal, and it carries the 41.10 refusal for a region no longer in a document that a
         // hand-written walk swallows.
-        fillRegion(this.region, '')
+        fillRegion(into, '')
         const full = `${target.pathname}${target.search}${target.hash}`
         if (options.replace === true) history.replaceState(null, '', full)
         else history.pushState(null, '', full)
         // 39.6 — BEFORE THE BODY IS WIRED, so a `<title>` the reader sees is the page they are
-        // arriving at rather than the one they left, for however long the mount takes.
-        if (page.head !== undefined) applyHead(page.head())
-        this.scope = mount(this.region, paramsProp(found.params))
+        // arriving at rather than the one they left, for however long the mount takes. Every
+        // level that is arriving contributes, outermost first, which is the order the server
+        // wrote them in; a kept layout's head is already standing and is not applied again.
+        for (let at = shared; at < arriving.length; at += 1) {
+            const head = (arriving[at] as PageModule).head
+            if (head !== undefined) applyHead(head())
+        }
+        this.mountFrom(arriving, shared, into, found.params)
         if (options.keepScroll !== true) scrollTo(0, 0)
+    }
+
+    // How much of the arriving chain is already standing. Layouts only: the page is the level
+    // that is always replaced, even where the address resolved to the same module with other
+    // params, because its own bindings read those params.
+    private shares(arriving: PageModule[]): number {
+        const layouts = arriving.length - 1
+        const standing = this.levels.length === 0 ? 0 : this.levels.length - 1
+        let shared = 0
+        while (
+            shared < layouts &&
+            shared < standing &&
+            (this.levels[shared] as Level).module.default ===
+                (arriving[shared] as PageModule).default
+        )
+            shared += 1
+        return shared
+    }
+
+    // Stopped from the INSIDE OUT, so a layout's disposers run after the page's — the order a
+    // scope's own teardown already has, and the one an author reading two `watch` cleanups in
+    // two files would expect.
+    private stopFrom(at: number): void {
+        for (let level = this.levels.length - 1; level >= at; level -= 1)
+            (this.levels[level] as Level).scope?.stop()
+        this.levels.length = at
+    }
+
+    // 35.1 — THE CHAIN, MOUNTED. Each level is handed the one below it as `children` (32.19), so
+    // a layout puts the page in its `<slot/>` with the same mechanism a caller writing markup
+    // between two tags uses — and the router learns where that slot is on the way past, which is
+    // what lets it swap the page there later without the layout knowing.
+    //
+    // THE CHILD'S SCOPE IS THE ROUTER'S, not the layout's: `mount` hands back nothing, so the
+    // layout owns nothing below it and a kept layout cannot stop the page arriving under it.
+    private mountFrom(
+        modules: PageModule[],
+        at: number,
+        region: Region,
+        params: Params,
+    ): void {
+        const module = modules[at] as PageModule
+        const level: Level = { module, scope: undefined, slot: undefined }
+        this.levels[at] = level
+        const props = paramsProp(params)
+        if (at < modules.length - 1)
+            props.children = () => ({
+                // NOTHING, because the level below carries its own markup (32.18): a module a
+                // route reaches fills the region it is mounted against when that region is
+                // empty, so the markup and the mount are one call rather than two.
+                html: () => '',
+                mount: (slot: Region): undefined => {
+                    level.slot = slot
+                    this.mountFrom(modules, at + 1, slot, params)
+                    return undefined
+                },
+            })
+        level.scope = module.default(region, props)
+        // The page's scope, for a caller that reads it. The chain's is `levels`.
+        if (at === modules.length - 1) this.scope = level.scope
     }
 
     // The page the SERVER painted, wired where it stands. No fill happens — the region is not
@@ -120,10 +215,20 @@ export class Router {
         // NO `applyHead` HERE. The document's head is the one the server wrote for this very
         // page, and re-applying would replace each contribution with an identical copy — which is
         // a `<link rel=stylesheet>` refetched and a flash of unstyled document on every load.
-        const { default: mount } = await found.route.load()
+        const standing = await load(found.route)
         if (this.navigation !== ticket) return
-        this.scope = mount(this.region, paramsProp(found.params))
+        this.mountFrom(standing, 0, this.region, found.params)
     }
+}
+
+// A route's chain, loaded: the layouts it renders inside, outermost first, and the page last.
+// One `Promise.all`, because a waterfall down a three-deep chain is three round trips for a
+// navigation the reader is watching.
+async function load(route: Compiled): Promise<PageModule[]> {
+    return await Promise.all([
+        ...(route.layouts ?? []).map((layout) => layout()),
+        route.load(),
+    ])
 }
 
 // 33.4 — A PROP IS AN ACCESSOR. A page is mounted as any other component is, so its one prop is

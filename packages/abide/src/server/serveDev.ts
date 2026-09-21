@@ -162,7 +162,8 @@ export async function serveDev(
             queued.push(waiting)
             return
         }
-        const id = (nextId += 1)
+        nextId += 1
+        const id = nextId
         inFlight.set(id, waiting)
         worker.postMessage({
             kind: 'request',
