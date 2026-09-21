@@ -1,4 +1,3 @@
-import { isThenable } from '#shared/reactive/isThenable.ts'
 import { REGION_CLOSE, REGION_OPEN } from '#ui/REGION.ts'
 import type { Component } from './render.ts'
 
@@ -19,18 +18,11 @@ export function renderComponent(
     heads: string[],
 ): string {
     const rendered = (
-        component as (
-            props: Record<string, () => unknown>,
-        ) => { head: string; body: string } | PromiseLike<unknown>
+        component as (props: Record<string, () => unknown>) => {
+            head: string
+            body: string
+        }
     )(props)
-    // 35.5 IS `render`'s, AND A PARENT IS NOT `render`. A component whose `<script>` awaits answers
-    // a promise, and the parent's markup is built as ONE string concatenation — so a promise
-    // standing in it is `[object Promise]`, or, reached for its members here, a `head` and a `body`
-    // that are both `undefined`. Refused by name rather than rendered.
-    if (isThenable(rendered))
-        throw new Error(
-            'abide: a component invoked with <Name/> has a top-level await in its <script>, and a caller that awaits a child is not built yet — only render() awaits a component. Do the awaiting in the page and pass the value down. RULEBOOK 35.5.',
-        )
     if (rendered.head !== '') heads.push(rendered.head)
     return `<!--${REGION_OPEN}-->${rendered.body}<!--${REGION_CLOSE}-->`
 }

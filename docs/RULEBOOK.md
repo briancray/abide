@@ -65,7 +65,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | adoption | What a `reactive` body does with a `Reactive` it returned. |
 | forwarding | The delegation between an adopting `Reactive` and the one it adopted. |
 | propagation | The derivation of a probe from the values a body read. |
-| sink | What 35.8 defines. |
+| sink | What 35.7 defines. |
 | implementation | Anything claiming conformance to this document. |
 
 RFC 2119 keywords are used as that document defines them: **MUST**, **MUST NOT**, **SHALL**,
@@ -1432,18 +1432,21 @@ indentation MUST be dropped at both ends of every block body and of the top-leve
 
 34.2 A `<script module>` block MUST be request-local on a server and process-wide in a browser.
 
-34.3 A `<style>` block MUST be component-scoped: every root element MUST carry a scope token, and
+34.3 A `<script>` or a `<script module>` MUST NOT await at its top level, and one that does MUST be
+a compile error.
+
+34.4 A `<style>` block MUST be component-scoped: every root element MUST carry a scope token, and
 every selector MUST require it on its rightmost compound.
 
-34.4 `:global(…)` MUST exempt the compound inside it from carrying the scope token.
+34.5 `:global(…)` MUST exempt the compound inside it from carrying the scope token.
 
-34.5 A stylesheet imported from any `<script>` in the file, or any `.ts` it reaches, MUST be a
+34.6 A stylesheet imported from any `<script>` in the file, or any `.ts` it reaches, MUST be a
 dependency of that component.
 
-34.6 A component scope the document never linked MUST reach the page through
+34.7 A component scope the document never linked MUST reach the page through
 `document.adoptedStyleSheets`.
 
-34.7 An implementation MUST NOT provide a fallback for `document.adoptedStyleSheets`.
+34.8 An implementation MUST NOT provide a fallback for `document.adoptedStyleSheets`.
 
 # 35. Pages, rendering and sinks
 
@@ -1456,20 +1459,18 @@ dependency of that component.
 
 35.4 `render` MUST take a `Component` already bound to its props.
 
-35.5 `render` MUST await a `Component` that answers asynchronously.
+35.5 `render` MUST produce a document as an async generator of bytes.
 
-35.6 `render` MUST produce a document as an async generator of bytes.
+35.6 A `Shell` MUST default to `src/ui/app.html`.
 
-35.7 A `Shell` MUST default to `src/ui/app.html`.
-
-35.8 A sink MUST be an addressable hole in the output stream that a value still in flight fills
+35.7 A sink MUST be an addressable hole in the output stream that a value still in flight fills
 later.
 
-35.9 An attribute a sink fills MUST be filled on the element itself.
+35.8 An attribute a sink fills MUST be filled on the element itself.
 
-35.10 A sink inside RCDATA MUST fill through the element's own property rather than through markup.
+35.9 A sink inside RCDATA MUST fill through the element's own property rather than through markup.
 
-35.11 The batching unit of a sink fill MUST be the flush and MUST NOT be the production.
+35.10 The batching unit of a sink fill MUST be the flush and MUST NOT be the production.
 
 # 36. Environment and files
 

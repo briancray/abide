@@ -67,7 +67,7 @@ rules above.
 
 The site's stylesheet is `packages/dogfood/src/ui/app.css` — a real file at the address the
 app's own `import '#ui/app.css'` resolves to once `.abide` compiles, so the CSS does not move
-when the scaffold goes. RULEBOOK 34.5 carries that import: global rather than scoped, folded into
+when the scaffold goes. RULEBOOK 34.6 carries that import: global rather than scoped, folded into
 the route's content-hashed sheet ahead of the scoped blocks.
 
 An EXAMPLE is a DIRECTORY under `packages/dogfood/examples/`, not a fence, per RULEBOOK 40: real

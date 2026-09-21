@@ -20,7 +20,7 @@ const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 const SHELL = `<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>`
 
-// 34.5 and 38.24: the stylesheet is a dependency of the page, and the document links what the
+// 34.6 and 38.24: the stylesheet is a dependency of the page, and the document links what the
 // build made of it. The page never names an address — that is the whole of the clause.
 //
 // `#ui/…` AND NOT `./home.css`, WHICH IS THE SPELLING REGISTRY DOCUMENTS. A relative specifier is
@@ -187,7 +187,7 @@ test('an address no route matches is 404 — 38.22', async () => {
     expect((await Bun.fetch(`${base}/__abide/client/nope.js`)).status).toBe(404)
 })
 
-test('the document links the stylesheet the build bundled — 34.5, 38.24', async () => {
+test('the document links the stylesheet the build bundled — 34.6, 38.24', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
     expect(html).toContain(
         '<link rel="stylesheet" href="/__abide/client/entry.css">',

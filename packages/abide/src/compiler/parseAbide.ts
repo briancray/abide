@@ -15,7 +15,7 @@ export type AbideFile = {
     // in a browser. Apart from `scripts` because the two run a different number of times, which is
     // the whole of the clause.
     modules: string[]
-    // `<style>` bodies in source order. Scoping is 34.3 and is not implemented yet.
+    // `<style>` bodies in source order. Scoping is 34.4 and is not implemented yet.
     styles: string[]
     template: TemplateNode[]
 }
@@ -120,7 +120,7 @@ export function parseAbide(source: string): AbideFile {
                 continue
             }
 
-            // 34.1, 34.3 — a `<script>` or a `<style>` is the FILE's, not markup, and its body is
+            // 34.1, 34.4 — a `<script>` or a `<style>` is the FILE's, not markup, and its body is
             // taken raw. Here rather than in a pass of its own: a scan that runs before the
             // template is parsed cannot tell a tag from the same characters inside a string in an
             // expression, and lifted the second into component setup.
@@ -134,7 +134,7 @@ export function parseAbide(source: string): AbideFile {
             // their attributes were discarded and a JSON-LD body was emitted as a JavaScript
             // statement, so the module did not parse and the document lost the tag.
             //
-            // A `<style>` HAS NO SECOND FORM — 34.3 makes every one of them the component's, with
+            // A `<style>` HAS NO SECOND FORM — 34.4 makes every one of them the component's, with
             // no attribute deciding otherwise — so this is one rule about `<script>` rather than an
             // exception carved out of a rule about both.
             const block =

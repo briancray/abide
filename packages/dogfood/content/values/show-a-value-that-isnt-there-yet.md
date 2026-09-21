@@ -182,11 +182,12 @@ neither of them stops the document.
 | --- | --- |
 | `{invoice}` | no — the read renders nothing and opens a sink the value fills later |
 | `{#if invoice.ready()}` | no — the `{:else}` renders while it loads |
-| `await invoice` in a `<script>` | yes — and that is the value being awaited, not a position |
+| `await invoice` inside a handler | yes — and that is the value being awaited, not a position |
 
 The last one is the section below, and it is not a template form at all: a slot is compiled into
-an ordinary function, so `{await invoice}` is refused rather than emitted. Waiting is something
-you do to a **value**, and no place in the markup does it to a page.
+an ordinary function, and so is component setup, so `{await invoice}` and a top-level `await` in a
+`<script>` are both refused. Waiting is something you do to a **value**, inside a function of your
+own; no place in the page does it to the page.
 
 Read on: [Conditionals](../templates/show-markup-conditionally.md)
 

@@ -1,6 +1,5 @@
 import { CURRENT_ROUTER, type NavigateOptions } from '#shared/CURRENT_ROUTER.ts'
 import { matchRoute, type Params } from '#shared/matchRoute.ts'
-import { isThenable } from '#shared/reactive/isThenable.ts'
 import {
     compareRoutes,
     parseRoutePattern,
@@ -14,14 +13,7 @@ import type { Scope } from './Scope.ts'
 // A PAGE'S CLIENT MODULE, mounted against the region the router owns. The same default export a
 // page already has — the router is a CALLER of a page exactly as a page is a caller of a
 // component, which is why nothing about the emitted module changes to be routable.
-// A PAGE WHOSE `<script>` AWAITS MOUNTS ASYNCHRONOUSLY, the same way its server half answers a
-// promise (35.5) — the emitted function body holds the author's own `await` and has to be `async`
-// to. Both call sites below already stand in an `async` method, so the guard is all the router
-// needs.
-export type PageMount = (
-    root: Region,
-    props?: Record<string, unknown>,
-) => Scope | Promise<Scope>
+export type PageMount = (root: Region, props?: Record<string, unknown>) => Scope
 
 // `head` is emitted only where a page carries its own markup, which is every routable one — but
 // a page with no `<head>` block contributes nothing and ships no such export, so it is optional
@@ -110,10 +102,7 @@ export class Router {
         // 39.6 — BEFORE THE BODY IS WIRED, so a `<title>` the reader sees is the page they are
         // arriving at rather than the one they left, for however long the mount takes.
         if (page.head !== undefined) applyHead(page.head())
-        // GUARDED, not awaited: a page that holds nothing answers its `Scope` outright, and an
-        // unconditional `await` spends a promise wrap and a microtask turn on every navigation.
-        const wired = mount(this.region, paramsProp(found.params))
-        this.scope = isThenable(wired) ? await wired : wired
+        this.scope = mount(this.region, paramsProp(found.params))
         if (options.keepScroll !== true) scrollTo(0, 0)
     }
 
@@ -133,8 +122,7 @@ export class Router {
         // a `<link rel=stylesheet>` refetched and a flash of unstyled document on every load.
         const { default: mount } = await found.route.load()
         if (this.navigation !== ticket) return
-        const wired = mount(this.region, paramsProp(found.params))
-        this.scope = isThenable(wired) ? await wired : wired
+        this.scope = mount(this.region, paramsProp(found.params))
     }
 }
 

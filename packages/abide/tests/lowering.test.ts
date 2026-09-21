@@ -636,10 +636,18 @@ test('an object literal opening a fragment expands its shorthand', async () => {
 
 // `for await (…)` puts a token between the keyword and the parenthesis. Read as a parameter
 // list, the SUBJECT was bound: never lowered, so the loop iterated the `Reactive` wrapper.
+//
+// INSIDE A FUNCTION, because 34.3 refuses one at a script's top level — a `for await` needs an
+// async context and setup is an ordinary function body, so the only place this loop can stand is
+// a function of the author's own. Nothing about the LOWERING depends on that, which is what this
+// asserts.
 test('a for-await subject is lowered and does not shadow itself', async () => {
-    expect(await lower('for await (const c of n) { f(c) }', N)).toBe(
-        'for await (const c of n()) { f(c) }',
-    )
+    expect(
+        await lower(
+            'async function g() { for await (const c of n) { f(c) } }',
+            N,
+        ),
+    ).toBe('async function g() { for await (const c of n()) { f(c) } }')
     expect(await lower('for (const c of n) { f(c) }', N)).toBe(
         'for (const c of n()) { f(c) }',
     )

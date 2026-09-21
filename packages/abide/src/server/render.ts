@@ -1,7 +1,5 @@
-// 35.4, 35.5 and 35.6 — `render` takes a component already bound to its props, awaits it where it
-// answers asynchronously, and produces the document as an async generator of bytes.
-
-import { isThenable } from '#shared/reactive/isThenable.ts'
+// 35.4 and 35.5 — `render` takes a component already bound to its props and produces the document
+// as an async generator of bytes.
 
 // REGISTRY declares `Component` opaque. What a compiled component IS today is a function
 // returning its markup, and the cast lives here, in one place, rather than in the type an app
@@ -12,7 +10,7 @@ import { isThenable } from '#shared/reactive/isThenable.ts'
 // biome-ignore lint/suspicious/noEmptyInterface: REGISTRY declares `interface Component {}`.
 export interface Component {}
 
-// 35.7 — the document a render renders into, defaulting to `src/ui/app.html`.
+// 35.6 — the document a render renders into, defaulting to `src/ui/app.html`.
 export type Shell = string | URL | undefined
 
 // Where a shell was not given and `src/ui/app.html` is not there either. The rulebook does not
@@ -29,12 +27,9 @@ export async function* render(
     component: Component,
     shell?: Shell,
 ): AsyncGenerator<Uint8Array> {
-    // 35.5 — A COMPONENT WHOSE `<script>` HOLDS A TOP-LEVEL `await` ANSWERS A PROMISE, and one
-    // whose does not answers the record outright. GUARDED rather than awaited unconditionally, for the reason the
-    // shell below is: most components hold nothing, and an `await` on a settled value is a promise
-    // wrap and a microtask turn per render.
-    const answered = (component as () => Rendered | PromiseLike<Rendered>)()
-    const rendered = isThenable(answered) ? await answered : answered
+    // 34.3 — SETUP IS SYNCHRONOUS, so a component answers its record outright and nothing here
+    // waits for it.
+    const rendered = (component as () => Rendered)()
     // GUARDED, because the string form is already settled: `shellText` is `async`, so awaiting it
     // unconditionally wrapped a promise and spent a microtask turn per request for nothing.
     const document = typeof shell === 'string' ? shell : await shellText(shell)
@@ -94,7 +89,7 @@ async function shellText(shell: URL | undefined): Promise<string> {
     return await shellUnder('src')
 }
 
-// 35.7's default, read from a ROOT rather than from the process's directory. `render` on its own
+// 35.6's default, read from a ROOT rather than from the process's directory. `render` on its own
 // is called from wherever the app is, so `src` is the root it passes; `serveBuild` is handed the
 // root `abide build` compiled and the two need not be the same directory. NOT PUBLIC SURFACE —
 // `server/index.ts` does not re-export it.

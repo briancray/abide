@@ -33,7 +33,7 @@ export const SHARED = '__shared'
 //
 // The component returns its head and its body apart. 39.3 is why the split is HERE and not in
 // `render`: the hoist is a compile-time partition of the template, so the emitted function has
-// two returns rather than one string a renderer has to go looking through. 35.6 is answered by
+// two returns rather than one string a renderer has to go looking through. 35.5 is answered by
 // `render`, which turns the two into the byte stream a document is served as.
 
 export function emitComponent(
@@ -99,7 +99,7 @@ export function emitComponent(
     // emitted only where the page invokes something: a page with no component pays nothing.
     return `${names.length === 0 ? '' : `import { ${importClause(names)} } from '${SERVER_SPECIFIER}'\n`}\
 ${componentImports(withoutProps(moduleSetup.imports), '')}${componentImports(withoutProps(setup.imports), '')}
-export default ${lowering.holdsAwait() ? 'async ' : ''}function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
+export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
 ${opened}${componentBody}
 ${heads ? `    const ${HEADS} = []\n` : ''}\
     const ${BODY} = ${concat(body)}

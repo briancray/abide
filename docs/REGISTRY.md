@@ -546,11 +546,11 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Spelling | Meaning | Rules |
 | --- | --- | --- |
-| `<script>` | Per-instance component setup. | 14.7, 34.1 |
-| `<script module>` | Module scope. | 34.2 |
-| `<style>` | Component-scoped styles. | 34.3, 34.4, 34.6, 34.7 |
-| `import './app.css'` | A stylesheet the component depends on. | 34.5 |
-| `:global(…)` | The per-selector escape from scoping. | 34.4 |
+| `<script>` | Per-instance component setup. | 14.7, 34.1, 34.3 |
+| `<script module>` | Module scope. | 34.2, 34.3 |
+| `<style>` | Component-scoped styles. | 34.4, 34.5, 34.7, 34.8 |
+| `import './app.css'` | A stylesheet the component depends on. | 34.6 |
+| `:global(…)` | The per-selector escape from scoping. | 34.5 |
 
 # Pages and routing
 
@@ -570,17 +570,17 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Component` | `interface Component {}` | A component bound to its props. | 32.18, 35.4 |
-| `render` | `(component: Component, shell?: Shell) => AsyncGenerator<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.6, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13 |
-| `Shell` | `string \| URL \| undefined` | The document a render renders into. | 35.7 |
+| `render` | `(component: Component, shell?: Shell) => AsyncGenerator<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.5, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13 |
+| `Shell` | `string \| URL \| undefined` | The document a render renders into. | 35.6 |
 
 ## Sinks
 
 | Spelling | Sink | Filled | Rules |
 | --- | --- | --- | --- |
-| `href={x}`, any attribute | the element | the attribute or property | 35.8, 35.9 |
-| `class:`, `style:`, `bind:` | the element | the class, the style property, the bound property | 35.8 |
-| `<title>{name}</title>` | `<title data-abide-sink="…">` | `.textContent` | 35.10, 35.11 |
-| `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` | 35.10 |
+| `href={x}`, any attribute | the element | the attribute or property | 35.7, 35.8 |
+| `class:`, `style:`, `bind:` | the element | the class, the style property, the bound property | 35.7 |
+| `<title>{name}</title>` | `<title data-abide-sink="…">` | `.textContent` | 35.9, 35.10 |
+| `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` | 35.9 |
 
 # Configuration
 
@@ -619,7 +619,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `src/ui/**` | Browser-related source. | 36.10 |
 | `src/shared/**` | Source shared by both. | 36.10 |
 | `src/server/app.ts` | The lifecycle hooks. | 37.1 |
-| `src/ui/app.html` | The document its pages are served in. | 35.7 |
+| `src/ui/app.html` | The document its pages are served in. | 35.6 |
 | `src/ui/public/**` | The files answered as authored, at their path below that directory. | 36.11, 36.12, 36.13, 36.14, 21.12, 21.13, 21.14, 38.19, 38.20 |
 | `src/ui/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
 | `src/ui/public/robots.txt` | The file answered at `/robots.txt`. | 36.11 |

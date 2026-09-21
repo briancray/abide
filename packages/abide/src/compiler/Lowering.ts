@@ -24,6 +24,9 @@ import { type Token, tokenise } from './tokenise.ts'
 // no parentheses to survive one.
 const SHORT_CIRCUIT: ReadonlySet<string> = new Set(['||', '&&', '??'])
 
+// 34.3's keyword, spelled once for the guard below.
+const AWAIT = 'await'
+
 // ONE FILE'S LOWERING. Every piece the emitters ask for — a script, a slot, a subject, a key — is a
 // SPAN of the projection, and a nested value (the right of a write, a computed path segment) is a
 // span of the same text lowered by the same splice. `used` collects the framework names the
@@ -94,13 +97,6 @@ export class Lowering {
         return this.lower(this.projection.scripts, false)
     }
 
-    // 35.5 — WHETHER THE EMITTED COMPONENT IS `async`. A `<script>` holding a top-level `await`
-    // is a function body holding one, and abide gives that `await` no meaning of its own: it is
-    // the author's JavaScript, and the only thing the emitters owe it is a body it can stand in.
-    holdsAwait(): boolean {
-        return this.projection.holds
-    }
-
     // A template expression. 32.26 — a SLOT's `raw(x)` lowers to the framework's own `raw`, which
     // is why the markup-writing holders (an expression, an attribute value) ask for it and a
     // subject, a key and a listener do not.
@@ -136,20 +132,27 @@ export class Lowering {
 
     // A TEMPLATE POSITION CANNOT `await`, and it is worth refusing rather than emitting. Every
     // slot, subject and attribute value is lowered into an ordinary arrow inside the markup
-    // concatenation — there is no `async` anywhere for an `await` to stand in — so `{await rows}`
-    // emitted a module that DOES NOT PARSE, reported by bun at import against the emitted file
-    // rather than against the page. The form used to be a clause and is not one now; the `<script>`
-    // is where an `await` goes, and the name read here is the value it left behind.
+    // concatenation — there is no `async` for an `await` to belong to — so `{await rows}` emitted a
+    // module that DOES NOT PARSE, reported by bun against the emitted file rather than the page.
     //
-    // ASKED OF THE TOKENS, so `{'await'}` and `{x.await}` are not it — one is a string and the
-    // other a member, and neither is the keyword.
+    // UNLESS THE SLOT MAKES ITS OWN, which is the half the first draft of this got wrong and
+    // REGRESSED: `onclick={async () => await save()}` is an ordinary handler, the `await` belongs
+    // to the arrow the author wrote, and refusing it broke a shape that had always worked.
+    //
+    // THE TEST IS `async` BEFORE `await` IN THE SAME SLOT, and that is a SUMMARY of the source
+    // rather than its structure — so state what it lets through: a slot holding both an async
+    // function AND a bare `await` of its own passes here and fails at the bundler, exactly as it
+    // did before this guard existed. Depth cannot do better on its own — `{(await a) + 1}` is
+    // illegal at paren depth 1 and `{xs.map(async (x) => await f(x))}` is legal at depth 2 — and
+    // the structural answer needs the checker's tree, which this file does not have.
     private refuseAwait(span: Span): void {
         const source = this.projection.text.slice(span.start, span.end)
-        if (!source.includes('await')) return
+        if (!source.includes(AWAIT)) return
         for (const token of tokenise(source)) {
-            if (token.text !== 'await') continue
+            if (token.text === 'async') return
+            if (token.text !== AWAIT) continue
             throw new Error(
-                `abide: a template position cannot await, and \`${source.trim()}\` does. A slot is lowered into an ordinary function, so there is nothing here to await in — do the awaiting in the <script> and read the name here.`,
+                `abide: a template position cannot await, and \`${source.trim()}\` does. A slot is lowered into an ordinary function, so there is nothing here to await in — await inside a handler or a reactive body, or read the value and let the position fill. RULEBOOK 34.3.`,
             )
         }
     }

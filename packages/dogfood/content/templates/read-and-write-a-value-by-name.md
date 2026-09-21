@@ -63,10 +63,11 @@ write in a `.ts` file, meaning the same thing. Lowered as a read it would be `aw
 which takes what has landed and throws where nothing has, and that is never what an `await` was
 asking for.
 
-Nothing is scheduled around it. The `await` is yours, the component is `async` because you wrote
-one, and two of them run one after the other exactly as they would anywhere else. A template
-position cannot await at all — a slot is compiled into an ordinary function — so the `<script>` is
-where it goes.
+**Where you can write one** is anywhere there is a function to write it in: a handler, a `reactive`
+body, an `async` arrow of your own. Not at the top of a `<script>`, and not in a template position.
+Setup is a function body and a slot is compiled into one, so neither has anything to await in, and
+both are compile errors rather than a module that will not parse. Nothing in abide holds a render,
+so there is no position where waiting would mean the page waits.
 
 Read on: [Local state](../values/show-a-value-that-changes.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md) ·

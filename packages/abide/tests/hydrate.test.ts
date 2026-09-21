@@ -421,90 +421,75 @@ let late = reactive(false)
     expect(work.attributesSet).toBe(0)
 })
 
-// 35.5 — A `<script>` MAY HOLD A TOP-LEVEL `await`, and abide gives it no meaning of its own: it
-// is the author's JavaScript, awaiting whatever the operand is. What the compiler owes it is a
-// body it can stand in — an `async` component — and `render` awaiting the promise that makes.
+// 31.3 — AN `await` OPERAND HOLDS THE `Reactive`, WHEREVER AN `await` IS LEGAL. Every `Reactive`
+// is a promise for its own settling (1.4, 2.8), so this is the same line a `.ts` file writes and
+// it means the same thing. Lowered as a read (31.1) it would be `await total()` — what has landed,
+// and a throw where nothing has (2.10), which is never what an `await` asked for.
 //
-// A `Reactive` NAME IS STILL A READ UNDER ONE (31.1). `await total` lowers to `await total()`,
-// which reads what has landed and throws where nothing has (2.2, 2.10) — so the page below awaits
-// an ordinary promise, which is the case this clause is actually about. 31.3's annotated binding
-// is the spelling for awaiting the value itself.
+// IN A HANDLER, BECAUSE 34.3 IS WHY. Setup is a function body on both sides and may not await at
+// its top level, so the positions left are the ones inside a function — a handler, a `reactive`
+// body — and a handler is the one a test can drive.
 //
-// THE REVERT: drop the `holdsAwait` arm of the emitted function header in `emitComponent`. The
-// module then has `await` in a body that is not `async` and this reports
-// `"await" can only be used inside an "async" function` rather than rendering `yes`.
-test('a script may hold a top-level await — 35.5', async () => {
-    const { html } = await mountPage(`<script>
-const rows = await Promise.resolve({ ok: 'yes' })
-</script>
-
-<p id="out">{rows.ok}</p>`)
-
-    expect(html).toContain('<p id="out">yes</p>')
-})
-
-// 31.3 — AN `await` OPERAND HOLDS THE `Reactive`, which is how a `<script>` waits. Every
-// `Reactive` is a promise for its own settling (1.4, 2.8), so this is the same line a `.ts` file
-// writes and it means the same thing. Lowered as a read (31.1) it would be `await total()` — what
-// has landed, and a throw where nothing has (2.10), which is never what an `await` asked for.
-//
-// THE RENDER WAITS AS A CONSEQUENCE, NOT AS A RULE. The component is `async` because the author
-// wrote an `await`, and `render` awaits it (35.5). Nothing schedules anything.
-//
-// BOTH HALVES ASSERTED. `{settled}` is the awaited value and `{total}` beside it is still a live
-// read of the same `Reactive` — a page that rendered `42` from the first alone would pass against
-// an `await` that had consumed the name.
-//
-// THE REVERT: drop the `AwaitExpression` arm of `classifyRead`. The name lowers to `await total()`
-// and this throws `NotLanded: reactive has not landed` out of `Component`.
+// THE REVERT: drop the `AwaitExpression` arm of `classifyRead`. The click then runs
+// `await total()` on a value that has not landed and the handler throws `NotLanded` instead of
+// moving the text to 42.
 test('an await operand holds the Reactive — 31.3', async () => {
-    const { html } = await mountPage(`<script>
+    const { mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 
 const total = reactive(async () => {
     await Bun.sleep(20)
     return 42
 })
-const settled = await total
+let shown = reactive('waiting')
 </script>
 
-<p id="out">{settled} {total}</p>`)
+<p id="out">{shown}</p>
+<button id="go" onclick={async () => { shown = String(await total) }}>go</button>`)
 
-    expect(html).toContain('<p id="out">42 42</p>')
+    mount(document.body)
+    flushSync()
+    ;(document.querySelector('#go') as HTMLElement).click()
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    flushSync()
+    expect(document.querySelector('#out')?.textContent).toBe('42')
 })
 
-// AND `await n()` IS STILL A READ, which is what keeps the arm above narrow: the operand there is
-// the CALL (31.7's explicit read), not the name, so nothing about it changed. It throws here
-// because nothing has landed — asserted as the refusal it is, since a test that only showed the
-// holding case would pass against an arm that swallowed every `await`.
-test('an explicit read under an await is still a read — 31.7', async () => {
-    let thrown = ''
-    try {
-        await mountPage(`<script>
-import { reactive } from 'abide'
-
-const total = reactive(async () => {
-    await Bun.sleep(20)
-    return 42
-})
-const settled = await total()
+// 34.3 — A SCRIPT BLOCK MAY NOT AWAIT AT ITS TOP LEVEL, and the compiler says so. Setup is a
+// function body on both sides, so nothing holds the render: every value a page reads is a hole the
+// document is written around (41.4, 32.24).
+//
+// BOTH BLOCKS, AND THE SERVER IS WHY. `<script module>` is request-local there (34.2), so the
+// emitted component carries its body too — in a browser that same block IS module scope, where the
+// line is legal, and a source that compiles on one side and not the other is what this refuses.
+//
+// THE REVERT: drop the two `refuseTopLevelAwait` calls in `projectShadow`. Both compiles succeed
+// and the import reports `AggregateError: 2 errors building …/Page.ts` — a bundler error against a
+// file the author never wrote.
+test('a script block cannot await at its top level — 34.3', async () => {
+    for (const block of ['<script>', '<script module>']) {
+        let thrown = ''
+        try {
+            await mountPage(`${block}
+const rows = await Promise.resolve(1)
 </script>
 
-<p id="out">{settled}</p>`)
-    } catch (error) {
-        thrown = String(error)
+<p id="out">{rows}</p>`)
+        } catch (error) {
+            thrown = String(error)
+        }
+        expect(thrown).toContain(`a ${block} cannot await at its top level`)
     }
-    expect(thrown).toContain('NotLanded')
 })
 
-// A TEMPLATE POSITION CANNOT AWAIT, and the compiler says so rather than emitting. Every slot,
-// subject and attribute value is lowered into an ordinary arrow inside the markup concatenation,
-// so there is no `async` for an `await` to stand in — `{await rows}` emitted a module that does
-// not parse, reported by bun against the emitted file rather than against the page.
+// A TEMPLATE POSITION CANNOT AWAIT EITHER, and for its own reason: every slot, subject and
+// attribute value is lowered into an ordinary arrow inside the markup concatenation, so there is
+// no function for an `await` to belong to at all. Apart from 34.3 because the refusal is the
+// lowering's rather than the projection's, and a slot has no top level to speak of.
 //
 // THE REVERT: drop the `refuseAwait` call from `Lowering.slot`. The compile succeeds and the
-// import of the emitted module reports `AggregateError: 2 errors building …/Page.ts` — a bundler
-// error against a file the author never wrote, naming neither the page nor the slot.
+// import of the emitted module reports the same bundler error, naming neither the page nor the
+// slot.
 test('a template position cannot await', async () => {
     let thrown = ''
     try {
@@ -519,6 +504,32 @@ const rows = reactive(async () => 1)
         thrown = String(error)
     }
     expect(thrown).toContain('a template position cannot await')
+})
+
+// AND A SLOT THAT MAKES ITS OWN `async` MAY AWAIT IN IT — the half the guard above got wrong on
+// its first run, which is why it is a test rather than a note. `onclick={async () => …}` is an
+// ordinary handler and the `await` belongs to the arrow the author wrote; refused, a shape that
+// had always worked stopped compiling.
+//
+// THE REVERT: drop the `async` arm of `Lowering.refuseAwait`. This reports
+// `a template position cannot await` against a page that is entirely correct.
+test('a slot that declares its own async may await in it', async () => {
+    const { mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+let shown = reactive('idle')
+const later = async () => 'done'
+</script>
+
+<p id="out">{shown}</p>
+<button id="go" onclick={async () => { shown = await later() }}>go</button>`)
+
+    mount(document.body)
+    flushSync()
+    ;(document.querySelector('#go') as HTMLElement).click()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    flushSync()
+    expect(document.querySelector('#out')?.textContent).toBe('done')
 })
 
 // 41.10 — A MISMATCH MUST NOT REBUILD THE PAGE, and the page is the one region with no block

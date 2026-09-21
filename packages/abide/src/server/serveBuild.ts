@@ -38,7 +38,7 @@ type Compiled = {
 }
 
 export type ServeOptions = {
-    // The app's source root — the directory `ui/` and `server/` sit under, and the one 35.7's
+    // The app's source root — the directory `ui/` and `server/` sit under, and the one 35.6's
     // shell is resolved against.
     root: string
     // Where `abide build` put its output.
@@ -131,7 +131,7 @@ export async function serveBuild(
         : Bun.serve({ port: options.port, fetch })
 }
 
-// 35.6's generator, as a body. Pulled a chunk at a time rather than collected, which is the shape
+// 35.5's generator, as a body. Pulled a chunk at a time rather than collected, which is the shape
 // 41.1 needs and the reason `render` yields twice rather than returning a string.
 //
 // IT IS NOT AN EARLY FLUSH. `render` calls the component before its first yield, so the body is
@@ -174,9 +174,9 @@ function match(
 // a document that parses its script before its styles paints once unstyled. It is a plain `<link>`
 // rather than anything the client does, so a page the server painted is styled with no JS at all.
 //
-// ONE STYLESHEET FOR THE APP, which is NOT 34.5's per-component dependency: the bundler collects
+// ONE STYLESHEET FOR THE APP, which is NOT 34.6's per-component dependency: the bundler collects
 // every stylesheet reachable from the entry into one file, so a page that imports none is served
-// this too. 34.3's scope token is what makes that distinction matter and it is not built.
+// this too. 34.4's scope token is what makes that distinction matter and it is not built.
 function withClientEntry(shell: string, styled: boolean): string {
     const at = headAnchor(shell)
     const link = styled

@@ -16,7 +16,7 @@ export const CLIENT_DIRECTORY = 'client'
 // The module that mounts the app, and so the one file in the bundle whose name the shell writes
 // out. Everything else a page needs is reached from here and named by the bundler.
 //
-// THE STYLESHEET IS THE SAME NAME. A `.abide` that imports a stylesheet (34.5) makes it a
+// THE STYLESHEET IS THE SAME NAME. A `.abide` that imports a stylesheet (34.6) makes it a
 // dependency of the client module, and the bundler collects every one it reaches under an entry
 // into `<entry>.css` — so the extension is the whole difference and there is no second constant.
 export const CLIENT_ENTRY = 'entry'
