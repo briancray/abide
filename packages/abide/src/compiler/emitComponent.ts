@@ -10,6 +10,7 @@ import {
     holdsSlot,
     isClassToggle,
     isComponentTag,
+    isElementBind,
     isEventName,
     isHead,
     isSingleRooted,
@@ -467,6 +468,10 @@ function emitAttribute(
         // 32.4 — `on<event>` is a listener, never markup. The server writes nothing, so a handler
         // cannot fire from a document that never hydrated.
         if (isEventName(attribute.lowerName)) return ''
+        // 32.9 — `bind:element` hands over the NODE, which a server has none of. Written out it
+        // was `bind:element=""` in the document — inert, ignored by a browser, and a tell that
+        // the binding was not built.
+        if (isElementBind(attribute.lowerName)) return ''
         // 32.3 — an expression attribute is reactive. Its CURRENT value is written here, and
         // `emitClient`'s own attribute loop is what keeps writing it after hydration.
         //

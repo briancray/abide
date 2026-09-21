@@ -112,6 +112,20 @@ export class Lowering {
         return this.lower(span, false)
     }
 
+    // 31.3 — A `bind:` OPERAND HOLDS THE `Reactive`, which is the one template position where a
+    // bare name is not a read: `bind:element={field}` puts the node IN the value, so lowering it
+    // to `field()` hands the binding whatever the value happens to be instead.
+    //
+    // ONLY THE OPERAND ITSELF. A name nested anywhere inside — the write in
+    // `bind:element={(node) => { tag = node.tagName }}` — is an ordinary position and is lowered
+    // as one, which is why this is the same walk with one read left alone rather than the source
+    // passed through.
+    reference(holder: object): string {
+        const span = this.spanOf(holder)
+        this.refuseAwait(span)
+        return this.lower(span, false, true)
+    }
+
     key(block: object): string {
         const span = this.projection.keys.get(block)
         if (span === undefined)
@@ -179,10 +193,15 @@ export class Lowering {
     // The source from `from` to `to`, every read in it rewritten. A write's value and a computed
     // segment are spans inside it, lowered by the same call, and the reads they hold are skipped
     // by the outer walk because it resumes past them.
-    private lower(span: Span, raw: boolean): string {
+    private lower(span: Span, raw: boolean, holds = false): string {
         const from = span.start
         const to = span.end
         const source = this.projection.text
+        // 31.3's position, as a span: the operand with its whitespace off, so a read covering
+        // exactly that is the name standing alone.
+        const text = source.slice(from, to)
+        const wholeFrom = from + (text.length - text.trimStart().length)
+        const wholeTo = from + text.trimEnd().length
         const calls = raw ? this.rawCalls(from, to) : NO_CALLS
         let read = this.firstRead(from)
         let call = 0
@@ -211,6 +230,9 @@ export class Lowering {
             read += 1
             const current = next as Read
             if (current.start < at) continue
+            // 31.3 — the operand's own read is the one that does not lower.
+            if (holds && current.from === wholeFrom && current.to === wholeTo)
+                continue
             const rewritten = this.rewrite(current, raw)
             if (rewritten === undefined) continue
             out += source.slice(at, current.from) + rewritten

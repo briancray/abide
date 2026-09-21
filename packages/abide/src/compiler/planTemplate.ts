@@ -123,12 +123,21 @@ export type RegionPlan = {
     branches: { branch: Branch; plan: TemplatePlan }[]
 }
 
+// 32.9 — `bind:element`, which is neither an attribute nor a listener: the value is handed the
+// NODE, once, when the node arrives. The path is the element's, reached by the walk every other
+// binding on it uses.
+export type ElementBinding = {
+    path: number[]
+    attribute: Attribute
+}
+
 export type TemplatePlan = {
     // Whether these nodes stand inside a block's body — see `planTemplate`.
     inRegion: boolean
     runs: TextRun[]
     handlers: HandlerBinding[]
     attributes: AttributeBinding[]
+    elements: ElementBinding[]
     regions: (RegionPlan | ListPlan | ComponentPlan | SlotPlan)[]
 }
 
@@ -147,6 +156,7 @@ export function planTemplate(
         runs: [],
         handlers: [],
         attributes: [],
+        elements: [],
         regions: [],
     }
     walk(template, [], plan, first)
@@ -288,6 +298,12 @@ function walk(
             const here = place()
             for (const attribute of node.attributes) {
                 if (!attribute.expression) continue
+                if (isElementBind(attribute.lowerName)) {
+                    // 32.9 — the node itself. Not written into the tag by the server and not
+                    // set by the client either: what the value takes is the element.
+                    plan.elements.push({ path: here, attribute })
+                    continue
+                }
                 if (isEventName(attribute.lowerName)) {
                     // 32.4 — a native listener on the element itself, reached by the same walk a
                     // text node is, so nothing is added to the document to find it.
@@ -373,6 +389,13 @@ export function holdsSlot(nodes: TemplateNode[]): boolean {
 
 export function isEventName(lowerName: string): boolean {
     return lowerName.length > 2 && lowerName.startsWith('on')
+}
+
+// 32.9 — `bind:element` is the one `bind:` the server writes nothing for and the client does not
+// set: it hands the node over. Here for `isEventName`'s reason — the server declining to write
+// it and the client binding it are one predicate answering twice.
+export function isElementBind(lowerName: string): boolean {
+    return lowerName === 'bind:element'
 }
 
 // 32.10 — `style:prop` sets ONE style property and `class:name` ONE class. Here rather than beside

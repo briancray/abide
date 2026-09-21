@@ -24,6 +24,7 @@
 // keeps the list below the budget this header calls it — a subsystem only the emitted route table
 // reaches does not belong on what every compiled module resolves through.
 
+export { bindElement } from './bindElement.ts'
 export { escapeless } from './escapeless.ts'
 export { List, listAt, updateList } from './List.ts'
 export { warnMismatch } from './Mismatch.ts'

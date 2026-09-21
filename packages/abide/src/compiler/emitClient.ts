@@ -260,6 +260,8 @@ function emitRegion(
     // map identity, and the array it was made from is right there.
     for (const group of byElement.values())
         sharable.push(beforeRegion((group[0] as AttributeBinding).path))
+    // 32.9 walks to an element the same way, so its path is hoisted with the rest of them.
+    for (const bound of plan.elements) sharable.push(beforeRegion(bound.path))
     // Where a path is walked from: its nearest anchor, or the region's own root.
     const hoisted = hoistPaths(sharable, root)
 
@@ -385,6 +387,20 @@ function emitRegion(
         }
         lines.push(
             `const ${element} = ${step('elementAt', at.rest, at.base, lowering)}\n${writes.join('\n')}`,
+        )
+    }
+
+    // 32.9 — THE NODE, HANDED OVER, once. Not a watch: what the value takes is the element,
+    // which is the same node on every run a watch would have made — and the callback form's
+    // `Disposer` goes on this region's scope, so a widget it set up is torn down when the nodes
+    // it was set up over leave.
+    for (const bound of plan.elements) {
+        counter.live = true
+        const at = hoisted.reference(bound.path)
+        const held = `__r${bound.path.join('_').replaceAll('-', 'm')}`
+        lines.push(
+            `const ${held} = ${lowering.use('bindElement')}(${step('elementAt', at.rest, at.base, lowering)}, ${lowering.reference(bound.attribute)})
+if (${held} !== undefined) ${SCOPE}.stops.push(${held})`,
         )
     }
 

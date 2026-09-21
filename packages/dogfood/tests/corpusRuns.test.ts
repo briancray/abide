@@ -298,9 +298,10 @@ test('every example renders on the server and mounts on the client', async () =>
     // GUARDED now; no corpus page reads an unlanded `{#if}` subject, which is exactly the kind of
     // gap a floor cannot report.
     //
-    // `element-ref` RENDERS `bind:element=""` INTO THE MARKUP, inert and ignored by a browser:
-    // the compiler has no `bind:` handling at all, so a `bind:` attribute falls through the
-    // ordinary computed path. 32.5-32.9 are that surface and none of it is built.
+    // `element-ref` USED TO RENDER `bind:element=""` INTO THE MARKUP — inert, ignored by a
+    // browser, and the tell that the compiler had no `bind:` handling at all. 32.9 is built now
+    // and the node reaches the value; 32.5 through 32.8 are the rest of that surface and are
+    // not, so a `bind:value` still falls through the ordinary computed path.
     //
     // THE FLOOR DID NOT MOVE FOR THE GROUPING, and that is the point of it. What had been the
     // biggest bucket left was five `TypeError`s, which read as five faults in abide and were one
