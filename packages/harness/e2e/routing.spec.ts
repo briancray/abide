@@ -23,7 +23,7 @@ const REPO = new URL('../../../', import.meta.url).pathname
 // reports `ENOENT` writing a page it just created, or `ENOTEMPTY` removing a tree the other is
 // filling. It passed under `--project=harness` alone for as long as it existed, which is the
 // reading CLAUDE.md calls honest and the one that hid this.
-let APP = join(REPO, '.test-modules/e2e-routeapp')
+let APP = ''
 
 const HOME = `<head><title>Home</title><meta name="description" content="the home page"></head>
 <main id="home"><h1>Home</h1><p id="n">{count}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button><a id="go" href="/about">about</a></main>`

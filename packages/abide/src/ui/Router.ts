@@ -35,11 +35,22 @@ export class Router {
     region: Region
     routes: Compiled[]
     scope: Scope | undefined
+    // WHICH NAVIGATION IS THE LIVE ONE. Both ways in await the destination's module before they
+    // touch anything, and a dynamic import resolves in whatever order the chunks arrive — so two
+    // clicks, or a click landing while `hydrate` is still loading, each mounted a page: the second
+    // one to finish overwrote `this.scope` and the first page's bindings were left awake, writing
+    // into nodes the other page had replaced. Nothing about the screen showed it — the newest
+    // markup was on top — which is why it is a counter rather than a flag.
+    //
+    // TAKEN BEFORE THE AWAIT AND CHECKED AFTER IT, so a superseded navigation stops before it
+    // stops a scope, empties the region or pushes a history entry for a page nobody will see.
+    navigation: number
 
     constructor(region: Region, routes: Compiled[]) {
         this.region = region
         this.routes = routes
         this.scope = undefined
+        this.navigation = 0
     }
 
     match(pathname: string): { route: Compiled; params: Params } | undefined {
@@ -73,7 +84,11 @@ export class Router {
             location.href = target.href
             return
         }
+        const ticket = (this.navigation += 1)
         const page = await found.route.load()
+        // SUPERSEDED, so this navigation is over. Nothing has been touched yet, which is the whole
+        // reason the ticket is checked here rather than after the mount.
+        if (this.navigation !== ticket) return
         const mount = page.default
         this.scope?.stop()
         // EMPTIED THROUGH THE PRIMITIVE EVERY OTHER REGION IS. `fillRegion(region, '')` is this
@@ -95,10 +110,16 @@ export class Router {
     async hydrate(): Promise<void> {
         const found = this.match(location.pathname)
         if (found === undefined) return
+        // A TICKET LIKE ANY OTHER NAVIGATION. `listenForRoutes` is attached before this is called,
+        // so a click during the page module's own load is a `go` that supersedes it — and
+        // hydrating on top of the markup that navigation had already put in the region wired the
+        // arriving page's bindings to the departing page's nodes.
+        const ticket = (this.navigation += 1)
         // NO `applyHead` HERE. The document's head is the one the server wrote for this very
         // page, and re-applying would replace each contribution with an identical copy — which is
         // a `<link rel=stylesheet>` refetched and a flash of unstyled document on every load.
         const { default: mount } = await found.route.load()
+        if (this.navigation !== ticket) return
         this.scope = mount(this.region, paramsProp(found.params))
     }
 }

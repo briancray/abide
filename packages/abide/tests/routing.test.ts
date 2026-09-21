@@ -263,3 +263,59 @@ test("a routable page's client module carries its merged head — 39.13", async 
         'export function head()',
     )
 })
+
+// A NAVIGATION THAT WAS SUPERSEDED MUST NOT MOUNT ON TOP OF THE ONE THAT REPLACED IT. Both ways
+// into a page await the destination's module before they touch anything, and a dynamic import
+// resolves when its chunk arrives rather than in the order it was asked for — so two clicks, or a
+// click landing while `hydrate` is still loading, each reached the mount. The second to FINISH
+// overwrote `router.scope`, and the first page's bindings were left awake over nodes the other
+// page had replaced: 12.13's leak, arriving through the one caller that is not a region.
+//
+// NOTHING ON SCREEN SHOWED IT, which is why this is a ticket rather than a flag — the newest
+// markup was on top either way, and only the address bar and the scope nobody stopped were wrong.
+//
+// THE LOADS RESOLVE OUT OF ORDER ON PURPOSE. Resolved in call order the bug does not reproduce at
+// all: the later navigation lands last and wins by accident, which is what made this look fine
+// for as long as every route's chunk was already cached.
+//
+// THE REVERT: drop the `this.navigation !== ticket` check from `Router.go`. The invoice page
+// mounts over the home page that replaced it, and this reports `/invoices/42` where `/` is due.
+test('a superseded navigation does not mount over the one that replaced it', async () => {
+    history.replaceState(null, '', '/')
+    const mounts = await pages()
+
+    let landInvoice = (): void => {}
+    const r = startRouter([
+        {
+            pattern: '/invoices/[id]',
+            load: () =>
+                new Promise((resolve) => {
+                    landInvoice = () =>
+                        resolve({ default: mounts.invoice as PageMount })
+                }),
+        },
+        {
+            pattern: '/',
+            load: async () => ({ default: mounts.home as PageMount }),
+        },
+    ])
+    await r.hydrate()
+    flushSync()
+
+    const superseded = r.go('/invoices/42')
+    const winner = r.go('/')
+    await winner
+    flushSync()
+    const settled = r.scope
+
+    landInvoice()
+    await superseded
+    flushSync()
+
+    expect(location.pathname).toBe('/')
+    expect(document.querySelector('#invoice')).toBeNull()
+    expect(document.querySelector('#home h1')?.textContent).toBe('Home')
+    // AND THE WINNER'S SCOPE IS STILL THE ROUTER'S — the superseded mount never replaced it, so
+    // there is no page left awake with nothing able to stop it.
+    expect(r.scope).toBe(settled)
+})
