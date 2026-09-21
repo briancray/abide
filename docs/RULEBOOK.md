@@ -1580,6 +1580,9 @@ nothing else there.
 38.24 The document `abide start` serves MUST link the stylesheet `abide build` bundled, and MUST
 link none where the build bundled none.
 
+38.25 A request in flight when `abide dev` replaces the worker MUST be answered by the
+replacement.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

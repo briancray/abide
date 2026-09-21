@@ -103,11 +103,9 @@ export async function serveDev(
     // answering is force-closed, and the new one is opened. The order matters: a socket closed
     // after the new worker is up is a reload client that reconnects to a server still compiling.
     //
-    // A REQUEST IN FLIGHT IS RE-ASKED rather than failed, and that is the clause read for what it
-    // is FOR: nothing a replaced worker holds may go on answering. Failing it satisfies the
-    // letter and serves a reader a network error for asking while somebody saved — and during a
-    // regeneration of the whole docs tree that is every request. Re-asked, the reader waits and
-    // gets the app the source now says.
+    // 38.25 — A REQUEST IN FLIGHT IS RE-ASKED rather than failed. Failing it serves a reader a
+    // network error for asking while somebody saved, and during a regeneration of a whole docs
+    // tree that is every request; re-asked, they wait and get the app the source now says.
     function replace(): void {
         ready = false
         worker?.terminate()
