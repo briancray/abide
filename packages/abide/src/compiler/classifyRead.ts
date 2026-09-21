@@ -139,6 +139,22 @@ export function classifyRead(node: Node): Read | undefined {
         value: undefined,
     }
 
+    // 31.3 — AN `await` OPERAND HOLDS THE `Reactive`. A `Reactive` is thenable (1.4), so `await n`
+    // is already the spelling for its settling (2.8) in every `.ts` file; lowered to `await n()`
+    // it became a READ instead, which takes what has landed and throws where nothing has (2.10) —
+    // the one position where a read is never what was meant.
+    //
+    // NOTHING IS SCHEDULED BY THIS. The `await` is the author's own, the component is `async`
+    // because their `<script>` holds one, and `render` awaits it (35.5). Two of them run one after
+    // the other, as they would in any other file.
+    //
+    // `await n()` IS UNTOUCHED, the call being the operand rather than the name — 31.7's explicit
+    // read, awaited, which is a read of what has landed and still throws.
+    if (parent.kind === SyntaxKind.AwaitExpression) {
+        read.shape = 'asWritten'
+        return read
+    }
+
     if (isCallExpression(parent) && parent.expression === node) {
         read.shape = 'call'
         read.arguments = parent.arguments.length

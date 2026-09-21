@@ -477,6 +477,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- |
 | `foo` wherever the declared type of its position is not a `Reactive` | a live read | 31.1, 31.2, 31.10 |
 | `const x: Reactive<…> = foo` / a `Reactive<…>`-typed parameter, return or `bind:` operand | the `Reactive` | 31.3 |
+| `await foo` | the settling of the `Reactive`, which is its value | 1.4, 2.8, 31.3 |
 | `foo = bar` | a write | 31.4, 11.62 |
 | `foo.bar = v` | a write through a path | 31.8 |
 | `foo.push(v)` | the same | 31.8, 31.9 |

@@ -1279,8 +1279,8 @@ carrying a modifier, a `target` or a `download` MUST NOT.
 31.2 A read by name MUST be live.
 
 31.3 A name MUST hold the `Reactive` only where the declared type of its position is a `Reactive`: an
-annotated binding, an annotated return, a `Reactive`-typed parameter, a `bind:` operand, or a prop
-declared as one.
+annotated binding, an annotated return, a `Reactive`-typed parameter, a `bind:` operand, an `await`
+operand, or a prop declared as one.
 
 31.4 Assignment to such a name MUST be a write, and the assigned value MAY be settled, a load, or a
 `Reactive`.

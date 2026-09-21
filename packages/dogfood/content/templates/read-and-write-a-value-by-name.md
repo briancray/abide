@@ -12,6 +12,7 @@ covers:
   - `foo.bar`
   - `foo.bar(…)`
   - `foo()` / `foo.set(v)`
+  - `await foo`
 examples:
   - packages/dogfood/examples/name-path-write
 ---
@@ -31,6 +32,7 @@ both of those keep compiling in the same file.
 | `foo.bar` | the value's `bar` |
 | `foo.bar` / `foo.bar(…)` where `bar` is one of its members | the `Reactive` API |
 | `foo()` / `foo.set(v)` | the two explicit forms |
+| `await foo` | the value, once it has settled |
 
 The rule is **position**, not decoration. An operand is a place a value belongs, so the name
 reads; a position whose declared type is a `Reactive` — an annotated binding, a parameter, a
@@ -55,10 +57,16 @@ following it as it produces — the same thing a body returning a `Reactive` doe
 settled value written to `paid` goes through to what it adopted (11.60), and only another
 `Reactive` re-points it (11.62).
 
-`await foo` is a read like any other position: it lowers to `await foo()`, which takes what has
-landed and throws where nothing has. To await the **settling** instead, reach the `Reactive`'s own
-promise face, which is a member and so reaches the `Reactive` rather than the value:
-`await foo.then((v) => v)`. In a `.ts` file there is no sugar and `await foo` is already that.
+`await foo` is the one other position that holds. Every `Reactive` is a promise for its own
+settling, so `await invoice` waits for the value and hands it to you — the same line you would
+write in a `.ts` file, meaning the same thing. Lowered as a read it would be `await invoice()`,
+which takes what has landed and throws where nothing has, and that is never what an `await` was
+asking for.
+
+Nothing is scheduled around it. The `await` is yours, the component is `async` because you wrote
+one, and two of them run one after the other exactly as they would anywhere else. A template
+position cannot await at all — a slot is compiled into an ordinary function — so the `<script>` is
+where it goes.
 
 Read on: [Local state](../values/show-a-value-that-changes.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md) ·

@@ -105,11 +105,15 @@ export class Lowering {
     // is why the markup-writing holders (an expression, an attribute value) ask for it and a
     // subject, a key and a listener do not.
     slot(holder: object): string {
-        return this.lower(this.spanOf(holder), true)
+        const span = this.spanOf(holder)
+        this.refuseAwait(span)
+        return this.lower(span, true)
     }
 
     expression(holder: object): string {
-        return this.lower(this.spanOf(holder), false)
+        const span = this.spanOf(holder)
+        this.refuseAwait(span)
+        return this.lower(span, false)
     }
 
     key(block: object): string {
@@ -128,6 +132,26 @@ export class Lowering {
         return (
             at < this.reads.length && (this.reads[at] as Read).start < span.end
         )
+    }
+
+    // A TEMPLATE POSITION CANNOT `await`, and it is worth refusing rather than emitting. Every
+    // slot, subject and attribute value is lowered into an ordinary arrow inside the markup
+    // concatenation — there is no `async` anywhere for an `await` to stand in — so `{await rows}`
+    // emitted a module that DOES NOT PARSE, reported by bun at import against the emitted file
+    // rather than against the page. The form used to be a clause and is not one now; the `<script>`
+    // is where an `await` goes, and the name read here is the value it left behind.
+    //
+    // ASKED OF THE TOKENS, so `{'await'}` and `{x.await}` are not it — one is a string and the
+    // other a member, and neither is the keyword.
+    private refuseAwait(span: Span): void {
+        const source = this.projection.text.slice(span.start, span.end)
+        if (!source.includes('await')) return
+        for (const token of tokenise(source)) {
+            if (token.text !== 'await') continue
+            throw new Error(
+                `abide: a template position cannot await, and \`${source.trim()}\` does. A slot is lowered into an ordinary function, so there is nothing here to await in — do the awaiting in the <script> and read the name here.`,
+            )
+        }
     }
 
     private spanOf(holder: object): Span {

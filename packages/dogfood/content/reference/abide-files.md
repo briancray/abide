@@ -49,6 +49,7 @@ presentational component usually is.
 | `foo.bar` | the value's `bar` | A property access is a read of the value, and throws `NotLanded` before it lands; a member of the `Reactive` itself reaches the `Reactive`, bound. |
 | `foo.bar(…)` | the `Reactive` API where `bar` is a member | A call reaches the `Reactive` where the name is one of its members. |
 | `foo()` / `foo.set(v)` | the explicit forms | The two members, which keep compiling. |
+| `await foo` | the value, settled | A `Reactive` is a promise for its own settling, so an `await` operand holds it rather than reading it. |
 
 
 The rule is **position**. An operand, a text hole, an attribute and a value-typed argument are

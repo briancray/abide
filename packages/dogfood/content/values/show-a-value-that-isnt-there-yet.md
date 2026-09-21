@@ -182,12 +182,11 @@ neither of them stops the document.
 | --- | --- |
 | `{invoice}` | no — the read renders nothing and opens a sink the value fills later |
 | `{#if invoice.ready()}` | no — the `{:else}` renders while it loads |
-| `await invoice.then((v) => v)` | yes — and that is the value being awaited, not a position |
+| `await invoice` in a `<script>` | yes — and that is the value being awaited, not a position |
 
-The last one is the section below, and it is not a template form at all. Waiting is something you
-do to a **value**; no place in the markup does it to a page. Inside a `.abide` a bare `invoice` is
-the read, so the promise face is reached through `then` — a member, which reaches the `Reactive`
-rather than what it holds.
+The last one is the section below, and it is not a template form at all: a slot is compiled into
+an ordinary function, so `{await invoice}` is refused rather than emitted. Waiting is something
+you do to a **value**, and no place in the markup does it to a page.
 
 Read on: [Conditionals](../templates/show-markup-conditionally.md)
 

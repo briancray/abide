@@ -443,20 +443,21 @@ const rows = await Promise.resolve({ ok: 'yes' })
     expect(html).toContain('<p id="out">yes</p>')
 })
 
-// 31.6 — AND THE ONE SPELLING THAT WAITS, which the docs point readers at and nothing gated until
-// this. Inside a `.abide` a bare `total` is a READ (31.1), so `await total` lowers to
-// `await total()` and takes what has landed — nothing, at this point. `then` is a member the
-// `Reactive` declares, so `total.then(…)` reaches the `Reactive` API instead and the `await` is
-// the settling (1.4, 2.8).
+// 31.3 — AN `await` OPERAND HOLDS THE `Reactive`, which is how a `<script>` waits. Every
+// `Reactive` is a promise for its own settling (1.4, 2.8), so this is the same line a `.ts` file
+// writes and it means the same thing. Lowered as a read (31.1) it would be `await total()` — what
+// has landed, and a throw where nothing has (2.10), which is never what an `await` asked for.
 //
-// WRITTEN BECAUSE THE DOCS GOT IT WRONG FIRST. They said `const held: Reactive<number> = total`
-// and then `await held` — but 31.3 holds the `Reactive` at the ANNOTATED POSITION, which is the
-// initializer, not at every later occurrence of the name it bound. `await held` is a read like any
-// other, and the page rendered nothing.
+// THE RENDER WAITS AS A CONSEQUENCE, NOT AS A RULE. The component is `async` because the author
+// wrote an `await`, and `render` awaits it (35.5). Nothing schedules anything.
 //
-// THE REVERT: drop `then` from `REACTIVE_MEMBERS`. 31.5 then sends the member to the VALUE, the
-// emitted line is `await total().then(…)`, and this throws `NotLanded` instead of rendering 42.
-test('a member reaches the Reactive, which is how a script waits — 31.6', async () => {
+// BOTH HALVES ASSERTED. `{settled}` is the awaited value and `{total}` beside it is still a live
+// read of the same `Reactive` — a page that rendered `42` from the first alone would pass against
+// an `await` that had consumed the name.
+//
+// THE REVERT: drop the `AwaitExpression` arm of `classifyRead`. The name lowers to `await total()`
+// and this throws `NotLanded: reactive has not landed` out of `Component`.
+test('an await operand holds the Reactive — 31.3', async () => {
     const { html } = await mountPage(`<script>
 import { reactive } from 'abide'
 
@@ -464,12 +465,60 @@ const total = reactive(async () => {
     await Bun.sleep(20)
     return 42
 })
-const settled = await total.then((value) => value)
+const settled = await total
+</script>
+
+<p id="out">{settled} {total}</p>`)
+
+    expect(html).toContain('<p id="out">42 42</p>')
+})
+
+// AND `await n()` IS STILL A READ, which is what keeps the arm above narrow: the operand there is
+// the CALL (31.7's explicit read), not the name, so nothing about it changed. It throws here
+// because nothing has landed — asserted as the refusal it is, since a test that only showed the
+// holding case would pass against an arm that swallowed every `await`.
+test('an explicit read under an await is still a read — 31.7', async () => {
+    let thrown = ''
+    try {
+        await mountPage(`<script>
+import { reactive } from 'abide'
+
+const total = reactive(async () => {
+    await Bun.sleep(20)
+    return 42
+})
+const settled = await total()
 </script>
 
 <p id="out">{settled}</p>`)
+    } catch (error) {
+        thrown = String(error)
+    }
+    expect(thrown).toContain('NotLanded')
+})
 
-    expect(html).toContain('<p id="out">42</p>')
+// A TEMPLATE POSITION CANNOT AWAIT, and the compiler says so rather than emitting. Every slot,
+// subject and attribute value is lowered into an ordinary arrow inside the markup concatenation,
+// so there is no `async` for an `await` to stand in — `{await rows}` emitted a module that does
+// not parse, reported by bun against the emitted file rather than against the page.
+//
+// THE REVERT: drop the `refuseAwait` call from `Lowering.slot`. The compile succeeds and the
+// import of the emitted module reports `AggregateError: 2 errors building …/Page.ts` — a bundler
+// error against a file the author never wrote, naming neither the page nor the slot.
+test('a template position cannot await', async () => {
+    let thrown = ''
+    try {
+        await mountPage(`<script>
+import { reactive } from 'abide'
+
+const rows = reactive(async () => 1)
+</script>
+
+<p id="out">{await rows}</p>`)
+    } catch (error) {
+        thrown = String(error)
+    }
+    expect(thrown).toContain('a template position cannot await')
 })
 
 // 41.10 — A MISMATCH MUST NOT REBUILD THE PAGE, and the page is the one region with no block
