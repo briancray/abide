@@ -238,16 +238,15 @@ test('a single-element row still carries no anchor', async () => {
     expect((html.match(/<!--/g) ?? []).length).toBe(2)
 })
 
-// A ROW'S BINDINGS ARE ADDRESSED FROM THE ROW'S NODES, and the row's plan is over the region's
-// root — whose children are the row's top-level nodes. The row's array IS that root, and reading
-// the base as the row ELEMENT instead walks one level too deep.
+// A ROW'S BINDINGS ARE FOUND FROM THE ROW'S NODES — the array the reconcile hands back, whose
+// entries are the row's top-level nodes. Starting the walk INSIDE the row element instead walks
+// one level too deep.
 //
-// THE REVERT: make the row's root `__nodes[0]` rather than `__nodes` in `emitList`. The
-// single-rooted shape below then walks one step past the text node it was looking for, `textAt`
-// puts the run's node INSIDE that text node where nothing can see it, and this reports `0`/`0`
-// where `1`/`1` is due with nothing thrown at all. The multi-rooted one reports two
-// `abide:hydrate abide: no node at [1,0] ... (41.10)` warnings. Both were green before this,
-// because no fixture bound anything below a row's first child.
+// THE REVERT: start a row's walk at `__nodes[0]?.firstChild` (and a multi-rooted one a node late)
+// in `emitComponent`'s `{#for}` arm. Every binding below the row's first child then lands a level
+// off, and this reports the wrong counts with NOTHING warned — no kind check fires, because what
+// the walk lands on is still the kind it expected. Green before, because no fixture bound
+// anything below a row's first child.
 const NESTED = `<script>
 import { reactive } from 'abide'
 
@@ -728,8 +727,8 @@ test('a second call with the same source does not restart the pump', async () =>
     }
     const source = arriving()
 
-    const make = (item: unknown): Node[] => {
-        const row = document.createElement('li')
+    const make = (made: Document, item: unknown): Node[] => {
+        const row = made.createElement('li')
         row.textContent = String(item)
         return [row]
     }
@@ -871,8 +870,8 @@ test('a list arriving in place of a stream stops the stream', async () => {
         await held
         yield 'c'
     }
-    const make = (item: unknown): Node[] => {
-        const row = document.createElement('li')
+    const make = (made: Document, item: unknown): Node[] => {
+        const row = made.createElement('li')
         row.textContent = String(item)
         return [row]
     }

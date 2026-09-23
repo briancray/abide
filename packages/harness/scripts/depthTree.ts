@@ -3,16 +3,17 @@
 // O(nodes) once for the whole page. Those cross somewhere, and "somewhere" is the only reason
 // markers might still be the right answer for a deep template.
 
-// `structural` is the naive emit: every binding walks from the region root.
-// `hoisted` walks each shared ancestor ONCE and indexes the leaves off it, which is what a
-// compiler can do because it knows every path at build time.
-import { hoistPaths } from '../../abide/src/compiler/hoistPaths.ts'
+// `structural` is the naive emit: every binding walks from the region root. `cursor` is what
+// `emitRegion` emits: one linear walk, each node found from the one before it.
+//
+// A THIRD ARM, `hoisted`, WAS THE EMITTED FORM UNTIL THE CURSOR REPLACED IT — each shared ancestor
+// walked once by child index, the leaves indexed off it (`hoistPaths`). Measured against it in
+// Chromium before it was deleted, two runs agreeing: the cursor at 0.26-0.36x on every deep shape
+// and 0.33-0.34x on the wide one. The mechanism: `childNodes[i]` on a live NodeList per step
+// against one `nextSibling` read per node, and a cursor that names every position is doing work a
+// JIT keeps in registers.
 
-export type Scheme = 'structural' | 'hoisted' | 'markers'
-
-// `hoisted` uses the compiler's OWN `hoistPaths`, so what is measured here is what is emitted —
-// the prototype it replaced hoisted a single common prefix and flattered the deep shape while
-// doing nothing at all for the wide one.
+export type Scheme = 'structural' | 'cursor' | 'markers'
 
 export type Tree = {
     markup: string
@@ -109,27 +110,7 @@ while (true) {
 }
 globalThis.__SLOTS__ = found
 `
-    if (scheme === 'hoisted') {
-        // THE COMPILER'S OWN PLAN, emitted the way `emitClient` emits it.
-        const plan = hoistPaths(paths)
-        const walk =
-            'const step = (n, p) => { for (let d = 0; d < p.length; d += 1) n = n.childNodes[p[d]]; return n }'
-        const anchors = plan.anchors
-            .map(
-                (anchor) =>
-                    `const ${anchor.name} = step(${anchor.from}, ${JSON.stringify(anchor.steps)})`,
-            )
-            .join('\n')
-        const refs = paths.map((path) => plan.reference(path))
-        return `
-const root = document.querySelector('#r')
-${walk}
-${anchors}
-const found = []
-${refs.map((ref, i) => `found[${i}] = step(${ref.base}, ${JSON.stringify(ref.rest)})`).join('\n')}
-globalThis.__SLOTS__ = found
-`
-    }
+    if (scheme === 'cursor') return cursorWalk(paths)
     // The naive emit: one walk from the region root per binding.
     return `
 const root = document.querySelector('#r')
@@ -141,6 +122,68 @@ for (let i = 0; i < paths.length; i += 1) {
     for (let d = 0; d < path.length; d += 1) node = node.childNodes[path[d]]
     found.push(node)
 }
+globalThis.__SLOTS__ = found
+`
+}
+
+// THE CURSOR, emitted the way `emitRegion` emits it: one `const` per node the walk passes through,
+// each found from the one before it (`nextSibling`) or the one it stands in (`firstChild`), with
+// `?.` on every step because on a page the walk stands outside every guard. Every position is
+// named, the ones between two bindings included, because that is what the emitter writes.
+function cursorWalk(paths: number[][]): string {
+    type Trie = Map<number, Trie>
+    const root: Trie = new Map()
+    for (const path of paths) {
+        let at = root
+        for (const step of path) {
+            let next = at.get(step)
+            if (next === undefined) {
+                next = new Map()
+                at.set(step, next)
+            }
+            at = next
+        }
+    }
+    const lines: string[] = []
+    const leaves = new Map<string, string>()
+    let next = 0
+    const visit = (node: Trie, parent: string, path: number[]): void => {
+        const indices = [...node.keys()].sort((left, right) => left - right)
+        let previous: string | null = null
+        let position = 0
+        for (const index of indices) {
+            let from: string =
+                previous === null
+                    ? `${parent}?.firstChild`
+                    : `${previous}?.nextSibling`
+            for (; position < index; position += 1) {
+                const passed = `c${next}`
+                next += 1
+                lines.push(`const ${passed} = ${from}`)
+                from = `${passed}?.nextSibling`
+            }
+            const name = `c${next}`
+            next += 1
+            lines.push(`const ${name} = ${from}`)
+            const child = node.get(index) as Trie
+            const here = [...path, index]
+            if (child.size === 0) leaves.set(here.join(','), name)
+            else visit(child, name, here)
+            previous = name
+            position = index + 1
+        }
+    }
+    visit(root, 'root', [])
+    const found: string[] = []
+    for (let at = 0; at < paths.length; at += 1)
+        found.push(
+            `found[${at}] = ${leaves.get((paths[at] as number[]).join(','))}`,
+        )
+    return `
+const root = document.querySelector('#r')
+${lines.join('\n')}
+const found = []
+${found.join('\n')}
 globalThis.__SLOTS__ = found
 `
 }

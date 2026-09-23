@@ -1,6 +1,9 @@
+import { LAYER_RECONCILE } from './LAYER_NAMES.ts'
 import type { List } from './List.ts'
+import { beginLayer, endLayer } from './measureLayer.ts'
+import { moveNode } from './moveNode.ts'
 import { ROW_OPEN } from './REGION.ts'
-import type { Region } from './regionAt.ts'
+import type { Region } from './regions.ts'
 import type { Scope } from './Scope.ts'
 
 // 41.8 — a KEYED list, reconciled by moving the nodes that are already there rather than by
@@ -102,6 +105,9 @@ export function reconcile(list: List, data: unknown[]): void {
     const next = new Array<Row>(wanted)
     const parent = region.close.parentNode
     if (parent === null) return
+    // OPENED AFTER THE ONLY EARLY EXIT, so the pair cannot go unbalanced. A region with no parent
+    // reconciles nothing and is not a layer that ran.
+    beginLayer(LAYER_RECONCILE)
 
     // BEFORE THE ANCHORS ARE TAKEN, and that ordering is the whole of it: a shadowed row stands
     // EARLIER in the document than the row that won its key, so dropping it after the placement
@@ -126,8 +132,12 @@ export function reconcile(list: List, data: unknown[]): void {
     // Its index in `current` for a row that survives, -1 for one this document does not have. A
     // plain array rather than a typed one: it is allocated per reconcile, and an Int32Array's
     // construction is not repaid at the sizes a list reaches.
-    const from: number[] = []
-    const survivor: (Row | null)[] = []
+    //
+    // SIZED LIKE `next` ABOVE, for the same reason and none of its caveat: the loop below fills
+    // both front-to-back for exactly `wanted` iterations, so neither can go sparse, and growing
+    // them by `push` paid log2(n) reallocate-and-copy passes per reconcile on each.
+    const from = new Array<number>(wanted)
+    const survivor = new Array<Row | null>(wanted)
     // Whether every survivor already stands in the wanted order, asked while `from` is built.
     let ordered = true
     let lastSurvivor = -1
@@ -140,8 +150,8 @@ export function reconcile(list: List, data: unknown[]): void {
         // while the text on screen stayed identical, so nothing about the output could show it.
         if (existing !== undefined && Object.is(existing.data, data[at])) {
             held.delete(key)
-            survivor.push(existing)
-            from.push(existing.at)
+            survivor[at] = existing
+            from[at] = existing.at
             if (existing.at < lastSurvivor) ordered = false
             lastSurvivor = existing.at
             continue
@@ -154,8 +164,8 @@ export function reconcile(list: List, data: unknown[]): void {
             held.delete(key)
             dropRow(existing)
         }
-        survivor.push(null)
-        from.push(-1)
+        survivor[at] = null
+        from[at] = -1
     }
 
     // THE ROWS THAT NEED NOT MOVE ARE THE LONGEST RUN ALREADY IN ORDER. Every survivor outside it
@@ -185,8 +195,11 @@ export function reconcile(list: List, data: unknown[]): void {
         // everything after it, so touching them would be a move that changes nothing — and
         // `insertBefore` on a node already in position still counts as a move in every engine's
         // records, which is what makes "nodes moved" mean anything.
+        // `moveNode` RATHER THAN `insertBefore`: these nodes are already in the document, and
+        // taking one out to put it back is what reloads an `<iframe>` and pauses a `<video>`.
+        // 32.30 — a survivor is moved, and the move does not take its nodes out of the document.
         if (keep !== null && keep[at] !== 1)
-            for (const node of existing.nodes) parent.insertBefore(node, anchor)
+            for (const node of existing.nodes) moveNode(parent, node, anchor)
         existing.at = at
         next[at] = existing
         anchor = existing.nodes[0] as ChildNode
@@ -195,6 +208,7 @@ export function reconcile(list: List, data: unknown[]): void {
     // What the new order did not ask for.
     for (const row of held.values()) dropRow(row)
     list.rows = next
+    endLayer(LAYER_RECONCILE)
 }
 
 // A new row, built and inserted before `before`.
@@ -206,7 +220,7 @@ export function makeRow(
     item: unknown,
     at: number,
 ): Row {
-    const nodes = list.make(item, at)
+    const nodes = list.make(parent.ownerDocument as Document, item, at)
     for (const node of nodes) parent.insertBefore(node, before)
     return rowOf(list, key, item, nodes, at)
 }

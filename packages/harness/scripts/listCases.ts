@@ -126,8 +126,8 @@ function listCase(
                 a.region as never,
                 false,
                 (row) => (row as Datum).id,
-                (row) => {
-                    const item = document.createElement('li')
+                (made, row) => {
+                    const item = made.createElement('li')
                     item.setAttribute('data-id', String((row as Datum).id))
                     item.textContent = (row as Datum).label
                     return [item]

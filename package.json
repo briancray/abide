@@ -29,7 +29,10 @@
         "bench:component": "bun packages/harness/scripts/benchComponent.ts",
         "bench:grid": "bun packages/harness/scripts/benchGrid.ts",
         "bench:render": "bun packages/harness/scripts/benchRender.ts",
-        "bench:shared": "bun packages/harness/scripts/benchShared.ts"
+        "bench:shared": "bun packages/harness/scripts/benchShared.ts",
+        "bench:share": "bun packages/harness/scripts/nameTheShare.ts",
+        "clauses:uncited": "bun packages/harness/scripts/uncitedClauses.ts",
+        "bench:reorder": "bun packages/harness/scripts/reorderShare.ts"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.5.11",

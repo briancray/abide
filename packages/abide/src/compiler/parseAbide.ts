@@ -78,8 +78,8 @@ export function parseAbide(source: string): AbideFile {
             // MATCHED CASE-INSENSITIVELY, because an HTML tag name is. Compared as written,
             // `<div>x</DIV><footer>f</footer>` dropped the close tag and put the `<footer>` INSIDE
             // the div — while the browser re-parsing that markup closes at `</DIV>`, so every
-            // child index after it addresses a different node and the page hydrates against the
-            // wrong tree.
+            // position the client walks to after it is a different node and the page hydrates
+            // against the wrong tree.
             const innermost = open[open.length - 1]
             if (
                 typeof innermost === 'string' &&
@@ -98,7 +98,7 @@ export function parseAbide(source: string): AbideFile {
             // and turned `<!DOCTYPE html>` into one too.
             //
             // A COMMENT IS DROPPED RATHER THAN KEPT. It is a real `childNodes` entry, so keeping
-            // one means `planTemplate` counting it and every emitter writing it, and the region
+            // one means the client's walk passing it and every emitter writing it, and the region
             // anchors are already the only comments the document carries (41.10). The document
             // loses the author's note and the two sides still agree on every index.
             if (source.startsWith('<!--', at)) {
@@ -350,7 +350,7 @@ function pushText(
         next += 1
     const text = source.slice(at, next)
     // A browser MERGES adjacent text on parse, so the tree the client walks has one node here and
-    // `planTemplate` counts one. The only way to produce two is the `<` that opened no tag, and
+    // the markup walk places one position. The only way to produce two is the `<` that opened no tag, and
     // this is where that run rejoins the one before it.
     const last = children[children.length - 1]
     if (last?.kind === 'text') last.text += text
@@ -466,9 +466,9 @@ function readTag(
     // A TAG NAME OPENS WITH AN ASCII LETTER, which is HTML's own production and not a case here.
     // Read as `[\w:-]`, `<p>a <3 b</p>` opened an element named `3` carrying the attribute `b<`,
     // swallowed the `</p>` and hung every node after it inside a phantom the browser never
-    // creates — so `planTemplate` counted a child the document does not have and every path after
-    // it in that parent is short by one. That is the one failure marker-free addressing cannot
-    // survive: it binds to whatever is at the index, silently.
+    // creates — so the markup walk placed a node the document does not have and every position
+    // after it in that parent lands one node off. That is the one failure marker-free addressing
+    // cannot survive: it binds to whatever is there, silently.
     if (!/[A-Za-z]/.test(source[at] ?? '')) return undefined
     while (at < source.length && /[\w:-]/.test(source[at] as string)) at += 1
     if (at === nameStart) return undefined

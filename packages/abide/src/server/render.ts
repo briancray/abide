@@ -31,17 +31,23 @@ type Rendered = { head: string; body: string }
 // THE HEADS COME UP WITH THE BODY. A layout's own contributions are in the record it answers;
 // what the page under it contributed is pushed as the thunk runs, so the document carries both
 // and the order is the tree's (39.5).
+// THE SHAPE IS THE SAME AT EVERY LEVEL, `children` included. The emitted readers are shared with
+// the client, where `Router.paramsProp` mints the record with both keys for the same reason: every
+// compiled page and layout loads its props off one of these, and a level that omits a key the
+// level above it carries is a second hidden class for all of them. The innermost has nothing below
+// it, so its `children` is present and undefined rather than absent.
 export function composePage(
     layouts: Component[],
     page: Component,
-    props: Record<string, () => unknown>,
+    props: Record<string, (() => unknown) | undefined>,
 ): Rendered {
     const heads: string[] = []
     const inner = (at: number): Rendered => {
         const component = (at === layouts.length ? page : layouts[at]) as (
-            props: Record<string, () => unknown>,
+            props: Record<string, (() => unknown) | undefined>,
         ) => Rendered
-        if (at === layouts.length) return component(props)
+        if (at === layouts.length)
+            return component({ ...props, children: undefined })
         return component({
             ...props,
             children: () => {

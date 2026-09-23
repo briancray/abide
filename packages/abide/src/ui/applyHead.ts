@@ -15,6 +15,21 @@ export function applyHead(markup: string): void {
     const head = document.head
     if (markup === '') return
     const incoming = markupNodes(head, markup)
+    // KEYED ONCE, NOT ONCE PER CONTRIBUTION. Walking the head per incoming node asked `headKey` —
+    // a `toLowerCase` and a fresh closure per call — for every standing element times every
+    // arriving one. One pass builds the index and each contribution is then a lookup.
+    const standingByKey = new Map<string, Element>()
+    for (
+        let node = head.firstElementChild;
+        node !== null;
+        node = node.nextElementSibling
+    ) {
+        const key = headKey(node)
+        // 39.12 WITHIN THE STANDING HEAD: the FIRST element holding a key is the one a
+        // contribution replaces, which is the node the per-contribution walk returned.
+        if (key !== undefined && !standingByKey.has(key))
+            standingByKey.set(key, node)
+    }
     for (const node of incoming) {
         if (node.nodeType !== 1) {
             head.appendChild(node)
@@ -26,9 +41,10 @@ export function applyHead(markup: string): void {
             head.appendChild(element)
             continue
         }
-        const standing = findByKey(head, key)
+        const standing = standingByKey.get(key)
         if (standing === undefined) {
             head.appendChild(element)
+            standingByKey.set(key, element)
             continue
         }
         // WHAT THE TWO PAGES SHARE IS NOT TOUCHED. `hydrate` skips `applyHead` outright because
@@ -38,6 +54,7 @@ export function applyHead(markup: string): void {
         // cheaper arm is to do nothing at all.
         if (standing.outerHTML === element.outerHTML) continue
         head.replaceChild(element, standing)
+        standingByKey.set(key, element)
     }
 }
 
@@ -50,14 +67,4 @@ function headKey(element: Element): string | undefined {
         element.tagName.toLowerCase(),
         (name) => element.getAttribute(name) ?? undefined,
     )
-}
-
-function findByKey(head: Element, key: string): Element | undefined {
-    for (
-        let node = head.firstElementChild;
-        node !== null;
-        node = node.nextElementSibling
-    )
-        if (headKey(node) === key) return node
-    return undefined
 }

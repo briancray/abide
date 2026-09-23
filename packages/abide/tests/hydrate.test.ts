@@ -131,16 +131,14 @@ const label = 'clicks'
     const names = await session.reads(`${ROOT}src/page.abide`, file)
     const client = emitClient(file, names)
 
-    // The live run is the only one bound. It is the ONLY binding on the page, so it walks its
-    // own path and no anchor is emitted — an anchor for one binding saves nothing and costs a
-    // line. The hoisting case is the test below.
-    expect(client).toContain('__textAt(root, [1,0], true)')
-    expect(client).not.toContain('__childAt(')
-    // The STATIC run is still ADDRESSED, and that is not a binding: every part of it is an
-    // expression, so it can render no node at all, and the index of everything after it in that
-    // parent counts through the node `textAt` puts back. One line, and nothing reads it again.
-    expect(client).toContain('__textAt(root, [0,0], true)')
-    expect(client).not.toContain('__setText(__textAt(root, [0,0]')
+    // The live run is the only one bound, found through the `<p>` it stands in.
+    expect(client).toContain('const __c3 = __blankHere(__c2?.firstChild, __c2)')
+    expect(client).toContain('__setText(__t3,')
+    // The STATIC run is not even WALKED. It stands inside the first `<p>`, and the second `<p>`
+    // is found from the first one's `nextSibling` — not by counting inside it — so nothing after
+    // the static run is found through it and there is nothing for its node to hold a place for.
+    expect(client).not.toContain('__c0?.firstChild')
+    expect(client.match(/__blankHere\(/g) ?? []).toHaveLength(1)
     // `watchEffect` at the top level, `watch` inside a `{#if}` arm — the second is a local that
     // collects its disposer so a branch swap can stop it. Either spelling counts as a binding.
     expect(client.match(/watch(Effect)?\(/g) ?? []).toHaveLength(1)
@@ -164,9 +162,9 @@ test('a static page emits no client module', async () => {
 // same until you ask for the markup beside it.
 //
 // THE SLOT IS ADDRESSABLE AFTERWARDS, which is the half that makes the hole legal rather than a
-// mismatch waiting to happen: a run every part of which is an expression is marked `blank` by
-// `planTemplate`, and `textAt`'s `blank` arm puts the text node back when the value lands. That
-// mechanism predates this and is why the fix is a catch rather than a placeholder node.
+// mismatch waiting to happen: a run every part of which is an expression is `blank` (`isBlankRun`),
+// and the client's walk puts its text node back as it passes (`blankHere`). That mechanism
+// predates this and is why the fix is a catch rather than a placeholder node.
 //
 // THE REVERT: make `unlandable` answer `lowered` unconditionally, so `emitNode`'s expression arm
 // emits `escapeText(...)` directly — `render` throws `NotLanded: reactive has not landed` and this

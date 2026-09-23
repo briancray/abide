@@ -12,8 +12,7 @@
 // the main overview, a `covers` line, the voice rules — and none of that is true of
 // an instrument.
 
-import { countExportedNames } from './countExportedNames.ts'
-import { countLines } from './countLines.ts'
+import { machineryCounts } from './machineryCounts.ts'
 import { type CardReading, readExampleReadings } from './readExampleReadings.ts'
 import {
     BUN_REPORT,
@@ -27,14 +26,6 @@ import { serveDocsApp } from './serveDocsApp.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 const EXAMPLES = new URL('../../dogfood/examples/', import.meta.url)
-
-const HARNESS_ENTRIES = [
-    'harness/measure',
-    'harness/engine',
-    'harness/server',
-    'harness/report',
-    'harness/gate',
-]
 
 const UNIT_PATHS = [
     'packages/abide',
@@ -61,10 +52,8 @@ const SUITES: Record<string, () => Promise<SuiteRun>> = {
     browser: () =>
         runSuite({
             label: 'Browser, chromium and webkit',
-            // THE HARNESS PAIR OF THE ONE CONFIG. They were a config of their own while
-            // `abide start` threw and `webServer` could not boot; naming the projects is
-            // what replaced that, and it keeps this row the measure lane rather than the
-            // whole browser gate.
+            // NAMED PROJECTS, so this row is the measure lane in both engines rather than
+            // the whole browser gate.
             command: [
                 'bunx',
                 'playwright',
@@ -116,25 +105,6 @@ async function counted(): Promise<{
             rows.push({ example, ...row })
     }
     return { rows }
-}
-
-async function machinery(): Promise<{
-    lines: number
-    files: number
-    names: Awaited<ReturnType<typeof countExportedNames>>
-}> {
-    const source = new URL('../src/', import.meta.url)
-    const files = [
-        ...new Bun.Glob('**/*.ts').scanSync({
-            cwd: source.pathname,
-            onlyFiles: true,
-        }),
-    ]
-    return {
-        lines: await countLines(source, files),
-        files: files.length,
-        names: await countExportedNames(HARNESS_ENTRIES),
-    }
 }
 
 function json(value: unknown): Response {
@@ -196,7 +166,7 @@ export async function serveStatus(): Promise<void> {
             const suite = /^\/api\/run\/(\w+)$/.exec(path)?.[1]
             if (suite && SUITES[suite]) return json(await SUITES[suite]())
             if (path === '/api/counted') return json(await counted())
-            if (path === '/api/machinery') return json(await machinery())
+            if (path === '/api/machinery') return json(await machineryCounts())
             if (path === '/api/measure') return streamedMeasure()
 
             return await fetch(

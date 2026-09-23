@@ -20,8 +20,8 @@
 // produce is DROPPED rather than left standing with hand-typed figures in it. An
 // authored number in a results table reads as a result.
 
-import { countExportedNames } from './countExportedNames.ts'
 import { countLines } from './countLines.ts'
+import { machineryCounts } from './machineryCounts.ts'
 
 const EXAMPLES = new URL('../../dogfood/examples/', import.meta.url)
 
@@ -38,14 +38,6 @@ type Manifest = {
     vanilla?: string[]
     bench?: { note: string; shared?: string[]; rows: BenchRow[] }
 }
-
-const HARNESS_ENTRIES = [
-    'harness/measure',
-    'harness/engine',
-    'harness/server',
-    'harness/report',
-    'harness/gate',
-]
 
 function today(): string {
     return new Date().toISOString().slice(0, 10)
@@ -122,19 +114,11 @@ export async function bench(name: string): Promise<void> {
         )
 }
 
-// The machinery triple's two countable members, for the package itself. The third —
-// branches added to a shared path — stays hand-counted.
+// The machinery triple, as the bench reports it. `machineryCounts` is the count itself, shared with
+// the status dashboard so the two cannot print different numbers.
 export async function machinery(): Promise<void> {
-    const source = new URL('../src/', import.meta.url)
-    const files: string[] = []
-    for (const file of new Bun.Glob('**/*.ts').scanSync({
-        cwd: source.pathname,
-        onlyFiles: true,
-    }))
-        files.push(file)
-    const lines = await countLines(source, files)
-    const names = await countExportedNames(HARNESS_ENTRIES)
-    console.log(`harness: ${lines} code lines across ${files.length} files`)
+    const { lines, files, names } = await machineryCounts()
+    console.log(`harness: ${lines} code lines across ${files} files`)
     console.log(`harness: ${names.total} exported names`)
     for (const [entry, exported] of Object.entries(names.byEntry))
         console.log(`  ${entry}: ${exported.join(', ') || '—'}`)

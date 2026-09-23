@@ -1,4 +1,4 @@
-import { isReactive } from '#shared/reactive/Reactive.ts'
+import { isReactive } from '#shared/reactive/isReactive.ts'
 import type { Disposer } from '#shared/reactive/watch.ts'
 
 // 32.9 — THE NODE, HANDED OVER. Two forms and one call site: a `Reactive` of an element takes

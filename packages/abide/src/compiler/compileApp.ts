@@ -2,6 +2,9 @@ import { existsSync } from 'node:fs' // bun exposes no sync existence check of i
 import { dirname, relative as relativePath } from 'node:path' // bun exposes no path helpers of its own
 
 import { CLIENT_ENTRY } from '#server/CLIENT_BUILD.ts'
+// The page's address from its path, read off `routePattern`'s own rule so the compiler and
+// the routers cannot disagree about what a directory is called.
+import { routeOf } from '#shared/routePattern.ts'
 import { emitClient } from './emitClient.ts'
 import { emitComponent } from './emitComponent.ts'
 import { invokedComponents } from './invokedComponents.ts'
@@ -53,10 +56,27 @@ export async function compileApp(root: string): Promise<CompiledApp> {
     const session =
         tsconfig === undefined ? undefined : await TypeSession.open(tsconfig)
     try {
-        const parsed: { path: string; file: AbideFile; text: string }[] = []
-        for (const source of sources) {
-            const text = await Bun.file(source).text()
-            parsed.push({ path: source, file: parseAbide(text), text })
+        // THE READS OVERLAP, THE PARSE DOES NOT. Nothing a source is read for depends on
+        // another, and this runs again on every `abide dev` save — so the whole tree is asked
+        // for at once and parsed in the order `sources` is already sorted into.
+        const texts = await Promise.all(
+            sources.map((source) => Bun.file(source).text()),
+        )
+        const parsed: {
+            path: string
+            relative: string
+            file: AbideFile
+            text: string
+        }[] = []
+        for (let index = 0; index < sources.length; index += 1) {
+            const text = texts[index] as string
+            const path = sources[index] as string
+            parsed.push({
+                path,
+                relative: path.slice(root.length + 1),
+                file: parseAbide(text),
+                text,
+            })
         }
 
         // ONE SNAPSHOT FOR THE WHOLE BUILD. Asking file by file costs 19.7 ms each against 0.8 ms
@@ -73,32 +93,30 @@ export async function compileApp(root: string): Promise<CompiledApp> {
         // `componentPaths` to turn an import of a component into a path inside this tree, and
         // built before the emit loop because a page may invoke a component the walk reaches later.
         const compiled = new Map<string, string>()
-        for (const entry of parsed)
-            compiled.set(entry.path, entry.path.slice(root.length + 1))
+        for (const entry of parsed) compiled.set(entry.path, entry.relative)
 
         // 30.7 — A ROUTABLE PAGE CARRIES ITS OWN MARKUP for the same reason an invoked component
         // does, and it is the same mechanism: a page the reader ARRIVED at was painted by the
         // server and hydrates, and a page they NAVIGATED to is handed the empty anchor pair and
         // fills it from the template in its own module. `emitClient`'s `isEmptyRegion` guard is
-        // what makes one module serve both, so "routable" joins "invoked" rather than forking it.
+        // what makes one module serve both, so "routable" joins "invoked" as a module that fills
+        // itself — and parts from it only in how OFTEN it can be filled, which is what decides
+        // whether the fill is markup or a build (`SelfFill`).
         const layouts: string[] = []
+        for (const entry of parsed)
+            if (isLayout(entry.relative)) layouts.push(entry.relative)
         for (const entry of parsed) {
-            const relative = compiled.get(entry.path) as string
-            if (isLayout(relative)) layouts.push(relative)
-        }
-        for (const entry of parsed) {
-            const relative = compiled.get(entry.path) as string
-            if (!isPage(relative)) continue
+            if (!isPage(entry.relative)) continue
             routes.push({
-                pattern: routeOf(relative),
-                source: relative,
-                layouts: layoutsAround(relative, layouts),
+                pattern: routeOf(entry.relative),
+                source: entry.relative,
+                layouts: layoutsAround(entry.relative, layouts),
             })
         }
 
         for (let at = 0; at < parsed.length; at += 1) {
             const entry = parsed[at] as (typeof parsed)[number]
-            const relative = compiled.get(entry.path) as string
+            const relative = entry.relative
             const fileReads = reads?.[at]
             const from = dirname(entry.path)
             modules.set(
@@ -122,13 +140,13 @@ export async function compileApp(root: string): Promise<CompiledApp> {
             // nothing imports it, the router is what invokes it, and a reader who navigated to a
             // page under it may arrive with the layout already standing or with nothing at all.
             const name = relative.slice(relative.lastIndexOf('/') + 1)
-            const routable = isPage(relative) || isLayout(relative)
-            const client = emitClient(
-                entry.file,
-                fileReads,
-                invoked.has(name) || routable,
-            )
-            if (client !== '' || invoked.has(name) || routable)
+            const selfFill = invoked.has(name)
+                ? 'repeated'
+                : isPage(relative) || isLayout(relative)
+                  ? 'once'
+                  : 'none'
+            const client = emitClient(entry.file, fileReads, selfFill)
+            if (client !== '' || selfFill !== 'none')
                 modules.set(
                     relative.replace(/\.abide$/, '.client.ts'),
                     client === ''
@@ -159,21 +177,23 @@ export async function compileApp(root: string): Promise<CompiledApp> {
     return { modules, routes, sources: sources.length }
 }
 
-// `page.abide` under a `pages/` directory. Both halves are load-bearing: the name is the address
-// and the directory is what says the address is a ROUTE rather than a component filed anywhere.
-function isPage(relative: string): boolean {
+// AN ADDRESS RATHER THAN A NAME. Both halves are load-bearing: the file name is the address and
+// the directory is what says the address is a ROUTE rather than a component filed anywhere. One
+// test for both names (35.1 reads `layout.abide` the same way for the same reason), so the
+// directory half cannot be got right for one and wrong for the other.
+function addressedAs(relative: string, name: string): boolean {
     return (
-        relative.endsWith('page.abide') &&
+        relative.endsWith(name) &&
         (relative.startsWith('pages/') || relative.includes('/pages/'))
     )
 }
 
-// 35.1 — `layout.abide` under a `pages/` directory, read the same way for the same reason.
+function isPage(relative: string): boolean {
+    return addressedAs(relative, 'page.abide')
+}
+
 function isLayout(relative: string): boolean {
-    return (
-        relative.endsWith('layout.abide') &&
-        (relative.startsWith('pages/') || relative.includes('/pages/'))
-    )
+    return addressedAs(relative, 'layout.abide')
 }
 
 // THE LAYOUTS A PAGE RENDERS INSIDE, outermost first. Every `layout.abide` in a directory ON THE
@@ -233,17 +253,6 @@ function componentPaths(
             return `from '${path.startsWith('.') ? path : `./${path}`}'`
         },
     )
-}
-
-// THE PAGE'S ADDRESS FROM ITS PATH, read off `routePattern`'s own rule so the compiler and the
-// routers cannot disagree about what a directory is called.
-function routeOf(pagePath: string): string {
-    const at = pagePath.lastIndexOf('/pages/')
-    const tail = at === -1 ? pagePath : pagePath.slice(at + '/pages/'.length)
-    const parts: string[] = []
-    for (const part of tail.split('/'))
-        if (part !== '' && !part.endsWith('.abide')) parts.push(part)
-    return `/${parts.join('/')}`
 }
 
 // One row of either table. The two differ only in which module a pattern loads, so the row is

@@ -55,6 +55,41 @@ export type Read = {
     value: Span | undefined
 }
 
+// THE SHAPE, IN ONE PLACE. The header's invariant is that every read carries every field, and
+// two hand-written literals are exactly how that stops being true — so both classifiers mint
+// their read here and then set only what they part company over.
+function newRead(node: Node): Read {
+    const start = node.getStart()
+    return {
+        start,
+        end: node.end,
+        shape: 'value',
+        from: start,
+        to: node.end,
+        operator: '',
+        prefix: false,
+        discarded: false,
+        arguments: 0,
+        path: [],
+        value: undefined,
+    }
+}
+
+// Neither classifier treats any of these as a read: an import or export specifier names a
+// binding rather than reading one, and a `typeof n` is a type position.
+function isNotARead(parent: Node): boolean {
+    switch (parent.kind) {
+        case SyntaxKind.ImportSpecifier:
+        case SyntaxKind.ImportClause:
+        case SyntaxKind.NamespaceImport:
+        case SyntaxKind.ExportSpecifier:
+        case SyntaxKind.TypeQuery:
+            return true
+        default:
+            return false
+    }
+}
+
 // ONE OCCURRENCE OF A NAME THE `props` PATTERN BOUND (33.4, 33.9). Every one of them is a read of
 // that key's accessor, which is where this parts company with `classifyRead`: `onsave()` is the
 // prop's own value being CALLED and lowers to `onsave()()`, where the same spelling on a
@@ -62,18 +97,11 @@ export type Read = {
 // `Reactive` face on a plain prop at all (33.6).
 export function classifyPropRead(node: Node): Read | undefined {
     const parent = node.parent
-    switch (parent.kind) {
-        case SyntaxKind.BindingElement:
-            // The binding itself, and the key it renames from — neither is a read.
-            if ((parent as { name?: Node }).name === node) return undefined
-            if ((parent as { propertyName?: Node }).propertyName === node)
-                return undefined
-            break
-        case SyntaxKind.ImportSpecifier:
-        case SyntaxKind.ImportClause:
-        case SyntaxKind.NamespaceImport:
-        case SyntaxKind.ExportSpecifier:
-        case SyntaxKind.TypeQuery:
+    if (isNotARead(parent)) return undefined
+    if (parent.kind === SyntaxKind.BindingElement) {
+        // The binding itself, and the key it renames from — neither is a read.
+        if ((parent as { name?: Node }).name === node) return undefined
+        if ((parent as { propertyName?: Node }).propertyName === node)
             return undefined
     }
     // 33.5, 33.6 — A PROP IS A LIVE READ AND HAS NO WRITE. `const` already refuses this in the
@@ -92,20 +120,8 @@ export function classifyPropRead(node: Node): Read | undefined {
         throw new Error(
             `abide: ${(node as { text?: string }).text ?? ''} is a prop, which is a live read of the caller's expression and has no write. RULEBOOK 33.5, 33.6.`,
         )
-    const start = node.getStart()
-    const read: Read = {
-        start,
-        end: node.end,
-        shape: isShorthandPropertyAssignment(parent) ? 'shorthand' : 'value',
-        from: start,
-        to: node.end,
-        operator: '',
-        prefix: false,
-        discarded: false,
-        arguments: 0,
-        path: [],
-        value: undefined,
-    }
+    const read = newRead(node)
+    if (isShorthandPropertyAssignment(parent)) read.shape = 'shorthand'
     return read
 }
 
@@ -113,31 +129,13 @@ export function classifyPropRead(node: Node): Read | undefined {
 // export specifier, and a `typeof n` in a type.
 export function classifyRead(node: Node): Read | undefined {
     const parent = node.parent
-    switch (parent.kind) {
-        case SyntaxKind.VariableDeclaration:
-            if ((parent as { name?: Node }).name === node) return undefined
-            break
-        case SyntaxKind.ImportSpecifier:
-        case SyntaxKind.ImportClause:
-        case SyntaxKind.NamespaceImport:
-        case SyntaxKind.ExportSpecifier:
-        case SyntaxKind.TypeQuery:
-            return undefined
-    }
-    const start = node.getStart()
-    const read: Read = {
-        start,
-        end: node.end,
-        shape: 'value',
-        from: start,
-        to: node.end,
-        operator: '',
-        prefix: false,
-        discarded: false,
-        arguments: 0,
-        path: [],
-        value: undefined,
-    }
+    if (isNotARead(parent)) return undefined
+    if (
+        parent.kind === SyntaxKind.VariableDeclaration &&
+        (parent as { name?: Node }).name === node
+    )
+        return undefined
+    const read = newRead(node)
 
     // 31.3 — AN `await` OPERAND HOLDS THE `Reactive`. A `Reactive` is thenable (1.4), so `await n`
     // is already the spelling for its settling (2.8) in every `.ts` file; lowered to `await n()`

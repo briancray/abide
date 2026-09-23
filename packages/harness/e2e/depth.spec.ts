@@ -24,11 +24,11 @@ const trees = JSON.parse(
 import { tree, wide } from './packages/harness/scripts/depthTree.ts'
 const out = []
 for (const [d, n] of ${JSON.stringify(CASES)})
-    for (const s of ['structural', 'hoisted', 'markers'])
+    for (const s of ['structural', 'cursor', 'markers'])
         out.push({ scheme: s, shape: 'deep', ...tree(d, n, s) })
 // WIDE: 500 parents x 4 bindings, four levels down. A single shared prefix hoists almost
 // nothing here, which is the case that would justify hoisting per subtree.
-for (const s of ['structural', 'hoisted', 'markers'])
+for (const s of ['structural', 'cursor', 'markers'])
     out.push({ scheme: s, shape: 'wide', ...wide(4, 500, 4, s) })
 console.log(JSON.stringify(out))
 `,
@@ -113,11 +113,11 @@ test('the walk against tree depth, in this engine', async ({
         const here = group.rows
         const bindings = here[0]?.bindings ?? 0
         const naive = here.find((row) => row.scheme === 'structural')
-        const hoisted = here.find((row) => row.scheme === 'hoisted')
+        const cursor = here.find((row) => row.scheme === 'cursor')
         const markers = here.find((row) => row.scheme === 'markers')
         if (
             naive === undefined ||
-            hoisted === undefined ||
+            cursor === undefined ||
             markers === undefined
         )
             continue
@@ -127,7 +127,7 @@ test('the walk against tree depth, in this engine', async ({
                 ? ''
                 : `  !! ${wrong.map((row) => `${row.scheme} found ${row.found}`).join(', ')} of ${bindings}`
         lines.push(
-            `  ${group.label}   naive ${(naive.ns / 1e6).toFixed(3)}   hoisted ${(hoisted.ns / 1e6).toFixed(3)}   markers ${(markers.ns / 1e6).toFixed(3)} ms    hoisted/markers ${(hoisted.ns / markers.ns).toFixed(2)}x${ok}`,
+            `  ${group.label}   naive ${(naive.ns / 1e6).toFixed(3)}   cursor ${(cursor.ns / 1e6).toFixed(3)}   markers ${(markers.ns / 1e6).toFixed(3)} ms   cursor/markers ${(cursor.ns / markers.ns).toFixed(2)}x${ok}`,
         )
     }
     console.log(lines.join('\n'))

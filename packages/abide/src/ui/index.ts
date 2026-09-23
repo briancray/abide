@@ -2,10 +2,9 @@
 // Every module reached from here is in the client's static closure, so an export added here is
 // paid for on every page (CLAUDE.md, "seams and imports"). The list IS the budget.
 //
-// The shared walk a region's bindings start from, the text node for a binding, the element for
-// a listener, the write, the stringify a run's parts go through — and what a DYNAMIC region
-// needs: the one that ADDRESSES one (`regionAt`; the rest of the addressing is one walk over a
-// path, whatever kind of root it starts from), what WRITES into one (`fillRegion` for an arm,
+// Where a mount's walk starts (`firstIn`, `parentIn`), the steps it takes and the checks a binding
+// makes on what it found (`adoptNode.ts`), the write, the stringify a run's parts go through — and
+// what a DYNAMIC region needs: what WRITES into one (`fillRegion` for an arm,
 // `listAt` and `updateList` for a `{#for}` — which reconciles an array and appends an async
 // subject, 32.15 — and `replaceNodes` for a row), what a hydration mismatch is answered with
 // (`warnMismatch`, 41.10), what every region's bindings are stopped through (`Scope`), what a
@@ -25,20 +24,33 @@
 // reaches does not belong on what every compiled module resolves through.
 
 export { bindElement } from './bindElement.ts'
+// 41.10's adopt half of a walk the compiler emits twice from one traversal — see `adoptNode.ts`.
+export {
+    blankHere,
+    elementHere,
+    regionFound,
+    regionHere,
+    textHere,
+} from './adoptNode.ts'
+// What a built row writes where the parser would have decoded the server's bytes — see
+// `decodeMarkup.ts` — and the one cut a `style:` value takes on both sides.
+export { decodedAttribute, decodedText } from './decodeMarkup.ts'
+export { oneStyleValue } from '#shared/escapeText.ts'
+export { isRaw } from '#shared/Raw.ts'
 export { escapeless } from './escapeless.ts'
 export { List, listAt, updateList } from './List.ts'
 export { warnMismatch } from './Mismatch.ts'
-export { childAt, elementAt, textAt } from './nodeAt.ts'
 export { markupNodes } from './parseMarkup.ts'
 export { REGION_CLOSE, REGION_OPEN } from './REGION.ts'
 export { type Row, reconcile, replaceNodes } from './reconcile.ts'
 export {
     fillRegion,
+    firstIn,
     isEmptyRegion,
+    parentIn,
     type Region,
     type Root,
-    regionAt,
-} from './regionAt.ts'
+} from './regions.ts'
 export { Scope } from './Scope.ts'
 export { setAttribute } from './setAttribute.ts'
 export { setClass } from './setClass.ts'

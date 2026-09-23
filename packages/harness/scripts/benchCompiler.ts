@@ -95,7 +95,9 @@ async function armsFor(session: TypeSession): Promise<Arm[]> {
             const client = emitClient(
                 file,
                 names,
-                invoked.has(source.slice(source.lastIndexOf('/') + 1)),
+                invoked.has(source.slice(source.lastIndexOf('/') + 1))
+                    ? 'repeated'
+                    : 'none',
             )
             if (client !== '') shippedAbide += codeLines(client)
             // The server module is not charged here: it never reaches a browser.

@@ -67,7 +67,7 @@ export async function buildCompiledPage(
             const client = emitClient(
                 entry.file,
                 names,
-                invoked.has(`${entry.name}.abide`),
+                invoked.has(`${entry.name}.abide`) ? 'repeated' : 'none',
             )
             writeFileSync(
                 `${scratch}/${entry.name}.client.ts`,

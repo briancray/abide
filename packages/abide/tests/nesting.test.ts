@@ -5,14 +5,14 @@
 // page's whole hydration down with `region 0 is not in the rendered document`.
 //
 // WHAT THEY HAVE IN COMMON is that the root a path starts from is not always a NODE: the page's is,
-// an arm's is its own anchor pair, and a row's is the array the reconcile handed back. One walk
-// takes all three, and a REGION REFERENCE — `-1 - n`, region n directly inside whatever the walk
-// has reached — is decoded wherever it stands rather than only at a path's head.
+// an arm's is its own anchor pair, and a row's is the array the reconcile handed back. The walk
+// starts from each of them and is the same walk after its first step, and a sibling AFTER a
+// region is found from the region's closing anchor wherever the region stands.
 //
 // A BLANK RUN is the other half: every part of it is an expression, so a value that stringifies to
-// `''` writes NO node and every index after it in that parent is short by one. The compiler says
-// which runs those are and `textAt` puts the node back at the position it belongs, which is what
-// makes the count the rest of the page assumes true.
+// `''` writes NO node and every node after it in that parent stands one place early. The compiler
+// knows which runs those are and the walk puts the node back as it passes (`blankHere`), which is
+// what makes everything after it where the rest of the page expects it.
 
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
@@ -20,7 +20,6 @@ import { compileFile, emitClient, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
-import { textAt } from '#ui/nodeAt.ts'
 import type { Scope } from '#ui/Scope.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { clientOf, closeTyped } from './typed.ts'
@@ -84,14 +83,12 @@ async function warningsWhile(body: () => Promise<void>): Promise<string[]> {
     return said
 }
 
-// A NESTED REGION IS ADDRESSED AGAINST THE ARM THAT HOLDS IT, not against the arm's first child.
-// An empty path means the root ITSELF, and the root of an arm is its anchor pair.
+// A NESTED REGION IS FOUND FROM THE ARM THAT HOLDS IT. The arm's root is its own anchor pair, handed
+// to the arm's mount as `__root`, and the walk inside it starts at the pair's opening anchor.
 //
-// THE REVERT: resolve an empty path as the root's first CHILD in `emitClient`'s `step`
-// (`childAt(rg0, [0])`), which is what it did. The inner region is then looked for inside the
-// `<p>`, and this reports TWO `abide:hydrate abide: region 0 is not in the rendered document
-// ... (41.10)` warnings where none is due — one from the block, one from the rebuild that fails
-// the same way — with `#deep` dead behind them.
+// THE REVERT: default a nested sink's head to the name the ENCLOSING walk gave the region
+// (`${at.name}.open.nextSibling` in `Cursor.nest`). The arm's slots restart at `__c0`, so that name
+// is one of the arm's own, read before it is declared, and the arm's first mount throws.
 test('an {#if} inside an arm is found, and its binding is live', async () => {
     const source = `<script>
 import { reactive } from 'abide'
@@ -111,9 +108,10 @@ let name = reactive('ada')
         'ada',
     )
 
-    // Region 0 of the ARM, which is the arm itself and not a node inside it.
+    // Walked from the ARM'S OWN anchors, then past the `<p>` to the inner pair.
     const client = await clientOf(source, ['outer', 'inner', 'name'])
-    expect(client).toContain('__regionAt(rg0, 0)')
+    expect(client).toContain('const __c0 = __root.open.nextSibling')
+    expect(client).toContain('const __c2 = __regionHere(__c0?.nextSibling)')
 })
 
 // THE SAME PROPERTY FROM A ROW, whose root is an ARRAY rather than an anchor pair — and a sibling
@@ -143,14 +141,12 @@ let rows = reactive([{ id: 'a', on: true }, { id: 'b', on: false }])
     expect(document.querySelectorAll('#list b')).toHaveLength(1)
 })
 
-// A RUN AFTER A NESTED REGION, inside the arm that holds both. The reference is `[-1, 0]` against
-// the ARM, so the base it counts regions in is the arm's anchor pair — and reading that base as a
-// node is the crash the walk used to take.
+// A RUN AFTER A NESTED REGION, inside the arm that holds both. The arm's root is its own anchor
+// pair — a record, not a node — and reading it as a node is the crash a walk used to take.
 //
-// THE REVERT: drop the `Region` branch from `regionAt`'s scan, so an arm's anchor pair is read as
-// a node. `root.firstChild` on a record that has none is `undefined`, `undefined !== null` holds,
-// and this reports a thrown `TypeError: undefined is not an object (evaluating 'node.nodeType')`
-// out of mount — NOT a `Mismatch`, so nothing swallows it — where `xy1` is due.
+// THE REVERT: start a nested sink's walk at `__root.firstChild` in `Cursor.nest`, reading the pair
+// as a node. The walk carries `undefined` from there, every unit in the arm refuses, the arm
+// rebuilds and refuses again, and `xy1` is never written.
 test('a run after a nested region is bound against the arm', async () => {
     const source = `<script>
 import { reactive } from 'abide'
@@ -169,14 +165,15 @@ let count = reactive(1)
     expect(hold.textContent).toBe('xy1')
 })
 
-// A REGION REFERENCE IN THE MIDDLE OF A PATH. `place()` writes one wherever a sibling follows a
-// region, so a region three elements deep is addressed `[0, -1, 0, 0]` — and a walk that only
-// decodes a negative at index 0 reads the rest as `childNodes[-1]`.
+// A SIBLING AFTER A REGION, INSIDE AN ELEMENT. How many nodes stand between a region's anchors
+// depends on a value, so what follows one is found from its CLOSING anchor — wherever the region
+// stands, not only at the page's top level.
 //
-// THE REVERT: decode a negative only at `at === 0` in `nodeAt`'s walk, which is where the emitter
-// used to put one. The rest is read as `childNodes[-1]` and this reports one
-// `abide:hydrate abide: no node at [0,-1,0,0] ... (41.10)` where none is due, `#tail` unwired.
-test('a region reference is decoded wherever it stands in a path', async () => {
+// THE REVERT: continue past a region from its OPENING anchor in `Cursor.region`. The `<em>` is
+// then looked for at the arm's `<b>`, the `{count}` binding lands on `<b>`'s text — a text node
+// where a text node was due, so no kind check refuses it — and `<b>` reads `1` where `y` is due.
+// Nothing warns, which is why the `<b>` is asserted as well as the tail.
+test('a sibling after a region inside an element is found from its close', async () => {
     const source = `<script>
 import { reactive } from 'abide'
 
@@ -192,21 +189,20 @@ let count = reactive(1)
     expect(said).toEqual([])
     const tail = document.querySelector('#tail') as HTMLElement
     expect(tail.textContent).toBe('1')
+    expect((document.querySelector('b') as HTMLElement).textContent).toBe('y')
 
-    // The pair is in the PATH, not spelled out by the emitter: `-1` is region 0 of what the walk
-    // has reached and the `0` after it counts nodes past its closing anchor.
     const client = await clientOf(source, ['open', 'count'])
-    expect(client).toContain('[0,-1,0,0]')
+    expect(client).toContain('const __c3 = __c2?.close?.nextSibling')
 })
 
 // A BLANK RUN RENDERS NO NODE, and the sibling after it then stands where the run was. The server
 // wrote `<p><b>x</b></p>` for a page whose author wrote `<p>{msg}<b>x</b></p>`, so `[0,0]` is the
 // `<b>` — and the binding has nowhere to write.
 //
-// THE REVERT: emit `textAt` without the `blank` argument, so a node of the wrong kind is refused
-// rather than a missing one inserted. This reports one `abide:hydrate abide: [0,0] is a B where
-// this binding's text was rendered ... (41.10)` where none is due, and `<p>` holding one child
-// where two are.
+// THE REVERT: walk the run as a plain step rather than through `blankHere` in `emitRegion`, so
+// nothing is put back and the unit is handed the `<b>`. This reports one `abide:hydrate abide:
+// text was due where the server wrote none ... (41.10)` where none is due, and `<p>` holding one
+// child where two are.
 test('a blank run gets its node back, at the position it belongs', async () => {
     const source = `<script>
 import { reactive } from 'abide'
@@ -233,8 +229,8 @@ let msg = reactive('')
 // rather than not at all: it appended the missing node to the END of the parent, so the run after
 // it found that node and the page rendered one value twice.
 //
-// THE REVERT: put the append-at-end fallback back in `textAt` — `insertText(holder, null)` rather
-// than before the node the path asked for. `#out` then reads `x00` where `x0` is due: the trailing
+// THE REVERT: append at the end of the parent in `blankHere` — `insertBefore(made, null)` rather
+// than before the node the walk stands on. `#out` then reads `x00` where `x0` is due: the trailing
 // run finds the node the blank one made at the end of the parent and writes into it.
 test('a blank run does not steal the node of the run after it', async () => {
     const source = `<script>
@@ -290,9 +286,9 @@ let b = reactive('B')
 // the node it is missing is what every later index in that parent counts through. The run itself
 // never changes; what it costs is one line at mount and nothing after.
 //
-// THE REVERT: skip a run with no live binding in `emitRegion` (`if (!bound) continue`), which is
-// what the filter did. The `<b>` is then at `[0,0]` where the plan says `[0,1]`, and this reports
-// one `abide:hydrate abide: no node at [0,1,0] ... (41.10)` where none is due.
+// THE REVERT: walk the run as a plain `nextSibling` step rather than through `blankHere` in
+// `emitRegion`. Nothing is put back, the `<b>` is then looked for where the run should have been,
+// and this reports one `abide:hydrate ... (41.10)` where none is due.
 test('a static blank run is addressed even though it is never bound', async () => {
     const source = `<script>
 import { reactive } from 'abide'
@@ -309,9 +305,12 @@ let a = reactive('A')
     expect(said).toEqual([])
     expect((document.querySelector('#in') as HTMLElement).textContent).toBe('A')
 
-    // Addressed, and NOT bound: no `setText` around it and no second watch.
+    // WALKED, and NOT bound: put back as the walk passes, because `<b>` is found from it — and no
+    // `setText` around it and no second watch.
     const client = await clientOf(source, ['a'])
-    expect(client).toContain('__textAt(root, [0,0], true)')
+    expect(client).toContain('const __c1 = __blankHere(__c0?.firstChild, __c0)')
+    expect(client).toContain('const __c2 = __c1?.nextSibling')
+    expect(client).not.toContain('__t1')
     expect(client.match(/watch(Effect)?\(/g) ?? []).toHaveLength(1)
 })
 
@@ -456,16 +455,22 @@ let msg = reactive('')
 })
 
 // A BLANK RUN AT A ROW'S OWN TOP LEVEL. A row IS its nodes — the reconcile moves and removes
-// exactly what that array holds — so a node put into the document has to go into the ARRAY at the
-// same index, or the row leaves part of itself behind on the first reorder.
+// exactly what that array holds — so a node the walk puts back into the document has to go into
+// the ARRAY at the same index, or the row leaves part of itself behind on the first reorder.
 //
-// THE REVERT: drop the `holder.splice(last, 0, text)` in `textAt`. The array is then one node
-// short of the document for the rest of the row's walk, and this reports TWO
-// `abide:hydrate abide: no node at [2,0] ... (41.10)` warnings — one a row — where none is due.
+// THE SPAN READS A PAGE-LEVEL `Reactive` ON PURPOSE. A row whose slots read only its item binds
+// nothing, so its walk is pruned away whole and nothing is ever put back — the case would pass
+// with the array wrong. And `textContent` cannot see an EMPTY text node left behind, so what is
+// asserted is where each row's run stands after the swap.
+//
+// THE REVERT: drop the row's array from `blankHere` in `emitRegion` (`sink.holds`). The run goes
+// into the document and not into the row, the swap moves the row without it, and this reports a
+// `<span>` whose previous sibling is the row's anchor rather than its run.
 test('a blank run inside a row goes into the row’s nodes as well', async () => {
     const source = `<script>
 import { reactive } from 'abide'
 
+let mark = reactive('')
 let rows = reactive([
     { id: 'a', tag: '' },
     { id: 'b', tag: '' },
@@ -477,7 +482,7 @@ function swap() {
 }
 </script>
 
-<ul id="list">{#for row of rows by row.id}{row.tag}<span>{row.id}</span>{/for}</ul>
+<ul id="list">{#for row of rows by row.id}{row.tag}<span>{row.id}{mark}</span>{/for}</ul>
 <button id="swap" onclick={swap}>swap</button>`
 
     const said = await warningsWhile(async () => {
@@ -490,14 +495,34 @@ function swap() {
     ;(document.querySelector('#swap') as HTMLElement).click()
     flushSync()
     expect(list.textContent).toBe('ba')
+    // Each row is its anchor, its run and its `<span>`, in that order, and nothing is left over.
+    const kinds: string[] = []
+    for (const node of list.childNodes)
+        kinds.push(
+            node.nodeType === 3
+                ? 'text'
+                : node.nodeType === 8
+                  ? 'anchor'
+                  : node.nodeName,
+        )
+    expect(kinds).toEqual([
+        'anchor',
+        'anchor',
+        'text',
+        'SPAN',
+        'anchor',
+        'text',
+        'SPAN',
+        'anchor',
+    ])
 })
 
 // 41.10 IN A ROW. The block that rebuilds is the ROW, and nothing outside it is touched — which is
 // what `replaceNodes` is for: the fresh nodes go in where the old ones were AND into the array the
 // reconcile holds, so the row is still one row afterwards.
 //
-// The row's run carries a STATIC piece on purpose — a blank run is one `textAt` fills rather than
-// refuses — and reads a page-level reactive, because a slot reading only the loop ITEM is written
+// The row's run carries a STATIC piece on purpose — a blank run is one the walk puts back rather
+// than refuses — and reads a page-level reactive, because a slot reading only the loop ITEM is written
 // by the markup and never bound at all.
 //
 // THE REVERT: drop the `try`/`catch` from the emitted `lsN_mount` in `emitList`. The mismatch
@@ -552,27 +577,47 @@ let prefix = reactive('p')
     ).toEqual(['id p-a', 'id p-b'])
 })
 
-// A ROW'S NODES ARE THE ROW, and a blank run addressed THROUGH a region inside a row element is
-// not one of them: the node goes inside that element, and the row array must not learn about it.
-// Spliced against `root` rather than against the `holder` the walk actually reached, the text went
-// into the row's top-level array — so the reconcile hoisted it OUT of the element on the first
-// reorder (`parent.insertBefore` runs against the list's parent) and deleted it out of the element
-// on the row's removal.
+// A ROW'S NODES ARE THE ROW, and a blank run put back INSIDE a row's element is not one of them:
+// the node goes inside that element, and the row's array must not learn about it. Handed to the
+// array, the reconcile hoisted it OUT of the element on the first reorder (it moves what the array
+// holds, against the list's parent) and deleted it out of the element on the row's removal.
 //
-// THE REVERT: `rowHolds(root, text, found)` in `textAt`'s region branch. This reports the row
-// array holding 2 nodes where 1 is due, with the second one parented to the `<div>` inside it.
-test('a blank run inside a row element does not join the row', () => {
-    document.body.replaceChildren()
-    const host = document.createElement('ul')
-    host.innerHTML = '<div id="row"><!--[--><!--]--></div>'
-    document.body.append(host)
-    const row = host.querySelector('#row') as HTMLElement
-    const rowNodes: Node[] = [row]
+// The region before the run is what makes the case: it is the shape that once put a path through a
+// region reference inside a row element, and it puts the walk one frame inside the row here.
+//
+// THE REVERT: hand `sink.holds` to every blank run in a row sink — drop `at.within === null` in
+// `emitRegion`. This reports the `<ul>` holding two stray text nodes after the swap, hoisted out of
+// the `<li>`s they belonged to.
+test('a blank run inside a row element does not join the row', async () => {
+    const source = `<script>
+import { reactive } from 'abide'
 
-    const text = textAt(rowNodes, [0, -1, 0], true)
+let mark = reactive('')
+let rows = reactive([{ id: 'a' }, { id: 'b' }])
 
-    expect(rowNodes).toHaveLength(1)
-    expect(text.parentNode).toBe(row)
+function swap() {
+    const [first, second] = rows
+    rows = [second, first]
+}
+</script>
+
+<ul id="list">{#for row of rows by row.id}<li id={row.id}>{#if row.id}<b>{row.id}</b>{/if}{mark}</li>{/for}</ul>
+<button id="swap" onclick={swap}>swap</button>`
+
+    const said = await warningsWhile(async () => {
+        await mountPage(source)
+    })
+    expect(said).toEqual([])
+    click('#swap')
+
+    const list = document.querySelector('#list') as HTMLElement
+    const top: string[] = []
+    for (const node of list.childNodes)
+        top.push(node.nodeType === 8 ? 'anchor' : node.nodeName)
+    expect(top).toEqual(['anchor', 'LI', 'LI', 'anchor'])
+    // Each run is where it was put back: the last child of its own `<li>`.
+    for (const item of list.querySelectorAll('li'))
+        expect(item.lastChild?.nodeType).toBe(3)
 })
 
 // 12.13 — A REGION STOPS EVERY SCOPE OPENED BENEATH IT. A row's own disposers were always stopped
@@ -659,4 +704,317 @@ let on = reactive(true)
     for (let at = 0; at < 11; at += 1) click('#flip')
     expect(document.querySelector('i')?.textContent).toBe('no')
     expect(page.children).toHaveLength(1)
+})
+
+// A ROW THE BROWSER GREW, WITH A REGION INSIDE IT — the case a hydration test cannot reach.
+//
+// Every nested-region test above MOUNTS AGAINST SERVER MARKUP, so the row's `make` is never
+// called: the nodes are already there and the client adopts them. A row the list grows AFTER mount
+// takes the other path entirely, and nothing was asserting it.
+//
+// IT MATTERS MORE SINCE `make` STOPPED PARSING. The markup path inlined the current arm into the
+// row's string, so a grown row arrived with its `{#if}` already rendered. Construction emits the
+// region as an EMPTY ANCHOR PAIR and leaves the filling to the region's own machinery in `mount` —
+// `isEmptyRegion` is true on that first run, so the same `fillRegion` a page-level region uses is
+// what puts the arm in. If that hand-off ever breaks, the row appears with its block silently
+// missing and every other assertion about it still passes.
+//
+// NOT A GATE FOR BUILDING OVER PARSING, and worth being exact about: a parsed row satisfies this
+// too. It is a correctness test for a path that had none.
+//
+// IT DOES HAVE TEETH, verified 2026-09-22: dropping the region's CLOSE anchor from `emitBuild`
+// fails this with one `abide:hydrate ... a region was due ... (41.10)`, and the build-versus-paint
+// table below with it. A row whose region is half written mounts, renders its sibling, and loses
+// its block.
+test('a row grown in the browser fills the region inside it', async () => {
+    const source = `<script>
+import { reactive } from 'abide'
+
+let rows = reactive([{ id: 'a', on: true }])
+
+function add() {
+    rows = [...rows, { id: 'b', on: true }]
+}
+</script>
+
+<ul id="list">{#for row of rows by row.id}<li>{#if row.on}<b>on</b>{/if}<span>{row.id}</span></li>{/for}</ul>
+<button id="add" onclick={add}>add</button>`
+
+    await mountPage(source)
+    expect(document.querySelectorAll('#list li')).toHaveLength(1)
+
+    const said = await warningsWhile(async () => {
+        ;(document.querySelector('#add') as HTMLElement).click()
+        flushSync()
+    })
+    expect(said).toEqual([])
+
+    const rows = [...document.querySelectorAll('#list li')]
+    expect(rows).toHaveLength(2)
+    // THE GROWN ROW CARRIES BOTH: the arm the region filled, and the sibling standing after it.
+    expect(rows[1]?.querySelector('b')?.textContent).toBe('on')
+    expect(rows[1]?.querySelector('span')?.textContent).toBe('b')
+})
+
+// A RUN IS ONE TEXT NODE IN A ROW THE BROWSER GREW, and the sibling after it is where that is
+// proved. `Hello {name}!` is three template nodes and ONE text node in a document — that is what
+// setting `innerHTML` produces, and the markup walk places one position for it.
+//
+// WHY THE ASSERTION IS ON THE `<em>` AND NOT ON THE TEXT. A row that emitted three text nodes
+// instead of one renders identically and every assertion about its words passes; what moves is
+// every LATER node in the same parent. So the tell is the sibling: `<em>` is child 1 for the
+// server and child 3 for a row built one-node-per-template-node, and a binding found one step
+// after the run then lands on a text node.
+//
+// THE REVERT, verified 2026-09-22: place one text position per template node rather than per run
+// (`emitChildren`'s run check in `emitComponent`). The build then makes three text nodes where the
+// parser makes one, and this reports 3 against the painted row's 1.
+test('a run in a grown row is one text node, and the sibling after it is found', async () => {
+    const source = `<script>
+import { reactive } from 'abide'
+
+let rows = reactive([{ id: 'a', name: 'Ada' }])
+
+function add() {
+    rows = [...rows, { id: 'b', name: 'Grace' }]
+}
+</script>
+
+<ul id="list">{#for row of rows by row.id}<li><span>Hello {row.name}! <em>one</em></span></li>{/for}</ul>
+<button id="add" onclick={add}>add</button>`
+
+    await mountPage(source)
+    const painted = document.querySelector('#list li span') as Element
+    const paintedRun = [...painted.childNodes].filter(
+        (node) => node.nodeType === 3,
+    )
+
+    ;(document.querySelector('#add') as HTMLElement).click()
+    flushSync()
+
+    const grown = document.querySelectorAll('#list li span')[1] as Element
+    const grownRun = [...grown.childNodes].filter((node) => node.nodeType === 3)
+
+    // THE SHAPES MATCH, which is the whole assertion: the row the server painted and the row the
+    // browser built are the same document, not two documents that look alike.
+    expect(grownRun.length).toBe(paintedRun.length)
+    expect(grown.childNodes.length).toBe(painted.childNodes.length)
+    expect((grown.childNodes[1] as Element).textContent).toBe('one')
+    expect(grown.textContent).toBe('Hello Grace! one')
+})
+
+// THE SHAPES A ROW CAN TAKE, BUILT AND PAINTED, COMPARED — the gate for the direction the adopt
+// gate cannot see.
+//
+// `corpusRuns.test.ts` checks that a row the SERVER painted can be adopted by the client's
+// addressing. Nothing checked the other direction: that a row the BROWSER built is the same
+// document the server would have written. The build and the markup now read ONE description —
+// the positions the markup walk places, and the attributes `writtenAttributes` lists — but what
+// each writes is still two spellings of one answer (a `createTextNode` against bytes the parser
+// reads), and their agreement is a property nothing else enforces.
+//
+// IT HAS ALREADY BEEN WRONG ONCE. Construction emitted one text node per TEMPLATE node where the
+// parser produces one per RUN, so `Hello {name}!` was three nodes built and one painted. Every row
+// rendered correctly and every assertion about its words passed; what moved was every later index
+// in the same parent. This table is what would have caught it on the first shape.
+//
+// A SHAPE IS ADDED HERE WHEN A ROW LEARNS TO CARRY SOMETHING NEW — that is the ratchet, and the
+// cost of forgetting is a silent off-by-N in a walk nobody reads.
+//
+// VERIFIED BY REVERT, 2026-09-22: emitting one text node per TEMPLATE node rather than per RUN
+// fails this on `text around a slot` and on `a run then a sibling`, reporting
+// `span(#text,#text,#text)` against the painted `span(#text)`.
+//
+// AND THE VALUES, SINCE EVERY ROW IS BUILT. A row used to be built only when it read nothing but
+// its item, and the build wrote the author's bytes where the parser decodes them — `AT&amp;T` on
+// the page for a grown row, `AT&T` for a painted one — which a comparison of node KINDS cannot
+// see. So each node's text and attributes are compared as well; the two rows carry the same data,
+// so any difference is the build disagreeing with the server.
+const ROW_SHAPES: [string, string][] = [
+    ['a bare element', '<li>{row.name}</li>'],
+    ['text around a slot', '<li>Hello {row.name}!</li>'],
+    [
+        'a run then a sibling',
+        '<li><span>Hi {row.name}</span><em>after</em></li>',
+    ],
+    ['nested elements', '<li><span><b>{row.name}</b></span></li>'],
+    ['a static attribute', '<li class="row"><span>{row.name}</span></li>'],
+    [
+        'a computed attribute',
+        '<li title={row.name}><span>{row.name}</span></li>',
+    ],
+    ['an empty element beside a run', '<li><i></i>{row.name}</li>'],
+    [
+        'a region inside the row',
+        '<li>{#if row.on}<b>on</b>{/if}<span>{row.name}</span></li>',
+    ],
+    // What the row's MOUNT writes, which the build leaves to it.
+    ['an attribute reading page state', '<li data-mark={mark}>{row.name}</li>'],
+    ['a run reading page state', '<li>{row.name} {mark}</li>'],
+    ['a blank run reading page state', '<li><b>x</b>{mark}</li>'],
+    // What the parser decodes and the build has to hand over decoded.
+    [
+        'entities in text and an attribute',
+        '<li title="AT&amp;T">AT&amp;T &copy; {row.name}</li>',
+    ],
+    [
+        'an entity in a URL attribute',
+        '<li><a href="/x?a=1&amp;b=2">{row.name}</a></li>',
+    ],
+    // What the server writes nothing for.
+    ['a blank run that is empty', '<li>{row.none}<b>x</b></li>'],
+    // A merged `class` and `style`, one of them reading page state.
+    [
+        'merged class and style',
+        '<li class="row" class:on={row.on} style="color: red" style:width={row.width}>{row.name}</li>',
+    ],
+    [
+        'a class reading page state',
+        '<li class:marked={mark === "m"}>{row.name}</li>',
+    ],
+    // Several top-level nodes, so the row carries its own anchor.
+    ['several top-level nodes', '<dt>{row.name}</dt><dd>{mark}</dd>'],
+    // Content only the parser makes right, which keeps the parser.
+    [
+        'an svg in the row',
+        '<li><svg><circle r="1"></circle></svg>{row.name}</li>',
+    ],
+]
+
+// THE NODE TREE, NOT THE MARKUP. `innerHTML` SERIALISES — three adjacent text nodes come back as
+// one string, identical to the merged node they should have been. The first version of this gate
+// compared `innerHTML`, passed against the very revert that motivated it, and was a green test
+// measuring nothing: comparing the OUTPUT is exactly what a structural contract cannot be checked
+// with. Node kinds and boundaries are what a walk steps over, so they are compared — and each
+// node's own text and attributes beside them, in the order the element holds them.
+function shapeOf(node: Node | undefined): string {
+    if (node === undefined) return '(missing)'
+    if (node.nodeType === 3)
+        return `#text${JSON.stringify((node as Text).data)}`
+    if (node.nodeType === 8) return `#comment(${(node as Comment).data})`
+    const element = node as Element
+    const attributes = [...element.attributes]
+        .map(
+            (attribute) =>
+                `${attribute.name}=${JSON.stringify(attribute.value)}`,
+        )
+        .join(' ')
+    const children = [...node.childNodes].map(shapeOf).join(',')
+    // THE NAMESPACE TOO: an `<svg>` built with `createElement` has the same `localName` as the one
+    // the parser made, and is an HTML element that draws nothing.
+    const space =
+        element.namespaceURI === 'http://www.w3.org/1999/xhtml'
+            ? ''
+            : `${element.namespaceURI}:`
+    return `${space}${element.localName}${attributes === '' ? '' : `[${attributes}]`}(${children})`
+}
+
+// The list's rows, as the reconcile holds them: each element between the region's anchors, or —
+// where a row carries its own anchor — each run of nodes from one anchor to the next.
+function rowsOf(list: Element): string[] {
+    const nodes = [...list.childNodes].slice(1, -1)
+    const anchored = nodes[0]?.nodeType === 8
+    if (!anchored) return nodes.map(shapeOf)
+    const rows: string[] = []
+    for (const node of nodes)
+        if (node.nodeType === 8) rows.push(shapeOf(node))
+        else rows[rows.length - 1] += `,${shapeOf(node)}`
+    return rows
+}
+
+test('a row the browser builds is the document the server would have written', async () => {
+    const differed: string[] = []
+    for (const [what, body] of ROW_SHAPES) {
+        const source = `<script>
+import { reactive } from 'abide'
+
+let mark = reactive('m')
+let rows = reactive([{ id: 'a', name: 'Ada', on: true, none: '', width: '10px' }])
+
+function add() {
+    rows = [...rows, { id: 'b', name: 'Ada', on: true, none: '', width: '10px' }]
+}
+</script>
+
+<ul id="list">{#for row of rows by row.id}${body}{/for}</ul>
+<button id="add" onclick={add}>add</button>`
+
+        await mountPage(source)
+        ;(document.querySelector('#add') as HTMLElement).click()
+        flushSync()
+
+        // THE TWO ROWS CARRY THE SAME DATA, so the only difference a comparison can find is the
+        // BUILD — which is the whole question. Every field is equal in both for exactly this.
+        const [painted, grown] = rowsOf(
+            document.querySelector('#list') as Element,
+        )
+        if (painted !== grown)
+            differed.push(
+                `${what}\n      painted ${painted}\n      grown   ${grown}`,
+            )
+    }
+    expect(differed).toEqual([])
+})
+
+// THE SAME GATE FOR AN ARM. A `{#if}` arm the server painted is hydrated; one the browser swaps in
+// INSIDE A ROW is BUILT from the arm's positions — the same build a row takes, since an arm in a
+// row is made once a row (`Cursor.repeated`) — so the two are held against each other the way a
+// grown row is against a painted one: painted on load, then swapped out and back, which builds
+// it, and the region compared node for node. An arm standing on a page is made once a swap and
+// is parsed, which is why this one stands in a row of one.
+//
+// A RAW VALUE IS HERE because an arm is where the docs app writes one (`DocsNav`'s
+// `{raw(item.nav)}`): the server parses it into elements, and a build that wrote it as text would
+// put markup on the screen.
+//
+// THE REVERT, verified 2026-09-22: make the `isRaw` test false in `builtRun`, so every run is
+// written as text, and this reports `a raw value` alone — an element painted, its markup as text
+// grown. Dropping the `&` decoding or building parser-owned content reports the same way.
+const ARM_SHAPES: [string, string][] = [
+    ['text and an element', '<p>Hello <b>{name}</b>!</p>'],
+    ['entities', '<p title="AT&amp;T">AT&amp;T &copy;</p>'],
+    ['an attribute reading page state', '<p data-name={name}>x</p>'],
+    ['a run reading page state', '<p>{name} and more</p>'],
+    ['a blank run that is empty', '<p>{none}<b>x</b></p>'],
+    ['a raw value', '<p>{raw(html)}</p>'],
+    [
+        'merged class and style',
+        '<p class="a" class:on={name === "Ada"} style:width={width}>x</p>',
+    ],
+    [
+        'a region inside the arm',
+        '<p>{#if name}<i>in</i>{/if}<span>after</span></p>',
+    ],
+    ['several top-level nodes', '<dt>{name}</dt><dd>x</dd>'],
+    ['an svg in the arm', '<svg><circle r="1"></circle></svg>'],
+]
+
+test('an arm the browser builds is the document the server would have written', async () => {
+    const differed: string[] = []
+    for (const [what, arm] of ARM_SHAPES) {
+        const source = `<script>
+import { reactive, raw } from 'abide'
+
+let on = reactive(true)
+let name = reactive('Ada')
+const none = ''
+const width = '10px'
+const html = '<b>hi</b>'
+</script>
+
+{#for one of [1]}<div id="host">{#if on}${arm}{/if}</div>{/for}
+<button id="flip" onclick={() => { on = !on }}>flip</button>`
+
+        await mountPage(source)
+        const host = document.querySelector('#host') as Element
+        const painted = [...host.childNodes].map(shapeOf).join(',')
+        click('#flip')
+        click('#flip')
+        const grown = [...host.childNodes].map(shapeOf).join(',')
+        if (painted !== grown)
+            differed.push(
+                `${what}\n      painted ${painted}\n      grown   ${grown}`,
+            )
+    }
+    expect(differed).toEqual([])
 })

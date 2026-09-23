@@ -7,20 +7,10 @@
 // so it reports each card as it lands rather than returning a table at the end.
 
 import { chromium, type Locator, type Page } from '@playwright/test'
+import type { Reading } from 'harness/measure'
 
 import { readPages, routeOf } from '../../dogfood/scripts/readContent.ts'
 import { serveDocsApp } from './serveDocsApp.ts'
-
-type Reading = {
-    op: string
-    substrate: string
-    loadedArm: string
-    load: Record<string, number | null>
-    arms: Record<string, { nanosecondsPerOp: number; p95: number }>
-    timing: { n: number; reps: number; floor: number } | null
-    paint: { firstContentfulPaint: number | null; firstPaint: number | null }
-    size: { nodes: number }
-}
 
 const COUNTS: [label: string, key: string][] = [
     ['moved', 'elementsMoved'],

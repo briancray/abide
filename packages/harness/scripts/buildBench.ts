@@ -29,7 +29,7 @@ if (import.meta.main) {
     const name = Bun.argv[2]
     if (name === undefined)
         throw new Error(
-            'usage: bun scripts/buildBench.ts <list|reactive|shapes>',
+            'usage: bun scripts/buildBench.ts <list|reactive|shapes|shared>',
         )
     console.log(await buildBench(name))
 }

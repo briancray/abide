@@ -1,6 +1,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import type { Read } from './classifyRead.ts'
 import type { AbideFile } from './parseAbide.ts'
+import { holdsSlot } from './classifyTemplate.ts'
 import { type Projection, projectShadow, type Span } from './projectShadow.ts'
 import { type Token, tokenise } from './tokenise.ts'
 
@@ -37,16 +38,27 @@ export class Lowering {
     readonly used = new Set<string>()
     // Ascending by `start`, so a span with none in it is one binary search.
     readonly reads: readonly Read[]
+    // 32.19 — WHETHER THE TEMPLATE HOLDS A `<slot/>`, walked ONCE here. Both emitters ask
+    // `takesProps()` about the same file, and the walk was a recursion over the whole template per
+    // lane per file — twice the work for an answer fixed when the file was parsed.
+    readonly holdsSlot: boolean
 
     constructor(file: AbideFile, reads: readonly Read[]) {
         this.projection = projectShadow(file)
         this.reads = reads
+        this.holdsSlot = holdsSlot(file.template)
     }
 
     // 33 — WHETHER THIS FILE IS A COMPONENT THAT TAKES PROPS, which is the one thing the emitters
     // need from the props pass: the emitted function takes the record, and a file that never
     // calls `props` takes none (33.2).
+    //
+    // A `<slot/>` IS THAT QUESTION WITH A SECOND ANSWER (32.19): the caller's children arrive on
+    // the props record, so a file holding one takes props whether or not it names them. Answered
+    // here rather than at each emitter, or a third reason to take the record has to be remembered
+    // in two files.
     takesProps(): boolean {
+        if (this.holdsSlot) return true
         for (const read of this.reads) if (read.shape === 'props') return true
         return false
     }
@@ -206,7 +218,7 @@ export class Lowering {
         let read = this.firstRead(from)
         let call = 0
         if (
-            call === calls.length &&
+            calls.length === 0 &&
             (read === this.reads.length ||
                 (this.reads[read] as Read).start >= to)
         )

@@ -56,7 +56,7 @@ async function mountPage(
         const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
         modules[`${name}.ts`] = emitComponent(file, reads)
         modules[`${name}.client.ts`] =
-            emitClient(file, reads, name !== 'Page') ||
+            emitClient(file, reads, name !== 'Page' ? 'repeated' : 'none') ||
             'export default () => {}'
     }
     const dir = temporaryModule(modules)
@@ -431,4 +431,34 @@ let mark = reactive('')
     })
     expect(work.bindingRuns).toBe(1)
     expect(document.querySelector('li')?.textContent).toBe('one!')
+})
+
+// A COMPONENT'S LIST GROWS A ROW. A component is mounted on the `Region` its caller wrote, not on a
+// node, so a build that asked `root` for its document was handed the region record — and the first
+// row a component's list grew threw `createElement is not a function`. Nothing had grown one: every
+// component test hydrates what the server wrote. The document is now the region's own, handed to
+// every build by `fillRegion` and by the list's reconcile.
+//
+// THE REVERT: make a row's build take its document from `root` again — `__document = root.ownerDocument
+// ?? root` at the head of `emitList`'s `make`. This throws the `TypeError` out of the click.
+test('a component whose list grows a row builds it in the right document', async () => {
+    const LIST = `<script>
+import { reactive } from 'abide'
+let rows = reactive(['a'])
+</script>
+<ul id="grown">{#for row of rows}<li>{row}</li>{/for}</ul>
+<button id="grow" onclick={() => { rows = [...rows, 'b'] }}>grow</button>`
+    const { mount } = await mountPage(
+        `<script>
+import List from './List.abide'
+</script>
+<main><List/></main>`,
+        { List: LIST },
+    )
+    mount(document.body)
+    ;(document.querySelector('#grow') as HTMLElement).click()
+    flushSync()
+    expect(
+        [...document.querySelectorAll('#grown li')].map((li) => li.textContent),
+    ).toEqual(['a', 'b'])
 })

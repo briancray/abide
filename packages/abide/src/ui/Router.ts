@@ -1,13 +1,15 @@
 import { CURRENT_ROUTER, type NavigateOptions } from '#shared/CURRENT_ROUTER.ts'
-import { matchRoute, type Params } from '#shared/matchRoute.ts'
+import { firstMatch, type Params } from '#shared/matchRoute.ts'
 import {
-    compareRoutes,
     parseRoutePattern,
+    rankBySpecificity,
     type Segment,
 } from '#shared/routePattern.ts'
 import { applyHead } from './applyHead.ts'
+import { LAYER_MOUNT, LAYER_NAVIGATE } from './LAYER_NAMES.ts'
+import { beginLayer, endLayer } from './measureLayer.ts'
 import { REGION_CLOSE, REGION_OPEN } from './REGION.ts'
-import { fillRegion, type Region } from './regionAt.ts'
+import { fillRegion, type Region } from './regions.ts'
 import type { Scope } from './Scope.ts'
 
 // A PAGE'S CLIENT MODULE, mounted against the region the router owns. The same default export a
@@ -25,8 +27,10 @@ export type Route = {
     pattern: string
     load: () => Promise<PageModule>
     // 35.1 — the layouts this page renders inside, outermost first, as the build found them.
-    // Optional because a table may be written by hand and most pages have none.
-    layouts?: (() => Promise<PageModule>)[]
+    // REQUIRED, as it is on the server's own row (`ServerRoute`): `tableOf` writes the key into
+    // both tables unconditionally, so an optional one was a second record shape for a row every
+    // navigation reads and a `??` arm the emitted table could not reach.
+    layouts: (() => Promise<PageModule>)[]
 }
 
 type Compiled = Route & { segments: Segment[] }
@@ -49,7 +53,6 @@ type Level = {
 export class Router {
     region: Region
     routes: Compiled[]
-    scope: Scope | undefined
     // The chain standing in the document, outermost layout first and the page last.
     levels: Level[]
     // WHICH NAVIGATION IS THE LIVE ONE. Both ways in await the destination's module before they
@@ -66,17 +69,20 @@ export class Router {
     constructor(region: Region, routes: Compiled[]) {
         this.region = region
         this.routes = routes
-        this.scope = undefined
         this.levels = []
         this.navigation = 0
     }
 
+    // THE PAGE'S SCOPE, for a caller that reads it — the chain's is `levels`. DERIVED rather than
+    // held: it was a field assigned on the way down `mountFrom` and never cleared by `stopFrom`, so
+    // between a navigation stopping the chain and the next one mounting it named a scope that had
+    // already been stopped. One fact, read off the array that owns it (41.11).
+    get scope(): Scope | undefined {
+        return this.levels[this.levels.length - 1]?.scope
+    }
+
     match(pathname: string): { route: Compiled; params: Params } | undefined {
-        for (const route of this.routes) {
-            const params = matchRoute(route.segments, pathname)
-            if (params !== null) return { route, params }
-        }
-        return undefined
+        return firstMatch(this.routes, pathname)
     }
 
     // 30.7 — NAVIGATES, AND DOES NOT RELOAD. Everything between the anchors is replaced and the
@@ -109,6 +115,12 @@ export class Router {
         // reason the ticket is checked here rather than after the mount.
         if (this.navigation !== ticket) return
 
+        // OPENED WHERE THE NAVIGATION COMMITS, which is after the last early exit and after the
+        // `await` above. The awaited load is a NETWORK wait, and a layer that contained it would
+        // report the round trip as the router's own cost — the measurement this exists to make
+        // honest is which fraction of click -> paint the router's WORK is.
+        beginLayer(LAYER_NAVIGATE)
+
         // 41.11 — WHAT THE TWO ADDRESSES SHARE IS NOT REBUILT. The comparison is by the MOUNT
         // rather than by the loader or the module record: the table holds an arrow per row, so
         // two routes under one layout name the same file through two different functions, and a
@@ -122,10 +134,10 @@ export class Router {
             shared === 0
                 ? this.region
                 : ((this.levels[shared - 1] as Level).slot as Region)
-        // EMPTIED THROUGH THE PRIMITIVE EVERY OTHER REGION IS. `fillRegion(region, '')` is this
-        // removal, and it carries the 41.10 refusal for a region no longer in a document that a
-        // hand-written walk swallows.
-        fillRegion(into, '')
+        // EMPTIED THROUGH THE PRIMITIVE EVERY OTHER REGION IS. `fillRegion(region)` with no build is
+        // this removal, and it carries the 41.10 refusal for a region no longer in a document that
+        // a hand-written walk swallows.
+        fillRegion(into)
         const full = `${target.pathname}${target.search}${target.hash}`
         if (options.replace === true) history.replaceState(null, '', full)
         else history.pushState(null, '', full)
@@ -137,8 +149,14 @@ export class Router {
             const head = (arriving[at] as PageModule).head
             if (head !== undefined) applyHead(head())
         }
+        // AT THE TOP OF THE CHAIN, NOT INSIDE `mountFrom`: it recurses one level per layout, and
+        // `shares()` SUMS every measure of a name inside the op — so a pair inside the recursion
+        // would count the innermost level once per level above it.
+        beginLayer(LAYER_MOUNT)
         this.mountFrom(arriving, shared, into, found.params)
+        endLayer(LAYER_MOUNT)
         if (options.keepScroll !== true) scrollTo(0, 0)
+        endLayer(LAYER_NAVIGATE)
     }
 
     // How much of the arriving chain is already standing. Layouts only: the page is the level
@@ -197,8 +215,6 @@ export class Router {
                 },
             })
         level.scope = module.default(region, props)
-        // The page's scope, for a caller that reads it. The chain's is `levels`.
-        if (at === modules.length - 1) this.scope = level.scope
     }
 
     // The page the SERVER painted, wired where it stands. No fill happens — the region is not
@@ -217,7 +233,12 @@ export class Router {
         // a `<link rel=stylesheet>` refetched and a flash of unstyled document on every load.
         const standing = await load(found.route)
         if (this.navigation !== ticket) return
+        // THE HYDRATE SHARE, and it is the number `compiler-maximalist` said it would take first
+        // and never had. Same name as the navigation's mount because it is the same work on the
+        // same chain — what differs is the op it is a fraction of.
+        beginLayer(LAYER_MOUNT)
         this.mountFrom(standing, 0, this.region, found.params)
+        endLayer(LAYER_MOUNT)
     }
 }
 
@@ -226,7 +247,7 @@ export class Router {
 // navigation the reader is watching.
 async function load(route: Compiled): Promise<PageModule[]> {
     return await Promise.all([
-        ...(route.layouts ?? []).map((layout) => layout()),
+        ...route.layouts.map((layout) => layout()),
         route.load(),
     ])
 }
@@ -236,8 +257,15 @@ async function load(route: Compiled): Promise<PageModule[]> {
 // function per key. Passed as the plain record it lowered to `params()` on a value that was not
 // one, so every page with a `[param]` in its address hydrated dead — with its server markup
 // already on screen, which is what kept it quiet.
-function paramsProp(params: Params): Record<string, () => unknown> {
-    return { params: () => params }
+//
+// THE SHAPE IS FIXED HERE, `children` included: every compiled page and layout loads its props
+// off this record, and a field added on a later path is a second hidden class for all of them.
+// A level with nothing below it leaves the key present and undefined, which is what both
+// emitted readers already test for.
+function paramsProp(
+    params: Params,
+): Record<string, (() => unknown) | undefined> {
+    return { params: () => params, children: undefined }
 }
 
 // THE REGION A ROUTER SWAPS PAGES IN. The server does not write these anchors — a page is the one
@@ -288,8 +316,7 @@ export function startRouter(
     const compiled: Compiled[] = []
     for (const route of routes)
         compiled.push({ ...route, segments: parseRoutePattern(route.pattern) })
-    compiled.sort((a, b) => compareRoutes(a.segments, b.segments))
-    const router = new Router(pageRegion(host), compiled)
+    const router = new Router(pageRegion(host), rankBySpecificity(compiled))
     CURRENT_ROUTER.current = router
     return router
 }

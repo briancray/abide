@@ -7,7 +7,7 @@ import type { Component } from './render.ts'
 // THE ANCHORS ARE THE PARENT'S PROBLEM, not the child's: how many top-level nodes the child writes
 // is a fact about another file, so the nodes after the invocation cannot be addressed by counting
 // and the region is what makes the child's markup one thing to walk to. It is the pair `{#if}`
-// already uses, so the client's `regionAt` needs no second case.
+// already uses, so the client's walk (`regionHere`) needs no second case.
 //
 // 39.1 — the child's head contributions are pushed onto the caller's, so a `<head>` in a component
 // reaches the document the way a page's does. The array is the caller's, which is what keeps the

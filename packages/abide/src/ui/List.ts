@@ -8,7 +8,7 @@ import {
     rowOf,
     rowsIn,
 } from './reconcile.ts'
-import { isEmptyRegion, type Region } from './regionAt.ts'
+import { isEmptyRegion, type Region } from './regions.ts'
 import type { Scope } from './Scope.ts'
 
 // ONE RECORD PER `{#for}`, owned by the emitted block, holding everything the two arms — the
@@ -29,14 +29,16 @@ export class List {
     // Whether each row carries its own anchor — a body with several top-level nodes.
     anchored: boolean
     key: (item: unknown, at: number) => unknown
-    make: (item: unknown, at: number) => Node[]
+    // A row's nodes, BUILT in the document the list stands in — handed over by the reconcile
+    // rather than found by the row, which is the one place a row's document is decided.
+    make: (document: Document, item: unknown, at: number) => Node[]
     mount: (nodes: Node[], item: unknown, at: number) => Scope
 
     constructor(
         region: Region,
         rows: Row[],
         key: (item: unknown, at: number) => unknown,
-        make: (item: unknown, at: number) => Node[],
+        make: (document: Document, item: unknown, at: number) => Node[],
         mount: (nodes: Node[], item: unknown, at: number) => Scope,
     ) {
         this.region = region
@@ -71,7 +73,7 @@ export function listAt(
     region: Region,
     anchored: boolean,
     key: (item: unknown, at: number) => unknown,
-    make: (item: unknown, at: number) => Node[],
+    make: (document: Document, item: unknown, at: number) => Node[],
     mount: (nodes: Node[], item: unknown, at: number) => Scope,
 ): List {
     const list = new List(region, [], key, make, mount)

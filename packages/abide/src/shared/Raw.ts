@@ -37,3 +37,10 @@ export function textOf(value: unknown): string {
 export function raw(value: unknown): Raw {
     return new Raw(textOf(value))
 }
+
+// Whether a value is the brand, for the one place that has to ask rather than just read it: a run a
+// browser BUILDS is a text node unless one of its values is `Raw`, and then it is parsed from the
+// markup the server writes for it (`emitClient`'s `builtRun`).
+export function isRaw(value: unknown): value is Raw {
+    return value instanceof Raw
+}

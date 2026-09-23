@@ -1377,6 +1377,9 @@ value alike.
 
 32.29 A static value in an attribute 32.21 scheme-checks MUST be escaped the way `{expr}` is.
 
+32.30 A keyed `{#for}` MUST move a row it keeps, and the move MUST NOT take the row's nodes out of
+the document.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
@@ -1734,8 +1737,8 @@ again, and a serialized setup result MUST NOT be adopted.
 41.8 A `{#for}` block over a cursor the server already painted MUST be reconciled against the replayed
 productions by the block's key, and MUST NOT be appended to.
 
-41.9 `render` MUST emit markers rather than a tree to diff, and the client MUST walk the marker
-list the document carried rather than the DOM.
+41.9 `render` MUST delimit a dynamic region with a comment anchor, and MUST NOT add a node, an
+attribute or a wrapper to the document for any other purpose.
 
 41.10 A hydration mismatch MUST rebuild the enclosing block and MUST NOT rebuild the page, warning
 on `abide:hydrate`.

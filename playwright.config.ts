@@ -5,10 +5,9 @@ import { defineConfig, devices } from '@playwright/test'
 // '/'. The harness pair is the measure lane's both-substrates gate, which needs a
 // browser and no app, and runs in each of the two engines a reader actually brings.
 //
-// THEY SHARE ONE CONFIG AGAIN. `webServer` is a whole-run option rather than a
-// per-project one, so while `abide start` threw, a project that serves nothing could
-// not run beside the one that serves everything and the harness pair lived in a
-// `playwright.harness.config.ts` of its own. `abide start` boots, so it does not.
+// ONE CONFIG, BECAUSE `webServer` IS A WHOLE-RUN OPTION rather than a per-project one: the
+// harness pair serves nothing and the app pair serves everything, so the two are told apart
+// by project name rather than by a config each.
 const PORT = 3131
 // EXPORTED, because a spec that needs the APP rather than a blank page needs its address, and a
 // second copy of the port in a spec file is the one way the two can disagree. `panel.spec.ts` is

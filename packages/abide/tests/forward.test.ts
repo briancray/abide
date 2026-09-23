@@ -1,19 +1,15 @@
-// FORWARD PRESSURE — the smallest case for a clause that is NOT BUILT YET, written to find out
-// whether what is built can grow into it, while the answer is still cheap.
+// THE STATIC REGION, ADDRESSED — what a binding is found by when nothing in the document marks it.
 //
-// It has said AWAY once already and been rewritten for it: slots were addressed by their position
-// in document order over the whole page, an `{#if}` false branch shifted every one after it, and
-// mounting into such a page threw. The scheme now addresses a node by CHILD INDICES from its
-// region root and adds nothing to the document at all.
-//
-// WHAT THAT BUYS is below. WHAT IT DOES NOT is the last test: a region whose shape depends on a
-// value still moves the indices of its siblings, so 32.12 and 32.13 need an ANCHOR in the
-// document at the boundary — which is exactly where a marker earns its place, and the only place
-// it does.
+// Twice this file said AWAY and the scheme was rewritten for it: slots were addressed by their
+// position in document order over the whole page, and an `{#if}` false branch shifted every one
+// after it; then they were addressed by child indices from the region root, and a region's value-
+// dependent length shifted every index after IT, which is what the anchors were added for. Now a
+// binding's node is found by the walk that wrote the markup (`Cursor`): each node from the one
+// before it or the one it stands in, and past a region from its closing anchor. Nothing is added
+// to the document but those anchors.
 
 import { afterAll, expect, test } from 'bun:test'
-import { parseAbide, planTemplate } from '#compiler'
-import { elementAt, textAt } from '#ui'
+import { elementHere, regionFound, regionHere, textHere } from '#ui'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { clientOf, closeTyped } from './typed.ts'
 
@@ -29,87 +25,53 @@ let b = reactive('B')
 <p id="one">{a}</p>
 <div><span>{b} tail</span><button onclick={() => a = 'x'}>go</button></div>`
 
-// THE PROPERTY A STATIC REGION NEEDS. A path is exact, and nothing was added to the document to
-// make it so. THE REVERT: drop the `childIndex` increment for a text run in `planTemplate` so
-// runs and elements share a counter; `[1,0,0]` then addresses the `<button>` rather than the
-// `<span>`'s text, and this reports a BUTTON where a text node is due.
-test('a node is found by child index from the region root', () => {
-    document.body.innerHTML =
-        '<p id="one">A</p><div><span>B tail</span><button>go</button></div>'
-
-    expect(textAt(document.body, [0, 0]).data).toBe('A')
-    expect(textAt(document.body, [1, 0, 0]).data).toBe('B tail')
-    expect(elementAt(document.body, [1, 1]).nodeName).toBe('BUTTON')
-})
-
-// A TEXT RUN IS ONE NODE, which is what lets this scheme exist at all: `{b} tail` merges into a
-// single text node when parsed, so there is nothing to address separately and nothing to invent.
-test('a run of static text and expressions plans as one node', () => {
-    const plan = planTemplate(parseAbide(SOURCE).template)
-    expect(plan.runs).toHaveLength(2)
-    expect(plan.runs[1]?.path).toEqual([1, 0, 0])
-    expect(plan.runs[1]?.parts).toMatchObject([
-        { text: 'b' },
-        { text: ' tail', holder: null },
-    ])
-    expect(plan.handlers[0]?.path).toEqual([1, 1])
-})
-
-// 41.10 — addressing by position is SILENT when it is wrong, so the kind is checked. THE REVERT:
-// return the node without the `nodeType` test; the binding then writes `data` onto an ELEMENT,
-// which is a no-op that leaves the page rendering the server's values forever with nothing said.
-test('a binding that finds the wrong kind of node says so', () => {
+// 41.10 — A WALK BY POSITION IS SILENT WHEN IT IS WRONG, so every unit checks the KIND of the node
+// it was handed. THE REVERT: return the node without the `nodeType` test in `elementHere`; a
+// listener is then added to a TEXT node, which accepts it and never fires, and the page renders
+// the server's markup forever with nothing said.
+test('a unit that is handed the wrong kind of node says so', () => {
     document.body.innerHTML = '<p id="one">A</p><div><span>B</span></div>'
-    expect(() => textAt(document.body, [1])).toThrow('41.10')
-    expect(() => textAt(document.body, [1])).toThrow('DIV')
-    expect(() => elementAt(document.body, [0, 0])).toThrow('41.10')
+    const p = document.body.firstChild as Node
+    const div = p.nextSibling as Node
+    expect(textHere(p.firstChild).data).toBe('A')
+    expect(() => textHere(div)).toThrow('41.10')
+    expect(() => elementHere(p.firstChild, 'p')).toThrow('41.10')
+    expect(() => elementHere(div, 'p')).toThrow('<p>')
+    // An ABSENT node — what the walk carries on past a node the server did not write — is
+    // refused here too, in the unit that needed it, rather than by the walk.
+    expect(() => elementHere(undefined, 'p')).toThrow('41.10')
+    expect(() => regionFound(regionHere(p))).toThrow('41.10')
 })
 
-test('the emitted binding walks a path and adds nothing to the document', async () => {
+test('the emitted binding walks the markup and adds nothing to the document', async () => {
     const client = await clientOf(SOURCE, ['a', 'b'])
-    // The `<span>`'s text and the `<button>` both sit under the `<div>` at [1], so that walk is
-    // taken once and both reference it. The `<p>` at [0] has no company and walks alone.
-    //
-    // DECLARED APART FROM ITS ASSIGNMENT, because the page guards each binding on its own (41.10,
-    // `emitClient`) and an anchor is the one name that crosses from one guard into the next.
-    expect(client).toContain('let at0')
-    expect(client).toContain('at0 = __childAt(root, [1])')
-    // `{b} tail` carries a static piece, so it always renders a node. `{a}` is every part an
-    // expression and can render none, which is the `true` — `textAt` puts one back.
-    expect(client).toContain('__textAt(at0, [0,0])')
-    expect(client).toContain('__elementAt(at0, [1])')
-    expect(client).toContain('__textAt(root, [0,0], true)')
+    // Each node is found from the one before it or the one it stands in — the `<div>` from the
+    // `<p>`, the `<span>` from the `<div>`, the `<button>` from the `<span>` — so nothing is added
+    // to the document to find any of them.
+    expect(client).toContain('const __c2 = __c0?.nextSibling\n')
+    expect(client).toContain('const __c3 = __c2?.firstChild\n')
+    expect(client).toContain('const __c5 = __c3?.nextSibling\n')
+    // `{b} tail` carries a static piece, so it always renders a node and is a plain step. `{a}` is
+    // every part an expression and can render none, so the walk puts one back as it passes.
+    expect(client).toContain('const __c4 = __c3?.firstChild\n')
+    expect(client).toContain('const __c1 = __blankHere(__c0?.firstChild, __c0)')
+    expect(client).toContain('__elementHere(__c5, "button").addEventListener')
     expect(client).not.toContain('data-a')
     expect(client).not.toContain('slots(')
     // RESOLVED ONCE AT MOUNT, and the binding writes the node it holds. THE REVERT: emit
-    // `setText(<address>, …)` inside the watch; every write then re-walks its path — 0.47 µs a
-    // write against 0.22 in Chromium, the walk being 0.21 of it.
-    expect(client).toContain('const __t1_0_0 = __textAt(at0, [0,0])')
-    expect(client).toContain('__setText(__t1_0_0,')
-    expect(client).not.toContain('__setText(__textAt(')
+    // `setText(textHere(…), …)` inside the watch; every write then re-checks the node it already
+    // holds.
+    expect(client).toContain('const __t4 = __textHere(__c4)')
+    expect(client).toContain('__setText(__t4,')
+    expect(client).not.toContain('__setText(__textHere(')
 })
 
-// STILL NOT BUILT, and the next thing forward pressure is owed. A region whose shape depends on a
-// value shifts the child indices of everything after it, so `{#if}` and `{#for}` cannot address
-// their siblings by position alone — the boundary needs an ANCHOR the document keeps whether the
-// region rendered or not. That is the one place a marker is worth its bytes, and this records the
-// requirement rather than the solution.
-test('a region that may not render moves its siblings — 32.12 and 32.13 need an anchor', () => {
-    document.body.innerHTML = '<p>before</p><p>after</p>'
-    expect(textAt(document.body, [1, 0]).data).toBe('after')
-
-    // The same page with a conditional region absent between them. Nothing marks where it was.
-    document.body.innerHTML = '<p>before</p>'
-    expect(() => textAt(document.body, [1, 0])).toThrow('41.10')
-})
-
-// THE WALK IS SHARED WHERE IT CAN BE. Four bindings under one parent walk the parent once, not
-// four times — measured at 2.3x a marker walk on a wide tree when every binding walked alone
-// (`depth.spec.ts`), and the compiler holds every path so the sharing is free to compute.
+// THE WALK IS SHARED BECAUSE IT IS ONE WALK. Four bindings under one parent reach it once, and
+// each is one step from its neighbour — where walking every binding alone from the root was
+// measured at 2.3x a marker walk on a wide tree (`depth.spec.ts`).
 //
-// THE REVERT: return `{ base: 'root', rest: path }` from `hoistPaths`' `reference` and emit no
-// anchors; every binding then walks its whole path, which this reports as 0 `childAt` lines where
-// 1 is due and four full paths where four one-step ones are.
+// Nothing to revert: sharing is not a pass over the bindings any more but the shape of the walk,
+// so what this holds is that every position is found exactly once.
 test('bindings under one parent share the walk to it', async () => {
     const source = `<script>
 import { reactive } from 'abide'
@@ -120,10 +82,10 @@ let c = reactive(3)
 <section><div><p>{a}</p><p>{b}</p><p>{c}</p></div></section>`
 
     const client = await clientOf(source, ['a', 'b', 'c'])
-    // One anchor down to the shared `<div>`, then a step per binding.
-    expect(client.match(/childAt\(/g) ?? []).toHaveLength(1)
-    expect(client).toContain('__childAt(root, [0,0])')
-    expect(client).toContain('__textAt(at0, [0,0], true)')
-    expect(client).toContain('__textAt(at0, [1,0], true)')
-    expect(client).toContain('__textAt(at0, [2,0], true)')
+    expect(client).toContain('const __c1 = __c0?.firstChild\n')
+    expect(client).toContain('const __c2 = __c1?.firstChild\n')
+    expect(client).toContain('const __c4 = __c2?.nextSibling\n')
+    expect(client).toContain('const __c6 = __c4?.nextSibling\n')
+    // Eight positions — the section, the div, three `<p>` and their runs — and eight steps.
+    expect(client.match(/const __c\d+ =/g) ?? []).toHaveLength(8)
 })

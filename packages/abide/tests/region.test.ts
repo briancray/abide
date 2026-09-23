@@ -77,15 +77,12 @@ test('a sibling after the region is bound through the anchor, not by index', asy
     const foot = document.querySelector('#foot') as HTMLElement
     expect(foot.textContent).toBe('ada')
 
-    // THE REVERT: address the footer by child index in `planTemplate` — drop the region-reference
-    // branch in `place()` and keep counting — and the taken arm's length decides which node `[2,0]`
-    // is. With the else arm rendered it lands on the footer by luck; swap to the if arm below and
-    // it lands on nothing, which is how this was found.
-    //
-    // `-1` is region 0 of the root and the `0` after it is how many nodes past its closing anchor
-    // to count; the walk in `nodeAt` is what decodes the pair.
+    // THE REVERT: continue past a region by counting its own nodes as if it were one — step from
+    // the region's OPENING anchor in `Cursor.region` — and the taken arm's length decides which
+    // node the footer is. How many nodes stand between the anchors depends on a value, so what
+    // follows them is found from the one that stays put: the close.
     const client = await clientOf(PAGE, ['open', 'name'])
-    expect(client).toContain('__textAt(root, [-1,0,0]')
+    expect(client).toContain('const __c3 = __c2?.close?.nextSibling')
 })
 
 test('a branch swap replaces the arm and nothing around it', async () => {
@@ -155,14 +152,10 @@ test('the arm a swap replaced stops waking', async () => {
     expect(after.bindingRuns).toBe(2)
 })
 
-// WHICH REGION THIS IS AMONG ITS PARENT'S. `regionAt` counts opening anchors directly inside one
-// node, so a region's index has to be counted the same way — per PARENT, not across the template.
-//
-// THE REVERT: number regions with `plan.regions.length`, which is flat because the walk recurses
-// into an element's children with the same plan. The second `{#if}` below is then asked for as
-// region 1 of the `<span>` that holds only one, and the mount throws `region 1 is not in the
-// rendered document`. One region, or several under ONE parent, never sees it — which is every
-// fixture there was.
+// TWO REGIONS UNDER DIFFERENT PARENTS. When regions were NUMBERED, an index counted across the
+// whole template rather than per parent asked the `<span>` below for a second region it does not
+// hold. Nothing counts regions now — each is taken where the walk stands (`regionHere`) — so this
+// holds the case that broke numbering rather than a number: both regions found, both live.
 const SPREAD = `<script>
 import { reactive } from 'abide'
 
@@ -193,11 +186,11 @@ test('two regions under different parents each find their own', async () => {
 // guard. This test then reports `no throw, content "" ` where the framed 41.10 error is due, and
 // the arm that was there is gone as well.
 test('filling a region that is not in a document is refused, not silent', async () => {
-    const { fillRegion, regionAt } = await import('#ui')
+    const { fillRegion, regionFound, regionHere } = await import('#ui')
     const holder = document.createElement('div')
     holder.innerHTML = '<!--[-->before<!--]-->'
     document.body.append(holder)
-    const region = regionAt(holder, 0)
+    const region = regionFound(regionHere(holder.firstChild))
     expect(region.open.nextSibling?.textContent).toBe('before')
     // Detached: the anchors are still each other's siblings, but they have no parent.
     const orphan = document.createDocumentFragment()
@@ -207,11 +200,29 @@ test('filling a region that is not in a document is refused, not silent', async 
 
     let said = ''
     try {
-        fillRegion(region, '<b>after</b>')
+        fillRegion(region, (made) => [made.createElement('b')])
     } catch (thrown) {
         said = (thrown as Error).message
     }
     expect(said).toContain('not in a document')
     expect(said).toContain('41.10')
     holder.remove()
+})
+
+// A REGION'S CLOSE IS THE ONE AT DEPTH ZERO. The walk steps past a region from its closing anchor,
+// so a region holding another must hand back ITS OWN close and not the first one it meets — or
+// every sibling after it is looked for inside it.
+//
+// THE REVERT: return at the first `REGION_CLOSE` in `regionHere`, ignoring depth. The outer region
+// then ends at the inner one's close, and this reports `inner` where `after` is due.
+test('a region holding a region is closed by its own anchor', async () => {
+    const { regionHere } = await import('#ui')
+    const holder = document.createElement('div')
+    holder.innerHTML = '<!--[--><!--[-->inner<!--]--><!--]-->after'
+    const outer = regionHere(holder.firstChild)
+    expect(outer?.close.nextSibling?.textContent).toBe('after')
+    // And something that is not an opening anchor is no region at all, rather than a throw — the
+    // walk carries `undefined` on and `regionFound` refuses in the unit that needed it.
+    expect(regionHere(holder.lastChild)).toBeUndefined()
+    expect(regionHere(undefined)).toBeUndefined()
 })

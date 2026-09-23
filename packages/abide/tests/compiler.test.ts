@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from 'bun:test'
-import { compileFile, parseAbide } from '#compiler'
+import { compileFile, emitClient, parseAbide } from '#compiler'
 import { escapeStyleValue, escapeText, render } from '#server'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import {
@@ -290,7 +290,7 @@ test('a comment, a doctype and a bare < are not tags', () => {
         '"<p>" + "a" + "</p>"',
     )
     expect(compileFile('<p>a < b</p>')).toContain('"<p>" + "a < b" + "</p>"')
-    // One text node, not two: a browser merges adjacent text on parse and `planTemplate` counts
+    // One text node, not two: a browser merges adjacent text on parse and the markup walk places
     // what the browser will see.
     const run = parseAbide('<p>a < b</p>').template[0] as {
         children: unknown[]
@@ -585,8 +585,14 @@ test('a for row binds its item on the client too', async () => {
         '<script>let rows = reactive([])</script>{#for rows of groups}<li>{rows.name}</li>{/for}',
         ['rows'],
     )
-    expect(client).toContain('const ls0_make = (rows, __at)')
-    expect(client).toContain('__escapeText(rows.name)')
+    expect(client).toContain('const ls0_make = (__document, rows, __at)')
+    // `escapeless` HERE AND `escapeText` ON THE SERVER, and the difference is the point rather
+    // than an inconsistency: the server concatenates into markup a browser parses, and this side
+    // CONSTRUCTS — `createTextNode` writes through `data`, where there is nothing to escape. What
+    // these lines are actually guarding is `rows.name` and not `rows().name`; the value is held
+    // once so a `Raw` can be told from text (`builtRun`), and then written through `escapeless`.
+    expect(client).toContain('const __c1_0 = rows.name')
+    expect(client).toContain('__escapeless(__c1_0)')
     // The row's own item is not a `Reactive`, so the run opens NO binding: the reconcile is what
     // rewrites a row whose data changed.
     expect(client).not.toContain('setText')
@@ -1124,17 +1130,18 @@ test('a default value holding an `=` is skipped whole — 31.10', async () => {
 
 // THE TWO EMITTERS FILTER THE SAME `<head>`, and a tag name is ASCII case-INSENSITIVE. Only the
 // server was lowercased, so `<HEAD>` was hoisted out of the document on one side and counted as a
-// body child on the other — every client path after it off by one, and because the root's
+// body child on the other — every client address after it off by one, and because the root's
 // bindings share one guard the first Mismatch abandons the whole mount. THE REVERT: compare
-// `node.tag === 'head'` in `emitClient`; the client path below becomes `[1,0]`.
+// `node.tag === 'head'` in `emitClient`; the `<p>` is then found one step along, past a `<head>`
+// the document does not hold there.
 test('an uppercase head is hoisted by both emitters', async () => {
     const source = '<HEAD><title>t</title></HEAD><p>{n}</p>'
     expect(await serverOf(source, ['n'])).toContain(
         '__body = "<p>" + __escapeText(__slotValue(() => n())) + "</p>"',
     )
-    expect(await clientOf(source, ['n'])).toContain(
-        '__textAt(root, [0,0], true)',
-    )
+    const client = await clientOf(source, ['n'])
+    expect(client).toContain('const __c0 = __head\n')
+    expect(client).toContain('__blankHere(__c0?.firstChild, __c0)')
 })
 
 // 32.3 HOLDS WHETHER OR NOT THE VALUE IS QUOTED. THE REVERT: push the unquoted value as a literal
@@ -1319,29 +1326,54 @@ test('a style beside a style: property compiles and is left unbound \u2014 32.20
     // The merged half gets NO whole-attribute write \u2014 that is the exception.
     expect(both).not.toContain('__setAttribute')
     // ALONE IT IS AN ORDINARY BINDING, which is what makes the case above an exception rather
-    // than the rule. THE REVERT: drop the `lowerName === 'style'` skip in `planTemplate`; the
+    // than the rule. THE REVERT: drop the `lowerName === 'style'` skip in `isMergedPlain`; the
     // first assertion below is unchanged and `__setAttribute` appears in `both` too.
     expect(await clientOf('<div style={s}>x</div>', ['s'])).toContain(
         '__setAttribute',
     )
 })
 
-// AN ELEMENT THAT IS BOTH A SHARED PARENT AND A BINDING SITE OF ITS OWN walks to a node an anchor
-// is already holding. `hoistPaths`' `nearest` answers only PROPER prefixes, so the element
-// carrying a listener AND a bound attribute — the common case 32.3 creates — re-walked one step
-// from the anchor above it, once for the listener and once for the attribute.
-//
-// THE REVERT: drop the exact-match arm from `hoistPaths`' `reference`. Both walks come back as
-// `__elementAt(at0, [0])`, which is the anchor's parent plus the step the anchor already took.
-test('a bound element reuses the anchor standing at its own path', async () => {
+// AN ELEMENT THAT IS BOTH A PARENT AND A BINDING SITE OF ITS OWN is found ONCE. The element
+// carrying a listener AND a bound attribute — the common case 32.3 creates — is one position in
+// the walk, and its children are found from it; the listener and the attribute each CHECK that
+// node rather than finding it again.
+test('a bound element is found once and read by everything that binds it', async () => {
     const client = await clientOf(
         '<section><div onclick={() => { n = n + 1 }} class={tone}><p>{n}</p><p>{tone}</p></div></section>',
         ['n', 'tone'],
     )
-    // `at1` IS the `<div>`, hoisted for the two text runs under it.
-    expect(client).toContain('at1 = __childAt(at0, [0])')
-    // So the listener and the binding read it rather than walking to it again.
-    expect(client).toContain('__elementAt(at1, []).addEventListener')
-    expect(client).toContain('= __elementAt(at1, [])')
-    expect(client).not.toContain('__elementAt(at0, [0])')
+    // `__c1` IS the `<div>`, and the two runs under it are found through it.
+    expect(client).toContain('const __c1 = __c0?.firstChild\n')
+    expect(client).toContain('const __c2 = __c1?.firstChild\n')
+    expect(client).toContain('const __c4 = __c2?.nextSibling\n')
+    expect(client).toContain('__elementHere(__c1, "div").addEventListener')
+    expect(client).toContain('const __a1 = __elementHere(__c1, "div")')
+    // One `const` per position: nothing is walked to twice.
+    expect(client.match(/const __c1 =/g) ?? []).toHaveLength(1)
+})
+
+// HOW OFTEN A REGION IS MADE DECIDES HOW THE BROWSER MAKES IT. An arm on a page is made once a swap
+// and is PARSED — one parse of a whole region costs what building it costs and ships as the smaller
+// string. An arm inside a row is made once a ROW and is BUILT — a parse a row was 29 ms against 5 ms
+// at a thousand rows (`selectedRowShare.ts`). A component's own arm can stand in a row, so it builds.
+//
+// THE REVERT: drop the `!sink.repeated` answer in `emitMaker`. Every region then builds, the page's
+// arm below included, and the docs client measured +4.3% gzipped for it.
+test('a region made once is parsed, and one made once a row is built', async () => {
+    const source =
+        '<script>let rows = reactive([1])\nlet on = reactive(true)</script>' +
+        '{#if on}<p>page</p>{/if}<ul>{#for row of rows}<li>{#if on}<b>row</b>{/if}</li>{/for}</ul>'
+    const { file, reads } = await typed(source, ['rows', 'on'])
+    const once = emitClient(file, reads, 'once')
+    const page = once.slice(
+        once.indexOf('function rg0_build'),
+        once.indexOf('function rg0_build') + 200,
+    )
+    expect(page).toContain('__markupNodes(__document')
+    expect(page).not.toContain('createElement')
+    // The arm inside the row: built.
+    expect(once).toContain('__document.createElement("b")')
+    // A component's own arm: built, because the component can stand in a row.
+    const invoked = emitClient(file, reads, 'repeated')
+    expect(invoked).toContain('__document.createElement("p")')
 })

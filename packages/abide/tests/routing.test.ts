@@ -59,7 +59,7 @@ async function pages(): Promise<Record<string, PageMount>> {
         const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
         modules[`${name}.ts`] = emitComponent(file, reads)
         // ROUTABLE, so the module carries its own markup — what the build now passes for a page.
-        modules[`${name}.client.ts`] = emitClient(file, reads, true)
+        modules[`${name}.client.ts`] = emitClient(file, reads, 'once')
     }
     const dir = temporaryModule(modules)
     const home = (await import(`${dir}/Home.client.ts`)).default as PageMount
@@ -85,10 +85,12 @@ function router(mounts: Record<string, PageMount>) {
         {
             pattern: '/invoices/[id]',
             load: async () => ({ default: mounts.invoice as PageMount }),
+            layouts: [],
         },
         {
             pattern: '/',
             load: async () => ({ default: mounts.home as PageMount }),
+            layouts: [],
         },
     ])
 }
@@ -118,8 +120,8 @@ test('a page the server painted hydrates, and the one navigated to builds itself
 })
 
 // 12.13 through the router: the page it replaced owned a scope, and the router is the only thing
-// that can remove its nodes. THE REVERT: drop `this.stop()` from `Router.go` — the old page's
-// binding goes on waking for every write into nodes no longer in the document.
+// that can remove its nodes. THE REVERT: drop the `this.stopFrom(shared)` call from `Router.go` —
+// the old page's binding goes on waking for every write into nodes no longer in the document.
 test('the page a navigation replaced stops its bindings — 12.13', async () => {
     history.replaceState(null, '', '/')
     const mounts = await pages()
@@ -257,12 +259,12 @@ test("a routable page's client module carries its merged head — 39.12", async 
 <p>body</p>`,
     )
     const reads = await session.reads(`${ROOT}src/Head.abide`, file)
-    const client = emitClient(file, reads, true)
+    const client = emitClient(file, reads, 'once')
     expect(client).toContain('export function head()')
     expect(client).toContain('Second')
     expect(client).not.toContain('First')
     // A page nobody navigates to needs none of it.
-    expect(emitClient(file, reads, false)).not.toContain(
+    expect(emitClient(file, reads, 'none')).not.toContain(
         'export function head()',
     )
 })
@@ -296,10 +298,12 @@ test('a superseded navigation does not mount over the one that replaced it', asy
                     landInvoice = () =>
                         resolve({ default: mounts.invoice as PageMount })
                 }),
+            layouts: [],
         },
         {
             pattern: '/',
             load: async () => ({ default: mounts.home as PageMount }),
+            layouts: [],
         },
     ])
     await r.hydrate()
@@ -355,7 +359,7 @@ async function chained(): Promise<{
         const file = parseAbide(source)
         const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
         modules[`${name}.ts`] = emitComponent(file, reads)
-        modules[`${name}.client.ts`] = emitClient(file, reads, true)
+        modules[`${name}.client.ts`] = emitClient(file, reads, 'once')
     }
     const dir = temporaryModule(modules)
     const mount = async (name: string): Promise<PageMount> =>
@@ -400,6 +404,7 @@ test('a page hydrates inside the layout the server painted — 35.1', async () =
         {
             pattern: '/settings',
             load: async () => ({ default: parts.settings }),
+            layouts: [],
         },
         {
             pattern: '/',
