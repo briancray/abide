@@ -82,6 +82,38 @@ export type Tracked = {
 
 export const TRACKING: { reader: Subscriber | null } = { reader: null }
 
+// ONE PLACE THE SHAPE IS WRITTEN. Four readers are registered in this graph and none of them is
+// a `Cell`: the tracked effect and the narrowed one in `watch.ts`, a history cursor, and the
+// waiter a `then` parks on a probe edge. Each spelled the same ten fields out for itself.
+//
+// THE FIELD ORDER IS THE PART NO TEST CATCHES. TypeScript refuses a literal that MISSES a field,
+// so the copies could not diverge in content — but it says nothing about the order they are
+// written in, and four orders is four hidden classes for one type. Every `reader.state` and
+// `reader.alive` on the mark walk is then a polymorphic load, and nothing about the output moves.
+//
+// `notify` IS ASSIGNED BY THE CALLER, which is a write to a field that is already there and so
+// leaves the shape alone — each of the four closes over its own reader, which a factory
+// parameter cannot do without a second frame on every wake.
+function unwired(): void {}
+
+export function newSubscriber(
+    sources: Tracked[],
+    adopter: Tracked | null,
+): Subscriber {
+    return {
+        sources,
+        probeSources: [],
+        cursor: 0,
+        alive: true,
+        state: CLEAN,
+        running: false,
+        isEffect: true,
+        isMirror: adopter !== null,
+        adopter,
+        notify: unwired,
+    }
+}
+
 // Removal by swap-with-last: order in a reader list is not observable, and a splice is
 // O(n) copying where this is one write. Exported because readers are registered OUTSIDE the
 // tracking protocol too — a cursor in `History.ts`, an entry's lifetime in `Keyed.ts` — and a
@@ -161,7 +193,10 @@ export function detachProbes(reader: Subscriber): void {
 // and the second call finds none.
 const SET_OVER_SCAN = 20
 
-function truncate(reader: Subscriber): void {
+// Exported because a tracked run's end is exactly this and nothing more: the TEST that there is
+// a tail is the caller's — two field loads, on the rare arm — and a named forwarder for it was a
+// second name for one call.
+export function truncate(reader: Subscriber): void {
     const sources = reader.sources
     const kept = reader.cursor
     const dropped = sources.length - kept
@@ -209,18 +244,34 @@ export function track(source: Tracked, reader: Subscriber): void {
     if (at < sources.length) truncate(reader)
     sources.push(source)
     reader.cursor = at + 1
-    // Appends happen only after a divergence, so this scan is off the common path. It
-    // is what stops a body reading one value twice from waking twice.
-    const readers = source.readers
-    for (let index = 0; index < readers.length; index += 1)
-        if (readers[index] === reader) return
-    readers.push(reader)
-}
-
-// The tail a run left behind. The TEST that there is one is the caller's — it is two
-// field loads, and this is the rare arm.
-export function endRun(reader: Subscriber): void {
-    truncate(reader)
+    // WHAT STOPS A BODY READING ONE VALUE TWICE FROM HOLDING TWO SUBSCRIPTIONS, asked of
+    // THIS READER'S sources rather than of the source's readers. The two answer the same
+    // question — `track` is the only thing that appends to either, and `truncate` drops from
+    // both in lockstep, so after it `sources[0..cursor)` IS the set this reader is
+    // subscribed to — and they cost differently: the kept prefix is as long as what this
+    // BODY reads (1-5), where `source.readers` is as long as the number of READERS on the
+    // value.
+    //
+    // SO THE SCAN WAS QUADRATIC IN THE ROW COUNT. A fresh reader is on this path, not only a
+    // diverging one: `Reactive`'s inlined stable arm tests `reader.sources[0] === cell`
+    // against an empty array, misses, and lands here. n rows each reading one shared value —
+    // `class:selected={selected() === item.id}`, the canonical shape — paid n²/2 pointer
+    // compares to mount. Measured under JSC, per reader: 446 ns at n=500 rising to 3,872 ns
+    // at n=8000, so mounting crossed a frame at n≈4,000. Asked this way it is ~60 ns FLAT and
+    // n=8000 goes 30.98 ms -> 0.45 ms. `mountingIsLinear` in `benchReactive.ts` is what holds the
+    // SLOPE (16 readers against 112, calibrated bar), `mount 50 readers on one value` holds the
+    // constant, and the subscription count in `reactive.test.ts` holds the dedup this replaced.
+    //
+    // THE THREE READERS REGISTERED OUTSIDE THE PROTOCOL are unaffected, and this asks nothing
+    // of them they were not already under: `History`'s cursor, `Keyed`'s lifetime mirror and
+    // the narrowed `watch(sources, effect)` each DECLARE their sources and push themselves
+    // onto those sources' readers, so the two agree by construction — and none of them
+    // tracks, which `truncate` already depends on. A cursor of 0 against a declared `sources`
+    // would have it drop the declared subscription on the first `track`, so a reader that
+    // both declares and tracks is already broken above this line.
+    for (let index = 0; index < at; index += 1)
+        if (sources[index] === source) return
+    source.readers.push(reader)
 }
 
 export function detach(reader: Subscriber): void {

@@ -31,6 +31,7 @@ import {
     type Retained,
     retained,
 } from './History.ts'
+import { isReactive } from './isReactive.ts'
 import { isThenable } from './isThenable.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import { NotLanded } from './NotLanded.ts'
@@ -41,12 +42,13 @@ import {
     DIRTY,
     detachProbes,
     dropProbeReader,
-    endRun,
+    newSubscriber,
     type Subscriber,
     TRACKING,
     type Tracked,
     track,
     trackProbe,
+    truncate,
     untracked,
 } from './tracking.ts'
 import { watchOver } from './watch.ts'
@@ -654,12 +656,9 @@ class Cell {
 // What a member's `this` is, and the one way from the value an app holds to its record.
 type Callable = { [CELL]: Cell }
 
-export function isReactive(value: unknown): value is Reactive<unknown> {
-    return (
-        typeof value === 'function' &&
-        (value as { [REACTIVE_BRAND]?: boolean })[REACTIVE_BRAND] === true
-    )
-}
+// 1.6's guard lives in a leaf of its own — an edge onto this module costs the whole graph, and
+// `bindElement` needs the brand and nothing else. Re-exported so every other caller is unchanged.
+export { isReactive }
 
 // THE DEFAULT IS THE REFERENCE, and `structural` is exported for an app to pass.
 //
@@ -1721,7 +1720,7 @@ function run(cell: Cell): void {
         produced = body(cell.args)
     } catch (thrown) {
         TRACKING.reader = previous
-        if (reader.cursor < reader.sources.length) endRun(reader)
+        if (reader.cursor < reader.sources.length) truncate(reader)
         cell.running = false
         if (thrown instanceof NotLanded) {
             cell.loading = true
@@ -1754,9 +1753,9 @@ function run(cell: Cell): void {
     TRACKING.reader = previous
     cell.aborted = false
     // A body that read FEWER values than last time leaves a tail nothing reads, and
-    // that is the only thing `endRun` has to do — so the test is here and the call is
-    // the rare arm.
-    if (reader.cursor < reader.sources.length) endRun(reader)
+    // that is the only thing the truncation has to do — so the test is here and the call
+    // is the rare arm.
+    if (reader.cursor < reader.sources.length) truncate(reader)
     cell.running = false
     // A VALUE THAT WAS ADOPTING AND IS NOT ANY MORE. Behind the `adoption` load so every
     // other recompute pays one field test rather than the brand read below it.
@@ -2389,39 +2388,29 @@ function settled(cell: Cell): Promise<unknown> {
         if (failure !== undefined) return Promise.reject(failure)
     }
     return new Promise((settle, fail) => {
-        const waiter: Subscriber = {
-            // THE ONE CELL IT WAITS ON, declared rather than tracked. It was registered
-            // outside the tracking protocol, so without this a `CHECK` mark arriving from
-            // further upstream would have nothing to resolve against.
-            sources: [cell],
-            probeSources: [],
-            cursor: 0,
-            alive: true,
-            state: CLEAN,
-            running: false,
-            isEffect: true,
-            isMirror: false,
-            adopter: null,
-            notify(): void {
-                // THE WAITER PULLS. A value built from a source that has just landed is marked and
-                // not yet re-run — nothing else reads it — so asking whether it is busy before
-                // pulling it answers from the run that aborted, and the await never settles.
-                if (cell.state !== CLEAN) resolve(cell)
-                if (busyNow(cell)) return
-                if (cell.servable) {
-                    waiter.alive = false
-                    dropProbeReader(cell, waiter)
-                    settle(heldValue(cell))
-                    return
-                }
-                if (cell.landed) return
-                const failure = failureOf(cell)
-                if (failure !== undefined) {
-                    waiter.alive = false
-                    dropProbeReader(cell, waiter)
-                    fail(failure)
-                }
-            },
+        // THE ONE CELL IT WAITS ON, declared rather than tracked. It was registered outside
+        // the tracking protocol, so without this a `CHECK` mark arriving from further
+        // upstream would have nothing to resolve against.
+        const waiter: Subscriber = newSubscriber([cell], null)
+        waiter.notify = (): void => {
+            // THE WAITER PULLS. A value built from a source that has just landed is marked and
+            // not yet re-run — nothing else reads it — so asking whether it is busy before
+            // pulling it answers from the run that aborted, and the await never settles.
+            if (cell.state !== CLEAN) resolve(cell)
+            if (busyNow(cell)) return
+            if (cell.servable) {
+                waiter.alive = false
+                dropProbeReader(cell, waiter)
+                settle(heldValue(cell))
+                return
+            }
+            if (cell.landed) return
+            const failure = failureOf(cell)
+            if (failure !== undefined) {
+                waiter.alive = false
+                dropProbeReader(cell, waiter)
+                fail(failure)
+            }
         }
         // ON THE PROBE EDGE, because what it waits for is a probe: every way to settled moves
         // `busy` or `ready` here or upstream, and `markProbes` carries an upstream move down
@@ -2487,9 +2476,9 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
 // change that really happened. So nothing in the graph's state moves; the invalidated value OWES
 // A RELOAD, the values built from it OWE A LOOK ABOVE, and none of them is directly servable, so
 // the read that reaches any of them goes a frame in and settles the debt first (7.12, 7.13).
-export const OWES_NOTHING: number = 0
-export const OWES_ABOVE: number = 1
-export const OWES_RELOAD: number = 2
+const OWES_NOTHING: number = 0
+const OWES_ABOVE: number = 1
+const OWES_RELOAD: number = 2
 
 // 11.52 IS EVERY TRIGGER AND EVERY ADOPTER, and the chain is walked rather than recursed
 // into: the reach into `adoption.source` sat PAST the "no producer" return, so an adoption made by
@@ -3181,61 +3170,63 @@ const MEMBERS = {
 // stand-in with 14 no-op members read 2.33 ns -> 2.88 ns on the same path, so the trade
 // looked real until the same measurement was taken on this file. The stand-in's members
 // were small enough to keep the instance out of the slow mode the real ones put it in.
-const MEMBER_PROTOTYPE = Object.assign(
-    Object.create(Function.prototype) as Record<PropertyKey, unknown>,
-    MEMBERS,
-)
-Object.defineProperty(MEMBER_PROTOTYPE, REACTIVE_BRAND, { value: true })
+//
+// THE BRAND IS PUT ON HERE RATHER THAN AT EACH OF THE FOUR. Every prototype below is the same
+// three lines with a different override record, and the one of them that mattered was the
+// `defineProperty`: a fourth prototype added without it is a value `isReactive` answers FALSE
+// for, which every guard in the design reads first (1.6) — so the slot would hand a `Reactive`
+// to `String()` and the template would render `[object Object]`, with nothing throwing.
+function brandedPrototype(
+    overrides?: Record<PropertyKey, unknown>,
+): Record<PropertyKey, unknown> {
+    const prototype = Object.assign(
+        Object.create(Function.prototype) as Record<PropertyKey, unknown>,
+        MEMBERS,
+        overrides,
+    )
+    Object.defineProperty(prototype, REACTIVE_BRAND, { value: true })
+    return prototype
+}
+
+const MEMBER_PROTOTYPE = brandedPrototype()
 
 // THE SAME MEMBERS WITH A STREAM'S WRITES — see `acceptIntoStream` for why they are not a branch.
 // A value adopting a stream is moved onto this one while it forwards and back when it stops,
 // which is a prototype change on one object at the moment an adoption starts or ends.
-const STREAM_PROTOTYPE = Object.assign(
-    Object.create(Function.prototype) as Record<PropertyKey, unknown>,
-    MEMBERS,
-    {
-        set(this: Callable, value: unknown): unknown {
-            return writeStream(this[CELL], value, true)
-        },
-        publish(this: Callable, value: unknown): unknown {
-            const cell = this[CELL]
-            const answer = writeStream(cell, value, false)
-            return answer === undefined ? cell.ordinal : answer
-        },
+const STREAM_PROTOTYPE = brandedPrototype({
+    set(this: Callable, value: unknown): unknown {
+        return writeStream(this[CELL], value, true)
     },
-)
-Object.defineProperty(STREAM_PROTOTYPE, REACTIVE_BRAND, { value: true })
+    publish(this: Callable, value: unknown): unknown {
+        const cell = this[CELL]
+        const answer = writeStream(cell, value, false)
+        return answer === undefined ? cell.ordinal : answer
+    },
+})
 
 // THE SAME MEMBERS WITH AN ADOPTING VALUE'S WRITES, which reach what it adopts (11.60) — through that
 // value's own members, so a stream's writes stay a stream's and an adoption of an adoption goes on
 // down — an adopting source is on this prototype for exactly as long as `adoption` is set. A `Reactive` given to `set` is adopted HERE instead (11.62), or a value re-pointed at a new
 // source would hand that source to the one it is leaving.
-const ADOPTING_PROTOTYPE = Object.assign(
-    Object.create(Function.prototype) as Record<PropertyKey, unknown>,
-    MEMBERS,
-    {
-        set(this: Callable, value: unknown): unknown {
-            const adoption = this[CELL].adoption
-            if (adoption === null || isReactive(value))
-                return MEMBERS.set.call(this, value)
-            return (adoption.source.callable as Reactive<unknown>).set(value)
-        },
-        publish(this: Callable, value: unknown): unknown {
-            const adoption = this[CELL].adoption
-            if (adoption === null || isReactive(value))
-                return MEMBERS.publish.call(this, value)
-            return (adoption.source.callable as Reactive<unknown>).publish(
-                value,
-            )
-        },
-        patch(this: Callable, mutate: (value: unknown) => void): void {
-            const adoption = this[CELL].adoption
-            if (adoption === null) patchCell(this[CELL], mutate)
-            else (adoption.source.callable as Reactive<unknown>).patch(mutate)
-        },
+const ADOPTING_PROTOTYPE = brandedPrototype({
+    set(this: Callable, value: unknown): unknown {
+        const adoption = this[CELL].adoption
+        if (adoption === null || isReactive(value))
+            return MEMBERS.set.call(this, value)
+        return (adoption.source.callable as Reactive<unknown>).set(value)
     },
-)
-Object.defineProperty(ADOPTING_PROTOTYPE, REACTIVE_BRAND, { value: true })
+    publish(this: Callable, value: unknown): unknown {
+        const adoption = this[CELL].adoption
+        if (adoption === null || isReactive(value))
+            return MEMBERS.publish.call(this, value)
+        return (adoption.source.callable as Reactive<unknown>).publish(value)
+    },
+    patch(this: Callable, mutate: (value: unknown) => void): void {
+        const adoption = this[CELL].adoption
+        if (adoption === null) patchCell(this[CELL], mutate)
+        else (adoption.source.callable as Reactive<unknown>).patch(mutate)
+    },
+})
 
 // THE SAME MEMBERS WITH THE COMMON WRITE SPELLED OUT, and a prototype rather than a branch
 // for the reason `acceptIntoStream` already gives: a test in the shared `set` that a value
@@ -3251,50 +3242,44 @@ Object.defineProperty(ADOPTING_PROTOTYPE, REACTIVE_BRAND, { value: true })
 // field `serve` writes is already at the value it writes. The three state tests are the
 // `moved` computation itself, read here to prove the rest is dead rather than to pick a
 // branch, and anything they refuse falls through to `MEMBERS.set`, which is unchanged.
-const SIMPLE_PROTOTYPE = Object.assign(
-    Object.create(Function.prototype) as Record<PropertyKey, unknown>,
-    MEMBERS,
-    {
-        set(this: Callable, value: unknown): unknown {
-            const cell = this[CELL]
-            if (
-                cell.servable &&
-                !cell.loading &&
-                cell.failure === undefined &&
-                (value === null ||
-                    (typeof value !== 'object' &&
-                        typeof value !== 'function') ||
-                    typeof (value as PromiseLike<unknown>).then !== 'function')
-            ) {
-                // INSIDE THE ARM, so the fallback below bumps it once rather than twice.
-                // A generation is only ever compared against a snapshot a load took, so
-                // two bumps ahead of the snapshot discard exactly what one does — but the
-                // field is the sort of thing a later reader comes to reason about, and a
-                // write that counts as two is a thing to have to un-learn.
-                cell.generation += 1
-                // 5.2, and `simple` is what makes `Object.is` the whole gate.
-                if (Object.is(value, cell.value)) {
-                    // The collapse arm's one lasting effect: `produce` restores `direct`
-                    // here, because a write can land on a value a mark walk has reached.
-                    cell.direct = cell.state === CLEAN
-                    return undefined
-                }
-                cell.value = value
-                // 6.18: an `undefined` is served and moves no ordinal.
-                if (value !== undefined) cell.ordinal += 1
-                // `setDirect`, with `plain` known true by `simple`.
+const SIMPLE_PROTOTYPE = brandedPrototype({
+    set(this: Callable, value: unknown): unknown {
+        const cell = this[CELL]
+        if (
+            cell.servable &&
+            !cell.loading &&
+            cell.failure === undefined &&
+            (value === null ||
+                (typeof value !== 'object' && typeof value !== 'function') ||
+                typeof (value as PromiseLike<unknown>).then !== 'function')
+        ) {
+            // INSIDE THE ARM, so the fallback below bumps it once rather than twice.
+            // A generation is only ever compared against a snapshot a load took, so
+            // two bumps ahead of the snapshot discard exactly what one does — but the
+            // field is the sort of thing a later reader comes to reason about, and a
+            // write that counts as two is a thing to have to un-learn.
+            cell.generation += 1
+            // 5.2, and `simple` is what makes `Object.is` the whole gate.
+            if (Object.is(value, cell.value)) {
+                // The collapse arm's one lasting effect: `produce` restores `direct`
+                // here, because a write can land on a value a mark walk has reached.
                 cell.direct = cell.state === CLEAN
-                if (cell.readers.length !== 0) markReaders(cell, DIRTY)
-                // `cascade`'s tail. A write made from inside an effect appends to the drain
-                // already walking rather than opening a second one.
-                if (!draining && pendingCount !== 0) schedule()
                 return undefined
             }
-            return MEMBERS.set.call(this, value)
-        },
+            cell.value = value
+            // 6.18: an `undefined` is served and moves no ordinal.
+            if (value !== undefined) cell.ordinal += 1
+            // `setDirect`, with `plain` known true by `simple`.
+            cell.direct = cell.state === CLEAN
+            if (cell.readers.length !== 0) markReaders(cell, DIRTY)
+            // `cascade`'s tail. A write made from inside an effect appends to the drain
+            // already walking rather than opening a second one.
+            if (!draining && pendingCount !== 0) schedule()
+            return undefined
+        }
+        return MEMBERS.set.call(this, value)
     },
-)
-Object.defineProperty(SIMPLE_PROTOTYPE, REACTIVE_BRAND, { value: true })
+})
 
 export function createReactive<
     Stored,

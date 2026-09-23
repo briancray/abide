@@ -683,6 +683,35 @@ test('a body that reads one value twice keeps it when a later run reads it once'
     expect(`shown: ${shown()}`).toBe('shown: BOB')
 })
 
+// A SLOT IS NOT A SUBSCRIPTION, from the append side. `sources` is POSITIONAL — one slot
+// per read — and `source.readers` is a SET, so the dedup on append is the only thing
+// keeping a body that reads one value three times from holding three subscriptions of it.
+//
+// IT WAS UNGATED, and that is why this is here: with the dedup deleted outright, all 208
+// tests in this file passed. Nothing about the OUTPUT moves — the propagation walk marks a
+// reader already marked and skips it, so the wake count is 1 either way and the value is
+// right either way. What moves is the work: every duplicate is an entry the mark walk loads
+// and tests on every write, and one `dropReader` per duplicate at teardown.
+//
+// THE REVERT IS STRUCTURAL — it is the reader-side scan at the foot of `track`, and the
+// broken arm is dropping it so the append is unconditional. Run: this reports `held: 3`
+// against the `held: 1` below. Dropping only the LOOP and keeping the push reports the same
+// 3, because the push is what the loop is guarding.
+test('a body that reads one value three times holds one subscription of it', () => {
+    const value = reactive(1)
+    // A guard over the same value it then reads, twice over — the most ordinary shape there
+    // is, and the one a row body written against a shared value has.
+    const stop = watch(() => {
+        value()
+        value()
+        value()
+    })
+    flushSync()
+    const held = cellOf<{ readers: unknown[] }>(value).readers.length
+    stop()
+    expect(`held: ${held}`).toBe('held: 1')
+})
+
 test('a body that reorders its sources keeps every one of them subscribed', () => {
     const first = reactive('a')
     const second = reactive('b')

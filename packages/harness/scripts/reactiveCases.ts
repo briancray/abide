@@ -9,7 +9,7 @@
 // `harness/measure` has no abide in its graph at all — the property `lanes.test.ts`
 // walks by resolution, and the reason the harness is a package.
 
-import { flushSync, reactive, structural } from 'abide'
+import { flushSync, reactive, structural, watch } from 'abide'
 import { carelessSignal, signal } from 'harness/measure/vanilla'
 
 // Defeats dead-code elimination without allocating: every read writes here.
@@ -1090,6 +1090,99 @@ function equalWriteAgainstCareless(width: number, fresh: boolean): Case {
     }
 }
 
+// THE SUBSCRIBE PATH, WHICH NOTHING HERE PRICED. Every fan-out case builds its readers in
+// SETUP and times the write afterwards, so the cost of a reader ARRIVING on a value was
+// invisible to the whole bench — and it was quadratic: `track` deduped by scanning
+// `source.readers`, whose length is the number of readers already on the value, so mounting
+// n of them was n²/2 pointer compares. Per reader under JSC: 446 ns at n=500 rising to
+// 3,872 ns at n=8000, which put a 30.98 ms mount on the click that opens a long list.
+// Deduping from the reader's own `sources` prefix instead — as long as what this BODY reads
+// rather than how many readers the VALUE has — is 0.45 ms at the same width.
+//
+// THE OP IS A MOUNT AND A TEARDOWN, both arms, so neither is left holding what the other
+// dropped. FIFTY readers, and the width is chosen by the batcher rather than by the claim: at
+// 200 the op is 26.7 µs, which clears the clock bar at n=1, and a sample of one op under a
+// frame is what `ratio()` refuses — so the row came out `underOneFrame` and was a figure
+// rather than a claim. At 50 the batcher takes n=4 and the ratio resolves.
+//
+// WHAT THE ROW IS WORTH, run both ways: 1.67x with the reader-side dedup and 2.21x with it
+// out, against an A/A floor of 3-7%. What it distinguishes is a CONSTANT the subscribe path
+// grows, because it is abide against the hand-written arm at ONE width — a constant is exactly
+// what a same-structure ratio divides out, so this row and `mountingIsLinear` in
+// `benchReactive.ts` cover different regressions and neither subsumes the other.
+//
+// THE SLOPE IS `mountingIsLinear`'S, at 16 against 112 with a calibrated bar. It is worth
+// reading that function's header before touching either: a first attempt at it compared against
+// what a COMPLEXITY CLASS predicts (4x linear, 16x quadratic) and reported the mechanism out as
+// holding, because at any priceable width `watch` construction dominates and the n² term is a
+// minority of the op. The bar has to be set by what the fixed mechanism measures, which is what
+// 6.2 does.
+//
+// THE PER-READER FIGURES in `track`'s own comment are the third record and the widest — 446 ns
+// rising to 3,872 ns against ~60 ns flat, measured directly at n=500 through n=8000, where
+// neither of the two rows reaches past 112. Those are a measurement to re-run rather than a
+// gate; the gate that runs in `bun test` is the dedup's subscription count in `reactive.test.ts`.
+
+function mountReaders(width: number): Case {
+    return {
+        name: `mount ${width} readers on one value`,
+        distinguishes:
+            'the subscribe path, which every fan-out case builds in setup and never times — a dedup scanned per arriving reader against one scanned per value the body reads, which is the difference between quadratic in the reader count and flat',
+        vanilla: (): void => {
+            const held = signal(0)
+            const stops: (() => void)[] = []
+            for (let index = 0; index < width; index += 1) {
+                stops.push(
+                    held.subscribe(() => {
+                        sink = held.read()
+                    }),
+                )
+                sink = held.read()
+            }
+            for (const stop of stops) stop()
+        },
+        abide: (): void => {
+            const source = reactive(0)
+            const stops: (() => void)[] = []
+            for (let index = 0; index < width; index += 1)
+                stops.push(
+                    watch(() => {
+                        sink = source()
+                    }),
+                )
+            for (const stop of stops) stop()
+        },
+        // BOTH ARMS HOLD THE SAME FAN while they are up, which is what makes the timings
+        // comparable: an arm that subscribed fewer readers would be a cheaper different job.
+        work: () => {
+            let handRuns = 0
+            const held = signal(0)
+            const handStops: (() => void)[] = []
+            for (let index = 0; index < width; index += 1) {
+                handStops.push(held.subscribe(() => {}))
+                handRuns += 1
+            }
+            let abideRuns = 0
+            const source = reactive(0)
+            const abideStops: (() => void)[] = []
+            for (let index = 0; index < width; index += 1)
+                abideStops.push(
+                    watch(() => {
+                        source()
+                        abideRuns += 1
+                    }),
+                )
+            flushSync()
+            for (const stop of handStops) stop()
+            for (const stop of abideStops) stop()
+            return {
+                vanilla: { subscribed: handRuns },
+                abide: { subscribed: abideRuns },
+            }
+        },
+    }
+}
+
 export const reactiveCases = (): Case[] => [
     constructValue(),
     constructDerived(),
@@ -1103,6 +1196,7 @@ export const reactiveCases = (): Case[] => [
     logAppendAndRead(),
     publishIntoCappedRing(),
     cursorBurst(),
+    mountReaders(50),
     fanOut(10),
     fanOut(100),
     // A THOUSAND, because the two earlier widths only show the slope and this is where

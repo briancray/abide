@@ -14,7 +14,12 @@
 // what a cursor reads is six fields, and naming them is what keeps the cell's internals
 // out of a second file.
 
-import { CLEAN, dropReader, type Subscriber, type Tracked } from './tracking.ts'
+import {
+    dropReader,
+    newSubscriber,
+    type Subscriber,
+    type Tracked,
+} from './tracking.ts'
 
 // RULEBOOK 6.3: the unit is `Produced`. Both faces, because a consumer that wants what
 // is already held should not have to `await` for it — the sync face is the retained
@@ -84,32 +89,20 @@ class Cursor implements AsyncIterator<unknown> {
         // called as a method on the SUBSCRIBER, so it cannot be the cursor's own method —
         // and widening `Subscriber` with a back-edge would put a field on the shape every
         // reader in the graph carries for the sake of the few that are cursors.
-        this.reader = {
-            // Registered outside the tracking protocol, so the source it waits on is
-            // declared rather than discovered — see the same shape in `Reactive`'s `settled`.
-            sources: [source as unknown as Tracked],
-            probeSources: [],
-            cursor: 0,
-            alive: true,
-            state: CLEAN,
-            running: false,
-            isEffect: true,
-            isMirror: false,
-            adopter: null,
-            // One production per waiting turn, in the order they were asked for: a burst that
-            // lands three productions on a consumer holding two turns answers both.
-            notify: (): void => {
-                const waiting = this.waiting
-                while (waiting.length !== 0) {
-                    const next = this.take()
-                    if (next === null) return
-                    ;(
-                        waiting.shift() as (
-                            result: IteratorResult<unknown>,
-                        ) => void
-                    )(next)
-                }
-            },
+        // Registered outside the tracking protocol, so the source it waits on is declared
+        // rather than discovered — see the same shape in `Reactive`'s `settled`.
+        this.reader = newSubscriber([source as unknown as Tracked], null)
+        // One production per waiting turn, in the order they were asked for: a burst that
+        // lands three productions on a consumer holding two turns answers both.
+        this.reader.notify = (): void => {
+            const waiting = this.waiting
+            while (waiting.length !== 0) {
+                const next = this.take()
+                if (next === null) return
+                ;(waiting.shift() as (result: IteratorResult<unknown>) => void)(
+                    next,
+                )
+            }
         }
         source.readers.push(this.reader)
     }

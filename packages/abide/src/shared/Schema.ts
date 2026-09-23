@@ -12,6 +12,7 @@
 // Together they are what lets 19.4 be enforced at all — see `runSchema`.
 
 import { note } from './note.ts'
+import { isThenable } from './reactive/isThenable.ts'
 import { untracked } from './reactive/tracking.ts'
 
 // The Standard Schema contract, declared here rather than depended on: it is an interface
@@ -176,7 +177,7 @@ function runStandard(
                 `The schema from "${standard.vendor}" answered ${result === null ? 'null' : typeof result}. A Standard Schema must answer a result object.`,
             ),
         )
-    if (typeof (result as PromiseLike<unknown>).then === 'function')
+    if (isThenable(result))
         throw new Error(
             `The schema from "${standard.vendor}" answered asynchronously. A Schema must be synchronous (RULEBOOK 19.13): validate what is already settled, or make the write a load by passing a promise.`,
         )

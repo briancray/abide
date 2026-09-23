@@ -28,9 +28,7 @@ import {
 } from './Reactive.ts'
 import { share } from './share.ts'
 
-export { canonicalKey } from './canonicalKey.ts'
 export type { History } from './History.ts'
-export { isThenable } from './isThenable.ts'
 export { isKeyed, type Keyed } from './Keyed.ts'
 export { NotLanded } from './NotLanded.ts'
 export {
