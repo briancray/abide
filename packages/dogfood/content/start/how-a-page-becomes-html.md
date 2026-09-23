@@ -20,7 +20,7 @@ fill the places they were read.
 | 2 | the route resolves | the `page.abide` at that path, inside its layouts |
 | 3 | the render starts | every load the page reads, all of them at once |
 | 4 | the first bytes leave | the head, then the markup as far as it goes |
-| 5 | the values land | each one fills the hole it left |
+| 5 | the document closes | as soon as the walk is done |
 | 6 | the browser takes over | the same setup runs again, against the nodes already there |
 | 7 | the next navigation | the browser renders it, and shared layouts are not rebuilt |
 
@@ -99,7 +99,8 @@ loads on a page are in flight together rather than in the order the markup happe
 them.
 
 The total time is the slowest one, not the sum — and the first byte does not wait for any of
-them.
+them. The markup waits one turn, so a load that answers without waiting on anything is painted
+rather than left as a hole.
 
 ## 4. The first bytes leave
 
@@ -133,35 +134,18 @@ that is not there yet is a hole in it rather than a reason to hold it back.
 Read on: [Streaming HTML](../pages/send-the-page-before-the-data-lands.md) ·
 [Loading states](../values/show-a-value-that-isnt-there-yet.md)
 
-## 5. The values land
+## 5. The document closes
 
-A document is a one-way stream, so a value cannot be written back at the position it was read
-from. What goes out at that position is an **address**, and when the row lands the fill is
-appended wherever the stream has got to and routed back to it:
+The document closes as soon as the walk is done. A value still in flight at that point is left
+as a hole, and nothing is written after the markup to fill it. The browser's own call for that
+value fills the hole once the page has taken over, and the buffer below answers that call.
 
-```
-  the walk               the document, in the order it goes out
-  ------------------     --------------------------------------
-  head is known      ->  <head> manifest . bootstrap </head>
-                         <body>
-  read .number       ->  <h1>Invoice [3]</h1>                   <-+
-  read .total .dueOn ->  <p>[4] due [5]</p>                     <-|
-  the walk goes on   ->  <footer>...</footer>                     |
-                         ...                                      |
-  the row lands      ->  [3]=42  [4]=$120.00  [5]=Mar 3 -----------+
-  document closes    ->  </body></html>
-```
+Nothing is written after the markup to fill a hole. The one script the page carries is the
+early-call script in the head, and it starts requests rather than writing values.
 
-The walk never pauses at a read, nothing is buffered waiting for the row, and nothing is
-re-sent. Appending the fill at the tail rather than at the hole is also what frees a value from
-arriving somewhere it would be illegal — inside a `<title>`, between two `<tr>`s.
-
-**The document closes when the walk is done, not when the values are.** A row still in flight at
-that point is never filled at all, and the browser's own request picks it up instead.
-
-**The cost is a client with no script.** Nothing filled after the first flush reaches it, because
-the script does the filling. A page that must work without one is a page whose values have to be
-there before the first flush, which is the server's business rather than the template's.
+**The cost is a client with no script.** A hole stays empty for it, because the script does the
+filling. A page that must work without one is a page whose values have to be there when the walk
+passes them, which is the server's business rather than the template's.
 
 ## 6. The browser takes over
 
@@ -170,16 +154,19 @@ document — the client re-runs the same setup the server ran: every `<script>`,
 `reactive` call, every body, again.
 
 That sounds like paying twice, and for the loads it is not. `reactive(() => getInvoice(…))` runs
-a second time in the browser and makes the same call — one the browser already issued before the
-bundle loaded. The render **buffered what it fetched**, so that call is answered from the buffer
-rather than from the database. One code path on both sides.
+a second time in the browser and makes the same call — one the page **already started** while it
+was still arriving. Once setup has run, the render writes one small script into the head, and it
+sends each call the page made as its own request. The bundle is still downloading at that point,
+so by the time it runs, the answers are usually there, and hydration takes them without asking
+again.
 
-That saves the **handler's work**, not the request — the bootstrap issues real fetches, and the
-buffer answers instead of the database. They go out of the head ahead of the bundle,
-so on a first visit the bundle load covers them and they cost nothing. On a repeat visit the bundle
-is cached and arrives at once, so the fetches are exposed — which is why a handler that answers
-`public, max-age` is worth declaring: the second visit is served from the browser cache and costs
-nothing again.
+The render **buffered what it fetched**, so each of those requests is answered from the buffer
+rather than from the database. The handler runs once. The request still shows in the network
+panel like any other, with its address, its status and a `server-timing` entry saying it was
+answered from the render's run and how long the handler took.
+
+That saves the **handler's work** and a round trip after the bundle. On a slow connection the
+bundle is the long wait, and the calls ride inside it rather than after it.
 
 Binding happens against the nodes that are already there. A marker whose content does not match
 rebuilds its own block, not the page.

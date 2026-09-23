@@ -50,7 +50,9 @@ beforeAll(async () => {
     app = temporaryModule({
         'ui/app.html': SHELL,
         'ui/pages/page.abide': HOME,
-        'ui/home.css': '.fixture-sheet-was-imported { color: red }',
+        // 36.15 — a URL naming a public file, left as its address rather than resolved on disk.
+        'ui/home.css':
+            ".fixture-sheet-was-imported { color: red }\n.fixture-uses-public { background: url('/robots.txt') }",
         // 38.20 — IN THE SOURCE TREE AND NOWHERE ELSE. Nothing copies this anywhere, because
         // nothing builds: an address answering it is the clause and a stale copy cannot pass it.
         'ui/public/robots.txt': 'User-agent: *\nAllow: /\n',
@@ -160,7 +162,30 @@ test('the client is built into memory and answered under the bundle address — 
 
     const sheet = await Bun.fetch(`${base}/__abide/client/entry.css`)
     expect(sheet.status).toBe(200)
-    expect(await sheet.text()).toContain('.fixture-sheet-was-imported')
+    const styles = await sheet.text()
+    expect(styles).toContain('.fixture-sheet-was-imported')
+    // 36.15. THE REVERT: drop `external` from `bundleInMemory` and the bundle fails, so there is
+    // no stylesheet to read at all.
+    expect(styles).toMatch(/url\("?\/robots\.txt"?\)/)
+})
+
+// 38.29 IN DEV TOO, where the manifest is keyed off the plugin's namespace rather than a path on
+// disk — a key that misses reads as a route with nothing to preload, and the page still hydrates.
+// THE REVERT: drop the namespace strip from `chunksByModule` and no chunk carries the page.
+test('the document preloads the chunk its own page is in — 38.29', async () => {
+    const html = await (await Bun.fetch(`${base}/`)).text()
+    const head = html.slice(0, html.indexOf('<body>'))
+    const preloaded: string[] = []
+    for (const match of head.matchAll(
+        /<link rel="modulepreload" href="\/__abide\/client\/([^"]+)">/g,
+    ))
+        preloaded.push(match[1] as string)
+    const bodies: string[] = []
+    for (const chunk of preloaded)
+        bodies.push(
+            await (await Bun.fetch(`${base}/__abide/client/${chunk}`)).text(),
+        )
+    expect(bodies.some((body) => body.includes('id="home"'))).toBe(true)
 })
 
 // THE REVERT: hand `Bun.build` an `outdir` and this reports the tree it left behind. Nothing a

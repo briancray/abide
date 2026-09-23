@@ -14,9 +14,6 @@ import { countExportedNames } from './countExportedNames.ts'
 import { countLines } from './countLines.ts'
 import { type Case, reactiveCases } from './reactiveCases.ts'
 
-// Defeats dead-code elimination without allocating — the same sink `reactiveCases.ts` keeps.
-let sink: unknown
-
 function report(measured: Batched, work: Case['work']): void {
     const counted = work()
     const vanillaSample = {
@@ -215,8 +212,9 @@ function mountingIsLinear(): void {
         const stops: (() => void)[] = []
         for (let index = 0; index < width; index += 1)
             stops.push(
+                // A tracked read is a side effect, so there is nothing here to eliminate.
                 watch(() => {
-                    sink = source()
+                    source()
                 }),
             )
         for (const stop of stops) stop()

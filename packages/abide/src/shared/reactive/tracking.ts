@@ -49,12 +49,12 @@ export type Subscriber = {
     state: number
     running: boolean
     isEffect: boolean
-    // A MIRROR IS NOT AN EFFECT AND MUST NOT BE BATCHED WITH ONE. An adoption's mirror
-    // moves a VALUE — it is the outer value's production, arriving from the inner one —
-    // so deferring it to the end of the turn would leave a read between the two answering
-    // with what the outer held before, and reads pulling correctly is the whole reason the
-    // drain can be deferred at all. It runs in the mark walk, where no body runs and the
-    // production it mints marks on through the same walk.
+    // A MIRROR RUNS IN THE MARK WALK, NOT THE DRAIN, and must not be batched with an effect. An
+    // adoption's mirror moves a VALUE — it is the outer value's production, arriving from the
+    // inner one — so deferring it to the end of the turn would leave a read between the two
+    // answering with what the outer held before, and reads pulling correctly is the whole reason
+    // the drain can be deferred at all. A keyed entry's lifetime is the one mirror with no
+    // adopter: it runs in the walk so its clock read is the production's own moment.
     isMirror: boolean
     // THE VALUE AN ADOPTION'S MIRROR MIRRORS INTO, and `null` on every other reader. A probe
     // move on the adopted value mints nothing, so it never reaches the mirror as a value —
@@ -82,23 +82,24 @@ export type Tracked = {
 
 export const TRACKING: { reader: Subscriber | null } = { reader: null }
 
-// ONE PLACE THE SHAPE IS WRITTEN. Four readers are registered in this graph and none of them is
-// a `Cell`: the tracked effect and the narrowed one in `watch.ts`, a history cursor, and the
-// waiter a `then` parks on a probe edge. Each spelled the same ten fields out for itself.
+// ONE PLACE THE SHAPE IS WRITTEN for every reader in this graph that is not a `Cell`: the tracked
+// effect and the narrowed one in `watch.ts`, a history cursor, the waiter a `then` parks on a probe
+// edge, and a keyed entry's lifetime mirror.
 //
 // THE FIELD ORDER IS THE PART NO TEST CATCHES. TypeScript refuses a literal that MISSES a field,
-// so the copies could not diverge in content — but it says nothing about the order they are
-// written in, and four orders is four hidden classes for one type. Every `reader.state` and
-// `reader.alive` on the mark walk is then a polymorphic load, and nothing about the output moves.
+// so copies could not diverge in content — but it says nothing about the order they are written
+// in, and each order is its own hidden class for one type. Every `reader.state` and `reader.alive`
+// on the mark walk is then a polymorphic load, and nothing about the output moves.
 //
 // `notify` IS ASSIGNED BY THE CALLER, which is a write to a field that is already there and so
-// leaves the shape alone — each of the four closes over its own reader, which a factory
-// parameter cannot do without a second frame on every wake.
+// leaves the shape alone — each reader's closes over the reader itself, which a factory parameter
+// cannot do without a second frame on every wake.
 function unwired(): void {}
 
 export function newSubscriber(
     sources: Tracked[],
     adopter: Tracked | null,
+    isMirror: boolean = adopter !== null,
 ): Subscriber {
     return {
         sources,
@@ -108,7 +109,7 @@ export function newSubscriber(
         state: CLEAN,
         running: false,
         isEffect: true,
-        isMirror: adopter !== null,
+        isMirror,
         adopter,
         notify: unwired,
     }

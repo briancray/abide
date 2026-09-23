@@ -1,15 +1,22 @@
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
-import { dirname, relative as relativePath } from 'node:path' // bun exposes no path helpers of its own
+import { dirname, posix, relative as relativePath } from 'node:path' // bun exposes no path helpers of its own
 
-import { CLIENT_ENTRY } from '#server/CLIENT_BUILD.ts'
+import type { Mount } from '#server/answerRpc.ts'
+import {
+    CLIENT_ADDRESS,
+    CLIENT_ENTRY,
+    WIRE_DIRECTORY,
+} from '#server/CLIENT_BUILD.ts'
 // The page's address from its path, read off `routePattern`'s own rule so the compiler and
 // the routers cannot disagree about what a directory is called.
 import { routeOf } from '#shared/routePattern.ts'
+import { defaultProject } from './defaultProject.ts'
 import { emitClient } from './emitClient.ts'
 import { emitComponent } from './emitComponent.ts'
+import { handlersUnder } from './handlersUnder.ts'
 import { invokedComponents } from './invokedComponents.ts'
 import { type AbideFile, parseAbide } from './parseAbide.ts'
-import { ROUTING_SPECIFIER } from './SPECIFIERS.ts'
+import { ROUTING_SPECIFIER, WIRE_SPECIFIER } from './SPECIFIERS.ts'
 import { TypeSession } from './TypeSession.ts'
 
 // AN APP'S `.abide` SOURCES, COMPILED — every module the output tree holds, keyed by where it goes
@@ -34,7 +41,8 @@ export type AppRoute = {
 
 export type CompiledApp = {
     // Module text by path below the output directory: `ui/pages/page.ts`, its `.client.ts`, and
-    // the three the build writes rather than an author (`routes.ts`, `server.ts`, `entry.ts`).
+    // what the build writes rather than an author (`routes.ts`, `server.ts`, `entry.ts`, `rpc.ts`
+    // and a wrapper per handler module under `WIRE_DIRECTORY`).
     modules: Map<string, string>
     routes: AppRoute[]
     // How many `.abide` files were read, which is what the commands report.
@@ -50,11 +58,14 @@ export async function compileApp(root: string): Promise<CompiledApp> {
     if (sources.length === 0) return { modules, routes, sources: 0 }
 
     // One session for the whole build: opening it spawns the checker, and the cost is paid once
-    // rather than per file. Where no tsconfig is found the build still runs and every name reads
-    // as written — 19.12 rather than a refusal.
-    const tsconfig = findTsconfig(root)
-    const session =
-        tsconfig === undefined ? undefined : await TypeSession.open(tsconfig)
+    // rather than per file. Where the app has no tsconfig it is typed against a default one
+    // (38.31), so every app is read by the same compiler.
+    const found = findTsconfig(root)
+    const project =
+        found === undefined
+            ? await defaultProject(root)
+            : { tsconfig: found, remove: async (): Promise<void> => {} }
+    const session = await TypeSession.open(project.tsconfig)
     try {
         // THE READS OVERLAP, THE PARSE DOES NOT. Nothing a source is read for depends on
         // another, and this runs again on every `abide dev` save — so the whole tree is asked
@@ -82,7 +93,7 @@ export async function compileApp(root: string): Promise<CompiledApp> {
         // ONE SNAPSHOT FOR THE WHOLE BUILD. Asking file by file costs 19.7 ms each against 0.8 ms
         // sharing one, because what is expensive is adding a file to the project's root set
         // rather than asking about it — and a fresh build adds every file it has.
-        const reads = await session?.readsFor(parsed)
+        const reads = await session.readsFor(parsed)
 
         // 32.18 — WHICH FILES ARE INVOKED AS COMPONENTS. A caller's client module imports its
         // child's, so a child with nothing to hydrate still needs one to exist (the no-op below),
@@ -122,7 +133,12 @@ export async function compileApp(root: string): Promise<CompiledApp> {
             modules.set(
                 relative.replace(/\.abide$/, '.ts'),
                 componentPaths(
-                    emitComponent(entry.file, fileReads),
+                    // 41.20 — a page and a layout are built a level at a time by `render`.
+                    emitComponent(
+                        entry.file,
+                        fileReads,
+                        isPage(relative) || isLayout(relative),
+                    ),
                     root,
                     from,
                     compiled,
@@ -167,12 +183,19 @@ export async function compileApp(root: string): Promise<CompiledApp> {
         if (routes.length > 0) {
             modules.set('routes.ts', clientTable(routes))
             modules.set('server.ts', serverTable(routes))
-            // The entry's SOURCE carries the name the bundle is written under, which is what
-            // makes `<out>/client/entry.js` the address the shell writes (38.23).
+            // The entry's SOURCE carries the name the bundle is written under — `entry-<hash>.js`
+            // from a build and `entry.js` in dev — and its key in the manifest (38.23, 38.5).
             modules.set(`${CLIENT_ENTRY}.ts`, ENTRY_MODULE)
+            // 16.2 AND 16.29 — THE HANDLERS, TWICE OFF ONE READ: the table the server mounts them
+            // from, and the module a browser is handed in place of each one's source.
+            const mounts = await handlersUnder(root, session)
+            modules.set('rpc.ts', mountTable(mounts))
+            for (const [source, wrapper] of wrappersOf(mounts))
+                modules.set(`${WIRE_DIRECTORY}/${source}`, wrapper)
         }
     } finally {
-        session?.close()
+        session.close()
+        await project.remove()
     }
     return { modules, routes, sources: sources.length }
 }
@@ -257,7 +280,11 @@ function componentPaths(
 
 // One row of either table. The two differ only in which module a pattern loads, so the row is
 // written once and the extension is the argument.
-function tableOf(routes: AppRoute[], extension: string): string {
+function tableOf(
+    routes: AppRoute[],
+    extension: string,
+    column: (route: AppRoute) => string = () => '',
+): string {
     const rows: string[] = []
     for (const route of routes) {
         const module = `./${route.source.replace(/\.abide$/, extension)}`
@@ -269,7 +296,7 @@ function tableOf(routes: AppRoute[], extension: string): string {
                 `() => import(${JSON.stringify(`./${layout.replace(/\.abide$/, extension)}`)})`,
         )
         rows.push(
-            `    { pattern: ${JSON.stringify(route.pattern)}, load: () => import(${JSON.stringify(module)}), layouts: [${wrapping.join(', ')}] },`,
+            `    { pattern: ${JSON.stringify(route.pattern)}, load: () => import(${JSON.stringify(module)}), layouts: [${wrapping.join(', ')}]${column(route)} },`,
         )
     }
     return rows.join('\n')
@@ -304,9 +331,51 @@ export function start(host: Element) {
 function serverTable(routes: AppRoute[]): string {
     return `// Written by \`abide build\`. The addresses this app answers, and what paints each.
 export const routes = [
-${tableOf(routes, '.ts')}
+${tableOf(routes, '.ts', clientModules)}
 ]
 `
+}
+
+// 38.29 — WHAT THE BROWSER WILL LOAD AT THIS ADDRESS, named on the SERVER's row: the server
+// writes the document, and the preloads for the page and its chain have to be in it before the
+// client has run at all. Keys into the manifest `chunksByModule` reads off the bundle.
+function clientModules(route: AppRoute): string {
+    const modules: string[] = []
+    for (const source of [route.source, ...route.layouts])
+        modules.push(source.replace(/\.abide$/, '.client.ts'))
+    return `, clientModules: ${JSON.stringify(modules)}`
+}
+
+// The server's half: the rows `mountHandlers` answers from.
+function mountTable(mounts: Mount[]): string {
+    return `// Written by \`abide build\`. Every handler this app answers over http, and where it is.
+export const handlers = ${JSON.stringify(mounts, null, 4)}
+`
+}
+
+// 16.29 — WHAT A BROWSER IMPORTS WHERE THE APP WROTE A HANDLER'S MODULE: the same export names, each
+// the same call over the wire. The address is written RELATIVE to the bundle's own directory and
+// resolved against the chunk at run time (16.11), so an app mounted under a sub-path calls its own
+// handlers rather than the root's.
+function wrappersOf(mounts: Mount[]): Map<string, string> {
+    const wrappers = new Map<string, string>()
+    for (const mount of mounts) {
+        const at = JSON.stringify(posix.relative(CLIENT_ADDRESS, mount.address))
+        const call = `wire(${JSON.stringify(mount.method)}, new URL(${at}, import.meta.url).pathname)`
+        const line =
+            mount.name === 'default'
+                ? `export default ${call}\n`
+                : `export const ${mount.name} = ${call}\n`
+        wrappers.set(
+            mount.source,
+            (wrappers.get(mount.source) ??
+                `// Written by \`abide build\`. What a browser holds in place of ${mount.source} (16.29).
+import { wire } from '${WIRE_SPECIFIER}'
+
+`) + line,
+        )
+    }
+    return wrappers
 }
 
 // THE ENTRY. An app does not write it: which module boots the client is the build's knowledge,

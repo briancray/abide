@@ -26,6 +26,7 @@ import {
     readyOverTags,
     refreshOverTags,
 } from './Reactive.ts'
+import { outsideScope, scoped } from './scoped.ts'
 import { share } from './share.ts'
 
 export type { History } from './History.ts'
@@ -158,6 +159,19 @@ export function reactive(
     // overloads' promises are made good.
     ...given: [first?: unknown, options?: unknown]
 ): unknown {
+    // 11.32 — ON A SERVER, OUTSIDE A REQUEST, THE VALUE IS FILED: a forwarder to one instance per
+    // request, and to the one built here where there is no request at all. `global` is what keeps
+    // a value process-wide (11.34).
+    if (
+        outsideScope(
+            (given[1] as { global?: boolean } | undefined)?.global === true,
+        )
+    )
+        return scoped(() => build(given))
+    return build(given)
+}
+
+function build(given: [first?: unknown, options?: unknown]): unknown {
     const [first, options] = given
     if (typeof first === 'function' && !isReactive(first)) {
         const body = first as (args?: unknown) => unknown

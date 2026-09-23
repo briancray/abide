@@ -5,6 +5,7 @@ import {
     isArrayLiteralExpression,
     isArrowFunction,
     isCallExpression,
+    isExportAssignment,
     isFunctionDeclaration,
     isFunctionExpression,
     isIdentifier,
@@ -12,6 +13,7 @@ import {
     isNewExpression,
     isObjectBindingPattern,
     isParenthesizedExpression,
+    isPropertyAccessExpression,
     isReturnStatement,
     isVariableDeclaration,
     isVariableStatement,
@@ -19,10 +21,14 @@ import {
 import {
     API,
     type Checker,
+    type Project,
+    type Symbol as CheckedSymbol,
+    SymbolFlags,
     type Type,
     TypeFlags,
     type UnionType,
 } from 'typescript/unstable/async'
+import type { Method } from '#shared/rpc.ts'
 import { classifyPropRead, classifyRead, type Read } from './classifyRead.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { projectShadow } from './projectShadow.ts'
@@ -70,6 +76,10 @@ export class TypeSession {
     }
 
     private tsconfig = ''
+
+    // The project as of the last snapshot, so a question asked after `readsFor` shares its snapshot
+    // rather than taking a second one.
+    private project: Project | undefined = undefined
 
     // SNAPSHOTS TAKEN, and it is a counter rather than a timing because that is the only form of
     // this claim that survives a loaded machine. One per build is the contract; one per FILE is
@@ -198,6 +208,7 @@ export class TypeSession {
             fileChanges: { created, changed },
         })
         const project = snapshot.getProjects()[0]
+        this.project = project
         if (project === undefined) return answers
         const checker = project.checker
 
@@ -302,9 +313,111 @@ export class TypeSession {
         return answers
     }
 
+    // 19.16 — EVERY VALUE EACH MODULE EXPORTS, and the method of the abide call that declares it, or
+    // `undefined` where it is not one. The checker's own export table, so a name exported apart from
+    // its declaration, under another name or from another module is the same export it is to an
+    // importer; and the callee's own symbol, so `GET` imported under another name or through a
+    // namespace is abide's, and an app's own function of that spelling is not. A type is not an
+    // export here: it is erased, and has no address to answer at.
+    async handlersIn(
+        paths: string[],
+    ): Promise<{ name: string; method: Method | undefined }[][]> {
+        if (this.project === undefined) {
+            this.snapshots += 1
+            const snapshot = await this.api.updateSnapshot({
+                openProjects: [this.tsconfig],
+            })
+            this.project = snapshot.getProjects()[0]
+        }
+        const project = this.project
+        if (project === undefined) return paths.map(() => [])
+        const checker = project.checker
+        // ABIDE'S FILE AS THE CHECKER NAMES IT, not as this module does: it canonicalises a path to
+        // the disk's case rules, so on a case-insensitive disk `/Users/…/Code` comes back
+        // `/users/…/code` and a string compared against `import.meta.url` never matched.
+        const methodsPath = (
+            await project.program.getSourceFile(METHODS_SOURCE)
+        )?.path
+        return Promise.all(
+            paths.map(async (path) => {
+                const sourceFile = await project.program.getSourceFile(path)
+                if (sourceFile === undefined)
+                    throw new Error(
+                        `abide: ${path} is not inside the project ${this.tsconfig}, so what it exports cannot be read (19.16). Give the app a tsconfig whose include reaches it.`,
+                    )
+                const module = await checker.getSymbolAtLocation(sourceFile)
+                if (module === undefined) return []
+                const exports = await checker.getExportsOfModule(module)
+                const found = await Promise.all(
+                    exports.map(async (exported) => {
+                        const target = await aliased(checker, exported)
+                        if ((target.flags & SymbolFlags.Value) === 0)
+                            return undefined
+                        return {
+                            name: exported.name,
+                            method: await declaringMethod(
+                                checker,
+                                target,
+                                methodsPath,
+                            ),
+                        }
+                    }),
+                )
+                const handlers: { name: string; method: Method | undefined }[] =
+                    []
+                for (const entry of found)
+                    if (entry !== undefined) handlers.push(entry)
+                return handlers
+            }),
+        )
+    }
+
     close(): void {
         this.api.close()
     }
+}
+
+// Where abide declares the five methods: `GET` is `declare('GET')` there and nowhere else.
+const METHODS_SOURCE = new URL('../shared/rpc.ts', import.meta.url).pathname
+const METHODS = new Set<string>(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+
+function aliased(
+    checker: Checker,
+    symbol: CheckedSymbol,
+): Promise<CheckedSymbol> {
+    return (symbol.flags & SymbolFlags.Alias) === 0
+        ? Promise.resolve(symbol)
+        : checker.getAliasedSymbol(symbol)
+}
+
+// The method of the abide call a value is declared by — `const x = GET(…)` or `export default
+// GET(…)` — or `undefined` where it is declared any other way.
+async function declaringMethod(
+    checker: Checker,
+    symbol: CheckedSymbol,
+    methodsPath: string | undefined,
+): Promise<Method | undefined> {
+    const declaration = await symbol.valueDeclaration?.resolve()
+    const call =
+        declaration === undefined
+            ? undefined
+            : isVariableDeclaration(declaration)
+              ? declaration.initializer
+              : isExportAssignment(declaration)
+                ? declaration.expression
+                : undefined
+    if (call === undefined || !isCallExpression(call)) return undefined
+    const callee = isPropertyAccessExpression(call.expression)
+        ? call.expression.name
+        : call.expression
+    const named = await checker.getSymbolAtLocation(callee)
+    if (named === undefined) return undefined
+    const method = await aliased(checker, named)
+    return METHODS.has(method.name) &&
+        methodsPath !== undefined &&
+        method.valueDeclaration?.path === methodsPath
+        ? (method.name as Method)
+        : undefined
 }
 
 // 31.3 — THE DECLARED TYPE OF THE POSITION A READ STANDS IN, where it is one of the three the

@@ -1,6 +1,16 @@
 // 35.4 and 35.5 — `render` takes a component already bound to its props and produces the document
 // as an async generator of bytes.
 
+import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
+import { isThenable } from '#shared/reactive/isThenable.ts'
+import {
+    leaveShare,
+    resumeShare,
+    type ShareScope,
+} from '#shared/reactive/share.ts'
+import type { RpcRequest } from '#shared/rpcRequest.ts'
+import { earlyCalls } from './requestScope.ts'
+
 // REGISTRY declares `Component` opaque. What a compiled component IS today is a function
 // returning its markup, and the cast lives here, in one place, rather than in the type an app
 // reads. It becomes a richer thing when a component takes props (33) and holds state (34.1).
@@ -36,38 +46,77 @@ type Rendered = { head: string; body: string }
 // compiled page and layout loads its props off one of these, and a level that omits a key the
 // level above it carries is a second hidden class for all of them. The innermost has nothing below
 // it, so its `children` is present and undefined rather than absent.
-export function composePage(
+//
+// 41.20 — EVERY LEVEL IS SET UP BEFORE ANY IS BUILT, and the turn is let run between the two, so a
+// call the setup started that answers without waiting on anything — a value already held, a
+// handler that only awaits what it has — is painted rather than left for the browser to fill. A
+// compiled page or layout answers `head` and `body` lazily and says which share scope its setup ran
+// in (`scope`), so the level below is set up inside it as it would have been inside the build
+// (10.5). A component that answers a plain record is simply built at the call, as before.
+export async function composePage(
     layouts: Component[],
     page: Component,
     props: Record<string, (() => unknown) | undefined>,
-): Rendered {
+): Promise<Rendered> {
     const heads: string[] = []
-    const inner = (at: number): Rendered => {
-        const component = (at === layouts.length ? page : layouts[at]) as (
+    const levels: (Rendered & { scope?: ShareScope | null })[] = []
+    // One level set up: inside the share scope of the level above where that level says what it
+    // is, and where it does not — a component that built as it was called — inside that level's
+    // build, which is where its `children` asks for this one.
+    const setUp = (at: number): Rendered => {
+        const inner = at === layouts.length
+        const component = (inner ? page : layouts[at]) as (
             props: Record<string, (() => unknown) | undefined>,
-        ) => Rendered
-        if (at === layouts.length)
-            return component({ ...props, children: undefined })
-        return component({
-            ...props,
-            children: () => {
-                const below = inner(at + 1)
-                if (below.head !== '') heads.push(below.head)
-                return below.body
-            },
-        })
+        ) => Rendered & { scope?: ShareScope | null }
+        const children = inner
+            ? undefined
+            : (): string => {
+                  const below = levels[at + 1] ?? setUp(at + 1)
+                  if (below.head !== '') heads.push(below.head)
+                  return below.body
+              }
+        const above = levels[at - 1]
+        const resumed = above !== undefined && above.scope !== undefined
+        const back = resumed
+            ? resumeShare(above.scope as ShareScope | null)
+            : null
+        try {
+            const level = component({ ...props, children })
+            levels[at] = level
+            return level
+        } finally {
+            if (resumed) leaveShare(back)
+        }
     }
-    const outermost = inner(0)
-    return { head: outermost.head + heads.join(''), body: outermost.body }
+    for (let at = 0; at <= layouts.length; at += 1)
+        if (levels[at] === undefined) setUp(at)
+    await new Promise((settled) => setImmediate(settled))
+    const outermost = levels[0] as Rendered
+    // BUILT ON THE FIRST READ, not here: `render` writes the early-call script between the setup
+    // this has just finished and the markup (41.21), so the calls leave before the page is built.
+    // THE OUTERMOST HEAD FIRST: reading it builds the chain, which is what pushes the heads below.
+    let built: Rendered | undefined
+    const build = (): Rendered => {
+        if (built === undefined) {
+            const head = outermost.head
+            built = { head: head + heads.join(''), body: outermost.body }
+        }
+        return built
+    }
+    return {
+        get head() {
+            return build().head
+        },
+        get body() {
+            return build().body
+        },
+    }
 }
 
 export async function* render(
     component: Component,
     shell?: Shell,
 ): AsyncGenerator<Uint8Array> {
-    // 34.3 — SETUP IS SYNCHRONOUS, so a component answers its record outright and nothing here
-    // waits for it.
-    const rendered = (component as () => Rendered)()
     // GUARDED, because the string form is already settled: `shellText` is `async`, so awaiting it
     // unconditionally wrapped a promise and spent a microtask turn per request for nothing.
     const document = typeof shell === 'string' ? shell : await shellText(shell)
@@ -81,13 +130,46 @@ export async function* render(
     // ahead of the body whatever order the shell wrote them in.
     const bodyAt = bodyAnchor(document)
     const headAt = headAnchor(document)
-    // Two chunks, split at the head, so what the document needs to start fetching is on the wire
-    // before the body is built. 41.1 makes that a requirement rather than a courtesy and is not
-    // implemented yet — this is the shape it will need, not the guarantee.
-    yield ENCODER.encode(document.slice(0, headAt) + rendered.head)
+    // 41.1 — THE SHELL'S HEAD BEFORE THE COMPONENT IS ASKED. It is known the moment the shell is,
+    // and it is what starts every fetch the document makes — the stylesheet, the entry and its
+    // preloads (38.23, 38.24, 38.29) — so nothing the page does holds it. What the PAGE puts in the
+    // head goes out with the body: it is the page's answer, and it cannot be known sooner.
+    //
+    // 41.16 — A THROW AFTER THIS POINT ENDS THE STREAM IN AN ERROR, not in a document. The status
+    // line is on the wire, so it cannot become a 500; a response that stops short of its
+    // terminating chunk is one every client and cache reads as incomplete, where an error page
+    // written into the body would be a complete 200 somebody stores.
+    yield ENCODER.encode(document.slice(0, headAt))
+    // 34.3 — SETUP IS SYNCHRONOUS, so a bare component answers its record outright, and the guard
+    // spends no microtask turn on it. 41.1 — BUT IT MAY BE PENDING: the head has already gone out,
+    // so a caller with something to wait on first — `answerRequest` importing the page and its
+    // chain — hands over a component whose record is a promise, and the wait lands after the flush.
+    const answered = (component as () => Rendered | PromiseLike<Rendered>)()
+    const rendered = isThenable(answered) ? await answered : answered
+    // 41.21 — THE PAGE'S CALLS LEAVE BEFORE ITS MARKUP IS BUILT. Setup has run, so every call the
+    // page makes is known, and a script in the head starts each one as the request the browser's
+    // own `Rpc` would make — while the rest of the document and the bundle are still on their way.
+    // Each is its own request, so the network panel shows them as it would have anyway.
+    const calls = earlyCalls()
+    if (calls !== undefined && calls.length > 0)
+        yield ENCODER.encode(earlyCallScript(calls))
     yield ENCODER.encode(
-        document.slice(headAt, bodyAt) + rendered.body + document.slice(bodyAt),
+        rendered.head +
+            document.slice(headAt, bodyAt) +
+            rendered.body +
+            document.slice(bodyAt),
     )
+}
+
+// 41.21 — THE SCRIPT ITSELF: each call started with `fetch`, and its answer left under the call's key
+// in `EARLY_CALLS` for `wire` to take (41.22). Inline because nothing else runs before the bundle
+// has arrived, which is the wait it exists to overlap. The data is JSON with `<` escaped, so no
+// string in it can close the element.
+function earlyCallScript(calls: RpcRequest[]): string {
+    const rows: [string, string, string, string | null][] = []
+    for (const call of calls)
+        rows.push([call.key, call.method, call.url, call.body ?? null])
+    return `<script>(function(s,c){for(var i=0;i<c.length;i++)(function(k,m,u,b){var e=s[k]={status:void 0,statusText:void 0,text:void 0,failed:!1};e.promise=fetch(u,b===null?{method:m}:{method:m,headers:{"content-type":"application/json"},body:b}).then(function(r){e.status=r.status;e.statusText=r.statusText;return r.text()}).then(function(t){e.text=t},function(){e.failed=!0})})(c[i][0],c[i][1],c[i][2],c[i][3])})(self.${EARLY_CALLS}||(self.${EARLY_CALLS}={}),${JSON.stringify(rows).replace(/</g, '\\u003c')})</script>`
 }
 
 // Where the body's content ends, which is where a page's markup goes.

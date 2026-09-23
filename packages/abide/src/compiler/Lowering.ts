@@ -1,7 +1,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import type { Read } from './classifyRead.ts'
-import type { AbideFile } from './parseAbide.ts'
 import { holdsSlot } from './classifyTemplate.ts'
+import type { AbideFile } from './parseAbide.ts'
 import { type Projection, projectShadow, type Span } from './projectShadow.ts'
 import { type Token, tokenise } from './tokenise.ts'
 

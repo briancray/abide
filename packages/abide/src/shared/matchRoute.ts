@@ -37,7 +37,8 @@ function matchParts(segments: Segment[], parts: string[]): Params | null {
         const segment = segments[index] as Segment
         // 30.5 — A REST TAKES WHAT IS LEFT, including nothing, and it is last by construction.
         if (segment.kind === 'rest') {
-            ;(params ??= {})[segment.name] = parts.slice(at)
+            params ??= {}
+            params[segment.name] = parts.slice(at)
             return params
         }
         const part = parts[at]
@@ -48,7 +49,10 @@ function matchParts(segments: Segment[], parts: string[]): Params | null {
         }
         if (segment.kind === 'static') {
             if (part !== segment.name) return null
-        } else (params ??= {})[segment.name] = part
+        } else {
+            params ??= {}
+            params[segment.name] = part
+        }
         at += 1
     }
     return at === parts.length ? (params ?? {}) : null

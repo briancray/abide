@@ -8,6 +8,7 @@ covers:
   - `trace.sampled`
   - `trace.headers`
   - `traceresponse`
+  - `server-timing`
 ---
 
 Every log line an abide app writes carries a `trace`. It is the id of the operation the work
@@ -74,6 +75,16 @@ whatever headers the call already has; it is a plain record.
 answered it without the callee having to log on the caller's behalf.
 
 Read on: [Handler URLs](../server/find-the-url-a-handler-answers-on.md)
+
+## `server-timing` is what the browser's network panel reads
+
+Every handler answer carries `server-timing` with **the handler's own duration**, which is the
+number the request's own timing hides. A call that took 900 ms because the service it reached
+out to took 850 shows the 850 on the handler, not somewhere in the transfer.
+
+An answer the page's render had already fetched says so. Its description reads that it was
+answered from the render's run, and its duration is how long that run took. It would otherwise
+look exactly like a fresh call that happened to be fast.
 
 ## Next
 

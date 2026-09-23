@@ -2,17 +2,23 @@
 // The `abide` CLI. Commands are addresses, not names, so they live in one dispatch
 // rather than a file each until one of them grows a reason to move.
 
-import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
+import { existsSync, realpathSync } from 'node:fs' // bun exposes no sync existence check or realpath of its own
 import { rm } from 'node:fs/promises' // bun exposes no recursive directory removal of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
 import { parseArgs } from 'node:util' // bun exposes no argv parser of its own yet
+import { brotliCompress, constants } from 'node:zlib' // bun has gzip and zstd of its own, and no brotli
 
 import { type AppRoute, compileApp } from '#compiler/compileApp.ts'
 import {
     CLIENT_DIRECTORY,
     CLIENT_ENTRY,
+    ENCODING_SUFFIX,
+    MANIFEST,
     PUBLIC_DIRECTORY,
 } from '#server/CLIENT_BUILD.ts'
+import { chunksByModule } from '#server/chunksByModule.ts'
+import { fenceServer } from '#server/fenceServer.ts'
+import { namesUnder } from '#server/namesUnder.ts'
 import { refuseAddressCollision } from '#server/refuseAddressCollision.ts'
 import { serveBuild } from '#server/serveBuild.ts'
 import { serveDev } from '#server/serveDev.ts'
@@ -57,10 +63,21 @@ async function build(root: string, out: string): Promise<number> {
     for (const path of new Bun.Glob('**/*.ts').scanSync({ cwd: out }))
         if (!app.modules.has(path)) stale.push(rm(`${out}/${path}`))
     await Promise.all(stale)
-    if (app.routes.length > 0) await bundleClient(out)
+    // 36.11 — the path below the directory IS the address. `favicon.ico` answers at
+    // `/favicon.ico`, and nothing declares that anywhere.
+    const publicNames = namesUnder(`${root}/ui/${PUBLIC_DIRECTORY}`)
+    const publicAddresses = publicNames.map((name) => `/${name}`)
+    if (app.routes.length > 0)
+        await bundleClient(out, fenceServer(root, app.modules), publicAddresses)
     // OUTSIDE THE ROUTE GUARD. An app's static files are its own whether or not it has a page
     // yet, and 36.13's check needs the routes rather than the other way round.
-    const published = await copyPublic(root, out, app.routes)
+    const published = await copyPublic(
+        root,
+        out,
+        app.routes,
+        publicNames,
+        publicAddresses,
+    )
     console.log(
         `abide build: ${app.sources} source(s), ${published} public file(s) -> ${out}`,
     )
@@ -78,16 +95,12 @@ async function copyPublic(
     root: string,
     out: string,
     routes: AppRoute[],
+    names: string[],
+    addresses: string[],
 ): Promise<number> {
     const from = `${root}/ui/${PUBLIC_DIRECTORY}`
-    if (!existsSync(from)) return 0
-
     const patterns: string[] = []
     for (const route of routes) patterns.push(route.pattern)
-    const names = [...new Bun.Glob('**/*').scanSync({ cwd: from })]
-    // 36.11 — the path below the directory IS the address. `favicon.ico` answers at
-    // `/favicon.ico`, and nothing declares that anywhere.
-    const addresses = names.map((name) => `/${name}`)
     refuseAddressCollision(patterns, addresses, 'abide build')
 
     const copies: Promise<number>[] = []
@@ -108,10 +121,15 @@ async function copyPublic(
 // bundle.
 //
 // `--splitting`, so a destination's markup and bindings stay in the chunk its own route loads
-// (30.11) rather than landing in the entry every page pays for. NOT CONTENT-HASHED and with no
-// manifest — that is 38.5 and it is not written yet, which makes this the shape rather than the
-// guarantee.
-async function bundleClient(out: string): Promise<void> {
+// (30.11) rather than landing in the entry every page pays for. 38.5 IS THIS FUNCTION: hashed and
+// minified by the bundler, the manifest off its metafile (the entry's name, and the chunks each
+// route module needs for 38.29), and the precompressed copies (`precompressOne`). What the manifest
+// does NOT carry yet is 38.19's list of public files.
+async function bundleClient(
+    out: string,
+    fence: Bun.BunPlugin,
+    publicAddresses: string[],
+): Promise<void> {
     // EMPTIED FIRST. `Bun.build` writes its chunks in and removes nothing, so a chunk whose content
     // hash changed leaves the old one behind and the directory is the union of every build ever run
     // into it. The docs app accumulated 1,423 orphans against 86 live chunks, and the cost is not
@@ -121,9 +139,33 @@ async function bundleClient(out: string): Promise<void> {
     const built = await Bun.build({
         entrypoints: [`${out}/${CLIENT_ENTRY}.ts`],
         outdir: `${out}/${CLIENT_DIRECTORY}`,
+        // 16.29, 16.30 — a handler module is its wrapper here, and the rest of `server/` refuses.
+        plugins: [fence],
         target: 'browser',
         format: 'esm',
         splitting: true,
+        metafile: true,
+        // 36.15 — a stylesheet's `url('/fonts/…')` is the public file's address, not a path here,
+        // and `Bun.build` reads a leading `/` as a path on this disk and fails on it not being
+        // there. The list is the files that exist rather than every `/…`: a URL naming nothing the
+        // app serves is still worth a build error.
+        external: publicAddresses,
+        // 38.5 — MINIFIED, and EVERY NAME HASHED, the entry's included: chunks and assets are
+        // already `[name]-[hash]` by default and the entry is not, which left the one file every
+        // page loads served for a year under a name the next deploy writes different bytes to.
+        // The manifest is how the document learns what the entry was called this time.
+        //
+        // NAMES KEPT, because a class's name is what an error reads to say what it was handed
+        // (`canonicalKey`), and a production error naming `a e` is one nobody can act on. It is
+        // free where it is paid: the JS the docs app's `/values` sends is 25.6 KB brotli with
+        // the names and without, against 31.9 unminified.
+        minify: {
+            whitespace: true,
+            syntax: true,
+            identifiers: true,
+            keepNames: true,
+        },
+        naming: { entry: '[name]-[hash].[ext]' },
     })
     // THROWN RATHER THAN LOGGED. A build that emitted server modules and no bundle is an app that
     // serves every page dead — the markup is right and nothing is wired — which is the one failure
@@ -133,6 +175,50 @@ async function bundleClient(out: string): Promise<void> {
             built.logs,
             'abide build: the client bundle failed',
         )
+    // THE REAL PATH, because the metafile names a file on disk with its symlinks resolved — and an
+    // `--out` under `/tmp` is `/private/tmp` to the bundler, which would key nothing at all.
+    await Bun.write(
+        `${out}/${MANIFEST}`,
+        JSON.stringify(
+            chunksByModule(
+                built.metafile as Bun.BuildMetafile,
+                realpathSync(out),
+            ),
+        ),
+    )
+    await Promise.all(built.outputs.map(precompressOne))
+}
+
+// 38.5 — EVERY FILE THE BUNDLE WROTE, BESIDE ITSELF IN EACH OF `ENCODING_SUFFIX`'s ENCODINGS, at
+// the highest level each has. The price is paid here once, where a server compressing per request
+// would pay it on every response or settle for a worse level to keep the response fast.
+//
+// ALL AT ONCE. The async brotli runs off the main thread, so the files compress side by side
+// rather than one after another — brotli at 11 is most of what this step costs.
+async function precompressOne(output: Bun.BuildArtifact): Promise<void> {
+    // `arrayBuffer` AND NOT `bytes`: the artifact's type declares both and it answers only the one.
+    const bytes = new Uint8Array(await output.arrayBuffer())
+    const brotli = await new Promise<Uint8Array>((compressed, failed) =>
+        brotliCompress(
+            bytes,
+            {
+                params: {
+                    [constants.BROTLI_PARAM_QUALITY]:
+                        constants.BROTLI_MAX_QUALITY,
+                    [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+                },
+            },
+            (thrown, result) =>
+                thrown === null ? compressed(result) : failed(thrown),
+        ),
+    )
+    await Promise.all([
+        Bun.write(output.path + ENCODING_SUFFIX.br, brotli),
+        Bun.write(
+            output.path + ENCODING_SUFFIX.gzip,
+            Bun.gzipSync(bytes, { level: 9 }),
+        ),
+    ])
 }
 
 async function main(argv: string[]): Promise<number | undefined> {

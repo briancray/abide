@@ -1,3 +1,37 @@
+/* THE THREE FAMILIES BRAND NAMES, served at `/fonts` — written in `assets/fonts`, which the pages
+   script copies into `public`, beside their OFL licences. The LATIN subset only: every character
+   the site's pages carry is in it apart from `≡`, which no subset Google serves covers either.
+   Sans and Grotesk are VARIABLE — one file each answers both weights — so the range is declared
+   rather than a face per weight. */
+@font-face {
+    font-family: 'IBM Plex Sans';
+    font-style: normal;
+    font-weight: 400 600;
+    font-display: swap;
+    src: url('/fonts/ibm-plex-sans.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Space Grotesk';
+    font-style: normal;
+    font-weight: 600 700;
+    font-display: swap;
+    src: url('/fonts/space-grotesk.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/ibm-plex-mono-400.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('/fonts/ibm-plex-mono-500.woff2') format('woff2');
+}
+
 :root {
     --paper: #F3F5F4;
     --raised: #FFFFFF;

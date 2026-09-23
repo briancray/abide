@@ -10,7 +10,8 @@
             "**/*.{json,ts,js}",
             "!**/dist",
             "!**/node_modules",
-            "!**/.abide"
+            "!**/.abide",
+            "!explorations/probes"
         ]
     },
     "formatter": {
@@ -60,7 +61,8 @@
             "includes": ["**/*.test.ts"],
             "linter": {
                 "rules": {
-                    "style": { "noNonNullAssertion": "off" }
+                    "style": { "noNonNullAssertion": "off" },
+                    "suspicious": { "noTemplateCurlyInString": "off" }
                 }
             }
         }

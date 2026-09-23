@@ -65,12 +65,17 @@ export class Router {
     // TAKEN BEFORE THE AWAIT AND CHECKED AFTER IT, so a superseded navigation stops before it
     // stops a scope, empties the region or pushes a history entry for a page nobody will see.
     navigation: number
+    // The routes whose chunks `prefetch` has already asked for. `pointerover` bubbles, so a
+    // pointer crossing a link's children asks again at every edge, and after the first time the
+    // answer is the module cache's anyway.
+    prefetched: Set<Compiled>
 
     constructor(region: Region, routes: Compiled[]) {
         this.region = region
         this.routes = routes
         this.levels = []
         this.navigation = 0
+        this.prefetched = new Set()
     }
 
     // THE PAGE'S SCOPE, for a caller that reads it — the chain's is `levels`. DERIVED rather than
@@ -83,6 +88,18 @@ export class Router {
 
     match(pathname: string): { route: Compiled; params: Params } | undefined {
         return firstMatch(this.routes, pathname)
+    }
+
+    // 30.14 — A NAVIGATION THE READER HAS SIGNALLED, LOADED BEFORE IT HAPPENS: the route's chunks are
+    // asked for on intent, so the click finds them in the module cache and setup — and with it
+    // every call the page makes — starts at once. Only the CODE: a call run on a hover would be a
+    // call nobody asked for, and for anything but a `GET` one with an effect. A failed load is
+    // left for the click, which reports it, and the next intent asks again.
+    prefetch(pathname: string): void {
+        const route = this.match(pathname)?.route
+        if (route === undefined || this.prefetched.has(route)) return
+        this.prefetched.add(route)
+        load(route).catch(() => this.prefetched.delete(route))
     }
 
     // 30.7 — NAVIGATES, AND DOES NOT RELOAD. Everything between the anchors is replaced and the

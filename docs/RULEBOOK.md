@@ -610,6 +610,9 @@ naming the cycle.
 
 11.67 `s.set` MUST throw 11.66's refusal, and a body whose answer 11.66 refuses MUST fail with it.
 
+11.68 A `reactive` without `global` MUST be built afresh in each request that reaches it, from its
+declaration and never from what a write outside every request left.
+
 # 12. Effects
 
 12.1 A `Disposer` MUST run before each rerun of its `Effect`, and once more at teardown.
@@ -988,6 +991,10 @@ optional.
 19.15 A `JsonSchema` given as a `Schema` without `jsonSchema` MUST be refused, naming
 `jsonSchema`.
 
+19.16 Every value a module under `src/server/rpc` exports MUST be declared by a call of abide's
+`GET`, `POST`, `PUT`, `PATCH` or `DELETE` — however the language spells the export, the call or its
+import — and an export that is not MUST be a build error naming it.
+
 # 20. Generated surfaces
 
 20.1 Every surface `Clients` names MUST be derived from the route table, and MUST NOT be authored
@@ -1051,6 +1058,9 @@ of that header.
 21.13 A file under `src/ui/public` MUST answer an `etag` derived from its bytes.
 
 21.14 A request whose `if-none-match` matches the `etag` 21.13 derives MUST be answered 304.
+
+21.15 An `Rpc` answer MUST carry `server-timing` with its handler's duration, and MUST say where it
+was answered from the `render`'s run.
 
 # 22. Request-scoped ambients
 
@@ -1272,6 +1282,9 @@ hydrated where it stands.
 30.13 A plain click on a same-origin link a route matches MUST reach `navigate`, and a click
 carrying a modifier, a `target` or a `download` MUST NOT.
 
+30.14 A pointer over, a press on or focus on a link 30.13 would take MUST load its route's chunks,
+and MUST NOT make an `Rpc` call.
+
 # 31. Reading and writing by name
 
 31.1 Inside a `.abide` file a name bound to a `Reactive` MUST be read wherever 31.3 does not hold it.
@@ -1466,14 +1479,17 @@ dependency of that component.
 
 35.6 A `Shell` MUST default to `src/ui/app.html`.
 
-35.7 A sink MUST be an addressable hole in the output stream that a value still in flight fills
-later.
+35.7 A sink MUST be a hole a `render` leaves where a value is still in flight, for the browser to
+fill once that value lands.
 
 35.8 An attribute a sink fills MUST be filled on the element itself.
 
 35.9 A sink inside RCDATA MUST fill through the element's own property rather than through markup.
 
-35.10 The batching unit of a sink fill MUST be the flush and MUST NOT be the production.
+35.10 The batching unit of a sink fill MUST be the turn and MUST NOT be the production.
+
+35.11 A `render` MUST close when its walk is done, and MUST NOT write a sink's fill into the
+document it streams.
 
 # 36. Environment and files
 
@@ -1507,6 +1523,9 @@ mount rather than at the origin.
 `abide build` and by `abide dev`, naming both.
 
 36.14 A file under `src/ui/public` MUST carry a `content-type` derived from its extension.
+
+36.15 A URL in the client bundle naming the address of a file under `src/ui/public` MUST be left as
+that address by `abide build` and by `abide dev`, and MUST NOT be resolved as a path on disk.
 
 # 37. Lifecycle hooks
 
@@ -1592,6 +1611,15 @@ where that holds a `ui`.
 38.27 A command that finds no app at its `--root` MUST fail, naming where it looked.
 
 38.28 `--out` MUST default beside the app rather than beside the working directory.
+
+38.29 The document `abide start` or `abide dev` serves MUST preload, from the head, every chunk its
+route imports statically, and MUST NOT preload a chunk reached only through a dynamic import.
+
+38.30 `abide start` MUST answer the document and the bundle in an encoding the request accepts
+where it has one, and MUST name `accept-encoding` in `vary`.
+
+38.31 `abide build` and `abide dev` MUST type an app with no `tsconfig.json` against a default
+project, and MUST NOT compile it untyped.
 
 # 39. Head and view transitions
 
@@ -1738,7 +1766,7 @@ again, and a serialized setup result MUST NOT be adopted.
 productions by the block's key, and MUST NOT be appended to.
 
 41.9 `render` MUST delimit a dynamic region with a comment anchor, and MUST NOT add a node, an
-attribute or a wrapper to the document for any other purpose.
+attribute or a wrapper to the document for any other purpose than 41.21's script.
 
 41.10 A hydration mismatch MUST rebuild the enclosing block and MUST NOT rebuild the page, warning
 on `abide:hydrate`.
@@ -1755,6 +1783,25 @@ MUST NOT be run a second time to fill it.
 remove every row it shadows.
 
 41.15 A repeated `{#for}` key MUST warn once for the block on `abide:hydrate`.
+
+41.16 A `render` that fails after flushing MUST end its stream in an error, and MUST NOT end it as a
+complete document.
+
+41.17 A seed buffer entry MUST answer one `Rpc` call, and MUST be dropped once it has.
+
+41.18 A seed buffer entry no `Rpc` call takes MUST be dropped 30 seconds after the `render` that
+filled it.
+
+41.19 A seed buffer entry MUST be matched by `principal.caller`, the handler and the call's `Args`
+key.
+
+41.20 A `render` MUST set up a page and every layout around it, and let the turn's queued microtasks
+run, before it builds any of their markup.
+
+41.21 A `render` MUST write one inline script into the head once setup has run and before any
+markup, starting each `Rpc` call the setup made as the request the browser's `Rpc` makes for it.
+
+41.22 The browser's `Rpc` MUST take a call 41.21's script started in place of making it, once.
 
 # 42. The app object
 

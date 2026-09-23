@@ -14,6 +14,7 @@
 // window's, and happy-dom's http client rejects these responses with "Duplicate Content-Length".
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { brotliDecompressSync } from 'node:zlib' // bun decompresses gzip and zstd of its own, and no brotli
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
@@ -63,6 +64,24 @@ const { params } = props<{ params: { id: string } }>()
 <head><title>Invoice</title></head>
 <main id="invoice"><h1>Invoice {params.id}</h1></main>`
 
+// 41.1 — A PAGE WHOSE IMPORT TAKES A WHILE, and the only way a fixture can make one: a component
+// script refuses a top-level `await`, and a module it imports does not. The wait is the import's,
+// which is exactly what the first request for a page after boot pays.
+const SLOW_MS = 400
+
+const SLOW = `<script>
+import '#ui/slow.ts'
+</script>
+
+<main id="slow"><h1>Slow</h1></main>`
+
+// 41.16 — a page that fails AFTER the head has gone out (41.1).
+const BROKEN = `<script>
+import '#ui/broken.ts'
+</script>
+
+<main id="broken"><h1>Broken</h1></main>`
+
 let server: Bun.Subprocess | undefined
 let base = ''
 
@@ -73,13 +92,21 @@ beforeAll(async () => {
         'ui/components/Badge.abide': BADGE,
         // A SELECTOR RATHER THAN A DECLARATION, as the thing asserted on: the bundler normalises
         // a colour (`rgb(1, 2, 3)` came back `#010203`) and a class name it cannot touch.
-        'ui/home.css': '.fixture-sheet-was-imported { color: red }',
+        // 36.15 — AND ONE URL NAMING A PUBLIC FILE, which is the address below rather than a path
+        // on this disk: read as a path, it fails the build this whole file is served from.
+        'ui/home.css':
+            ".fixture-sheet-was-imported { color: red }\n.fixture-uses-public { background: url('/img/dot.svg') }",
         'package.json': JSON.stringify({
             name: 'serve-fixture',
             type: 'module',
             imports: { '#ui/*': './ui/*' },
         }),
         'ui/pages/invoices/[id]/page.abide': INVOICE,
+        'ui/pages/slow/page.abide': SLOW,
+        'ui/slow.ts': `await new Promise((settle) => setTimeout(settle, ${SLOW_MS}))\nexport {}\n`,
+        'ui/pages/broken/page.abide': BROKEN,
+        // ON THE SERVER ONLY, so the build still bundles it: the browser never evaluates it here.
+        'ui/broken.ts': `if (typeof window === 'undefined') throw new Error('broken on purpose')\nexport {}\n`,
         // 36.11 — TWO DEPTHS, because "its path below that directory" is the clause and a flat
         // directory cannot tell a path from a name.
         'ui/public/robots.txt': 'User-agent: *\nAllow: /\n',
@@ -182,18 +209,46 @@ test('a param in the address reaches the page as a prop — 33.4, 38.6', async (
     expect(await response.text()).toContain('<h1>Invoice 42</h1>')
 })
 
+// The entry's file name, off the document's own script tag — a build hashes it (38.5), so it is
+// read where a browser reads it rather than spelled out here.
+async function entryOf(): Promise<string> {
+    const html = await (await Bun.fetch(`${base}/`)).text()
+    const found =
+        /<script type="module" src="\/__abide\/client\/([^"]+)"><\/script>/.exec(
+            html,
+        )
+    if (found === null) throw new Error(`the document loads no entry: ${html}`)
+    return found[1] as string
+}
+
 // 38.23. Nothing hydrates without it, and the page still looks right — so this is asserted rather
 // than left to a browser noticing.
 test('the document loads the client entry — 38.23', async () => {
-    const html = await (await Bun.fetch(`${base}/`)).text()
-    expect(html).toContain(
-        '<script type="module" src="/__abide/client/entry.js"></script>',
-    )
+    const entry = await entryOf()
     // AND THE ADDRESS ANSWERS. The tag naming a 404 is the failure this pair exists to split:
     // the document is identical either way.
-    const entry = await Bun.fetch(`${base}/__abide/client/entry.js`)
-    expect(entry.status).toBe(200)
-    expect(await entry.text()).toContain('startRouter')
+    const response = await Bun.fetch(`${base}/__abide/client/${entry}`)
+    expect(response.status).toBe(200)
+    // THE ROUTE TABLE, as a string a minifier leaves alone.
+    expect(await response.text()).toContain('/invoices/[id]')
+})
+
+// 38.5 — HASHED AND MINIFIED. The name is the half that is correctness: every file under the
+// client address is served for a year, so an entry under a fixed name is the old app for every
+// returning reader after a deploy, pointing at chunks the new build deleted.
+// THE REVERT: drop `naming` from `bundleClient` and the entry is `entry.js`; drop `minify` and the
+// comment the bundler heads each module with — its source path — is still in it.
+test('the entry is content-hashed and minified — 38.5', async () => {
+    const entry = await entryOf()
+    expect(entry).toMatch(/^entry-[a-z0-9]+\.js$/)
+    const text = await (
+        await Bun.fetch(`${base}/__abide/client/${entry}`)
+    ).text()
+    expect(/^\/\/ .*listenForRoutes\.ts$/m.test(text)).toBe(false)
+    // THE FIXED NAME IS GONE, not left beside the hashed one.
+    expect((await Bun.fetch(`${base}/__abide/client/entry.js`)).status).toBe(
+        404,
+    )
 })
 
 test('the script tag lands in the head, ahead of the body — 38.23', async () => {
@@ -201,6 +256,165 @@ test('the script tag lands in the head, ahead of the body — 38.23', async () =
     expect(html.indexOf('<script type="module"')).toBeLessThan(
         html.indexOf('<body>'),
     )
+})
+
+// 38.29. Nothing a reader sees moves without it — the client asks for the same chunks itself, a
+// round trip later — so the work is what is asserted: which addresses the document names.
+// THE REVERTS: drop the loop over `chunks` from `clientTags` and this reports 0 preloads; follow
+// `dynamic-import` edges in `chunksByModule` too and every address preloads every page, 0 its own.
+test('the document preloads the static closure of its own route, and nothing else — 38.29', async () => {
+    const preloadsAt = async (address: string): Promise<string[]> => {
+        const html = await (await Bun.fetch(`${base}${address}`)).text()
+        const head = html.slice(0, html.indexOf('<body>'))
+        const found: string[] = []
+        for (const match of head.matchAll(
+            /<link rel="modulepreload" href="\/__abide\/client\/([^"]+)">/g,
+        ))
+            found.push(match[1] as string)
+        return found
+    }
+    const home = await preloadsAt('/')
+    expect(home.length).toBeGreaterThan(0)
+    // THE ENTRY IS THE SCRIPT TAG'S, and a preload of it is a second request line for it.
+    expect(home).not.toContain(await entryOf())
+    // NOR THE STYLESHEET, which the bundler reports as a static import of the entry: fetched as a
+    // module it is a MIME error in the console and a second request for bytes 38.24 linked.
+    for (const chunk of home) expect(chunk.endsWith('.js')).toBe(true)
+
+    // CLOSED: every chunk a preloaded chunk imports statically is preloaded too, so the browser
+    // has nothing left to discover before the page can run. And ONE OF THEM IS THE PAGE's.
+    const bodies = new Map<string, string>()
+    for (const chunk of home) {
+        const response = await Bun.fetch(`${base}/__abide/client/${chunk}`)
+        expect(response.status).toBe(200)
+        bodies.set(chunk, await response.text())
+    }
+    for (const body of bodies.values())
+        for (const match of body.matchAll(/from\s*"\.\/([^"]+\.js)"/g))
+            if (!(match[1] as string).startsWith('entry-'))
+                expect(home).toContain(match[1] as string)
+    expect(
+        [...bodies.values()].some((body) => body.includes('id="home"')),
+    ).toBe(true)
+
+    // ANOTHER ADDRESS PRELOADS ITS OWN PAGE and not this one: a dynamic import is a destination,
+    // and following those edges is the whole route table on every document.
+    const invoice = await preloadsAt('/invoices/42')
+    const homeOnly = home.filter((chunk) => !invoice.includes(chunk))
+    const invoiceOnly = invoice.filter((chunk) => !home.includes(chunk))
+    expect(homeOnly.length).toBe(1)
+    expect(invoiceOnly.length).toBe(1)
+})
+
+// 41.1. THE REVERT: move the first `yield` in `render` below the component call, or load the page
+// in `answerRequest` ahead of the `Response` as it was, or drop the flush from `compressStream`, and
+// the head arrives with the body — after the import, SLOW_MS in.
+test('the head is on the wire before the page is imported — 41.1', async () => {
+    const started = performance.now()
+    // 38.30 AS WELL: COMPRESSED, which is where a compressor that holds its input until the end
+    // would put the head back behind the body. Brotli because it is what a browser asks for.
+    const response = await Bun.fetch(`${base}/slow`, {
+        headers: { 'accept-encoding': 'br' },
+    })
+    expect(response.headers.get('content-encoding')).toBe('br')
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader()
+    const decoder = new TextDecoder()
+    let seen = ''
+    let headAt = Number.POSITIVE_INFINITY
+    for (
+        let read = await reader.read();
+        !read.done;
+        read = await reader.read()
+    ) {
+        seen += decoder.decode(read.value, { stream: true })
+        if (
+            headAt === Number.POSITIVE_INFINITY &&
+            seen.includes('modulepreload')
+        )
+            headAt = performance.now() - started
+    }
+    const doneAt = performance.now() - started
+    // WHAT STARTS THE FETCHES is in the early part, and the page is not.
+    expect(headAt).toBeLessThan(SLOW_MS / 2)
+    expect(doneAt).toBeGreaterThanOrEqual(SLOW_MS)
+    expect(seen).toContain('<main id="slow">')
+})
+
+// 41.16 — 41.1's cost, decided rather than left to happen: the status line is out, so a page that
+// throws afterwards cannot become a 500. It must not become a COMPLETE 200 either — a document
+// with an error written into it is one a cache stores — so the stream ends in an error.
+test('a page that fails after the head has flushed ends the stream in an error — 41.16', async () => {
+    const response = await Bun.fetch(`${base}/broken`)
+    expect(response.status).toBe(200)
+    let failed = false
+    try {
+        await response.text()
+    } catch {
+        failed = true
+    }
+    expect(failed).toBe(true)
+    // AND THE SERVER IS STILL UP.
+    expect((await Bun.fetch(`${base}/`)).status).toBe(200)
+})
+
+// 38.5 AND 38.30 — THE BUNDLE, PRECOMPRESSED AND NEGOTIATED. Read with `decompress: false`, since
+// `Bun.fetch` otherwise sends `br` itself and hands back the decoded bytes, and every other test in
+// this file would pass whether anything was compressed or not.
+// THE REVERT: drop `precompress` from the build and the brotli arm reports no `content-encoding`.
+test('a bundled file is served in the encoding the request takes, and identical once decoded — 38.5, 38.30', async () => {
+    const address = `${base}/__abide/client/${await entryOf()}`
+    const plain = await Bun.fetch(address, {
+        headers: { 'accept-encoding': 'identity' },
+    })
+    expect(plain.headers.get('content-encoding')).toBeNull()
+    expect(plain.headers.get('vary')).toBe('accept-encoding')
+    const identity = new Uint8Array(await plain.arrayBuffer())
+
+    const brotli = await Bun.fetch(address, {
+        headers: { 'accept-encoding': 'gzip, br' },
+        decompress: false,
+    })
+    expect(brotli.headers.get('content-encoding')).toBe('br')
+    expect(brotli.headers.get('content-type')).toContain('javascript')
+    const brotliBytes = new Uint8Array(await brotli.arrayBuffer())
+    expect(brotliBytes.length).toBeLessThan(identity.length)
+    expect(new Uint8Array(brotliDecompressSync(brotliBytes))).toEqual(identity)
+
+    const gzip = await Bun.fetch(address, {
+        headers: { 'accept-encoding': 'gzip' },
+        decompress: false,
+    })
+    expect(gzip.headers.get('content-encoding')).toBe('gzip')
+    expect(Bun.gunzipSync(new Uint8Array(await gzip.arrayBuffer()))).toEqual(
+        identity,
+    )
+
+    // THE COPIES ARE NOT ADDRESSES OF THEIR OWN (38.21).
+    expect((await Bun.fetch(`${address}.br`)).status).toBe(404)
+})
+
+// 38.30 — THE DOCUMENT, compressed per request since it is rendered per request.
+test('the document is compressed in the encoding the request takes — 38.30', async () => {
+    const plain = await Bun.fetch(`${base}/`, {
+        headers: { 'accept-encoding': 'identity' },
+    })
+    expect(plain.headers.get('content-encoding')).toBeNull()
+    expect(plain.headers.get('vary')).toBe('accept-encoding')
+    const identity = await plain.text()
+
+    for (const [encoding, decode] of [
+        ['br', brotliDecompressSync],
+        ['gzip', Bun.gunzipSync],
+    ] as const) {
+        const response = await Bun.fetch(`${base}/`, {
+            headers: { 'accept-encoding': encoding },
+            decompress: false,
+        })
+        expect(response.headers.get('content-encoding')).toBe(encoding)
+        expect(response.headers.get('content-type')).toContain('text/html')
+        const bytes = new Uint8Array(await response.arrayBuffer())
+        expect(new TextDecoder().decode(decode(bytes))).toBe(identity)
+    }
 })
 
 test('an address no route matches is 404 — 38.22', async () => {
@@ -211,19 +425,36 @@ test('an address no route matches is 404 — 38.22', async () => {
 
 test('the document links the stylesheet the build bundled — 34.6, 38.24', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
-    expect(html).toContain(
-        '<link rel="stylesheet" href="/__abide/client/entry.css">',
-    )
+    const linked =
+        /<link rel="stylesheet" href="\/__abide\/client\/(entry-[a-z0-9]+\.css)">/.exec(
+            html,
+        )
+    expect(linked).not.toBeNull()
     // AHEAD OF THE SCRIPT, so the document does not paint once unstyled.
     expect(html.indexOf('rel="stylesheet"')).toBeLessThan(
         html.indexOf('<script type="module"'),
     )
 
-    const sheet = await Bun.fetch(`${base}/__abide/client/entry.css`)
+    const sheet = await Bun.fetch(
+        `${base}/__abide/client/${(linked as RegExpExecArray)[1]}`,
+    )
     expect(sheet.status).toBe(200)
     // THE PAGE'S OWN RULE, which is what says the import was followed rather than a file being
     // emitted with the right name.
     expect(await sheet.text()).toContain('.fixture-sheet-was-imported')
+})
+
+// 36.15. THE REVERT: drop `external` from `bundleClient` and the build fails on
+// `Could not resolve: "/img/dot.svg"` — every test in this file with it.
+test('a stylesheet URL naming a public file is left as its address — 36.15', async () => {
+    const html = await (await Bun.fetch(`${base}/`)).text()
+    const linked = /<link rel="stylesheet" href="([^"]+)">/.exec(html)
+    const sheet = await (
+        await Bun.fetch(`${base}${(linked as RegExpExecArray)[1]}`)
+    ).text()
+    expect(sheet).toMatch(/url\("?\/img\/dot\.svg"?\)/)
+    // AND THE ADDRESS IS THE FILE.
+    expect((await Bun.fetch(`${base}/img/dot.svg`)).status).toBe(200)
 })
 
 test('a public file is answered at its path below the directory — 36.11, 36.12', async () => {
@@ -321,15 +552,12 @@ afterAll(() => {
     bare?.kill()
 })
 
-// THE REVERT: write the `<link>` unconditionally in `withClientEntry` and this reports a document
-// fetching a missing stylesheet on every load — and looking exactly right doing it.
+// THE REVERT: write the `<link>` in `clientTags` whatever the manifest says and this reports a
+// document fetching a missing stylesheet on every load — and looking exactly right doing it.
 test('an app that imports no stylesheet links none — 38.24', async () => {
     const html = await (await Bun.fetch(`${bareBase}/`)).text()
     expect(html).toContain('<main id="bare">Bare</main>')
     expect(html).not.toContain('rel="stylesheet"')
-    expect(
-        (await Bun.fetch(`${bareBase}/__abide/client/entry.css`)).status,
-    ).toBe(404)
 })
 
 // THE REVERT: scan the public directory without testing for it, and `abide start` throws at boot

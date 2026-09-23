@@ -110,6 +110,14 @@ export function watchOver(
     }
 }
 
+// A SECOND BODY BESIDE `watchOver` ON PURPOSE, and it reads as the duplication it is: the two
+// differ by the cursor reset, the probe rebuild and the tail trim, and the rest is the same lines.
+// ONE BODY WITH A `tracked` FLAG WAS BUILT AND MEASURED, under V8 against this pair, interleaved
+// four runs a side: `write a value that changed` — one bound watch — went 15.6 ns to 21.4 in every
+// run, and `mount 50 readers` +12% (+7% under JSC). Three flag tests cannot cost 6 ns. The
+// likely mechanism, inferred rather than traced: every closure made from one literal shares its
+// call-site feedback, so the template binding's `effect()` call became every `s.watch` effect's and
+// every adoption mirror's too. Two literals keep that call site to the effects a template makes.
 function watchTracked(effect: Effect): Disposer {
     // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
     let dispose: Disposer | void

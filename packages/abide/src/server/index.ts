@@ -12,10 +12,6 @@
 // emitted module reaches through here: 32.1's escaping and 32.2's `raw`, which both sides render
 // markup with, 32.21's `safeUrl`, and 31.8's `writePath`.
 export * from '#shared'
-export { type Component, render, type Shell } from './render.ts'
-// 32.18's run-time half: one invocation, rendered where it stands, with the anchors that make the
-// child's markup one thing for the client to walk to.
-export { renderComponent } from './renderComponent.ts'
 export {
     DELETE,
     GET,
@@ -24,4 +20,10 @@ export {
     PUT,
     type Rpc,
     type RpcOptions,
-} from './rpc.ts'
+} from '#shared/rpc.ts'
+export { type Component, render, type Shell } from './render.ts'
+// 32.18's run-time half: one invocation, rendered where it stands, with the anchors that make the
+// child's markup one thing for the client to walk to.
+export { renderComponent } from './renderComponent.ts'
+// 22.1 — the request being served, and the response being built for it.
+export { request, response } from './requestScope.ts'

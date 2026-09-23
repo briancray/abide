@@ -161,6 +161,40 @@ test('a click on a routed link navigates and does not reload — 30.7', async ()
     stop()
 })
 
+// 30.14 — INTENT LOADS THE CODE AND NOTHING ELSE. A pointer over a routed link asks for the route's
+// chunk, and the address and the page stay where they were. THE REVERT: drop the `pointerover`
+// listener in `listenForRoutes`; the chunk is loaded 0 times where 1 is due, and the click pays it.
+test("a pointer over a routed link loads the route's chunk, and does not navigate — 30.14", async () => {
+    history.replaceState(null, '', '/')
+    const mounts = await pages()
+    let loads = 0
+    const r = startRouter([
+        {
+            pattern: '/invoices/[id]',
+            load: async () => {
+                loads += 1
+                return { default: mounts.invoice as PageMount }
+            },
+            layouts: [],
+        },
+        {
+            pattern: '/',
+            load: async () => ({ default: mounts.home as PageMount }),
+            layouts: [],
+        },
+    ])
+    await r.hydrate()
+    flushSync()
+    const stop = listenForRoutes(r)
+    const link = document.querySelector('#to-invoice') as HTMLElement
+    link.dispatchEvent(new Event('pointerover', { bubbles: true }))
+    await Bun.sleep(0)
+    expect(loads).toBe(1)
+    expect(location.pathname).toBe('/')
+    expect(document.querySelector('#home h1')?.textContent).toBe('Home')
+    stop()
+})
+
 test('a route literal is matched in the spelling its directory is filed under — 30.3, 30.5', () => {
     expect(routeOf('src/ui/pages/invoices/[id]/page.abide')).toBe(
         '/invoices/[id]',

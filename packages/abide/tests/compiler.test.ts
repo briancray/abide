@@ -127,7 +127,8 @@ test('the compiler is not reachable from the server seam', async () => {
     const server = await import('#server')
     // THE WHOLE ISOMORPHIC SURFACE CROSSES, so the list is the shared seam's plus what the server
     // owns: `listOf` is 32.15's — the emitted `{#for}` and the client's `updateList` ask the one
-    // function what a subject iterates as — `render` is 35.4's, and the five methods are 16.2's.
+    // function what a subject iterates as — `render` is 35.4's, the five methods are 16.2's, and
+    // `request` and `response` are 22.1's.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
         [
@@ -139,6 +140,8 @@ test('the compiler is not reachable from the server seam', async () => {
             'PUT',
             'render',
             'renderComponent',
+            'request',
+            'response',
         ].sort(),
     )
 })
@@ -1366,8 +1369,8 @@ test('a region made once is parsed, and one made once a row is built', async () 
     const { file, reads } = await typed(source, ['rows', 'on'])
     const once = emitClient(file, reads, 'once')
     const page = once.slice(
-        once.indexOf('function rg0_build'),
-        once.indexOf('function rg0_build') + 200,
+        once.indexOf('const rg0_build'),
+        once.indexOf('const rg0_build') + 200,
     )
     expect(page).toContain('__markupNodes(__document')
     expect(page).not.toContain('createElement')

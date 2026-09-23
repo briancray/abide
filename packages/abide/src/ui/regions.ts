@@ -46,12 +46,9 @@ export function isEmptyRegion(root: Root): boolean {
 // is mounted on the `Region` its caller wrote — so every build asking `root` for one threw the first
 // time a component's list grew a row. And the `abide.fill` layer then times the build as well as the
 // insert, which is the whole of what filling a region costs.
-//
-// `arm` is which `{#if}` arm to build; every other build ignores it.
 export function fillRegion(
     region: Region,
-    build?: (document: Document, arm: number) => Node[],
-    arm = 0,
+    build?: (document: Document) => Node[],
 ): void {
     // THE PARENT IS READ BEFORE ANYTHING IS REMOVED, and the removal only happens if there is
     // one. Written as an unguarded removal followed by a `?.`-guarded insert, a region whose
@@ -70,7 +67,7 @@ export function fillRegion(
     }
     if (build === undefined) return
     beginLayer(LAYER_FILL)
-    const made = build(region.close.ownerDocument as Document, arm)
+    const made = build(region.close.ownerDocument as Document)
     for (const one of made) parent.insertBefore(one, region.close)
     endLayer(LAYER_FILL)
 }

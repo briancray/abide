@@ -1,7 +1,13 @@
 import { REGION_CLOSE, REGION_OPEN, ROW_OPEN } from '#ui/REGION.ts'
 import { CHILDREN } from './CHILDREN.ts'
-import type { Read } from './classifyRead.ts'
 import { Cursor, type Position, placeTemplate, REGION_ROOT } from './Cursor.ts'
+import type { Read } from './classifyRead.ts'
+import {
+    bindingsOf,
+    isHead,
+    isSingleRooted,
+    isSlot,
+} from './classifyTemplate.ts'
 import {
     emitHead,
     emitRow,
@@ -19,12 +25,6 @@ import {
 } from './emitComponent.ts'
 import { Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
-import {
-    bindingsOf,
-    isHead,
-    isSingleRooted,
-    isSlot,
-} from './classifyTemplate.ts'
 import { SHARED_NAMES } from './SHARED_NAMES.ts'
 import { RUNTIME_SPECIFIER, SHARED_SPECIFIER } from './SPECIFIERS.ts'
 import { componentImports, splitImports, withoutProps } from './splitImports.ts'
@@ -850,7 +850,7 @@ function emitBlock(
             `}`,
         )
         armBuild.push(
-            `    if (arm === ${arm}) {\n        ${emitMaker(at.inner[arm] as Cursor, () => renderMarkup(at.inner[arm] as Cursor, lowering, true), false, lowering).replaceAll('\n', '\n    ')}\n    }`,
+            `    function (__document) {\n        ${emitMaker(at.inner[arm] as Cursor, () => renderMarkup(at.inner[arm] as Cursor, lowering, true), false, lowering).replaceAll('\n', '\n    ')}\n    },`,
         )
     }
 
@@ -859,14 +859,14 @@ function emitBlock(
             name,
             `${REGION_ROOT}, arm`,
             armMount,
-            `${fillRegion}(${REGION_ROOT}, ${name}_build, arm)`,
+            `${fillRegion}(${REGION_ROOT}, ${name}_build[arm])`,
             lowering,
             at.inner.some(holdsComponent),
         ),
     )
-    helpers.push(
-        `function ${name}_build(__document, arm) {\n${armBuild.join('\n')}\n    return []\n}`,
-    )
+    // ONE BUILD PER ARM, indexed by the arm the watch took. The `-1` floor — no arm taken — reads
+    // `undefined`, which is `fillRegion` with nothing to build: the region is emptied.
+    helpers.push(`const ${name}_build = [\n${armBuild.join('\n')}\n]`)
 
     // ONE SCOPE FOR THE BLOCK'S WHOLE LIFE, owned by the region above it and REFILLED on every
     // swap rather than replaced. A fresh scope per swap would have to be handed up per swap too,
@@ -889,7 +889,7 @@ ${SCOPE}.watch(() => {
     if (next === ${name}_at) return
     if (${name}_at !== undefined || ${lowering.use('isEmptyRegion')}(${name})) {
         ${name}_scope.stop()
-        ${fillRegion}(${name}, ${name}_build, next)
+        ${fillRegion}(${name}, ${name}_build[next])
     }
     ${name}_at = next
     ${name}_scope.own(${name}_mount(${name}, next))

@@ -23,7 +23,8 @@
 // keeps the list below the budget this header calls it — a subsystem only the emitted route table
 // reaches does not belong on what every compiled module resolves through.
 
-export { bindElement } from './bindElement.ts'
+export { oneStyleValue } from '#shared/escapeText.ts'
+export { isRaw } from '#shared/Raw.ts'
 // 41.10's adopt half of a walk the compiler emits twice from one traversal — see `adoptNode.ts`.
 export {
     blankHere,
@@ -32,11 +33,10 @@ export {
     regionHere,
     textHere,
 } from './adoptNode.ts'
+export { bindElement } from './bindElement.ts'
 // What a built row writes where the parser would have decoded the server's bytes — see
 // `decodeMarkup.ts` — and the one cut a `style:` value takes on both sides.
 export { decodedAttribute, decodedText } from './decodeMarkup.ts'
-export { oneStyleValue } from '#shared/escapeText.ts'
-export { isRaw } from '#shared/Raw.ts'
 export { escapeless } from './escapeless.ts'
 export { List, listAt, updateList } from './List.ts'
 export { warnMismatch } from './Mismatch.ts'

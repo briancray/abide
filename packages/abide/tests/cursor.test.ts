@@ -12,8 +12,8 @@
 
 import { expect, test } from 'bun:test'
 import { parseAbide } from '#compiler'
-import { isHead } from '#compiler/classifyTemplate.ts'
 import { Cursor, placeTemplate, REGION_ROOT } from '#compiler/Cursor.ts'
+import { isHead } from '#compiler/classifyTemplate.ts'
 import type { TemplateNode } from '#compiler/TemplateNode.ts'
 
 function walk(source: string): { cursor: Cursor; template: TemplateNode[] } {

@@ -7,14 +7,22 @@
             THE TYPEFACES, AND NOTHING ELSE. The stylesheet is not linked here: a page declares
             the stylesheet it depends on (34.5) and `abide start` links what the build bundled
             (38.24), so a `<link>` written here would be a second, stale answer to that.
-            The three families are BRAND's.
+            The three families are BRAND's, and the `@font-face` rules naming them are in
+            `app.css`.
+
+            SERVED FROM THIS ORIGIN rather than from Google's two. A font from there waited on the
+            document, then a stylesheet from a second origin, then the file from a third — two
+            connections set up and a round trip before the first glyph. PRELOADED because a font
+            is otherwise found only once the stylesheet is parsed AND a rule using it matches.
+            These are the two families on every first screen: body text and headings. Mono is
+            left to be found, since a page that shows no code has no use for it yet.
+
+            `crossorigin` IS REQUIRED EVEN THOUGH THE ORIGIN IS THE SAME: a font is always fetched
+            in cors mode, and a preload made without it is a second, unmatched request that the
+            real one does not reuse.
         -->
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link
-            rel="stylesheet"
-            href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&family=Space+Grotesk:wght@600;700&display=swap"
-        />
+        <link rel="preload" href="/fonts/ibm-plex-sans.woff2" as="font" type="font/woff2" crossorigin />
+        <link rel="preload" href="/fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin />
     </head>
     <body class="has-toc"></body>
 </html>

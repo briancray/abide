@@ -12,6 +12,14 @@ IS, and the clauses that govern it. behaviour is cited, never described.
 number rather than restating it, because a second copy drifts and only one of them gets fixed.
 * `docs/BRAND.md` — positioning, voice, vocabulary, visual identity.
 
+`explorations/` IS NOT A FOURTH DOCUMENT. it holds work done to find out whether something is
+worth doing — dated arguments, a measurement, and findings about the code as it is — and nothing
+in it is decided or citable as a rule. it sits outside `docs/` on purpose: amending a clause means
+grepping its number across `docs/`, and these files cite clause numbers freely, so putting them
+there would bury a real amendment under speculative hits. start at
+`explorations/STANDING-FINDINGS.md`, which is the half that outlived the exercise that produced
+it.
+
 CONVERTING A PAGE TO THE CARD SHAPE is taught by a CONVERTED page, never by a description of one.
 `OLD_SHAPE` in `packages/dogfood/tests/coverage.test.ts` is what was the backlog. IT IS EMPTY: the
 conversion is done and the set is now a RATCHET, so a page arriving in the old shape has to add its

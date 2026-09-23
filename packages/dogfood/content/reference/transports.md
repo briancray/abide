@@ -140,6 +140,7 @@ calls `jsonSchema` never carries one (19.14).
 | `etag` | a file under `src/ui/public` | The answered bytes, addressed by their content. |
 | `referrer-policy: strict-origin-when-cross-origin` | a page | The browsers' own default, written down. |
 | `vary` | wherever an answer depends on a request header | Names the header the answer varied on. |
+| `server-timing` | an rpc answer | The handler's duration, and whether the render's run answered it. |
 
 Every response declares its own content type and carries `x-content-type-options: nosniff`
 unconditionally, a browser guessing a different type being only ever the vulnerability. A

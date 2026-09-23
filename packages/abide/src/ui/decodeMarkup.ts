@@ -4,8 +4,7 @@ import { parseMarkup } from './parseMarkup.ts'
 // server writes an author's static text and static attribute values as their own bytes, and the
 // browser DECODES them — `AT&amp;T` is `AT&T` on the page. A built row writes through `data` and
 // `setAttribute`, which decode nothing, so the build has to hand over what the parser would have
-// made. Construction used to write the author's bytes straight through, and every grown row showed
-// `AT&amp;T` where the server's showed `AT&T`.
+// made — written straight through, every grown row shows `AT&amp;T` where the server's shows `AT&T`.
 //
 // THE PARSER IS ASKED, not a table. HTML's named references are two thousand entries and the
 // attribute and text rules differ at the edges; the parser that read the server's markup is the

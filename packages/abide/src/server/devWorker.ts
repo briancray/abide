@@ -28,12 +28,16 @@ import {
     rankRoutes,
     type ServerRoute,
 } from './answerRequest.ts'
+import { type Mount, mountHandlers } from './answerRpc.ts'
 import {
     CLIENT_ADDRESS,
     CLIENT_ENTRY,
     DEV_ADDRESS,
     PUBLIC_DIRECTORY,
 } from './CLIENT_BUILD.ts'
+import { chunksByModule, type Manifest, NO_MANIFEST } from './chunksByModule.ts'
+import { fenceServer } from './fenceServer.ts'
+import { namesUnder } from './namesUnder.ts'
 import { refuseAddressCollision } from './refuseAddressCollision.ts'
 import { shellUnder } from './render.ts'
 
@@ -43,8 +47,12 @@ import { shellUnder } from './render.ts'
 // writes one.
 const VIRTUAL_DIRECTORY = '__abide'
 
-// The bundle this worker answers `/__abide/client/…` out of, and the type each name is served as.
-type Bundle = Map<string, { bytes: ArrayBuffer; type: string }>
+// The bundle this worker answers `/__abide/client/…` out of, the type each name is served as, and
+// the chunks each route module needs (38.29).
+type Bundle = {
+    files: Map<string, { bytes: ArrayBuffer; type: string }>
+    manifest: Manifest
+}
 
 // What the listener sends to start this worker: the app's root, the modules it compiled to, and
 // what stopped it compiling where nothing did.
@@ -105,20 +113,27 @@ async function answerAsk(ask: Ask): Promise<{
     // this id and nothing else will send one, so an escape left the reader's tab hanging until
     // they gave up — and the commonest escape is the whole point of a dev server: a page whose
     // module does not parse throws when the route table imports it.
+    //
+    // THE BODY IS READ INSIDE THE TRY. `render` flushes the head before the page is imported
+    // (41.1), so that throw arrives while the body is being read rather than when the response is
+    // made — and this lane collects the body anyway, so it can still answer the failure document
+    // where `abide start` can only end the stream.
     let response: Response
+    let body: ArrayBuffer
     try {
         response =
             app === undefined
                 ? failedDocument(failure)
                 : await answerRequest(app, request)
+        body = await response.arrayBuffer()
     } catch (thrown) {
         response = failedDocument(
             thrown instanceof Error
                 ? (thrown.stack ?? thrown.message)
                 : String(thrown),
         )
+        body = await response.arrayBuffer()
     }
-    const body = await response.arrayBuffer()
     return {
         kind: 'response',
         id: ask.id,
@@ -150,25 +165,37 @@ async function open(start: Start): Promise<void> {
         const plugin = virtualModules(modules)
         Bun.plugin(plugin)
 
-        // ASKED FOR TOGETHER. Neither the shell nor the public directory depends on the
-        // bundle or on the other, and both sat behind the whole client build — which on a
-        // reload is latency the author waits on.
-        const bundling = bundleInMemory(root, base, plugin, routed)
-        const shelling = shellUnder(root)
-        // 38.20 — OUT OF THE SOURCE TREE. `abide build` copies these into its output and dev
-        // has no output, so the address answers where the author's file actually is.
-        const publishing = publicFilesUnder(`${root}/ui/${PUBLIC_DIRECTORY}`)
-        const [bundle, shell, published] = await Promise.all([
-            bundling,
-            shelling,
-            publishing,
+        // ASKED FOR TOGETHER. The bundle, the shell, the public directory and the server's own
+        // tables depend on none of each other — the plugin is registered above, before any of
+        // them asks it anything — and on a reload every one of them is latency the author waits on.
+        //
+        // ONE LISTING of the public directory, for the bundle's externals and for what is served.
+        const publicDirectory = `${root}/ui/${PUBLIC_DIRECTORY}`
+        const publicNames = namesUnder(publicDirectory)
+        const [bundle, shell, published, table, handlers] = await Promise.all([
+            bundleInMemory(
+                root,
+                base,
+                // 16.29, 16.30 — the browser's view of `server/`, as `abide build` gives it.
+                [plugin, fenceServer(root, start.modules)],
+                routed,
+                publicNames.map((name) => `/${name}`),
+            ),
+            shellUnder(root),
+            // 38.20 — OUT OF THE SOURCE TREE. `abide build` copies these into its output and dev
+            // has no output, so the address answers where the author's file actually is.
+            publicFilesUnder(publicDirectory, publicNames),
+            routed
+                ? (import(`${base}/server.ts`) as Promise<{
+                      routes: ServerRoute[]
+                  }>)
+                : { routes: [] as ServerRoute[] },
+            routed
+                ? (
+                      import(`${base}/rpc.ts`) as Promise<{ handlers: Mount[] }>
+                  ).then((rpc) => mountHandlers(rpc.handlers, root))
+                : mountHandlers([], root),
         ])
-
-        const table = routed
-            ? ((await import(`${base}/server.ts`)) as {
-                  routes: ServerRoute[]
-              })
-            : { routes: [] as ServerRoute[] }
 
         // 36.13, IN THIS LANE TOO. A throw here lands in `failure`, which is what 38.4 asks
         // for: the command keeps answering and what it answers names both halves. Without it
@@ -178,19 +205,20 @@ async function open(start: Start): Promise<void> {
         for (const route of table.routes) patterns.push(route.pattern)
         refuseAddressCollision(patterns, published.keys(), 'abide dev')
 
+        // 38.18 — THE RELOAD CLIENT IS THIS WORKER'S, not the bundle's, and it goes in whether or
+        // not there is an entry beside it: a bundle that failed is exactly when a reader needs the
+        // next save to reach them. `clientTags` writes nothing for a manifest with no entry.
+        const reload = `<script type="module" src="${DEV_ADDRESS}/client.js"></script>`
         app = {
-            routes: rankRoutes(table.routes),
-            shell: intoHead(
-                shell,
-                // 38.18 — THE RELOAD CLIENT IS THIS WORKER'S, not the bundle's, and it goes in
-                // whether or not there is an entry beside it: a bundle that failed is exactly
-                // when a reader needs the next save to reach them. What is NOT written is a tag
-                // for a bundle that is not there — a `<script>` at a 404 is a console error in
-                // place of the build error the terminal already carries.
-                `${bundle.has(`${CLIENT_ENTRY}.js`) ? clientTags(bundle.has(`${CLIENT_ENTRY}.css`)) : ''}<script type="module" src="${DEV_ADDRESS}/client.js"></script>`,
+            routes: rankRoutes(table.routes, (route) =>
+                intoHead(
+                    shell,
+                    clientTags(bundle.manifest, route.clientModules) + reload,
+                ),
             ),
             framework: (pathname) => served(bundle, pathname),
             published,
+            handlers,
         }
     } catch (thrown) {
         failure = thrown instanceof Error ? thrown.message : String(thrown)
@@ -206,7 +234,7 @@ function served(bundle: Bundle, pathname: string): Response | undefined {
             },
         })
     if (!pathname.startsWith(`${CLIENT_ADDRESS}/`)) return notFound()
-    const found = bundle.get(pathname.slice(CLIENT_ADDRESS.length + 1))
+    const found = bundle.files.get(pathname.slice(CLIENT_ADDRESS.length + 1))
     if (found === undefined) return notFound()
     // NO CACHING AT ALL, which is where dev parts company with 21.5: the names are stable across
     // rebuilds, so a browser told to keep `entry.js` for a year keeps the app it had at boot.
@@ -226,10 +254,11 @@ function served(bundle: Bundle, pathname: string): Response | undefined {
 async function bundleInMemory(
     root: string,
     base: string,
-    plugin: Bun.BunPlugin,
+    plugins: Bun.BunPlugin[],
     routed: boolean,
+    publicAddresses: string[],
 ): Promise<Bundle> {
-    const bundle: Bundle = new Map()
+    const bundle: Bundle = { files: new Map(), manifest: NO_MANIFEST }
     if (!routed) return bundle
     const built = await Bun.build({
         entrypoints: [`${base}/${CLIENT_ENTRY}.ts`],
@@ -237,10 +266,13 @@ async function bundleInMemory(
         // there to open. What it decides is where the output names are rooted, and the naming
         // below makes them flat anyway.
         root,
-        plugins: [plugin],
+        plugins,
         target: 'browser',
         format: 'esm',
         splitting: true,
+        metafile: true,
+        // 36.15 — as `abide build` does, off the source tree this lane answers them out of (38.20).
+        external: publicAddresses,
         naming: {
             entry: '[name].[ext]',
             chunk: '[name]-[hash].[ext]',
@@ -264,11 +296,14 @@ async function bundleInMemory(
     for (let index = 0; index < built.outputs.length; index += 1) {
         const output = built.outputs[index] as Bun.BuildArtifact
         const name = output.path.slice(output.path.lastIndexOf('/') + 1)
-        bundle.set(name, {
+        bundle.files.set(name, {
             bytes: read[index] as ArrayBuffer,
             type: output.type,
         })
     }
+    // `base` AS GIVEN, with no real path taken: every route module is one the plugin served, and
+    // the metafile names those under the plugin's namespace exactly as the plugin spelled them.
+    bundle.manifest = chunksByModule(built.metafile as Bun.BuildMetafile, base)
     return bundle
 }
 

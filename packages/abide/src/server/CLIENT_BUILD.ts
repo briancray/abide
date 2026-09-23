@@ -27,6 +27,18 @@ export const CLIENT_DIRECTORY = 'client'
 // into `<entry>.css` — so the extension is the whole difference and there is no second constant.
 export const CLIENT_ENTRY = 'entry'
 
+// 38.5 — where `abide build` writes the manifest `chunksByModule` reads off the bundle, below its
+// own output directory and BESIDE the client directory rather than in it: everything in there is
+// answered under `CLIENT_ADDRESS` (38.21), and the manifest is the server's, not the browser's.
+export const MANIFEST = 'manifest.json'
+
+// 38.5 — THE ENCODINGS A RESPONSE CAN BE COMPRESSED IN, in the order a tie is broken, and the suffix
+// `abide build` writes each precompressed file under. Brotli first: it is the smaller of the two
+// on the bundle, and every browser that sends it over https decodes it. Gzip is the one a browser
+// asks for over plain http. The build writes these and `abide start` reads them, so the suffix
+// spelled twice is a build that precompresses into files nothing ever serves.
+export const ENCODING_SUFFIX = { br: '.br', gzip: '.gz' } as const
+
 // 38.19 — where `abide build` copies `src/ui/public`, below its own output directory. A directory
 // rather than the source tree: `abide start` boots what the build produced and reaches for nothing
 // an app might have moved since.
@@ -37,3 +49,13 @@ export const PUBLIC_DIRECTORY = 'public'
 // dev WORKER serves the script that opens it, and a string spelled out in both is a reload that
 // silently never happens.
 export const DEV_ADDRESS = '/__abide/dev'
+
+// 16.2 — where a handler under `server/rpc` is answered over http: its path below that directory,
+// then its export name (19.1). Here for `CLIENT_ADDRESS`'s reason: the build writes the address
+// into the browser's wrapper and the server answers at it.
+export const RPC_ADDRESS = `${ABIDE_ADDRESS}/rpc`
+
+// 16.29 — where the build puts the module a browser gets in place of each handler module, below the
+// build's own output: the source's path, with this in front. One lookup for the client bundle to make
+// (`fenceServer`), and a place a reader can open to see exactly what the browser was handed.
+export const WIRE_DIRECTORY = 'wire'

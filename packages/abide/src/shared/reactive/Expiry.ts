@@ -27,7 +27,7 @@
 // two that moved further moved the other way and swap places between runs.
 //
 // THE FIELD IS ON THE EXPIRY RECORD, NOT ON THE CELL, and that is why. `dropped` could have
-// been a cell field beside `stale` and `servable`, and one more field per cell was
+// been a cell field beside `landed` and `servable`, and one more field per cell was
 // already worth about 5% on `probe a settled DAG 5 wide x 5 deep` when `expiry` itself was
 // added — a walk that reads no expiry code at all and is bound by memory traffic. A record
 // only a `ttl` value allocates costs the other values nothing.

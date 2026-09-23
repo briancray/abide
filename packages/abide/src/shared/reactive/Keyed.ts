@@ -20,13 +20,14 @@ import {
     isStreamBody,
     type Reactive,
     type ReactiveOptions,
+    refuseBothCaps,
     startDeferred,
     untag,
 } from './Reactive.ts'
 import {
-    CLEAN,
     detach,
     dropReader,
+    newSubscriber,
     type Subscriber,
     TRACKING,
     type Tracked,
@@ -60,6 +61,12 @@ export function isKeyed(
     )
 }
 
+// WHAT AN ENTRY WAS KEYED ON, read off its own record rather than a second map beside `entries`:
+// the args are the entry's body argument and its cell already holds them for every run.
+function argsOf(entry: unknown): unknown {
+    return (entry as { [CELL]: { args: unknown } })[CELL].args
+}
+
 function matches(args: unknown, pattern: unknown): boolean {
     if (pattern === undefined) return true
     if (args === null || typeof args !== 'object') return args === pattern
@@ -85,19 +92,23 @@ function matches(args: unknown, pattern: unknown): boolean {
 // moment. It is also woken by a cascade that is not a production (an `invalidate`, an
 // abort), and `servable` is what tells those apart: every one of them leaves nothing to
 // serve, where a production always leaves something.
+//
+// ONE MAP, IN RECENCY ORDER, holding what an eviction needs beside when the entry last produced.
+type Follower = {
+    at: number
+    cell: Tracked
+    reader: Subscriber
+    evict: () => void
+}
+
 class Lifetime {
     ms: number
-    lastProduced: Map<string, number>
-    followers: Map<
-        string,
-        { cell: Tracked; reader: Subscriber; evict: () => void }
-    >
+    followed: Map<string, Follower>
     timer: ReturnType<typeof setTimeout> | null
 
     constructor(ms: number) {
         this.ms = ms
-        this.lastProduced = new Map()
-        this.followers = new Map()
+        this.followed = new Map()
         this.timer = null
     }
 
@@ -105,30 +116,22 @@ class Lifetime {
         // 11.33: `Infinity` is the life of the scope, which no timer here can reach.
         if (this.ms === Number.POSITIVE_INFINITY) return
         const cell = entry[CELL]
-        const reader: Subscriber = {
-            sources: [cell],
-            probeSources: [],
-            cursor: 0,
-            alive: true,
-            state: CLEAN,
-            running: false,
-            isEffect: true,
-            isMirror: true,
-            adopter: null,
-            notify: (): void => {
-                if ((cell as unknown as { servable: boolean }).servable)
-                    this.touch(key)
-            },
+        // A MIRROR WITH NO ADOPTER — `Subscriber.isMirror` says why.
+        const reader = newSubscriber([cell], null, true)
+        const follower: Follower = { at: 0, cell, reader, evict }
+        reader.notify = (): void => {
+            if ((cell as unknown as { servable: boolean }).servable)
+                this.touch(key, follower)
         }
         cell.readers.push(reader)
-        this.followers.set(key, { cell, reader, evict })
         // The life starts at the reach: an entry whose load never lands still ends.
-        this.touch(key)
+        this.touch(key, follower)
     }
 
-    touch(key: string): void {
-        this.lastProduced.delete(key)
-        this.lastProduced.set(key, Date.now())
+    touch(key: string, follower: Follower): void {
+        follower.at = Date.now()
+        this.followed.delete(key)
+        this.followed.set(key, follower)
         // THE STANDING TIMER IS LEFT WHERE IT IS. It is armed at an entry at least as old as
         // this one, so it fires no later than anything this touch could need — at worst
         // early, and an early fire evicts nothing and re-arms. Re-arming here would be a
@@ -137,8 +140,8 @@ class Lifetime {
     }
 
     arm(): void {
-        for (const oldest of this.lastProduced.values()) {
-            armTimer(this, oldest + this.ms - Date.now(), () => {
+        for (const oldest of this.followed.values()) {
+            armTimer(this, oldest.at + this.ms - Date.now(), () => {
                 this.sweep()
             })
             return
@@ -148,12 +151,9 @@ class Lifetime {
     sweep(): void {
         this.timer = null
         const deadline = Date.now() - this.ms
-        for (const [key, at] of this.lastProduced) {
-            if (at > deadline) break
-            this.lastProduced.delete(key)
-            const follower = this.followers.get(key)
-            if (follower === undefined) continue
-            this.followers.delete(key)
+        for (const [key, follower] of this.followed) {
+            if (follower.at > deadline) break
+            this.followed.delete(key)
             follower.reader.alive = false
             dropReader(follower.cell, follower.reader)
             follower.evict()
@@ -276,9 +276,6 @@ export function createKeyed<
     options: ReactiveOptions<Accepted, Stored, never, Args> | undefined,
 ): Keyed<Stored, Args, Accepted, Failures> {
     const entries = new Map<string, Reactive<Stored, Accepted, Failures>>()
-    // What each entry was keyed on, so a pattern can be matched without re-parsing the
-    // canonical form back into an object.
-    const keyedOn = new Map<string, Args>()
     // 11.46: A KEYED `ttl` IS THE LIFE OF AN ENTRY, not of a production inside one, so it is
     // taken off the options every entry is built from — forwarded, it would build the
     // unkeyed mechanism in every entry and evict nothing from this map.
@@ -286,10 +283,7 @@ export function createKeyed<
     // 9.28: `history` is among what every entry is built from, so each entry keeps its own.
     const entryOptions = rest
     // 5.15, at the factory: a keyed value is capped one way or the other.
-    if (throttle !== undefined && debounce !== undefined)
-        throw new Error(
-            `${label}() declares both throttle and debounce. A value is capped one way or the other.`,
-        )
+    refuseBothCaps(`${label}()`, throttle, debounce)
     // 5.20: A KEYED VALUE'S WINDOW HOLDS BACK STARTING A KEY, rather than capping each entry's wakes.
     const starts =
         throttle === undefined && debounce === undefined
@@ -303,23 +297,14 @@ export function createKeyed<
         gate === undefined ? body : gated(body, gate as Schema<Args>),
     )
 
-    function hold(
+    // Out of the map and out of every selection with it, rather than reachable by a sweep until a
+    // collection happens to run.
+    function release(
         key: string,
-        args: Args,
         created: Reactive<Stored, Accepted, Failures>,
     ): void {
-        entries.set(key, created)
-        keyedOn.set(key, args)
-        if (lifetime !== null)
-            lifetime.follow(
-                key,
-                created as unknown as { [CELL]: Tracked },
-                () => {
-                    entries.delete(key)
-                    keyedOn.delete(key)
-                    untag(created)
-                },
-            )
+        entries.delete(key)
+        untag(created)
     }
 
     const self = function reach(
@@ -337,14 +322,19 @@ export function createKeyed<
             entryOptions as ReactiveOptions<Accepted, Stored, Failures>,
             starts !== null,
         )
-        hold(key, args, created)
+        entries.set(key, created)
+        if (lifetime !== null)
+            lifetime.follow(
+                key,
+                created as unknown as { [CELL]: Tracked },
+                () => {
+                    release(key, created)
+                },
+            )
         if (starts !== null)
             starts.reached(created, () => {
                 // 5.21: superseded before it started — not held, so a later reach starts afresh.
-                if (entries.get(key) !== created) return
-                entries.delete(key)
-                keyedOn.delete(key)
-                untag(created)
+                if (entries.get(key) === created) release(key, created)
             })
         return created
     } as Keyed<Stored, Args, Accepted, Failures>
@@ -352,26 +342,25 @@ export function createKeyed<
     ;(self as unknown as Record<symbol, boolean>)[KEYED_BRAND] = true
     self.entries = entries
     self.busy = (pattern?: Partial<Args>): boolean => {
-        for (const [key, entry] of entries)
-            if (matches(keyedOn.get(key), pattern) && entry.busy()) return true
+        for (const entry of entries.values())
+            if (matches(argsOf(entry), pattern) && entry.busy()) return true
         return false
     }
     // ALL rather than ANY, and the quantifiers are not a pair of preferences: `busy`
     // asks whether anything is loading, `ready` whether everything is servable, and
     // that is the only pairing under which `busy && !ready` reads as one sentence.
     self.ready = (pattern?: Partial<Args>): boolean => {
-        for (const [key, entry] of entries)
-            if (matches(keyedOn.get(key), pattern) && !entry.ready())
-                return false
+        for (const entry of entries.values())
+            if (matches(argsOf(entry), pattern) && !entry.ready()) return false
         return true
     }
     self.refresh = (pattern?: Partial<Args>): void => {
-        for (const [key, entry] of entries)
-            if (matches(keyedOn.get(key), pattern)) entry.refresh()
+        for (const entry of entries.values())
+            if (matches(argsOf(entry), pattern)) entry.refresh()
     }
     self.invalidate = (pattern?: Partial<Args>): void => {
-        for (const [key, entry] of entries)
-            if (matches(keyedOn.get(key), pattern)) entry.invalidate()
+        for (const entry of entries.values())
+            if (matches(argsOf(entry), pattern)) entry.invalidate()
     }
     return self
 }

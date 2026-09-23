@@ -41,7 +41,13 @@ test('an app is found at src/ where the command is run — 38.26, 38.28', async 
     // BESIDE THE APP, which is the other half of saying nothing: a build whose output lands
     // wherever the shell happened to stand is one `abide start` cannot find twice running.
     expect(await Bun.file(`${app}/.abide/server.ts`).exists()).toBe(true)
-    expect(await Bun.file(`${app}/.abide/client/entry.js`).exists()).toBe(true)
+    // THE ENTRY UNDER THE NAME THE MANIFEST GIVES IT, which a build hashes (38.5).
+    const manifest = (await Bun.file(`${app}/.abide/manifest.json`).json()) as {
+        entry: string
+    }
+    expect(
+        await Bun.file(`${app}/.abide/client/${manifest.entry}`).exists(),
+    ).toBe(true)
 })
 
 test('an app is found where the command is run, when ui/ is right there — 38.26', async () => {

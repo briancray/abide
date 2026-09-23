@@ -126,8 +126,7 @@ function installScrollSpy(signal: AbortSignal) {
                 (headings[index] as Element).getBoundingClientRect().top +
                 scrolled
         offsets = measured
-        // EVERY READ BEFORE THE WRITE `update` MAKES. This is the ordering that matters, and it
-        // already held.
+        // EVERY READ BEFORE THE WRITE `update` MAKES. This is the ordering that matters.
         bottom = document.documentElement.scrollHeight
         update()
     }
@@ -164,10 +163,6 @@ function installScrollSpy(signal: AbortSignal) {
     // OWED ONLY WHERE THE SWAP IS STILL TO COME. The webfont swap is a reflow and moves every
     // offset, so a measure after it is real — but on a CLIENT NAVIGATION `fonts.ready` is already
     // resolved, and this ran a second whole measure one microtask behind the first for nothing.
-    //
-    // DEFERRING THE FIRST MEASURE PAST THE ROUTER'S MUTATIONS WITH ONE `requestAnimationFrame`
-    // WAS TRIED AND DROPPED: the forced-layout count did not move (above), and it costs a frame
-    // of offsets being empty on every navigation.
     if (document.fonts !== undefined && document.fonts.status !== 'loaded')
         document.fonts.ready.then(measure)
     // DEFERRED PAST THE ROUTER'S MUTATIONS BY ONE FRAME, and the reason is the opposite of what a
@@ -284,6 +279,10 @@ function tableHtml(caption: string, rows: string) {
         '</tbody></table>'
     )
 }
+// One row of either table: the metric, its cells, and the ratio column.
+function row(label: string, cells: string, ratio: Reading | null) {
+    return '<tr><td>' + label + '</td>' + cells + ratioCell(ratio) + '</tr>'
+}
 function loadRows(reading: Reading) {
     let rows = ''
     for (const [label, key] of COUNTS) {
@@ -292,31 +291,24 @@ function loadRows(reading: Reading) {
         // abide publishes, and nothing publishes one yet — so the cell says the lane
         // did not count it rather than that it counted none.
         if (value === null || !value) continue
-        rows +=
-            '<tr><td>' +
-            label +
-            '</td>' +
-            loadedOnly(reading, value) +
-            ratioCell(null) +
-            '</tr>'
+        rows += row(label, loadedOnly(reading, value), null)
     }
     const paint = reading.paint || {}
     const first =
         paint.firstContentfulPaint != null
             ? paint.firstContentfulPaint
             : paint.firstPaint
-    if (first != null) {
-        rows +=
-            '<tr><td>First paint</td>' +
-            loadedOnly(reading, `${first.toFixed(1)} ms`) +
-            ratioCell(null) +
-            '</tr>'
-    }
-    rows +=
-        '<tr><td>Nodes in the document</td>' +
-        loadedOnly(reading, reading.size.nodes) +
-        ratioCell(null) +
-        '</tr>'
+    if (first != null)
+        rows += row(
+            'First paint',
+            loadedOnly(reading, `${first.toFixed(1)} ms`),
+            null,
+        )
+    rows += row(
+        'Nodes in the document',
+        loadedOnly(reading, reading.size.nodes),
+        null,
+    )
     return rows
 }
 function opRows(reading: Reading) {
@@ -327,36 +319,32 @@ function opRows(reading: Reading) {
             reading.arms[arm] ? reading.arms[arm].work[key] : null,
         )
         if (values.every((value) => value === null || !value)) continue
-        rows +=
-            '<tr><td>' +
-            label +
-            '</td>' +
-            values.map(cell).join('') +
-            ratioCell(
-                values[0] !== null && values[1]
-                    ? { kind: 'ratio', value: values[0] / values[1] }
-                    : null,
-            ) +
-            '</tr>'
+        rows += row(
+            label,
+            values.map(cell).join(''),
+            values[0] !== null && values[1]
+                ? { kind: 'ratio', value: values[0] / values[1] }
+                : null,
+        )
     }
-    rows +=
-        '<tr><td>Time per op</td>' +
+    rows += row(
+        'Time per op',
         ARMS.map((arm) =>
             cell(
                 reading.arms[arm]
                     ? millis(reading.arms[arm].nanosecondsPerOp)
                     : null,
             ),
-        ).join('') +
-        ratioCell(reading.ratios.abide) +
-        '</tr>'
-    rows +=
-        '<tr><td>p95</td>' +
+        ).join(''),
+        reading.ratios.abide,
+    )
+    rows += row(
+        'p95',
         ARMS.map((arm) =>
             cell(reading.arms[arm] ? millis(reading.arms[arm].p95) : null),
-        ).join('') +
-        ratioCell(null) +
-        '</tr>'
+        ).join(''),
+        null,
+    )
     return rows
 }
 function readingHtml(reading: Reading | null, windowMs: number) {

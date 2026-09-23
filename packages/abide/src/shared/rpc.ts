@@ -1,6 +1,7 @@
-// `GET` and the four mutations: a handler given an address (16.2). This is the IN-PROCESS arm —
-// what a server-side caller, a page rendering on the server and a test all reach. The wire arm is
-// a generated wrapper the browser gets instead of this module (16.29), and it is not built yet.
+// `GET` and the four mutations: a handler given an address (16.2). The IN-PROCESS arm is what a
+// server-side caller, a page rendering on the server and a test all reach; the WIRE arm is what a
+// browser gets in its place (16.29, `#ui/wire.ts`) — and it is `declare` over a body that fetches,
+// which is why this module is in the seam both reach rather than in the server's.
 //
 // A HANDLER IS A `reactive` (16.1), so an `Rpc` is not a second kind of value: the call hands back
 // the handler's own `Reactive` (16.3), and every probe, trigger and failure on it is the reactive
@@ -13,8 +14,7 @@
 // 16.8's publish into a value with no producer; and 16.7's `ttl` default on a `reactive` built
 // BEFORE it reached a mutation, which is an option on a value that already exists.
 
-import type { Failed } from '#shared/Failed.ts'
-import { isFailed } from '#shared/Failed.ts'
+import { isFailed } from './Failed.ts'
 import {
     type AdoptedFailures,
     type AdoptedProduced,
@@ -25,9 +25,11 @@ import {
     type Reactive,
     type Refused,
     reactive,
-} from '#shared/reactive/index.ts'
+} from './reactive/index.ts'
+import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
+import { currentScope } from './reactive/scoping.ts'
 
-type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     ...args: undefined extends Args ? [args?: Args] : [args: Args]
@@ -91,7 +93,7 @@ type Declare = {
     >
 }
 
-function declare(method: Method): Declare {
+export function declare(method: Method): Declare {
     return ((handler: unknown, options?: RpcOptions): unknown => {
         // 16.5 — THE ARM IS READ OFF A BRAND. A `Keyed` and a one-parameter plain function have
         // the same shape, and only the first has already decided its own keying.
@@ -106,29 +108,38 @@ function declare(method: Method): Declare {
                   )
         // 16.3 — the handler's own `Reactive`. A `Keyed` reaches its entry, which is 1.7's start
         // and 1.8's join; an unkeyed value has one entry and the call is the reach of it.
+        //
+        // 41.13 — AND REPORTED, where the call is made in a page's render: the browser's own call for
+        // this handler and these args is then answered from what this one reached, rather than by
+        // running the handler again. Everywhere else the scope has no `seed`, and in a browser there
+        // is no scope at all, so the report is one load of a `null`.
         const call = isKeyed(value)
-            ? (args?: unknown): unknown =>
-                  (value as (args: unknown) => unknown)(args)
-            : (): unknown => value
+            ? (args?: unknown): unknown => {
+                  const reached = (value as (args: unknown) => unknown)(args)
+                  currentScope()?.seed?.(rpc, args, reached)
+                  return reached
+              }
+            : (): unknown => {
+                  currentScope()?.seed?.(rpc, undefined, value)
+                  return value
+              }
         // THE HANDLER'S OWN MEMBERS, handed the pattern. A `Keyed` narrows by it and a `Reactive`'s
         // take no argument, so one spelling serves both arms and neither is a second mechanism.
-        const face = value as {
-            busy(pattern?: unknown): boolean
-            ready(pattern?: unknown): boolean
-            refresh(pattern?: unknown): void
-            invalidate(pattern?: unknown): void
-        }
-        return Object.assign(call, {
+        const face = value as Record<
+            (typeof SELECTION_MEMBERS)[number],
+            (pattern?: unknown) => unknown
+        >
+        const rpc = Object.assign(call, {
             method,
             description: options?.description,
-            busy: (pattern?: unknown): boolean => face.busy(pattern),
-            ready: (pattern?: unknown): boolean => face.ready(pattern),
-            refresh: (pattern?: unknown): void => face.refresh(pattern),
-            invalidate: (pattern?: unknown): void => face.invalidate(pattern),
             isError(error: unknown, name: string): boolean {
-                return isFailed(error) && (error as Failed).name === name
+                return isFailed(error) && error.name === name
             },
         })
+        const members = rpc as unknown as Record<string, unknown>
+        for (const name of SELECTION_MEMBERS)
+            members[name] = (pattern?: unknown): unknown => face[name](pattern)
+        return rpc
     }) as Declare
 }
 

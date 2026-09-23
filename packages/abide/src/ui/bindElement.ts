@@ -23,6 +23,6 @@ export function bindElement(
         return undefined
     }
     if (typeof value !== 'function') return undefined
-    const disposer = (value as (node: Element) => Disposer | void)(element)
+    const disposer = (value as (node: Element) => Disposer | undefined)(element)
     return typeof disposer === 'function' ? disposer : undefined
 }

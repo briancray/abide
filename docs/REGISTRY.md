@@ -89,7 +89,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `history` | `number` | How many past productions a value retains beside the standing one. | 6.1, 6.2, 6.3, 6.16, 6.17, 6.18, 9.3, 9.10, 9.17, 9.18, 9.19, 9.28, 11.39 |
 | `ttl` | `number` | The life of a retained production. | 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11, 6.12, 6.13, 6.14, 6.15, 6.22, 11.6, 11.35, 11.46, 11.49, 11.50 |
 | `args` | `Schema<Args>` | The gate on a keyed value's args. | 9.9, 11.28, 11.30, 11.41, 11.42, 11.57, 11.61 |
-| `global` | `boolean` | Opts out of the default scope into one cache shared by every caller in the process. | 11.34, 11.35, 11.36, 11.37, 11.38, 11.40, 11.54 |
+| `global` | `boolean` | Opts out of the default scope into one cache shared by every caller in the process. | 11.34, 11.35, 11.36, 11.37, 11.38, 11.40, 11.54, 11.68 |
 | `tags` | `string[] \| ((args?: Args) => string[])` | What a `Selection` matches on. | 11.44, 11.45 |
 | `throttle` | `number` | A ceiling on how often the value changes. | 5.9, 5.10, 5.12, 5.13, 5.15, 5.16, 5.18, 5.19, 5.20, 5.21, 5.22 |
 | `debounce` | `number` | A wait for the changes to stop before the value changes. | 5.9, 5.10, 5.12, 5.14, 5.15, 5.16, 5.18, 5.19, 5.20, 5.21, 5.22 |
@@ -204,7 +204,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.9, 16.12, 16.26, 16.27, 16.28, 16.29, 16.30, 16.34, 16.45, 41.5, 41.7, 41.12 |
+| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.9, 16.12, 16.26, 16.27, 16.28, 16.29, 16.30, 16.34, 16.45, 41.5, 41.7, 41.12, 41.22 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.31 |
 | `Produced` | `unknown` | What it yields, per the unit rule. | 1.2, 16.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.19 |
@@ -300,6 +300,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `etag` | a file under `src/ui/public` | The answered bytes, addressed by their content. | 21.13, 21.14 |
 | `referrer-policy: strict-origin-when-cross-origin` | a page | The browsers' own default, written down. | 21.6 |
 | `vary` | wherever an answer depends on a request header | Names the header the answer varied on. | 21.7 |
+| `server-timing` | an rpc answer | The handler's duration, and whether the render's run answered it. | 21.15 |
 
 # Generated surfaces
 
@@ -467,7 +468,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13 |
+| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14 |
 
 # `.abide` files
 
@@ -570,7 +571,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Component` | `interface Component {}` | A component bound to its props. | 32.18, 35.4 |
-| `render` | `(component: Component, shell?: Shell) => AsyncGenerator<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.5, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13 |
+| `render` | `(component: Component, shell?: Shell) => AsyncGenerator<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.5, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.21, 35.11 |
 | `Shell` | `string \| URL \| undefined` | The document a render renders into. | 35.6 |
 
 ## Sinks
@@ -579,7 +580,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- | --- |
 | `href={x}`, any attribute | the element | the attribute or property | 35.7, 35.8 |
 | `class:`, `style:`, `bind:` | the element | the class, the style property, the bound property | 35.7 |
-| `<title>{name}</title>` | `<title data-abide-sink="…">` | `.textContent` | 35.9, 35.10 |
+| `<title>{name}</title>` | the `<title>` | `.textContent` | 35.9, 35.10 |
 | `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` | 35.9 |
 
 # Configuration
@@ -620,13 +621,13 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `src/shared/**` | Source shared by both. | 36.10 |
 | `src/server/app.ts` | The lifecycle hooks. | 37.1 |
 | `src/ui/app.html` | The document its pages are served in. | 35.6 |
-| `src/ui/public/**` | The files answered as authored, at their path below that directory. | 36.11, 36.12, 36.13, 36.14, 21.12, 21.13, 21.14, 38.19, 38.20 |
+| `src/ui/public/**` | The files answered as authored, at their path below that directory. | 36.11, 36.12, 36.13, 36.14, 36.15, 21.12, 21.13, 21.14, 38.19, 38.20 |
 | `src/ui/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
 | `src/ui/public/robots.txt` | The file answered at `/robots.txt`. | 36.11 |
 | `src/ui/pages/**/page.abide` | A route. | 23.3, 23.4 |
 | `src/ui/pages/**/layout.abide` | A layout, rendering its child page through a slot. | 35.1, 41.11 |
 | `src/ui/pages/**/error.abide` | The page a refusal renders in. | 35.2, 35.3 |
-| `src/server/rpc/**/*.ts` | The rpc handlers. | 19.1 |
+| `src/server/rpc/**/*.ts` | The rpc handlers. | 19.1, 19.16 |
 | `src/server/sockets/**/*.ts` | The socket handlers. | 19.1 |
 
 ## Lifecycle hooks
@@ -662,9 +663,9 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `abide scaffold <name>` | Writes a starter project. | 38.1 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2 |
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3 |
-| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 38.4, 38.15, 38.16, 38.17, 38.18, 38.20, 38.25, 38.26, 38.27 |
-| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.5, 38.19, 38.26, 38.27, 38.28 |
-| `abide start [--port <n>]` | Boots the built app. | 38.6, 38.21, 38.22, 38.23, 38.24, 38.26, 38.27, 38.28 |
+| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 38.4, 38.15, 38.16, 38.17, 38.18, 38.20, 38.25, 38.26, 38.27, 38.29, 38.31 |
+| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.5, 38.19, 38.26, 38.27, 38.28, 38.31 |
+| `abide start [--port <n>]` | Boots the built app. | 38.6, 38.21, 38.22, 38.23, 38.24, 38.26, 38.27, 38.28, 38.29, 38.30 |
 | `abide connect [url]` | The interactive shell against a running app. | 38.7 |
 | `abide call <address> [args]` | One call to one handler. | 38.8 |
 | `abide openapi [--out <file>] [--url <origin>]` | The OpenAPI document written rather than served. | 38.9 |

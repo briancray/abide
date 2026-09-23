@@ -17,8 +17,7 @@ import type { TemplateNode } from './TemplateNode.ts'
 // - the build (`emitClient`'s `emitBuild`) — what a region made once a row is constructed by;
 // - the adopt walk (`emitRegion`) — how a mount finds each node the server or the build made.
 //
-// So where a node stands, and what it is, is decided once. Positions used to be a by-product of
-// WRITING markup, and the client wrote markup three times over only to throw it away for them.
+// So where a node stands, and what it is, is decided once.
 //
 // A LINEAR CURSOR: each position is found from the one BEFORE it — `previous.nextSibling` — or
 // from the node it hangs inside. Nothing arithmetic, so a region standing in the middle of a run of
@@ -129,17 +128,20 @@ export class Cursor {
     // A run of adjacent text and expressions, which a browser parses as ONE text node however many
     // pieces it was written as — see `classifyTemplate`'s head for why that is the unit.
     text(run: TemplateNode[], blank: boolean): Position {
-        const frame = this.here()
-        const at = this.record('text', run[0] as TemplateNode, '', blank, run)
-        frame.after = at.name
-        return at
+        return this.record('text', run[0] as TemplateNode, '', blank, run)
     }
 
-    // An element. `enter` is what descends into it; a void element is placed and never entered.
+    // An element, and the walk DESCENDS into it: what is placed next is its first child, until
+    // `leave`. The stack discipline the markup emitter already walks in — an element's children are
+    // emitted between its open and close tags and nowhere else. A void element is left at once.
     element(node: TemplateNode & { kind: 'element' }): Position {
-        const frame = this.here()
         const at = this.record('element', node, node.lowerTag, false, [])
-        frame.after = at.name
+        this.frames.push({
+            parent: at.name,
+            within: at,
+            parserOwned: at.parserOwned,
+            after: null,
+        })
         return at
     }
 
@@ -147,34 +149,10 @@ export class Cursor {
     // rather than by counting — which is the negative-step encoding falling out rather than being
     // ported. How many nodes stand between the anchors depends on a value, and a cursor never asks.
     region(holder: TemplateNode): Position {
-        const frame = this.here()
-        const at = this.record('region', holder, '', false, [])
-        frame.after = `${at.name}?.close`
-        return at
-    }
-
-    // Descend into the element just placed. Bracketed by `leave`, which is the stack discipline the
-    // markup emitter already walks in: an element's children are emitted between its open and close
-    // tags and nowhere else.
-    enter(): void {
-        const at = this.positions[this.positions.length - 1]
-        if (at === undefined || at.kind !== 'element')
-            throw new Error(
-                'abide: a cursor descended into something that is not the element it just placed.',
-            )
-        this.frames.push({
-            parent: at.name,
-            within: at,
-            parserOwned: at.parserOwned,
-            after: null,
-        })
+        return this.record('region', holder, '', false, [])
     }
 
     leave(): void {
-        if (this.frames.length === 1)
-            throw new Error(
-                'abide: a cursor left a region root it never entered.',
-            )
         this.frames.pop()
     }
 
@@ -228,6 +206,7 @@ export class Cursor {
             children: [],
         }
         this.next += 1
+        frame.after = kind === 'region' ? `${at.name}?.close` : at.name
         this.positions.push(at)
         if (frame.within === null) this.top.push(at)
         else frame.within.children.push(at)
@@ -288,7 +267,6 @@ export function placeTemplate(nodes: TemplateNode[], cursor: Cursor): void {
             continue
         }
         cursor.element(node)
-        cursor.enter()
         placeTemplate(node.children, cursor)
         cursor.leave()
     }

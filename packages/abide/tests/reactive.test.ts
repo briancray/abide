@@ -12,6 +12,7 @@ import {
     invalidate,
     isReactive,
     NotLanded,
+    type Reactive,
     reactive,
     ready,
     refresh,
@@ -22,6 +23,8 @@ import {
 } from '#shared'
 import { CELL } from '#shared/reactive/CELL.ts'
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
+import { SCOPING } from '#shared/reactive/scoping.ts'
+import { CLEAN } from '#shared/reactive/tracking.ts'
 
 // THE RECORD A VALUE'S STATE LIVES ON. Every test that asserts a field rather than an
 // answer reaches it through here — read off the callable itself, a field is `undefined`,
@@ -788,8 +791,19 @@ test('a probe over a cycle terminates', () => {
 // 43 own properties on a function is past what V8 tracks with a map. Putting the 33 fields
 // back on the function instead of on `Cell` takes this to 36 own names and 0 own symbols,
 // and construction from 87 ns to 123 here and from 83 ns to 101 under V8.
+//
+// BUILT AS A BROWSER BUILDS IT. Where an earlier file in the same process installed a server's
+// provider, a value built outside a request is the forwarder `scoped.ts` hands back, whose one own
+// symbol is its filing — a different object, and not the one this prices.
 test('a value carries its fields and not its members', () => {
-    const value = reactive(1)
+    const provider = SCOPING.provider
+    SCOPING.provider = null
+    let value: ReturnType<typeof reactive<number>>
+    try {
+        value = reactive(1)
+    } finally {
+        SCOPING.provider = provider
+    }
     // The three a function always has, and nothing of the value's own.
     expect(Object.getOwnPropertyNames(value).length).toBe(3)
     // The record, and only the record: the brand is inherited, so it is not one per value.
@@ -1342,11 +1356,11 @@ test('re-adopting something with nothing to serve clears the outer', () => {
 // waking on every one of them.
 //
 // The revert is dropping the inheritance: `woken` goes from 0 to 1.
-// 11.16 IS BOTH EDGES. Losing what there was to serve is the same move `unserveMarked`
-// makes on a trigger and `run` makes on an abort — the readers hear it through the
-// cascade and the GUARDS hear it through `probesMoved` — and only the first was made
-// here. The inner has been loading all along, so it moves no probe of its own: there is
-// no upstream walk for the guard to hear through, and it never runs again.
+// 11.16 IS BOTH EDGES. Losing what there was to serve is `unserve`, the one move a trigger
+// and an abort make too — the readers hear it through the cascade and the GUARDS hear it
+// through `probesMoved` — and the adoption once made only the first. The inner has been loading all
+// along, so it moves no probe of its own: there is no upstream walk for the guard to hear
+// through, and it never runs again.
 //
 // THE REVERT is the unserve arm cascading and stopping: `saw: true` while the truth is
 // false, and `{#if outer.ready()}{outer()}{:else}spinner{/if}` renders the value branch
@@ -1681,6 +1695,32 @@ test('a derived value is not ready while a value it read has nothing to serve', 
     expect(source.ready()).toBe(false)
     expect(derived.busy()).toBe(true)
     expect(derived.ready()).toBe(false)
+})
+
+// 11.59 THROUGH AN ABORT, where nothing upstream moved a probe. The write that re-points the body
+// is a production on `flag`, and `pending` has never had anything to serve, so the only move a
+// guard on `derived.ready()` can hear is the one the abort makes when it stops serving.
+//
+// THE REVERT: dropping `probesMoved` from `unserve` reports `seen: true` — the guard left on the
+// value branch while the value it guards throws.
+test('a derived value that aborts wakes the guard asking whether it is ready', () => {
+    const flag = reactive(false)
+    const pending = reactive<number>()
+    const derived = reactive(() => (flag() ? pending() : 0))
+    const seen: boolean[] = []
+    const guard = watch(() => {
+        seen.push(derived.ready())
+    })
+    // What pulls the body: a reader of the VALUE, apart from the guard.
+    const painter = watch(() => {
+        derived()
+    })
+    expect(seen).toEqual([true])
+    flag.set(true)
+    flushSync()
+    expect(`seen: ${seen.at(-1)}`).toBe('seen: false')
+    guard()
+    painter()
 })
 
 // The floor reaches through the adoption too, which is not in the tracked source list —
@@ -2956,17 +2996,15 @@ test('a write landing on a released value stops the read reloading', async () =>
     expect(`runs: ${runs}`).toBe('runs: 1')
 })
 
-// ── `servable === landed && !stale`, the invariant nothing was checking ──────────────
+// ── `servable` implies `landed`, the invariant nothing was checking ──────────────────
 
-// THE LADDER THE READ PATH IS BUILT ON. `servable` is `landed && !stale` CACHED rather
-// than recomputed, and `direct` caches `state === CLEAN && servable` on top of it — which
-// is what makes a read one load and one branch. Nine sites move the three fields by hand.
+// THE LADDER THE READ PATH IS BUILT ON. `servable` says a read may answer with the held value,
+// and `direct` caches `state === CLEAN && servable` on top of it — which is what makes a read
+// one load and one branch. The sites that move the two fields do it by hand.
 //
-// IT FAILS SILENTLY IN BOTH DIRECTIONS, which is why it is a gate and not a comment. A
-// site that marks `stale` and forgets `servable` leaves `s.ready()` answering true and
-// `readIndirect` handing back a value the system has already decided is wrong; one that
-// clears `servable` and forgets `stale` leaves a value refusing every read with nothing
-// able to explain why. The output of the failing arm is a plausible value either way.
+// IT FAILS SILENTLY, which is why it is a gate and not a comment. A site that releases the
+// value and forgets `servable` leaves `s.ready()` answering true and `readIndirect` handing
+// back `undefined` as though it were a production — a plausible value, with nothing throwing.
 //
 // WALKED RATHER THAN ENUMERATED. The transitions that exist today could be listed, and
 // then the next one — the one this is for — would not be in the list. A sequence over the
@@ -2980,13 +3018,9 @@ test('a write landing on a released value stops the read reloading', async () =>
 // transition is checked, and the split is the honest one rather than a slower fuzz that
 // would have to sleep through a timer on every step.
 function breachedBy(value: unknown): string | null {
-    const cell = cellOf<{
-        landed: boolean
-        stale: boolean
-        servable: boolean
-    }>(value)
-    if (cell.servable === (cell.landed && !cell.stale)) return null
-    return `servable=${cell.servable} landed=${cell.landed} stale=${cell.stale}`
+    const cell = cellOf<{ landed: boolean; servable: boolean }>(value)
+    if (!cell.servable || cell.landed) return null
+    return `servable=${cell.servable} landed=${cell.landed}`
 }
 
 // Seeded so a failure names a reproducible sequence rather than one that has gone by the
@@ -3002,7 +3036,26 @@ function sequence(seed: number): () => number {
     }
 }
 
-test('servable stays landed && !stale across every transition', async () => {
+// WHAT AN OPERATION'S OWN CLAUSE LETS IT DO SILENTLY, and nothing else is let off. 7.14 and 7.16
+// have an invalidate drop `busy` with no wake — a guard still showing a load reads the truth on its
+// next render. 5.7 has a patch mint over the same object, and an ungated publish mints a repeat,
+// so a reader woken onto the value it already held is the clause working. 6.4 has an expiry wake
+// no reader, so one holding the released production until the reload lands is the clause too.
+type Allows =
+    | 'busy falls silently'
+    | 'the same value wakes'
+    | 'an expiry wakes no reader'
+
+type Subject = {
+    name: string
+    value: Reactive<unknown>
+    ops: { op: () => void; allows?: Allows }[]
+}
+
+// THE VALUES BOTH WALKS TAKE, built fresh per walk. Every arm `run` has, the adoption arms, a
+// retained value, and a `ttl` value both settled and loading — the loading one is the only way to
+// a reload that starts from the read path and is not over by the end of the operation.
+function walkSubjects(): Subject[] {
     const source = reactive(1)
     const unlanded = reactive(new Promise<number>(() => {}))
     let abortNow = false
@@ -3012,73 +3065,22 @@ test('servable stays landed && !stale across every transition', async () => {
     // adoption arm that LEAVES the adopting value unservable — adopting a settled one puts
     // it back inside the same operation, which is why adopting `source` cannot reach it.
     let adoptPendingNow = false
-
-    const subjects: { name: string; value: unknown; ops: (() => void)[] }[] = []
+    let refuseNow = false
+    let rejectNow = false
 
     const plain = reactive({ n: 1 })
-    subjects.push({
-        name: 'a value',
-        value: plain,
-        ops: [
-            () => plain.set({ n: 2 }),
-            () => plain.publish({ n: 2 }),
-            () =>
-                plain.patch((held) => {
-                    held.n += 1
-                }),
-            () => plain.invalidate(),
-            () => plain.refresh(),
-        ],
-    })
-
     // The body reaches every arm `run` has: a production, the abort (11.53), a refusal,
     // and an adoption whose source stops being servable (11.16).
     const derived = reactive(() => {
         if (abortNow) return unlanded()
         if (failNow) throw new Error('refused')
+        // 15.5: a refusal handed back rather than thrown, which `run` lands on its own arm.
+        if (refuseNow) return refuse.typed('Refused')() as unknown as number
         if (adoptPendingNow) return unlanded
         if (adoptNow) return source
         return source() + 1
     })
-    subjects.push({
-        name: 'a body',
-        value: derived,
-        ops: [
-            () => source.set(source.peek() === 1 ? 2 : 1),
-            () => derived.invalidate(),
-            () => derived.refresh(),
-            () => derived.set(99),
-            () => {
-                abortNow = !abortNow
-                derived.refresh()
-            },
-            () => {
-                failNow = !failNow
-                derived.refresh()
-            },
-            () => {
-                adoptNow = !adoptNow
-                derived.refresh()
-            },
-            () => {
-                adoptPendingNow = !adoptPendingNow
-                derived.refresh()
-            },
-            () => source.invalidate(),
-        ],
-    })
-
     const room = reactive<number>(undefined, { history: 3 })
-    subjects.push({
-        name: 'a room',
-        value: room,
-        ops: [
-            () => room.publish(1),
-            () => room.publish(2),
-            () => room.invalidate(),
-        ],
-    })
-
     // 6.13's transition, reached through the read rather than the timer so the walk stays
     // contention-immune and runs in the parallel gate (CLAUDE.md, "counts run in bun test").
     let ttlRuns = 0
@@ -3089,48 +3091,316 @@ test('servable stays landed && !stale across every transition', async () => {
         },
         { ttl: 1_000 },
     )
-    subjects.push({
-        name: 'a ttl value',
-        value: expiring,
-        ops: [
-            () => {
-                const now = Date.now()
-                setSystemTime(new Date(now + 1_001))
-                try {
-                    expiring.peek()
-                } finally {
-                    setSystemTime()
-                }
-            },
-            () => expiring.invalidate(),
-            () => expiring.refresh(),
-        ],
+    let loadRuns = 0
+    const reloading = reactive(
+        () => {
+            loadRuns += 1
+            return rejectNow
+                ? Promise.reject(new Error('reload refused'))
+                : Promise.resolve({ at: loadRuns })
+        },
+        { ttl: 1_000 },
+    )
+    const expireThenRead = (value: Reactive<unknown>) => (): void => {
+        const now = Date.now()
+        setSystemTime(new Date(now + 1_001))
+        try {
+            value.peek()
+        } finally {
+            setSystemTime()
+        }
+    }
+    const invalidate = (value: Reactive<unknown>) => ({
+        op: () => value.invalidate(),
+        allows: 'busy falls silently' as const,
     })
 
+    return [
+        {
+            name: 'a value',
+            value: plain as Reactive<unknown>,
+            ops: [
+                { op: () => plain.set({ n: 2 }) },
+                { op: () => plain.publish({ n: 2 }) },
+                {
+                    op: () =>
+                        plain.patch((held) => {
+                            held.n += 1
+                        }),
+                    allows: 'the same value wakes',
+                },
+                invalidate(plain as Reactive<unknown>),
+                { op: () => plain.refresh() },
+            ],
+        },
+        {
+            name: 'a body',
+            value: derived as Reactive<unknown>,
+            ops: [
+                { op: () => source.set(source.peek() === 1 ? 2 : 1) },
+                invalidate(derived as Reactive<unknown>),
+                { op: () => derived.refresh() },
+                { op: () => derived.set(99) },
+                {
+                    op: () => {
+                        abortNow = !abortNow
+                        derived.refresh()
+                    },
+                },
+                {
+                    op: () => {
+                        failNow = !failNow
+                        derived.refresh()
+                    },
+                },
+                {
+                    op: () => {
+                        adoptNow = !adoptNow
+                        derived.refresh()
+                    },
+                },
+                {
+                    op: () => {
+                        refuseNow = !refuseNow
+                        derived.refresh()
+                    },
+                },
+                {
+                    op: () => {
+                        adoptPendingNow = !adoptPendingNow
+                        derived.refresh()
+                    },
+                },
+                { op: () => source.invalidate() },
+            ],
+        },
+        {
+            name: 'a room',
+            value: room as Reactive<unknown>,
+            ops: [
+                { op: () => room.publish(1), allows: 'the same value wakes' },
+                { op: () => room.publish(2), allows: 'the same value wakes' },
+                invalidate(room as Reactive<unknown>),
+            ],
+        },
+        {
+            name: 'a ttl value',
+            value: expiring as Reactive<unknown>,
+            ops: [
+                {
+                    op: expireThenRead(expiring as Reactive<unknown>),
+                    allows: 'an expiry wakes no reader',
+                },
+                invalidate(expiring as Reactive<unknown>),
+                { op: () => expiring.refresh() },
+            ],
+        },
+        {
+            name: 'a ttl load',
+            value: reloading as Reactive<unknown>,
+            ops: [
+                {
+                    op: expireThenRead(reloading as Reactive<unknown>),
+                    allows: 'an expiry wakes no reader',
+                },
+                invalidate(reloading as Reactive<unknown>),
+                { op: () => reloading.refresh() },
+                {
+                    op: () => {
+                        rejectNow = !rejectNow
+                    },
+                },
+            ],
+        },
+    ]
+}
+
+function pick(
+    subjects: Subject[],
+    next: () => number,
+): { subject: Subject; at: number } {
+    const subject = subjects[next() % subjects.length] as Subject
+    return { subject, at: next() % subject.ops.length }
+}
+
+// A read inside an op may refuse, which is the value working rather than a rule breaking — 2.2
+// and 2.3 are what those throws are.
+function attempt(op: () => void): void {
+    try {
+        op()
+    } catch (thrown) {
+        if (!(thrown instanceof Error)) throw thrown
+    }
+}
+
+test('servable implies landed across every transition', async () => {
+    const subjects = walkSubjects()
     const next = sequence(0x5eed)
     const walked: string[] = []
     for (let step = 0; step < 600; step += 1) {
-        const subject = subjects[
-            next() % subjects.length
-        ] as (typeof subjects)[0]
-        const pick = next() % subject.ops.length
-        walked.push(`${subject.name}[${pick}]`)
-        try {
-            ;(subject.ops[pick] as () => void)()
-        } catch (thrown) {
-            // A read inside an op may refuse, which is the value working rather than the
-            // invariant breaking — 2.2 and 2.3 are what those throws are.
-            if (!(thrown instanceof Error)) throw thrown
-        }
+        const { subject, at } = pick(subjects, next)
+        walked.push(`${subject.name}[${at}]`)
+        attempt((subject.ops[at] as Subject['ops'][0]).op)
         flushSync()
         for (const held of subjects) {
             const breach = breachedBy(held.value)
             if (breach !== null)
                 throw new Error(
-                    `${held.name} breached servable === landed && !stale at step ${step} (${breach}). The sequence was: ${walked.slice(-8).join(' -> ')}`,
+                    `${held.name} breached servable implies landed at step ${step} (${breach}). The sequence was: ${walked.slice(-8).join(' -> ')}`,
                 )
         }
     }
+    expect(`steps walked: ${walked.length}`).toBe('steps walked: 600')
+})
+
+// ── The wake contract, walked ──────────────────────────────────────────────────────────
+
+// EVERY WAKE BUG THIS FILE HAS GATED WAS A DECISION MADE AT ONE SITE, and each was found by a
+// test written after the fact for that site. What they break is one contract, stated at the
+// public surface, so it can be walked rather than enumerated:
+//
+// A GUARD IS NEVER LEFT SHOWING A PROBE THAT HAS MOVED. A watch reading `busy`, `ready` and
+// `error` must, once the turn is over, have last seen what they answer now (3.3). It is the
+// OBSERVED state that is compared, never a wake count: `markProbes` wakes a guard it could have
+// spared on purpose, and a count would call that a failure. The one move let off is the one a
+// clause makes silent — an invalidate dropping `busy` (7.14, 7.16).
+//
+// A READER IS NEVER WOKEN ONTO WHAT IT ALREADY READ (5.1). A watch reading the value that re-runs
+// and reads the same thing — the same identity, the same refusal, or not landed again — was woken
+// for nothing, except where the operation's clause mints a repeat on purpose (5.7, an ungated
+// publish), and where the operation settled a reload an invalidate left owing: 7.8 unserves
+// ahead of that reload, and `reloadOwed` says why the order stands.
+//
+// A READER IS NEVER LEFT ON A READ THAT HAS MOVED. Over a value that is not being served, what the
+// reader last read is what a read throws now — the standing refusal, or not landed.
+//
+// CHECKED TWICE A STEP: when the operation returns, which is where a load has STARTED and not yet
+// ended — the only moment a missed `busy` edge is visible — and again once the loads it started
+// have settled.
+//
+// THE REVERTS, each on its own: gating `refused`'s cascade on `landed` rather than `servable`,
+// cascading unconditionally in either of `run`'s refusal arms, or setting `loading` in `expire`
+// ahead of the reload — each walks to a named step and reports the rule, the subject and the
+// sequence that reached it.
+const NOT_LANDED = Symbol('not landed')
+// What a reader has read before its first run, which no read can equal.
+const NOT_READ = Symbol('not read')
+// A reload an invalidate left owing — `Reactive.ts`'s `OWES_RELOAD`, which is not exported.
+const OWES_RELOAD = 2
+
+function readOf(value: Reactive<unknown>): unknown {
+    try {
+        return value()
+    } catch (thrown) {
+        return thrown instanceof NotLanded ? NOT_LANDED : thrown
+    }
+}
+
+type Probes = { busy: boolean; ready: boolean; error: unknown }
+
+function probesOf(value: Reactive<unknown>): Probes {
+    return { busy: value.busy(), ready: value.ready(), error: value.error() }
+}
+
+test('the wake contract holds across every transition', async () => {
+    const subjects = walkSubjects()
+    const observers = subjects.map((subject) => {
+        const seen = {
+            probes: probesOf(subject.value),
+            read: NOT_READ as unknown,
+            repeats: 0,
+        }
+        const stops = [
+            watch(() => {
+                seen.probes = probesOf(subject.value)
+            }),
+            watch(() => {
+                const read = readOf(subject.value)
+                if (Object.is(read, seen.read)) seen.repeats += 1
+                seen.read = read
+            }),
+        ]
+        return { subject, seen, stops }
+    })
+    // What the construction started — the ttl load's first body — is over before the walk.
+    for (let turn = 0; turn < 10; turn += 1) await null
+    flushSync()
+
+    const next = sequence(0x5eed)
+    const walked: string[] = []
+    const check = (
+        step: number,
+        when: string,
+        allows: Set<Allows>,
+        owner: Subject,
+    ): void => {
+        for (const { subject, seen } of observers) {
+            const where = `${subject.name} at step ${step}, ${when}. The sequence was: ${walked.slice(-8).join(' -> ')}`
+            const cell = cellOf<{
+                direct: boolean
+                state: number
+                servable: boolean
+                owes: number
+            }>(subject.value)
+            if (cell.direct && !(cell.state === CLEAN && cell.servable))
+                throw new Error(`direct without CLEAN and servable: ${where}`)
+            const now = probesOf(subject.value)
+            if (
+                subject === owner &&
+                allows.has('busy falls silently') &&
+                !now.busy
+            )
+                seen.probes.busy = false
+            for (const probe of ['busy', 'ready', 'error'] as const)
+                if (!Object.is(now[probe], seen.probes[probe]))
+                    throw new Error(
+                        `a guard still shows ${probe} ${String(seen.probes[probe])} where it is now ${String(now[probe])}: ${where}`,
+                    )
+            if (
+                seen.repeats !== 0 &&
+                !(subject === owner && allows.has('the same value wakes'))
+            )
+                throw new Error(
+                    `a reader was woken onto the value it already read: ${where}`,
+                )
+            seen.repeats = 0
+            // A READER IS NEVER LEFT ON A READ THAT HAS MOVED, told through the probe alone so the
+            // check reads nothing that settles a debt or pulls a mark: where nothing is served and
+            // nothing is owed or marked, a read throws the standing refusal, or not landed (2.2).
+            if (
+                !cell.servable &&
+                cell.owes === 0 &&
+                cell.state === CLEAN &&
+                !(subject === owner && allows.has('an expiry wakes no reader'))
+            ) {
+                const error = subject.value.error()
+                const throws = error === undefined ? NOT_LANDED : error
+                if (!Object.is(seen.read, throws))
+                    throw new Error(
+                        `a reader still holds ${String(seen.read)} where a read now throws ${String(throws)}: ${where}`,
+                    )
+            }
+        }
+    }
+
+    for (let step = 0; step < 600; step += 1) {
+        const { subject, at } = pick(subjects, next)
+        walked.push(`${subject.name}[${at}]`)
+        const { op, allows: declared } = subject.ops[at] as Subject['ops'][0]
+        const allows = new Set<Allows>()
+        if (declared !== undefined) allows.add(declared)
+        // `reloadOwed`'s stated cost, read off the record: the operation settles a reload an
+        // invalidate left owing (`OWES_RELOAD`).
+        if (cellOf<{ owes: number }>(subject.value).owes === OWES_RELOAD)
+            allows.add('the same value wakes')
+        attempt(op)
+        flushSync()
+        check(step, 'as the operation returns', allows, subject)
+        for (let turn = 0; turn < 10; turn += 1) await null
+        flushSync()
+        check(step, 'once its loads settled', allows, subject)
+    }
+    for (const { stops } of observers) for (const stop of stops) stop()
     expect(`steps walked: ${walked.length}`).toBe('steps walked: 600')
 })
 
@@ -3139,8 +3409,8 @@ test('servable stays landed && !stale across every transition', async () => {
 // the way past — so this is the one place the three fields can be read while 6.13 holds.
 //
 // THE REVERT: removing `cell.servable = false` from `dropStanding` reports
-// `servable=true landed=false stale=true`.
-test('a released value still reads servable === landed && !stale', async () => {
+// `servable=true landed=false`.
+test('a released value still reads servable implies landed', async () => {
     const expiring = reactive(() => ({ n: 1 }), { ttl: 20 })
     expect(breachedBy(expiring)).toBeNull()
     await Bun.sleep(80)
@@ -3242,6 +3512,70 @@ test('a failed revalidation goes on serving and wakes nobody', async () => {
     expect(`error: ${(loaded.error() as unknown as Error).message}`).toBe(
         'error: the reload failed',
     )
+})
+
+// 4.12 FOR A BODY THAT FAILS IN ITS OWN RUN, which reached `run`'s two private copies of the
+// refusal rather than `refused` — a sync throw and a returned `Failed` — and those cascaded
+// unconditionally, so the same revalidation that wakes nobody through a rejected load woke
+// every value reader through a throw.
+//
+// THE REVERT: cascading unconditionally in `run`'s throw arm reports `wakes: 1` on the throw
+// row; in its `Failed` arm, `wakes: 1` on the returned row.
+test('a body that fails over a value still being served wakes nobody, thrown or returned', () => {
+    for (const how of ['thrown', 'returned']) {
+        let failNext = false
+        const loaded = reactive(() => {
+            if (!failNext) return 'held'
+            if (how === 'thrown') throw new Error('the reload failed')
+            return refuse.typed('Reload')() as unknown as string
+        })
+        expect(loaded()).toBe('held')
+        const counter = wakes(loaded)
+        failNext = true
+        loaded.refresh()
+        const woken = counter.count()
+        counter.stop()
+        expect(`${how} value: ${loaded()}`).toBe(`${how} value: held`)
+        expect(`${how} wakes: ${woken}`).toBe(`${how} wakes: 0`)
+        expect(
+            `${how} error: ${loaded.error() === undefined ? 'none' : 'standing'}`,
+        ).toBe(`${how} error: standing`)
+    }
+})
+
+// THE OTHER SIDE OF THE SAME TEST, and why it is `servable` rather than `landed`. An invalidated
+// value has landed and is no longer served (7.8): its reader re-ran on the unserve and aborted on
+// `NotLanded`. A reload that fails there is the reader's answer — it has nothing else coming — so
+// it must wake, or the reader waits on a load that has already ended.
+//
+// THE REVERT: gating the cascade in `refused` on `!cell.landed` reports
+// `answered: reactive has not landed` — the reader parked on the abort and never told.
+test('a reload that fails over an invalidated value wakes the reader it left waiting', async () => {
+    let failNext = false
+    const loaded = reactive(() =>
+        failNext
+            ? Promise.reject(new Error('the reload failed'))
+            : Promise.resolve('held'),
+    )
+    expect(await loaded).toBe('held')
+    let answered = 'nothing'
+    const stop = watch(() => {
+        try {
+            answered = loaded()
+        } catch (thrown) {
+            answered = (thrown as Error).message
+        }
+    })
+    loaded.invalidate()
+    failNext = true
+    // The read that settles the debt (7.13): it unserves, the watch re-runs onto the abort,
+    // and the reload is in flight.
+    expect(() => loaded()).toThrow()
+    flushSync()
+    await Bun.sleep(10)
+    flushSync()
+    stop()
+    expect(`answered: ${answered}`).toBe('answered: the reload failed')
 })
 
 // THE ARGUMENT SHIFT NOTHING TYPE-CHECKS. `MEMBERS` is assigned onto a prototype and is
@@ -4692,7 +5026,7 @@ test('a stream is stored once at close, and a restore is a finished stream', asy
 
 // 8.6 SEEDS THE RING AND 8.7 KEEPS THE BODY OFF — and `retainRun`, which is what enters an
 // accumulation into the past and stamps the mint, is reached only from `pump`. So a
-// restored stream never became a CLOSED run: `standingMinted` answered false for the life
+// restored stream never became a CLOSED run: `standingLive` answered false for the life
 // of the value, which takes the `ttl` out of `expire` and `sweepExpiry` silently — it never
 // drops and never re-reads the store — and leaves 8.6's seeded window unreachable through
 // `s.history`.

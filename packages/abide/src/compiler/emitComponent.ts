@@ -3,10 +3,8 @@ import { headKeyOf } from '#shared/headKeyOf.ts'
 import { safeUrl } from '#shared/safeUrl.ts'
 import { REGION_CLOSE, REGION_OPEN, ROW_OPEN } from '#ui/REGION.ts'
 import { CHILDREN } from './CHILDREN.ts'
-import type { Read } from './classifyRead.ts'
 import { Cursor, type Position, placeTemplate } from './Cursor.ts'
-import { Lowering, PROPS } from './Lowering.ts'
-import type { AbideFile } from './parseAbide.ts'
+import type { Read } from './classifyRead.ts'
 import {
     isClassToggle,
     isComponentTag,
@@ -17,6 +15,8 @@ import {
     isSlot,
     isStyleProperty,
 } from './classifyTemplate.ts'
+import { Lowering, PROPS } from './Lowering.ts'
+import type { AbideFile } from './parseAbide.ts'
 import { SERVER_SPECIFIER } from './SPECIFIERS.ts'
 import { componentImports, splitImports, withoutProps } from './splitImports.ts'
 import type { Attribute, TemplateNode } from './TemplateNode.ts'
@@ -26,6 +26,11 @@ import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 // do. Under `__` for the reason every framework name in an emitted module is.
 const HEADS = '__heads'
 const BODY = '__body'
+// A page's or a layout's deferred build (41.20), and the share scope it resumes.
+const SETTLED_AT = '__settledAt'
+const BUILT = '__built'
+const BUILD = '__build'
+const BACK = '__back'
 
 // The share scope an instance opens (10.5), named apart from the client's binding `Scope`: one is
 // what a component's descendants look a key up through, the other is what stops its bindings.
@@ -40,9 +45,14 @@ export const SHARED = '__shared'
 // two returns rather than one string a renderer has to go looking through. 35.5 is answered by
 // `render`, which turns the two into the byte stream a document is served as.
 
+// `settles` IS A PAGE OR A LAYOUT, which `render` builds a level at a time (41.20): its setup runs at
+// the call and its markup is built on the first read of `head` or `body`, so the calls the setup
+// started are given the turn to answer that a component built inside its caller's markup is not.
+// Every other component builds where it is called, and pays nothing for the difference.
 export function emitComponent(
     file: AbideFile,
     reads: readonly Read[] = [],
+    settles = false,
 ): string {
     // 39.1, 39.3 — a top-level `<head>` contributes its children to the document head, and the
     // hoist happens at compile time. 39.5: with no merge key they append in tree order, which is
@@ -95,7 +105,6 @@ export function emitComponent(
     const closed = shares
         ? `\n    } finally { ${lowering.use('leaveShare')}(${SHARED}) }`
         : ''
-    const names = [...used].sort()
 
     // THE SETUP IS NOT RE-INDENTED. Adding a margin to every line rewrites the INSIDE of a
     // multi-line template literal, so `\`line one\nline two\`` gains four spaces it never had —
@@ -104,16 +113,43 @@ export function emitComponent(
     // call that renders it stands inside the BODY expression — so the heads are collected as the
     // body is built and the body is bound to a name before the return reads them. The array is
     // emitted only where the page invokes something: a page with no component pays nothing.
-    return `${names.length === 0 ? '' : `import { ${importClause(names)} } from '${SERVER_SPECIFIER}'\n`}\
-${componentImports(withoutProps(moduleSetup.imports), '')}${componentImports(withoutProps(setup.imports), '')}
-export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
-${opened}${componentBody}
-${heads ? `    const ${HEADS} = []\n` : ''}\
+    const build = `${heads ? `    const ${HEADS} = []\n` : ''}\
     const ${BODY} = ${concat(body)}
     return {
         head: ${head}${heads ? ` + ${HEADS}.join('')` : ''},
         body: ${BODY},
-    }${closed}
+    }`
+    // 41.20 — BUILT ON THE FIRST READ, and ONCE: `render` reads `head` and then `body`, and a
+    // child the markup invokes must not be set up twice. The build resumes the share scope the
+    // setup ran in (10.5), since by the time it is read the caller's has long been left — and that
+    // scope is `scope` on the answer, so `composePage` sets the level below up inside it too.
+    const answer = settles
+        ? `    const ${SETTLED_AT} = ${lowering.use('currentShare')}()
+    let ${BUILT}
+    const ${BUILD} = () => {
+        if (${BUILT} !== undefined) return ${BUILT}
+        const ${BACK} = ${lowering.use('resumeShare')}(${SETTLED_AT})
+        try {
+            ${BUILT} = (() => {
+${build}
+            })()
+        } finally {
+            ${lowering.use('leaveShare')}(${BACK})
+        }
+        return ${BUILT}
+    }
+    return {
+        scope: ${SETTLED_AT},
+        get head() { return ${BUILD}().head },
+        get body() { return ${BUILD}().body },
+    }`
+        : build
+    const namesUsed = [...used].sort()
+    return `${namesUsed.length === 0 ? '' : `import { ${importClause(namesUsed)} } from '${SERVER_SPECIFIER}'\n`}\
+${componentImports(withoutProps(moduleSetup.imports), '')}${componentImports(withoutProps(setup.imports), '')}
+export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
+${opened}${componentBody}
+${answer}${closed}
 }
 `
 }
