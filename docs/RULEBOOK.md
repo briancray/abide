@@ -1500,8 +1500,8 @@ mount rather than at the origin.
 
 36.12 A file under `src/ui/public` MUST be answered with the bytes as authored.
 
-36.13 A `src/ui/public` path resolving to the address of a page route MUST be a build error naming
-both.
+36.13 A `src/ui/public` path resolving to the address of a page route MUST be refused by
+`abide build` and by `abide dev`, naming both.
 
 36.14 A file under `src/ui/public` MUST carry a `content-type` derived from its extension.
 

@@ -76,3 +76,13 @@ function specificity(segment: Segment): number {
     if (segment.kind === 'required') return 2
     return segment.kind === 'optional' ? 1 : 0
 }
+
+// 30.9 — MOST SPECIFIC FIRST, for whichever seam is asking. The ranking POLICY is what decides
+// which page an address resolves to, so it is here with `compareRoutes` rather than written out
+// beside each table: the server's boot and the client router's start sort through one call.
+export function rankBySpecificity<T extends { segments: Segment[] }>(
+    rows: T[],
+): T[] {
+    rows.sort((a, b) => compareRoutes(a.segments, b.segments))
+    return rows
+}

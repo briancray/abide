@@ -17,6 +17,7 @@
 // which is the one thing dev does differently from `abide start` — 41.1's flush is not built, so
 // what is lost today is the head chunk going out ahead of the body's encode.
 
+import { escapeText } from '#shared/escapeText.ts'
 import {
     type AppSources,
     answerRequest,
@@ -33,6 +34,7 @@ import {
     DEV_ADDRESS,
     PUBLIC_DIRECTORY,
 } from './CLIENT_BUILD.ts'
+import { refuseAddressCollision } from './refuseAddressCollision.ts'
 import { shellUnder } from './render.ts'
 
 // Where the compiled modules pretend to live. Under the app's own root so that `#ui/…` and a bare
@@ -148,7 +150,19 @@ async function open(start: Start): Promise<void> {
         const plugin = virtualModules(modules)
         Bun.plugin(plugin)
 
-        const bundle = await bundleInMemory(root, base, plugin, routed)
+        // ASKED FOR TOGETHER. Neither the shell nor the public directory depends on the
+        // bundle or on the other, and both sat behind the whole client build — which on a
+        // reload is latency the author waits on.
+        const bundling = bundleInMemory(root, base, plugin, routed)
+        const shelling = shellUnder(root)
+        // 38.20 — OUT OF THE SOURCE TREE. `abide build` copies these into its output and dev
+        // has no output, so the address answers where the author's file actually is.
+        const publishing = publicFilesUnder(`${root}/ui/${PUBLIC_DIRECTORY}`)
+        const [bundle, shell, published] = await Promise.all([
+            bundling,
+            shelling,
+            publishing,
+        ])
 
         const table = routed
             ? ((await import(`${base}/server.ts`)) as {
@@ -156,10 +170,18 @@ async function open(start: Start): Promise<void> {
               })
             : { routes: [] as ServerRoute[] }
 
+        // 36.13, IN THIS LANE TOO. A throw here lands in `failure`, which is what 38.4 asks
+        // for: the command keeps answering and what it answers names both halves. Without it
+        // `answerRequest` below would silently prefer the file — its public-before-routes
+        // order rests on this collision being impossible.
+        const patterns: string[] = []
+        for (const route of table.routes) patterns.push(route.pattern)
+        refuseAddressCollision(patterns, published.keys(), 'abide dev')
+
         app = {
             routes: rankRoutes(table.routes),
             shell: intoHead(
-                await shellUnder(root),
+                shell,
                 // 38.18 — THE RELOAD CLIENT IS THIS WORKER'S, not the bundle's, and it goes in
                 // whether or not there is an entry beside it: a bundle that failed is exactly
                 // when a reader needs the next save to reach them. What is NOT written is a tag
@@ -168,9 +190,7 @@ async function open(start: Start): Promise<void> {
                 `${bundle.has(`${CLIENT_ENTRY}.js`) ? clientTags(bundle.has(`${CLIENT_ENTRY}.css`)) : ''}<script type="module" src="${DEV_ADDRESS}/client.js"></script>`,
             ),
             framework: (pathname) => served(bundle, pathname),
-            // 38.20 — OUT OF THE SOURCE TREE. `abide build` copies these into its output and dev
-            // has no output, so the address answers where the author's file actually is.
-            published: await publicFilesUnder(`${root}/ui/${PUBLIC_DIRECTORY}`),
+            published,
         }
     } catch (thrown) {
         failure = thrown instanceof Error ? thrown.message : String(thrown)
@@ -237,10 +257,15 @@ async function bundleInMemory(
         )
         return bundle
     }
-    for (const output of built.outputs) {
+    // The chunks are independent, so they are read at once rather than one after another.
+    const read = await Promise.all(
+        built.outputs.map((output) => output.arrayBuffer()),
+    )
+    for (let index = 0; index < built.outputs.length; index += 1) {
+        const output = built.outputs[index] as Bun.BuildArtifact
         const name = output.path.slice(output.path.lastIndexOf('/') + 1)
         bundle.set(name, {
-            bytes: await output.arrayBuffer(),
+            bytes: read[index] as ArrayBuffer,
             type: output.type,
         })
     }
@@ -298,19 +323,12 @@ function failedDocument(why: string): Response {
     return new Response(
         `<!doctype html><html><head><meta charset="utf-8"><title>abide dev</title>
 <script type="module" src="${DEV_ADDRESS}/client.js"></script></head>
-<body><main><h1>abide dev</h1><pre>${escapeForDocument(why)}</pre></main></body></html>`,
+<body><main><h1>abide dev</h1><pre>${escapeText(why)}</pre></main></body></html>`,
         {
             status: 500,
             headers: { 'content-type': 'text/html; charset=utf-8' },
         },
     )
-}
-
-function escapeForDocument(text: string): string {
-    return text
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
 }
 
 // 38.16's other end. The listener force-closes every live socket when it replaces this worker, so

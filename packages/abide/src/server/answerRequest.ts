@@ -8,10 +8,10 @@
 // (37): those want a request scope, and a request scope is the next thing rather than a gap in
 // this one.
 
-import { matchRoute, type Params } from '#shared/matchRoute.ts'
+import { firstMatch } from '#shared/matchRoute.ts'
 import {
-    compareRoutes,
     parseRoutePattern,
+    rankBySpecificity,
     type Segment,
 } from '#shared/routePattern.ts'
 import { ABIDE_ADDRESS, CLIENT_ADDRESS, CLIENT_ENTRY } from './CLIENT_BUILD.ts'
@@ -61,27 +61,34 @@ export async function answerRequest(
         return app.framework(asked) ?? notFound()
 
     // 36.11 — A PUBLIC FILE IS ITS PATH BELOW THE DIRECTORY, so `/favicon.ico` is answered
-    // before any route is tried. The order is not load-bearing: 36.13 makes a collision
-    // between the two a build error, so at run time there can never be one to resolve.
+    // before any route is tried. The order is not load-bearing: every command that serves
+    // runs `refuseAddressCollision` (36.13) over the same two trees before it answers
+    // anything, so at run time there can never be a collision to resolve.
     const file = app.published.get(asked)
     if (file !== undefined) return publicResponse(request, file)
 
-    const found = match(app.routes, asked)
+    const found = firstMatch(app.routes, asked)
     // 38.22. The client router leaves an unmatched address to the document (30.10), so this
     // is where that address arrives and there is nothing behind it.
     if (found === undefined) return notFound()
 
-    const loaded = await Promise.all([
+    // THE PAGE AND ITS CHAIN, IN ONE ROUND OF WAITING. A nested `Promise.all` rather than one
+    // flat array with the page spliced onto the head: the two settle together either way, and the
+    // flat form's element type is the union of the two, so reading a head and a tail back off it
+    // took an `as` per read. This is the same concurrency with the types carrying it.
+    const [loadedPage, loadedLayouts] = await Promise.all([
         found.route.load(),
-        ...found.route.layouts.map((layout) => layout()),
+        Promise.all(found.route.layouts.map((layout) => layout())),
     ])
-    const [page, ...layouts] = loaded.map((module) => module.default)
+    const page = loadedPage.default
+    const layouts: Component[] = []
+    for (const module of loadedLayouts) layouts.push(module.default)
     // 35.3 — BOUND HERE, because `render` takes a component that already has its props.
     // 33.4 — a prop is an ACCESSOR, which is the contract `renderComponent` renders a child
     // under and the one the client router mounts a page under; the params are the record
     // `matchRoute` hands the client for this same address.
     const bound = (): unknown =>
-        composePage(layouts as Component[], page as Component, {
+        composePage(layouts, page, {
             params: () => found.params,
         })
     return new Response(streamOf(render(bound, app.shell)), {
@@ -89,8 +96,9 @@ export async function answerRequest(
     })
 }
 
-// 30.9 — MOST SPECIFIC FIRST, ranked off the table rather than in it, so the ordering is the
-// client router's own and the two cannot resolve one address differently.
+// 30.9 — MOST SPECIFIC FIRST, ranked off the table rather than in it. The ordering IS the client
+// router's own: both seams sort through `rankBySpecificity` and resolve through `firstMatch`, so
+// "the two cannot resolve one address differently" is a grep rather than a promise.
 export function rankRoutes(table: ServerRoute[]): Ranked[] {
     const routes: Ranked[] = []
     for (const route of table)
@@ -98,12 +106,9 @@ export function rankRoutes(table: ServerRoute[]): Ranked[] {
             pattern: route.pattern,
             segments: parseRoutePattern(route.pattern),
             load: route.load,
-            // A table written before layouts existed has no chain, and a page with none is the
-            // common case either way.
-            layouts: route.layouts ?? [],
+            layouts: route.layouts,
         })
-    routes.sort((a, b) => compareRoutes(a.segments, b.segments))
-    return routes
+    return rankBySpecificity(routes)
 }
 
 // THE TAGS THAT LOAD THE APP — 38.23, and 38.24 for the stylesheet beside it. An app does not
@@ -151,14 +156,19 @@ export async function publicFilesUnder(
         if ((thrown as { code?: unknown }).code !== 'ENOENT') throw thrown
         return files
     }
-    for (const name of names) {
-        const path = `${root}/${name}`
-        const bytes = await Bun.file(path).bytes()
+    // THE READS OVERLAP. They are independent, and `abide dev` runs this again on every
+    // reload rather than once at boot — so it is reload latency an author waits on, not just
+    // a boot cost. The hashing below is unchanged; only the reads are asked for at once.
+    const read = await Promise.all(
+        names.map((name) => Bun.file(`${root}/${name}`).bytes()),
+    )
+    for (let index = 0; index < names.length; index += 1) {
+        const name = names[index] as string
         // Non-cryptographic, and that is the right tool: an etag answers "are these the same
         // bytes", not "could somebody forge these bytes".
         files.set(`/${name}`, {
-            path,
-            etag: `"${Bun.hash(bytes).toString(16)}"`,
+            path: `${root}/${name}`,
+            etag: `"${Bun.hash(read[index] as Uint8Array).toString(16)}"`,
         })
     }
     return files
@@ -185,17 +195,6 @@ function streamOf(
             else controller.enqueue(next.value)
         },
     })
-}
-
-function match(
-    routes: Ranked[],
-    pathname: string,
-): { route: Ranked; params: Params } | undefined {
-    for (const route of routes) {
-        const params = matchRoute(route.segments, pathname)
-        if (params !== null) return { route, params }
-    }
-    return undefined
 }
 
 function publicResponse(request: Request, file: PublicFile): Response {

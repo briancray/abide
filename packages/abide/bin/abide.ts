@@ -3,6 +3,7 @@
 // rather than a file each until one of them grows a reason to move.
 
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
+import { rm } from 'node:fs/promises' // bun exposes no recursive directory removal of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
 import { parseArgs } from 'node:util' // bun exposes no argv parser of its own yet
 
@@ -12,6 +13,7 @@ import {
     CLIENT_ENTRY,
     PUBLIC_DIRECTORY,
 } from '#server/CLIENT_BUILD.ts'
+import { refuseAddressCollision } from '#server/refuseAddressCollision.ts'
 import { serveBuild } from '#server/serveBuild.ts'
 import { serveDev } from '#server/serveDev.ts'
 
@@ -34,8 +36,27 @@ async function build(root: string, out: string): Promise<number> {
         console.log(`abide build: no .abide sources under ${root}`)
         return 0
     }
+    // WRITTEN TOGETHER. 175 modules for the docs app, each independent of the others, and one
+    // `await` a time made the emit a queue — the same reason `publicFilesUnder` and the dev
+    // worker's own reads are one `Promise.all` each.
+    const writes: Promise<number>[] = []
     for (const [name, text] of app.modules)
-        await Bun.write(`${out}/${name}`, text)
+        writes.push(Bun.write(`${out}/${name}`, text))
+    await Promise.all(writes)
+
+    // A MODULE WHOSE SOURCE IS GONE IS REMOVED, not left standing. Nothing removed what a DELETED
+    // `.abide` used to compile to, so the output was the union of every build: a `DocsRail.ts`
+    // outlived its source by a day here, and a grep over the emitted modules answered about code
+    // no build produces — which is how a coverage count came back wrong. The same class as the
+    // orphan chunks `bundleClient` empties, one level up and found the same way.
+    //
+    // PRUNED AGAINST WHAT WAS JUST WRITTEN rather than by emptying `out`: the directory is named
+    // by `--out` and a flag that deletes a tree is a different kind of thing from one that writes
+    // into it. `client/` holds `.js` and is emptied where it is built.
+    const stale: Promise<void>[] = []
+    for (const path of new Bun.Glob('**/*.ts').scanSync({ cwd: out }))
+        if (!app.modules.has(path)) stale.push(rm(`${out}/${path}`))
+    await Promise.all(stale)
     if (app.routes.length > 0) await bundleClient(out)
     // OUTSIDE THE ROUTE GUARD. An app's static files are its own whether or not it has a page
     // yet, and 36.13's check needs the routes rather than the other way round.
@@ -50,10 +71,9 @@ async function build(root: string, out: string): Promise<number> {
 // `abide start` answers out of what the build produced and an app moving a file after a build
 // cannot change what is served.
 //
-// 36.13 IS CHECKED HERE, and this is the only place it can be: a public file and a page route are
-// two different walks of two different trees, and the collision is invisible from inside either.
-// A build error naming both beats a server that silently prefers one — which is the same bug with
-// a reader instead of an author looking at it.
+// 36.13 IS CHECKED BEFORE A BYTE IS COPIED, through `refuseAddressCollision` — which `abide dev`
+// runs too. Checking it here mid-copy left a partial output behind on the throw, and it left the
+// dev lane unchecked entirely.
 async function copyPublic(
     root: string,
     out: string,
@@ -62,26 +82,25 @@ async function copyPublic(
     const from = `${root}/ui/${PUBLIC_DIRECTORY}`
     if (!existsSync(from)) return 0
 
-    const addresses = new Set<string>()
-    for (const route of routes) addresses.add(route.pattern)
+    const patterns: string[] = []
+    for (const route of routes) patterns.push(route.pattern)
+    const names = [...new Bun.Glob('**/*').scanSync({ cwd: from })]
+    // 36.11 — the path below the directory IS the address. `favicon.ico` answers at
+    // `/favicon.ico`, and nothing declares that anywhere.
+    const addresses = names.map((name) => `/${name}`)
+    refuseAddressCollision(patterns, addresses, 'abide build')
 
-    let copied = 0
-    for (const name of new Bun.Glob('**/*').scanSync({ cwd: from })) {
-        // 36.11 — the path below the directory IS the address. `favicon.ico` answers at
-        // `/favicon.ico`, and nothing declares that anywhere.
-        const address = `/${name}`
-        if (addresses.has(address))
-            throw new Error(
-                `abide build: ui/${PUBLIC_DIRECTORY}/${name} and the page at ${address} claim the same address. RULEBOOK 36.13.`,
-            )
-        // 36.12 — the bytes as authored. `Bun.write` of a `BunFile` is a copy and not a re-encode.
-        await Bun.write(
-            `${out}/${PUBLIC_DIRECTORY}/${name}`,
-            Bun.file(`${from}/${name}`),
+    const copies: Promise<number>[] = []
+    // 36.12 — the bytes as authored. `Bun.write` of a `BunFile` is a copy and not a re-encode.
+    for (const name of names)
+        copies.push(
+            Bun.write(
+                `${out}/${PUBLIC_DIRECTORY}/${name}`,
+                Bun.file(`${from}/${name}`),
+            ),
         )
-        copied += 1
-    }
-    return copied
+    await Promise.all(copies)
+    return names.length
 }
 
 // THE BUNDLE. Which module boots the client is the compiler's knowledge — it writes the entry
@@ -93,6 +112,12 @@ async function copyPublic(
 // manifest — that is 38.5 and it is not written yet, which makes this the shape rather than the
 // guarantee.
 async function bundleClient(out: string): Promise<void> {
+    // EMPTIED FIRST. `Bun.build` writes its chunks in and removes nothing, so a chunk whose content
+    // hash changed leaves the old one behind and the directory is the union of every build ever run
+    // into it. The docs app accumulated 1,423 orphans against 86 live chunks, and the cost is not
+    // disk: a grep over the built output answers about code no page loads, which is how one
+    // exploration priced the client bundle off files nothing imports.
+    await rm(`${out}/${CLIENT_DIRECTORY}`, { recursive: true, force: true })
     const built = await Bun.build({
         entrypoints: [`${out}/${CLIENT_ENTRY}.ts`],
         outdir: `${out}/${CLIENT_DIRECTORY}`,

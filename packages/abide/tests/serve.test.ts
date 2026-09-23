@@ -340,13 +340,16 @@ test('an app with no public directory still boots and serves — 38.19', async (
     expect((await Bun.fetch(`${bareBase}/robots.txt`)).status).toBe(404)
 })
 
-// 36.13 — A BUILD ERROR, and the build is the only place it can be seen: a public file and a page
-// route are two walks of two different trees, and from inside either one the collision is
-// invisible. Left to run time it is a silent preference, and which one wins is whatever the
-// server happened to check first.
+// 36.13 — NAMING BOTH: a public file and a page route are two walks of two different trees, and
+// from inside either one the collision is invisible. Left to run time it is a silent preference,
+// and which one wins is whatever the server happened to check first.
 //
-// THE REVERT: drop the `addresses.has` test in `copyPublic` and the build succeeds, after which
-// `/about` is the FILE — the page is unreachable and nothing said so.
+// THE REVERT: drop the `addresses.has` test in `refuseAddressCollision` and the build succeeds,
+// after which `/about` is the FILE — the page is unreachable and nothing said so.
+//
+// `abide dev` ASKS THE SAME QUESTION — see the test beside this one. It did not, and that is
+// what moved this out of `copyPublic`: the dev lane has no build step, so the clause bound in
+// one of the two lanes that serve.
 test('a public file claiming a page address is a build error naming both — 36.13', () => {
     const app = temporaryModule({
         'ui/pages/about/page.abide': '<main>About</main>',

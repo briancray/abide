@@ -122,8 +122,12 @@ export async function serveDev(
     // 38.4 — THE PROJECT, WATCHED. One recursive watcher over the source root: the pages, the
     // shell, the stylesheets and `ui/public` are all under it, and every one of them is something
     // the worker read at boot.
+    //
+    // IT IS NOT UNREFFED. It holds the process open, which is what a command that IS a server
+    // wants: the only ways out of `abide dev` are a signal and a throw, exactly as for
+    // `abide start`.
     let settling: ReturnType<typeof setTimeout> | undefined
-    const watcher = watch(options.root, { recursive: true }, () => {
+    watch(options.root, { recursive: true }, () => {
         if (settling !== undefined) clearTimeout(settling)
         settling = setTimeout(replace, SETTLE_MILLISECONDS)
     })
@@ -201,11 +205,6 @@ export async function serveDev(
             message() {},
         },
     })
-
-    // THE WATCHER IS NOT UNREFFED. It holds the process open, which is what a command that IS a
-    // server wants: the only ways out of `abide dev` are a signal and a throw, exactly as for
-    // `abide start`.
-    void watcher
 
     return server as unknown as Bun.Server<undefined>
 }

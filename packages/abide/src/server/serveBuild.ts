@@ -79,7 +79,8 @@ export async function serveBuild(
 
     // SPREAD RATHER THAN PASSED AS `undefined`. `Bun.serve` with no port reads `PORT` and then
     // falls back to 3000, and a key present and undefined is not the same as an absent one.
-    return options.port === undefined
-        ? Bun.serve({ fetch })
-        : Bun.serve({ port: options.port, fetch })
+    return Bun.serve({
+        ...(options.port === undefined ? {} : { port: options.port }),
+        fetch,
+    })
 }

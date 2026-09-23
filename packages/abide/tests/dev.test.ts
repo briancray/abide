@@ -295,3 +295,50 @@ test('a client build that fails does not stop the server — 38.18', async () =>
     // fixes this, and a document with no reload client cannot receive it.
     expect(html).toContain('/__abide/dev/client.js')
 })
+
+// A THIRD APP, AND IT EARNS THE THIRD BOOT: the collision has to be there at BOOT, because what
+// is being asked is whether the DEV lane refuses it at all — a reload recovering from one would
+// be a different clause.
+let colliding: Bun.Subprocess | undefined
+let collidingBase = ''
+
+beforeAll(async () => {
+    const dir = temporaryModule({
+        'ui/app.html': SHELL,
+        'ui/pages/page.abide': HOME,
+        'ui/pages/about/page.abide': '<main id="about">About</main>',
+        // The file that shadows the page. `abide build` has refused this since the clause was
+        // written; `abide dev` served it.
+        'ui/public/about': 'the file that shadows the page',
+        'package.json': PACKAGE,
+        'tsconfig.json': TSCONFIG,
+    })
+    colliding = Bun.spawn(['bun', BIN, 'dev', '--root', dir, '--port', '0'], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+    })
+    collidingBase = await addressOf(colliding)
+}, 30_000)
+
+afterAll(() => {
+    colliding?.kill()
+})
+
+// 36.13 IN THE DEV LANE. The clause was enforced inside `abide build`'s copy loop, so `abide dev`
+// — which has no build step — checked nothing, while `answerRequest` answers a public file ahead
+// of any route on the stated ground that a collision cannot exist at run time. 30.8 is what that
+// breaks: the same address resolved to the PAGE under `abide start` and to the FILE under
+// `abide dev`.
+//
+// THE REVERT: drop the `refuseAddressCollision` call in `devWorker.open` and this boots clean,
+// after which `/about` answers 200 with `the file that shadows the page` — the page unreachable,
+// in one lane only, and nothing said so.
+test('a public file claiming a page address is refused by dev too — 36.13', async () => {
+    const failed = await (await Bun.fetch(`${collidingBase}/about`)).text()
+    // BOTH, which is the clause — and the same two halves `abide build` names.
+    expect(failed).toContain('ui/public/about')
+    expect(failed).toContain('/about')
+    expect(failed).toContain('36.13')
+    // The address is NOT the file, which is the whole of what went wrong.
+    expect(failed).not.toContain('the file that shadows the page')
+}, 30_000)
