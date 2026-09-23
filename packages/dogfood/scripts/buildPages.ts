@@ -38,6 +38,8 @@ import {
 import { escapeHtml, renderInline } from './renderMarkdown.ts'
 import { type ZipEntry, zip } from './zip.ts'
 
+const ENCODER = new TextEncoder()
+
 const SOURCE = new URL('../src/', import.meta.url)
 const PAGES = new URL('ui/pages/', SOURCE)
 const PUBLIC = new URL('ui/public/', SOURCE)
@@ -198,13 +200,19 @@ export async function buildPages(): Promise<Page[]> {
         const existing = Bun.file(at)
         const next =
             typeof contents === 'string'
-                ? new TextEncoder().encode(contents)
+                ? ENCODER.encode(contents)
                 : contents instanceof Uint8Array
                   ? contents
                   : new Uint8Array(await contents.arrayBuffer())
-        if (await existing.exists()) {
+        // One syscall rather than two, the reason `render.ts`'s `shellUnder` gives: the read
+        // already fails when the file is not there, which is what `.exists()` was asked ahead
+        // of it. Narrowed to that one code for its reason too — a file that exists and cannot
+        // be read is a different fault and must not read as a first write.
+        try {
             const held = new Uint8Array(await existing.arrayBuffer())
             if (held.length === next.length && sameBytes(held, next)) return
+        } catch (thrown) {
+            if ((thrown as { code?: unknown }).code !== 'ENOENT') throw thrown
         }
         await Bun.write(at, next)
     }

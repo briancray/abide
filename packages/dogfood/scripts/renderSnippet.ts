@@ -7,29 +7,12 @@
 // runs to the end of the construct it opens — which is the whole rule, applied by two
 // balancers because markup and code close differently and nothing else does.
 
+import { VOID_ELEMENTS } from '../../abide/src/compiler/VOID_ELEMENTS.ts'
 import { displayPath, escapeHtml, highlight, sideOf } from './renderMarkdown.ts'
 
 const EXAMPLES_DIR = new URL('../examples/', import.meta.url)
 
 export type SnippetAddress = { example: string; file: string; anchor: string }
-
-// An element that closes itself. A slice anchored on one is a single line, so the tag
-// balancer never opens a depth it would then scan the rest of the file looking to close.
-const VOID_ELEMENTS = new Set([
-    'area',
-    'base',
-    'br',
-    'col',
-    'embed',
-    'hr',
-    'img',
-    'input',
-    'link',
-    'meta',
-    'source',
-    'track',
-    'wbr',
-])
 
 const TAG = /<\/?([a-zA-Z][\w-]*)|\/>/g
 

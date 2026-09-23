@@ -10,6 +10,8 @@
 // There is no `---` branch, and that is the DESIGN rule rather than an omission: the site
 // carries no horizontal rules at all, so one cannot come back by accident.
 
+import { escapeAttribute } from 'abide'
+
 const HEADING = /^(#{1,4})\s+(.*)$/
 // The directive spellings. Anchored and line-at-a-time here; a caller sweeping a whole
 // body takes `new RegExp(EXAMPLE.source, 'gm')` rather than writing the pattern again.
@@ -25,13 +27,10 @@ const QUOTE = /^>\s?(.*)$/
 const TIP = /^\[!TIP\]\s*/
 const TABLE_DIVIDER = /^\|(\s*:?-+:?\s*\|)+$/
 
-export function escapeHtml(text: string): string {
-    return text
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-}
+// THE FRAMEWORK'S OWN, under the name this file's callers already use. `escapeAttribute` escapes
+// the same four characters and is public surface — a fourth copy of that list in this repo is the
+// one that goes stale, and the two `.abide`-side copies are what `#shared/escapeText.ts` says so.
+export const escapeHtml: (value: unknown) => string = escapeAttribute
 
 // A fence's label is a file path or one of four words — `server`, `browser`, `shared`,
 // `abide`. Which SIDE it names is derived from it rather than written twice. Four words

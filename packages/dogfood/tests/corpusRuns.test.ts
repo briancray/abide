@@ -91,7 +91,9 @@ async function exampleTree(
             emitClient(
                 file,
                 reads,
-                invoked.has(path.slice(path.lastIndexOf('/') + 1)),
+                invoked.has(path.slice(path.lastIndexOf('/') + 1))
+                    ? 'repeated'
+                    : 'none',
             ) || 'export default () => {}',
             from,
         )
@@ -151,9 +153,28 @@ test('every example renders on the server and mounts on the client', async () =>
         )
     }
 
+    // THE ROUND TRIP IS ALREADY HAPPENING HERE — the server paints, `innerHTML` parses, and the
+    // client module adopts what it finds — so what was missing was never the exercise, only the
+    // ASSERTION. A mismatch warns and rebuilds the block (41.10); it does not throw. So a page
+    // whose every binding missed its node still mounts, still runs, and still counts above.
+    //
+    // 41.9 IS WHAT THIS HOLDS. The document carries no marker to walk beyond the region anchors,
+    // so where the client looks for a node is decided by the walk that wrote the server's markup
+    // (`emitMarkup` carrying a `Cursor` — `emitClient.ts`'s header). This is the check that the
+    // decision holds against real documents, over 83 apps written before the addressing existed.
+    const mismatched: string[] = []
+    let painting = ''
+    const warned = console.warn
+    console.warn = (...args: unknown[]): void => {
+        if (args[0] === 'abide:hydrate')
+            mismatched.push(`${painting}: ${String(args[1] ?? '')}`)
+        warned(...args)
+    }
+
     try {
         for (const relative of sources) {
             const example = relative.slice(0, relative.indexOf('/files/'))
+            painting = relative
             try {
                 // EACH EXAMPLE IS ITS OWN APP, with its own `#server` / `#shared` / `#ui`, and a
                 // temp directory is not that app. So the example's WHOLE `src` is copied and
@@ -205,6 +226,7 @@ test('every example renders on the server and mounts on the client', async () =>
         // file defers arrives after the listeners are gone, and that file is scored as running.
         await new Promise((resolve) => setTimeout(resolve, 300))
     } finally {
+        console.warn = warned
         removeEventListener('error', escaped)
         removeEventListener('unhandledrejection', escaped)
         session.close()
@@ -251,6 +273,15 @@ test('every example renders on the server and mounts on the client', async () =>
                     `    ${String(count).padStart(3)}  ${reason}`,
             ),
         ].join('\n'),
+    )
+
+    console.log(
+        mismatched.length === 0
+            ? '\n  Every mounted page adopted the markup the server painted.'
+            : [
+                  `\n  ${mismatched.length} hydration mismatch(es) — the client walked to a node the server did not write there:`,
+                  ...mismatched.map((line) => `    ${line}`),
+              ].join('\n'),
     )
 
     // A FLOOR, ratcheted. It is not a pass/fail of the corpus — most of what is missing is
@@ -314,4 +345,41 @@ test('every example renders on the server and mounts on the client', async () =>
     // A RATCHET STILL, and the direction is the rule: this may not go down under a change that
     // does not change what is being counted.
     expect(sources.length - broken.length).toBeGreaterThanOrEqual(67)
+
+    // THE ADOPT RATCHET, and it is the only thing standing under 41.9. Nothing else in the suite
+    // paints with one emitter, parses, and adopts with the other: `forward.test.ts` walks
+    // hand-written HTML, `hydrate.test.ts` drives small fixtures written beside the implementation.
+    // This runs 83 apps nobody wrote for it.
+    //
+    // ONE, AND IT IS 41.12 HAPPENING. Read once, so it is not read again:
+    //
+    // `reload-triggers/.../Level.abide` guards an `{#if}` on `level.busy() && !level.ready()`.
+    // The server painted arm 0 — the `Rpc` was in flight — and the client mounted arm 1, so arm
+    // 1's walk runs over the nodes arm 0 wrote and a unit refuses what it was handed: `text was
+    // due where the server wrote none`. THE ADDRESSING IS NOT AT FAULT: both ends place the same
+    // positions for either arm. What differs is WHICH ARM, not where the nodes are.
+    //
+    // The client is not busy because this harness renders and mounts in ONE process, so the keyed
+    // `Rpc` is already settled by the time the mount asks. 41.12 governs it exactly — an `Rpc` call
+    // re-execution makes that the seed buffer cannot answer MUST be a hydration mismatch — and the
+    // seed buffer is decided and unwritten (`grep -i seed packages/abide/src` is empty). A browser
+    // reaches the same mismatch from the other side: 41.6 re-runs the call cold against a server
+    // that had already landed it.
+    //
+    // SO IT IS SPECIFIED BEHAVIOUR AND STAYS AT ONE. It goes to zero when 41.7 and 41.13 are built,
+    // and this line is a place that will notice when they are.
+    //
+    // THE NUMBER MAY NOT GO UP. A second mismatch is the drift this exists to catch, and it is
+    // silent by construction: the block rebuilds, the output is right, and the work was wasted.
+    //
+    // VERIFIED BY REVERT, 2026-09-22. `if (!client) out.reverse()` at the end of
+    // `emitComponent`'s `emitChildren` — the server writes each element's children backwards, the
+    // client's plan is untouched — takes this from 1 to 59. `worth: 59`.
+    //
+    // AND THE FLOOR ABOVE DID NOT MOVE: 67 of 83 still rendered and mounted with that installed.
+    // The markup stays valid HTML, every page still runs, every assertion that existed before this
+    // one stayed green, and 58 pages silently rebuilt every block they had been handed. That is
+    // the whole argument for counting the work rather than the output, and it is why this line is
+    // not covered by the floor it sits under.
+    expect(mismatched.length).toBeLessThanOrEqual(1)
 })

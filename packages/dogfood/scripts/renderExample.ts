@@ -18,6 +18,14 @@ import {
 
 const EXAMPLES_DIR = new URL('../examples/', import.meta.url)
 const APP_STYLESHEET = new URL('../src/ui/app.css', import.meta.url)
+
+// READ ONCE FOR THE RUN, not once per card. It is the same unchanging bytes for every
+// `{% example %}` in the corpus, and it was on each card's critical path.
+let appStylesheet: Promise<string> | undefined
+function readAppStylesheet(): Promise<string> {
+    appStylesheet ??= Bun.file(APP_STYLESHEET).text()
+    return appStylesheet
+}
 const FONTS =
     'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&family=Space+Grotesk:wght@600;700&display=swap'
 
@@ -396,12 +404,16 @@ async function readGroup(
 ): Promise<ExampleFile[]> {
     const group: ExampleFile[] = []
     for (const path of paths) {
-        const file = Bun.file(
-            new URL(`${name}/${folder}/${path}`, EXAMPLES_DIR),
-        )
-        if (!(await file.exists()))
+        let source: string
+        try {
+            source = await Bun.file(
+                new URL(`${name}/${folder}/${path}`, EXAMPLES_DIR),
+            ).text()
+        } catch (thrown) {
+            if ((thrown as { code?: unknown }).code !== 'ENOENT') throw thrown
             throw new Error(`example ${name}: ${folder}/${path} is missing`)
-        group.push({ path, source: await file.text() })
+        }
+        group.push({ path, source })
     }
     return group
 }
@@ -847,7 +859,7 @@ export async function readExample(
     const fixtures = fixturesOf(manifest.wire ?? [])
     checkFixtures(name, fixtures)
     checkRequests(name, arm.script, fixtures, manifest.served)
-    const appCss = await Bun.file(APP_STYLESHEET).text()
+    const appCss = await readAppStylesheet()
 
     // THE RENDER IS NOT A PANEL. It is the thing the example IS, so it sits above the
     // tabs and stays there — what the tabs hold is everything you consult ABOUT it.

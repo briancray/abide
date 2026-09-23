@@ -9,6 +9,8 @@
 // rather than being watched for. It was a `MutationObserver` over the body until the compiler
 // emitted the binding, which is the same thing guessed at.
 
+import { escapeText } from 'abide'
+
 // THE BRIDGE THE INSTRUMENTED FRAME GETS, appended after the harness and before the
 // arm. It belongs to the DOCUMENTATION rather than to the harness — 40.18 — so it
 // lives here beside the rest of the page's own script rather than in the injectable.
@@ -103,12 +105,30 @@ function installScrollSpy(signal: AbortSignal) {
         document.querySelector(`.toc a[href="#${h.id}"]`),
     )
     let offsets: number[] = []
+    // Read here rather than in `update`: it is a layout read, and `update` runs per scroll
+    // frame after the previous frame wrote `aria-current` — which would force the layout that
+    // write invalidated, every frame of every scroll. Content height is stable between
+    // `measure` calls for the same reason `offsets` are.
+    let bottom = 0
     let current = -1
 
     function measure() {
-        offsets = headings.map(
-            (h) => h.getBoundingClientRect().top + window.scrollY,
-        )
+        // HOISTED, and it buys reads rather than forced layouts — the forced-layout COUNT does not
+        // move for this (median 9 either way). A RUN OF READS WITH NO WRITE BETWEEN THEM FORCES
+        // THE LAYOUT ONCE, so ten `scrollY` reads here were nine redundant reads and never nine
+        // reflows. Kept because it is less work and simpler, not because it was faster.
+        const scrolled = window.scrollY
+        // Pre-sized and walked rather than mapped: this walks per heading, and a `map` allocates
+        // the intermediate as well as the result.
+        const measured = new Array<number>(headings.length)
+        for (let index = 0; index < headings.length; index += 1)
+            measured[index] =
+                (headings[index] as Element).getBoundingClientRect().top +
+                scrolled
+        offsets = measured
+        // EVERY READ BEFORE THE WRITE `update` MAKES. This is the ordering that matters, and it
+        // already held.
+        bottom = document.documentElement.scrollHeight
         update()
     }
 
@@ -118,10 +138,7 @@ function installScrollSpy(signal: AbortSignal) {
         for (let i = 0; i < offsets.length; i += 1)
             if ((offsets[i] as number) <= line) next = i
         // At the bottom there is no room left to scroll the last heading up to the line.
-        if (
-            window.innerHeight + window.scrollY >=
-            document.documentElement.scrollHeight - 2
-        ) {
+        if (window.innerHeight + window.scrollY >= bottom - 2) {
             next = offsets.length - 1
         }
         if (next === current) return
@@ -144,9 +161,257 @@ function installScrollSpy(signal: AbortSignal) {
         { passive: true, signal },
     )
     addEventListener('resize', measure, { passive: true, signal })
-    document.fonts?.ready.then(measure)
-    measure()
+    // OWED ONLY WHERE THE SWAP IS STILL TO COME. The webfont swap is a reflow and moves every
+    // offset, so a measure after it is real — but on a CLIENT NAVIGATION `fonts.ready` is already
+    // resolved, and this ran a second whole measure one microtask behind the first for nothing.
+    //
+    // DEFERRING THE FIRST MEASURE PAST THE ROUTER'S MUTATIONS WITH ONE `requestAnimationFrame`
+    // WAS TRIED AND DROPPED: the forced-layout count did not move (above), and it costs a frame
+    // of offsets being empty on every navigation.
+    if (document.fonts !== undefined && document.fonts.status !== 'loaded')
+        document.fonts.ready.then(measure)
+    // DEFERRED PAST THE ROUTER'S MUTATIONS BY ONE FRAME, and the reason is the opposite of what a
+    // counter said. `installScrollSpy` runs from a `bind:element` callback DURING mount, so
+    // measuring inline forces a layout of the whole page the router has just inserted. The forced
+    // COUNT is identical either way — which is why this was tried, dropped, and then measured
+    // properly: `bun run bench:share` puts `abide.mount` at 22.6% of click-to-paint with the
+    // measure inline and 14.7-16.2% with it deferred, over two runs. Same number of forced
+    // layouts, ~7 points of the op between them, because what costs is WHEN the layout is forced
+    // and not how often.
+    //
+    // WHAT IT COSTS: one frame in which `offsets` is empty, immediately after a navigation that
+    // has just scrolled to the top — so the spy has nothing to report yet anyway.
+    requestAnimationFrame(() => {
+        if (!signal.aborted) measure()
+    })
 }
+
+// THE READING, RENDERED, in the same four columns as the Bench table beside it —
+// metric, abide, hand-written, ratio. The abide column is EMPTY rather than absent:
+// a missing column reads as a table that does not compare, and an empty one reads
+// as the comparison that has not happened yet, which is the true statement.
+const COUNTS: [string, string][] = [
+    ['Elements moved', 'elementsMoved'],
+    ['Markers moved', 'markersMoved'],
+    ['Text nodes moved', 'textMoved'],
+    ['Nodes created', 'nodesCreated'],
+    ['Attributes set', 'attributesSet'],
+    ['Class writes', 'classWrites'],
+    ['Style writes', 'styleWrites'],
+    ['Data writes', 'dataWrites'],
+    ['Redundant data writes', 'redundantDataWrites'],
+    ['Listeners bound', 'listenersBound'],
+    ['Binding runs', 'bindingRuns'],
+    ['Wakes', 'wakes'],
+    ['Descents', 'descents'],
+]
+const ENGINES = {
+    v8: 'V8',
+    jsc: 'JavaScriptCore',
+    spidermonkey: 'SpiderMonkey',
+    unknown: 'an engine we could not name',
+}
+const ARMS = ['abide', 'hand-written']
+const NOTHING = '\u2014'
+
+function millis(nanoseconds: number) {
+    if (nanoseconds >= 1e6) return `${(nanoseconds / 1e6).toFixed(2)} ms`
+    if (nanoseconds >= 1e3) return `${(nanoseconds / 1e3).toFixed(2)} \u00b5s`
+    return `${Math.round(nanoseconds)} ns`
+}
+function refusalHtml(why: string) {
+    return (
+        '<p class="ex-measure-refused">' +
+        escapeText(why) +
+        '</p>' +
+        '<button type="button" class="ex-measure-run" data-measure-run>Try again</button>'
+    )
+}
+function cell(value: unknown) {
+    return (
+        '<td>' +
+        (value === null || value === undefined
+            ? `<span class="ex-tag">${NOTHING}</span>`
+            : `<code>${escapeText(value)}</code>`) +
+        '</td>'
+    )
+}
+// A TAG IS NOT A NUMBER. ratio() hands back a discriminated result and the tags are
+// the whole reason: two values inside the measured floor do not divide, and a
+// frame-quantised pair divides to 1.01x, which is the claim the harness exists to
+// refuse.
+function ratioCell(answer: Reading | null) {
+    if (!answer)
+        return (
+            '<td class="ex-ratio"><span class="ex-tag">' +
+            NOTHING +
+            '</span></td>'
+        )
+    if (answer.kind === 'underTheFloor')
+        return '<td class="ex-ratio"><span class="ex-tag">under the floor</span></td>'
+    if (answer.kind === 'underOneFrame')
+        return '<td class="ex-ratio"><span class="ex-tag">under one frame</span></td>'
+    const klass =
+        answer.value === 1
+            ? ''
+            : answer.value < 1
+              ? ' class="ex-good"'
+              : ' class="ex-bad"'
+    return (
+        '<td class="ex-ratio"><code' +
+        klass +
+        '>' +
+        answer.value.toFixed(2) +
+        'x</code></td>'
+    )
+}
+// ONLY ONE ARM CAN HAVE RENDERED THE PAGE — two arms cannot both own a document — so every load
+// row is the loaded arm's cell and a blank beside it. Read through `ARMS` rather than by naming
+// the two: an arm name spelled per row is the one a third arm gets missed in.
+function loadedOnly(reading: Reading, value: unknown) {
+    return ARMS.map((arm) =>
+        cell(arm === reading.loadedArm ? value : null),
+    ).join('')
+}
+function tableHtml(caption: string, rows: string) {
+    if (!rows) return ''
+    return (
+        '<table class="ex-bench"><thead><tr><th>' +
+        caption +
+        '</th><th>abide</th>' +
+        '<th>Hand-written</th><th class="ex-ratio">Ratio</th></tr></thead><tbody>' +
+        rows +
+        '</tbody></table>'
+    )
+}
+function loadRows(reading: Reading) {
+    let rows = ''
+    for (const [label, key] of COUNTS) {
+        const value = reading.load[key]
+        // A NULL IS NOT A ZERO. Wakes, binding runs and descents are read off a record
+        // abide publishes, and nothing publishes one yet — so the cell says the lane
+        // did not count it rather than that it counted none.
+        if (value === null || !value) continue
+        rows +=
+            '<tr><td>' +
+            label +
+            '</td>' +
+            loadedOnly(reading, value) +
+            ratioCell(null) +
+            '</tr>'
+    }
+    const paint = reading.paint || {}
+    const first =
+        paint.firstContentfulPaint != null
+            ? paint.firstContentfulPaint
+            : paint.firstPaint
+    if (first != null) {
+        rows +=
+            '<tr><td>First paint</td>' +
+            loadedOnly(reading, `${first.toFixed(1)} ms`) +
+            ratioCell(null) +
+            '</tr>'
+    }
+    rows +=
+        '<tr><td>Nodes in the document</td>' +
+        loadedOnly(reading, reading.size.nodes) +
+        ratioCell(null) +
+        '</tr>'
+    return rows
+}
+function opRows(reading: Reading) {
+    if (!reading.timing) return ''
+    let rows = ''
+    for (const [label, key] of COUNTS) {
+        const values = ARMS.map((arm) =>
+            reading.arms[arm] ? reading.arms[arm].work[key] : null,
+        )
+        if (values.every((value) => value === null || !value)) continue
+        rows +=
+            '<tr><td>' +
+            label +
+            '</td>' +
+            values.map(cell).join('') +
+            ratioCell(
+                values[0] !== null && values[1]
+                    ? { kind: 'ratio', value: values[0] / values[1] }
+                    : null,
+            ) +
+            '</tr>'
+    }
+    rows +=
+        '<tr><td>Time per op</td>' +
+        ARMS.map((arm) =>
+            cell(
+                reading.arms[arm]
+                    ? millis(reading.arms[arm].nanosecondsPerOp)
+                    : null,
+            ),
+        ).join('') +
+        ratioCell(reading.ratios.abide) +
+        '</tr>'
+    rows +=
+        '<tr><td>p95</td>' +
+        ARMS.map((arm) =>
+            cell(reading.arms[arm] ? millis(reading.arms[arm].p95) : null),
+        ).join('') +
+        ratioCell(null) +
+        '</tr>'
+    return rows
+}
+function readingHtml(reading: Reading | null, windowMs: number) {
+    if (!reading) return refusalHtml('The frame reported nothing.')
+    const engine =
+        (ENGINES as Record<string, string>)[reading.substrate] ??
+        reading.substrate
+    let html = tableHtml('On load', loadRows(reading))
+    html += tableHtml(escapeText(reading.op), opRows(reading))
+    // WHY THE ABIDE COLUMN IS EMPTY, said once and plainly. An empty column with no
+    // explanation reads as a measurement that came back zero.
+    const missing = ARMS.filter(
+        (arm) => arm !== reading.loadedArm && !reading.arms[arm],
+    )
+    if (missing.length) {
+        html +=
+            '<p class="ex-note">The <strong>' +
+            missing.join(' and ') +
+            '</strong> column is empty because that arm does not run yet ' +
+            '\u2014 the compiler has to emit a page before there is anything to load beside the hand-written one. ' +
+            'Both arms have to be batched in ONE run, or the two get different sample sizes and the ratio is refused.</p>'
+    }
+    const facts = [`counted over the first <strong>${windowMs} ms</strong>`]
+    if (reading.paint?.longTasks)
+        facts.push(`<strong>${reading.paint.longTasks}</strong> long tasks`)
+    if (reading.timing) {
+        facts.push(
+            '<span class="ex-reading-detail">n=' +
+                reading.timing.n +
+                ' \u00b7 ' +
+                reading.timing.reps +
+                ' reps \u00b7 floor \u00b1' +
+                (reading.timing.floor * 100).toFixed(2) +
+                '%</span>',
+        )
+    }
+    html += `<p class="ex-note">${facts.join(' \u00b7 ')}</p>`
+    html +=
+        '<p class="ex-note">Measured in <strong>your</strong> browser just now, on ' +
+        engine +
+        ', whose clock steps every ' +
+        millis(reading.clockNanoseconds) +
+        '.' +
+        (reading.timing
+            ? ''
+            : ' No repeatable op is named here, so there is no duration to batch.') +
+        ' These are not our numbers and they are not a claim \u2014 the counts are the same everywhere, the timings are yours.</p>'
+    html +=
+        '<button type="button" class="ex-measure-run" data-measure-run>Measure again</button>'
+    return html
+}
+
+// The measure lane, fetched once per PAGE and only if a reader opens a panel — it is the
+// same bytes whichever card asks for it.
+let harness: string | null = null
 
 // Panel tabs and file tabs are the same interaction, so one delegated listener per example serves
 // both rather than a listener per button. RELOAD rides along, and it re-runs the arm from nothing
@@ -195,261 +460,6 @@ function installExamples(main: Element, signal: AbortSignal) {
             { signal },
         )
 
-        // THE READING, RENDERED, in the same four columns as the Bench table beside it —
-        // metric, abide, hand-written, ratio. The abide column is EMPTY rather than absent:
-        // a missing column reads as a table that does not compare, and an empty one reads
-        // as the comparison that has not happened yet, which is the true statement.
-        const COUNTS = [
-            ['Elements moved', 'elementsMoved'],
-            ['Markers moved', 'markersMoved'],
-            ['Text nodes moved', 'textMoved'],
-            ['Nodes created', 'nodesCreated'],
-            ['Attributes set', 'attributesSet'],
-            ['Class writes', 'classWrites'],
-            ['Style writes', 'styleWrites'],
-            ['Data writes', 'dataWrites'],
-            ['Redundant data writes', 'redundantDataWrites'],
-            ['Listeners bound', 'listenersBound'],
-            ['Binding runs', 'bindingRuns'],
-            ['Wakes', 'wakes'],
-            ['Descents', 'descents'],
-        ]
-        const ENGINES = {
-            v8: 'V8',
-            jsc: 'JavaScriptCore',
-            spidermonkey: 'SpiderMonkey',
-            unknown: 'an engine we could not name',
-        }
-        const ARMS = ['abide', 'hand-written']
-        const NOTHING = '\u2014'
-
-        function escapeText(value: unknown) {
-            return String(value).replace(
-                /[&<>]/g,
-                (c) =>
-                    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] as string,
-            )
-        }
-        function millis(nanoseconds: number) {
-            if (nanoseconds >= 1e6)
-                return `${(nanoseconds / 1e6).toFixed(2)} ms`
-            if (nanoseconds >= 1e3)
-                return `${(nanoseconds / 1e3).toFixed(2)} \u00b5s`
-            return `${Math.round(nanoseconds)} ns`
-        }
-        function refusalHtml(why: string) {
-            return (
-                '<p class="ex-measure-refused">' +
-                escapeText(why) +
-                '</p>' +
-                '<button type="button" class="ex-measure-run" data-measure-run>Try again</button>'
-            )
-        }
-        function cell(value: unknown) {
-            return (
-                '<td>' +
-                (value === null || value === undefined
-                    ? `<span class="ex-tag">${NOTHING}</span>`
-                    : `<code>${escapeText(value)}</code>`) +
-                '</td>'
-            )
-        }
-        // A TAG IS NOT A NUMBER. ratio() hands back a discriminated result and the tags are
-        // the whole reason: two values inside the measured floor do not divide, and a
-        // frame-quantised pair divides to 1.01x, which is the claim the harness exists to
-        // refuse.
-        function ratioCell(answer: Reading | null) {
-            if (!answer)
-                return (
-                    '<td class="ex-ratio"><span class="ex-tag">' +
-                    NOTHING +
-                    '</span></td>'
-                )
-            if (answer.kind === 'underTheFloor')
-                return '<td class="ex-ratio"><span class="ex-tag">under the floor</span></td>'
-            if (answer.kind === 'underOneFrame')
-                return '<td class="ex-ratio"><span class="ex-tag">under one frame</span></td>'
-            const klass =
-                answer.value === 1
-                    ? ''
-                    : answer.value < 1
-                      ? ' class="ex-good"'
-                      : ' class="ex-bad"'
-            return (
-                '<td class="ex-ratio"><code' +
-                klass +
-                '>' +
-                answer.value.toFixed(2) +
-                'x</code></td>'
-            )
-        }
-        function armCount(reading: Reading, arm: string, key: string) {
-            if (arm === reading.loadedArm) return reading.load[key]
-            return null
-        }
-        function tableHtml(caption: string, rows: string) {
-            if (!rows) return ''
-            return (
-                '<table class="ex-bench"><thead><tr><th>' +
-                caption +
-                '</th><th>abide</th>' +
-                '<th>Hand-written</th><th class="ex-ratio">Ratio</th></tr></thead><tbody>' +
-                rows +
-                '</tbody></table>'
-            )
-        }
-        function loadRows(reading: Reading) {
-            let rows = ''
-            for (const [label, key] of COUNTS as [string, string][]) {
-                const value = reading.load[key]
-                // A NULL IS NOT A ZERO. Wakes, binding runs and descents are read off a record
-                // abide publishes, and nothing publishes one yet — so the cell says the lane
-                // did not count it rather than that it counted none.
-                if (value === null || !value) continue
-                rows +=
-                    '<tr><td>' +
-                    label +
-                    '</td>' +
-                    cell(armCount(reading, 'abide', key)) +
-                    cell(armCount(reading, 'hand-written', key)) +
-                    ratioCell(null) +
-                    '</tr>'
-            }
-            const paint = reading.paint || {}
-            const first =
-                paint.firstContentfulPaint != null
-                    ? paint.firstContentfulPaint
-                    : paint.firstPaint
-            if (first != null) {
-                rows +=
-                    '<tr><td>First paint</td>' +
-                    cell(
-                        reading.loadedArm === 'abide'
-                            ? `${first.toFixed(1)} ms`
-                            : null,
-                    ) +
-                    cell(
-                        reading.loadedArm === 'hand-written'
-                            ? `${first.toFixed(1)} ms`
-                            : null,
-                    ) +
-                    ratioCell(null) +
-                    '</tr>'
-            }
-            rows +=
-                '<tr><td>Nodes in the document</td>' +
-                cell(
-                    reading.loadedArm === 'abide' ? reading.size.nodes : null,
-                ) +
-                cell(
-                    reading.loadedArm === 'hand-written'
-                        ? reading.size.nodes
-                        : null,
-                ) +
-                ratioCell(null) +
-                '</tr>'
-            return rows
-        }
-        function opRows(reading: Reading) {
-            if (!reading.timing) return ''
-            let rows = ''
-            for (const [label, key] of COUNTS as [string, string][]) {
-                const values = ARMS.map((arm) =>
-                    reading.arms[arm] ? reading.arms[arm].work[key] : null,
-                )
-                if (values.every((value) => value === null || !value)) continue
-                rows +=
-                    '<tr><td>' +
-                    label +
-                    '</td>' +
-                    values.map(cell).join('') +
-                    ratioCell(
-                        values[0] !== null && values[1]
-                            ? { kind: 'ratio', value: values[0] / values[1] }
-                            : null,
-                    ) +
-                    '</tr>'
-            }
-            rows +=
-                '<tr><td>Time per op</td>' +
-                ARMS.map((arm) =>
-                    cell(
-                        reading.arms[arm]
-                            ? millis(reading.arms[arm].nanosecondsPerOp)
-                            : null,
-                    ),
-                ).join('') +
-                ratioCell(reading.ratios.abide) +
-                '</tr>'
-            rows +=
-                '<tr><td>p95</td>' +
-                ARMS.map((arm) =>
-                    cell(
-                        reading.arms[arm]
-                            ? millis(reading.arms[arm].p95)
-                            : null,
-                    ),
-                ).join('') +
-                ratioCell(null) +
-                '</tr>'
-            return rows
-        }
-        function readingHtml(reading: Reading | null, windowMs: number) {
-            if (!reading) return refusalHtml('The frame reported nothing.')
-            const engine =
-                (ENGINES as Record<string, string>)[reading.substrate] ??
-                reading.substrate
-            let html = tableHtml('On load', loadRows(reading))
-            html += tableHtml(escapeText(reading.op), opRows(reading))
-            // WHY THE ABIDE COLUMN IS EMPTY, said once and plainly. An empty column with no
-            // explanation reads as a measurement that came back zero.
-            const missing = ARMS.filter(
-                (arm) => arm !== reading.loadedArm && !reading.arms[arm],
-            )
-            if (missing.length) {
-                html +=
-                    '<p class="ex-note">The <strong>' +
-                    missing.join(' and ') +
-                    '</strong> column is empty because that arm does not run yet ' +
-                    '\u2014 the compiler has to emit a page before there is anything to load beside the hand-written one. ' +
-                    'Both arms have to be batched in ONE run, or the two get different sample sizes and the ratio is refused.</p>'
-            }
-            const facts = [
-                `counted over the first <strong>${windowMs} ms</strong>`,
-            ]
-            if (reading.paint?.longTasks)
-                facts.push(
-                    '<strong>' +
-                        reading.paint.longTasks +
-                        '</strong> long tasks',
-                )
-            if (reading.timing) {
-                facts.push(
-                    '<span class="ex-reading-detail">n=' +
-                        reading.timing.n +
-                        ' \u00b7 ' +
-                        reading.timing.reps +
-                        ' reps \u00b7 floor \u00b1' +
-                        (reading.timing.floor * 100).toFixed(2) +
-                        '%</span>',
-                )
-            }
-            html += `<p class="ex-note">${facts.join(' \u00b7 ')}</p>`
-            html +=
-                '<p class="ex-note">Measured in <strong>your</strong> browser just now, on ' +
-                engine +
-                ', whose clock steps every ' +
-                millis(reading.clockNanoseconds) +
-                '.' +
-                (reading.timing
-                    ? ''
-                    : ' No repeatable op is named here, so there is no duration to batch.') +
-                ' These are not our numbers and they are not a claim \u2014 the counts are the same everywhere, the timings are yours.</p>'
-            html +=
-                '<button type="button" class="ex-measure-run" data-measure-run>Measure again</button>'
-            return html
-        }
-
         // THE MEASURE PANEL. A reading cannot be taken retroactively — counting a load
         // means arming before the arm's first line — so this reloads the frame with the
         // instrument prepended. The harness is fetched once per page and only if asked,
@@ -459,7 +469,6 @@ function installExamples(main: Element, signal: AbortSignal) {
         const measurePanel = example.querySelector(
             '[data-measure]',
         ) as HTMLElement | null
-        let harness: string | null = null
         let measuring = false
 
         function askToMeasure() {

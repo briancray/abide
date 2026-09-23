@@ -12,7 +12,6 @@ import {
     EXAMPLE,
     groupSections,
     LEAD,
-    renderInline,
     renderMarkdown,
     SNIPPET,
 } from './renderMarkdown.ts'
@@ -41,7 +40,7 @@ export type Page = {
 
 // Front matter is `key: value` lines between two `---` rules, plus a `- item` list
 // form. The list form is not decoration: a capability name may contain a comma, a
-
+// colon or a pipe, so no single-line delimiter is safe for `covers`.
 function readFrontMatter(source: string): {
     fields: Map<string, string[]>
     body: string
@@ -71,12 +70,19 @@ export async function readPages(): Promise<Page[]> {
     const pages: Page[] = []
     for (const group of NAV) {
         for (const slug of group.pages) {
-            const file = Bun.file(new URL(`${slug}.md`, CONTENT_DIR))
-            if (!(await file.exists()))
+            let source: string
+            try {
+                source = await Bun.file(
+                    new URL(`${slug}.md`, CONTENT_DIR),
+                ).text()
+            } catch (thrown) {
+                if ((thrown as { code?: unknown }).code !== 'ENOENT')
+                    throw thrown
                 throw new Error(
                     `docs: NAV names ${slug}, content/${slug}.md is missing`,
                 )
-            const { fields, body } = readFrontMatter(await file.text())
+            }
+            const { fields, body } = readFrontMatter(source)
             pages.push({
                 slug,
                 section: group.section,
@@ -93,8 +99,6 @@ export async function readPages(): Promise<Page[]> {
     }
     return pages
 }
-
-// Every href is RELATIVE to the page it sits on, so `dist/index.html` opens over
 
 function leadOf(pages: Page[], slug: string): string {
     const source = pages.find((candidate) => candidate.slug === slug)
@@ -130,27 +134,45 @@ export function markdownAddressOf(slug: string): string {
     return `/${slug}.md`
 }
 
+// SPLICED AT THE INDEX `matchAll` ALREADY GAVE, not searched for again. Every one of the six
+// expansions goes through here, and the reason is what the search cost: `String.replace` with a
+// string is not literal — it reads `$&`, `` $` ``, `$'` and `$1` out of the REPLACEMENT — so an
+// example holding `'$'` for a currency sign inserted the entire rest of the document and left
+// every directive after it unexpanded, with the build still exiting 0. Cutting at the index makes
+// `$` an ordinary character rather than a rule to remember at six call sites, and it stops
+// re-scanning the whole document per directive on the way.
+async function expand(
+    body: string,
+    pattern: RegExp,
+    render: (match: RegExpMatchArray) => string | Promise<string>,
+): Promise<string> {
+    const out: string[] = []
+    let cut = 0
+    for (const match of body.matchAll(pattern)) {
+        out.push(body.slice(cut, match.index), await render(match))
+        cut = match.index + match[0].length
+    }
+    if (cut === 0) return body
+    out.push(body.slice(cut))
+    return out.join('')
+}
+
 // THE BODY, RENDERED. The directives expand in the order they have to: a LEAD is a section
 // page's opening and an opening carries the example that page leads with, so the passes that
 // expand one run after it — or the overview ships the marker instead of the figure.
-//
-// EVERY REPLACEMENT TAKES THE FUNCTION FORM. A string replacement is not literal —
-// `String.replace` reads `$&`, `` $` ``, `$'` and `$1` out of it — so an example holding `'$'`
-// for a currency sign inserted the entire rest of the document.
 export async function renderBody(page: Page, pages: Page[]): Promise<string> {
     let body = renderMarkdown(page.body)
-    for (const match of [...body.matchAll(/<!--lead:([\w/-]+)-->/g)]) {
-        const lead = renderMarkdown(leadOf(pages, match[1] ?? ''))
-        body = body.replace(match[0], () => lead)
-    }
-    for (const match of [...body.matchAll(/<!--example:([\w-]+)-->/g)]) {
-        const example = await readExample(match[1] ?? '', '/')
-        body = body.replace(match[0], () => example.html)
-    }
-    for (const match of [...body.matchAll(/<!--snippet:(\{.*?\})-->/g)]) {
-        const html = await snippetHtml(JSON.parse(match[1] ?? '{}'))
-        body = body.replace(match[0], () => html)
-    }
+    body = await expand(body, /<!--lead:([\w/-]+)-->/g, (match) =>
+        renderMarkdown(leadOf(pages, match[1] ?? '')),
+    )
+    body = await expand(
+        body,
+        /<!--example:([\w-]+)-->/g,
+        async (match) => (await readExample(match[1] ?? '', '/')).html,
+    )
+    body = await expand(body, /<!--snippet:(\{.*?\})-->/g, (match) =>
+        snippetHtml(JSON.parse(match[1] ?? '{}')),
+    )
     return groupSections(linksToRoutes(body, page.slug))
 }
 
@@ -201,27 +223,19 @@ export async function renderPageMarkdown(
     // The directives expand into FENCES rather than panels — same source, same order,
     // no tab a reader of plain text cannot open. LEAD runs first for the reason the HTML
     // path gives: an opening it pulls in may itself embed an example or a snippet.
-    //
-    // EVERY REPLACEMENT TAKES THE FUNCTION FORM. A string replacement is not literal —
-    // `String.replace` reads `$&`, `` $` ``, `$'` and `$1` out of it — so an example
-    // holding `'$'` for a currency sign inserted the entire rest of the document and left
-    // every directive after it unexpanded, with the build still exiting 0.
-    for (const match of [...body.matchAll(new RegExp(LEAD.source, 'gm'))]) {
-        const lead = leadOf(pages, match[1] ?? '')
-        body = body.replace(match[0], () => lead)
-    }
-    for (const match of [...body.matchAll(new RegExp(EXAMPLE.source, 'gm'))]) {
-        const markdown = await exampleMarkdown(match[1] ?? '', root)
-        body = body.replace(match[0], () => markdown)
-    }
-    for (const match of [...body.matchAll(new RegExp(SNIPPET.source, 'gm'))]) {
-        const markdown = await snippetMarkdown({
+    body = await expand(body, new RegExp(LEAD.source, 'gm'), (match) =>
+        leadOf(pages, match[1] ?? ''),
+    )
+    body = await expand(body, new RegExp(EXAMPLE.source, 'gm'), (match) =>
+        exampleMarkdown(match[1] ?? '', root),
+    )
+    body = await expand(body, new RegExp(SNIPPET.source, 'gm'), (match) =>
+        snippetMarkdown({
             example: match[1] ?? '',
             file: match[2] ?? '',
             anchor: match[3] ?? '',
-        })
-        body = body.replace(match[0], () => markdown)
-    }
+        }),
+    )
 
     let head = `# ${page.title}\n`
     if (page.intent) head += `\n*${page.intent}*\n`
@@ -256,13 +270,3 @@ the path each page's marker comment names.
 ## Contents
 ${contents}${body}`
 }
-
-// The design brief lives in `src/ui/app.css` — a REAL stylesheet at the address the
-// app's own `import '#ui/app.css'` will resolve to once `.abide` compiles, so the CSS
-// does not have to move when the scaffold goes.
-//
-// The design brief in one place. The SIGNATURE is the code-block spine: every snippet
-// names which side it runs on, because "same name, both sides" is the thing abide is
-// claiming and a reader scanning for "where does this run" is the commonest question
-// these docs answer. Amber is reserved for NOT-YET states — stubs, pending — and is
-// never used decoratively, so its presence always means the same thing.
