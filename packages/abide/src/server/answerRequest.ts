@@ -6,15 +6,24 @@
 // WHAT WRAPS IT is `createApp.ts`: the `App` whose `fetch` opens the request's one scope (42.6) and
 // runs the app's `middleware` (37.3) around this.
 
+import {
+    ABIDE_ADDRESS,
+    CLIENT_ADDRESS,
+    HEALTH_ADDRESS,
+    LOGS_ADDRESS,
+    MCP_ADDRESS,
+    OPENAPI_ADDRESS,
+    PRINCIPAL_ADDRESS,
+    RPC_ADDRESS,
+} from '#shared/ADDRESSES.ts'
+import { DEBUG_META } from '#shared/DEBUG_META.ts'
 import { escapeAttribute } from '#shared/escapeText.ts'
 import type { Failed } from '#shared/Failed.ts'
-import { DEBUG_META } from '#shared/DEBUG_META.ts'
 import { namedLogger } from '#shared/log.ts'
+import { MOUNT_META } from '#shared/MOUNT_META.ts'
 import { coversPrefix, firstMatch, partsOf } from '#shared/matchRoute.ts'
 import { MOUNT, mounted } from '#shared/mount.ts'
-import { MOUNT_META } from '#shared/MOUNT_META.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
-import { PRINCIPAL_ADDRESS } from '#shared/principal.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { refuse, notFound as refusedNotFound } from '#shared/refuse.ts'
 import { arrive } from '#shared/route.ts'
@@ -33,16 +42,7 @@ import {
     bodyOf,
     contentEtag,
 } from './answerValue.ts'
-import {
-    ABIDE_ADDRESS,
-    CLIENT_ADDRESS,
-    CLIENT_ENTRY,
-    HEALTH_ADDRESS,
-    LOGS_ADDRESS,
-    MCP_ADDRESS,
-    OPENAPI_ADDRESS,
-    RPC_ADDRESS,
-} from './CLIENT_BUILD.ts'
+import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 import { chunksOf, type Manifest } from './chunksByModule.ts'
 import { compressStream } from './compressStream.ts'
 import { answerLogs, answerMcp, openApi } from './generatedSurfaces.ts'
@@ -62,7 +62,7 @@ import { seedFor } from './seedBuffer.ts'
 // One row of the table the compiler writes to `<out>/server.ts`. The loader is a dynamic import
 // so a page's markup is off the boot path until an address asks for it, which is the same reason
 // the client table's loaders are (30.11).
-export type ServerRoute = {
+type ServerRoute = {
     pattern: string
     load: () => Promise<{ default: Component }>
     // 35.1 — the layouts this page renders inside, outermost first, as the compiler found them.
@@ -73,7 +73,7 @@ export type ServerRoute = {
 }
 
 // 35.2 — an error page, and the directory it answers for.
-export type ServerError = Omit<ServerRoute, 'clientModules'>
+type ServerError = Omit<ServerRoute, 'clientModules'>
 
 type RankedError = ServerError & { segments: Segment[] }
 

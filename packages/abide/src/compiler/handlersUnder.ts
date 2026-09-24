@@ -9,9 +9,8 @@
 // not a handler a refusal here rather than an address that silently never answers.
 
 import type { Mount } from '#server/answerRpc.ts'
-import { RPC_ADDRESS } from '#server/CLIENT_BUILD.ts'
 import { namesUnder } from '#server/namesUnder.ts'
-import { SOCKET_ADDRESS } from '#shared/SOCKET_ADDRESS.ts'
+import { RPC_ADDRESS, SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
 import type { TypeSession } from './TypeSession.ts'
 
 const HANDLER_DIRECTORY = 'server/rpc'

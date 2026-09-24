@@ -6,9 +6,9 @@
 // Read off a `Schema` built by `jsonSchema`, where the document is exposed; a schema with no document
 // has declared no types, and its args stay the text they arrived as.
 
-import { ARGS_GATE } from './reactive/ARGS_GATE.ts'
-import type { Gated } from './reactive/Keyed.ts'
-import { numberFromText } from './numberFromText.ts'
+import { numberFromText } from '#shared/numberFromText.ts'
+import { ARGS_GATE } from '#shared/reactive/ARGS_GATE.ts'
+import type { Gated } from '#shared/reactive/Keyed.ts'
 
 export type Document = {
     type?: string | string[]

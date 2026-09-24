@@ -5,11 +5,6 @@
 // WIRE-ONLY, per 16.14: the `Origin` gate on a mutation, `maxBodySize`, the `crossOrigin` preflight,
 // raising the request's idle timeout (16.23), and 19.8's coercion of the text a URL carried.
 
-import {
-    argsDocumentOf,
-    coerceArgs,
-    type Document,
-} from '#shared/coerceArgs.ts'
 import { type Failed, isFailed, wireFailure } from '#shared/Failed.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { mounted as underMount } from '#shared/mount.ts'
@@ -20,6 +15,7 @@ import { argsInURL } from '#shared/rpcRequest.ts'
 import type { Socket } from '#shared/socket.ts'
 import { answerValue } from './answerValue.ts'
 import { callerOf } from './callerOf.ts'
+import { argsDocumentOf, coerceArgs, type Document } from './coerceArgs.ts'
 import { appOrigin, positiveSetting } from './config.ts'
 import { failureOf } from './hooks.ts'
 import { prefers } from './prefers.ts'

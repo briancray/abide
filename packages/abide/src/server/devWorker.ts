@@ -16,6 +16,7 @@
 // A REQUEST ARRIVES AS A MESSAGE and leaves as one. The body is collected rather than streamed,
 // which is the one thing dev does differently from `abide start`.
 
+import { CLIENT_ADDRESS, DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import { escapeText } from '#shared/escapeText.ts'
 import {
     appSources,
@@ -24,12 +25,7 @@ import {
     type ServerTable,
 } from './answerRequest.ts'
 import { type Mount, mountHandlers } from './answerRpc.ts'
-import {
-    CLIENT_ADDRESS,
-    CLIENT_ENTRY,
-    DEV_ADDRESS,
-    PUBLIC_DIRECTORY,
-} from './CLIENT_BUILD.ts'
+import { CLIENT_ENTRY, PUBLIC_DIRECTORY } from './CLIENT_BUILD.ts'
 import { chunksByModule, type Manifest, NO_MANIFEST } from './chunksByModule.ts'
 import { clientBuildOptions } from './clientBuildOptions.ts'
 import { type App, bootApp } from './createApp.ts'

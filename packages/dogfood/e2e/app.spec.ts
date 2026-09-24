@@ -10,7 +10,7 @@
 import { expect, test } from '@playwright/test'
 import { NAV_ITEMS } from '../src/ui/NAV_ITEMS.ts'
 
-// SERVING UNDER A SUB-PATH IS NOT BUILT. The client entry's address is absolute (`CLIENT_BUILD`)
+// SERVING UNDER A SUB-PATH IS NOT BUILT. The client entry's address is absolute (`ADDRESSES`)
 // and nothing mounts the route table below a prefix, so the second project has nothing to run
 // against yet — skipped by name rather than deleted, since the arm is what will catch the URL the
 // framework built by assuming '/'.

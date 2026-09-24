@@ -6,6 +6,7 @@
 // THE MEMBERS ARE BUILT ON FIRST ACCESS. A body runs when its value is built, so members built at
 // import would load the document on every page whether anything read it or not.
 
+import { PRINCIPAL_ADDRESS } from './ADDRESSES.ts'
 import type { Failed } from './Failed.ts'
 import { mounted } from './mount.ts'
 import { ambient } from './reactive/index.ts'
@@ -17,8 +18,6 @@ export type Principal = {
     error?: Failed<string, unknown> | undefined
     [claim: string]: unknown
 }
-
-export const PRINCIPAL_ADDRESS = '/__abide/principal'
 
 export const PRINCIPAL: {
     document: () => Principal | Promise<Principal>

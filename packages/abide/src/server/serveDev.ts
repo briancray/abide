@@ -20,7 +20,7 @@ import {
     compileApp,
     openChecker,
 } from '#compiler/compileApp.ts'
-import { DEV_ADDRESS } from './CLIENT_BUILD.ts'
+import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 
 export type DevOptions = {
     // The app's source root — the directory `ui/` sits under, and the tree that is watched.

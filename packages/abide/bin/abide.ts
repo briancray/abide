@@ -13,10 +13,7 @@ import { scaffold } from '#compiler/scaffold.ts'
 import {
     CLIENT_DIRECTORY,
     ENCODING_SUFFIX,
-    LOGS_ADDRESS,
     MANIFEST,
-    MCP_ADDRESS,
-    OPENAPI_ADDRESS,
     PUBLIC_DIRECTORY,
 } from '#server/CLIENT_BUILD.ts'
 import { chunksByModule, NO_MANIFEST } from '#server/chunksByModule.ts'
@@ -33,6 +30,11 @@ import {
 } from '#server/remote.ts'
 import { serveBuild } from '#server/serveBuild.ts'
 import { serveDev } from '#server/serveDev.ts'
+import {
+    LOGS_ADDRESS,
+    MCP_ADDRESS,
+    OPENAPI_ADDRESS,
+} from '#shared/ADDRESSES.ts'
 
 // What `main` hands a command: the words after the flags, the command's own first, and the flags.
 type Given = ReturnType<typeof parsed>

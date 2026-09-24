@@ -3,10 +3,10 @@
 // sent (36.6), and neither variable is read anywhere else.
 
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
+import { RPC_ADDRESS } from '#shared/ADDRESSES.ts'
 import type { Method } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import type { Mount } from './answerRpc.ts'
-import { RPC_ADDRESS } from './CLIENT_BUILD.ts'
 import { appRoot, buildDirectory } from './createApp.ts'
 
 // The running app asked for, or `undefined` where none is — which is where `openapi` and `mcp`

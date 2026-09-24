@@ -2,11 +2,8 @@ import { existsSync, realpathSync } from 'node:fs' // bun exposes no sync existe
 import { dirname, posix } from 'node:path' // bun exposes no path helpers of its own
 
 import type { Mount } from '#server/answerRpc.ts'
-import {
-    CLIENT_ADDRESS,
-    CLIENT_ENTRY,
-    WIRE_DIRECTORY,
-} from '#server/CLIENT_BUILD.ts'
+import { CLIENT_ENTRY, WIRE_DIRECTORY } from '#server/CLIENT_BUILD.ts'
+import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
 // The page's address from its path, read off `routePattern`'s own rule so the compiler and
 // the routers cannot disagree about what a directory is called.
 import { routeOf } from '#shared/routePattern.ts'
@@ -15,9 +12,9 @@ import { defaultProject } from './defaultProject.ts'
 import { emitClient } from './emitClient.ts'
 import { emitComponent } from './emitComponent.ts'
 import { declaresHandlers, handlersUnder } from './handlersUnder.ts'
-import { markScoped, scopeCss, scopeToken } from './scopeStyles.ts'
 import { type AbideFile, parseAbide } from './parseAbide.ts'
 import { ROUTING_SPECIFIER, WIRE_SPECIFIER } from './SPECIFIERS.ts'
+import { markScoped, scopeCss, scopeToken } from './scopeStyles.ts'
 import { TypeSession } from './TypeSession.ts'
 
 // AN APP'S `.abide` SOURCES, COMPILED — every module the output tree holds, keyed by where it goes
@@ -29,7 +26,7 @@ import { TypeSession } from './TypeSession.ts'
 // its imports say they are — the relative specifier the compiler left alone resolves the same in
 // either tree, and `componentGraph` is what makes the non-relative ones do the same.
 
-export type AppRoute = {
+type AppRoute = {
     // The address, in the bracket spelling `routePattern` parses.
     pattern: string
     // The `.abide` this route paints, relative to the app root.

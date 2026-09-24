@@ -11,10 +11,10 @@
 // NOT HERE YET: 18.15's reset of a `{#for}` over the copy, which is the compiler's; a reset here
 // publishes the owner's ring into the copy.
 
+import { SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
+import { failed, isFailedNamed } from '#shared/Failed.ts'
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
-import { failed, isFailedNamed } from '#shared/Failed.ts'
-import { SOCKET_ADDRESS } from '#shared/SOCKET_ADDRESS.ts'
 import { HYDRATE_LOG } from './Mismatch.ts'
 
 // How many productions a subscriber's copy retains for a cursor to replay.

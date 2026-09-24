@@ -6,6 +6,7 @@
 // what it found, so the addresses the server answers and the addresses the client router knows
 // are two readings of one walk rather than two walks that have to agree (30.8).
 
+import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
 import {
     appSources,
     type LoadedSources,
@@ -15,7 +16,6 @@ import {
 } from './answerRequest.ts'
 import { type Mount, mountHandlers } from './answerRpc.ts'
 import {
-    CLIENT_ADDRESS,
     CLIENT_DIRECTORY,
     ENCODING_SUFFIX,
     MANIFEST,

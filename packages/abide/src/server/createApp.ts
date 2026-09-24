@@ -8,12 +8,11 @@
 
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
-
+import { SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
 import { namedLogger } from '#shared/log.ts'
 import { compose } from '#shared/Middleware.ts'
 import { MOUNT, unmounted } from '#shared/mount.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
-import { SOCKET_ADDRESS } from '#shared/SOCKET_ADDRESS.ts'
 import {
     type AppSources,
     answerRequest,
