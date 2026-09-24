@@ -1,0 +1,28 @@
+<script>
+import { reactive } from 'abide'
+import { getMetrics } from '#server/rpc/cacheSharedMetrics'
+
+const RANGES = ['7d', '30d']
+
+let range = reactive('7d')
+
+// Its own range, and no way to reach the tile above — the args are the
+// whole of what decides whether these two are one load.
+const metrics = reactive(() => getMetrics({ range }))
+</script>
+
+<ul class="grid">
+    <li><span>range</span>
+        <div class="tabs">
+        {#for one of RANGES}
+            <button aria-selected={range === one}
+                onclick={() => { range = one }}>{one}</button>
+        {/for}
+        </div></li>
+    <li><span>average order</span>
+        <strong>{metrics.ready() ? metrics.average : '—'}</strong>
+    </li>
+    <li><span>times computed</span>
+        <strong>{metrics.ready() ? metrics.computed : '—'}</strong>
+    </li>
+</ul>

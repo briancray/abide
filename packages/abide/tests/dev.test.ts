@@ -27,8 +27,19 @@ let count = reactive(0)
 const PACKAGE = JSON.stringify({
     name: 'dev-fixture',
     type: 'module',
-    imports: { '#ui/*': './ui/*' },
+    imports: {
+        '#ui/*': './ui/*',
+        '#shared/*': ['./shared/*', './shared/*.ts'],
+    },
 })
+
+// A SEAM WRITTEN THE WAY AN APP WRITES IT: extensionless, which is the spelling only the second
+// target of the manifest's `imports` answers.
+const SEAM_PAGE = `<script>
+import { greeting } from '#shared/greeting'
+</script>
+
+<main id="seam">{greeting()}</main>`
 
 const TSCONFIG = JSON.stringify({
     compilerOptions: {
@@ -39,7 +50,7 @@ const TSCONFIG = JSON.stringify({
         allowImportingTsExtensions: true,
         types: [],
     },
-    include: ['ui'],
+    include: ['ui', 'shared'],
 })
 
 let server: Bun.Subprocess | undefined
@@ -50,6 +61,9 @@ beforeAll(async () => {
     app = temporaryModule({
         'ui/app.html': SHELL,
         'ui/pages/page.abide': HOME,
+        'ui/pages/seam/page.abide': SEAM_PAGE,
+        'shared/greeting.ts':
+            "export function greeting(): string {\n    return 'from the shared seam'\n}\n",
         // 36.15 — a URL naming a public file, left as its address rather than resolved on disk.
         'ui/home.css':
             ".fixture-sheet-was-imported { color: red }\n.fixture-uses-public { background: url('/robots.txt') }",
@@ -148,6 +162,17 @@ test('a page is painted by the command with no build in front of it — 38.4', a
     expect(html).toContain('<meta charset="utf-8">')
 })
 
+// AN EXTENSIONLESS SEAM IMPORT RESOLVES UNDER DEV AS IT DOES IN A BUILD. The runtime takes a `#`
+// specifier from a compiled module as an exact file, so `#shared/greeting` found nothing and the
+// page was the error document — while `abide build`, whose bundler probes, served it.
+//
+// THE REVERT: drop `withSeamsResolved` from the dev plugin's `onLoad`; the page answers the error
+// document naming `#shared`.
+test('a page importing an extensionless seam is painted — 38.4', async () => {
+    const html = await (await Bun.fetch(`${base}/seam`)).text()
+    expect(html).toContain('<main id="seam">from the shared seam</main>')
+})
+
 // 38.17 — IN MEMORY, AND NAMED BY ITS SOURCE. `entry.js` rather than a content hash is what makes
 // a stack trace name the module the author wrote, and it is the one place dev parts company with
 // 38.5's hashed chunks on purpose.
@@ -235,6 +260,38 @@ test('a save reaches the next request — 38.4, 38.16', async () => {
     await waitFor(`${base}/`, (body) => body.includes('Home'))
 }, 30_000)
 
+// THE CHECKER IS KEPT ACROSS SAVES, so what a page's names ARE can be decided by a file the
+// compiler never writes: `total` below is static until a save to a plain `.ts` makes it a
+// `Reactive`, and a page reading it has to be compiled against the new type — a checker answering
+// from what it cached at boot paints the reactive as though it were the value.
+//
+// THE REVERT: drop the `checker.session.edited(…)` call in `serveDev`'s `compile` and the second
+// wait times out on a page painting the reactive's own function source where its 8 was due.
+test('an edit to a plain .ts reaches the types the next compile reads — 31.3, 38.4', async () => {
+    const reading = HOME.replace(
+        'let count = reactive(0)',
+        "import { total } from '#ui/total.ts'\nlet count = reactive(0)\nlet shown = total",
+    ).replace('<h1>Home</h1>', '<h1>Home</h1><p id="total">{shown}</p>')
+    await save('ui/total.ts', 'export const total = 7\n')
+    await save('ui/pages/page.abide', reading)
+    await waitFor(`${base}/`, (body) => body.includes('<p id="total">7</p>'))
+
+    await save(
+        'ui/total.ts',
+        "import { reactive } from 'abide'\nexport const total = reactive(8)\n",
+    )
+    expect(
+        await waitFor(`${base}/`, (body) =>
+            body.includes('<p id="total">8</p>'),
+        ),
+    ).toContain('<p id="total">8</p>')
+
+    // ONE SAVE TO PUT IT BACK, and `total.ts` left where it is: a second event here can land after
+    // the wait below is satisfied, and the reload it starts is the next test's socket refused.
+    await save('ui/pages/page.abide', HOME)
+    await waitFor(`${base}/`, (body) => !body.includes('id="total"'))
+}, 45_000)
+
 // 38.16 — THE FORCE-CLOSE, which is the whole reload protocol: nothing is sent over this socket
 // and its LIFE is the message. THE REVERT: drop the `terminate` loop from `replace` and the
 // socket stays open across the save, so a browser waits for a reload that never comes.
@@ -283,6 +340,9 @@ beforeAll(async () => {
     const dir = temporaryModule({
         'ui/app.html': SHELL,
         'ui/pages/page.abide': HOME,
+        'ui/pages/seam/page.abide': SEAM_PAGE,
+        'shared/greeting.ts':
+            "export function greeting(): string {\n    return 'from the shared seam'\n}\n",
         // THE BROWSER GRAPH ALONE. A route's module is imported lazily on the server, so this
         // page is never loaded by the arm below — and the bundler follows every dynamic import
         // in the table, so the bundle it builds is the thing that fails.
@@ -331,6 +391,9 @@ beforeAll(async () => {
     const dir = temporaryModule({
         'ui/app.html': SHELL,
         'ui/pages/page.abide': HOME,
+        'ui/pages/seam/page.abide': SEAM_PAGE,
+        'shared/greeting.ts':
+            "export function greeting(): string {\n    return 'from the shared seam'\n}\n",
         'ui/pages/about/page.abide': '<main id="about">About</main>',
         // The file that shadows the page. `abide build` has refused this since the clause was
         // written; `abide dev` served it.

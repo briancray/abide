@@ -14,6 +14,7 @@
 // generated document carries them.
 
 import type { Issues } from './Issues.ts'
+import { isRecord } from './isRecord.ts'
 import type { JsonValue } from './JsonValue.ts'
 import { note } from './note.ts'
 
@@ -161,9 +162,9 @@ function hasShape(shape: Shape, held: unknown): boolean {
         case 'an array of schemas':
             return Array.isArray(held)
         case 'a schema':
-            return typeof held === 'boolean' || isMembers(held)
+            return typeof held === 'boolean' || isRecord(held)
         case 'an object of schemas':
-            return isMembers(held)
+            return isRecord(held)
         case 'a string or an array of them':
             return (
                 typeof held === 'string' ||
@@ -173,10 +174,6 @@ function hasShape(shape: Shape, held: unknown): boolean {
         case 'any value':
             return true
     }
-}
-
-function isMembers(held: unknown): boolean {
-    return held !== null && typeof held === 'object' && !Array.isArray(held)
 }
 
 export function validateJson<T>(
@@ -341,8 +338,7 @@ function check(
     if (typeof value === 'number') checkNumber(node, value, path, found)
     if (typeof value === 'string') checkString(node, value, path, found)
     if (Array.isArray(value)) checkArray(node, value, path, found)
-    if (isMembers(value))
-        checkObject(node, value as Record<string, unknown>, path, found)
+    if (isRecord(value)) checkObject(node, value, path, found)
 
     checkCombinators(node, value, path, found)
 }

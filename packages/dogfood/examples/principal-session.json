@@ -1,0 +1,13 @@
+{
+    "title": "`principal.set` — one seal, read everywhere",
+    "summary": "A sign-in on a CRM, and the header above it. Sign in, then sign out, and watch a component the form never names.",
+    "app": "crm",
+    "about": "server",
+    "files": [
+        "src/server/rpc/principalSessionSession.ts",
+        "src/ui/components/Session.abide",
+        "src/ui/components/Header.abide",
+        "src/ui/components/SignIn.abide"
+    ],
+    "render": "src/ui/components/SignIn.abide"
+}

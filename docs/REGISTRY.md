@@ -64,7 +64,7 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `reactive` | `<Computed, Args, Shaped = Awaited<Computed>>(body: (args: Args) => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never, Args> & { transform?: (value: Awaited<Computed>) => Shaped }) => Keyed<Kept<Shaped>, Args, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed body overload. | 11.2, 11.3, 11.4, 11.6, 11.7, 11.23, 11.56, 11.63 |
 | `reactive` | `<Accepted, Shaped = Accepted>(initial?: Accepted \| Promise<Accepted>, options?: ReactiveOptions<Accepted, Kept<Shaped>, never> & { transform?: (value: Accepted) => Shaped }) => Reactive<Kept<Shaped>, Accepted, Refused<Shaped>>` | The value overload, for what the scope owns outright. | 4.1, 4.2, 4.14, 4.15, 4.16 |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | The shape of a `transform`. | 4.6, 4.7, 4.8 |
-| `Store` | `{ get: () => Stored \| Promise<Stored>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void> }` | Where a value lives when this process does not. | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19 |
+| `Store` | `{ get: () => Stored \| undefined \| Promise<Stored \| undefined>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void> }` | Where a value lives when this process does not. | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19 |
 | `Shared` | `interface Shared {}` | The app's declaration-merged registry of shared keys. | 10.3 |
 | `reactive.share` | `<Key extends string, Value>(key: Key, create: () => Reactive<Value>) => Key extends keyof Shared ? Reactive<Shared[Key]> : Reactive<Value>` | Get-or-create a reactive value in the component's scope by key. | 10.1, 10.2, 10.4, 10.5, 10.6, 10.7 |
 
@@ -88,9 +88,9 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator an app declares on `identity`. | 5.4, 5.5 |
 | `history` | `number` | How many past productions a value retains beside the standing one. | 6.1, 6.2, 6.3, 6.16, 6.17, 6.18, 9.3, 9.10, 9.17, 9.18, 9.19, 9.28, 11.39 |
 | `ttl` | `number` | The life of a retained production. | 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11, 6.12, 6.13, 6.14, 6.15, 6.22, 11.6, 11.35, 11.46, 11.49, 11.50 |
-| `args` | `Schema<Args>` | The gate on a keyed value's args. | 9.9, 11.28, 11.30, 11.41, 11.42, 11.57, 11.61 |
+| `args` | `Schema<Args>` | The gate on a keyed value's args. | 9.9, 11.28, 11.30, 11.41, 11.42, 11.57, 11.61, 11.69 |
 | `global` | `boolean` | Opts out of the default scope into one cache shared by every caller in the process. | 11.34, 11.35, 11.36, 11.37, 11.38, 11.40, 11.54, 11.68 |
-| `tags` | `string[] \| ((args?: Args) => string[])` | What a `Selection` matches on. | 11.44, 11.45 |
+| `tags` | `string[] \| ((args: Args) => string[])` | What a `Selection` matches on. | 11.44, 11.45 |
 | `throttle` | `number` | A ceiling on how often the value changes. | 5.9, 5.10, 5.12, 5.13, 5.15, 5.16, 5.18, 5.19, 5.20, 5.21, 5.22 |
 | `debounce` | `number` | A wait for the changes to stop before the value changes. | 5.9, 5.10, 5.12, 5.14, 5.15, 5.16, 5.18, 5.19, 5.20, 5.21, 5.22 |
 
@@ -243,7 +243,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `sse` | `<T>(values: Values<T>) => Values<T>` | The same machine framed as server-sent events, fixed. | 16.47, 17.6, 17.7 |
 | `bytes` | `(values: Values<Uint8Array>) => Values<Uint8Array>` | A stream of binary chunks, fixed. | 16.35, 17.6, 17.7 |
 | `RedirectStatus` | `301 \| 302 \| 303 \| 307 \| 308` | The statuses a `redirect` may carry. | 17.3 |
-| `refuse` | `(status: number, message?: string) => Failed<'HttpError', undefined>` | An undeclared refusal at a status. | 15.5, 15.9, 15.10, 16.42, 17.4, 17.5 |
+| `refuse` | `(status: number, message?: string) => Failed<'HttpError', undefined>` | An undeclared refusal at a status. | 15.5, 15.9, 15.10, 15.16, 16.42, 17.4, 17.5 |
 
 ## `socket` — `reactive` + transport
 
@@ -252,7 +252,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `Socket` | `<Produced, Args, Failures = never>(args?: Args) => Reactive<Produced, Produced, Failures, Produced>` | A value carried over a web socket. | 9.16, 18.1, 18.2, 18.10, 18.11, 18.12, 18.13, 18.14, 18.15, 18.16 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The key of the value carried. | 11.24 |
 | `Produced` | `unknown` | What one production carries. | 9.14 |
-| `socket` | `<Produced, Args, Failures = never>(values?: Reactive<Produced, Produced, Failures, Produced> \| Keyed<Produced, Args, Produced, Failures, Produced>, options?: SocketOptions<Produced, Args>) => Socket<Produced, Args, Failures>` | The socket factory, over a `reactive`. | 18.1, 18.3, 18.9 |
+| `socket` | `<Produced, Args, Failures = never>(values?: Reactive<Produced, Produced, Failures, Produced> \| Keyed<Produced, Args, Produced, Failures, Produced>, options?: SocketOptions<Produced, Args>) => Socket<Produced, Args, Failures>` | The socket factory, over a `reactive`. | 9.16, 18.1, 18.3, 18.9, 18.18 |
 
 ### `SocketOptions`
 
@@ -294,7 +294,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `traceresponse` | everything | Correlates the answer, a failure included. | 21.2 |
 | `cache-control: private, no-store` | a page, an rpc answer, any refusal | The default a write through `response` overrides. | 21.3, 21.10 |
 | `cache-control: private, max-age=<ttl>` | a `GET` over a `global` `reactive` | The value's own duration, answered rather than restated. | 21.8, 21.9, 21.11 |
-| `cache-control: no-store` | `/__abide/health`, `/__abide/principal` | Refuses caching for an answer about this process or this caller. | 21.4 |
+| `cache-control: no-store` | `/__abide/health`, `/__abide/principal`, `/__abide/openapi.json`, `/__abide/mcp` | Refuses caching for an answer about this process, this caller or the app's surfaces. | 21.4 |
 | `cache-control: public, max-age=31536000, immutable` | the built bundle | A chunk addressed by its own content hash. | 21.5 |
 | `cache-control: public, max-age=0, must-revalidate` | a file under `src/ui/public` | A file at an address the build never chose. | 21.12 |
 | `etag` | a file under `src/ui/public` | The answered bytes, addressed by their content. | 21.13, 21.14 |
@@ -429,7 +429,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `Logger` | `typeof log` | What `log.named` hands back. | 28.5 |
 | `log.enabled` | `() => boolean` | Whether a gated line under this namespace would be written. | 28.6, 28.7 |
 | `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; namespace: string; message: string; trace: string }` | One line, as a value. | 24.3 |
-| `log.records` | `Reactive<LogRecord[], LogRecord, never, LogRecord>` | The value every line is published to. | 28.1 |
+| `log.records` | `Reactive<LogRecord>` | The value every line is published to. | 28.1 |
 | `abide:request` | `debug` | One line per request. | 28.8 |
 | `abide:socket` | `debug` | One line per socket event. | 28.8 |
 | `abide:lifecycle` | `debug` `error` | A lifecycle that ran. | 28.8 |
@@ -468,7 +468,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14 |
+| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18 |
 
 # `.abide` files
 
@@ -495,7 +495,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- |
 | `{expr}` | Reactive text, escaped. | 32.1, 32.24 |
 | formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
-| `{raw(...)}` | Raw HTML. | 32.2, 32.26, 32.27 |
+| `{raw(...)}` | Raw HTML. | 32.2, 32.26, 32.27, 32.31, 32.32 |
 | `name={expr}` | A reactive attribute or property. | 32.3, 32.21, 32.24 |
 | `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4 |
 | `name="…{expr}…"` | An interpolated quoted value. | 32.3 |
@@ -515,7 +515,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.2, 32.25, 32.27 |
+| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.2, 32.25, 32.27, 32.31, 32.32 |
 | `Raw` | `class Raw { html: string }` | What `raw` hands back. | 32.25 |
 
 ### Control flow

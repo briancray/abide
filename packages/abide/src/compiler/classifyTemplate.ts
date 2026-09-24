@@ -1,11 +1,18 @@
-import type { Attribute, TemplateNode } from './TemplateNode.ts'
+import { isEventName } from '#shared/isEventName.ts'
+import {
+    type Attribute,
+    childListsOf,
+    type TemplateNode,
+} from './TemplateNode.ts'
 
-// THE CLASSIFICATION both emitters share. Where a node STANDS is not decided here: `emitMarkup`
+export { isEventName }
+
+// THE CLASSIFICATION both emitters share. Where a node STANDS is not decided here: `renderMarkup`
 // carries a `Cursor`, so the walk that writes a node is the walk that places it. What IS decided
 // here is what a node IS — and a decision that must bind BOTH lanes belongs here, because one copy
 // of it is the agreement.
 //
-// THE PREDICATES — `isComponentTag`, `isEventName`, `isHead`, `isSingleRooted`, `isStyleProperty`,
+// THE PREDICATES — `isComponentTag`, `isEventName`, `isSingleRooted`, `isStyleProperty`,
 // `isClassToggle`, `isSlot` — and `bindingsOf`. An `onclick` the server declines to write and the
 // client binds as a listener is one predicate answering twice.
 //
@@ -60,14 +67,24 @@ export function bindingsOf(node: TemplateNode & { kind: 'element' }): {
     handlers: { event: string; attribute: Attribute }[]
     attributes: AttributeBinding[]
     elements: Attribute[]
+    binds: { kind: ValueBind; attribute: Attribute }[]
+    spreads: { attribute: Attribute; explicit: string[] }[]
 } {
     const bound: ReturnType<typeof bindingsOf> = {
         handlers: [],
         attributes: [],
         elements: [],
+        binds: [],
+        spreads: [],
     }
     for (const attribute of node.attributes) {
         if (!attribute.expression) continue
+        const bind = valueBindOf(attribute.lowerName)
+        if (bind !== undefined) {
+            // 32.5, 32.7, 32.8 — the property and the value, kept in step both ways.
+            bound.binds.push({ kind: bind, attribute })
+            continue
+        }
         if (isElementBind(attribute.lowerName)) {
             // 32.9 — the node itself. Not written into the tag by the server and not set by the
             // client either: what the value takes is the element.
@@ -83,9 +100,11 @@ export function bindingsOf(node: TemplateNode & { kind: 'element' }): {
             })
             continue
         }
-        // 32.11's spread is not built, and an emitter that planned one would bind a name beginning
-        // `...` as an attribute.
-        if (attribute.name.startsWith('...')) continue
+        // 32.11 — a spread, kept written by a binding of its own.
+        if (attribute.name === '...') {
+            bound.spreads.push({ attribute, explicit: explicitNames(node) })
+            continue
+        }
         // 32.10, 32.20 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE and every
         // `class:name` ONE `class`, merged by the server emitter. So a plain `style={expr}` or
         // `class={expr}` standing beside one cannot be written back on its own: `setAttribute`
@@ -137,21 +156,10 @@ export function isSlot(node: TemplateNode): boolean {
 export function holdsSlot(nodes: TemplateNode[]): boolean {
     for (const node of nodes) {
         if (isSlot(node)) return true
-        if (node.kind === 'element' && holdsSlot(node.children)) return true
-        if (node.kind === 'block') {
-            if (node.block === 'for') {
-                if (holdsSlot(node.children)) return true
-                continue
-            }
-            for (const branch of node.branches)
-                if (holdsSlot(branch.children)) return true
-        }
+        for (const children of childListsOf(node))
+            if (holdsSlot(children)) return true
     }
     return false
-}
-
-export function isEventName(lowerName: string): boolean {
-    return lowerName.length > 2 && lowerName.startsWith('on')
 }
 
 // 32.9 — `bind:element` is the one `bind:` the server writes nothing for and the client does not
@@ -159,6 +167,19 @@ export function isEventName(lowerName: string): boolean {
 // it and the client binding it are one predicate answering twice.
 export function isElementBind(lowerName: string): boolean {
     return lowerName === 'bind:element'
+}
+
+// 32.5, 32.7, 32.8 — THE BINDS THAT KEEP A PROPERTY AND A VALUE IN STEP, by the folded name, or
+// `undefined` for any other attribute. Both emitters ask: the server writes the value into the tag
+// and the client binds the property.
+export type ValueBind = 'value' | 'checked' | 'open' | 'group'
+
+export function valueBindOf(lowerName: string): ValueBind | undefined {
+    if (lowerName === 'bind:value') return 'value'
+    if (lowerName === 'bind:checked') return 'checked'
+    if (lowerName === 'bind:open') return 'open'
+    if (lowerName === 'bind:group') return 'group'
+    return undefined
 }
 
 // 32.10 — `style:prop` sets ONE style property and `class:name` ONE class. Here rather than beside
@@ -215,10 +236,6 @@ function isMergedPlain(
     return false
 }
 
-export function isHead(node: TemplateNode): boolean {
-    return node.kind === 'element' && node.lowerTag === 'head'
-}
-
 // Whether a `{#for}` body is ONE top-level element and nothing else. That row IS its element, so
 // the nodes between the region's anchors are the rows and nothing has to be added to tell them
 // apart. `<dt>{k}</dt><dd>{v}</dd>` is not — counting elements there finds four rows in a list of
@@ -261,4 +278,28 @@ const PARSER_OWNED = new Set([
 
 export function isParserOwned(lowerTag: string): boolean {
     return PARSER_OWNED.has(lowerTag)
+}
+
+// 32.11 — THE ATTRIBUTE NAMES AN ELEMENT WRITES FOR ITSELF, which a spread on it does not override:
+// each attribute as the tag carries it, `class:` and `style:` folded into the one attribute they merge
+// into and a bind into the property's own name.
+export function explicitNames(
+    node: TemplateNode & { kind: 'element' },
+): string[] {
+    const names: string[] = []
+    for (const attribute of node.attributes) {
+        if (attribute.name === '...') continue
+        const lower = attribute.lowerName
+        const name = lower.startsWith('class:')
+            ? 'class'
+            : lower.startsWith('style:')
+              ? 'style'
+              : lower === 'bind:group'
+                ? 'checked'
+                : lower.startsWith('bind:')
+                  ? lower.slice('bind:'.length)
+                  : lower
+        if (!names.includes(name)) names.push(name)
+    }
+    return names
 }

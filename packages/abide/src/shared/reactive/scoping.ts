@@ -12,12 +12,7 @@ export type Scope = {
     // A `Map` rather than a `WeakMap` because the scope is the shorter life: it is dropped with its
     // request, and everything it holds goes with it.
     instances: Map<object, unknown>
-    // 41.13 — where an `Rpc` call made in this scope reports the value it reached, so the browser's
-    // own call for it is answered from that value (41.5). `null` in every scope but a page's render.
-    seed: Seed | null
 }
-
-export type Seed = (rpc: object, args: unknown, reached: unknown) => void
 
 export type Scoping = {
     current(): Scope | undefined

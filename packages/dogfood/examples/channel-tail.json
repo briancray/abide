@@ -1,0 +1,10 @@
+{
+    "title": "`{ history }` on a channel — how far back it goes",
+    "summary": "A transcript pane over a conversation already three turns old. Send a fourth and watch the top of it.",
+    "app": "chat",
+    "files": [
+        "src/shared/channelTailConversations.ts",
+        "src/ui/components/ChannelTailChat.abide"
+    ],
+    "render": "src/ui/components/ChannelTailChat.abide"
+}

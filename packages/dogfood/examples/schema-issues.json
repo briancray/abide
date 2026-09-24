@@ -1,0 +1,11 @@
+{
+    "title": "`Issues<T>` — a message under the field it belongs to",
+    "summary": "The invoice search. Empty the query, or ask for four — each message lands under its own field.",
+    "app": "crm",
+    "about": "server",
+    "files": [
+        "src/server/rpc/schemaIssuesInvoices.ts",
+        "src/ui/components/SchemaIssuesSearch.abide"
+    ],
+    "render": "src/ui/components/SchemaIssuesSearch.abide"
+}

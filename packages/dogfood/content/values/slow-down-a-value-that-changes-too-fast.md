@@ -8,8 +8,8 @@ covers:
   - `identity`
   - `structural`
 examples:
-  - packages/dogfood/examples/cap-debounce
-  - packages/dogfood/examples/cap-throttle
+  - packages/dogfood/examples/cap-debounce.json
+  - packages/dogfood/examples/cap-throttle.json
 ---
 
 A filter box is the case where "reading loads it" stops being free. Bind the input to a value,

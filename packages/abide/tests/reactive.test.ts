@@ -2775,12 +2775,11 @@ test('an args gate refuses before the body runs, and the refusal is the entry fo
     expect(invoice({ id: 4 })()).toBe(8)
 })
 
-// 11.28 AND 9.9: THE GATE REFUSES AND DECIDES NOTHING ELSE. A schema that normalises hands back
-// a value, and that value is discarded — the body gets the args the caller sent, and two args
-// the gate would normalise to one are still two keys.
+// 11.28 AND 11.69: THE GATE DOES NOT DECIDE THE ENTRY, AND THE BODY GETS WHAT IT RETURNED. Two
+// args the gate would normalise to one are still two keys, and each body sees the normalised form.
 //
-// THE REVERT is handing the body what the gate returned: `body saw: number`.
-test('an args gate that normalises decides neither the entry nor what the body sees', () => {
+// THE REVERT is handing the body the args the caller sent: `body saw: string`.
+test("an args gate that normalises decides the body's args but not the entry", () => {
     const seen: string[] = []
     const keyed = reactive(
         (args: { id: string | number }) => {
@@ -2795,7 +2794,7 @@ test('an args gate that normalises decides neither the entry nor what the body s
     )
     keyed({ id: '7' })
     keyed({ id: 7 })
-    expect(`body saw: ${seen[0]}`).toBe('body saw: string')
+    expect(`body saw: ${seen[0]}`).toBe('body saw: number')
     expect(`entries: ${keyed.entries.size}`).toBe('entries: 2')
 })
 

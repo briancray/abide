@@ -28,16 +28,17 @@ button { padding: .25rem .625rem; border-radius: 999px; border: 1px solid var(--
 button:hover:not(:disabled) { color: var(--ink); border-color: var(--muted) }
 button:disabled { opacity: .5 }
 .failure { white-space: pre-wrap; font: 400 .75rem/1.4 var(--mono); color: var(--bad); margin: 0 }
-.bar { height: 2px; background: var(--rule); overflow: hidden }
-.bar i { display: block; height: 100%; width: 0; background: var(--good); transition: width .2s }
+.st-note, .st-tag { font-size: .75rem; color: var(--muted); margin: 0 }
+.st-good { color: var(--good) }
+.st-bad { color: var(--bad) }
 </style>
 <header>
   <div class="head">
     <h1>Status</h1>
-    <span id="overall" class="ex-tag">nothing run yet</span>
+    <span id="overall" class="st-tag">nothing run yet</span>
     <button type="button" id="all">Run everything</button>
   </div>
-  <p class="ex-note" id="where">Every number here is produced when you ask for it. Nothing is authored and nothing is cached.</p>
+  <p class="st-note" id="where">Every number here is produced when you ask for it. Nothing is authored and nothing is cached.</p>
 </header>
 <div id="sections"></div>
 <script src="/status.js"></script>

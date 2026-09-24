@@ -12,9 +12,9 @@ covers:
   - `flushSync`
   - `Transformer`, `Disposer`, middleware, lifecycle hooks
 examples:
-  - packages/dogfood/examples/watch-tracked
-  - packages/dogfood/examples/watch-disposer
-  - packages/dogfood/examples/watch-sources
+  - packages/dogfood/examples/watch-tracked.json
+  - packages/dogfood/examples/watch-disposer.json
+  - packages/dogfood/examples/watch-sources.json
 ---
 
 Most of what looks like an effect is a value. A heading derived from a row, a filtered list, a count

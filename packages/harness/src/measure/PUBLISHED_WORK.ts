@@ -11,7 +11,7 @@
 export const PUBLISHED_WORK_KEY = '__ABIDE_WORK__'
 
 // Every field `measure()` reads off the published record. A record missing one of them
-// is a throw naming it, per 44.24 — the same reason an unpatched DOM mutator throws
+// is a throw naming it, per 44.21 — the same reason an unpatched DOM mutator throws
 // rather than reporting 0.
 export const PUBLISHED_WORK_FIELDS = [
     'wakes',

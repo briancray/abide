@@ -49,7 +49,9 @@ export async function startApp(
             '--port',
             '0',
         ],
-        { stdout: 'pipe', stderr: 'pipe' },
+        // THE ENVIRONMENT AS IT STANDS, which a spawn does not take by default: bun hands a child
+        // the one this process started with, so a test that set a variable would not reach it.
+        { stdout: 'pipe', stderr: 'pipe', env: process.env },
     )
     let seen = ''
     for await (const chunk of server.stdout as ReadableStream<Uint8Array>) {

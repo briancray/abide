@@ -9,7 +9,7 @@ const { install, measure, patchSet } = await import('../src/measure/index.ts')
 install()
 
 // `number | null` rather than `number`: the three rows this lane reads off the published
-// counter are absent in both substrates here, and 44.23 says absent is `null`. Typed as
+// counter are absent in both substrates here, and 44.20 says absent is `null`. Typed as
 // `number` the two sides would still compare equal and the declaration would be a lie.
 const cases: Record<string, Record<string, number | null>> = {}
 for (const [name, body] of Object.entries(CASES))

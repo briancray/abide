@@ -22,9 +22,11 @@
 // every file is compared before it is written and what is left over is deleted at the end, and
 // one word changes one page.
 
-import { rm } from 'node:fs/promises' // bun has no recursive directory remove of its own
+import { readdir, rm, rmdir } from 'node:fs/promises' // bun has no directory remove or listing of its own
 
-import { buildInjectable } from '../../harness/scripts/buildInjectable.ts'
+import { escapeAttribute } from 'abide'
+
+import { ifPresent } from './ifPresent.ts'
 import {
     headingsOf,
     markdownAddressOf,
@@ -35,8 +37,8 @@ import {
     renderPageMarkdown,
     routeOf,
 } from './readContent.ts'
-import { escapeHtml, renderInline } from './renderMarkdown.ts'
-import { type ZipEntry, zip } from './zip.ts'
+import type { Example } from './renderExample.ts'
+import { renderInline } from './renderMarkdown.ts'
 
 const ENCODER = new TextEncoder()
 
@@ -44,7 +46,6 @@ const SOURCE = new URL('../src/', import.meta.url)
 const PAGES = new URL('ui/pages/', SOURCE)
 const PUBLIC = new URL('ui/public/', SOURCE)
 const ASSETS = new URL('../assets/', import.meta.url)
-const EXAMPLES = new URL('../examples/', import.meta.url)
 
 // A page's DIRECTORY under `pages/`, which is the whole of its address (CLAUDE.md): the app's
 // root page is `pages/page.abide` and a section's overview is the section's own directory.
@@ -142,7 +143,6 @@ function contentModule(
     const record = {
         slug: page.slug,
         header: headerOf(page),
-        body,
         footer: footerOf(previous, next),
         rail: railOf(page, body),
     }
@@ -153,33 +153,73 @@ export const CONTENT: DocsContent = ${JSON.stringify(record, null, 4)}
 `
 }
 
-// THE PAGE, AND IT IS THE SAME PAGE EIGHTY-FIVE TIMES: the head it contributes (39.1), the nav
-// every page shares, five slots over the record beside it, and the node its own client code is
-// handed (32.9). What differs is the record, which is why the record is the import.
+// THE CHROME EVERY PAGE SHARES, as the one layout around all of them: the skip link, the nav and
+// the stylesheet. A layout is not rebuilt between navigations (41.11), so the nav a reader has
+// scrolled stays where it is while the page beside it changes — which is why the nav reads where
+// it is from the route rather than being told by the page.
+//
+// `<slot/>` AT THE BODY'S OWN LEVEL, because the body is a three-column grid — nav, `<main>`, rail
+// — and the page's `<main>` and rail are its second and third columns. The region anchors round the
+// slot are comments, which are not grid items.
+const LAYOUT = `<script>
+import DocsNav from '#ui/components/DocsNav.abide'
+import '#ui/app.css'
+</script>
+
+<a class="skip" href="#content">Skip to content</a>
+<DocsNav/>
+<slot/>
+`
+
+// THE PAGE: the head it contributes (39.1), the record beside it, and the BODY AS MARKUP. The body is the one part written into the template rather than carried in the
+// record, because an example is a component and a component is a tag — a `{raw}` string cannot
+// hold one, and the body cannot be cut around it either, an example sitting inside the `<section>`
+// `groupSections` wrapped it in.
+//
+// HTML WRITTEN INTO A TEMPLATE IS TEMPLATE, so a `{` in a code sample would open a slot. Every
+// brace is written as its character reference instead, which the browser reads back as the brace.
 //
 // `#ui/pages/…` RATHER THAN `./CONTENT.ts`. A relative specifier is left exactly as written and
 // the emitted module lives in the build tree, so `./CONTENT.ts` resolves beside the OUTPUT and
 // misses the source; an import-map specifier resolves the same from either tree.
-export function pageSource(page: Page, directory: string): string {
-    const title = escapeHtml(page.title.replaceAll('`', ''))
+export function pageSource(
+    page: Page,
+    directory: string,
+    body: string,
+    examples: Example[],
+): string {
+    const title = escapeAttribute(page.title.replaceAll('`', ''))
+    let imports = ''
+    // And a newline inside a `<pre>` is written as ITS reference too: the template drops a text
+    // node that is only whitespace, and in highlighted code that is every line break, the break
+    // sitting between two `<span>`s.
+    let markup = body
+        .replaceAll('{', '&#123;')
+        .replaceAll('}', '&#125;')
+        .replace(/<pre\b[\s\S]*?<\/pre>/g, (block) =>
+            block.replaceAll('\n', '&#10;'),
+        )
+    for (const example of examples) {
+        imports += `import ${example.component} from '#${example.render.slice('src/'.length)}'\n`
+        markup = markup.replace(
+            `<!--render:${example.name}-->`,
+            () => `<${example.component}/>`,
+        )
+    }
     return `<script>
 import { raw } from 'abide'
-import DocsNav from '#ui/components/DocsNav.abide'
 import { installDocs } from '#ui/docs.ts'
 import { CONTENT } from '#ui/pages/${directory}CONTENT.ts'
-import '#ui/app.css'
-</script>
+${imports}</script>
 
 <head>
     <title>${title} — abide</title>
     <link rel="alternate" type="text/markdown" href="${markdownAddressOf(page.slug)}" title="${title} as Markdown">
 </head>
 
-<a class="skip" href="#content">Skip to content</a>
-<DocsNav current={CONTENT.slug}/>
 <main id="content" bind:element={installDocs}>
     <header>{raw(CONTENT.header)}</header>
-    {raw(CONTENT.body)}
+    ${markup}
     <footer>{raw(CONTENT.footer)}</footer>
 </main>
 {raw(CONTENT.rail)}
@@ -204,29 +244,27 @@ export async function buildPages(): Promise<Page[]> {
                 : contents instanceof Uint8Array
                   ? contents
                   : new Uint8Array(await contents.arrayBuffer())
-        // One syscall rather than two, the reason `render.ts`'s `shellUnder` gives: the read
-        // already fails when the file is not there, which is what `.exists()` was asked ahead
-        // of it. Narrowed to that one code for its reason too — a file that exists and cannot
-        // be read is a different fault and must not read as a first write.
-        try {
-            const held = new Uint8Array(await existing.arrayBuffer())
-            if (held.length === next.length && sameBytes(held, next)) return
-        } catch (thrown) {
-            if ((thrown as { code?: unknown }).code !== 'ENOENT') throw thrown
-        }
+        const held = await ifPresent(existing.bytes())
+        if (
+            held !== undefined &&
+            held.length === next.length &&
+            sameBytes(held, next)
+        )
+            return
         await Bun.write(at, next)
     }
 
     await put(new URL('ui/NAV_ITEMS.ts', SOURCE), navItems(pages))
+    await put(new URL('layout.abide', PAGES), LAYOUT)
 
     const markdown: string[] = []
     for (let index = 0; index < pages.length; index += 1) {
         const page = pages[index] as Page
         const directory = directoryOf(page.slug)
-        const body = await renderBody(page, pages)
+        const { body, examples } = await renderBody(page, pages)
         await put(
             new URL(`${directory}page.abide`, PAGES),
-            pageSource(page, directory),
+            pageSource(page, directory, body, examples),
         )
         await put(
             new URL(`${directory}CONTENT.ts`, PAGES),
@@ -242,29 +280,6 @@ export async function buildPages(): Promise<Page[]> {
 
     // ONE FILE in reading order, for an agent that would otherwise fetch eighty.
     await put(new URL('abide.md', PUBLIC), renderBundle(pages, markdown))
-
-    // THE MEASURE LANE, AS ONE FILE, fetched once by a card's panel and only when a reader opens
-    // one — 40.18. Inlining it would put 20 kB into every example's `srcdoc` attribute.
-    await put(new URL('measure.js', PUBLIC), Bun.file(await buildInjectable()))
-
-    // ONE ZIP PER EXAMPLE, so Download is a button rather than a menu. Entries carry the example
-    // name as their first segment, so unzipping makes a folder.
-    const archives = new Map<string, ZipEntry[]>()
-    for (const path of new Bun.Glob(
-        '*/{files,compiled,vanilla,tests}/**',
-    ).scanSync({ cwd: EXAMPLES.pathname })) {
-        const name = path.slice(0, path.indexOf('/'))
-        const entries = archives.get(name) ?? []
-        entries.push({
-            path,
-            source: await Bun.file(new URL(path, EXAMPLES)).text(),
-        })
-        archives.set(name, entries)
-    }
-    for (const [name, entries] of archives) {
-        entries.sort((a, b) => (a.path < b.path ? -1 : 1))
-        await put(new URL(`examples/${name}.zip`, PUBLIC), zip(entries))
-    }
 
     // What an author wrote by hand, into the directory a generator owns.
     for (const name of new Bun.Glob('**/*').scanSync({ cwd: ASSETS.pathname }))
@@ -292,12 +307,29 @@ async function prune(root: URL, written: Set<string>): Promise<void> {
         const path = new URL(name, root).pathname
         if (!written.has(path)) await rm(path)
     }
+    // AND THE DIRECTORIES THAT LEAVES EMPTY, deepest first so a parent is asked after its
+    // children went. Under `pages/` an empty directory is harmless; under `public/` it is a folder
+    // the app serves a listing-shaped nothing from, and the zips' left one standing.
+    const directories = [
+        ...new Bun.Glob('**/*').scanSync({
+            cwd: root.pathname,
+            onlyFiles: false,
+        }),
+    ]
+        .map((name) => new URL(name, root).pathname)
+        .sort((a, b) => b.length - a.length)
+    for (const path of directories)
+        if (
+            !written.has(path) &&
+            (await readdir(path).catch(() => null))?.length === 0
+        )
+            await rmdir(path)
 }
 
 if (import.meta.main) {
     const pages = await buildPages()
     const written = pages.filter((page) => !page.stub).length
     console.log(
-        `docs: ${pages.length} pages -> src/ui/pages (${written} written, ${pages.length - written} stubs), plus markdown, zips and abide.md under src/ui/public`,
+        `docs: ${pages.length} pages -> src/ui/pages (${written} written, ${pages.length - written} stubs), plus markdown and abide.md under src/ui/public`,
     )
 }

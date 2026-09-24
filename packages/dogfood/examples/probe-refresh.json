@@ -1,0 +1,10 @@
+{
+    "title": "The first load and every one after are `ready()` apart",
+    "summary": "An invoice with a Refresh beside it. Wait for the figures, then press Refresh and watch what does not disappear.",
+    "app": "crm",
+    "files": [
+        "src/server/rpc/probeRefreshInvoices.ts",
+        "src/ui/components/ProbeRefreshInvoice.abide"
+    ],
+    "render": "src/ui/components/ProbeRefreshInvoice.abide"
+}

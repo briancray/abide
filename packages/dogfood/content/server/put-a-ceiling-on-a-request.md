@@ -8,7 +8,7 @@ covers:
   - `ABIDE_RPC_TIMEOUT`
   - `ABIDE_MAX_REQUEST_BODY_SIZE`
 examples:
-  - packages/dogfood/examples/timeout-per-chunk
+  - packages/dogfood/examples/timeout-per-chunk.json
 ---
 
 An upload endpoint with no ceiling will one day be handed a four-gigabyte file. A report that

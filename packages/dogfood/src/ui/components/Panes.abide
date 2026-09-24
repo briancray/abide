@@ -1,0 +1,21 @@
+<script>
+import { token } from '#shared/tailCursorTokens'
+
+let sent = 3
+
+function emit() {
+    sent += 1
+    token.publish({ at: sent, text: `token ${sent}` })
+}
+</script>
+
+<ul class="fields stacked">
+    <li><span>replayed then live</span><strong id="replay">
+        {#for line of token.history(3)}{line.at} {/for}
+    </strong></li>
+    <li><span>live only</span><strong>
+        {#for line of token.history(0)}{line.at} {/for}
+    </strong></li>
+</ul>
+
+<button onclick={emit}>Next token</button>

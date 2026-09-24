@@ -1,0 +1,11 @@
+{
+    "title": "`{ store }` — where the value lives when the process does not",
+    "summary": "A volume the player keeps between visits. Step it up, then reload the page.",
+    "app": "player",
+    "files": [
+        "src/shared/settingsStore.ts",
+        "src/server/rpc/storeRestoreSettings.ts",
+        "src/ui/components/StoreRestoreVolume.abide"
+    ],
+    "render": "src/ui/components/StoreRestoreVolume.abide"
+}

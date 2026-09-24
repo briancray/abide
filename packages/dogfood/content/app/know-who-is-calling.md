@@ -19,7 +19,7 @@ covers:
   - `ABIDE_PRINCIPAL_SECRET`
   - `ABIDE_PRINCIPAL_TTL`
 examples:
-  - packages/dogfood/examples/principal-session
+  - packages/dogfood/examples/principal-session.json
 ---
 
 abide does not know how you authenticate somebody. It knows what to do **after** you have: seal

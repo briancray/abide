@@ -40,11 +40,11 @@ let count = reactive(0)
 <head><title>Home</title></head>
 <main id="home"><h1>Home</h1><p id="n">{count}</p><Badge label="live"/></main>`
 
-// 32.18 THROUGH A BUILD, which is the one arm that can say a component import RESOLVES. The
-// compiler swaps the extension and stops (`splitImports`), so the specifier the emitted page
-// carries is `#ui/components/Badge.ts` — a file that exists in the output tree and nowhere in the
-// source tree the import map points at. `compileApp` rewrites it relative; without that the page
-// compiles, the build succeeds, and the address 500s on the first request.
+// 32.18 THROUGH A BUILD, which is the one arm that can say a component import RESOLVES. Left as
+// written with its extension swapped, the specifier the emitted page carries is
+// `#ui/components/Badge.ts` — a file that exists in the output tree and nowhere in the source tree
+// the import map points at. `componentGraph` resolves it to a path inside the build; without that
+// the bundle cannot resolve the client half and the build fails.
 const BADGE = `<script>
 import { props } from 'abide'
 
@@ -196,8 +196,9 @@ test('an address a page matches is painted into the shell — 38.6', async () =>
 // THE REVERT: hand the page `{ params: found.params }` rather than `{ params: () => … }` in
 // `serveBuild` and this reports `params is not a function` instead of the id — which is the same
 // break `Router.paramsProp` carries on the client side of the same contract.
-// THE REVERT: drop `componentPaths` from `compileApp` and this address answers 500 — the module
-// the page imports resolves into the source tree, where the compiler wrote nothing.
+// THE REVERT: hand the emitters no `componentGraph` imports in `compileApp` and the build this
+// file serves fails before any address answers — `Could not resolve: "#ui/components/Badge.client.ts"`,
+// the module the page imports being in the source tree, where the compiler wrote nothing.
 test('a page invoking a component is painted with it — 32.18, 38.6', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
     expect(html).toContain('<span id="badge">live</span>')
@@ -501,6 +502,33 @@ test('a public file revalidates against an etag off its bytes — 21.12, 21.13, 
     expect(stale.status).toBe(200)
 })
 
+// 16.36's range, on a public file, answered by the `answerBlobTagged` a returned `Blob` is. NOT A
+// GATE ON THAT: Bun.serve ranges a file body of its own, so a public branch answering a bare
+// `Bun.file` passes this too. What it holds is that the range keeps the public headers.
+test('a public file answers a range 206 with the public headers — 16.36, 21.12', async () => {
+    const { headers } = await Bun.fetch(`${base}/robots.txt`)
+    const ranged = await Bun.fetch(`${base}/robots.txt`, {
+        headers: { range: 'bytes=0-9' },
+    })
+    expect(ranged.status).toBe(206)
+    expect(ranged.headers.get('content-range')).toBe('bytes 0-9/23')
+    expect(await ranged.text()).toBe('User-agent')
+    expect(ranged.headers.get('cache-control')).toBe(
+        'public, max-age=0, must-revalidate',
+    )
+    expect(ranged.headers.get('etag')).toBe(headers.get('etag'))
+})
+
+// THE REVERT: answer a declined range with the blob itself, and Bun.serve — which reads no
+// `If-Range` — sends 206 and the ten bytes of a version the reader does not have.
+test('a public file answers a stale if-range in full — 16.36', async () => {
+    const stale = await Bun.fetch(`${base}/robots.txt`, {
+        headers: { range: 'bytes=0-9', 'if-range': '"not-the-etag"' },
+    })
+    expect(stale.status).toBe(200)
+    expect(await stale.text()).toBe('User-agent: *\nAllow: /\n')
+})
+
 // A SECOND APP, AND IT EARNS THE SECOND BOOT. Everything above is asserted against an app that
 // HAS a stylesheet and HAS a public directory, and the presence arm cannot tell either mechanism
 // from one that is unconditional — writing the `<link>` always passes every test above, and so
@@ -572,7 +600,7 @@ test('an app with no public directory still boots and serves — 38.19', async (
 // from inside either one the collision is invisible. Left to run time it is a silent preference,
 // and which one wins is whatever the server happened to check first.
 //
-// THE REVERT: drop the `addresses.has` test in `refuseAddressCollision` and the build succeeds,
+// THE REVERT: drop the `patterns.has` test in `refuseAddressCollision` and the build succeeds,
 // after which `/about` is the FILE — the page is unreachable and nothing said so.
 //
 // `abide dev` ASKS THE SAME QUESTION — see the test beside this one. It did not, and that is

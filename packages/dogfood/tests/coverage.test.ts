@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { NAV } from '../scripts/NAV.ts'
 import { readPages } from '../scripts/readContent.ts'
-import { RATIO_TAGS } from '../scripts/renderExample.ts'
+import { type Manifest, readManifest } from '../scripts/renderExample.ts'
 import { EXAMPLE, LEAD, SNIPPET } from '../scripts/renderMarkdown.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
 
@@ -190,6 +190,19 @@ test('every content page is reachable from the nav', async () => {
 })
 
 const EXAMPLES_DIR = new URL('../examples/', import.meta.url)
+const APP = new URL('../', import.meta.url)
+
+// Every example, by name, with its manifest.
+async function examples(): Promise<Map<string, Manifest>> {
+    const found = new Map<string, Manifest>()
+    for (const path of new Bun.Glob('*.json').scanSync({
+        cwd: EXAMPLES_DIR.pathname,
+    })) {
+        const name = path.slice(0, -'.json'.length)
+        found.set(name, await readManifest(name))
+    }
+    return found
+}
 
 // An example is real files, so a page can reference one that does not exist and a
 // directory can rot with nothing embedding it. Both are silent without this.
@@ -214,12 +227,7 @@ test('every embedded example exists, and every example is embedded', async () =>
         for (const name of embeddedExamples(source)) embedded.add(name)
     }
 
-    const onDisk = new Set<string>()
-    for (const path of new Bun.Glob('*/example.json').scanSync({
-        cwd: EXAMPLES_DIR.pathname,
-    })) {
-        onDisk.add(path.slice(0, path.indexOf('/')))
-    }
+    const onDisk = new Set((await examples()).keys())
 
     expect([...embedded].filter((name) => !onDisk.has(name))).toEqual([])
     expect([...onDisk].filter((name) => !embedded.has(name))).toEqual([])
@@ -228,28 +236,10 @@ test('every embedded example exists, and every example is embedded', async () =>
 // Every path an example's manifest names has to resolve, or a panel renders empty.
 test('every file an example manifest names is on disk', async () => {
     const missing: string[] = []
-    for (const path of new Bun.Glob('*/example.json').scanSync({
-        cwd: EXAMPLES_DIR.pathname,
-    })) {
-        const name = path.slice(0, path.indexOf('/'))
-        const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
-        // `tests` is results rather than paths now, so it is not a file group.
-        for (const folder of ['files', 'compiled', 'vanilla'] as const) {
-            for (const entry of (manifest[folder] ?? []) as string[]) {
-                const file = Bun.file(
-                    new URL(`${name}/${folder}/${entry}`, EXAMPLES_DIR),
-                )
-                if (!(await file.exists()))
-                    missing.push(`${name}/${folder}/${entry}`)
-            }
-        }
-        // The arm is not in a manifest list — the frame finds it by convention — so it is checked
-        // by name here rather than by walking one.
-        const page = Bun.file(
-            new URL(`${name}/vanilla/index.html`, EXAMPLES_DIR),
-        )
-        if (!(await page.exists())) missing.push(`${name}/vanilla/index.html`)
-    }
+    for (const [name, manifest] of await examples())
+        for (const path of manifest.files)
+            if (!(await Bun.file(new URL(path, APP)).exists()))
+                missing.push(`${name}: ${path}`)
     expect(missing).toEqual([])
 })
 
@@ -344,14 +334,16 @@ async function abideSources(): Promise<{ where: string; code: string }[]> {
             })
         }
     }
-    for (const path of new Bun.Glob('**/*.abide').scanSync({
-        cwd: EXAMPLES_DIR.pathname,
-    })) {
-        sources.push({
-            where: path,
-            code: await Bun.file(new URL(path, EXAMPLES_DIR)).text(),
-        })
-    }
+    const seen = new Set<string>()
+    for (const manifest of (await examples()).values())
+        for (const path of manifest.files) {
+            if (!path.endsWith('.abide') || seen.has(path)) continue
+            seen.add(path)
+            sources.push({
+                where: path,
+                code: await Bun.file(new URL(path, APP)).text(),
+            })
+        }
     return sources
 }
 
@@ -408,12 +400,12 @@ test('an abide snippet reads and writes state by name, not through the explicit 
 const EXAMPLES_PREFIX = 'packages/dogfood/examples/'
 const REPO = new URL('../../../', import.meta.url)
 
-test('front matter names exactly the example directories the page embeds', async () => {
+test('front matter names exactly the example manifests the page embeds', async () => {
     const wrong: string[] = []
     for (const page of await readPages()) {
         const embedded: string[] = []
         for (const name of embeddedExamples(page.body))
-            embedded.push(`${EXAMPLES_PREFIX}${name}`)
+            embedded.push(`${EXAMPLES_PREFIX}${name}.json`)
         if (page.examples.join() !== [...new Set(embedded)].join())
             wrong.push(
                 `${page.slug}: front matter ${page.examples.join()}, body ${embedded.join()}`,
@@ -423,11 +415,11 @@ test('front matter names exactly the example directories the page embeds', async
 })
 
 // ONE TEACHING PAGE PER EXAMPLE, which is what is left of "one example per page" once a page
-// carries a demo per behaviour instead (40.20). The property that rule was protecting
+// carries a demo per behaviour instead (40.18). The property that rule was protecting
 // survives the inversion: a reader meets an example where it is taught, so a directory taught
-// from two pages is code one of those readers has never been shown running. RULEBOOK 40.23.
+// from two pages is code one of those readers has never been shown running. RULEBOOK 40.21.
 //
-// `covers` IS THE DISCRIMINANT, and it is the one already in the front matter (40.13): an
+// `covers` IS THE DISCRIMINANT, and it is the one already in the front matter (40.12): an
 // overview carries a section's opening example and a style experiment re-renders one to
 // compare voices, and neither is teaching the names in it. A page that claims a name is.
 test('an example directory is taught by exactly one page', async () => {
@@ -454,35 +446,30 @@ const APPS = new Set(['crm', 'chat', 'dashboard', 'player', 'unconverted'])
 
 test('every example declares an app the brand names', async () => {
     const wrong: string[] = []
-    for (const path of new Bun.Glob('*/example.json').scanSync({
-        cwd: EXAMPLES_DIR.pathname,
-    })) {
-        const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
-        if (!APPS.has(manifest.app)) wrong.push(`${path}: app ${manifest.app}`)
-    }
+    for (const [name, manifest] of await examples())
+        if (!APPS.has(manifest.app)) wrong.push(`${name}: app ${manifest.app}`)
     expect(wrong).toEqual([])
 })
 
-// ONE APP PER PAGE (RULEBOOK 40.25). Six cards from four worlds is four worlds to enter, and
+// ONE APP PER PAGE (RULEBOOK 40.23). Six cards from four worlds is four worlds to enter, and
 // the reader pays that per card while the thing being taught is one thing throughout.
 test('every example a page embeds is drawn from the same app', async () => {
     const mixed: string[] = []
+    const all = await examples()
     for (const page of await readPages()) {
         const apps = new Set<string>()
         for (const name of new Set(embeddedExamples(page.body))) {
-            const manifest = Bun.file(
-                new URL(`${name}/example.json`, EXAMPLES_DIR),
-            )
-            if (await manifest.exists()) apps.add((await manifest.json()).app)
+            const manifest = all.get(name)
+            if (manifest) apps.add(manifest.app)
         }
         if (apps.size > 1) mixed.push(`${page.slug}: ${[...apps].join(', ')}`)
     }
     expect(mixed).toEqual([])
 })
 
-// THE OLD SHAPE, LISTED SO IT IS A NUMBER RATHER THAN A READING. A page in the shape 40.20 and
-// 40.21 replaced — one example in the lead and every section hanging a snippet off it —
-// passes every check there is: 40.27 and 40.28 are judgement, and the example it embeds declares
+// THE OLD SHAPE, LISTED SO IT IS A NUMBER RATHER THAN A READING. A page in the shape 40.18 and
+// 40.19 replaced — one example in the lead and every section hanging a snippet off it —
+// passes every check there is: 40.25 and 40.26 are judgement, and the example it embeds declares
 // `unconverted`, which the app check waves through. So an agent asked to convert a section can
 // polish its prose, leave the structure untouched, and go green.
 //
@@ -497,12 +484,8 @@ const OLD_SHAPE = new Set<string>([])
 
 test('no teaching page is in the old shape but the ones already counted', async () => {
     const apps = new Map<string, string>()
-    for (const path of new Bun.Glob('*/example.json').scanSync({
-        cwd: EXAMPLES_DIR.pathname,
-    })) {
-        const name = path.slice(0, path.indexOf('/'))
-        apps.set(name, (await Bun.file(new URL(path, EXAMPLES_DIR)).json()).app)
-    }
+    for (const [name, manifest] of await examples())
+        apps.set(name, manifest.app)
     // A style experiment re-renders one example in another voice and teaches no name, so it
     // declares no `covers` and is not a page this is about.
     const found: string[] = []
@@ -517,11 +500,11 @@ test('no teaching page is in the old shape but the ones already counted', async 
     expect([...OLD_SHAPE].filter((slug) => !found.includes(slug))).toEqual([])
 })
 
-test('every example directory the front matter names is on disk', async () => {
+test('every example manifest the front matter names is on disk', async () => {
     const missing: string[] = []
     for (const page of await readPages()) {
         for (const path of page.examples) {
-            const manifest = Bun.file(new URL(`${path}/example.json`, REPO))
+            const manifest = Bun.file(new URL(path, REPO))
             if (!(await manifest.exists()))
                 missing.push(`${page.slug}: ${path}`)
         }
@@ -657,7 +640,7 @@ test('no nav label begins with a preposition', async () => {
     expect(offenders).toEqual([])
 })
 
-// RULEBOOK 40.13: a page declares in `covers` which REGISTRY names it covers, and an overview or
+// RULEBOOK 40.12: a page declares in `covers` which REGISTRY names it covers, and an overview or
 // a reference page declares none. `machines/index` had grown four entries the section's topic pages
 // should have owned, and nothing said so — the coverage tests above are satisfied by a
 // claim from any page, which is exactly what makes the WRONG page's claim invisible.
@@ -757,13 +740,13 @@ test('no code sample is wider than the column it renders in', async () => {
             wide.push(`content/${path}:${line}`)
     }
     // An example's own files, which the panel renders at the same width.
-    for (const path of new Bun.Glob('*/{files,compiled}/**/*').scanSync({
-        cwd: EXAMPLES_DIR.pathname,
-        onlyFiles: true,
-    })) {
-        const source = await Bun.file(new URL(path, EXAMPLES_DIR)).text()
+    const shown = new Set<string>()
+    for (const manifest of (await examples()).values())
+        for (const path of manifest.files) shown.add(path)
+    for (const path of shown) {
+        const source = await Bun.file(new URL(path, APP)).text()
         for (const line of overlongLines(source, false))
-            wide.push(`examples/${path}:${line}`)
+            wide.push(`${path}:${line}`)
     }
     expect(wide).toEqual([])
 })
@@ -838,102 +821,6 @@ test('every name a reference page enumerates is on one of the pages that claim i
         }
     }
     expect(absent).toEqual([])
-})
-
-// CLAUDE.md, "performance and measurement": a performance claim is a RATIO against
-// hand-written code in the same substrate, and absolute milliseconds from a DOM
-// emulator describe the emulator. A bench row with a number in the abide column and
-// nothing beside it is exactly that — a figure with no arm to be a ratio against, and
-// it reads as a result.
-//
-// The arm is checked too, and it is now load-bearing twice over: it is the comparison
-// the ratio is made against, and since the runner change it is also what the render
-// RUNS.
-//
-// THE RATIO CELL USED TO ACCEPT ANY TRUTHY STRING, and that is what let
-// `read-invoice`'s hand-typed "1.01x" through — two frame-quantised figures divided
-// into a claim. It is now either a ratio SPELLING or one of the harness's tags, and
-// the tags exist because `ratio()` returns a discriminated result: two `underOneFrame`
-// samples do not divide.
-const RATIO_SPELLING = /^\d+(?:\.\d+)?x$/
-
-test('every example carries a hand-written arm, and every bench row is a ratio against it', async () => {
-    const missing: string[] = []
-    for (const path of new Bun.Glob('*/example.json').scanSync({
-        cwd: EXAMPLES_DIR.pathname,
-    })) {
-        const name = path.slice(0, path.indexOf('/'))
-        const arm = Bun.file(
-            new URL(`${name}/vanilla/index.html`, EXAMPLES_DIR),
-        )
-        if (!(await arm.exists())) missing.push(`${name}: no vanilla arm`)
-        const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
-        for (const row of manifest.bench?.rows ?? []) {
-            if (!row.vanilla)
-                missing.push(
-                    `${name}: "${row.metric}" has no arm to compare against`,
-                )
-            if (!row.ratio) {
-                missing.push(`${name}: "${row.metric}" states no ratio`)
-                continue
-            }
-            if (row.ratio in RATIO_TAGS || RATIO_SPELLING.test(row.ratio))
-                continue
-            missing.push(
-                `${name}: "${row.metric}" states "${row.ratio}", which is neither a ratio nor a tag the harness produces`,
-            )
-        }
-    }
-    expect(missing).toEqual([])
-})
-
-// NO ROW IS AUTHORED ANY MORE, and that is what this now checks. The card used to
-// carry four hand-typed figures beside one counted one, and a hand-typed 16.8 ms in a
-// results table reads as a result. Everything a browser can measure is measured in the
-// reader's browser; what is left here is counted over the SOURCE, and `bun run bench`
-// DROPS a row it cannot produce rather than leaving figures standing in it.
-test('every bench row says what counted it, and none is authored', async () => {
-    const silent: string[] = []
-    for (const path of new Bun.Glob('*/example.json').scanSync({
-        cwd: EXAMPLES_DIR.pathname,
-    })) {
-        const name = path.slice(0, path.indexOf('/'))
-        const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
-        if (!manifest.bench) continue
-        if (!manifest.bench.note?.trim()) silent.push(name)
-        for (const row of manifest.bench.rows ?? []) {
-            const note = (row.note ?? '').trim()
-            if (note.startsWith('measured:')) continue
-            silent.push(
-                `${name}: "${row.metric}" is not counted — ${note || 'it says nothing about what produced it'}`,
-            )
-        }
-    }
-    expect(silent).toEqual([])
-})
-
-// A COUNTED ROW'S RATIO IS DERIVED, so a hand edit to any one of the three cells is
-// visible. Every row is counted now, so nothing is exempt.
-test('a counted bench row states the ratio its own two figures make', async () => {
-    const drifted: string[] = []
-    for (const path of new Bun.Glob('*/example.json').scanSync({
-        cwd: EXAMPLES_DIR.pathname,
-    })) {
-        const name = path.slice(0, path.indexOf('/'))
-        const manifest = await Bun.file(new URL(path, EXAMPLES_DIR)).json()
-        for (const row of manifest.bench?.rows ?? []) {
-            if (!(row.note ?? '').startsWith('measured:')) continue
-            const abide = Number.parseFloat(row.abide)
-            const vanilla = Number.parseFloat(row.vanilla)
-            if (!Number.isFinite(abide) || !Number.isFinite(vanilla)) continue
-            const stated = `${(abide / vanilla).toFixed(2)}x`
-            if (stated !== row.ratio)
-                drifted.push(
-                    `${name}: "${row.metric}" states ${row.ratio}, and ${row.abide}/${row.vanilla} is ${stated}`,
-                )
-        }
-    }
-    expect(drifted).toEqual([])
 })
 
 // A REFERENCE PAGE THAT RESTATES A SIGNATURE IS A SECOND COPY OF IT, and the check above only

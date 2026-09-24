@@ -5,70 +5,77 @@ import type { Segment } from './routePattern.ts'
 // nothing on the way back in has a type to restore.
 export type Params = Record<string, string | string[]>
 
-// One pattern against one pathname. Walked rather than compiled to a regex: a route table is
-// matched once per navigation, so the walk is never the cost, and a regex would have to encode
-// three segment kinds in a grammar nobody reading the table can see.
-export function matchRoute(
-    segments: Segment[],
-    pathname: string,
-): Params | null {
-    return matchParts(segments, partsOf(pathname))
-}
-
 // The pathname taken apart, once. `firstMatch` walks a whole table against ONE address, so the
-// split and the per-part decode belong to the walk rather than to each candidate in it — a
-// ninety-route table was splitting the path ninety times and decoding every segment ninety
-// times to resolve one address, per request and per client navigation.
-function partsOf(pathname: string): string[] {
+// split and the per-part decode belong to the walk rather than to each candidate in it, or a
+// table of n routes splits and decodes the address n times.
+//
+// `undefined` FOR AN ADDRESS THAT WILL NOT PERCENT-DECODE, which names nothing: the server answers
+// it 400 (15.16) and the router leaves it to the document (30.10). A throw here reached the
+// router's link listeners, which are the one place nothing catches it.
+export function partsOf(pathname: string): string[] | undefined {
     const parts: string[] = []
-    for (const part of pathname.split('/'))
-        if (part !== '') parts.push(decodeURIComponent(part))
+    try {
+        for (const part of pathname.split('/'))
+            if (part !== '') parts.push(decodeURIComponent(part))
+    } catch {
+        return undefined
+    }
     return parts
 }
 
-// ALLOCATED ON THE FIRST PARAM, not on entry. `firstMatch` calls this once per CANDIDATE, and most
-// candidates die on their first static segment — a ninety-route table minted ninety records to
-// resolve one address and threw eighty-nine of them away, for the same reason `partsOf` was
-// hoisted out of the walk above. A pattern with no params never allocates at all.
-function matchParts(segments: Segment[], parts: string[]): Params | null {
-    let params: Params | null = null
-    let at = 0
-    for (let index = 0; index < segments.length; index += 1) {
-        const segment = segments[index] as Segment
-        // 30.5 — A REST TAKES WHAT IS LEFT, including nothing, and it is last by construction.
-        if (segment.kind === 'rest') {
-            params ??= {}
-            params[segment.name] = parts.slice(at)
-            return params
+// 35.2 — whether `segments` match the FRONT of `parts`, with the same meaning each segment kind has
+// in a route: the directories an error page stands for cover every address below them.
+export function coversPrefix(segments: Segment[], parts: string[]): boolean {
+    return walk(segments, 0, parts, 0, true) !== null
+}
+
+// ONE SEGMENT AT A TIME, and the params built on the way back out: a candidate that fails
+// allocates nothing, and one pattern that matches allocates one record. 30.4 — AN OPTIONAL IS TRIED
+// TAKEN, THEN LEFT OUT, so `/[[lang]]/docs` matches `/docs` as well as `/en/docs`: taking the part
+// greedily and never trying without it is how a left-out optional stopped omitting its segment.
+function walk(
+    segments: Segment[],
+    index: number,
+    parts: string[],
+    at: number,
+    prefix: boolean,
+): Params | null {
+    if (index === segments.length)
+        return prefix || at === parts.length ? {} : null
+    const segment = segments[index] as Segment
+    // 30.5 — A REST TAKES WHAT IS LEFT, including nothing, and it is last by construction.
+    if (segment.kind === 'rest') return { [segment.name]: parts.slice(at) }
+    const part = parts[at]
+    if (segment.kind === 'optional') {
+        if (part !== undefined) {
+            const taken = walk(segments, index + 1, parts, at + 1, prefix)
+            if (taken !== null) {
+                taken[segment.name] = part
+                return taken
+            }
         }
-        const part = parts[at]
-        if (part === undefined) {
-            // 30.4 — leaving an optional out omits its segment, so a pattern may outrun the path.
-            if (segment.kind === 'optional') continue
-            return null
-        }
-        if (segment.kind === 'static') {
-            if (part !== segment.name) return null
-        } else {
-            params ??= {}
-            params[segment.name] = part
-        }
-        at += 1
+        return walk(segments, index + 1, parts, at, prefix)
     }
-    return at === parts.length ? (params ?? {}) : null
+    if (part === undefined) return null
+    if (segment.kind === 'static' && part !== segment.name) return null
+    const params = walk(segments, index + 1, parts, at + 1, prefix)
+    if (params !== null && segment.kind === 'required')
+        params[segment.name] = part
+    return params
 }
 
 // 30.9 — THE FIRST PATTERN THAT MATCHES WINS, over a table already ranked most-specific-first.
 // BOTH SEAMS WALK THIS ONE. The server resolving an address and the client router resolving the
-// same one is the isomorphism 30.8 rests on, and it was two copies of this loop in two files
-// whose comments each promised it was not.
+// same one is the isomorphism 30.8 rests on.
+// Walked rather than compiled to a regex: a route table is matched once per navigation, so the walk
+// is never the cost, and a regex would have to encode three segment kinds in a grammar nobody
+// reading the table can see.
 export function firstMatch<T extends { segments: Segment[] }>(
     routes: T[],
-    pathname: string,
+    parts: string[],
 ): { route: T; params: Params } | undefined {
-    const parts = partsOf(pathname)
     for (const route of routes) {
-        const params = matchParts(route.segments, parts)
+        const params = walk(route.segments, 0, parts, 0, false)
         if (params !== null) return { route, params }
     }
     return undefined

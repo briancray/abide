@@ -1,8 +1,8 @@
 // WHAT THE COMPILER COSTS AND WHAT IT BUYS, against the arm somebody would have written by hand.
 //
-// The arms are not invented here. `packages/dogfood/examples/*` already holds a `.abide` page and
-// a hand-written `vanilla/` page doing the same job, written as a pair, and those are the only
-// honest arms available: an arm written beside the implementation it flatters gets MORE scrutiny,
+// The arms are not invented here. Every docs example is a `.abide` component, and
+// `packages/harness/arms/<example>` is a hand-written page doing the same job, written as a pair —
+// and those are the only honest arms available: an arm written beside the implementation it flatters gets MORE scrutiny,
 // not less, and these predate the compiler entirely.
 //
 // TWO BUDGETS, because they run in opposite directions and reporting one alone is how a trade
@@ -11,21 +11,23 @@
 //   SHIPPED   — what the browser downloads: emitted client module plus the runtime in its static
 //               closure. Higher is the price, and the runtime is charged to EVERY page.
 //
-// COMPILE TIME HAS NO RATIO AND IS NOT GIVEN ONE (44.22). There is no hand-written arm for "run
+// COMPILE TIME HAS NO RATIO AND IS NOT GIVEN ONE (44.19). There is no hand-written arm for "run
 // the compiler", so it is reported as an absolute ceiling with the machine and the date on it —
 // a budget, never a claim.
 
+import { resolve } from 'node:path' // bun has no path helpers of its own
 import {
     compileFile,
+    componentGraph,
     emitClient,
     emitComponent,
-    invokedComponents,
     parseAbide,
     TypeSession,
 } from 'abide/compiler'
 import { countLines } from './countLines.ts'
+import { abideSourcesOf, DOGFOOD } from './exampleSources.ts'
 
-const EXAMPLES = new URL('../../dogfood/examples/', import.meta.url)
+const ARMS = new URL('../arms/', import.meta.url)
 const REPO = new URL('../../../', import.meta.url)
 
 // Enough rounds that one slow scheduling hiccup cannot carry the average.
@@ -33,6 +35,7 @@ const ROUNDS = 10
 
 type Arm = {
     name: string
+    abideSources: string[]
     authoredAbide: number
     authoredVanilla: number
     shippedAbide: number
@@ -40,27 +43,28 @@ type Arm = {
     typeable: boolean
 }
 
+// `#ui/x` is the docs app's `src/ui/x`, as its import map says.
+function resolveSeam(specifier: string, from: string): string {
+    const seam = /^#(server|shared|ui)\//.exec(specifier)
+    return seam === null
+        ? resolve(from, specifier)
+        : `${DOGFOOD.pathname}src/${seam[1]}/${specifier.slice(seam[0].length)}`
+}
+
 async function armsFor(session: TypeSession): Promise<Arm[]> {
     const arms: Arm[] = []
-    for (const entry of new Bun.Glob('*/vanilla').scanSync({
-        cwd: EXAMPLES.pathname,
-        onlyFiles: false,
+    for (const entry of new Bun.Glob('*/index.html').scanSync({
+        cwd: ARMS.pathname,
     })) {
         const name = entry.slice(0, entry.indexOf('/'))
-        const abideSources = [
-            ...new Bun.Glob(`${name}/files/**/*.abide`).scanSync({
-                cwd: EXAMPLES.pathname,
-            }),
-        ]
+        const abideSources = await abideSourcesOf(name)
         const vanillaScripts = [
-            ...new Bun.Glob(`${name}/vanilla/*.js`).scanSync({
-                cwd: EXAMPLES.pathname,
-            }),
+            ...new Bun.Glob(`${name}/*.js`).scanSync({ cwd: ARMS.pathname }),
         ]
-        if (abideSources.length === 0 || vanillaScripts.length === 0) continue
+        if (vanillaScripts.length === 0) continue
 
-        const authoredAbide = await countLines(EXAMPLES, abideSources)
-        const authoredVanilla = await countLines(EXAMPLES, vanillaScripts)
+        const authoredAbide = await countLines(DOGFOOD, abideSources)
+        const authoredVanilla = await countLines(ARMS, vanillaScripts)
 
         // What the browser gets: the emitted client module for each page. A page with nothing to
         // hydrate emits none, and counts zero — which is the point of that emptiness.
@@ -69,24 +73,21 @@ async function armsFor(session: TypeSession): Promise<Arm[]> {
         // 32.18 — only a file another one INVOKES carries its own markup, so the example's whole
         // set is read before any of it is emitted. Charging every page for one is 34% of this
         // number.
-        const invoked = invokedComponents(
-            await Promise.all(
-                abideSources.map((source) =>
-                    Bun.file(new URL(source, EXAMPLES)).text(),
+        const files: { path: string; file: ReturnType<typeof parseAbide> }[] =
+            []
+        for (const source of abideSources)
+            files.push({
+                path: `${DOGFOOD.pathname}${source}`,
+                file: parseAbide(
+                    await Bun.file(new URL(source, DOGFOOD)).text(),
                 ),
-            ),
-        )
-        for (const source of abideSources) {
-            const text = await Bun.file(new URL(source, EXAMPLES)).text()
-            const file = parseAbide(text)
+            })
+        const { invoked } = componentGraph(files, resolveSeam)
+        for (const { path, file } of files) {
             let names: Awaited<ReturnType<typeof session.reads>>
             try {
-                names = await session.reads(
-                    new URL(source, EXAMPLES).pathname,
-                    file,
-                )
+                names = await session.reads(path, file)
             } catch {
-                // The examples are not inside any tsconfig, so the checker cannot type them.
                 // Counted as UNTYPEABLE rather than dropped: a budget over the subset that
                 // happens to work is a budget that improves by failing.
                 typeable = false
@@ -95,9 +96,7 @@ async function armsFor(session: TypeSession): Promise<Arm[]> {
             const client = emitClient(
                 file,
                 names,
-                invoked.has(source.slice(source.lastIndexOf('/') + 1))
-                    ? 'repeated'
-                    : 'none',
+                invoked.has(path) ? 'repeated' : 'none',
             )
             if (client !== '') shippedAbide += codeLines(client)
             // The server module is not charged here: it never reaches a browser.
@@ -105,6 +104,7 @@ async function armsFor(session: TypeSession): Promise<Arm[]> {
         }
         arms.push({
             name,
+            abideSources,
             authoredAbide,
             authoredVanilla,
             shippedAbide,
@@ -130,14 +130,12 @@ async function compileCeiling(
     arms: Arm[],
 ): Promise<void> {
     const sources: { path: string; text: string }[] = []
-    for (const entry of new Bun.Glob('*/files/**/*.abide').scanSync({
-        cwd: EXAMPLES.pathname,
-    })) {
-        sources.push({
-            path: new URL(entry, EXAMPLES).pathname,
-            text: await Bun.file(new URL(entry, EXAMPLES)).text(),
-        })
-    }
+    for (const arm of arms)
+        for (const source of arm.abideSources)
+            sources.push({
+                path: new URL(source, DOGFOOD).pathname,
+                text: await Bun.file(new URL(source, DOGFOOD)).text(),
+            })
 
     // PARSE AND EMIT ALONE first — no checker in it — because the two costs have different
     // shapes and a single total hides which one to look at when it moves.
@@ -151,10 +149,7 @@ async function compileCeiling(
     // files while a watch rebuild is all known ones. Timed on the compiler's own fixture,
     // because a file outside every tsconfig throws rather than measuring (31.3).
     // Inside the project the session opened, or the query throws rather than measuring.
-    const fixture = new URL(
-        'packages/dogfood/examples/bind-text/files/src/',
-        REPO,
-    ).pathname
+    const fixture = new URL('src/ui/components/', DOGFOOD).pathname
     const sample = parseAbide(sources[0]?.text ?? '')
     await session.reads(`${fixture}warm.abide`, sample)
 
@@ -178,7 +173,7 @@ async function compileCeiling(
     await session.readsFor(batched)
     const batchNanoseconds = (Bun.nanoseconds() - batchStart) / ROUNDS
 
-    console.log('\nCOMPILE TIME — a ceiling, not a ratio (44.22)')
+    console.log('\nCOMPILE TIME — a ceiling, not a ratio (44.19)')
     console.log(`  ${sources.length} sources, ${arms.length} paired examples`)
     console.log(
         `  parse + emit   ${(emitNanoseconds / 1000).toFixed(1)} µs per file`,
@@ -207,11 +202,10 @@ async function compileCeiling(
 }
 
 async function main(): Promise<void> {
-    // The EXAMPLES' own project, not abide's. A shadow has to be inside the project that is open
-    // or the checker never reads it, which is why the corpus counted as untypeable rather than as
-    // unsupported — a fact about the tsconfig, not about the compiler.
+    // The DOCS APP'S own project, not abide's. A shadow has to be inside the project that is open
+    // or the checker never reads it.
     const session = await TypeSession.open(
-        new URL('packages/dogfood/examples/tsconfig.json', REPO).pathname,
+        new URL('tsconfig.json', DOGFOOD).pathname,
     )
     try {
         const arms = await armsFor(session)

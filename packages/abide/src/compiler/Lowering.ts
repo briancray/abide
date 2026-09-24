@@ -3,6 +3,7 @@ import type { Read } from './classifyRead.ts'
 import { holdsSlot } from './classifyTemplate.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { type Projection, projectShadow, type Span } from './projectShadow.ts'
+import type { TemplateNode } from './TemplateNode.ts'
 import { type Token, tokenise } from './tokenise.ts'
 
 // 31.1 and 31.4 — inside a `.abide` a name bound to a `Reactive` is READ where it stands and
@@ -24,9 +25,6 @@ import { type Token, tokenise } from './tokenise.ts'
 // looser than everything an author can legally write around an assignment, so the bare form needs
 // no parentheses to survive one.
 const SHORT_CIRCUIT: ReadonlySet<string> = new Set(['||', '&&', '??'])
-
-// 34.3's keyword, spelled once for the guard below.
-const AWAIT = 'await'
 
 // ONE FILE'S LOWERING. Every piece the emitters ask for — a script, a slot, a subject, a key — is a
 // SPAN of the projection, and a nested value (the right of a write, a computed path segment) is a
@@ -113,15 +111,11 @@ export class Lowering {
     // is why the markup-writing holders (an expression, an attribute value) ask for it and a
     // subject, a key and a listener do not.
     slot(holder: object): string {
-        const span = this.spanOf(holder)
-        this.refuseAwait(span)
-        return this.lower(span, true)
+        return this.lower(this.spanOf(holder), true)
     }
 
     expression(holder: object): string {
-        const span = this.spanOf(holder)
-        this.refuseAwait(span)
-        return this.lower(span, false)
+        return this.lower(this.spanOf(holder), false)
     }
 
     // 31.3 — A `bind:` OPERAND HOLDS THE `Reactive`, which is the one template position where a
@@ -133,9 +127,7 @@ export class Lowering {
     // as one, which is why this is the same walk with one read left alone rather than the source
     // passed through.
     reference(holder: object): string {
-        const span = this.spanOf(holder)
-        this.refuseAwait(span)
-        return this.lower(span, false, true)
+        return this.lower(this.spanOf(holder), false, true)
     }
 
     key(block: object): string {
@@ -145,42 +137,29 @@ export class Lowering {
         return this.lower(span, false)
     }
 
-    // WHETHER AN EXPRESSION READS A `Reactive` AT ALL, which is not the same question as whether the
-    // rewrite changed it — `{n()}` and `{n.busy()}` are spellings it leaves exactly as written
-    // (31.7, 31.5), and a run judged by the diff was dropped as static and never moved again.
-    readsIn(holder: object): boolean {
-        const span = this.spanOf(holder)
-        const at = this.firstRead(span.start)
-        return (
-            at < this.reads.length && (this.reads[at] as Read).start < span.end
-        )
+    // 14.2 — WHETHER A POSITION IS BOUND, and it is bound unless the checker PROVED it reads nothing
+    // reactive (`proveSlots`). Asking whether it NAMED a `Reactive` was the old rule, and it wrote
+    // `{big()}` once where `big` reads `n` in its body — and the diff was the rule before that, which
+    // dropped `{n()}` as static because the rewrite leaves it exactly as written (31.7).
+    //
+    // ABSENCE IS LIVE: a file lowered with no checker answers binds every position, which is the
+    // safe side of a question nobody asked.
+    isLive(holder: object): boolean {
+        return !this.holds(this.spanOf(holder), 'static')
     }
 
-    // A TEMPLATE POSITION CANNOT `await`, and it is worth refusing rather than emitting. Every
-    // slot, subject and attribute value is lowered into an ordinary arrow inside the markup
-    // concatenation — there is no `async` for an `await` to belong to — so `{await rows}` emitted a
-    // module that DOES NOT PARSE, reported by bun against the emitted file rather than the page.
-    //
-    // UNLESS THE SLOT MAKES ITS OWN, which is the half the first draft of this got wrong and
-    // REGRESSED: `onclick={async () => await save()}` is an ordinary handler, the `await` belongs
-    // to the arrow the author wrote, and refusing it broke a shape that had always worked.
-    //
-    // THE TEST IS `async` BEFORE `await` IN THE SAME SLOT, and that is a SUMMARY of the source
-    // rather than its structure — so state what it lets through: a slot holding both an async
-    // function AND a bare `await` of its own passes here and fails at the bundler, exactly as it
-    // did before this guard existed. Depth cannot do better on its own — `{(await a) + 1}` is
-    // illegal at paren depth 1 and `{xs.map(async (x) => await f(x))}` is legal at depth 2 — and
-    // the structural answer needs the checker's tree, which this file does not have.
-    private refuseAwait(span: Span): void {
-        const source = this.projection.text.slice(span.start, span.end)
-        if (!source.includes(AWAIT)) return
-        for (const token of tokenise(source)) {
-            if (token.text === 'async') return
-            if (token.text !== AWAIT) continue
-            throw new Error(
-                `abide: a template position cannot await, and \`${source.trim()}\` does. A slot is lowered into an ordinary function, so there is nothing here to await in — await inside a handler or a reactive body, or read the value and let the position fill. RULEBOOK 34.3.`,
-            )
+    // 32.27 — WHETHER A TEXT RUN CAN HOLD MARKUP: a part that is live, or a part that calls `raw`.
+    // A part the checker PROVED is a primitive (`isLive` false) cannot be `Raw` — the proof is that
+    // its value's type is primitive — save 32.26's `raw(x)`, which `provePosition` exempts and which
+    // is `Raw` always. So a run of proven parts is text for good, and neither side pays for markup
+    // it cannot hold: a row reading its own item, most slots on most pages, is one.
+    holdsMarkup(run: readonly TemplateNode[]): boolean {
+        for (const piece of run) {
+            if (piece.kind !== 'expression') continue
+            if (this.isLive(piece) || this.holds(this.spanOf(piece), 'raw'))
+                return true
         }
+        return false
     }
 
     private spanOf(holder: object): Span {
@@ -188,6 +167,21 @@ export class Lowering {
         if (span === undefined)
             throw new Error('abide: a template expression was never projected.')
         return span
+    }
+
+    // Whether a read of that shape starts inside the span. Positions do not nest, so a `static`
+    // mark in one is at its start.
+    private holds(span: Span, shape: Read['shape']): boolean {
+        for (
+            let at = this.firstRead(span.start);
+            at < this.reads.length;
+            at += 1
+        ) {
+            const read = this.reads[at] as Read
+            if (read.start >= span.end) return false
+            if (read.shape === shape) return true
+        }
+        return false
     }
 
     // The index of the first read starting at or after `offset`.
@@ -214,37 +208,28 @@ export class Lowering {
         const text = source.slice(from, to)
         const wholeFrom = from + (text.length - text.trimStart().length)
         const wholeTo = from + text.trimEnd().length
-        const calls = raw ? this.rawCalls(from, to) : NO_CALLS
         let read = this.firstRead(from)
-        let call = 0
         if (
-            calls.length === 0 &&
-            (read === this.reads.length ||
-                (this.reads[read] as Read).start >= to)
+            read === this.reads.length ||
+            (this.reads[read] as Read).start >= to
         )
             return source.slice(from, to)
 
         let out = ''
         let at = from
-        while (true) {
-            const next = this.reads[read]
-            const readAt =
-                next !== undefined && next.start < to ? next.start : to
-            const callAt = call < calls.length ? (calls[call] as number) : to
-            if (readAt === to && callAt === to) break
-            if (callAt < readAt) {
-                call += 1
-                if (callAt < at) continue
-                out += source.slice(at, callAt) + this.use('raw')
-                at = callAt + 'raw'.length
+        for (; read < this.reads.length; read += 1) {
+            const current = this.reads[read] as Read
+            if (current.start >= to) break
+            if (current.start < at) continue
+            // 31.3 — the operand's own read is the one that does not lower — save that a `Reactive`
+            // prop's name is its accessor, and the operand is what the accessor hands back (33.7).
+            if (holds && current.from === wholeFrom && current.to === wholeTo) {
+                if (current.through) {
+                    out += `${source.slice(at, current.from)}${this.projection.text.slice(current.start, current.end)}()`
+                    at = current.to
+                }
                 continue
             }
-            read += 1
-            const current = next as Read
-            if (current.start < at) continue
-            // 31.3 — the operand's own read is the one that does not lower.
-            if (holds && current.from === wholeFrom && current.to === wholeTo)
-                continue
             const rewritten = this.rewrite(current, raw)
             if (rewritten === undefined) continue
             out += source.slice(at, current.from) + rewritten
@@ -255,19 +240,24 @@ export class Lowering {
 
     // What one read lowers to, or `undefined` where it stays exactly as written.
     private rewrite(read: Read, raw: boolean): string | undefined {
-        const name = this.projection.text.slice(read.start, read.end)
+        const spelled = this.projection.text.slice(read.start, read.end)
+        // 33.7 — a `Reactive` prop is reached through its accessor.
+        const name = read.through ? `${spelled}()` : spelled
         switch (read.shape) {
             case 'asWritten':
-                return undefined
+                return read.through ? name : undefined
+            // 31.5 — the member BOUND to the `Reactive`, arguments and all.
+            case 'member':
+                return `((...args) => ${name}.${read.path[0]?.name}(...args))`
             // 31.7 — the explicit spelling keeps compiling. 31.11 — AND IT TAKES NO ARGUMENTS.
             // Passed through, `count(5)` calls the read with a value the read ignores: an author
             // who meant a write, silently given one.
             case 'call':
                 if (read.arguments > 0)
                     throw new Error(
-                        `abide: ${name}() is a read by name and takes no arguments, and this one is given one. Write ${name}.set(…) to write it. RULEBOOK 31.11.`,
+                        `abide: ${spelled}() is a read by name and takes no arguments, and this one is given one. Write ${spelled}.set(…) to write it. RULEBOOK 31.11.`,
                     )
-                return undefined
+                return read.through ? name : undefined
             // 31.1 — a read. A member that is not the `Reactive`'s own reaches the value (31.5,
             // 31.6), so `regions.join(', ')` reads first and `n?.x` reads `n()?.x`.
             case 'value':
@@ -275,7 +265,7 @@ export class Lowering {
             // AN OBJECT SHORTHAND IS A KEY AND A VALUE. `{ n }` means `{ n: n }`, so the key has
             // to stay `n` and only the value lowers — `{ n() }` is a method with no body.
             case 'shorthand':
-                return `${name}: ${name}()`
+                return `${spelled}: ${name}()`
             // 33.4 — the call IS the record of accessors the caller passed, so the pattern an
             // author wrote destructures that rather than a value nothing has.
             case 'props':
@@ -288,6 +278,13 @@ export class Lowering {
                 return '() => ('
             case 'defaultClose':
                 return ')'
+            case 'static':
+                return undefined
+            // 32.26, 32.2 — THE SLOT SPELLING `raw(x)` IS A CALL TO THE FRAMEWORK'S `raw`, the
+            // export an app imports, so a value branded in a `<script>` and one branded in a slot
+            // are the same object.
+            case 'raw':
+                return raw ? this.use('raw') : undefined
         }
         const value =
             read.value === undefined ? '1' : this.lower(read.value, raw).trim()
@@ -333,38 +330,7 @@ export class Lowering {
         const write = `${name}.set(${this.use('writePath')}(${name}(), [${segments.join(', ')}], ${stored}))`
         return short ? `${current} ${op} ${write}` : write
     }
-
-    // 32.26, 32.2 — THE SLOT SPELLING `raw(x)` IS A CALL TO THE FRAMEWORK'S `raw`, the export an
-    // app imports, so a value branded in a `<script>` and one branded in a slot are the same
-    // object. A member (`markdown.raw(x)`) is that object's own method, and a bare `raw` that is
-    // not called is whatever the file bound. Found by spelling, so it holds with no checker too.
-    private rawCalls(from: number, to: number): number[] {
-        const text = this.projection.text.slice(from, to)
-        if (!text.includes('raw')) return NO_CALLS
-        const calls: number[] = []
-        const tokens = tokenise(text)
-        for (let i = 0; i < tokens.length; i += 1) {
-            const token = tokens[i] as Token
-            if (token.kind !== SyntaxKind.Identifier || token.text !== 'raw')
-                continue
-            const previous = tokens[i - 1]?.kind
-            if (
-                previous === SyntaxKind.DotToken ||
-                previous === SyntaxKind.QuestionDotToken ||
-                tokens[i + 1]?.kind !== SyntaxKind.OpenParenToken
-            )
-                continue
-            // A `Reactive` the page named `raw` is a read, and the read's rewrite is the answer.
-            const offset = from + token.start
-            const read = this.reads[this.firstRead(offset)]
-            if (read !== undefined && read.start === offset) continue
-            calls.push(offset)
-        }
-        return calls
-    }
 }
-
-const NO_CALLS: number[] = []
 
 // What the emitted component function calls its props record. Under `__` for the reason every
 // framework name in an emitted module is (`importClause`): an author's own `props` is a name they

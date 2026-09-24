@@ -10,11 +10,14 @@
 // value (15.1), so it is in this seam rather than the server's: the same object crosses a
 // wire, fills `s.error` and narrows through `s.isError`.
 
+// EMITTED CODE'S: the value a `bind:` operand holds, as the server writes it into the tag (32.5).
+export { boundValue, groupHolds } from './boundValue.ts'
 export {
     escapeAttribute,
     escapeStyleValue,
     escapeText,
 } from './escapeText.ts'
+export { type Cookies, cookies } from './cookies.ts'
 export { type Failed, isFailed } from './Failed.ts'
 export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
@@ -23,14 +26,19 @@ export { jsonSchema } from './jsonSchema.ts'
 // as — the server's emitted block, the client's `updateList`, and the markup a client builds for a
 // row — so the one function is the one answer.
 export { listOf } from './listOf.ts'
+export { type Logger, type LogRecord, log } from './log.ts'
+export type { Middleware } from './Middleware.ts'
 // `navigate` ALONE, of everything routing needs. This barrel is what an app resolves through the
 // bare `abide` specifier, and the matcher, the pattern grammar and `routeOf` are reached by path
 // from the two places that have them — the build and the client router. Putting them here would
 // widen the public surface with names no clause or registry row gives an author, and drag both
 // modules into the static closure of the entry every page imports.
 export { navigate } from './navigate.ts'
+export { online } from './online.ts'
+export { type Principal, principal } from './principal.ts'
 export { props } from './props.ts'
-export { Raw, raw } from './Raw.ts'
+// `markupRun` and `RAW_WRITES` are EMITTED CODE'S: a text run anchored while it holds markup (32.31).
+export { markupRun, RAW_WRITES, Raw, raw } from './Raw.ts'
 export {
     busy,
     // 10.5's pair — not an app's names: an emitted component opens its instance's share scope
@@ -60,11 +68,26 @@ export {
     type Transformer,
     watch,
 } from './reactive/index.ts'
+export type { Params } from './matchRoute.ts'
 export { notFound, refuse, validationError } from './refuse.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'
+export { route } from './route.ts'
 export { safeUrl } from './safeUrl.ts'
+// EMITTED CODE'S — 32.11's spread, as props and as markup.
+export { spreadAttributes, spreadProps } from './spread.ts'
 // EMITTED CODE'S, not an author's — no REGISTRY row, the way `escapeText` and `listOf` have
 // none. A markup position that aborts on an unlanded read (32.24) is the compiler's business.
 export { slotValue } from './slotValue.ts'
+// 30.1 — the address builder, and the types that read a route literal for it.
+export {
+    type HasParams,
+    type HasSegments,
+    type OptionalNames,
+    type ParamsOf,
+    type Query,
+    type RequiredNames,
+    type RestNames,
+    url,
+} from './url.ts'
 export { validateJson } from './validateJson.ts'
 export { writePath } from './writePath.ts'

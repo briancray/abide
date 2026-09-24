@@ -1,0 +1,20 @@
+<script>
+import { reactive, refresh } from 'abide'
+import { getInvoice } from '#server/rpc/probeRefreshInvoices'
+
+const invoice = reactive(() => getInvoice({ id: '4021' }))
+// A reload over a value still being served: busy, and still ready.
+const reloading = reactive(() => invoice.busy() && invoice.ready())
+</script>
+
+<div class="row">
+    <button onclick={() => refresh(invoice)}>Refresh</button>
+    <span class="status">{reloading ? 'refreshing…' : ''}</span>
+</div>
+
+{#if !invoice.ready()}<p>Loading the invoice…</p>{/if}
+
+<ul class="fields stacked">
+    <li><span>total</span><strong>{invoice.total}</strong></li>
+    <li><span>times sent</span><strong>{invoice.sent}</strong></li>
+</ul>

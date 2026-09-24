@@ -310,6 +310,7 @@ test('the wire takes a call the page already started, and fetches after that —
         return {
             status: 200,
             statusText: 'OK',
+            headers: new Headers({ 'content-type': 'application/json' }),
             text: async () => '{"id":"7","fresh":true}',
         }
     }) as unknown
@@ -364,4 +365,72 @@ test('the wire takes a call the page already started, and fetches after that —
         window.fetch = previous
         window.__abideCalls = undefined
     }
+})
+
+// 16.33 — A FRAMED STREAM IS THE CHUNKS IT CARRIED, in each framing the server can answer in. THE
+// REVERT: drop the jsonl arm from `answered`; the body is not one JSON value, and the call refuses.
+test('the wire collects a jsonl or sse answer into its chunks — 16.33', async () => {
+    const window = globalThis as unknown as Record<string, unknown>
+    const previous = window.fetch
+    const bodies: Record<string, [string, string]> = {
+        '/rpc/lines': ['application/jsonl', '{"n":1}\n{"n":2}\n'],
+        '/rpc/events': ['text/event-stream', 'data: 1\n\ndata: 2\n\n'],
+    }
+    window.fetch = (async (input: string) => {
+        const [type, text] = bodies[input] as [string, string]
+        return {
+            status: 200,
+            statusText: 'OK',
+            headers: new Headers({ 'content-type': type }),
+            text: async () => text,
+        }
+    }) as unknown
+    try {
+        const lines = wire('GET', '/rpc/lines') as () => PromiseLike<unknown>
+        const events = wire('GET', '/rpc/events') as () => PromiseLike<unknown>
+        expect(await lines()).toEqual([{ n: 1 }, { n: 2 }])
+        expect(await events()).toEqual([1, 2])
+    } finally {
+        window.fetch = previous
+    }
+})
+
+// 20.4 — A HANDLER WITHHELD FROM THE UI GETS NO WRAPPER, so a page importing it is 16.30's compile
+// error rather than a call the browser was quietly handed; the handler still answers over http. THE
+// REVERT: write a wrapper for every mount in `wrappersOf`; the build succeeds and the page ships a call
+// to a handler its author withheld.
+test('a handler with clients.ui false gets no browser wrapper — 20.4', async () => {
+    const HANDLERS = `import { GET } from 'abide/server'
+
+export const internal = GET(() => 'staff only', { clients: { ui: false } })
+
+export const open = GET(() => 'anyone')
+`
+    const refused = appFixture({
+        'ui/pages/page.abide': `<script>
+import { reactive } from 'abide'
+import { internal } from '#server/rpc/staff.ts'
+
+const value = reactive(() => internal())
+</script>
+
+<p>{value()}</p>`,
+        'server/rpc/staff.ts': HANDLERS,
+    })
+    const built = buildApp(refused)
+    expect(built.exitCode).not.toBe(0)
+    expect(built.stderr).toContain('internal')
+
+    const allowed = appFixture({
+        'ui/pages/page.abide': `<script>
+import { reactive } from 'abide'
+import { open } from '#server/rpc/staff.ts'
+
+const value = reactive(() => open())
+</script>
+
+<p>{value()}</p>`,
+        'server/rpc/staff.ts': HANDLERS,
+    })
+    expect(buildApp(allowed).exitCode).toBe(0)
 })

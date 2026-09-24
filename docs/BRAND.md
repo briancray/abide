@@ -146,16 +146,16 @@ clause it lands on, and the clause is the page's title rather than the card's.
 | Dashboard | A total that follows its filter · a metric three tiles want and one load answers · a poll that has to be capped · a count that quietly stopped following its filter | an unkeyed `reactive` body, `global`, `throttle`, tracking after `await` |
 | Player | A now-playing bar and a library that agree · a volume that survives the tab · a scrub that fires per frame | `reactive.share`, `store`, `debounce` |
 
-**Why 40.25 holds a page to one app.** Six cards drawn from four worlds is six worlds to enter, and
+**Why 40.23 holds a page to one app.** Six cards drawn from four worlds is six worlds to enter, and
 the reader pays that toll per card while the thing being taught is the same one throughout.
 
-**Why 40.26 seats a control with its value.** Held apart from it a button has to name its own
+**Why 40.24 seats a control with its value.** Held apart from it a button has to name its own
 subject — "add one" of what — and that name is longer and vaguer than the arrow it replaced. This
 is the same economy the readouts are under: what the layout can say, the words do not have to.
 
 # What an example has to prove
 
-40.27, 40.28 and 40.29 are one rule rather than three, because dropping any one is a distinct way
+40.25, 40.26 and 40.27 are one rule rather than three, because dropping any one is a distinct way
 for a card to go wrong: a card that proves nothing is
 decoration, a card that proves it in forty lines has buried the proof under the setup, and a card
 that proves it in a world nobody has is proving it to nobody.
@@ -179,16 +179,16 @@ Three levels, and a reader may stop at any of them.
 | Section overview | that same opening, then what does not fit on a landing page — every part linking to the page that covers it |
 | Topic page | one problem, solved |
 
-The three levels are 40.13's, the constraint on a lead is 40.33's and the map section is 40.34's;
+The three levels are 40.12's, the constraint on a lead is 40.31's and the map section is 40.32's;
 the `{% lead %}` directive is the build's. SOME OF WHAT IS BELOW IS GATED as well, in
 `packages/dogfood/tests/coverage.test.ts` and `voice.test.ts` — the tests are the list, an
 enumeration here being a second copy of them that nothing re-runs. A rule here that turns out to be
 checkable belongs in a test rather than in prose; what stays is what only a reader can decide.
 
-* **A page's LEAD is what the section overview says about it.** 40.33 is the constraint and also
+* **A page's LEAD is what the section overview says about it.** 40.31 is the constraint and also
   the test: the lead is about the whole page rather than about whatever the first heading happens
   to be, and an opening that describes the first card advertises the page as that one card.
-* **Where a page's subject is a NAME, the first section is the map 40.34 asks for.** A reader
+* **Where a page's subject is a NAME, the first section is the map 40.32 asks for.** A reader
   arriving to compare two spellings gets them in the first screen instead of assembling them from
   six sections; one who came to learn scrolls past a table costing four lines. It fits a page whose
   subject is one name with variants, which is most of the primitives, and it does not fit a page
@@ -248,22 +248,20 @@ three pages later.
   A reader who can check a claim in two seconds holds it; one who is asked to follow an
   argument is still deciding. This is the strongest form of "claim, then evidence" and the
   default — reach for prose evidence only where no example fits. Every example is a real `.abide` or
-  `.ts` file, and 40.3 asks it for a bench and a spec, which is what keeps it evidence rather than
-  illustration. TODAY THOSE ARE AUTHORED, not run — neither can execute until the compiler
-  does — and every panel carrying one says so, because a number that reads as measured is worse
-  than no number.
+  `.ts` file in the docs app, running on the page that teaches it, and 40.3 asks it for a spec,
+  which is what keeps it evidence rather than illustration.
 * **Four layers reach a card, and each says a thing the others cannot.** The HEADING is the
-  claim, in the reader's words, and 40.27 is what binds the card to it. The card's TITLE is the
+  claim, in the reader's words, and 40.25 is what binds the card to it. The card's TITLE is the
   signature and a gloss, which is the address in the API the claim is about. The card's SUMMARY
   is the situation and what to do in it, one or two sentences. And the copy AFTER the card is
   everything none of those can carry: the reason, the refusal, the thing the running page cannot
-  show. 40.30 is what keeps a fourth voice out from between a heading and its card — the layer that kept being
+  show. 40.28 is what keeps a fourth voice out from between a heading and its card — the layer that kept being
   written and is always a fourth voice restating one of the other three — a card had a heading
   saying a derived value re-runs when what it read changes, then a paragraph saying reading is what
   subscribes, then a title saying auto-tracked derivation, then a summary saying the total
   follows the seats. Four ways to say it before anything had been shown.
 * **The opening card is the one to price.** The line after it says what it cost, against the
-  hand-written arm the example carries. A page's opening card
+  hand-written arm paired with the example (44.19). A page's opening card
   carries the claim the title made; the cards after it are already inside an argument the reader
   has accepted, and pricing each of them turns the device into furniture.
 * **Second person, imperative.** What *you* write, what *it* does. "You write one instead", not
@@ -365,15 +363,13 @@ for prose, and 1.25rem and up for headings and stat values.
 thing wherever it appears: an aside in prose, written `> [!TIP]`, and an annotation the
 documentation adds beside something a reader is looking at. A reader is entitled to read every
 pixel of a render as the app's output, which is why the documentation's own instrumentation sits
-OUTSIDE the frame rather than inside it wearing a tip (40.18) — the request meter under an example
-is that, and it is the arm's own count rather than a caption about one.
+OUTSIDE the render rather than inside it wearing a tip (40.17).
 
-**An example leads with the running page, and the page is really running.** The render sits above
-the tabs and stays there, and what it runs is the hand-written arm (40.16) against the network that
-example names (40.17) — its wire fixture, or a hand-written server of its own where a frozen answer
-cannot cover what a reader types. Requests shows that network rather than a screenshot of calls
-somebody transcribed. Files, Bench and Tests are what a reader consults ABOUT
-it. The thing an example is for is the thing that runs, and a reader who has to find a tab before
+**An example leads with the running component, and the component is really running.** The render
+sits above the tabs and stays there, and what it runs is the example's own component, inline in the
+docs app (40.15), answered by the docs app's own handlers (40.16) — the code in the Files tab is the
+code on screen, with nothing standing in for either half. Files is what a reader consults ABOUT it.
+The thing an example is for is the thing that runs, and a reader who has to find a tab before
 seeing one has been handed source to read instead of something to try.
 
 A stub marker takes `--muted`. It marks an ABSENCE, so it takes the ground's own recessive tone

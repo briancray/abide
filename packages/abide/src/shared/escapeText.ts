@@ -4,7 +4,7 @@
 // `escapeless` in #ui is that path, and the two sitting apart is what keeps them from being
 // confused for one another.
 
-import { Raw, textOf } from './Raw.ts'
+import { RAW_WRITES, Raw, textOf } from './Raw.ts'
 
 // The common slot holds nothing to escape, so the scan is the fast path and the rewrite is
 // the fallback: a clean string is returned as it arrived, with no allocation.
@@ -19,8 +19,11 @@ const SPECIAL = /[&<>]/
 export function escapeText(value: unknown): string {
     // 32.27 — a branded raw value renders unescaped, and the brand is read FIRST: `String(value)`
     // below turns a `Raw` into its html and the scan then escapes exactly the markup the brand
-    // was put on to keep. What the check costs is in `Raw.ts`.
-    if (value instanceof Raw) return value.html
+    // was put on to keep. What the check costs is in `Raw.ts`, and why it is counted is `markupRun`.
+    if (value instanceof Raw) {
+        RAW_WRITES.count += 1
+        return value.html
+    }
     return escapeMarkup(value == null ? '' : String(value))
 }
 

@@ -10,9 +10,9 @@ covers:
   - `bind:group`
   - `bind:value={{get, set}}`
 examples:
-  - packages/dogfood/examples/bind-text
-  - packages/dogfood/examples/bind-boolean
-  - packages/dogfood/examples/bind-group
+  - packages/dogfood/examples/bind-text.json
+  - packages/dogfood/examples/bind-boolean.json
+  - packages/dogfood/examples/bind-group.json
 ---
 
 A form is a value you can see. The usual cost of saying so is a handler per field — read the

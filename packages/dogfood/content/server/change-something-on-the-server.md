@@ -6,7 +6,7 @@ covers:
   - `POST` / `PUT` / `PATCH` / `DELETE`
   - `server/rpc/admin/audit.ts`
 examples:
-  - packages/dogfood/examples/write-coalesced
+  - packages/dogfood/examples/write-coalesced.json
 ---
 
 A read is safe to repeat. A write is not — and a browser repeats one for you: a double-click,

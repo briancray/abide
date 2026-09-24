@@ -1,0 +1,11 @@
+<script>
+import { reactive } from 'abide'
+
+let handle = reactive('ada')
+</script>
+
+<h3>@{handle}</h3>
+
+<label>handle
+    <input bind:value={handle}>
+</label>

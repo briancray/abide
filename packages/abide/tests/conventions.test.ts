@@ -9,6 +9,10 @@
 // now: the first file that violates one fails, rather than the fiftieth being found by reading.
 
 import { expect, test } from 'bun:test'
+import {
+    CITATION,
+    rulebookClauses,
+} from '../../harness/scripts/rulebookClauses.ts'
 
 const ABIDE = new URL('../', import.meta.url)
 
@@ -33,7 +37,8 @@ async function sources(
 test('framework code imports by seam, never through its own public specifier', async () => {
     const offenders: string[] = []
     for (const { path, text } of await sources(ABIDE)) {
-        if (path.startsWith('tests/')) continue
+        // THE STARTER `abide scaffold` COPIES IS AN APP'S CODE, and resolves abide as an app does.
+        if (path.startsWith('tests/') || path.startsWith('scaffold/')) continue
         for (const match of text.matchAll(/from '(abide(?:\/[\w-]+)?)'/g)) {
             offenders.push(`${path}: ${match[1]}`)
         }
@@ -143,10 +148,7 @@ test('every clause a framework comment cites exists', async () => {
         new URL('../../../docs/RULEBOOK.md', import.meta.url),
     ).text()
     const ids = new Set<string>()
-    for (const paragraph of rulebook.split(/\n\s*\n/)) {
-        const clause = /^(\d+\.\d+)\s/.exec(paragraph.trim())
-        if (clause?.[1]) ids.add(clause[1])
-    }
+    for (const { id } of rulebookClauses(rulebook)) ids.add(id)
     expect(ids.size).toBeGreaterThan(100)
 
     const dangling: string[] = []
@@ -155,7 +157,7 @@ test('every clause a framework comment cites exists', async () => {
         for (let index = 0; index < lines.length; index += 1) {
             const line = lines[index] ?? ''
             if (!line.trimStart().startsWith('//')) continue
-            for (const cited of line.matchAll(/\b(\d{1,2}\.\d{1,2})\b/g)) {
+            for (const cited of line.matchAll(CITATION)) {
                 const id = cited[1] ?? ''
                 const after = line.slice(
                     (cited.index ?? 0) + (cited[0]?.length ?? 0),

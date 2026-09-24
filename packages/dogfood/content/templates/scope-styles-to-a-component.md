@@ -7,8 +7,8 @@ covers:
   - `:global(…)`
   - `import './app.css'`
 examples:
-  - packages/dogfood/examples/style-scoped
-  - packages/dogfood/examples/style-global
+  - packages/dogfood/examples/style-scoped.json
+  - packages/dogfood/examples/style-global.json
 ---
 
 A component's styles are the component's. Writing `.badge` inside one and having it mean that

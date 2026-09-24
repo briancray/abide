@@ -13,8 +13,8 @@ covers:
   - `class:name={cond}`
   - `style:prop={value}`
 examples:
-  - packages/dogfood/examples/markup-escaped
-  - packages/dogfood/examples/markup-class-style
+  - packages/dogfood/examples/markup-escaped.json
+  - packages/dogfood/examples/markup-class-style.json
 ---
 
 A hole in the markup is `{}` around an expression. Whatever it reads, it follows: the text

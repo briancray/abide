@@ -33,7 +33,7 @@ test('a unit that is handed the wrong kind of node says so', () => {
     document.body.innerHTML = '<p id="one">A</p><div><span>B</span></div>'
     const p = document.body.firstChild as Node
     const div = p.nextSibling as Node
-    expect(textHere(p.firstChild).data).toBe('A')
+    expect((textHere(p.firstChild) as Text).data).toBe('A')
     expect(() => textHere(div)).toThrow('41.10')
     expect(() => elementHere(p.firstChild, 'p')).toThrow('41.10')
     expect(() => elementHere(div, 'p')).toThrow('<p>')
@@ -51,17 +51,19 @@ test('the emitted binding walks the markup and adds nothing to the document', as
     expect(client).toContain('const __c2 = __c0?.nextSibling\n')
     expect(client).toContain('const __c3 = __c2?.firstChild\n')
     expect(client).toContain('const __c5 = __c3?.nextSibling\n')
-    // `{b} tail` carries a static piece, so it always renders a node and is a plain step. `{a}` is
-    // every part an expression and can render none, so the walk puts one back as it passes.
-    expect(client).toContain('const __c4 = __c3?.firstChild\n')
-    expect(client).toContain('const __c1 = __blankHere(__c0?.firstChild, __c0)')
+    // `{b} tail` carries a static piece, so it always renders a node — but it is live, so it can
+    // hold markup (32.27) and is stepped to its closing anchor where it does, and never put back.
+    // `{a}` is every part an expression and can render none, so the walk puts one back as it
+    // passes.
+    expect(client).toContain('const __c4 = __runHere(__c3?.firstChild, null)\n')
+    expect(client).toContain('const __c1 = __runHere(__c0?.firstChild, __c0)')
     expect(client).toContain('__elementHere(__c5, "button").addEventListener')
     expect(client).not.toContain('data-a')
     expect(client).not.toContain('slots(')
     // RESOLVED ONCE AT MOUNT, and the binding writes the node it holds. THE REVERT: emit
     // `setText(textHere(…), …)` inside the watch; every write then re-checks the node it already
     // holds.
-    expect(client).toContain('const __t4 = __textHere(__c4)')
+    expect(client).toContain('let __t4 = __textHere(__c4)')
     expect(client).toContain('__setText(__t4,')
     expect(client).not.toContain('__setText(__textHere(')
 })

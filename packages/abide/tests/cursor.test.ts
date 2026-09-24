@@ -13,15 +13,13 @@
 import { expect, test } from 'bun:test'
 import { parseAbide } from '#compiler'
 import { Cursor, placeTemplate, REGION_ROOT } from '#compiler/Cursor.ts'
-import { isHead } from '#compiler/classifyTemplate.ts'
 import type { TemplateNode } from '#compiler/TemplateNode.ts'
 
 function walk(source: string): { cursor: Cursor; template: TemplateNode[] } {
     const file = parseAbide(source)
-    const template = file.template.filter((node) => !isHead(node))
     const cursor = new Cursor('__head', '__parent')
-    placeTemplate(template, cursor)
-    return { cursor, template }
+    placeTemplate(file.template, cursor)
+    return { cursor, template: file.template }
 }
 
 // How many times the walk accounted for each template node: a run's pieces, an element, or the
@@ -156,25 +154,25 @@ test('an arm addresses from the anchor pair it hangs in', () => {
     expect(arm.positions[0]?.parent).toBe(`${REGION_ROOT}.close.parentNode`)
 })
 
-// A ROW IS ITS OWN REGION ROOT — its nodes are the array the reconcile hands back, so the walk
-// starts there rather than inside anything. A multi-rooted row carries its own anchor at the head
-// of that array, which is why its first top-level node stands one along.
-test('a row addresses from the nodes the reconcile holds', () => {
+// A ROW IS ITS OWN REGION ROOT — its first node is on the record the reconcile hands its mount, so
+// the walk starts there rather than inside anything. A multi-rooted row's first node is its own
+// anchor, which is why its first top-level node stands one along.
+test('a row addresses from the first node of the row the reconcile holds', () => {
     const single = firstNested(
         walk('<ul>{#for i of xs}<li>{i}</li>{/for}</ul>').cursor,
     )
     expect(walked(single)).toEqual([
-        '__c0 li <- __nodes[0]',
+        '__c0 li <- __row.node',
         '__c1 text <- __c0?.firstChild',
     ])
-    expect(single.holds).toBe('__nodes')
+    expect(single.repeated).toBe(true)
 
     const many = firstNested(
         walk('<dl>{#for i of xs}<dt>{i.k}</dt><dd>{i.v}</dd>{/for}</dl>')
             .cursor,
     )
     expect(walked(many)).toEqual([
-        '__c0 dt <- __nodes[1]',
+        '__c0 dt <- __row.node.nextSibling',
         '__c1 text <- __c0?.firstChild',
         '__c2 dd <- __c0?.nextSibling',
         '__c3 text <- __c2?.firstChild',

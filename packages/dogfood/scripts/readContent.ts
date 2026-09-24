@@ -6,8 +6,9 @@
 // `src/`, and the tests read it directly — which is the whole reason the reading and the writing
 // are two files: a gate on the prose should not have to build a site to ask its question.
 
+import { ifPresent } from './ifPresent.ts'
 import { NAV } from './NAV.ts'
-import { exampleMarkdown, readExample } from './renderExample.ts'
+import { type Example, exampleMarkdown, readExample } from './renderExample.ts'
 import {
     EXAMPLE,
     groupSections,
@@ -70,18 +71,13 @@ export async function readPages(): Promise<Page[]> {
     const pages: Page[] = []
     for (const group of NAV) {
         for (const slug of group.pages) {
-            let source: string
-            try {
-                source = await Bun.file(
-                    new URL(`${slug}.md`, CONTENT_DIR),
-                ).text()
-            } catch (thrown) {
-                if ((thrown as { code?: unknown }).code !== 'ENOENT')
-                    throw thrown
+            const source = await ifPresent(
+                Bun.file(new URL(`${slug}.md`, CONTENT_DIR)).text(),
+            )
+            if (source === undefined)
                 throw new Error(
                     `docs: NAV names ${slug}, content/${slug}.md is missing`,
                 )
-            }
             const { fields, body } = readFrontMatter(source)
             pages.push({
                 slug,
@@ -160,20 +156,27 @@ async function expand(
 // THE BODY, RENDERED. The directives expand in the order they have to: a LEAD is a section
 // page's opening and an opening carries the example that page leads with, so the passes that
 // expand one run after it — or the overview ships the marker instead of the figure.
-export async function renderBody(page: Page, pages: Page[]): Promise<string> {
+//
+// THE EXAMPLES COME BACK WITH IT, because the body names where each one renders and the page is
+// what imports and invokes it.
+export async function renderBody(
+    page: Page,
+    pages: Page[],
+): Promise<{ body: string; examples: Example[] }> {
     let body = renderMarkdown(page.body)
     body = await expand(body, /<!--lead:([\w/-]+)-->/g, (match) =>
         renderMarkdown(leadOf(pages, match[1] ?? '')),
     )
-    body = await expand(
-        body,
-        /<!--example:([\w-]+)-->/g,
-        async (match) => (await readExample(match[1] ?? '', '/')).html,
-    )
+    const examples: Example[] = []
+    body = await expand(body, /<!--example:([\w-]+)-->/g, async (match) => {
+        const example = await readExample(match[1] ?? '')
+        examples.push(example)
+        return example.html
+    })
     body = await expand(body, /<!--snippet:(\{.*?\})-->/g, (match) =>
         snippetHtml(JSON.parse(match[1] ?? '{}')),
     )
-    return groupSections(linksToRoutes(body, page.slug))
+    return { body: groupSections(linksToRoutes(body, page.slug)), examples }
 }
 
 // MARKDOWN IS THE PAGE and the app is derived from it, so a `content/` link names the `.md` —
@@ -218,7 +221,6 @@ export async function renderPageMarkdown(
     page: Page,
     pages: Page[],
 ): Promise<string> {
-    const root = '../'.repeat(page.slug.split('/').length - 1)
     let body = page.body.trim()
     // The directives expand into FENCES rather than panels — same source, same order,
     // no tab a reader of plain text cannot open. LEAD runs first for the reason the HTML
@@ -227,7 +229,7 @@ export async function renderPageMarkdown(
         leadOf(pages, match[1] ?? ''),
     )
     body = await expand(body, new RegExp(EXAMPLE.source, 'gm'), (match) =>
-        exampleMarkdown(match[1] ?? '', root),
+        exampleMarkdown(match[1] ?? ''),
     )
     body = await expand(body, new RegExp(SNIPPET.source, 'gm'), (match) =>
         snippetMarkdown({

@@ -6,7 +6,7 @@ covers:
   - `on<event>={fn}`
   - `bind:element={Reactive<Element> | ((element: Element) => void | Disposer)}`
 examples:
-  - packages/dogfood/examples/element-ref
+  - packages/dogfood/examples/element-ref.json
 ---
 
 An event handler is an attribute whose value is a function. There is no synthetic event system

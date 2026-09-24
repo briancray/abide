@@ -6,6 +6,8 @@
 import { expect, test } from 'bun:test'
 import { inScope, request, response } from '#server/requestScope.ts'
 import { flushSync, reactive, refresh, watch } from '#shared'
+import { GET } from '#shared/rpc.ts'
+import { socket } from '#shared/socket.ts'
 
 const tick = (): Promise<void> => new Promise((done) => setTimeout(done, 0))
 
@@ -156,4 +158,77 @@ test('request and response read the request being served, and throw outside one 
         return request().url
     })
     expect(url).toBe('http://app/invoices')
+})
+
+// 9.16, 18.18 — A SOCKET CARRIES A PROCESS-WIDE VALUE, and one built without `global` is refused where
+// it is declared rather than quietly filed per request. THE REVERT: drop the refusal from `socket`;
+// the request-local value is carried, and a publish inside a request reaches none of its subscribers.
+test('socket refuses a value built without global — 18.18', () => {
+    let refusal: unknown
+    try {
+        socket(reactive<string>(undefined))
+    } catch (thrown) {
+        refusal = thrown
+    }
+    expect(String(refusal)).toContain('RULEBOOK 9.16, 18.18')
+    expect(socket(reactive<string>(undefined, { global: true }))).toBeDefined()
+})
+
+// 11.26, 11.69 — A HANDLER WITH RUNGS KEYS ITS VALUE BY THE ARGS AS SENT, and its body gets what the
+// gate made of them, as one with no rungs does. THE REVERT: reach the value with `ctx.args()` at
+// the onion's centre; the two spellings land on 1 entry rather than 2.
+test('a handler with rungs keys its value by the args as sent — 11.26, 11.69', async () => {
+    const seen: string[] = []
+    const invoice = reactive(
+        (args: { id: string }) => {
+            seen.push(args.id)
+            return args.id
+        },
+        {
+            args: (given: unknown) => ({
+                id: (given as { id: string }).id.toLowerCase(),
+            }),
+        },
+    )
+    const getInvoice = GET(invoice, { middleware: [async (next) => next()] })
+    const entries = await inScope(new Request('http://app/'), async () => {
+        await getInvoice({ id: 'ABC' })
+        await getInvoice({ id: 'abc' })
+        return invoice.entries.size
+    })
+    expect(`entries: ${entries}`).toBe('entries: 2')
+    expect(seen).toEqual(['abc', 'abc'])
+})
+
+// 16.19, 16.20 — `ctx.args()` ASKED AGAIN AFTER A REFUSAL IS REFUSED AGAIN, not handed nothing. A rung
+// may catch the refusal and ask a second time, and the answer kept for later asks is only one the
+// gate accepted. THE REVERT: mark the ask asked before validating, in `argsOnce`; the second ask
+// hands back `undefined` rather than throwing — 1 refusal where 2 are due. And the value is built
+// outside every request, so it is `scoped`'s keyed face that carries the gate: dropped there, 0.
+test('a rung that caught the args refusal and asks again is refused again — 16.19, 16.20', async () => {
+    const refusals: string[] = []
+    const invoice = reactive((args: { id: string }) => args.id, {
+        args: (given: unknown) => {
+            if (typeof (given as { id: unknown }).id !== 'string')
+                throw new Error('id is text')
+            return given as { id: string }
+        },
+    })
+    const getInvoice = GET(invoice, {
+        middleware: [
+            async (next, ctx) => {
+                for (let ask = 0; ask < 2; ask += 1)
+                    try {
+                        ctx.args()
+                    } catch (refusal) {
+                        refusals.push((refusal as { name: string }).name)
+                    }
+                return next()
+            },
+        ],
+    })
+    await inScope(new Request('http://app/'), async () => {
+        await getInvoice({ id: 7 } as never).catch(() => {})
+    })
+    expect(refusals).toEqual(['ValidationError', 'ValidationError'])
 })

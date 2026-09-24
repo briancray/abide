@@ -20,22 +20,22 @@ import {
     busyOverTags,
     createReactive,
     invalidateOverTags,
-    isReactive,
     type Reactive,
     type ReactiveOptions,
     readyOverTags,
     refreshOverTags,
 } from './Reactive.ts'
+import { isReactive } from './isReactive.ts'
 import { outsideScope, scoped } from './scoped.ts'
 import { share } from './share.ts'
 
 export type { History } from './History.ts'
 export { isKeyed, type Keyed } from './Keyed.ts'
+export { isReactive } from './isReactive.ts'
 export { NotLanded } from './NotLanded.ts'
 export {
     flushSync,
     type Identity,
-    isReactive,
     type Reactive,
     type ReactiveOptions,
     type Store,
@@ -170,6 +170,14 @@ export function reactive(
         return scoped(() => build(given))
     return build(given)
 }
+
+// A FRAMEWORK AMBIENT — `route`, `online` — FILED PER SCOPE WHATEVER ORDER THE MODULES LOADED IN.
+// `reactive` decides at construction, and a value abide itself builds at import can be built before
+// the server has installed its provider, which made it one value for every request in the process.
+// A forwarder resolves to its home wherever no scope is current, so in a browser this is the one
+// value it always was, behind one more call.
+export const ambient = ((...given: [first?: unknown, options?: unknown]) =>
+    scoped(() => build(given))) as unknown as typeof reactive
 
 function build(given: [first?: unknown, options?: unknown]): unknown {
     const [first, options] = given

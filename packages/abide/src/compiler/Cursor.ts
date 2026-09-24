@@ -38,6 +38,10 @@ import type { TemplateNode } from './TemplateNode.ts'
 // `mountFunction`), which is exactly one name, and this is it.
 export const REGION_ROOT = '__root'
 
+// WHAT A ROW'S MOUNT CALLS THE ROW'S RECORD — `REGION_ROOT`'s counterpart for a `{#for}` row, and
+// the one name the emitted mount and its rebuild share (`emitClient`'s `emitList`).
+export const ROW_ROOT = '__row'
+
 export type PositionKind = 'text' | 'element' | 'region'
 
 export type Position = {
@@ -94,33 +98,34 @@ export class Cursor {
     readonly positions: Position[] = []
     // The positions at the region's own root, in order — what a renderer starts from.
     readonly top: Position[] = []
-    // WHAT HOLDS A ROW'S NODES, where this sink is a row's: a blank run put back at the TOP of a
-    // row has to join the array the reconcile moves, or a reorder leaves it behind. '' elsewhere.
-    readonly holds: string
     // WHETHER THIS REGION CAN BE MADE MORE THAN ONCE IN ONE DOCUMENT — a row, anything inside one,
     // and all of an invoked component, which can itself stand in a row. What decides how the
     // browser makes it (`emitMaker`): the parser invoked once for a region made once costs what
     // building it costs and ships as smaller strings, and invoked once a ROW it is the whole of the
     // cost. Carried down, so an arm three regions inside a row knows it is one of a thousand.
     readonly repeated: boolean
+    // WHETHER A COMPONENT IS INVOKED ANYWHERE IN THIS REGION, at any depth — what decides whether a
+    // deferred mount has to resume its instance's share scope (10.5). Set from the invocation up
+    // through every sink it stands inside, so a component three regions down marks all three.
+    holdsComponent = false
+    // The sink this one is nested in (`nest`), or null at a page's or component's own root.
+    private outer: Cursor | null = null
     private readonly head: string
     private readonly frames: Frame[]
     private next = 0
 
-    // `head` is where this region's first node is found and `parent` what its run hangs off —
-    // spelled by whoever owns the region rather than resolved here: an arm, a slot or a caller's
-    // children hang off an anchor pair (`REGION_ROOT`), a row is the ARRAY the reconcile handed
-    // back, and a page is a node or a `Region` depending on who mounts it, so `emitClient` asks the
-    // runtime (`PAGE_HEAD`). `holds` names a row's array — see the field.
+    // `head` is where this region's first node is found and `parent` what its run hangs off. Every
+    // region but a row hangs off the anchor pair its mount is handed (`REGION_ROOT`) — the page, an
+    // arm, a slot and a caller's children alike, since the server writes a page's pair too — so
+    // that is the default; a row starts at the first node of the RECORD the reconcile hands its
+    // mount, and spells its own.
     constructor(
-        head: string,
-        parent: string,
-        holds = '',
+        head = `${REGION_ROOT}.open.nextSibling`,
+        parent = `${REGION_ROOT}.close.parentNode`,
         parserOwned = false,
         repeated = false,
     ) {
         this.head = head
-        this.holds = holds
         this.repeated = repeated
         this.frames = [{ parent, within: null, parserOwned, after: null }]
     }
@@ -149,6 +154,13 @@ export class Cursor {
     // rather than by counting — which is the negative-step encoding falling out rather than being
     // ported. How many nodes stand between the anchors depends on a value, and a cursor never asks.
     region(holder: TemplateNode): Position {
+        if (holder.kind === 'element' && !isSlot(holder))
+            for (
+                let sink: Cursor | null = this;
+                sink !== null && !sink.holdsComponent;
+                sink = sink.outer
+            )
+                sink.holdsComponent = true
         return this.record('region', holder, '', false, [])
     }
 
@@ -156,19 +168,17 @@ export class Cursor {
         this.frames.pop()
     }
 
-    // A nested region's sink, hung off the region's position. The head and the parent default to
-    // the anchor pair the region's own mount is handed (`REGION_ROOT`), which is what an arm, a
-    // slot fallback and a caller's children all hang off; a `{#for}` row passes its own, because a
-    // row's root is the array of nodes the reconcile holds and not a pair of anchors.
-    nest(at: Position, head = '', parent = '', holds = ''): Cursor {
+    // A nested region's sink, hung off the region's position. A `{#for}` row passes its own head
+    // and parent, because a row's root is the row's first node and not a pair of anchors.
+    nest(at: Position, head?: string, parent?: string, row = false): Cursor {
         const sink = new Cursor(
-            head === '' ? `${REGION_ROOT}.open.nextSibling` : head,
-            parent === '' ? `${REGION_ROOT}.close.parentNode` : parent,
-            holds,
+            head,
+            parent,
             at.parserOwned,
-            // A row's sink is the one holding a row's nodes, and everything below it repeats too.
-            this.repeated || holds !== '',
+            // A row repeats, and everything below it repeats too.
+            this.repeated || row,
         )
+        sink.outer = this
         at.inner.push(sink)
         return sink
     }
@@ -225,8 +235,9 @@ export class Cursor {
 // construction once shipped, found by reading emitted output rather than by any assertion.
 //
 // A NESTED REGION IS A SINK OF ITS OWN: one per `{#if}` arm, one for a `{#for}` row (whose root is
-// the array of nodes the reconcile holds, so it starts there, a node along where the row carries its
-// own anchor), one for a `<slot/>` fallback, one for the children between an invocation's tags.
+// the first node of the row the reconcile holds, so it starts there, a node along where the row
+// carries its own anchor), one for a `<slot/>` fallback, one for the children between an
+// invocation's tags.
 export function placeTemplate(nodes: TemplateNode[], cursor: Cursor): void {
     for (let at = 0; at < nodes.length; at += 1) {
         const node = nodes[at] as TemplateNode
@@ -246,9 +257,11 @@ export function placeTemplate(nodes: TemplateNode[], cursor: Cursor): void {
                     node.children,
                     cursor.nest(
                         here,
-                        single ? '__nodes[0]' : '__nodes[1]',
-                        '__nodes[0].parentNode',
-                        '__nodes',
+                        single
+                            ? `${ROW_ROOT}.node`
+                            : `${ROW_ROOT}.node.nextSibling`,
+                        `${ROW_ROOT}.node.parentNode`,
+                        true,
                     ),
                 )
                 continue

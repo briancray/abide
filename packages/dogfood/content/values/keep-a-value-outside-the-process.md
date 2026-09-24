@@ -6,8 +6,8 @@ covers:
   - `store`
   - `Store`
 examples:
-  - packages/dogfood/examples/store-restore
-  - packages/dogfood/examples/store-keyed
+  - packages/dogfood/examples/store-restore.json
+  - packages/dogfood/examples/store-keyed.json
 ---
 
 A `Reactive` lives and dies with its scope unless it is told otherwise. A `store` is how it is
@@ -19,8 +19,8 @@ a row somewhere — and it is one option on the value rather than a mechanism be
 {% example store-restore %}
 
 *1 option, 0 markup changed* — the read and the write are the page's own, untouched. Step the
-volume and press **Reload** on the frame: that re-runs the arm from nothing, which is the restart
-a store exists for.
+volume and reload the page: that builds the component from nothing, which is the restart a store
+exists for.
 
 `Store` is `{ get, set }`, and there is no way to spell either alone. A persister with no restore is
 a `watch` under a longer name; a restore with no persister is the initial value `reactive` already

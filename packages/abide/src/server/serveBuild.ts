@@ -7,14 +7,11 @@
 // are two readings of one walk rather than two walks that have to agree (30.8).
 
 import {
-    type AppSources,
-    answerRequest,
-    clientTags,
-    intoHead,
+    appSources,
+    type LoadedSources,
     notFound,
     publicFilesUnder,
-    rankRoutes,
-    type ServerRoute,
+    type ServerTable,
 } from './answerRequest.ts'
 import { type Mount, mountHandlers } from './answerRpc.ts'
 import {
@@ -25,12 +22,15 @@ import {
     PUBLIC_DIRECTORY,
 } from './CLIENT_BUILD.ts'
 import type { Manifest } from './chunksByModule.ts'
+import { bootApp } from './createApp.ts'
+import { namesUnder } from './namesUnder.ts'
 import {
     ENCODINGS,
     type Encoding,
     negotiateEncoding,
 } from './negotiateEncoding.ts'
 import { shellUnder } from './render.ts'
+import { LISTENING } from './requestScope.ts'
 
 export type ServeOptions = {
     // The app's source root — the directory `ui/` and `server/` sit under, and the one 35.6's
@@ -41,9 +41,20 @@ export type ServeOptions = {
     port?: number | undefined
 }
 
+// 38.6 — `abide start`: the built app, booted (`bootApp`) and listening. What `App.listen` bound is
+// handed back, for the command to say where.
 export async function serveBuild(
     options: ServeOptions,
-): Promise<Bun.Server<undefined>> {
+): Promise<Bun.Server<unknown>> {
+    const app = await bootApp(options.root, () => loadBuild(options))
+    await app.listen(options.port === undefined ? {} : { port: options.port })
+    return LISTENING.server as Bun.Server<unknown>
+}
+
+// WHAT `abide build` LEFT ON DISK, as the parts an `App` is booted over.
+export async function loadBuild(
+    options: Pick<ServeOptions, 'root' | 'out'>,
+): Promise<LoadedSources> {
     // THE BOOT READS OVERLAP: the route table, the handler table, the shell, the manifest and the
     // public files are independent of each other, and this is the whole of `abide start`'s boot.
     //
@@ -51,22 +62,24 @@ export async function serveBuild(
     // op and leaves the caching to whatever server got written; this is that server. The manifest
     // names the stylesheet only where the bundler collected one, so an app that imports none links
     // none.
-    const [table, handlerTable, shell, manifest, published] = await Promise.all(
-        [
+    const [table, mountedHandlers, shell, manifest, published] =
+        await Promise.all([
             import(
                 Bun.pathToFileURL(`${options.out}/server.ts`).href
-            ) as Promise<{
-                routes: ServerRoute[]
-            }>,
-            // 16.2 — the handlers the build found, answered out of the app's own source.
-            import(Bun.pathToFileURL(`${options.out}/rpc.ts`).href) as Promise<{
-                handlers: Mount[]
-            }>,
+            ) as Promise<ServerTable>,
+            // 16.2 — the handlers the build found, answered out of the app's own source, and 18.2's
+            // sockets among them — mounted as soon as they load, as the dev lane does.
+            (
+                import(
+                    Bun.pathToFileURL(`${options.out}/rpc.ts`).href
+                ) as Promise<{
+                    handlers: Mount[]
+                }>
+            ).then((rpc) => mountHandlers(rpc.handlers, options.root)),
             shellUnder(options.root),
             Bun.file(`${options.out}/${MANIFEST}`).json() as Promise<Manifest>,
             publicFilesUnder(`${options.out}/${PUBLIC_DIRECTORY}`),
-        ],
-    )
+        ])
 
     // THE BUNDLE, ENUMERATED RATHER THAN RESOLVED. A request names a file in this set or it names
     // nothing — there is no path to normalise, so `..` is not a case that has to be got right,
@@ -76,9 +89,7 @@ export async function serveBuild(
     // encoding (38.5), so they are found under the name they encode and served as that name.
     const clientRoot = `${options.out}/${CLIENT_DIRECTORY}`
     const suffixes = Object.values(ENCODING_SUFFIX) as string[]
-    const found = new Set<string>()
-    for (const name of new Bun.Glob('**/*').scanSync({ cwd: clientRoot }))
-        found.add(name)
+    const found = new Set(namesUnder(clientRoot))
     const assets = new Map<string, Encoding[]>()
     for (const name of found) {
         if (suffixes.some((suffix) => name.endsWith(suffix))) continue
@@ -89,10 +100,7 @@ export async function serveBuild(
         assets.set(name, encodings)
     }
 
-    const app: AppSources = {
-        routes: rankRoutes(table.routes, (route) =>
-            intoHead(shell, clientTags(manifest, route.clientModules)),
-        ),
+    return appSources(table, shell, manifest, '', {
         framework: (pathname, request) => {
             if (!pathname.startsWith(`${CLIENT_ADDRESS}/`)) return notFound()
             const name = pathname.slice(CLIENT_ADDRESS.length + 1)
@@ -121,16 +129,6 @@ export async function serveBuild(
             )
         },
         published,
-        handlers: await mountHandlers(handlerTable.handlers, options.root),
-    }
-
-    const fetch = (request: Request): Promise<Response> =>
-        answerRequest(app, request)
-
-    // SPREAD RATHER THAN PASSED AS `undefined`. `Bun.serve` with no port reads `PORT` and then
-    // falls back to 3000, and a key present and undefined is not the same as an absent one.
-    return Bun.serve({
-        ...(options.port === undefined ? {} : { port: options.port }),
-        fetch,
+        ...mountedHandlers,
     })
 }

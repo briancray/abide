@@ -21,15 +21,18 @@
 // CLAUDE.md's existence proof, and the reason this file reports a RATIO and the work counters
 // beside it rather than a fraction alone.
 
-import { chromium, type Page } from '@playwright/test'
-
-import { shares } from '../src/engine/shares.ts'
-import { traceOp } from '../src/engine/traceOp.ts'
+import { chromium } from '@playwright/test'
+import { LAYER_RECONCILE } from '../../abide/src/ui/LAYER_NAMES.ts'
 import { THRESHOLDS } from '../src/report/THRESHOLDS.ts'
-import { buildCompiledPage } from './buildCompiledPage.ts'
+import {
+    buildCompiledPage,
+    type CompiledPage,
+    openCompiledPage,
+} from './buildCompiledPage.ts'
+import { median, percent, spread } from './median.ts'
+import { milliseconds } from './milliseconds.ts'
+import { type ArmSample, traceArm } from './traceArm.ts'
 
-// Spelled here rather than imported — see the same note in `nameTheShare.ts`.
-const LAYER_RECONCILE = 'abide.reconcile'
 const LAYER_VANILLA = 'vanilla.build'
 
 // `bun run bench:reorder 2000` — the n is a lever because the PERCEPTION rule needs it. A share is
@@ -183,7 +186,7 @@ const VANILLA_BODIES: Record<string, string> = {
         const nodes = []
         for (let n = scratch.content.firstChild; n !== null; n = n.nextSibling) nodes.push(n)
         for (const node of nodes) list.insertBefore(node, null)
-        const row = { key: ${ROWS} + at, data: null, nodes, scope: new Scope(), at }
+        const row = { key: ${ROWS} + at, data: null, node: nodes[0], scope: new Scope(), at }
         held.set(row.key, row)
         from[at] = -1
         survivor[at] = null
@@ -222,7 +225,7 @@ const VANILLA_BODIES: Record<string, string> = {
     for (let at = 0; at < ${ROWS}; at += 1) {
         const nodes = markupNodes(list, "<li>" + "<span>" + escapeText('new ' + at) + "</span>" + "</li>")
         for (const node of nodes) list.insertBefore(node, null)
-        const row = { key: ${ROWS} + at, data: null, nodes, scope: new Scope(), at }
+        const row = { key: ${ROWS} + at, data: null, node: nodes[0], scope: new Scope(), at }
         held.set(row.key, row)
         from[at] = -1
         survivor[at] = null
@@ -304,7 +307,7 @@ const VANILLA_BODIES: Record<string, string> = {
     }
     list.replaceChildren(...next)`,
     // THE SHAPE PARSED ONCE AND CLONED, which is what the compiler could emit: it already knows
-    // the row's static markup and already addresses the hole (the walk's `blankHere`).
+    // the row's static markup and already addresses the hole (the walk's `runHere`).
     clone: `
     const scratch = document.createElement('template')
     scratch.innerHTML = '<li><span>x</span></li>'
@@ -329,88 +332,6 @@ ${body}
 `
 }
 
-type Sample = {
-    opNanoseconds: number
-    layerNanoseconds: number
-    layerRuns: number
-    share: number | null
-    refusal: string
-    recalcStyle: number
-    layoutCount: number
-}
-
-async function traceArm(
-    page: Page,
-    button: string,
-    layer: string,
-): Promise<Sample> {
-    const trace = await traceOp(page, 'reorder-to-paint', async () => {
-        await page.evaluate(
-            async ([id, layerName]) => {
-                const lane = globalThis as unknown as { __FLUSH__?: () => void }
-                performance.mark('op:start')
-                ;(document.querySelector(`#${id}`) as HTMLElement).click()
-                // THE TURN ENDS INSIDE THE OP. A reactive drain is batched to the end of one, so a
-                // body that clicks and returns is measured before the reconcile has run at all —
-                // and reports a page doing no work as a page doing less of it. The hand-written
-                // arm has nothing to flush, which is itself part of what is being compared.
-                lane.__FLUSH__?.()
-                // THE LAYER'S OWN MEASURE IS THE COMPLETION SIGNAL, rather than a row's text.
-                // Watching text cannot serve an arm whose rows are STATIC — the decomposition
-                // below has one — and it silently waits forever instead of failing. Every arm
-                // here emits a measure when its work is done, so one signal serves them all.
-                await new Promise<void>((resolve) => {
-                    const tick = (): void => {
-                        if (
-                            performance.getEntriesByName(layerName as string)
-                                .length > 0
-                        )
-                            requestAnimationFrame(() => resolve())
-                        else requestAnimationFrame(tick)
-                    }
-                    requestAnimationFrame(tick)
-                })
-                performance.mark('op:end')
-                performance.measure('reorder-to-paint', 'op:start', 'op:end')
-            },
-            [button, layer] as [string, string],
-        )
-    })
-
-    const op = trace.measures.find(
-        (measure) => measure.name === 'reorder-to-paint',
-    )
-    if (!op) throw new Error('no reorder-to-paint measure')
-    let layerNanoseconds = 0
-    let layerRuns = 0
-    for (const measure of trace.measures)
-        if (measure.name === layer) {
-            layerNanoseconds +=
-                measure.endNanoseconds - measure.startNanoseconds
-            layerRuns += 1
-        }
-    let share: number | null = null
-    let refusal = ''
-    try {
-        share = shares(trace, {
-            layer,
-            of: 'reorder-to-paint',
-            threshold: 'frame',
-        }).ceilingCpu
-    } catch (thrown) {
-        refusal = String(thrown).split('\n')[0] ?? ''
-    }
-    return {
-        opNanoseconds: op.endNanoseconds - op.startNanoseconds,
-        layerNanoseconds,
-        layerRuns,
-        share,
-        refusal,
-        recalcStyle: trace.counters.recalcStyle,
-        layoutCount: trace.counters.layout,
-    }
-}
-
 // A WIDER ROW, AND NOTHING ELSE CHANGED. If `make` really is ~90% of the build then the build
 // tracks the row's MARKUP SIZE, because parsing is the only thing in it that scales that way —
 // the Scope, the row record, the keyed entry and the insert loop are per ROW, not per byte. This
@@ -425,151 +346,54 @@ const compiled = await buildCompiledPage(PAGE_SOURCE)
 const compiledStatic = await buildCompiledPage(STATIC_SOURCE)
 const compiledWide = await buildCompiledPage(WIDE_SOURCE)
 
-const byCase: Record<string, Sample[]> = {
-    reverse: [],
-    swap: [],
-    replace: [],
-    append: [],
-    clear: [],
-    'replace (static rows)': [],
-    'replace (hand-written)': [],
-    'replace (innerHTML a row)': [],
-    'replace (parse once, clone)': [],
-    'replace (painter, one shape)': [],
-    'replace (painter, two shapes)': [],
-    'ladder: +insert each node': [],
-    'ladder: +a Scope a row': [],
-    'ladder: +row record and keyed map': [],
-    'ladder: abide make reproduced': [],
-    'replace (wide row)': [],
-    'ONE parse for the whole tree': [],
+function layerMedian(samples: ArmSample[] | undefined): number {
+    return median((samples ?? []).map((sample) => sample.layerNanoseconds))
 }
+
+const byCase: Record<string, ArmSample[]> = {}
+
+// EVERY ARM IN ITS OWN CONTEXT, in this order each run. The hand-written arms carry no `__MOUNT__`,
+// so opening them the compiled way is the same navigation with an inert mount.
+const arms: [string, CompiledPage, string, string][] = []
+for (const which of ['reverse', 'swap', 'replace', 'append', 'clear'])
+    arms.push([which, compiled, which, LAYER_RECONCILE])
+// The same everything but a row carrying six elements instead of one.
+arms.push(['replace (wide row)', compiledWide, 'replace', LAYER_RECONCILE])
+// Compiled by the same call from the same source with one substitution.
+arms.push(['replace (static rows)', compiledStatic, 'replace', LAYER_RECONCILE])
+for (const [label, body] of [
+    ['replace (hand-written)', 'createElement'],
+    ['replace (innerHTML a row)', 'innerHTML'],
+    ['replace (parse once, clone)', 'clone'],
+    ['replace (painter, one shape)', 'painter'],
+    ['replace (painter, two shapes)', 'painterTwo'],
+    ['ladder: +insert each node', 'ladderInsert'],
+    ['ladder: +a Scope a row', 'ladderScope'],
+    ['ladder: +row record and keyed map', 'ladderKeyed'],
+    ['ladder: abide make reproduced', 'ladderFaithful'],
+    ['ONE parse for the whole tree', 'oneParse'],
+] as const)
+    arms.push([
+        label,
+        {
+            markup: VANILLA_MARKUP,
+            script: vanillaScript(VANILLA_BODIES[body] as string),
+        },
+        'replace',
+        LAYER_VANILLA,
+    ])
 
 const browser = await chromium.launch()
 try {
-    for (let run = 0; run < RUNS; run += 1) {
-        for (const which of [
-            'reverse',
-            'swap',
-            'replace',
-            'append',
-            'clear',
-        ] as const) {
-            const context = await browser.newContext()
-            // Armed before the page's script runs — `measureLayer.ts` reads the flag once at
-            // module load, so this must be an init script and not a later `evaluate`.
-            await context.addInitScript(() => {
-                ;(
-                    globalThis as unknown as { __ABIDE_LAYERS__: boolean }
-                ).__ABIDE_LAYERS__ = true
-            })
-            const page = await context.newPage()
-            await page.goto('about:blank')
-            await page.setContent(
-                `<!doctype html><html><body>${compiled.markup}</body></html>`,
-            )
-            await page.addScriptTag({ content: compiled.script })
-            // MOUNTED OUTSIDE THE OP. Hydration is setup here, not the thing being priced, and
-            // `traceOp` clears the marks it left before the op begins.
-            await page.evaluate(() => {
-                ;(
-                    globalThis as unknown as { __MOUNT__?: () => void }
-                ).__MOUNT__?.()
-            })
-            ;(byCase[which] as Sample[]).push(
-                await traceArm(page, which, LAYER_RECONCILE),
-            )
-            await context.close()
+    for (let run = 0; run < RUNS; run += 1)
+        for (const [label, built, button, layer] of arms) {
+            const page = await openCompiledPage(browser, built)
+            byCase[label] ??= []
+            byCase[label].push(await traceArm(page, button, layer))
+            await page.context().close()
         }
-
-        // THE WIDE-ROW ARM, same everything but a row carrying six elements instead of one.
-        {
-            const context = await browser.newContext()
-            await context.addInitScript(() => {
-                ;(
-                    globalThis as unknown as { __ABIDE_LAYERS__: boolean }
-                ).__ABIDE_LAYERS__ = true
-            })
-            const page = await context.newPage()
-            await page.goto('about:blank')
-            await page.setContent(
-                `<!doctype html><html><body>${compiledWide.markup}</body></html>`,
-            )
-            await page.addScriptTag({ content: compiledWide.script })
-            await page.evaluate(() => {
-                ;(
-                    globalThis as unknown as { __MOUNT__?: () => void }
-                ).__MOUNT__?.()
-            })
-            ;(byCase['replace (wide row)'] as Sample[]).push(
-                await traceArm(page, 'replace', LAYER_RECONCILE),
-            )
-            await context.close()
-        }
-
-        // THE STATIC-ROW ARM, compiled by the same call from the same source with one substitution.
-        {
-            const context = await browser.newContext()
-            await context.addInitScript(() => {
-                ;(
-                    globalThis as unknown as { __ABIDE_LAYERS__: boolean }
-                ).__ABIDE_LAYERS__ = true
-            })
-            const page = await context.newPage()
-            await page.goto('about:blank')
-            await page.setContent(
-                `<!doctype html><html><body>${compiledStatic.markup}</body></html>`,
-            )
-            await page.addScriptTag({ content: compiledStatic.script })
-            await page.evaluate(() => {
-                ;(
-                    globalThis as unknown as { __MOUNT__?: () => void }
-                ).__MOUNT__?.()
-            })
-            ;(byCase['replace (static rows)'] as Sample[]).push(
-                await traceArm(page, 'replace', LAYER_RECONCILE),
-            )
-            await context.close()
-        }
-
-        // THE HAND-WRITTEN ARMS, EACH ITS OWN NAVIGATION. `setContent` keeps the JavaScript
-        // context, so sharing a page with the compiled arm would leave `__MOUNT__` on the global
-        // and abide mounted into a document with no anchors.
-        const vanillaArms: [string, string][] = [
-            ['replace (hand-written)', 'createElement'],
-            ['replace (innerHTML a row)', 'innerHTML'],
-            ['replace (parse once, clone)', 'clone'],
-            ['replace (painter, one shape)', 'painter'],
-            ['replace (painter, two shapes)', 'painterTwo'],
-            ['ladder: +insert each node', 'ladderInsert'],
-            ['ladder: +a Scope a row', 'ladderScope'],
-            ['ladder: +row record and keyed map', 'ladderKeyed'],
-            ['ladder: abide make reproduced', 'ladderFaithful'],
-            ['ONE parse for the whole tree', 'oneParse'],
-        ]
-        for (const [label, body] of vanillaArms) {
-            const context = await browser.newContext()
-            const page = await context.newPage()
-            await page.goto('about:blank')
-            await page.setContent(
-                `<!doctype html><html><body>${VANILLA_MARKUP}</body></html>`,
-            )
-            await page.addScriptTag({
-                content: vanillaScript(VANILLA_BODIES[body] as string),
-            })
-            ;(byCase[label] as Sample[]).push(
-                await traceArm(page, 'replace', LAYER_VANILLA),
-            )
-            await context.close()
-        }
-    }
 } finally {
     await browser.close()
-}
-
-function median(values: number[]): number {
-    const sorted = [...values].sort((left, right) => left - right)
-    return sorted[Math.floor(sorted.length / 2)] as number
 }
 
 const HEADINGS: Record<string, string> = {
@@ -595,14 +419,14 @@ const HEADINGS: Record<string, string> = {
 console.log(
     `\nTHE REORDER SHARE — chromium/V8, ${RUNS} runs, ${ROWS} keyed rows\n`,
 )
-for (const [which, samples] of Object.entries(byCase)) {
+for (const [which, heading] of Object.entries(HEADINGS)) {
+    const samples = byCase[which] ?? []
     const taken = samples
         .map((sample) => sample.share)
         .filter((share): share is number => share !== null)
-    const opMilliseconds = median(samples.map((s) => s.opNanoseconds)) / 1e6
-    console.log(`  ${HEADINGS[which]}`)
+    console.log(`  ${heading}`)
     console.log(
-        `    op          median ${opMilliseconds.toFixed(2)} ms   layer ${(median(samples.map((s) => s.layerNanoseconds)) / 1e6).toFixed(2)} ms`,
+        `    op          median ${milliseconds(median(samples.map((s) => s.opNanoseconds)))} ms   layer ${milliseconds(layerMedian(samples))} ms`,
     )
     // THE WORK, BESIDE THE TIME, AND READ FIRST. Identical work counts with a large ms gap is
     // never a difference in the layer being compared — it is a difference in what the two arms
@@ -618,35 +442,20 @@ for (const [which, samples] of Object.entries(byCase)) {
     if (taken.length === 0)
         console.log(`    refused     ${samples[0]?.refusal}`)
     else {
-        const sorted = [...taken].sort((left, right) => left - right)
         console.log(
-            `    share       median ${(median(taken) * 100).toFixed(1)}%   spread ${((sorted[0] as number) * 100).toFixed(1)}% – ${((sorted[sorted.length - 1] as number) * 100).toFixed(1)}%`,
+            `    share       median ${(median(taken) * 100).toFixed(1)}%   spread ${spread(taken, percent)}`,
         )
     }
     console.log('')
 }
 
-const abideBuild = median(
-    (byCase.replace as Sample[]).map((s) => s.layerNanoseconds),
-)
-const handBuild = median(
-    (byCase['replace (hand-written)'] as Sample[]).map(
-        (s) => s.layerNanoseconds,
-    ),
-)
-const parsedPerRow = median(
-    (byCase['replace (innerHTML a row)'] as Sample[]).map(
-        (s) => s.layerNanoseconds,
-    ),
-)
-const clonedOnce = median(
-    (byCase['replace (parse once, clone)'] as Sample[]).map(
-        (s) => s.layerNanoseconds,
-    ),
-)
+const abideBuild = layerMedian(byCase.replace)
+const handBuild = layerMedian(byCase['replace (hand-written)'])
+const parsedPerRow = layerMedian(byCase['replace (innerHTML a row)'])
+const clonedOnce = layerMedian(byCase['replace (parse once, clone)'])
 console.log(
     `  BUILDING ${ROWS} ROWS costs abide ${(abideBuild / handBuild).toFixed(2)}x the hand-written arm ` +
-        `(${(abideBuild / 1e6).toFixed(2)} ms against ${(handBuild / 1e6).toFixed(2)} ms).`,
+        `(${milliseconds(abideBuild)} ms against ${milliseconds(handBuild)} ms).`,
 )
 // READ THE ASK BEFORE THE RATIO. The work counters above are IDENTICAL — one style recalculation
 // and one layout in both arms — and CLAUDE.md is explicit that identical work with a large ms gap
@@ -661,53 +470,37 @@ console.log(
 // exact shape are materialisable in 0.7 ms, so the remaining ~10 ms is reactive construction and
 // teardown rather than anything the document required. That is the fraction to decompose next,
 // and until it is decomposed nobody should name the allocator or the effect as the target.
-const staticBuild = median(
-    (byCase['replace (static rows)'] as Sample[]).map(
-        (s) => s.layerNanoseconds,
-    ),
-)
+const staticBuild = layerMedian(byCase['replace (static rows)'])
 console.log(
-    `  Of that, ${(handBuild / 1e6).toFixed(2)} ms is DOM the document needed either way.`,
+    `  Of that, ${milliseconds(handBuild)} ms is DOM the document needed either way.`,
 )
 // THE SPLIT, AND IT IS THE POINT OF THE STATIC ARM. Three numbers over one op: what the document
 // costs, what abide's row machinery costs with no binding in the row, and what a binding a row
 // adds. Naming the target without this split is the mistake the two no-op reactive-core rewrites
 // made.
-const appendBuild = median(
-    (byCase.append as Sample[]).map((s) => s.layerNanoseconds),
-)
-const clearDrop = median(
-    (byCase.clear as Sample[]).map((s) => s.layerNanoseconds),
-)
+const appendBuild = layerMedian(byCase.append)
+const clearDrop = layerMedian(byCase.clear)
 // BUILD AGAINST TEARDOWN, isolated the same way: an append BUILDS and drops nothing, a clear DROPS
 // and builds nothing, and a replace does both. If the two halves add up to the replace then the
 // split is clean and neither is hiding inside the other.
 console.log(
     `  BUILD AGAINST TEARDOWN, ${ROWS} rows each:\n` +
-        `    build only (append)              ${(appendBuild / 1e6).toFixed(2)} ms\n` +
-        `    teardown only (clear)            ${(clearDrop / 1e6).toFixed(2)} ms\n` +
-        `    both (replace)                   ${(abideBuild / 1e6).toFixed(2)} ms   ` +
-        `against ${((appendBuild + clearDrop) / 1e6).toFixed(2)} ms for the two halves added`,
+        `    build only (append)              ${milliseconds(appendBuild)} ms\n` +
+        `    teardown only (clear)            ${milliseconds(clearDrop)} ms\n` +
+        `    both (replace)                   ${milliseconds(abideBuild)} ms   ` +
+        `against ${milliseconds(appendBuild + clearDrop)} ms for the two halves added`,
 )
 console.log(
     `  THE SPLIT, ${ROWS} rows built:\n` +
-        `    DOM the document needed          ${(handBuild / 1e6).toFixed(2)} ms\n` +
-        `    abide row machinery, no binding  ${(staticBuild / 1e6).toFixed(2)} ms  (${(staticBuild / handBuild).toFixed(1)}x the DOM alone)\n` +
-        `    one binding a row, on top        ${((abideBuild - staticBuild) / 1e6).toFixed(2)} ms  (${(((abideBuild - staticBuild) / abideBuild) * 100).toFixed(0)}% of abide's build)`,
+        `    DOM the document needed          ${milliseconds(handBuild)} ms\n` +
+        `    abide row machinery, no binding  ${milliseconds(staticBuild)} ms  (${(staticBuild / handBuild).toFixed(1)}x the DOM alone)\n` +
+        `    one binding a row, on top        ${milliseconds(abideBuild - staticBuild)} ms  (${(((abideBuild - staticBuild) / abideBuild) * 100).toFixed(0)}% of abide's build)`,
 )
 // WHERE THE ROW BUILD GOES, attributed by three hand-written arms rather than by reading the
 // emitter and guessing. `ls0_make` is `markupNodes(root, "<li>…")` and `parseMarkup` sets
 // `template.innerHTML` — one HTML parse a row. The middle arm is that, alone.
-const painterOne = median(
-    (byCase['replace (painter, one shape)'] as Sample[]).map(
-        (s) => s.layerNanoseconds,
-    ),
-)
-const painterTwo = median(
-    (byCase['replace (painter, two shapes)'] as Sample[]).map(
-        (s) => s.layerNanoseconds,
-    ),
-)
+const painterOne = layerMedian(byCase['replace (painter, one shape)'])
+const painterTwo = layerMedian(byCase['replace (painter, two shapes)'])
 console.log(
     `\n  WHERE THE ${ROWS}-ROW BUILD GOES, per row:\n` +
         `    createElement, inline            ${((handBuild / ROWS) * 1e-3).toFixed(1)} µs\n` +
@@ -734,9 +527,7 @@ const ladder: [string, string][] = [
 let previous = 0
 console.log(`\n  WHAT THE ${ROWS}-ROW BUILD IS MADE OF, per row:`)
 for (const [label, key] of ladder) {
-    const here = median(
-        (byCase[key] as Sample[]).map((s) => s.layerNanoseconds),
-    )
+    const here = layerMedian(byCase[key])
     const perRow = (here / ROWS) * 1e-3
     const delta = previous === 0 ? 0 : ((here - previous) / ROWS) * 1e-3
     console.log(
@@ -751,9 +542,7 @@ for (const [label, key] of ladder) {
 console.log(
     `    ${'abide make+mount (built)'.padEnd(30)} ${((abideBuild / ROWS) * 1e-3).toFixed(1)} µs   (${(abideBuild / previous).toFixed(2)}x the parse path it replaced)`,
 )
-const wideBuild = median(
-    (byCase['replace (wide row)'] as Sample[]).map((s) => s.layerNanoseconds),
-)
+const wideBuild = layerMedian(byCase['replace (wide row)'])
 // THE SCALING CHECK, AND ITS SIGNATURE IS THE WHOLE STORY. One element a row against six: the
 // markup roughly quadruples and everything per-ROW is unchanged. While the emitter PARSED, this
 // read 1.12x over three runs and two list sizes — a cost ~88% fixed per row, which is what
@@ -761,8 +550,8 @@ const wideBuild = median(
 // nodes actually made, which is what construction looks like. A flat reading here again would mean
 // a fixed per-row cost had come back.
 console.log(
-    `\n  DOES THE BUILD TRACK THE MARKUP? one element a row ${(abideBuild / 1e6).toFixed(2)} ms, ` +
-        `six ${(wideBuild / 1e6).toFixed(2)} ms — ${(wideBuild / abideBuild).toFixed(2)}x for ~4x the markup bytes.`,
+    `\n  DOES THE BUILD TRACK THE MARKUP? one element a row ${milliseconds(abideBuild)} ms, ` +
+        `six ${milliseconds(wideBuild)} ms — ${(wideBuild / abideBuild).toFixed(2)}x for ~4x the markup bytes.`,
 )
 console.log(
     `\n  DISPATCH, against inline construction: one shape ${(painterOne / handBuild).toFixed(2)}x, ` +
@@ -771,25 +560,21 @@ console.log(
 )
 // WHAT CONSTRUCTION IS WORTH, against the two arms that bound it: the parse path the emitter used
 // to take, and hand-written `createElement`, which is the floor.
-const oneParse = median(
-    (byCase['ONE parse for the whole tree'] as Sample[]).map(
-        (s) => s.layerNanoseconds,
-    ),
-)
+const oneParse = layerMedian(byCase['ONE parse for the whole tree'])
 // THE QUESTION A ROW RESULT CANNOT ANSWER. Construction wins on a row because the parser's FIXED
 // cost dominates a forty-byte string. A region fill is one parse of the whole tree — so this is
 // whether the same trade holds when the fixed cost is amortised over everything at once.
 console.log(
-    `\n  ONE PARSE OF ${ROWS} ROWS: ${(oneParse / 1e6).toFixed(2)} ms, against ` +
-        `${(handBuild / 1e6).toFixed(2)} ms to CONSTRUCT the same tree ` +
-        `(${(oneParse / handBuild).toFixed(2)}x) — and against ${(parsedPerRow / 1e6).toFixed(2)} ms parsing a row at a time.`,
+    `\n  ONE PARSE OF ${ROWS} ROWS: ${milliseconds(oneParse)} ms, against ` +
+        `${milliseconds(handBuild)} ms to CONSTRUCT the same tree ` +
+        `(${(oneParse / handBuild).toFixed(2)}x) — and against ${milliseconds(parsedPerRow)} ms parsing a row at a time.`,
 )
 console.log(
-    `\n  ROW CONSTRUCTION vs THE PARSE PATH: ${(abideBuild / 1e6).toFixed(2)} ms against ` +
-        `${(parsedPerRow / 1e6).toFixed(2)} ms at ${ROWS} rows — and the hand-written floor is ` +
-        `${(handBuild / 1e6).toFixed(2)} ms, so abide is ${(abideBuild / handBuild).toFixed(2)}x a bare createElement loop ` +
+    `\n  ROW CONSTRUCTION vs THE PARSE PATH: ${milliseconds(abideBuild)} ms against ` +
+        `${milliseconds(parsedPerRow)} ms at ${ROWS} rows — and the hand-written floor is ` +
+        `${milliseconds(handBuild)} ms, so abide is ${(abideBuild / handBuild).toFixed(2)}x a bare createElement loop ` +
         `with the Scope, the row record and the keyed bookkeeping inside it.`,
 )
 console.log(
-    `\n  one frame = ${(THRESHOLDS.frame / 1e6).toFixed(2)} ms. A share is WALL CLOCK between two marks and includes any style or layout the layer forced — it is not the script category.\n`,
+    `\n  one frame = ${milliseconds(THRESHOLDS.frame)} ms. A share is WALL CLOCK between two marks and includes any style or layout the layer forced — it is not the script category.\n`,
 )

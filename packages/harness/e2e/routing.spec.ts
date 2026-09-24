@@ -7,7 +7,7 @@
 // `/about` is served as an EMPTY shell on purpose: it is the direct-hit case, and it proves the
 // same module both hydrates what a server painted and builds what it did not.
 //
-// `node:http` rather than `Bun.serve` for `panel.spec.ts`'s reason: playwright runs on node.
+// `node:http` rather than `Bun.serve`: playwright runs on node.
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -23,6 +23,14 @@ const REPO = new URL('../../../', import.meta.url).pathname
 // reports `ENOENT` writing a page it just created, or `ENOTEMPTY` removing a tree the other is
 // filling. It passed under `--project=harness` alone for as long as it existed, which is the
 // reading CLAUDE.md calls honest and the one that hid this.
+//
+// AND ONE WORKER PER PROJECT, because `fullyParallel` otherwise hands this file's two tests to two
+// workers of the SAME project, each running `beforeAll` into the one tree: one build's `rm` of
+// `.abide/client` lands under the other's precompress (`ENOENT … entry-*.js`). `default` runs the
+// tests in order in one worker — one build per engine, and unlike `serial` a failure does not skip
+// the test after it.
+test.describe.configure({ mode: 'default' })
+
 let APP = ''
 
 const HOME = `<head><title>Home</title><meta name="description" content="the home page"></head>
@@ -153,7 +161,16 @@ console.log(JSON.stringify({
             response.end('404')
             return
         }
-        const body = asked === '/' ? PAINTED : ''
+        // 30.16 — THE ROUTER ASKING, answered the way abide's own server does when no
+        // `middleware` objects: 204 and no body.
+        if (request.headers['abide-navigation'] !== undefined) {
+            response.writeHead(204)
+            response.end()
+            return
+        }
+        // AN ADDRESS THIS SERVER PAINTS NOTHING FOR still gets the page's pair, empty — the
+        // shape `render` writes for a page with no markup (41.9), and the one the router finds.
+        const body = asked === '/' ? PAINTED : '<!--[--><!--]-->'
         response.writeHead(200, { 'content-type': 'text/html' })
         response.end(
             `<!doctype html><html><head>${asked === '/' ? PAINTED_HEAD : ''}<script type="module" src="/entry.js"></script></head><body>${body}</body></html>`,
@@ -240,10 +257,9 @@ test('a navigation swaps the page without reloading the document — 30.7', asyn
 })
 
 // THE DIRECT HIT — a reader who pastes `/about` rather than clicking to it. The server paints
-// nothing for it, so the document arrives with the opening anchor as its only child and the page
-// builds itself from its own module (30.11). This is where `pageRegion` put the close anchor
-// BEFORE the open one and the region could never be filled: the navigation arm above still
-// passed, because it never asked for a page the server had not painted.
+// nothing for it, so the document arrives with the page's pair empty and the page builds itself
+// from its own module (30.11). The navigation arm above cannot catch a region that will not fill
+// here, because it never asks for a page the server had not painted.
 test('a page the server painted nothing for builds itself on a direct hit — 30.11', async ({
     page,
 }) => {

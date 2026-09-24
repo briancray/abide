@@ -6,7 +6,7 @@ covers:
   - `{#if cond}`
   - `{#try}`
 examples:
-  - packages/dogfood/examples/try-region
+  - packages/dogfood/examples/try-region.json
 ---
 
 Three questions a page asks about a value: is it true, has it landed, and did rendering it

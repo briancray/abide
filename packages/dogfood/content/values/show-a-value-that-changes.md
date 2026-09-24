@@ -11,9 +11,9 @@ covers:
   - `Shaped`
   - `Transformer`
 examples:
-  - packages/dogfood/examples/state-owned
-  - packages/dogfood/examples/state-loaded
-  - packages/dogfood/examples/state-transform
+  - packages/dogfood/examples/state-owned.json
+  - packages/dogfood/examples/state-loaded.json
+  - packages/dogfood/examples/state-transform.json
 ---
 
 Editing a profile is the whole of the problem every page has: something is held, something on

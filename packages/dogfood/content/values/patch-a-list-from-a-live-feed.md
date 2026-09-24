@@ -6,9 +6,9 @@ covers:
   - `s.patch`
   - `transform`
 examples:
-  - packages/dogfood/examples/patch-wakes
-  - packages/dogfood/examples/patch-unseen
-  - packages/dogfood/examples/patch-transform
+  - packages/dogfood/examples/patch-wakes.json
+  - packages/dogfood/examples/patch-unseen.json
+  - packages/dogfood/examples/patch-transform.json
 ---
 
 A list arrives once and then changes for the rest of the session. Refetching it per change is a
@@ -63,8 +63,8 @@ Read on: [Channels](let-anything-publish-and-anything-read.md) ·
 
 {% example patch-transform %}
 
-A frame names an id, and finding that id in an array is a scan before it is a write. The Requests
-panel is what the server sent — an **array** — and the page holds an **index**. `transform` is
+A frame names an id, and finding that id in an array is a scan before it is a write. The server
+sends an **array**, and the page holds an **index**. `transform` is
 where the one becomes the other, once, on the way in, so nothing downstream re-indexes per frame.
 
 Doing it here is also what keeps it done once. A reshape written at the call site is a reshape

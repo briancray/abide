@@ -10,9 +10,9 @@ covers:
   - `s[Symbol.asyncIterator]`
   - `ABIDE_MAX_STREAM_BUFFER_SIZE`
 examples:
-  - packages/dogfood/examples/tail-window
-  - packages/dogfood/examples/tail-cursor
-  - packages/dogfood/examples/tail-undo
+  - packages/dogfood/examples/tail-window.json
+  - packages/dogfood/examples/tail-cursor.json
+  - packages/dogfood/examples/tail-undo.json
 ---
 
 A chat pane wants the last fifty messages. A log viewer wants the last five hundred lines. A

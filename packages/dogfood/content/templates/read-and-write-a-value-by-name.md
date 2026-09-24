@@ -14,7 +14,7 @@ covers:
   - `foo()` / `foo.set(v)`
   - `await foo`
 examples:
-  - packages/dogfood/examples/name-path-write
+  - packages/dogfood/examples/name-path-write.json
 ---
 
 Inside a `.abide` file a name bound to a `Reactive` **is** the value. `count` in an expression
@@ -101,7 +101,9 @@ compiler warns on a `??` whose left side could only be missing because nothing h
 
 A member of the `Reactive` itself reaches the `Reactive` rather than the value —
 `contact.busy()`, `contact.error()`, and `onclick={person.refresh}` without the call, which
-hands over `refresh` bound to `person`. Anything else is the value's own. Where the value
+hands over `refresh` bound to `person`. Bound means arguments pass through: a keyed value's
+`refresh` takes a pattern, so handed straight to `onclick` it gets the click's event as one — wrap
+it in an arrow there. Anything else is the value's own. Where the value
 declares a member by the same name the compiler warns, and `contact().error` is how to reach
 the value's.
 

@@ -8,14 +8,17 @@
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
 import { tmpdir } from 'node:os' // bun exposes no temp-directory helper of its own
+import { resolve } from 'node:path' // bun has no path helpers of its own
+import type { Browser, Page } from '@playwright/test'
 import {
+    componentGraph,
     emitClient,
     emitComponent,
-    invokedComponents,
     parseAbide,
     TypeSession,
 } from 'abide/compiler'
 import { render } from 'abide/server'
+import { armLayers } from './armLayers.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 const SHELL = '<!doctype html><html><head></head><body></body></html>'
@@ -44,7 +47,6 @@ export async function buildCompiledPage(
         ]
         const files = named.map(([name, text]) => ({
             name,
-            text,
             path: `${REPO}packages/abide/tests/fixtures/typed/src/${
                 name === 'Page' ? 'browser' : name
             }.abide`,
@@ -55,7 +57,9 @@ export async function buildCompiledPage(
         const reads = await session.readsFor(files)
         // WHICH FILES ARE INVOKED IS THE BUILD'S KNOWLEDGE and already has a name, so a component
         // that itself invokes one is answered here rather than by a flag this file guesses.
-        const invoked = invokedComponents(named.map(([, text]) => text))
+        const { invoked } = componentGraph(files, (specifier, from) =>
+            resolve(from, specifier),
+        )
         let at = 0
         for (const entry of files) {
             const names = reads[at] ?? []
@@ -67,7 +71,7 @@ export async function buildCompiledPage(
             const client = emitClient(
                 entry.file,
                 names,
-                invoked.has(`${entry.name}.abide`) ? 'repeated' : 'none',
+                invoked.has(entry.path) ? 'repeated' : 'none',
             )
             writeFileSync(
                 `${scratch}/${entry.name}.client.ts`,
@@ -91,8 +95,11 @@ export async function buildCompiledPage(
                 `import { flushSync, reactive, watch } from 'abide'`,
                 `import { escapeless, setText } from 'abide/runtime'`,
                 `const g = globalThis`,
-                `g.__MOUNT__ = () => mount(document.body)`,
-                `g.__MOUNT_INTO__ = (root) => mount(root)`,
+                // THE HOST HOLDS THE PAGE AND NOTHING ELSE, so the pair `render` wrote round it is
+                // the host's first and last child.
+                `const pageIn = (host) => ({ open: host.firstChild, close: host.lastChild })`,
+                `g.__MOUNT__ = () => mount(pageIn(document.body))`,
+                `g.__MOUNT_INTO__ = (root) => mount(pageIn(root))`,
                 `g.__FLUSH__ = flushSync`,
                 `g.__LOOP_MOUNT__ = (root) => {`,
                 // THE VALUE IS MADE PER MOUNT, as the emitted one is: `let rows = reactive(...)`
@@ -144,6 +151,29 @@ export async function buildCompiledPage(
         session.close()
         rmSync(scratch, { recursive: true, force: true })
     }
+}
+
+// A FRESH CONTEXT PER PAGE, closed through `page.context()`. `setContent` keeps the JavaScript
+// context, so two pages sharing one would leave the first one's `__MOUNT__` on the global. A page
+// with no `__MOUNT__` — a hand-written arm — is opened the same way and the mount is inert.
+export async function openCompiledPage(
+    browser: Browser,
+    built: CompiledPage,
+): Promise<Page> {
+    const context = await browser.newContext()
+    await armLayers(context)
+    const page = await context.newPage()
+    await page.goto('about:blank')
+    await page.setContent(
+        `<!doctype html><html><body>${built.markup}</body></html>`,
+    )
+    await page.addScriptTag({ content: built.script })
+    // MOUNTED OUTSIDE THE OP. Hydration is setup here, not the thing being priced, and `traceOp`
+    // clears the marks it left before the op begins.
+    await page.evaluate(() => {
+        ;(globalThis as unknown as { __MOUNT__?: () => void }).__MOUNT__?.()
+    })
+    return page
 }
 
 if (import.meta.main) {

@@ -152,7 +152,7 @@ export function blankWork(): Work {
         dataWrites: 0,
         redundantDataWrites: 0,
         listenersBound: 0,
-        // NOT 0 — this lane does not count these three and `null` says so. 44.23, and
+        // NOT 0 — this lane does not count these three and `null` says so. 44.20, and
         // the reason is on the fields in `Work.ts`.
         bindingRuns: null,
         wakes: null,

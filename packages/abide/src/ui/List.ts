@@ -1,5 +1,6 @@
 import { listOf } from '#shared/listOf.ts'
-import { Mismatch, warnMismatch } from './Mismatch.ts'
+import { untracked } from '#shared/reactive/tracking.ts'
+import { HYDRATE_LOG, Mismatch, warnMismatch } from './Mismatch.ts'
 import {
     dropRow,
     makeRow,
@@ -32,14 +33,16 @@ export class List {
     // A row's nodes, BUILT in the document the list stands in — handed over by the reconcile
     // rather than found by the row, which is the one place a row's document is decided.
     make: (document: Document, item: unknown, at: number) => Node[]
-    mount: (nodes: Node[], item: unknown, at: number) => Scope
+    // Handed the row's RECORD rather than its nodes: a row it rebuilds (41.10) writes its new
+    // first node back there.
+    mount: (row: Row, item: unknown, at: number) => Scope
 
     constructor(
         region: Region,
         rows: Row[],
         key: (item: unknown, at: number) => unknown,
         make: (document: Document, item: unknown, at: number) => Node[],
-        mount: (nodes: Node[], item: unknown, at: number) => Scope,
+        mount: (row: Row, item: unknown, at: number) => Scope,
     ) {
         this.region = region
         this.rows = rows
@@ -74,7 +77,7 @@ export function listAt(
     anchored: boolean,
     key: (item: unknown, at: number) => unknown,
     make: (document: Document, item: unknown, at: number) => Node[],
-    mount: (nodes: Node[], item: unknown, at: number) => Scope,
+    mount: (row: Row, item: unknown, at: number) => Scope,
 ): List {
     const list = new List(region, [], key, make, mount)
     list.hydrating = true
@@ -105,7 +108,7 @@ function hydrate(list: List, items: unknown[]): boolean {
     for (let at = 0; at < found.length; at += 1) {
         const item = items[at]
         list.rows.push(
-            rowOf(list, list.key(item, at), item, found[at] as Node[], at),
+            rowOf(list, list.key(item, at), item, found[at] as ChildNode, at),
         )
     }
     if (found.length === items.length) return true
@@ -120,8 +123,19 @@ function hydrate(list: List, items: unknown[]): boolean {
 // 32.15 — AN ARRAY RECONCILES AND AN ASYNC SUBJECT APPENDS AS ITEMS ARRIVE. There is no list to
 // diff an async subject against: the items are not all there, and the arrival of one says nothing
 // about the ones behind it.
+//
+// THE SUBJECT IS READ TRACKED AND THE ROWS ARE BUILT UNTRACKED. `make` evaluates a row's attributes
+// as it builds them, so under the list's watch a row reading `selected` subscribed the WHOLE list to
+// it — one full reconcile per write after any row was built here. A row's own reads are its mount's
+// watches. `listOf` stays outside: spreading an iterable is a read of it.
 export function updateList(list: List, subject: unknown): void {
-    const items = listOf(subject)
+    untracked(settleList, list, listOf(subject))
+}
+
+function settleList(
+    list: List,
+    items: unknown[] | AsyncIterable<unknown>,
+): void {
     const hydrating = list.hydrating
     list.hydrating = false
     if (!Array.isArray(items)) {
@@ -153,7 +167,7 @@ function appendRows(list: List, source: AsyncIterable<unknown>): void {
     // same way rather than letting it escape.
     pump(list, source).catch((thrown: unknown) => {
         if (warnMismatch(thrown)) return
-        console.warn('abide:hydrate', thrown)
+        HYDRATE_LOG.warning(thrown)
     })
 }
 

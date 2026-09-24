@@ -5,11 +5,11 @@ intent: Live state the system publishes and every client reads — presence, pro
 covers:
   - `s.publish`
 examples:
-  - packages/dogfood/examples/channel-shared
-  - packages/dogfood/examples/channel-rooms
-  - packages/dogfood/examples/channel-tail
-  - packages/dogfood/examples/channel-transform
-  - packages/dogfood/examples/channel-identity
+  - packages/dogfood/examples/channel-shared.json
+  - packages/dogfood/examples/channel-rooms.json
+  - packages/dogfood/examples/channel-tail.json
+  - packages/dogfood/examples/channel-transform.json
+  - packages/dogfood/examples/channel-identity.json
 ---
 
 A reactive value is state your code has. A **channel** is state the system keeps sending to everyone
@@ -68,8 +68,8 @@ Read on: [Sockets](../server/keep-a-room-of-callers-in-sync.md) ·
 {% example channel-rooms %}
 
 Give the body a parameter and it is **one channel per key** (11.2), and the args you call it with
-pick one. That one declaration is a different channel per conversation in the address bar, which is
-why changing conversations is changing the URL and nothing else. Each has its own messages, its own
+pick one. That one declaration is a different channel per conversation, which is why changing
+conversations is changing one value and nothing else. Each has its own messages, its own
 history and its own `seq` (9.28), and coming back to one finds it as you left it.
 
 The body answers `undefined`, and that lands (11.63). So a conversation nothing has published to
@@ -185,7 +185,8 @@ A restart drops every ring. History past the ring was always app data behind an 
 ## Channels are process-wide, not per caller
 
 The one thing to get right. A reactive value's default scope is one caller — request-local on a
-server (11.32) — and **a value a socket carries is the opposite** (9.16). State every caller can
+server (11.32) — and **a value a socket carries is the opposite** (9.16), which is why it is built
+with `global: true` (18.18). State every caller can
 reach is what a channel *is*, and `args` is how one caller's channel is told from another's.
 
 So on a server a channel is shared across requests by design. Anything caller-specific belongs

@@ -3,32 +3,60 @@
 // this one, because a dev server that resolves an address differently from the served one is a
 // bug a reader meets in production and never in development.
 //
-// WHAT IS NOT HERE is worth stating, since the rulebook describes a much larger path. There is no
-// `App` (42), no middleware onion (16.15) and no lifecycle hook (37). The request scope they wait
-// on is `requestScope.ts`, and a page and a handler each answer inside one.
+// WHAT WRAPS IT is `createApp.ts`: the `App` whose `fetch` opens the request's one scope (42.6) and
+// runs the app's `middleware` (37.3) around this.
 
-import { firstMatch } from '#shared/matchRoute.ts'
-import type { Seed } from '#shared/reactive/scoping.ts'
+import { escapeAttribute } from '#shared/escapeText.ts'
+import type { Failed } from '#shared/Failed.ts'
+import { DEBUG_META } from '#shared/DEBUG_META.ts'
+import { namedLogger } from '#shared/log.ts'
+import { coversPrefix, firstMatch, partsOf } from '#shared/matchRoute.ts'
+import { MOUNT, mounted } from '#shared/mount.ts'
+import { MOUNT_META } from '#shared/MOUNT_META.ts'
+import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
+import { PRINCIPAL_ADDRESS } from '#shared/principal.ts'
+import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
+import { refuse, notFound as refusedNotFound } from '#shared/refuse.ts'
+import { arrive } from '#shared/route.ts'
 import {
     parseRoutePattern,
     rankBySpecificity,
     type Segment,
 } from '#shared/routePattern.ts'
+import type { Rpc } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
-import { addressOf, answerRpc, type Mounted } from './answerRpc.ts'
+import type { Socket } from '#shared/socket.ts'
+import { answerRpc, type Mounted } from './answerRpc.ts'
+import {
+    answerBlobTagged,
+    answerValue,
+    bodyOf,
+    contentEtag,
+} from './answerValue.ts'
 import {
     ABIDE_ADDRESS,
     CLIENT_ADDRESS,
     CLIENT_ENTRY,
+    HEALTH_ADDRESS,
+    LOGS_ADDRESS,
+    MCP_ADDRESS,
+    OPENAPI_ADDRESS,
     RPC_ADDRESS,
 } from './CLIENT_BUILD.ts'
-import { callerOf, mintCaller } from './callerOf.ts'
 import { chunksOf, type Manifest } from './chunksByModule.ts'
 import { compressStream } from './compressStream.ts'
+import { answerLogs, answerMcp, openApi } from './generatedSurfaces.ts'
+import { reportHealth } from './health.ts'
 import { namesUnder } from './namesUnder.ts'
 import { ENCODINGS, negotiateEncoding } from './negotiateEncoding.ts'
+import { callerFor, resolvePrincipal } from './principal.ts'
 import { type Component, composePage, headAnchor, render } from './render.ts'
-import { earlyCalls, inScopeEachPull } from './requestScope.ts'
+import {
+    adoptRequest,
+    currentRequestScope,
+    inScopeEachPull,
+    writtenStatus,
+} from './requestScope.ts'
 import { seedFor } from './seedBuffer.ts'
 
 // One row of the table the compiler writes to `<out>/server.ts`. The loader is a dynamic import
@@ -44,11 +72,12 @@ export type ServerRoute = {
     clientModules: string[]
 }
 
-export type Ranked = {
-    pattern: string
-    segments: Segment[]
-    load: ServerRoute['load']
-    layouts: ServerRoute['layouts']
+// 35.2 — an error page, and the directory it answers for.
+export type ServerError = Omit<ServerRoute, 'clientModules'>
+
+type RankedError = ServerError & { segments: Segment[] }
+
+type Ranked = RankedError & {
     // The document this route is painted into, with the tags that load the app already in its
     // head (38.23, 38.24) and the preloads for this route's own modules (38.29). One per route and
     // built at boot, so a request pays for none of it.
@@ -59,7 +88,7 @@ export type Ranked = {
 export type PublicFile = { path: string; etag: string }
 
 export type AppSources = {
-    // 30.9's order, which `rankRoutes` is the only way to get.
+    // 30.9's order, which `appSources` is the only way to get.
     routes: Ranked[]
     // Everything under `/__abide` — the bundle both commands answer there (38.21), and the
     // reload client `abide dev` adds beside it (38.18). One lane rather than an asset table plus
@@ -68,73 +97,117 @@ export type AppSources = {
     // 38.19 and 38.20 — a file's address below `public`, to the file itself. From the built
     // output for `abide start` and from the source tree for `abide dev`.
     published: Map<string, PublicFile>
+    // 35.2 — the error pages, deepest directory first, and the document they are painted into.
+    errors: RankedError[]
+    errorDocument: string
     // 16.2 — every handler's address, to what answers it (`mountHandlers`).
     handlers: Map<string, Mounted>
+    // 18.2 — every socket the app mounts, by address, carried over the one mux `App.listen` binds.
+    sockets: Map<string, Socket<unknown, unknown>>
+    // 37.2 — the app's own route, asked where nothing of abide's answers. `bootApp` fills it
+    // from `src/server/app.ts`'s `default`.
+    own: ((request: Request) => Promise<Response | undefined>) | undefined
+    // 20.10 — the `App.fetch` an MCP call is answered through: this app's, which `RPC_SERVER.raw`
+    // is not — that slot holds whichever `App` the process booted last.
+    fetch: (request: Request) => Promise<Response>
 }
+
+// What a command reads or compiles, before `bootApp` adds what the `App` itself supplies.
+export type LoadedSources = Omit<AppSources, 'own' | 'fetch'>
 
 export async function answerRequest(
     app: AppSources,
     request: Request,
 ): Promise<Response> {
+    // ONE SCOPE PER REQUEST (42.6): the one `App.fetch` opened, which every lane below reuses — and
+    // which serves the request a `middleware` rung handed `next` where it made one of its own (37.3).
+    adoptRequest(request)
     const url = new URL(request.url)
     const asked = url.pathname
 
     if (asked.startsWith(`${RPC_ADDRESS}/`))
-        return answerRpc(app.handlers, url, request)
+        return answerRpc(app.handlers, url, request, (failure) =>
+            answerFailure(app, asked, failure),
+        )
+    // 25.1, 26.1, 20.5, 20.9, 36.7 — a surface of abide's own, or a 404 where its `ABIDE_*` has not
+    // opened it.
+    const surface = SURFACES.get(asked)
+    if (surface !== undefined) {
+        const answer = await surface(app, request)
+        if (answer === undefined) return notFound()
+        // 21.4 — an answer about this process, or its surfaces, is never cached.
+        return answerValue(
+            answer,
+            request,
+            new Headers({
+                'content-type': 'application/json',
+                'cache-control': 'no-store',
+            }),
+            200,
+        )
+    }
     if (asked.startsWith(`${ABIDE_ADDRESS}/`))
         return app.framework(asked, request) ?? notFound()
 
     // 36.11 — A PUBLIC FILE IS ITS PATH BELOW THE DIRECTORY, so `/favicon.ico` is answered
-    // before any route is tried. The order is not load-bearing: every command that serves
-    // runs `refuseAddressCollision` (36.13) over the same two trees before it answers
-    // anything, so at run time there can never be a collision to resolve.
+    // before any route is tried. The order is not load-bearing: `abide build` and `abide dev`
+    // run `refuseAddressCollision` (36.13) over the same two trees before anything is served,
+    // so at run time there can never be a collision to resolve.
     const file = app.published.get(asked)
     if (file !== undefined) return publicResponse(request, file)
 
-    const found = firstMatch(app.routes, asked)
-    // 38.22. The client router leaves an unmatched address to the document (30.10), so this
-    // is where that address arrives and there is nothing behind it.
-    if (found === undefined) return notFound()
+    // 15.16 — an address that will not percent-decode names nothing, and is the caller's fault.
+    const parts = partsOf(asked)
+    if (parts === undefined)
+        return answerFailure(
+            app,
+            asked,
+            refuse(400, 'The address is not a valid path.'),
+        )
 
-    // 41.1 — THE IMPORTS ARE THE COMPONENT'S, so they run after `render` has flushed the head
-    // rather than ahead of the whole response. The first request for a page after boot pays the
-    // import, and every fetch the head starts is under way while it does.
-    //
-    // THE PAGE AND ITS CHAIN, IN ONE ROUND OF WAITING. A nested `Promise.all` rather than one
-    // flat array with the page spliced onto the head: the two settle together either way, and the
-    // flat form's element type is the union of the two, so reading a head and a tail back off it
-    // took an `as` per read. This is the same concurrency with the types carrying it.
-    //
-    // STARTED WHEN `render` ASKS, not here. Started here, a reader who hung up before the stream
-    // was pulled left a rejection nothing would ever await.
-    const bound = async (): Promise<unknown> => {
-        const [loadedPage, loadedLayouts] = await Promise.all([
-            found.route.load(),
-            Promise.all(found.route.layouts.map((layout) => layout())),
-        ])
-        const layouts: Component[] = []
-        for (const module of loadedLayouts) layouts.push(module.default)
-        // 35.3 — BOUND HERE, because `render` takes a component that already has its props.
-        // 33.4 — a prop is an ACCESSOR, which is the contract `renderComponent` renders a child
-        // under and the one the client router mounts a page under; the params are the record
-        // `matchRoute` hands the client for this same address.
-        return composePage(layouts, loadedPage.default, {
-            params: () => found.params,
+    const found = firstMatch(app.routes, parts)
+    // 38.22. The client router leaves an unmatched address to the document (30.10), so this
+    // is where that address arrives — and where the app's own route is asked before the 404.
+    if (found === undefined)
+        return (
+            (await app.own?.(request)) ??
+            (await answerFailure(
+                app,
+                asked,
+                refusedNotFound({ path: asked, method: request.method }),
+            ))
+        )
+
+    // 30.16 — THE CLIENT ROUTER ASKING, not a reader loading the page. `middleware` has already run
+    // over this request by the time it gets here, and it is what the router came for: a refusal
+    // or a redirect it wrote. `stamp` puts that written status over this 204, and the router
+    // carries the page's own markup, so there is nothing to render.
+    if (request.headers.has(NAVIGATION_HEADER))
+        return new Response(null, {
+            status: 204,
+            headers: { 'cache-control': 'no-store' },
         })
-    }
+
+    // 33.4 — a prop is an ACCESSOR, which is the contract `renderComponent` renders a child under
+    // and the one the client router mounts a page under; the params are the record `firstMatch`
+    // hands the client for this same address.
+    const bound = boundPage(found.route, { params: () => found.params })
     // 38.30 — `vary` WHETHER OR NOT THIS ONE IS COMPRESSED: the document is negotiated, and a cache
     // that stored the identity answer for a reader who sent no `accept-encoding` must not hand it
     // to one who did, nor the reverse.
     // 11.32 — the page renders in a scope of its own, so what its values hold is this request's —
     // and 41.13, every call it makes is left for the browser's own call to be answered from.
-    const headers: Record<string, string> = { ...DOCUMENT_HEADERS }
-    let caller = callerOf(request)
-    if (caller === undefined) {
-        const minted = mintCaller()
-        caller = minted.caller
-        headers['set-cookie'] = minted.cookie
-    }
-    const chunks = inScopeEachPull(request, reportFor(caller), () =>
+    const headers = new Headers(DOCUMENT_HEADERS)
+    // 26.5 — the caller the seed buffer is keyed by, minted where the browser carries none: the same
+    // one `principal.caller` reads for the rest of the request.
+    const caller = callerFor()
+    // 23.1 — WHERE THIS PAGE IS, for its setup to read, in the request's own instances (11.32).
+    arrive(request.url, found.route.pattern, found.params)
+    // 21.10, 22.9 — WHAT WAS WRITTEN THROUGH `response` BEFORE THE HEAD WENT OUT: a `middleware`
+    // rung's, in the scope `App.fetch` opened. A write the render makes lands after the headers
+    // have been sent, and 26.21 is the clause that refuses the one write that would matter.
+    const status = writtenStatus()
+    const chunks = inScopeEachPull({ seed: seedFor(caller), calls: [] }, () =>
         render(bound, found.route.document),
     )
     const encoding = negotiateEncoding(
@@ -142,53 +215,123 @@ export async function answerRequest(
         ENCODINGS,
     )
     if (encoding === undefined)
-        return new Response(streamOf(chunks), { headers })
-    headers['content-encoding'] = encoding
-    return new Response(compressStream(chunks, encoding), { headers })
+        return new Response(bodyOf(chunks, 'bytes'), { status, headers })
+    headers.set('content-encoding', encoding)
+    return new Response(compressStream(chunks, encoding), { status, headers })
 }
 
-// What a page's render reports each call into: the seed buffer (41.13), and — where the handler is
-// mounted — the request the browser will make for it, for the early-call script (41.21). Once per
-// request, as the browser's `Rpc` makes it once, and the seed buffer is what says which is the once.
-function reportFor(caller: string): Seed {
-    const seed = seedFor(caller)
-    return (rpc, args, reached) => {
-        if (!seed(rpc, args, reached)) return
-        const mount = addressOf(rpc)
-        const calls = earlyCalls()
-        if (mount === undefined || calls === undefined) return
-        calls.push(
-            rpcRequest(
-                mount.method,
-                mount.address,
-                args as Record<string, unknown> | undefined,
-            ),
-        )
+// 41.1 — THE IMPORTS ARE THE COMPONENT'S, so they run after `render` has flushed the head
+// rather than ahead of the whole response. The first request for a page after boot pays the
+// import, and every fetch the head starts is under way while it does.
+//
+// THE PAGE AND ITS CHAIN, IN ONE ROUND OF WAITING. A nested `Promise.all` rather than one
+// flat array with the page spliced onto the head: the two settle together either way, and the
+// flat form's element type is the union of the two, so reading a head and a tail back off it
+// took an `as` per read. This is the same concurrency with the types carrying it.
+//
+// STARTED WHEN `render` ASKS, not here. Started here, a reader who hung up before the stream
+// was pulled left a rejection nothing would ever await.
+//
+// 35.3 — BOUND HERE, because `render` takes a component that already has its props. An error page
+// is bound the same way, with the failure where a page has its params.
+function boundPage(
+    page: Pick<Ranked, 'load' | 'layouts'>,
+    props: Record<string, () => unknown>,
+): () => Promise<unknown> {
+    return async () => {
+        const [loadedPage, loadedLayouts] = await Promise.all([
+            page.load(),
+            Promise.all(page.layouts.map((layout) => layout())),
+        ])
+        const layouts: Component[] = []
+        for (const module of loadedLayouts) layouts.push(module.default)
+        return composePage(layouts, loadedPage.default, props)
     }
 }
 
+// THE ADDRESSES ABIDE ANSWERS ITSELF, looked up once rather than asked in turn: each to its value,
+// a `Response` of its own, or `undefined` where its `ABIDE_*` has not opened it.
+const SURFACES = new Map<
+    string,
+    (app: AppSources, request: Request) => unknown
+>([
+    [HEALTH_ADDRESS, reportHealth],
+    [PRINCIPAL_ADDRESS, resolvePrincipal],
+    [OPENAPI_ADDRESS, (app) => openApi(app.handlers)],
+    [
+        MCP_ADDRESS,
+        (app, request) => answerMcp(app.handlers, request, app.fetch),
+    ],
+    [LOGS_ADDRESS, (_app, request) => answerLogs(request)],
+])
+
+// What a call made in a page's render reports into: the seed buffer (41.13), and — where the handler
+// is mounted — the request the browser will make for it, for the early-call script (41.21). Once per
+// render, as the browser's `Rpc` makes it once, and the seed buffer is what says which is the once.
+RPC_SERVER.reached = (rpc, args, reached) => {
+    const page = currentRequestScope()?.page
+    if (page === undefined || !page.seed(rpc, args, reached)) return
+    // 16.11 — the address the browser's own call is made at, stamped under the mount by
+    // `mountHandlers` — and `undefined` on a handler nothing mounted.
+    const { address, method } = rpc as Rpc<unknown, unknown>
+    if (address === undefined) return
+    page.calls.push(
+        rpcRequest(
+            method,
+            address,
+            args as Record<string, unknown> | undefined,
+        ),
+    )
+}
+
+// 21.3, 21.6.
 const DOCUMENT_HEADERS = {
     'content-type': 'text/html; charset=utf-8',
+    'cache-control': 'private, no-store',
+    'referrer-policy': 'strict-origin-when-cross-origin',
     vary: 'accept-encoding',
 }
 
+// What the compiler writes to `<out>/server.ts` — read off disk by `abide start` and out of memory
+// by `abide dev`.
+export type ServerTable = { routes: ServerRoute[]; errors: ServerError[] }
+
+// THE PARTS BOTH COMMANDS BUILD ALIKE, off the table, the shell and the bundle's manifest. What
+// differs between them is passed in: the `framework` lane, and `head` — `abide dev`'s reload client
+// (38.18), after the app's own tags.
+//
 // 30.9 — MOST SPECIFIC FIRST, ranked off the table rather than in it. The ordering IS the client
 // router's own: both seams sort through `rankBySpecificity` and resolve through `firstMatch`, so
-// "the two cannot resolve one address differently" is a grep rather than a promise.
-export function rankRoutes(
-    table: ServerRoute[],
-    documentOf: (route: ServerRoute) => string,
-): Ranked[] {
+// "the two cannot resolve one address differently" is a grep rather than a promise. 35.2 — the
+// error pages deepest directory first, so the nearest answers.
+export function appSources(
+    table: ServerTable,
+    shell: string,
+    manifest: Manifest,
+    head: string,
+    parts: Pick<AppSources, 'framework' | 'published' | 'handlers' | 'sockets'>,
+): LoadedSources {
+    const documentOf = (modules: string[]): string =>
+        intoHead(shell, clientTags(manifest, modules) + head)
     const routes: Ranked[] = []
-    for (const route of table)
+    for (const route of table.routes)
         routes.push({
             pattern: route.pattern,
             segments: parseRoutePattern(route.pattern),
             load: route.load,
             layouts: route.layouts,
-            document: documentOf(route),
+            document: documentOf(route.clientModules),
         })
-    return rankBySpecificity(routes)
+    const errors: RankedError[] = []
+    for (const error of table.errors)
+        errors.push({ ...error, segments: parseRoutePattern(error.pattern) })
+    errors.sort((a, b) => b.segments.length - a.segments.length)
+    return {
+        routes: rankBySpecificity(routes),
+        errors,
+        errorDocument: documentOf([]),
+        ...parts,
+    }
 }
 
 // THE TAGS THAT LOAD THE APP — 38.23, and 38.24 for the stylesheet beside it. An app does not
@@ -213,19 +356,29 @@ export function rankRoutes(
 // `<script>` at a 404.
 export function clientTags(manifest: Manifest, modules: string[]): string {
     if (manifest.entry === undefined) return ''
+    // 28.10 — `DEBUG`, through the document rather than the bundle, where the server has one.
+    const debug = process.env.DEBUG
     let tags =
+        debug === undefined || debug === ''
+            ? ''
+            : `<meta name="${DEBUG_META}" content="${escapeAttribute(debug)}">`
+    // 16.11 — the mount the browser resolves every address against, the root's `''` included: a
+    // lookup that finds no tag has walked the whole document to say so.
+    tags += `<meta name="${MOUNT_META}" content="${escapeAttribute(MOUNT.current())}">`
+    const client = mounted(CLIENT_ADDRESS)
+    tags +=
         manifest.stylesheet === undefined
             ? ''
-            : `<link rel="stylesheet" href="${CLIENT_ADDRESS}/${manifest.stylesheet}">`
-    tags += `<script type="module" src="${CLIENT_ADDRESS}/${manifest.entry}"></script>`
+            : `<link rel="stylesheet" href="${client}/${manifest.stylesheet}">`
+    tags += `<script type="module" src="${client}/${manifest.entry}"></script>`
     for (const chunk of chunksOf([`${CLIENT_ENTRY}.ts`, ...modules], manifest))
-        tags += `<link rel="modulepreload" href="${CLIENT_ADDRESS}/${chunk}">`
+        tags += `<link rel="modulepreload" href="${client}/${chunk}">`
     return tags
 }
 
 // The tags, at the head anchor `render` uses — so a shell with no `</head>` puts them where its
 // head content goes rather than inside the body.
-export function intoHead(shell: string, tags: string): string {
+function intoHead(shell: string, tags: string): string {
     const at = headAnchor(shell)
     return shell.slice(0, at) + tags + shell.slice(at)
 }
@@ -243,17 +396,17 @@ export async function publicFilesUnder(
     const files = new Map<string, PublicFile>()
     // THE READS OVERLAP. They are independent, and `abide dev` runs this again on every
     // reload rather than once at boot — so it is reload latency an author waits on, not just
-    // a boot cost. The hashing below is unchanged; only the reads are asked for at once.
-    const read = await Promise.all(
-        names.map((name) => Bun.file(`${root}/${name}`).bytes()),
+    // a boot cost. Each is hashed as it lands, so no more than the reads in flight are held.
+    const etags = await Promise.all(
+        names.map(async (name) =>
+            contentEtag(await Bun.file(`${root}/${name}`).bytes()),
+        ),
     )
     for (let index = 0; index < names.length; index += 1) {
         const name = names[index] as string
-        // Non-cryptographic, and that is the right tool: an etag answers "are these the same
-        // bytes", not "could somebody forge these bytes".
         files.set(`/${name}`, {
             path: `${root}/${name}`,
-            etag: `"${Bun.hash(read[index] as Uint8Array).toString(16)}"`,
+            etag: etags[index] as string,
         })
     }
     return files
@@ -263,38 +416,63 @@ export function notFound(): Response {
     return new Response('not found', { status: 404 })
 }
 
-// 35.5's generator, as a body, pulled a chunk at a time rather than collected — the shape 41.1's
-// early head needs. A reader who hangs up returns the generator, which stops the render in its scope
-// (`inScopeEachPull`), as `compressStream` does on its path.
-function streamOf(
-    chunks: AsyncGenerator<Uint8Array>,
-): ReadableStream<Uint8Array> {
-    return new ReadableStream<Uint8Array>({
-        async pull(controller) {
-            const next = await chunks.next()
-            if (next.done === true) controller.close()
-            else controller.enqueue(next.value)
-        },
-        cancel() {
-            void chunks.return(undefined)
-        },
-    })
-}
-
+// 21.14 and 16.36's range, answered off the etag read at boot, before a byte is read. 36.12 and
+// 36.14 — the bytes as authored, and the content-type off the extension, which is what `Bun.file`
+// already derives rather than a table kept here.
 function publicResponse(request: Request, file: PublicFile): Response {
-    // 21.14 — the conditional request, answered before a byte is read.
-    if (request.headers.get('if-none-match') === file.etag)
-        return new Response(null, {
-            status: 304,
-            headers: { etag: file.etag, ...PUBLIC_HEADERS },
-        })
-    // 36.12 and 36.14 — the bytes as authored, and the content-type off the extension, which is
-    // what `Bun.file` already derives rather than a table kept here.
-    return new Response(Bun.file(file.path), {
-        headers: { etag: file.etag, ...PUBLIC_HEADERS },
-    })
+    return answerBlobTagged(
+        Bun.file(file.path),
+        file.etag,
+        request,
+        // 21.12. Revalidated every time and cached in between, which is what an unhashed name
+        // earns — the etag is what makes that one conditional request rather than one transfer.
+        new Headers({ 'cache-control': 'public, max-age=0, must-revalidate' }),
+        200,
+    )
 }
 
-// 21.12. Revalidated every time and cached in between, which is what an unhashed name earns — the
-// etag is what makes that one conditional request rather than one transfer.
-const PUBLIC_HEADERS = { 'cache-control': 'public, max-age=0, must-revalidate' }
+// 35.2 — THE ERROR PAGES FOR `pathname`, nearest first: every one whose directory is a prefix of the
+// address, each segment meaning what it means in a route.
+function errorsFor(errors: RankedError[], pathname: string): RankedError[] {
+    // 15.16's address has no parts to be nearest to, so the root's page paints it.
+    const parts = partsOf(pathname) ?? []
+    const found: RankedError[] = []
+    for (const error of errors)
+        if (coversPrefix(error.segments, parts)) found.push(error)
+    return found
+}
+
+const RENDER_LOG = namedLogger('abide:render')
+
+// 35.2, 35.3 — A REFUSAL, PAINTED BY THE NEAREST ERROR PAGE at the refusal's own status. The page is
+// rendered whole before a byte is answered, so one that fails is not half-sent: it escalates to the
+// next ancestor, and says so on `abide:render`. With none left, the refusal is answered as text.
+async function answerFailure(
+    app: AppSources,
+    pathname: string,
+    failure: Failed<string, unknown>,
+): Promise<Response> {
+    const headers = new Headers(DOCUMENT_HEADERS)
+    const status = failure.status
+    for (const error of errorsFor(app.errors, pathname)) {
+        try {
+            const bound = boundPage(error, { failure: () => failure })
+            const chunks: Uint8Array[] = []
+            for await (const chunk of inScopeEachPull(undefined, () =>
+                render(bound, app.errorDocument),
+            ))
+                chunks.push(chunk)
+            return new Response(Bun.concatArrayBuffers(chunks), {
+                status,
+                headers,
+            })
+        } catch (thrown) {
+            RENDER_LOG.warning(
+                `the error page for ${error.pattern} failed, so the next one answers`,
+                thrown,
+            )
+        }
+    }
+    headers.set('content-type', 'text/plain; charset=utf-8')
+    return new Response(failure.message, { status, headers })
+}

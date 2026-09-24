@@ -1,10 +1,10 @@
 import { LAYER_RECONCILE } from './LAYER_NAMES.ts'
 import type { List } from './List.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
+import { HYDRATE_LOG } from './Mismatch.ts'
 import { moveNode } from './moveNode.ts'
-import { ROW_OPEN } from './REGION.ts'
-import type { Region } from './regions.ts'
-import type { Scope } from './Scope.ts'
+import { closeOf, type Region, removeUntil } from './regions.ts'
+import { Scope } from './Scope.ts'
 
 // 41.8 — a KEYED list, reconciled by moving the nodes that are already there rather than by
 // rebuilding them. A rebuild produces the right screen and the wrong document: focus, selection,
@@ -23,9 +23,12 @@ export type Row = {
     // stale and the row is remade. Identity is the signal here, the inverse of the case where a
     // freshly built wrapper defeats one.
     data: unknown
-    // EVERY node of the row, in order. One element for the common single-root body; the row's
-    // anchor and its whole content for a body with several.
-    nodes: Node[]
+    // THE ROW'S FIRST NODE: its element where the body has one, its `ROW_OPEN` anchor where it has
+    // several. An anchored row is every sibling from here to the next row's anchor or the region's
+    // close (`closeOf`) — a RANGE, as a region is its pair, and not the nodes `make` handed back: a
+    // region at the row's top level fills AFTER the row is made, and a row held as that array
+    // moved without the arm's content and left it standing after whichever row came next.
+    node: ChildNode
     // The row's bindings, stopped when it leaves.
     scope: Scope
     // Where this row stood in the list the document currently shows. The placement walk needs
@@ -36,38 +39,66 @@ export type Row = {
     at: number
 }
 
-// 41.10 — a row that cannot be hydrated is REBUILT, and a row IS its nodes: the reconcile moves
-// and removes exactly what this array holds, so a replacement has to land in the ARRAY as well as
-// in the document or the row leaves half of itself behind on the first reorder.
-export function replaceNodes(nodes: Node[], next: Node[]): void {
-    const first = nodes[0] ?? null
-    const parent = first === null ? null : first.parentNode
+// 41.10 — a row that cannot be hydrated is REBUILT, in place: the fresh nodes go where the row
+// stood and the row's record takes the new first node, so the reconcile still reaches all of it.
+export function replaceRow(row: Row, next: Node[]): void {
+    const first = row.node
+    const parent = first.parentNode
     if (parent === null) return
-    for (const node of next) parent.insertBefore(node, first as ChildNode)
-    for (const node of nodes) (node as ChildNode).remove()
-    nodes.length = 0
-    for (const node of next) nodes.push(node)
+    for (const node of next) parent.insertBefore(node, first)
+    removeRow(first)
+    row.node = next[0] as ChildNode
 }
 
-export function rowsIn(region: Region, anchored: boolean): Node[][] {
-    const found: Node[][] = []
-    let current: Node[] | undefined
+// AN ANCHOR IS A COMMENT AND A SINGLE ROOT IS AN ELEMENT, so the row's first node says which kind
+// of row it is and no flag is carried beside it.
+function removeRow(first: ChildNode): void {
+    if (first.nodeType !== 8) {
+        first.remove()
+        return
+    }
+    removeUntil(first, closeOf(first, true))
+}
+
+// TO THE LAST NODE RATHER THAN TO THE ROW'S END: a row moved before its own end puts each node it
+// moves between its tail and the end, so the sibling after the tail is the row's own anchor again
+// by the time the walk reaches it.
+function moveRow(parent: Node, first: ChildNode, before: Node | null): void {
+    if (first.nodeType !== 8) {
+        moveNode(parent, first, before)
+        return
+    }
+    const end = closeOf(first, true)
+    const last = end === null ? parent.lastChild : end.previousSibling
+    let node = first
+    for (;;) {
+        const next = node.nextSibling as ChildNode
+        moveNode(parent, node, before)
+        if (node === last) return
+        node = next
+    }
+}
+
+// THE ROWS THE SERVER PAINTED, by their first nodes: each element between the region's anchors,
+// or each `ROW_OPEN` standing at the region's own depth — a `{#for}` nested in a row's arm carries
+// anchors of its own, one depth down.
+export function rowsIn(region: Region, anchored: boolean): ChildNode[] {
+    const found: ChildNode[] = []
+    if (anchored) {
+        for (
+            let node = closeOf(region.open, true);
+            node !== null && node !== region.close;
+            node = closeOf(node, true)
+        )
+            found.push(node)
+        return found
+    }
     for (
         let node = region.open.nextSibling;
         node !== null && node !== region.close;
         node = node.nextSibling
-    ) {
-        if (!anchored) {
-            if (node.nodeType === 1) found.push([node])
-            continue
-        }
-        if (node.nodeType === 8 && (node as Comment).data === ROW_OPEN) {
-            current = [node]
-            found.push(current)
-            continue
-        }
-        current?.push(node)
-    }
+    )
+        if (node.nodeType === 1) found.push(node)
     return found
 }
 
@@ -188,21 +219,16 @@ export function reconcile(list: List, data: unknown[]): void {
         if (existing === undefined || existing === null) {
             const row = makeRow(list, parent, anchor, keys[at], data[at], at)
             next[at] = row
-            anchor = row.nodes[0] as ChildNode
+            anchor = row.node
             continue
         }
-        // In the run that is already ordered: its nodes are where they belong relative to
-        // everything after it, so touching them would be a move that changes nothing — and
-        // `insertBefore` on a node already in position still counts as a move in every engine's
-        // records, which is what makes "nodes moved" mean anything.
-        // `moveNode` RATHER THAN `insertBefore`: these nodes are already in the document, and
-        // taking one out to put it back is what reloads an `<iframe>` and pauses a `<video>`.
-        // 32.30 — a survivor is moved, and the move does not take its nodes out of the document.
+        // In the run that is already ordered: untouched, since a move there changes nothing and
+        // still counts as one. 32.30 — a survivor is moved without leaving the document (`moveNode`).
         if (keep !== null && keep[at] !== 1)
-            for (const node of existing.nodes) moveNode(parent, node, anchor)
+            moveRow(parent, existing.node, anchor)
         existing.at = at
         next[at] = existing
-        anchor = existing.nodes[0] as ChildNode
+        anchor = existing.node
     }
 
     // What the new order did not ask for.
@@ -222,25 +248,32 @@ export function makeRow(
 ): Row {
     const nodes = list.make(parent.ownerDocument as Document, item, at)
     for (const node of nodes) parent.insertBefore(node, before)
-    return rowOf(list, key, item, nodes, at)
+    return rowOf(list, key, item, nodes[0] as ChildNode, at)
 }
 
+// WHAT A ROW'S SCOPE IS UNTIL ITS MOUNT RETURNS — a `Scope` rather than `undefined`, so the field
+// holds one class for the record's whole life.
+const UNMOUNTED = new Scope()
+
 // A row over nodes already in the document, mounted. The one place a row's record is written, so
-// its shape is fixed once for every path that makes one — a made row and a hydrated one alike.
+// its shape is fixed once for every path that makes one — a made row and a hydrated one alike. The
+// mount is handed the RECORD, because a row it rebuilds (41.10) has a new first node to write back.
 export function rowOf(
     list: List,
     key: unknown,
     item: unknown,
-    nodes: Node[],
+    node: ChildNode,
     at: number,
 ): Row {
-    return { key, data: item, nodes, scope: list.mount(nodes, item, at), at }
+    const row: Row = { key, data: item, node, scope: UNMOUNTED, at }
+    row.scope = list.mount(row, item, at)
+    return row
 }
 
 // Stopped before removal, so a binding cannot wake over a node that is already gone.
 export function dropRow(row: Row): void {
     row.scope.stop()
-    for (const node of row.nodes) (node as ChildNode).remove()
+    removeRow(row.node)
 }
 
 // 41.15 — ONCE FOR THE BLOCK, not once a reconcile. A repeated key is a property of the `by`
@@ -255,8 +288,7 @@ export function dropRow(row: Row): void {
 function warnRepeatedKey(list: List): void {
     if (list.warned) return
     list.warned = true
-    console.warn(
-        'abide:hydrate',
+    HYDRATE_LOG.warning(
         'abide: a {#for} key is repeated in this list, so the last row under it is the one kept and the rows it shadows are dropped. RULEBOOK 41.14.',
     )
 }

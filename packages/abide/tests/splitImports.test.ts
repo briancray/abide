@@ -27,7 +27,6 @@ test('an import inside a string is not one', () => {
 // `reScanTemplateToken`; the import below stays in the component BODY, where `export default
 // function Component() { import { a } from 'b' }` does not parse at all.
 test('an import after a template literal still hoists', () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: the substitution IS the subject.
     const r = splitImports("const g = `hi ${who}`\nimport { a } from 'b'\n")
     expect(r.imports).toBe("import { a } from 'b'\n")
     expect(r.body).not.toContain('import {')

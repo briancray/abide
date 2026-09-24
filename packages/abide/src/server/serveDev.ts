@@ -3,9 +3,9 @@
 // every reload, so a browser holding a connection open meets a server that is still there when
 // the app behind it has been thrown away and rebuilt.
 //
-// THE COMPILE IS HERE AND THE APP IS THERE. One `TypeSession` then serves every reload, where a
-// compiler imported into each new worker cost 4.5 s a save against the 80 ms the compile takes —
-// and the clause asks for the APP to be in the worker, which the compiler is not.
+// THE COMPILE IS HERE AND THE APP IS THERE. The compiler stays loaded on this thread across every
+// reload, where a compiler imported into each new worker cost 4.5 s a save against the 80 ms the
+// compile takes — and the clause asks for the APP to be in the worker, which the compiler is not.
 //
 // 38.16 — A RELOAD IS A NEW WORKER, not a module cache to invalidate. An app leaves things behind
 // that no invalidation reaches — a timer, a `share`, a module that ran once — and a worker is the
@@ -15,7 +15,11 @@
 
 import { watch } from 'node:fs' // bun exposes no file watcher of its own
 
-import { compileApp } from '#compiler/compileApp.ts'
+import {
+    type AppChecker,
+    compileApp,
+    openChecker,
+} from '#compiler/compileApp.ts'
 import { DEV_ADDRESS } from './CLIENT_BUILD.ts'
 
 export type DevOptions = {
@@ -46,6 +50,8 @@ type Answer = {
 // workers for one keystroke.
 const SETTLE_MILLISECONDS = 25
 
+type Compiled = { modules: Map<string, string>; failure: string }
+
 export async function serveDev(
     options: DevOptions,
 ): Promise<Bun.Server<undefined>> {
@@ -60,17 +66,69 @@ export async function serveDev(
     // tab hangs until they give up. It waits here instead.
     const queued: InFlight[] = []
 
-    // The worker, compiled and answering. A compile that threw is sent IN rather than thrown
-    // here: 38.4 keeps the app up, so what a failure changes is what the worker serves.
-    async function open(): Promise<void> {
-        let modules = new Map<string, string>()
-        let failure = ''
+    // ONE COMPILE AT A TIME, and the worker is started from the LAST one. A save landing while a
+    // compile runs marks it stale rather than starting a second: two in flight each started a
+    // worker, the one finishing second overwrote the first without terminating it, and where the
+    // older compile finished last it was the one that served.
+    let compiling: Promise<void> | undefined
+    let stale = false
+
+    // THE CHECKER IS KEPT ACROSS SAVES, and what the watcher saw move since the last compile is
+    // what it is told. On the docs app a save reached the next answer in 182 ms opening a checker
+    // per compile and 86 ms keeping one; kept, it re-reads only what moved — which is only right while it is TOLD what moved, so every path
+    // the watcher names lands here and `movedSomewhere` is the event that named none.
+    let checker: AppChecker | undefined
+    const moved = new Set<string>()
+    let movedSomewhere = false
+
+    async function reopen(): Promise<void> {
+        let compiled: Compiled
+        do {
+            stale = false
+            compiled = await compile()
+        } while (stale)
+        compiling = undefined
+        open(compiled)
+    }
+
+    // A compile that threw is sent IN rather than thrown here: 38.4 keeps the app up, so what a
+    // failure changes is what the worker serves.
+    //
+    // A THROW DROPS THE CHECKER. Most are an author's typo, but the checker's own process dying is
+    // one too, and a session nobody can tell apart from a dead one is not one to keep.
+    async function compile(): Promise<Compiled> {
         try {
-            modules = (await compileApp(options.root)).modules
+            if (checker !== undefined && !checker.isCurrent())
+                await closeChecker()
+            if (checker === undefined) checker = await openChecker(options.root)
+            else checker.session.edited(movedSomewhere ? undefined : [...moved])
+            moved.clear()
+            movedSomewhere = false
+            return {
+                modules: (await compileApp(options.root, checker)).modules,
+                failure: '',
+            }
         } catch (thrown) {
-            failure = thrown instanceof Error ? thrown.message : String(thrown)
+            await closeChecker()
+            const failure =
+                thrown instanceof Error ? thrown.message : String(thrown)
             console.error(`abide dev: ${failure}`)
+            return { modules: new Map(), failure }
         }
+    }
+
+    async function closeChecker(): Promise<void> {
+        const closing = checker
+        checker = undefined
+        try {
+            await closing?.close()
+        } catch {
+            // Already gone, which is what closing it was for.
+        }
+    }
+
+    // The worker, compiled and answering.
+    function open({ modules, failure }: Compiled): void {
         const started = new Worker(
             new URL('./devWorker.ts', import.meta.url).href,
         )
@@ -114,10 +172,12 @@ export async function serveDev(
         sockets.clear()
         for (const again of inFlight.values()) queued.push(again)
         inFlight.clear()
-        void open()
+        if (compiling !== undefined) stale = true
+        else compiling = reopen()
     }
 
-    await open()
+    compiling = reopen()
+    await compiling
 
     // 38.4 — THE PROJECT, WATCHED. One recursive watcher over the source root: the pages, the
     // shell, the stylesheets and `ui/public` are all under it, and every one of them is something
@@ -127,7 +187,9 @@ export async function serveDev(
     // wants: the only ways out of `abide dev` are a signal and a throw, exactly as for
     // `abide start`.
     let settling: ReturnType<typeof setTimeout> | undefined
-    watch(options.root, { recursive: true }, () => {
+    watch(options.root, { recursive: true }, (_event, filename) => {
+        if (filename === null) movedSomewhere = true
+        else moved.add(`${options.root}/${filename}`)
         if (settling !== undefined) clearTimeout(settling)
         settling = setTimeout(replace, SETTLE_MILLISECONDS)
     })
@@ -178,6 +240,14 @@ export async function serveDev(
             body: waiting.body,
         })
     }
+
+    // THE CHECKER GOES WITH THE COMMAND. It is a process of its own, and an app with no tsconfig
+    // holds a temporary project on disk for as long as it is open. The signal is raised again once
+    // it is closed, so the command still ends the way that signal ends a process.
+    for (const signal of ['SIGINT', 'SIGTERM'] as const)
+        process.once(signal, () => {
+            void closeChecker().finally(() => process.kill(process.pid, signal))
+        })
 
     const server = Bun.serve({
         ...(options.port === undefined ? {} : { port: options.port }),

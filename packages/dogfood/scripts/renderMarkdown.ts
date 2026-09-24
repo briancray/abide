@@ -27,11 +27,6 @@ const QUOTE = /^>\s?(.*)$/
 const TIP = /^\[!TIP\]\s*/
 const TABLE_DIVIDER = /^\|(\s*:?-+:?\s*\|)+$/
 
-// THE FRAMEWORK'S OWN, under the name this file's callers already use. `escapeAttribute` escapes
-// the same four characters and is public surface — a fourth copy of that list in this repo is the
-// one that goes stale, and the two `.abide`-side copies are what `#shared/escapeText.ts` says so.
-export const escapeHtml: (value: unknown) => string = escapeAttribute
-
 // A fence's label is a file path or one of four words — `server`, `browser`, `shared`,
 // `abide`. Which SIDE it names is derived from it rather than written twice. Four words
 // and three colours: `shared` and `abide` are both sides at once, which is the
@@ -66,7 +61,7 @@ export function highlight(code: string): string {
     let last = 0
     TOKEN.lastIndex = 0
     for (let match = TOKEN.exec(code); match; match = TOKEN.exec(code)) {
-        html += escapeHtml(code.slice(last, match.index))
+        html += escapeAttribute(code.slice(last, match.index))
         let group = 0
         for (let index = 1; index < match.length; index += 1) {
             if (match[index] !== undefined) {
@@ -74,10 +69,10 @@ export function highlight(code: string): string {
                 break
             }
         }
-        html += `<span class="t-${TOKEN_CLASS[group - 1]}">${escapeHtml(match[0])}</span>`
+        html += `<span class="t-${TOKEN_CLASS[group - 1]}">${escapeAttribute(match[0])}</span>`
         last = match.index + match[0].length
     }
-    return html + escapeHtml(code.slice(last))
+    return html + escapeAttribute(code.slice(last))
 }
 
 // A file is shown by the SPECIFIER an author types, not by where it sits on disk:
@@ -143,10 +138,10 @@ export function renderInline(text: string): string {
         const part = parts[index] ?? ''
         if (index % 2 === 1) {
             markup += `\0${codes.length}\0`
-            codes.push(`<code>${escapeHtml(part)}</code>`)
+            codes.push(`<code>${escapeAttribute(part)}</code>`)
             continue
         }
-        markup += escapeHtml(part)
+        markup += escapeAttribute(part)
     }
     return markup
         .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
@@ -252,12 +247,12 @@ export function renderMarkdown(source: string): string {
             }
             index += 1 // the closing fence
             const attribute = language
-                ? ` class="language-${escapeHtml(language)}"`
+                ? ` class="language-${escapeAttribute(language)}"`
                 : ''
             const code = `<pre><code${attribute}>${highlight(body.join('\n'))}</code></pre>`
             html += label
                 ? `<figure class="snippet" data-side="${sideOf(label)}">
-<figcaption>${escapeHtml(captionOf(language, label))}</figcaption>${code}</figure>\n`
+<figcaption>${escapeAttribute(captionOf(language, label))}</figcaption>${code}</figure>\n`
                 : `${code}\n`
             continue
         }

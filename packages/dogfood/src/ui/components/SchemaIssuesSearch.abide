@@ -1,0 +1,31 @@
+<script>
+import { reactive } from 'abide'
+import { searchInvoices } from '#server/rpc/schemaIssuesInvoices'
+
+let query = reactive('inv')
+let limit = reactive('2')
+
+const found = reactive(() => searchInvoices({ query, limit: Number(limit) }))
+
+// The key is the field's own path, so a lookup is what a message costs.
+const issues = reactive(() =>
+    found.isError(found.error(), 'ValidationError') ? found.error().data : {},
+)
+</script>
+
+<label>query
+    <input bind:value={query}>
+</label>
+<p class="status">{issues.query?.[0] ?? ''}</p>
+
+<label>limit
+    <input bind:value={limit}>
+</label>
+<p class="status">{issues.limit?.[0] ?? ''}</p>
+
+<ul class="fields">
+    <li><span>matches</span>
+        <strong>
+            {found.ready() && !found.error() ? found.length : '—'}
+        </strong></li>
+</ul>

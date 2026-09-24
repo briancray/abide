@@ -30,6 +30,15 @@ const invoice = reactive(() => getInvoice({ id: '4021' }))
 
 <main><p id="total">{invoice().id}</p></main>`
 
+// 26.9 — A RUNG THAT SIGNS THE CALLER OUT before the handler is reached, on a header of the test's.
+const SIGN_OUT = `import { middleware, principal } from 'abide/server'
+
+middleware((next, { request }) => {
+    if (request.headers.get('x-sign-out') === '1') principal.clear()
+    return next()
+})
+`
+
 let stop = (): void => {}
 let base = ''
 
@@ -37,6 +46,7 @@ beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'ui/pages/page.abide': PAGE,
         'server/rpc/invoices.ts': INVOICES,
+        'server/app.ts': SIGN_OUT,
     }))
 }, 30_000)
 
@@ -47,11 +57,13 @@ afterAll(() => {
 
 const CALL = '/__abide/rpc/invoices/getInvoice?id=4021'
 
-async function call(cookie?: string): Promise<{ id: string; run: number }> {
-    const answer = await Bun.fetch(
-        `${base}${CALL}`,
-        cookie === undefined ? {} : { headers: { cookie } },
-    )
+async function call(
+    cookie?: string,
+    headers: Record<string, string> = {},
+): Promise<{ id: string; run: number }> {
+    const answer = await Bun.fetch(`${base}${CALL}`, {
+        headers: cookie === undefined ? headers : { ...headers, cookie },
+    })
     return (await answer.json()) as { id: string; run: number }
 }
 
@@ -101,6 +113,17 @@ test("one browser's render does not answer another browser's call — 41.19", as
     expect(stranger.run).toBe(anchor.run + 2)
 })
 
+// 41.19 BY `principal.caller` AS IT STANDS, and 26.7, 26.9 — a caller signed out earlier in the
+// request is rotated, so the render made for it before does not answer it. THE REVERT: match on the
+// cookie the request arrived with (`callerOf` reading the header before `scope.caller`); the
+// signed-out call is answered from the render — 1 past the anchor where 2 is due.
+test('a caller signed out earlier in the request is not answered from its render — 41.19, 26.9', async () => {
+    const anchor = await call()
+    const cookie = await render()
+    const signedOut = await call(cookie, { 'x-sign-out': '1' })
+    expect(signedOut.run).toBe(anchor.run + 2)
+})
+
 // THE BUFFER ITSELF, IN PROCESS: matched by handler and args (41.19), taken once (41.17), and gone
 // after its life whether or not its timer has fired (41.18).
 test('an entry is matched by handler and args, taken once, and ends after 30 seconds — 41.17-41.19', async () => {
@@ -127,13 +150,34 @@ test('an entry is matched by handler and args, taken once, and ends after 30 sec
     }
 })
 
+// ONE KEY, SEVERAL RENDERS: each render leaves its own entry under the same caller, handler and args,
+// and each call takes one, oldest first — then the index is empty again, and a later render fills it.
+test('entries under one key are taken oldest first, one a call — 41.17, 41.19', async () => {
+    const handler = {}
+    seedFor('caller-c')(handler, { id: '1' }, Promise.resolve('first'))
+    seedFor('caller-c')(handler, { id: '1' }, Promise.resolve('second'))
+    expect(await takeSeed('caller-c', handler, { id: '1' })).toMatchObject({
+        value: 'first',
+    })
+    expect(await takeSeed('caller-c', handler, { id: '1' })).toMatchObject({
+        value: 'second',
+    })
+    expect(takeSeed('caller-c', handler, { id: '1' })).toBeUndefined()
+    seedFor('caller-c')(handler, { id: '1' }, Promise.resolve('third'))
+    expect(await takeSeed('caller-c', handler, { id: '1' })).toMatchObject({
+        value: 'third',
+    })
+})
+
 // 41.21 — THE PAGE'S CALLS ARE STARTED FROM THE HEAD, before any markup, as the requests the
 // browser's own `Rpc` makes — addresses, not answers (41.5). THE REVERT: drop the early-call
 // `yield` in `render`; the head carries no script and the call leaves only once the bundle runs.
 test('the head starts every call the page made, before its markup — 41.21', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
     const script =
-        /<script>\(function\(s,c\)[\s\S]*?<\/script>/.exec(html)?.[0] ?? ''
+        /<script type="application\/json">[\s\S]*?<\/script><script>\(function\(s,c\)[\s\S]*?<\/script>/.exec(
+            html,
+        )?.[0] ?? ''
     expect(script).toContain('/__abide/rpc/invoices/getInvoice?id=4021')
     expect(script).toContain('__abideCalls')
     // In the head, and ahead of the markup.

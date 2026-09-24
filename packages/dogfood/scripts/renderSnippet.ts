@@ -7,10 +7,11 @@
 // runs to the end of the construct it opens — which is the whole rule, applied by two
 // balancers because markup and code close differently and nothing else does.
 
-import { VOID_ELEMENTS } from '../../abide/src/compiler/VOID_ELEMENTS.ts'
-import { displayPath, escapeHtml, highlight, sideOf } from './renderMarkdown.ts'
+import { escapeAttribute } from 'abide'
 
-const EXAMPLES_DIR = new URL('../examples/', import.meta.url)
+import { VOID_ELEMENTS } from '../../abide/src/compiler/VOID_ELEMENTS.ts'
+import { readManifest, readSource } from './renderExample.ts'
+import { displayPath, highlight, sideOf } from './renderMarkdown.ts'
 
 export type SnippetAddress = { example: string; file: string; anchor: string }
 
@@ -136,10 +137,13 @@ export function slice(source: string, anchor: string, where: string): string {
 
 async function readSlice(address: SnippetAddress): Promise<string> {
     const { example, file, anchor } = address
-    const handle = Bun.file(new URL(`${example}/files/${file}`, EXAMPLES_DIR))
-    if (!(await handle.exists()))
-        throw new Error(`snippet ${example}: files/${file} is missing`)
-    const source = await handle.text()
+    // A SNIPPET QUOTES AN EXAMPLE, not the app at large: the file has to be one the example is
+    // made of, or the page shows code no card on it runs.
+    if (!(await readManifest(example)).files.includes(file))
+        throw new Error(`snippet ${example}: ${file} is not one of its files`)
+    const source = await readSource(file)
+    if (source === undefined)
+        throw new Error(`snippet ${example}: ${file} is missing`)
     if (!anchor) return source.trimEnd()
     return slice(source, anchor, `snippet ${example} ${file}`)
 }
@@ -156,7 +160,7 @@ function captionOf(address: SnippetAddress): string {
 export async function snippetHtml(address: SnippetAddress): Promise<string> {
     const code = await readSlice(address)
     return `<figure class="snippet" data-side="${sideOf(address.file)}">
-<figcaption>${escapeHtml(captionOf(address))}</figcaption><pre><code>${highlight(code)}</code></pre></figure>`
+<figcaption>${escapeAttribute(captionOf(address))}</figcaption><pre><code>${highlight(code)}</code></pre></figure>`
 }
 
 export async function snippetMarkdown(

@@ -12,6 +12,7 @@ import { emitClient, emitComponent, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
+import { pageRegion } from '#ui/regions.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
@@ -96,7 +97,7 @@ let clicks = reactive(0)
 
     // AND IT IS ALIVE. The binding and the listener are the CALLER's, mounted into a region the
     // child owns — which is the half a string assertion cannot see.
-    mount(document.body)
+    mount(pageRegion(document.body))
     click('#bump')
     expect(document.querySelector('#count')?.textContent).toBe('1 so far')
 })
@@ -141,7 +142,7 @@ let open = reactive(false)
         { Card: CARD },
     )
 
-    mount(document.body)
+    mount(pageRegion(document.body))
     expect(document.querySelector('#shown')).toBeNull()
     click('#toggle')
     expect(document.querySelector('#shown')?.textContent).toBe('shown')
@@ -178,7 +179,7 @@ let rows = reactive<string[]>([])
         { Card: CARD },
     )
 
-    mount(document.body)
+    mount(pageRegion(document.body))
     expect(document.querySelectorAll('.grown').length).toBe(0)
     click('#add')
     expect(document.querySelectorAll('.grown').length).toBe(1)

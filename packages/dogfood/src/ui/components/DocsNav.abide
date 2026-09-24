@@ -8,10 +8,11 @@
 // where its expression is false is not decided anywhere in the rulebook, and what the compiler
 // does today is write it empty — which `a[aria-current]` in the stylesheet matches, so every
 // link in the nav rendered as the one you are on.
-import { props, raw } from 'abide'
+//
+// WHERE YOU ARE COMES FROM THE ROUTE. The nav is the layout's, and a layout outlives the page it
+// wraps (41.11), so a prop the page passed would be the FIRST page's for as long as the nav stands.
+import { raw, route } from 'abide'
 import { NAV_ITEMS } from '#ui/NAV_ITEMS.ts'
-
-const { current } = props<{ current: string }>()
 </script>
 
 <nav>
@@ -21,7 +22,7 @@ const { current } = props<{ current: string }>()
             <h2>{group.section}</h2>
             <ul>
                 {#for item of group.pages}
-                    <li>{#if item.slug === current}<a href={item.href} aria-current="page">{raw(item.nav)}</a>{:else}<a href={item.href}>{raw(item.nav)}</a>{/if}{#if item.stub}<span class="stub" title="Stub — not written yet"></span>{/if}</li>
+                    <li>{#if item.href === route.url().pathname}<a href={item.href} aria-current="page">{raw(item.nav)}</a>{:else}<a href={item.href}>{raw(item.nav)}</a>{/if}{#if item.stub}<span class="stub" title="Stub — not written yet"></span>{/if}</li>
                 {/for}
             </ul>
         </section>

@@ -14,8 +14,8 @@ covers:
   - `rpc.isError`
   - `s.isError`
 examples:
-  - packages/dogfood/examples/refuse-narrowed
-  - packages/dogfood/examples/refuse-write
+  - packages/dogfood/examples/refuse-narrowed.json
+  - packages/dogfood/examples/refuse-write.json
 ---
 
 "That invoice is not yours" and "the database is down" are different answers, and a caller

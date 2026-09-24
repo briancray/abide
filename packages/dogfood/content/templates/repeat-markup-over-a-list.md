@@ -5,7 +5,7 @@ intent: Render a list so that reordering it moves nodes instead of rebuilding th
 covers:
   - `{#for item, index of list by key}`
 examples:
-  - packages/dogfood/examples/list-keyed
+  - packages/dogfood/examples/list-keyed.json
 ---
 
 A list block renders its body once per item. What separates one implementation from another is

@@ -10,7 +10,7 @@ covers:
   - `<Tag>…</Tag>`
   - `<slot>fallback</slot>`
 examples:
-  - packages/dogfood/examples/props-live
+  - packages/dogfood/examples/props-live.json
 ---
 
 A component is a `.abide` file, or a block in one. Invoking it is a capitalised tag, and that

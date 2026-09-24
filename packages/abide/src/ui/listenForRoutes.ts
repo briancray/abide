@@ -10,16 +10,18 @@ import type { Router } from './Router.ts'
 export function listenForRoutes(router: Router): () => void {
     const onClick = (event: MouseEvent): void => {
         if (!isPlainClick(event)) return
-        const url = routedLink(event, router)
-        if (url === undefined) return
+        const url = sameOriginLink(event)
+        if (url === undefined || router.match(url.pathname) === undefined)
+            return
         event.preventDefault()
         void router.go(url)
     }
 
     // 30.14 — INTENT: a pointer over a link, a finger or button pressed on one, keyboard focus on
-    // one. Each asks for the route's chunks; asking again is the module cache answering.
+    // one. Each asks for the route's chunks; asking again is the module cache answering, and an
+    // address with no route is `prefetch`'s to drop — its own match is the only one an intent pays.
     const onIntent = (event: Event): void => {
-        const url = routedLink(event, router)
+        const url = sameOriginLink(event)
         if (url !== undefined) router.prefetch(url.pathname)
     }
 
@@ -44,16 +46,16 @@ export function listenForRoutes(router: Router): () => void {
     return () => listening.abort()
 }
 
-// The address a link the router would take leads to, or `undefined` for one the browser keeps.
-function routedLink(event: Event, router: Router): URL | undefined {
+// The address a same-origin link leads to, or `undefined` for one the browser keeps whatever the
+// routes say.
+function sameOriginLink(event: Event): URL | undefined {
     // The nearest `<a href>` at or above the event, because the target is whatever text or icon
     // the author put inside the link. `closest` also reaches an SVG `<a>`, whose `href` is an
     // `SVGAnimatedString` rather than a URL, so the element type is what decides.
     const anchor = (event.target as Element | null)?.closest?.('a[href]')
     if (!(anchor instanceof HTMLAnchorElement)) return undefined
     // WHAT THE BROWSER WOULD DO ANYWAY, left to the browser: a download, a new tab, another
-    // origin, or an address this build has no route for. `go` re-checks the last of these, so the
-    // only thing decided here is whether to take the link at all.
+    // origin. An address this build has no route for is the caller's to check.
     if (anchor.hasAttribute('download')) return undefined
     const target = anchor.getAttribute('target')
     if (target !== null && target !== '' && target !== '_self') return undefined
@@ -61,7 +63,6 @@ function routedLink(event: Event, router: Router): URL | undefined {
     if (href === null || href.startsWith('#')) return undefined
     const url = new URL(anchor.href, location.href)
     if (url.origin !== location.origin) return undefined
-    if (router.match(url.pathname) === undefined) return undefined
     return url
 }
 

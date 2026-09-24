@@ -1,0 +1,26 @@
+<script>
+import { reactive } from 'abide'
+import { getMetrics } from '#server/rpc/cacheSharedMetrics'
+
+const RANGES = ['7d', '30d']
+
+let range = reactive('7d')
+
+const metrics = reactive(() => getMetrics({ range }))
+</script>
+
+<ul class="grid">
+    <li><span>range</span>
+        <div class="tabs">
+        {#for one of RANGES}
+            <button aria-selected={range === one}
+                onclick={() => { range = one }}>{one}</button>
+        {/for}
+        </div></li>
+    <li><span>orders</span>
+        <strong>{metrics.ready() ? metrics.orders : '—'}</strong>
+    </li>
+    <li><span>times computed</span>
+        <strong>{metrics.ready() ? metrics.computed : '—'}</strong>
+    </li>
+</ul>

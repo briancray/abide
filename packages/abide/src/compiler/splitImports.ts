@@ -66,9 +66,11 @@ function inImportClause(kind: SyntaxKind): boolean {
     return IMPORT_CLAUSE.has(kind) || isContextualKeyword(kind)
 }
 
-function importSpans(source: string): { start: number; end: number }[] {
+function importSpans(
+    source: string,
+): { start: number; end: number; specifier: string }[] {
     const tokens = tokenise(source)
-    const spans: { start: number; end: number }[] = []
+    const spans: { start: number; end: number; specifier: string }[] = []
     for (let i = 0; i < tokens.length; i += 1) {
         const keyword = tokens[i] as Token
         let at = i + 1
@@ -92,6 +94,7 @@ function importSpans(source: string): { start: number; end: number }[] {
             // attribute and left ` with { type: 'json' }` behind as a `with` statement, which is
             // illegal in a module and takes the whole file with it.
             end: endOfAttributes(tokens, at + 1, specifier.end, source),
+            specifier: specifier.text.slice(1, -1),
         })
         i = at
     }
@@ -169,16 +172,33 @@ function endOfAttributes(
     return end
 }
 
+// Every `.abide` a script imports or re-exports, as written — read off the same spans the split
+// lifts, so the build's import graph and the emitted imports are one reading of the file.
+export function abideSpecifiers(script: string): string[] {
+    const specifiers: string[] = []
+    if (!script.includes('.abide')) return specifiers
+    for (const span of importSpans(script))
+        if (span.specifier.endsWith('.abide')) specifiers.push(span.specifier)
+    return specifiers
+}
+
 // 32.18 — A `.abide` IMPORT IS AN IMPORT OF THE MODULE THAT FILE COMPILES TO, and which of the two
 // it is is the LANE's business: the server module renders the child, the client module mounts it.
-// The path is left exactly as the author wrote it — where the compiled tree lives is the build's
-// business, and an emitter that rewrote the path would be deciding a layout it cannot see.
+// WHERE that module is, is the build's: `components` maps a specifier to the path, relative and
+// without an extension, the build resolved it to (`componentGraph`) — and a specifier it does not
+// map keeps the path as written, which is where a relative one lands anyway because the output
+// tree mirrors the source tree.
 export function componentImports(
     imports: string,
     lane: '' | '.client',
+    components: ReadonlyMap<string, string>,
 ): string {
     return imports.includes('.abide')
-        ? imports.replace(/(\.abide)(?=['"])/g, `${lane}.ts`)
+        ? imports.replace(
+              /(['"])([^'"\n]*)\.abide\1/g,
+              (_whole, quote: string, stem: string) =>
+                  `${quote}${components.get(`${stem}.abide`) ?? stem}${lane}.ts${quote}`,
+          )
         : imports
 }
 

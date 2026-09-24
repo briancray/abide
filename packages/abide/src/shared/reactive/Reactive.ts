@@ -12,7 +12,7 @@
 // included — a shape that grows a field on a later path is two hidden classes and every
 // read downstream of it deoptimises.
 
-import { type Failed, isFailed } from '../Failed.ts'
+import { type Failed, isFailed, isFailedNamed } from '../Failed.ts'
 import { validationError } from '../refuse.ts'
 import { type Found, runSchema, type Schema } from '../Schema.ts'
 import { WORK } from '../WORK.ts'
@@ -62,9 +62,10 @@ export type Transformer<Accepted, Stored, Failures = never> = (
 ) => Stored | Failures
 
 // Both halves, and no way to spell either alone (8.1). `get` answering `undefined` is a miss
-// (8.17), which is why a store over a value that may be absent is a `Store<T | undefined>`.
+// (8.17), so the miss is in `get`'s type rather than in `Stored`: a store over a value with a body
+// is typed by what the body produces, and a `Store<T | undefined>` there could not be written.
 export type Store<Stored> = {
-    get: () => Stored | Promise<Stored>
+    get: () => Stored | undefined | Promise<Stored | undefined>
     set: (value: Stored, retention: { ttl: number }) => void | Promise<void>
 }
 
@@ -90,8 +91,8 @@ export type ReactiveOptions<
     // on the unkeyed form (11.42): its field type collapses to `never` there.
     Args = never,
 > = {
-    // RULEBOOK 11.41, 11.28: the gate on a keyed value's args, which refuses and does nothing
-    // else — what it returns is discarded, and the key was taken before it ran (11.26).
+    // RULEBOOK 11.41, 11.28, 11.69: the gate on a keyed value's args — what it returns is what the
+    // body is handed, and the key was taken before it ran (11.26).
     args?: [Args] extends [never] ? never : Schema<Args>
     // RULEBOOK 5.3: discriminated by arity — one parameter is a projection compared by
     // `!==`, two is a comparator answering directly.
@@ -119,15 +120,19 @@ export type ReactiveOptions<
     debounce?: number
     // RULEBOOK 11.44, 11.45: what a `Selection` matches on, and the one selector that reaches
     // across values. The function form is handed the entry's args, and `undefined` on a value
-    // that has none.
-    tags?: string[] | ((args?: Args) => string[])
+    // that has none — which is the only value it is ever `undefined` on.
+    tags?: string[] | ((args: ArgsOf<Args>) => string[])
     // RULEBOOK 8, 9.11, 11.43: where the value lives when the process does not. The function form
     // is handed the entry's args, so each key of a `Keyed` has a store of its own.
-    store?: Store<Stored> | ((args?: Args) => Store<Stored>)
+    store?: Store<Stored> | ((args: ArgsOf<Args>) => Store<Stored>)
     // RULEBOOK 11.32, 11.34: one value for the whole process rather than one per request. Inert in a
     // browser, where the process IS the scope.
     global?: boolean
 }
+
+// What a function-form option is handed: the entry's args, or `undefined` on a value whose body
+// takes none (11.45).
+type ArgsOf<Args> = [Args] extends [never] ? undefined : Args
 
 // `Produced` is the fourth parameter and RULEBOOK 1.2 is what it means: the unit the
 // producer yielded, which is `Stored` for every producer but a stream, and one chunk for a
@@ -663,10 +668,6 @@ class Cell {
 
 // What a member's `this` is, and the one way from the value an app holds to its record.
 type Callable = { [CELL]: Cell }
-
-// 1.6's guard lives in a leaf of its own — an edge onto this module costs the whole graph, and
-// `bindElement` needs the brand and nothing else. Re-exported so every other caller is unchanged.
-export { isReactive }
 
 // 5.15 is a BUILD error and there is no build yet, so it lands at construction — the
 // earliest moment that exists, and the one the app still has a stack for. Naming the value
@@ -3036,14 +3037,9 @@ const MEMBERS = {
         if (reader !== null) trackProbe(cell, reader)
         return failureOf(cell)
     },
-    // `this` IS DECLARED AND UNUSED, and the annotation is the whole point: every member
-    // here reaches its cell through it, and spelling this one `_this` instead makes it a
-    // real first parameter that shifts every argument by one. Nothing type-checks that —
-    // `MEMBERS` is assigned onto a prototype and is never matched against the `Reactive`
-    // type, so the two can disagree in silence.
-    isError(this: Callable, error: unknown, name: string): boolean {
-        return isFailed(error) && error.name === name
-    },
+    // THE ONE MEMBER THAT READS NO CELL, so it is the shared function itself — `Rpc.isError` and a
+    // socket's are the same one. Its first parameter is the error, as the member's is.
+    isError: isFailedNamed,
     set(this: Callable, value: unknown): unknown {
         const cell = this[CELL]
         cell.generation += 1
@@ -3087,18 +3083,7 @@ const MEMBERS = {
         return watchCell(this[CELL], effect)
     },
     history(this: Callable, replay?: number): History<unknown> {
-        // 9.15: an adopting value's past is the adopted value's, and an adoption of an
-        // adoption goes on down. Stopping at one level answered from the MIDDLE value's standing
-        // production, which retains nothing of its own: a two-deep chain over a ring of ten
-        // reported one entry.
-        let cell = this[CELL]
-        while (cell.adoption !== null) cell = cell.adoption.source
-        // 6.5, AND THIS IS WHERE IT BITES. `s.history` is the only way to reach a retained production
-        // (2.5), so sweeping here is what stops one past its life being handed back — 6.9's timer is
-        // the common path and this is the backstop for a fire that came late. Before the cursor
-        // exists, so 6.7 is untouched: what must not observe an expiry is a LIVE cursor.
-        if (cell.expiry !== null && cell.ringDepth > 0)
-            dropExpired(cell.expiry, ringedOf(cell), standingKept(cell))
+        const cell = pastOf(this)
         // 6.17: a streaming producer's past is its CLOSED runs, which is a different ring from
         // the chunk buffer `cell` carries — see `historyView`. Everything below is the same
         // arithmetic over whichever of the two the value has.
@@ -3147,6 +3132,25 @@ const MEMBERS = {
     finally(this: Callable, onSettled: () => void): Promise<unknown> {
         return settled(this[CELL]).finally(onSettled)
     },
+}
+
+// THE CELL A READER OF `value`'S PAST IS HANDED, and the one way to it: `s.history` and a socket
+// subscription (18.13) both come through here, so neither replays what the other would not.
+//
+// 9.15: an adopting value's past is the adopted value's, and an adoption of an adoption goes on
+// down. Stopping at one level answered from the MIDDLE value's standing production, which retains
+// nothing of its own: a two-deep chain over a ring of ten reported one entry.
+//
+// 6.5, AND THIS IS WHERE IT BITES. A replay is the only way to reach a retained production (2.5), so
+// sweeping here is what stops one past its life being handed back — 6.9's timer is the common path
+// and this is the backstop for a fire that came late. Before any cursor exists, so 6.7 is untouched:
+// what must not observe an expiry is a LIVE cursor.
+export function pastOf(value: unknown): Cell {
+    let cell = (value as Callable)[CELL]
+    while (cell.adoption !== null) cell = cell.adoption.source
+    if (cell.expiry !== null && cell.ringDepth > 0)
+        dropExpired(cell.expiry, ringedOf(cell), standingKept(cell))
+    return cell
 }
 
 // What a value filed outside every scope forwards (`scoped.ts`): read off the record, so a member

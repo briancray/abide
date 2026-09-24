@@ -5,7 +5,7 @@ intent: One type for everything that changes, instead of three that disagree.
 covers:
   - `Reactive`
 examples:
-  - packages/dogfood/examples/one-type
+  - packages/dogfood/examples/one-type.json
 ---
 
 An interface is mostly waiting. Something is loading, reloading, streaming, stale, or failed.

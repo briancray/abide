@@ -195,8 +195,7 @@ export function detachProbes(reader: Subscriber): void {
 const SET_OVER_SCAN = 20
 
 // Exported because a tracked run's end is exactly this and nothing more: the TEST that there is
-// a tail is the caller's — two field loads, on the rare arm — and a named forwarder for it was a
-// second name for one call.
+// a tail is the caller's — two field loads, on the rare arm.
 export function truncate(reader: Subscriber): void {
     const sources = reader.sources
     const kept = reader.cursor

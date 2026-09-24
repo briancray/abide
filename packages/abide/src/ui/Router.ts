@@ -1,5 +1,8 @@
 import { CURRENT_ROUTER, type NavigateOptions } from '#shared/CURRENT_ROUTER.ts'
-import { firstMatch, type Params } from '#shared/matchRoute.ts'
+import { firstMatch, type Params, partsOf } from '#shared/matchRoute.ts'
+import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
+import { unmounted } from '#shared/mount.ts'
+import { arrive, route } from '#shared/route.ts'
 import {
     parseRoutePattern,
     rankBySpecificity,
@@ -8,8 +11,7 @@ import {
 import { applyHead } from './applyHead.ts'
 import { LAYER_MOUNT, LAYER_NAVIGATE } from './LAYER_NAMES.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
-import { REGION_CLOSE, REGION_OPEN } from './REGION.ts'
-import { fillRegion, type Region } from './regions.ts'
+import { fillRegion, pageRegion, type Region } from './regions.ts'
 import type { Scope } from './Scope.ts'
 
 // A PAGE'S CLIENT MODULE, mounted against the region the router owns. The same default export a
@@ -28,8 +30,7 @@ export type Route = {
     load: () => Promise<PageModule>
     // 35.1 — the layouts this page renders inside, outermost first, as the build found them.
     // REQUIRED, as it is on the server's own row (`ServerRoute`): `tableOf` writes the key into
-    // both tables unconditionally, so an optional one was a second record shape for a row every
-    // navigation reads and a `??` arm the emitted table could not reach.
+    // both tables unconditionally, so every row has one shape.
     layouts: (() => Promise<PageModule>)[]
 }
 
@@ -78,23 +79,20 @@ export class Router {
         this.prefetched = new Set()
     }
 
-    // THE PAGE'S SCOPE, for a caller that reads it — the chain's is `levels`. DERIVED rather than
-    // held: it was a field assigned on the way down `mountFrom` and never cleared by `stopFrom`, so
-    // between a navigation stopping the chain and the next one mounting it named a scope that had
-    // already been stopped. One fact, read off the array that owns it (41.11).
-    get scope(): Scope | undefined {
-        return this.levels[this.levels.length - 1]?.scope
-    }
-
+    // 16.11 — AN ADDRESS OUTSIDE THE MOUNT IS NO ROUTE OF THIS APP'S, and one inside it is matched
+    // as the address below the app's root. Every way in — a click, an intent, back and forward, a
+    // hydration — is matched here.
     match(pathname: string): { route: Compiled; params: Params } | undefined {
-        return firstMatch(this.routes, pathname)
+        const below = unmounted(pathname)
+        const parts = below === undefined ? undefined : partsOf(below)
+        return parts === undefined ? undefined : firstMatch(this.routes, parts)
     }
 
-    // 30.14 — A NAVIGATION THE READER HAS SIGNALLED, LOADED BEFORE IT HAPPENS: the route's chunks are
-    // asked for on intent, so the click finds them in the module cache and setup — and with it
+    // 30.14 — A NAVIGATION THE READER HAS SIGNALLED, LOADED BEFORE IT HAPPENS: the route's chunks
+    // are asked for on intent, so the click finds them in the module cache and setup — and with it
     // every call the page makes — starts at once. Only the CODE: a call run on a hover would be a
-    // call nobody asked for, and for anything but a `GET` one with an effect. A failed load is
-    // left for the click, which reports it, and the next intent asks again.
+    // call nobody asked for, and for anything but a `GET` one with an effect. A failed load is left
+    // for the click, which reports it, and the next intent asks again.
     prefetch(pathname: string): void {
         const route = this.match(pathname)?.route
         if (route === undefined || this.prefetched.has(route)) return
@@ -127,53 +125,97 @@ export class Router {
         }
         this.navigation += 1
         const ticket = this.navigation
-        const arriving = await load(found.route)
-        // SUPERSEDED, so this navigation is over. Nothing has been touched yet, which is the whole
-        // reason the ticket is checked here rather than after the mount.
-        if (this.navigation !== ticket) return
+        route.navigating.set(true)
+        // EVERY WAY OUT CLEARS WHAT THE WAY IN SET: a load that fails, a setup that throws and a
+        // navigation that completes all leave `navigating` false and every layer closed. A
+        // superseded one leaves `navigating` to the navigation that superseded it.
+        try {
+            // 30.15 — THE SERVER IS ASKED ALONGSIDE THE LOAD, so its `middleware` decides the
+            // navigation for the price of the one round trip the chunks already cost.
+            const [answer, arriving] = await Promise.all([
+                ask(target),
+                load(found.route),
+            ])
+            // SUPERSEDED, so this navigation is over. Nothing has been touched yet, which is the
+            // whole reason the ticket is checked here rather than after the mount — and
+            // `navigating` stays the newer navigation's to clear.
+            if (this.navigation !== ticket) return
+            // 30.18 — A REFUSAL, A RESPONSE MIDDLEWARE ANSWERED ITSELF, or no answer at all: the
+            // document asks again and paints whatever the server says. A fetch that failed —
+            // offline, or a redirect to another origin that CORS will not let it follow — goes to
+            // the address it was sent to.
+            if (answer?.status !== 204) {
+                location.href = answer?.url ?? target.href
+                return
+            }
+            if (!answer.redirected) {
+                this.commit(target, found, arriving, options)
+                return
+            }
+            // 30.17 — REDIRECTED, and the server already said yes to where it landed: the answer is
+            // the 204 at the end of the chain. That address is mounted in place of the one asked
+            // for, and a route the client has no row for is the document's (30.10).
+            const landed = new URL(answer.url)
+            const landing = this.match(landed.pathname)
+            if (landing === undefined) {
+                location.href = landed.href
+                return
+            }
+            const redirected = await load(landing.route)
+            if (this.navigation !== ticket) return
+            this.commit(landed, landing, redirected, options)
+        } finally {
+            if (this.navigation === ticket) route.navigating.set(false)
+        }
+    }
 
+    // WHAT A NAVIGATION DOES ONCE IT IS NO LONGER SUPERSEDABLE: the old part stopped and emptied,
+    // the address written, the arriving part's head applied and its levels mounted.
+    private commit(
+        target: URL,
+        found: { route: Compiled; params: Params },
+        arriving: PageModule[],
+        options: NavigateOptions,
+    ): void {
         // OPENED WHERE THE NAVIGATION COMMITS, which is after the last early exit and after the
         // `await` above. The awaited load is a NETWORK wait, and a layer that contained it would
         // report the round trip as the router's own cost — the measurement this exists to make
         // honest is which fraction of click -> paint the router's WORK is.
         beginLayer(LAYER_NAVIGATE)
-
-        // 41.11 — WHAT THE TWO ADDRESSES SHARE IS NOT REBUILT. The comparison is by the MOUNT
-        // rather than by the loader or the module record: the table holds an arrow per row, so
-        // two routes under one layout name the same file through two different functions, and a
-        // table written by hand may answer with a fresh record each call. The function a module
-        // exports is the same function either way.
-        const shared = this.shares(arriving)
-        this.stopFrom(shared)
-        // The region the arriving part goes into: the page region where nothing is kept, and the
-        // deepest kept layout's own slot where something is.
-        const into =
-            shared === 0
-                ? this.region
-                : ((this.levels[shared - 1] as Level).slot as Region)
-        // EMPTIED THROUGH THE PRIMITIVE EVERY OTHER REGION IS. `fillRegion(region)` with no build is
-        // this removal, and it carries the 41.10 refusal for a region no longer in a document that
-        // a hand-written walk swallows.
-        fillRegion(into)
-        const full = `${target.pathname}${target.search}${target.hash}`
-        if (options.replace === true) history.replaceState(null, '', full)
-        else history.pushState(null, '', full)
-        // 39.6 — BEFORE THE BODY IS WIRED, so a `<title>` the reader sees is the page they are
-        // arriving at rather than the one they left, for however long the mount takes. Every
-        // level that is arriving contributes, outermost first, which is the order the server
-        // wrote them in; a kept layout's head is already standing and is not applied again.
-        for (let at = shared; at < arriving.length; at += 1) {
-            const head = (arriving[at] as PageModule).head
-            if (head !== undefined) applyHead(head())
+        try {
+            // 41.11 — WHAT THE TWO ADDRESSES SHARE IS NOT REBUILT. The comparison is by the MOUNT
+            // rather than by the loader or the module record: the table holds an arrow per row, so
+            // two routes under one layout name the same file through two different functions, and a
+            // table written by hand may answer with a fresh record each call. The function a module
+            // exports is the same function either way.
+            const shared = this.shares(arriving)
+            this.stopFrom(shared)
+            // The region the arriving part goes into: the page region where nothing is kept, and
+            // the deepest kept layout's own slot where something is.
+            const into =
+                shared === 0
+                    ? this.region
+                    : ((this.levels[shared - 1] as Level).slot as Region)
+            // EMPTIED THROUGH THE PRIMITIVE EVERY OTHER REGION IS. `fillRegion(region)` with no
+            // build is this removal, and it carries the 41.10 refusal for a region no longer in a
+            // document that a hand-written walk swallows.
+            fillRegion(into)
+            const full = `${target.pathname}${target.search}${target.hash}`
+            if (options.replace === true) history.replaceState(null, '', full)
+            else history.pushState(null, '', full)
+            // 39.6 — BEFORE THE BODY IS WIRED, so a `<title>` the reader sees is the page they are
+            // arriving at rather than the one they left, for however long the mount takes. Every
+            // level that is arriving contributes, outermost first, which is the order the server
+            // wrote them in; a kept layout's head is already standing and is not applied again.
+            for (let at = shared; at < arriving.length; at += 1) {
+                const head = (arriving[at] as PageModule).head
+                if (head !== undefined) applyHead(head())
+            }
+            this.mountChain(target.href, found, arriving, shared, into)
+            if (options.keepScroll !== true) scrollTo(0, 0)
+        } finally {
+            endLayer(LAYER_NAVIGATE)
         }
-        // AT THE TOP OF THE CHAIN, NOT INSIDE `mountFrom`: it recurses one level per layout, and
-        // `shares()` SUMS every measure of a name inside the op — so a pair inside the recursion
-        // would count the innermost level once per level above it.
-        beginLayer(LAYER_MOUNT)
-        this.mountFrom(arriving, shared, into, found.params)
-        endLayer(LAYER_MOUNT)
-        if (options.keepScroll !== true) scrollTo(0, 0)
-        endLayer(LAYER_NAVIGATE)
     }
 
     // How much of the arriving chain is already standing. Layouts only: the page is the level
@@ -221,10 +263,10 @@ export class Router {
         const props = paramsProp(params)
         if (at < modules.length - 1)
             props.children = () => ({
-                // NOTHING, because the level below carries its own markup (32.18): a module a
-                // route reaches fills the region it is mounted against when that region is
-                // empty, so the markup and the mount are one call rather than two.
-                html: () => '',
+                // NO BUILD, because the level below carries its own (32.18): a module a route
+                // reaches fills the region it is mounted against when that region is empty, so
+                // the build and the mount are one call rather than two.
+                build: undefined,
                 mount: (slot: Region): undefined => {
                     level.slot = slot
                     this.mountFrom(modules, at + 1, slot, params)
@@ -250,12 +292,29 @@ export class Router {
         // a `<link rel=stylesheet>` refetched and a flash of unstyled document on every load.
         const standing = await load(found.route)
         if (this.navigation !== ticket) return
-        // THE HYDRATE SHARE, and it is the number `compiler-maximalist` said it would take first
-        // and never had. Same name as the navigation's mount because it is the same work on the
+        // THE HYDRATE SHARE. Same name as the navigation's mount because it is the same work on the
         // same chain — what differs is the op it is a fraction of.
+        this.mountChain(location.href, found, standing, 0, this.region)
+    }
+
+    // AT THE TOP OF THE CHAIN, NOT INSIDE `mountFrom`: it recurses one level per layout, and
+    // `shares()` SUMS every measure of a name inside the op — so a pair inside the recursion would
+    // count the innermost level once per level above it. 23.1 — WRITTEN BEFORE THE ARRIVING PAGE'S
+    // SETUP, which reads it.
+    private mountChain(
+        href: string,
+        found: { route: Compiled; params: Params },
+        modules: PageModule[],
+        from: number,
+        into: Region,
+    ): void {
+        arrive(href, found.route.pattern, found.params)
         beginLayer(LAYER_MOUNT)
-        this.mountFrom(standing, 0, this.region, found.params)
-        endLayer(LAYER_MOUNT)
+        try {
+            this.mountFrom(modules, from, into, found.params)
+        } finally {
+            endLayer(LAYER_MOUNT)
+        }
     }
 }
 
@@ -269,8 +328,22 @@ async function load(route: Compiled): Promise<PageModule[]> {
     ])
 }
 
+// 30.15 — THE ADDRESS, THROUGH THE SERVER'S `middleware` AND NOT ITS RENDER (30.16). A redirect
+// is followed here, carrying the header, so the answer at the end of it is the server's go-ahead
+// for the address it landed on.
+async function ask(target: URL): Promise<Response | undefined> {
+    try {
+        return await fetch(target, {
+            headers: { [NAVIGATION_HEADER]: '1' },
+            cache: 'no-store',
+        })
+    } catch {
+        return undefined
+    }
+}
+
 // 33.4 — A PROP IS AN ACCESSOR. A page is mounted as any other component is, so its one prop is
-// passed the way `renderComponent` passes a child's and the way `serveBuild` paints one: a
+// passed the way `renderComponent` passes a child's and the way `answerRequest` paints one: a
 // function per key. Passed as the plain record it lowered to `params()` on a value that was not
 // one, so every page with a `[param]` in its address hydrated dead — with its server markup
 // already on screen, which is what kept it quiet.
@@ -283,45 +356,6 @@ function paramsProp(
     params: Params,
 ): Record<string, (() => unknown) | undefined> {
     return { params: () => params, children: undefined }
-}
-
-// THE REGION A ROUTER SWAPS PAGES IN. The server does not write these anchors — a page is the one
-// region with nothing around it — so the router puts them round what the document already holds,
-// which is the page the server painted. After this the page IS a region and every primitive a
-// `{#if}` arm uses works on it unchanged.
-//
-// THE CLOSING ANCHOR GOES AFTER THE LAST THING THE PAGE WROTE, not at the end of the host: an app
-// shell puts its module script in the host too, and a close anchor past it makes the script part
-// of the page — so the first navigation removes the running app from the document. Scripts and
-// links are the shell's, wherever they stand, and stay outside.
-function pageRegion(host: Element): Region {
-    const open = document.createComment(REGION_OPEN)
-    const close = document.createComment(REGION_CLOSE)
-    host.insertBefore(open, host.firstChild)
-    let after: ChildNode | null = null
-    // STOPPING AT `open` IS NOT AN EDGE CASE, it is the empty page: a document the server painted
-    // nothing into has the opening anchor as its only child, and a scan that walks past it puts
-    // the close anchor BEFORE the open one — a region that can never be filled, on exactly the
-    // direct-hit a client router exists to answer.
-    for (
-        let node = host.lastChild;
-        node !== null && node !== open;
-        node = node.previousSibling
-    )
-        if (isShell(node)) after = node as ChildNode
-        else break
-    host.insertBefore(close, after)
-    return { open, close }
-}
-
-// A COMMENT IS NOT SHELL. A page whose last region is a `{#if}` ends in that region's close
-// anchor, and calling it shell would leave it outside the page — so only the three elements a
-// shell actually carries are, plus the whitespace between them.
-function isShell(node: Node): boolean {
-    if (node.nodeType === 3) return (node.nodeValue ?? '').trim() === ''
-    if (node.nodeType !== 1) return false
-    const tag = (node as Element).tagName
-    return tag === 'SCRIPT' || tag === 'LINK' || tag === 'STYLE'
 }
 
 // THE ROUTES, MOST SPECIFIC FIRST, and the router registered as this document's. Ranking here

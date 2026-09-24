@@ -30,9 +30,7 @@ test('the page asks for every endpoint the server answers', () => {
         '/api/run/unit',
         '/api/run/gates',
         '/api/run/browser',
-        '/api/counted',
         '/api/machinery',
-        '/api/measure',
     ])
         expect(STATUS_SCRIPT).toContain(endpoint)
 })

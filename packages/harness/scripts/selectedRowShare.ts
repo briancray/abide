@@ -11,11 +11,13 @@
 // `bun packages/harness/scripts/selectedRowShare.ts [rows]` — reports which path the compiler took
 // for each arm, read off the emitted module, beside what it cost.
 
-import { chromium, type Page } from '@playwright/test'
-import { traceOp } from '../src/engine/traceOp.ts'
-import { buildCompiledPage } from './buildCompiledPage.ts'
+import { chromium } from '@playwright/test'
+import { LAYER_RECONCILE } from '../../abide/src/ui/LAYER_NAMES.ts'
+import { buildCompiledPage, openCompiledPage } from './buildCompiledPage.ts'
+import { median, spread } from './median.ts'
+import { milliseconds } from './milliseconds.ts'
+import { type ArmSample, traceArm } from './traceArm.ts'
 
-const LAYER_RECONCILE = 'abide.reconcile'
 const ROWS = Number(process.argv[2] ?? '1000')
 const RUNS = 5
 
@@ -57,82 +59,13 @@ const ARMS: Record<string, string> = {
         '<li>{#if row.id >= 0}<b>on</b>{/if}<span>{row.label}</span></li>',
     ),
     // THE MACHINERY WITHOUT THE PARSE: an arm with nothing in it is filled with '', which
-    // `fillRegion` answers without invoking the parser — every scope, watch and mount still runs.
+    // `fillRegion` answers without invoking the parser — the watch still runs, and an arm that
+    // binds nothing has no scope or mount to run.
     'empty block': page(
         '<li>{#if row.id >= 0}{/if}<span>{row.label}</span></li>',
     ),
     // The same nodes with no block around the `<b>`: what the row costs when nothing is filled.
     'same, no block': page('<li><b>on</b><span>{row.label}</span></li>'),
-}
-
-type Sample = { op: number; layer: number; recalc: number; layout: number }
-
-async function once(
-    browser: import('@playwright/test').Browser,
-    built: {
-        markup: string
-        script: string
-    },
-): Promise<Sample> {
-    const context = await browser.newContext()
-    await context.addInitScript(() => {
-        ;(
-            globalThis as unknown as { __ABIDE_LAYERS__: boolean }
-        ).__ABIDE_LAYERS__ = true
-    })
-    const tab: Page = await context.newPage()
-    await tab.goto('about:blank')
-    await tab.setContent(
-        `<!doctype html><html><body>${built.markup}</body></html>`,
-    )
-    await tab.addScriptTag({ content: built.script })
-    await tab.evaluate(() => {
-        ;(globalThis as unknown as { __MOUNT__?: () => void }).__MOUNT__?.()
-    })
-    const trace = await traceOp(tab, 'replace-to-paint', async () => {
-        await tab.evaluate(async (layerName) => {
-            const lane = globalThis as unknown as { __FLUSH__?: () => void }
-            performance.mark('op:start')
-            ;(document.querySelector('#replace') as HTMLElement).click()
-            lane.__FLUSH__?.()
-            await new Promise<void>((resolve) => {
-                const tick = (): void => {
-                    if (performance.getEntriesByName(layerName).length > 0)
-                        requestAnimationFrame(() => resolve())
-                    else requestAnimationFrame(tick)
-                }
-                requestAnimationFrame(tick)
-            })
-            performance.mark('op:end')
-            performance.measure('replace-to-paint', 'op:start', 'op:end')
-        }, LAYER_RECONCILE)
-    })
-    // THE ROWS ARE CHECKED, not assumed: an arm that built nothing is the fastest on the table.
-    const count = await tab.evaluate(
-        () => document.querySelectorAll('#list li').length,
-    )
-    if (count !== ROWS)
-        throw new Error(`built ${count} rows where ${ROWS} are due`)
-    await context.close()
-    const op = trace.measures.find(
-        (measure) => measure.name === 'replace-to-paint',
-    )
-    if (op === undefined) throw new Error('no replace-to-paint measure')
-    let layer = 0
-    for (const measure of trace.measures)
-        if (measure.name === LAYER_RECONCILE)
-            layer += measure.endNanoseconds - measure.startNanoseconds
-    return {
-        op: op.endNanoseconds - op.startNanoseconds,
-        layer,
-        recalc: trace.counters.recalcStyle,
-        layout: trace.counters.layout,
-    }
-}
-
-const median = (values: number[]): number => {
-    const sorted = [...values].sort((left, right) => left - right)
-    return sorted[Math.floor(sorted.length / 2)] as number
 }
 
 const browser = await chromium.launch()
@@ -149,15 +82,26 @@ try {
             : built.script.includes('markupNodes(')
               ? 'PARSED a row'
               : 'unknown'
-        const samples: Sample[] = []
-        for (let run = 0; run < RUNS; run += 1)
-            samples.push(await once(browser, built))
-        const ms = (ns: number): string => (ns / 1e6).toFixed(2)
+        const samples: ArmSample[] = []
+        for (let run = 0; run < RUNS; run += 1) {
+            const tab = await openCompiledPage(browser, built)
+            samples.push(await traceArm(tab, 'replace', LAYER_RECONCILE))
+            // THE ROWS ARE CHECKED, not assumed: an arm that built nothing is the fastest on the table.
+            const count = await tab.evaluate(
+                () => document.querySelectorAll('#list li').length,
+            )
+            if (count !== ROWS)
+                throw new Error(`built ${count} rows where ${ROWS} are due`)
+            await tab.context().close()
+        }
         console.log(
-            `  ${name.padEnd(13)} ${path.padEnd(13)} op ${ms(median(samples.map((s) => s.op)))} ms` +
-                `   abide.reconcile ${ms(median(samples.map((s) => s.layer)))} ms` +
-                `   spread ${ms(Math.min(...samples.map((s) => s.layer)))}-${ms(Math.max(...samples.map((s) => s.layer)))}` +
-                `   recalc ${median(samples.map((s) => s.recalc))}  layout ${median(samples.map((s) => s.layout))}`,
+            `  ${name.padEnd(13)} ${path.padEnd(13)} op ${milliseconds(median(samples.map((s) => s.opNanoseconds)))} ms` +
+                `   abide.reconcile ${milliseconds(median(samples.map((s) => s.layerNanoseconds)))} ms` +
+                `   spread ${spread(
+                    samples.map((s) => s.layerNanoseconds),
+                    milliseconds,
+                )}` +
+                `   recalc ${median(samples.map((s) => s.recalcStyle))}  layout ${median(samples.map((s) => s.layoutCount))}`,
         )
     }
 } finally {

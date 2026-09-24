@@ -73,3 +73,21 @@ export function failed<Name extends string, Data>(
     refusal.data = data
     return refusal
 }
+
+// 15.1 — A REFUSAL AS IT CROSSES A WIRE: the four fields and nothing else, whatever else the object
+// carried — `isFailed` admits another library's error, whose `message` the constructor left unenumerable.
+export function wireFailure(
+    failure: Failed<string, unknown>,
+): Failed<string, unknown> {
+    return {
+        name: failure.name,
+        status: failure.status,
+        message: failure.message,
+        data: failure.data,
+    } as Failed<string, unknown>
+}
+
+// 3.1 — the refusal, matched by name: `Rpc.isError` and a socket's alike.
+export function isFailedNamed(error: unknown, name: string): boolean {
+    return isFailed(error) && error.name === name
+}

@@ -5,7 +5,7 @@
 //
 // WHY ALL THREE OR NONE. `armCase()` zeroes every field it reads, so a field abide declares and
 // never increments is created at 0 and read back at 0 — and every gate asserting it passes
-// against a counter that was never wired (44.24). Publishing two of three is worse than
+// against a counter that was never wired (44.21). Publishing two of three is worse than
 // publishing none, because the third looks measured.
 //
 // WHAT IT COSTS is one integer increment on the propagation walk and one per effect run, and it

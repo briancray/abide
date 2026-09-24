@@ -12,9 +12,9 @@ covers:
   - `rpc.busy`
   - `rpc.ready`
 examples:
-  - packages/dogfood/examples/cache-shared
-  - packages/dogfood/examples/cache-canonical
-  - packages/dogfood/examples/cache-tags
+  - packages/dogfood/examples/cache-shared.json
+  - packages/dogfood/examples/cache-canonical.json
+  - packages/dogfood/examples/cache-tags.json
 ---
 
 A tile shows the week's orders. Another below it shows the average. Both need the same seven days,
@@ -92,8 +92,8 @@ nobody and shows no spinner.
 Args are always plain args. A reactive value in an argument position **reads**; making the call
 follow that value is the enclosing derived value's job.
 
-An `args` schema refuses and does nothing else. The key is taken before it runs (11.26), so it never
-moves a call onto another entry (11.28), and the body gets the args the caller sent.
+An `args` schema never decides the key. The key is taken before it runs (11.26), so it never
+moves a call onto another entry (11.28), and the body gets what it returned (11.69).
 
 ## A keyed value's cache is request-local on a server, process-local in a browser
 

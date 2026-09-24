@@ -1,7 +1,0 @@
-{
-    "title": "`log.named` and `DEBUG` — one namespace on, one off",
-    "summary": "A CRM's own log. Send an invoice, then press Poll — only one of them has a namespace that is on.",
-    "app": "crm",
-    "files": ["src/ui/components/Console.abide"],
-    "route": "/admin/logs"
-}

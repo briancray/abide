@@ -2,34 +2,27 @@
 // reactive core landed as no-ops because the path they improved is 0.055 of a 1.45 ms op,
 // and this is the number that would have stopped either of them being written.
 //
-// WHY THIS DOES NOT CALL `shares()`. The engine lane reads its numerator out of the
-// `performance.measure` pairs THE CODE UNDER TEST EMITS, and abide emits none —
-// `grep -rn 'performance.mark' packages/abide/src` is empty. So there is no numerator for
-// "the compiler's layer" or "the reactive core" without instrumenting the framework, and
-// the honest stand-in is Blink's own ScriptDuration: every JS-layer change is a SUBSET of
-// script, so `script / op` is a ceiling on a ceiling.
-//
-// It over-estimates twice, both in the safe direction — `layers` are metric deltas over
-// the whole traced window, which is wider than the measured op, and `script` is all script
-// including the docs app's own. A layer is smaller than this number, never larger. Once a
-// layer emits marks of its own, `shares()` is the sharper instrument and this becomes the
-// denominator it is priced against.
+// TWO INSTRUMENTS, the blunt one first. Blink's own ScriptDuration is a ceiling: every JS-layer
+// change is a SUBSET of script, so `script / op` bounds any of them — and it over-estimates twice,
+// both in the safe direction: `layers` are metric deltas over the whole traced window, which is
+// wider than the measured op, and `script` includes the docs app's own. Then `shares()`, over the
+// `performance.measure` pairs abide emits under `LAYER_NAMES.ts`, which is the sharper instrument
+// and is priced against the op the first one measured.
 
 import { chromium } from '@playwright/test'
-
-import { shares } from '../src/engine/shares.ts'
+import {
+    LAYER_FILL,
+    LAYER_MOUNT,
+    LAYER_NAVIGATE,
+} from '../../abide/src/ui/LAYER_NAMES.ts'
+import { durationOf, measuresNamed, shares } from '../src/engine/shares.ts'
+import type { Trace } from '../src/engine/Trace.ts'
 import { traceOp } from '../src/engine/traceOp.ts'
 import { THRESHOLDS } from '../src/report/THRESHOLDS.ts'
+import { armLayers } from './armLayers.ts'
+import { median, percent, spread } from './median.ts'
+import { milliseconds } from './milliseconds.ts'
 import { serveDocsApp } from './serveDocsApp.ts'
-
-// THE LAYER NAMES, SPELLED HERE RATHER THAN IMPORTED. `packages/abide/src/ui/LAYER_NAMES.ts` is
-// the source of truth and is framework-internal; pulling it in would either put an abide edge in
-// this script or cost three entries on `ui/index.ts`'s budget for a harness convenience. The
-// duplication is real and the failure is loud: `shares()` throws "found no measure named" rather
-// than reporting a wrong fraction.
-const LAYER_NAVIGATE = 'abide.navigate'
-const LAYER_MOUNT = 'abide.mount'
-const LAYER_FILL = 'abide.fill'
 
 // A CONTENT-HEAVY PAGE AND A SHORTER ONE. The op somebody waits on is the whole
 // navigation, so the pair is two real docs addresses rather than a fixture: a fixture
@@ -49,27 +42,29 @@ type Row = {
     forcedLayout: number
 }
 
-function median(values: number[]): number {
-    const sorted = [...values].sort((left, right) => left - right)
-    return sorted[Math.floor(sorted.length / 2)] as number
-}
-
-function milliseconds(nanoseconds: number): string {
-    return (nanoseconds / 1e6).toFixed(2)
+function rowOf(trace: Trace, op: string): Row {
+    return {
+        opNanoseconds: durationOf(trace, op),
+        script: trace.layers.script,
+        style: trace.layers.style,
+        layout: trace.layers.layout,
+        recalcStyle: trace.counters.recalcStyle,
+        layoutCount: trace.counters.layout,
+        paint: trace.counters.paint,
+        forcedLayout: trace.counters.forcedLayout,
+    }
 }
 
 function report(name: string, rows: Row[]): void {
     const op = rows.map((row) => row.opNanoseconds)
     const script = rows.map((row) => row.script)
     const shares = rows.map((row) => row.script / row.opNanoseconds)
-    const spread = (values: number[]): string =>
-        `${milliseconds(Math.min(...values))} – ${milliseconds(Math.max(...values))}`
     console.log(`\n  ${name}`)
     console.log(
-        `    op         median ${milliseconds(median(op)).padStart(8)} ms   spread ${spread(op)}`,
+        `    op         median ${milliseconds(median(op)).padStart(8)} ms   spread ${spread(op, milliseconds)}`,
     )
     console.log(
-        `    script     median ${milliseconds(median(script)).padStart(8)} ms   spread ${spread(script)}`,
+        `    script     median ${milliseconds(median(script)).padStart(8)} ms   spread ${spread(script, milliseconds)}`,
     )
     console.log(
         `    style      median ${milliseconds(median(rows.map((row) => row.style))).padStart(8)} ms`,
@@ -78,7 +73,7 @@ function report(name: string, rows: Row[]): void {
         `    layout     median ${milliseconds(median(rows.map((row) => row.layout))).padStart(8)} ms`,
     )
     console.log(
-        `    SCRIPT/OP  median ${(median(shares) * 100).toFixed(1)}%   spread ${(Math.min(...shares) * 100).toFixed(1)}% – ${(Math.max(...shares) * 100).toFixed(1)}%   <- the ceiling for any JS-layer change`,
+        `    SCRIPT/OP  median ${(median(shares) * 100).toFixed(1)}%   spread ${spread(shares, percent)}   <- the ceiling for any JS-layer change`,
     )
     console.log(
         `    counters   recalcStyle ${rows.map((row) => row.recalcStyle).join('/')}   layout ${rows.map((row) => row.layoutCount).join('/')}   paint ${rows.map((row) => row.paint).join('/')}   forced ${rows.map((row) => row.forcedLayout).join('/')}`,
@@ -104,14 +99,7 @@ try {
         // A FRESH CONTEXT PER RUN: the second load of a page is a different op, and
         // reusing one context prices the cache rather than the framework.
         const context = await browser.newContext()
-        // ARMED BEFORE ABIDE'S MODULE GRAPH LOADS. `measureLayer.ts` reads the flag once into a
-        // `const` so the disarmed path is one foldable branch rather than a global read per op —
-        // which means an init script and a navigation, not `page.evaluate` after load.
-        await context.addInitScript(() => {
-            ;(
-                globalThis as unknown as { __ABIDE_LAYERS__: boolean }
-            ).__ABIDE_LAYERS__ = true
-        })
+        await armLayers(context)
         const page = await context.newPage()
 
         const load = await traceOp(page, 'navigation-to-paint', async () => {
@@ -134,20 +122,7 @@ try {
                 })
             })
         })
-        const loadAt = load.measures.find(
-            (measure) => measure.name === 'navigation-to-paint',
-        )
-        if (!loadAt) throw new Error('no navigation-to-paint measure')
-        loads.push({
-            opNanoseconds: loadAt.endNanoseconds - loadAt.startNanoseconds,
-            script: load.layers.script,
-            style: load.layers.style,
-            layout: load.layers.layout,
-            recalcStyle: load.counters.recalcStyle,
-            layoutCount: load.counters.layout,
-            paint: load.counters.paint,
-            forcedLayout: load.counters.forcedLayout,
-        })
+        loads.push(rowOf(load, 'navigation-to-paint'))
 
         const navigation = await traceOp(page, 'click-to-paint', async () => {
             await page.evaluate(async (href) => {
@@ -176,21 +151,7 @@ try {
                 performance.measure('click-to-paint', 'op:start', 'op:end')
             }, TO)
         })
-        const navigationAt = navigation.measures.find(
-            (measure) => measure.name === 'click-to-paint',
-        )
-        if (!navigationAt) throw new Error('no click-to-paint measure')
-        clicks.push({
-            opNanoseconds:
-                navigationAt.endNanoseconds - navigationAt.startNanoseconds,
-            script: navigation.layers.script,
-            style: navigation.layers.style,
-            layout: navigation.layers.layout,
-            recalcStyle: navigation.counters.recalcStyle,
-            layoutCount: navigation.counters.layout,
-            paint: navigation.counters.paint,
-            forcedLayout: navigation.counters.forcedLayout,
-        })
+        clicks.push(rowOf(navigation, 'click-to-paint'))
 
         // THE FIRST LAYER-SPECIFIC SHARES THIS REPO HAS HAD. Everything above is `script/op`, a
         // ceiling on a ceiling, because abide emitted no marks of its own and `shares()` had no
@@ -212,11 +173,8 @@ try {
                 // HOW MANY TIMES THE LAYER RAN, which for `abide.fill` is the question: the build
                 // emits 90 call sites over the docs app and what matters is how many a real
                 // navigation reaches. A count, not a clock.
-                let ran = 0
-                for (const measure of navigation.measures)
-                    if (measure.name === layer) ran += 1
                 const counted = layerRuns[layer] ?? []
-                counted.push(ran)
+                counted.push(measuresNamed(navigation, layer).length)
                 layerRuns[layer] = counted
             } catch (thrown) {
                 const refused = layerRefusals[layer] ?? []
@@ -251,12 +209,9 @@ for (const layer of [LAYER_NAVIGATE, LAYER_MOUNT, LAYER_FILL]) {
     const taken = layerShares[layer]
     const refused = layerRefusals[layer]
     if (taken !== undefined && taken.length > 0) {
-        const sorted = [...taken].sort((a, b) => a - b)
-        const median = sorted[Math.floor(sorted.length / 2)] as number
         const ran = layerRuns[layer] ?? []
-        const ranSorted = [...ran].sort((a, b) => a - b)
         console.log(
-            `    ${layer.padEnd(16)} median ${(median * 100).toFixed(1)}%   spread ${((sorted[0] as number) * 100).toFixed(1)}% – ${((sorted[sorted.length - 1] as number) * 100).toFixed(1)}%   ran ${ranSorted[Math.floor(ranSorted.length / 2)] ?? 0}x an op`,
+            `    ${layer.padEnd(16)} median ${(median(taken) * 100).toFixed(1)}%   spread ${spread(taken, percent)}   ran ${ran.length > 0 ? median(ran) : 0}x an op`,
         )
     }
     // NAMED, NOT COUNTED. A layer that refused every run refused for ONE reason, and the reason is

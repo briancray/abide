@@ -181,7 +181,7 @@ test('listeners bound and binding runs are separate rows', () => {
     const work = measure(() => element.addEventListener('click', () => {}))
     expect(work.listenersBound).toBe(1)
     // NULL, not 0. This lane counts listeners and does not count binding runs, and
-    // `0` was the row saying "none ran" about a counter it never reads — 44.23.
+    // `0` was the row saying "none ran" about a counter it never reads — 44.20.
     expect(work.bindingRuns).toBeNull()
 })
 
@@ -196,7 +196,7 @@ test('listeners bound and binding runs are separate rows', () => {
 // above with the number each reports.
 // The shape is IMPORTED rather than restated. It was declared here and in the lane, and
 // abide will declare a third — the wire cannot be typed across the seam (44.1), so the
-// two copies that CAN be one are one, and 44.24 covers the one that cannot.
+// two copies that CAN be one are one, and 44.21 covers the one that cannot.
 function publish(record: Partial<PublishedWork> | undefined): void {
     const global = globalThis as Record<string, unknown>
     if (record === undefined) delete global[PUBLISHED_WORK_KEY]

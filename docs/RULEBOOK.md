@@ -613,6 +613,8 @@ naming the cycle.
 11.68 A `reactive` without `global` MUST be built afresh in each request that reaches it, from its
 declaration and never from what a write outside every request left.
 
+11.69 A keyed value's body MUST be handed what its `args` gate returned.
+
 # 12. Effects
 
 12.1 A `Disposer` MUST run before each rerun of its `Effect`, and once more at teardown.
@@ -755,6 +757,8 @@ warn on `abide:refuse`.
 
 15.15 A `schema` refusal at construction MUST warn on `abide:refuse` rather than stop the `Failed`
 being built.
+
+15.16 An address that will not percent-decode MUST be answered `refuse(400)`.
 
 # 16. Handlers and transports
 
@@ -951,6 +955,8 @@ equality rather than for order.
 18.17 A client reading a `GET` MUST be subscribed over the socket mux to that handler's productions
 for those `Args`.
 
+18.18 `socket` MUST refuse a `Reactive` built without `global`.
+
 # 19. Mount paths and schemas
 
 19.1 A handler declared with `socket` MUST be mounted as 16.2 mounts one declared over http.
@@ -1035,7 +1041,8 @@ one spelling for it, and MUST publish the type-derived `JsonSchema` where it has
 
 21.3 A page, an rpc answer and a refusal MUST default to `cache-control: private, no-store`.
 
-21.4 `/__abide/health` and `/__abide/principal` MUST answer `cache-control: no-store`.
+21.4 `/__abide/health`, `/__abide/principal`, `/__abide/openapi.json` and `/__abide/mcp` MUST answer
+`cache-control: no-store`.
 
 21.5 The built bundle MUST answer `cache-control: public, max-age=31536000, immutable`.
 
@@ -1048,7 +1055,7 @@ app MUST NOT be required to state the duration a second time.
 
 21.9 A `GET` over a `global` `reactive` MUST answer `private`.
 
-21.10 A write through `response` MUST override the default 21.3 states.
+21.10 A write through `response` MUST override every header and the status the answer carries.
 
 21.11 The `max-age` 21.8 derives MUST replace 21.3's `no-store`, and 21.3 MUST decide the rest
 of that header.
@@ -1285,6 +1292,16 @@ carrying a modifier, a `target` or a `download` MUST NOT.
 30.14 A pointer over, a press on or focus on a link 30.13 would take MUST load its route's chunks,
 and MUST NOT make an `Rpc` call.
 
+30.15 `navigate` MUST pass the address it matched through `middleware` before it mounts the page.
+
+30.16 A request `navigate` makes MUST be answered 204 with no body, at the status `middleware`
+wrote where it wrote one.
+
+30.17 `navigate` MUST mount the route a redirect in that answer lands on, at the address it landed
+on.
+
+30.18 `navigate` MUST leave an answer other than 204 to the document.
+
 # 31. Reading and writing by name
 
 31.1 Inside a `.abide` file a name bound to a `Reactive` MUST be read wherever 31.3 does not hold it.
@@ -1392,6 +1409,12 @@ value alike.
 
 32.30 A keyed `{#for}` MUST move a row it keeps, and the move MUST NOT take the row's nodes out of
 the document.
+
+32.31 A slot MUST be bounded by an anchor pair of its own while it holds a value branded by `raw`,
+and MUST NOT be bounded by one while it holds none.
+
+32.32 The anchor pair bounding a slot under 32.31 MUST be distinct from the one bounding a `{#if}`,
+a `{#for}`, a `{#try}`, a `<slot/>` or a `<Name/>`.
 
 # 33. Props
 
@@ -1662,13 +1685,13 @@ app MUST NOT be required to feature-detect.
 
 40.2 Every name REGISTRY carries MUST be documented against real `.abide` and `.ts` files.
 
-40.3 Every `{% example %}` directory SHOULD carry a bench and an end-to-end spec.
+40.3 Every `{% example %}` SHOULD carry an end-to-end spec.
 
-40.4 A file in an `{% example %}` directory that is not part of the problem its summary names MUST
-NOT be there.
+40.4 A file an `{% example %}` names that is not part of the problem its summary names MUST NOT be
+one of its files.
 
-40.5 `{% example %}` MUST render the example directory as the running page above a tab per artifact
-it has, and the render MUST NOT be one of those tabs.
+40.5 `{% example %}` MUST render the example's component inline, above a tab per artifact it has,
+and the render MUST NOT be one of those tabs.
 
 40.6 `{% snippet %}` MUST be how a page shows code from an example, in place of pasting it into a
 fence.
@@ -1685,62 +1708,57 @@ order, with the gap marked rather than closed.
 
 40.11 A panel an `{% example %}` has no artifact for MUST NOT be rendered.
 
-40.12 The hand-written arm an `{% example %}` carries MUST NOT be a panel.
-
-40.13 A page MUST declare in `covers` which REGISTRY names it covers, and an overview or a reference
+40.12 A page MUST declare in `covers` which REGISTRY names it covers, and an overview or a reference
 page MUST declare none.
 
-40.14 Every name `covers` may claim MUST be claimed by exactly one page.
+40.13 Every name `covers` may claim MUST be claimed by exactly one page.
 
-40.15 The voice, the vocabulary and the register of a title against a nav label MUST be
+40.14 The voice, the vocabulary and the register of a title against a nav label MUST be
 `docs/BRAND.md`'s, and MUST NOT be stated here.
 
-40.16 An `{% example %}` MUST run its hand-written arm, and MUST NOT run a scripted stand-in for
-one.
+40.15 An `{% example %}` MUST run the component it names in the docs app, and MUST NOT run a
+stand-in for it.
 
-40.17 The network an `{% example %}` arm talks to MUST be that example's own wire fixture or the
-hand-written server its manifest names, and a request neither answers MUST be reported in the frame
-rather than left to hang.
+40.16 A request an `{% example %}` makes MUST be answered by the docs app's own handlers, and MUST
+NOT be answered by a fixture.
 
-40.18 Instrumentation the documentation adds to an `{% example %}` MUST sit outside the render.
+40.17 Instrumentation the documentation adds to an `{% example %}` MUST sit outside the render.
 
-40.19 Two wire fixtures an `{% example %}` arm's request cannot be told apart by MUST be a build
-failure.
+40.18 A page MUST embed one `{% example %}` per behaviour it teaches.
 
-40.20 A page MUST embed one `{% example %}` per behaviour it teaches.
+40.19 An `{% example %}` MUST demonstrate exactly one behaviour.
 
-40.21 An `{% example %}` MUST demonstrate exactly one behaviour.
+40.20 A readout the hand-written arm paired with an `{% example %}` renders MUST be one that example's
+own source names.
 
-40.22 A readout an `{% example %}` arm renders MUST be one that example's own source names.
+40.21 An `{% example %}` MUST be embedded by exactly one page declaring `covers`.
 
-40.23 An `{% example %}` directory MUST be embedded by exactly one page declaring `covers`.
+40.22 An `{% example %}` MUST model a pattern from an app `docs/BRAND.md` names.
 
-40.24 An `{% example %}` MUST model a pattern from an app `docs/BRAND.md` names.
+40.23 Every `{% example %}` a page embeds MUST be drawn from the same app.
 
-40.25 Every `{% example %}` a page embeds MUST be drawn from the same app.
+40.24 A control an `{% example %}` renders MUST sit with the value it changes.
 
-40.26 A control an `{% example %}` renders MUST sit with the value it changes.
+40.25 An `{% example %}` MUST prove the heading it sits under.
 
-40.27 An `{% example %}` MUST prove the heading it sits under.
+40.26 An `{% example %}` MUST NOT carry code its proof does not need.
 
-40.28 An `{% example %}` MUST NOT carry code its proof does not need.
-
-40.29 The capability an `{% example %}` proves MUST be one the app it is drawn from would reach
+40.27 The capability an `{% example %}` proves MUST be one the app it is drawn from would reach
 for.
 
-40.30 A heading that carries an `{% example %}` MUST be followed by it, with nothing between
+40.28 A heading that carries an `{% example %}` MUST be followed by it, with nothing between
 them.
 
-40.31 An `{% example %}`'s summary MUST state the situation it is in, and MUST NOT restate the
+40.29 An `{% example %}`'s summary MUST state the situation it is in, and MUST NOT restate the
 heading.
 
-40.32 A comment in an `{% example %}`'s own source MUST fit on one line, and a reason longer than
+40.30 A comment in an `{% example %}`'s own source MUST fit on one line, and a reason longer than
 that MUST go in the copy after the card.
 
-40.33 A page's lead MUST read standalone, being what a section overview shows for that page, and
+40.31 A page's lead MUST read standalone, being what a section overview shows for that page, and
 MUST NOT carry a relative link.
 
-40.34 A page whose `covers` names one REGISTRY entry SHOULD open on a section giving that entry's
+40.32 A page whose `covers` names one REGISTRY entry SHOULD open on a section giving that entry's
 forms, the options they share, and a link to its reference page.
 
 # 41. Rendering and hydration
@@ -1890,32 +1908,15 @@ compared against.
 
 44.18 `batch` MUST throw in a parallel worker.
 
-44.19 The producer of a `bench` row MUST be a workspace script, and MUST NOT be a command.
+44.19 A hand-written arm under `harness/arms` MUST be paired with an `{% example %}`.
 
-44.20 A `bench` row MUST say what produced it.
-
-44.21 A `bench` row MUST be written only where both arms produced a number.
-
-44.22 `harness` MUST NOT carry a hand-written arm of its own.
-
-44.23 `measure` MUST report `wakes`, `bindingRuns` and `descents` as absent where no record has been
+44.20 `measure` MUST report `wakes`, `bindingRuns` and `descents` as absent where no record has been
 published, and MUST NOT report zero for one.
 
-44.24 A published record MUST carry every field `measure` reads off it as a number, and `measure`
+44.21 A published record MUST carry every field `measure` reads off it as a number, and `measure`
 MUST throw naming each field that is absent.
 
-44.25 A counter `measure` reads rather than counts MUST be published as a fixed-shape record
+44.22 A counter `measure` reads rather than counts MUST be published as a fixed-shape record
 reached through `globalThis.__ABIDE_WORK__`.
 
-40.35 An `{% example %}` MUST carry one results panel, and the measurement that fills it MUST NOT
-run until the reader asks.
-
-40.36 A reading an `{% example %}` panel renders MUST name the engine it was taken on and the
-window it covers.
-
-40.37 A ratio an `{% example %}` panel renders MUST be between arms batched in one run.
-
-40.38 A figure an `{% example %}` panel shows MUST be counted or measured, and MUST NOT be
-authored.
-
-40.39 A page reporting the build's own results MUST NOT be listed in `NAV`.
+40.33 A page reporting the build's own results MUST NOT be listed in `NAV`.

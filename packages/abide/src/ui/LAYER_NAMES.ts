@@ -11,9 +11,12 @@
 export const LAYER_NAVIGATE = 'abide.navigate'
 export const LAYER_MOUNT = 'abide.mount'
 export const LAYER_RECONCILE = 'abide.reconcile'
-// EVERY REGION THE BROWSER FILLS PARSES A STRING — an `{#if}` arm, a navigated-to page building
-// itself (30.11), a component filling its own region (32.18). Emitted only where a fill actually
-// PARSES: `fillRegion` early-returns on the empty markup that merely empties a region, so the run
-// count of this layer is the number of parses a navigation really performed rather than the number
-// of call sites the build emitted.
+// EVERY REGION THE BROWSER FILLS BY A BUILD — an `{#if}` arm, a navigated-to page building itself
+// (30.11), a component filling its own region (32.18). A fill with no build merely empties the
+// region and opens no layer, so the run count is the number of builds a navigation really ran
+// rather than the number of call sites the build emitted.
 export const LAYER_FILL = 'abide.fill'
+
+// THE GLOBAL THAT ARMS THEM (`measureLayer.ts`), set by the harness before the graph loads — the
+// same string crossing the same seam, so it is a leaf member for the same reason.
+export const LAYERS_ARMED = '__ABIDE_LAYERS__'

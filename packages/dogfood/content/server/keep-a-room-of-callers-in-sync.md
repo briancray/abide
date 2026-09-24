@@ -31,7 +31,9 @@ polls: it is the same `Reactive` the server publishes into, reached from outside
 | `socket(values, options)` | the same, with `clientPublish`, `crossOrigin` or `middleware` |
 
 `values` is a `Reactive` — a channel, where it declares `history` — or a `Keyed` holding one per
-args key, so one socket carries every channel in it (18.1). `Produced` and `Args` come through unchanged, so neither is spelled again here.
+args key, so one socket carries every channel in it (18.1). It is built with `global: true`: a
+channel is one value every caller shares (9.16), and a value built without `global` is
+request-local on a server (11.32), so `socket` refuses one where it is declared (18.18). `Produced` and `Args` come through unchanged, so neither is spelled again here.
 What the options gate is the **transport**: who may connect, who may publish inward, and from
 which origin. Every signature is in the [Transports](../reference/transports.md) reference, and
 what a channel is before it has an address is [Channels](../values/let-anything-publish-and-anything-read.md).
@@ -159,7 +161,7 @@ A moderator removing a message publishes a **tombstone** the block renders as re
 ```ts #shared/threads.ts — excerpt
 type Line = { id: string; body?: string; removed?: true }
 
-export const chat = reactive<Line>(undefined, { history: 200 })
+export const chat = reactive<Line>(undefined, { history: 200, global: true })
 ```
 
 ```abide #ui/pages/threads/[id]/page.abide — excerpt

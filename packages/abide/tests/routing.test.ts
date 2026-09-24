@@ -1,23 +1,29 @@
 // 30.7 — NAVIGATION THAT DOES NOT RELOAD THE DOCUMENT, end to end. The destination's markup is
-// not fetched: a page the reader navigated to is handed the empty anchor pair and fills it from
+// not fetched — the server is asked only whether the navigation may happen (30.15): a page the reader navigated to is handed the empty anchor pair and fills it from
 // the template its own module carries, which is `emitClient`'s `isEmptyRegion` guard doing for a
 // PAGE exactly what it already did for an invoked component (32.18).
 //
 // THE SAME MODULE BOTH WAYS IN is the claim worth holding: the page the server painted hydrates
 // where it stands because its region is not empty, and the page navigated to fills because it is.
 
-import { afterAll, expect, test } from 'bun:test'
+import { afterAll, afterEach, expect, test } from 'bun:test'
 import { emitClient, emitComponent, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { composePage } from '#server/render.ts'
-import { flushSync, navigate } from '#shared'
+import { flushSync, navigate, route } from '#shared'
 import { CURRENT_ROUTER } from '#shared/CURRENT_ROUTER.ts'
-import { matchRoute } from '#shared/matchRoute.ts'
+import {
+    coversPrefix,
+    firstMatch,
+    type Params,
+    partsOf,
+} from '#shared/matchRoute.ts'
 import {
     compareRoutes,
     parseRoutePattern,
     routeOf,
+    type Segment,
 } from '#shared/routePattern.ts'
 import { applyHead } from '#ui/applyHead.ts'
 import { listenForRoutes, type PageMount, startRouter } from '#ui/routing.ts'
@@ -25,10 +31,30 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
+// 30.15 — THE SERVER EVERY NAVIGATION ASKS FIRST: a go-ahead unless a test says otherwise, and
+// the addresses asked, in order.
+const asked: string[] = []
+const goAhead = (): Response => new Response(null, { status: 204 })
+let answering: (url: URL) => Response = goAhead
+const unstubbed = globalThis.fetch
+globalThis.fetch = (async (input: URL | string) => {
+    const url = new URL(String(input))
+    asked.push(url.pathname)
+    const answer = answering(url)
+    // A fetched answer carries the address it came from, and one built by hand carries ''.
+    return answer.url === ''
+        ? Object.defineProperty(answer, 'url', { value: url.href })
+        : answer
+}) as typeof fetch
+afterEach(() => {
+    answering = goAhead
+    asked.length = 0
+})
 afterAll(() => {
     session.close()
     removeTemporaryModules()
     CURRENT_ROUTER.current = null
+    globalThis.fetch = unstubbed
 })
 
 const HOME = `<script>
@@ -49,7 +75,9 @@ let rows = reactive(['one', 'two'])
 
 <main id="invoice"><h1>Invoice</h1><ul>{#for row of rows by row}<li>{row}</li>{/for}</ul></main>`
 
-async function pages(): Promise<Record<string, PageMount>> {
+async function pages(
+    shell = '<!doctype html><html><head></head><body></body></html>',
+): Promise<Record<string, PageMount>> {
     const modules: Record<string, string> = {}
     for (const [name, source] of Object.entries({
         Home: HOME,
@@ -68,10 +96,7 @@ async function pages(): Promise<Record<string, PageMount>> {
     // The server's painting of the HOME page only — the one the reader arrived at.
     const { default: Component } = await import(`${dir}/Home.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
+    for await (const chunk of render(Component, shell))
         html += new TextDecoder().decode(chunk)
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
@@ -95,6 +120,12 @@ function router(mounts: Record<string, PageMount>) {
     ])
 }
 
+function matchRoute(segments: Segment[], pathname: string): Params | null {
+    const parts = partsOf(pathname)
+    if (parts === undefined) return null
+    return firstMatch([{ segments }], parts)?.params ?? null
+}
+
 test('a page the server painted hydrates, and the one navigated to builds itself — 30.7', async () => {
     history.replaceState(null, '', '/')
     const mounts = await pages()
@@ -108,7 +139,7 @@ test('a page the server painted hydrates, and the one navigated to builds itself
     flushSync()
     expect(document.querySelector('#home p')?.textContent).toBe('1')
 
-    // NAVIGATED TO: no server, no fetch. The module fills the region it was handed.
+    // NAVIGATED TO: the server is asked, and the module fills the region it was handed.
     await navigate('/invoices/42')
     flushSync()
     expect(location.pathname).toBe('/invoices/42')
@@ -117,6 +148,176 @@ test('a page the server painted hydrates, and the one navigated to builds itself
     expect(
         [...document.querySelectorAll('#invoice li')].map((n) => n.textContent),
     ).toEqual(['one', 'two'])
+})
+
+// 30.17 — A REDIRECT THE SERVER'S MIDDLEWARE WROTE IS WHERE THE NAVIGATION LANDS, mounted and
+// written to the address bar in place of the address asked for. THE REVERT: commit `target` whether
+// or not the answer was redirected; the bar reads /invoices/42 and the page its params.
+test('a navigation lands where the server redirected it — 30.15, 30.17', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    await r.hydrate()
+    answering = (url) =>
+        Object.defineProperties(goAhead(), {
+            redirected: { value: url.pathname === '/invoices/42' },
+            url: { value: new URL('/invoices/7', url).href },
+        })
+    await navigate('/invoices/42')
+    flushSync()
+    expect(asked).toEqual(['/invoices/42'])
+    expect(location.pathname).toBe('/invoices/7')
+    expect(route.params()).toEqual({ id: '7' })
+    expect(document.querySelector('#invoice h1')?.textContent).toBe('Invoice')
+})
+
+// 30.18 — ANYTHING BUT A GO-AHEAD IS THE DOCUMENT'S: the router mounts nothing and writes no history
+// entry. THE REVERT: drop the status check in `Router.go`; the invoice mounts under a refusal.
+test('a navigation the server refuses is left to the document — 30.18', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    await r.hydrate()
+    const entries = history.length
+    let left = ''
+    answering = () => new Response('refused', { status: 403 })
+    const assign = Object.getOwnPropertyDescriptor(location, 'href')
+    Object.defineProperty(location, 'href', {
+        configurable: true,
+        get: () => 'http://localhost/',
+        set: (to: string) => {
+            left = to
+        },
+    })
+    try {
+        await navigate('/invoices/42')
+    } finally {
+        if (assign !== undefined)
+            Object.defineProperty(location, 'href', assign)
+        else delete (location as { href?: string }).href
+    }
+    flushSync()
+    expect(left).toEndWith('/invoices/42')
+    expect(history.length).toBe(entries)
+    expect(document.querySelector('#invoice')).toBeNull()
+    expect(document.querySelector('#home h1')?.textContent).toBe('Home')
+})
+
+// 23.1, 23.2, 23.6 — THE ROUTER FILLS `route`: at hydration from the address the server painted, and
+// on a navigation BEFORE the arriving page mounts, with `navigating` true for as long as its chunk
+// is loading. THE REVERT: move `arrive` after `mountFrom` in `Router.go`; the page's setup reads
+// the params of the address it left, and this reports `{}` where `{ id: '7' }` is due.
+test('the router fills route on hydration and on a navigation — 23.1, 23.2', async () => {
+    history.replaceState(null, '', '/')
+    const mounts = await pages()
+    let release = (): void => {}
+    let seen: unknown
+    const r = startRouter([
+        {
+            pattern: '/invoices/[id]',
+            load: () =>
+                new Promise((done) => {
+                    release = () =>
+                        done({
+                            default: ((region, props) => {
+                                seen = route.params()
+                                return (mounts.invoice as PageMount)(
+                                    region,
+                                    props,
+                                )
+                            }) as PageMount,
+                        })
+                }),
+            layouts: [],
+        },
+        {
+            pattern: '/',
+            load: async () => ({ default: mounts.home as PageMount }),
+            layouts: [],
+        },
+    ])
+    await r.hydrate()
+    expect(route.name()).toBe('/')
+    expect(route.url().pathname).toBe('/')
+    expect(route.navigating()).toBe(false)
+    const before = route.url()
+
+    const going = navigate('/invoices/7?tab=lines')
+    await Promise.resolve()
+    expect(route.navigating()).toBe(true)
+    release()
+    await going
+    expect(route.navigating()).toBe(false)
+    expect(seen).toEqual({ id: '7' })
+    expect(route.name()).toBe('/invoices/[id]')
+    expect(route.url().search).toBe('?tab=lines')
+    expect(route.url()).not.toBe(before)
+})
+
+// 23.2 — A NAVIGATION THAT THROWS IS STILL OVER. THE REVERT: clear `navigating` only on the paths
+// that complete, as `Router.go` did; a page whose setup throws then leaves it true for good, and
+// every "loading…" bound to it stays up over a page that never arrived.
+test('a page whose setup throws still ends the navigation — 23.2', async () => {
+    history.replaceState(null, '', '/')
+    const mounts = await pages()
+    const r = startRouter([
+        {
+            pattern: '/invoices/[id]',
+            load: async () => ({
+                default: (() => {
+                    throw new Error('setup failed')
+                }) as PageMount,
+            }),
+            layouts: [],
+        },
+        {
+            pattern: '/',
+            load: async () => ({ default: mounts.home as PageMount }),
+            layouts: [],
+        },
+    ])
+    await r.hydrate()
+    let thrown: unknown
+    try {
+        await navigate('/invoices/7')
+    } catch (error) {
+        thrown = error
+    }
+    expect((thrown as Error | undefined)?.message).toBe('setup failed')
+    expect(route.navigating()).toBe(false)
+})
+
+// 15.16, 30.10 — AN ADDRESS THAT WILL NOT PERCENT-DECODE IS NO ROUTE, and the router leaves it to
+// the document rather than throwing. THE REVERT: let `partsOf` throw the `URIError`; this `match`
+// then throws, and so does every hover, focus and click on a link to such an address.
+test('an address that will not percent-decode matches nothing — 15.16, 30.10', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    expect(r.match('/%E0%A4%A')).toBeUndefined()
+    expect(r.match('/invoices/%E0%A4%A')).toBeUndefined()
+    expect(r.match('/invoices/42')?.params).toEqual({ id: '42' })
+})
+
+// 41.9 — THE PAGE IS THE PAIR THE SERVER WROTE, and what a shell puts in the body beside it is not
+// the page. THE REVERT: write `rendered.body` bare in `render` and have `startRouter` put a pair
+// round the host's first child and its last non-script one, as it did; the walk then starts at the
+// shell's `<header>`, so the page hydrates dead (`#home p` stays 0 where 1 is due), and the first
+// navigation removes the header and the script with the page.
+test("a shell's own body markup stays outside the page region — 41.9", async () => {
+    history.replaceState(null, '', '/')
+    const mounts = await pages(
+        '<!doctype html><html><head></head><body><header id="shell">chrome</header><script id="entry"></script></body></html>',
+    )
+    const r = router(mounts)
+    await r.hydrate()
+    flushSync()
+    ;(document.querySelector('#bump') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelector('#home p')?.textContent).toBe('1')
+
+    await navigate('/invoices/42')
+    flushSync()
+    expect(document.querySelector('#invoice h1')?.textContent).toBe('Invoice')
+    expect(document.querySelector('#shell')?.textContent).toBe('chrome')
+    expect(document.querySelector('#entry')).not.toBeNull()
 })
 
 // 12.13 through the router: the page it replaced owned a scope, and the router is the only thing
@@ -128,7 +329,7 @@ test('the page a navigation replaced stops its bindings — 12.13', async () => 
     const r = router(mounts)
     await r.hydrate()
     flushSync()
-    const scope = r.scope
+    const scope = r.levels.at(-1)?.scope
     expect(scope?.stops.length).toBeGreaterThan(0)
 
     await navigate('/invoices/42')
@@ -210,6 +411,23 @@ test('a route literal is matched in the spelling its directory is filed under �
         matchRoute(parseRoutePattern('/files/[...rest]'), '/files/a/b'),
     ).toEqual({ rest: ['a', 'b'] })
     expect(matchRoute(parseRoutePattern('/x/[[y]]'), '/x')).toEqual({})
+})
+
+// 30.4 — AN OPTIONAL LEFT OUT OMITS ITS SEGMENT WHEREVER IT STANDS, not only at the end. THE REVERT:
+// take an optional's part greedily and never retry without it; `/[[lang]]/docs` then spends `docs`
+// on `lang` and misses `/docs`, and an error page under it stops covering the addresses below.
+test('an optional in the middle may be left out — 30.4, 35.2', () => {
+    const docs = parseRoutePattern('/[[lang]]/docs')
+    expect(matchRoute(docs, '/docs')).toEqual({})
+    expect(matchRoute(docs, '/en/docs')).toEqual({ lang: 'en' })
+    expect(matchRoute(docs, '/en/other')).toBeNull()
+    expect(coversPrefix(docs, ['docs', 'intro'])).toBe(true)
+    expect(coversPrefix(docs, ['en', 'docs', 'intro'])).toBe(true)
+    expect(coversPrefix(docs, ['blog'])).toBe(false)
+    // A rest takes nothing as readily as something, so its directory covers its own address.
+    expect(coversPrefix(parseRoutePattern('/files/[...path]'), ['files'])).toBe(
+        true,
+    )
 })
 
 // 30.9 — THE MOST SPECIFIC ROUTE WINS, and every case here is one where TWO patterns match the
@@ -347,7 +565,7 @@ test('a superseded navigation does not mount over the one that replaced it', asy
     const winner = r.go('/')
     await winner
     flushSync()
-    const settled = r.scope
+    const settled = r.levels.at(-1)?.scope
 
     landInvoice()
     await superseded
@@ -358,7 +576,7 @@ test('a superseded navigation does not mount over the one that replaced it', asy
     expect(document.querySelector('#home h1')?.textContent).toBe('Home')
     // AND THE WINNER'S SCOPE IS STILL THE ROUTER'S — the superseded mount never replaced it, so
     // there is no page left awake with nothing able to stop it.
-    expect(r.scope).toBe(settled)
+    expect(r.levels.at(-1)?.scope).toBe(settled)
 })
 
 // 35.1 AND 41.11 ON THE CLIENT. A layout is mounted once and the page under it is what a
@@ -392,7 +610,7 @@ async function chained(): Promise<{
     })) {
         const file = parseAbide(source)
         const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
-        modules[`${name}.ts`] = emitComponent(file, reads)
+        modules[`${name}.ts`] = emitComponent(file, reads, true)
         modules[`${name}.client.ts`] = emitClient(file, reads, 'once')
     }
     const dir = temporaryModule(modules)

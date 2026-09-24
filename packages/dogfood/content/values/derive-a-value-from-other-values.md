@@ -6,12 +6,12 @@ covers:
   - `Keyed`
   - `reactive` body, unkeyed
 examples:
-  - packages/dogfood/examples/memo-tracked
-  - packages/dogfood/examples/memo-adoption
-  - packages/dogfood/examples/memo-write
-  - packages/dogfood/examples/memo-keyed
-  - packages/dogfood/examples/memo-await
-  - packages/dogfood/examples/memo-provisional
+  - packages/dogfood/examples/memo-tracked.json
+  - packages/dogfood/examples/memo-adoption.json
+  - packages/dogfood/examples/memo-write.json
+  - packages/dogfood/examples/memo-keyed.json
+  - packages/dogfood/examples/memo-await.json
+  - packages/dogfood/examples/memo-provisional.json
 ---
 
 Everything on this page is `reactive` given a body: a value computed from other values, which
@@ -151,7 +151,7 @@ at all, so the top `Save` is live until the answer arrives.
 
 Only you know which answer is safe before there is one, so say it with the probe:
 
-{% snippet memo-provisional src/ui/components/Contact.abide <button disabled={!mode %}
+{% snippet memo-provisional src/ui/components/MemoProvisionalContact.abide <button disabled={!mode %}
 
 Locked is the answer until the gate says otherwise, so the second `Save` is dead on the first frame
 rather than live for one.

@@ -1,0 +1,11 @@
+{
+    "title": "`rpc.isError(e, name)` — the refusal, matched by name",
+    "summary": "Three invoices on one account. Open the second and the third — each is refused for a different reason.",
+    "app": "crm",
+    "files": [
+        "src/shared/refuseNarrowedFailures.ts",
+        "src/server/rpc/refuseNarrowedInvoices.ts",
+        "src/ui/components/RefuseNarrowedInvoice.abide"
+    ],
+    "render": "src/ui/components/RefuseNarrowedInvoice.abide"
+}

@@ -15,7 +15,7 @@ import type { Reading } from './Reading.ts'
 install()
 watchLongTasks()
 // THE LOAD CASE IS NOT ARMED HERE. Counting a page load is something the DOCUMENTATION
-// does — 40.18 — and arming it in the lane made `measure()` throw "already armed" for
+// does — 40.17 — and arming it in the lane made `measure()` throw "already armed" for
 // every other caller in the same page, which is what the both-substrates gate does.
 // The caller that wants a load counted arms one; the lane just offers the pair.
 ;(

@@ -12,6 +12,7 @@ import { compileFile, emitClient, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
+import { pageRegion } from '#ui/regions.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { clientOf, closeTyped } from './typed.ts'
 
@@ -70,7 +71,8 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
     // merges into a single text node when parsed, so there is nothing to separate and nothing
     // invented to separate it with.
     expect(html).toContain('<p id="out">clicks: 0</p>')
-    expect(html).not.toContain('<!--')
+    // The page's own pair (41.9) and not one comment more.
+    expect((html.match(/<!--/g) ?? []).length).toBe(2)
     expect(html).not.toContain('data-a')
     // 32.4 — the handler is a listener, and the server writes no `onclick` for it to fire from.
     expect(html).not.toContain('onclick')
@@ -80,11 +82,11 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
     // never again — a click-only measurement reports the same 1 with the mechanism out and
     // distinguishes nothing, which is what the revert showed when this was written that way.
     const mountWork = measure(() => {
-        mount(document.body)
+        mount(pageRegion(document.body))
         flushSync()
     })
     // Two slots on this page, ONE of which reads a reactive value. THE REVERT: drop the
-    // `readsReactive` check in `emitClient`; this reports `bindingRuns` 1 -> 2 and `wakes`
+    // `isLiveRun` check in `emitClient`; this reports `bindingRuns` 1 -> 2 and `wakes`
     // 1 -> 2, and both grow with every static slot on the page.
     expect(mountWork.bindingRuns).toBe(1)
     expect(mountWork.wakes).toBe(1)
@@ -114,7 +116,7 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
 // A RUN reading nothing reactive is written once by the server and never again. The page below
 // has TWO runs — one static, one live — which is what makes the case distinguish: a page whose
 // only run is live reports one binding whether the check is there or not. THE REVERT: drop
-// `readsReactive` in `emitClient` and bind every run; this reports 2 bindings where 1 is due, and
+// `isLiveRun` in `emitClient` and bind every run; this reports 2 bindings where 1 is due, and
 // the mount gate below reports `bindingRuns` 2 where it reports 1.
 test('a run that reads nothing reactive opens no binding', async () => {
     const source = `<script>
@@ -132,13 +134,13 @@ const label = 'clicks'
     const client = emitClient(file, names)
 
     // The live run is the only one bound, found through the `<p>` it stands in.
-    expect(client).toContain('const __c3 = __blankHere(__c2?.firstChild, __c2)')
+    expect(client).toContain('const __c3 = __runHere(__c2?.firstChild, __c2)')
     expect(client).toContain('__setText(__t3,')
     // The STATIC run is not even WALKED. It stands inside the first `<p>`, and the second `<p>`
     // is found from the first one's `nextSibling` — not by counting inside it — so nothing after
     // the static run is found through it and there is nothing for its node to hold a place for.
     expect(client).not.toContain('__c0?.firstChild')
-    expect(client.match(/__blankHere\(/g) ?? []).toHaveLength(1)
+    expect(client.match(/__runHere\(/g) ?? []).toHaveLength(1)
     // `watchEffect` at the top level, `watch` inside a `{#if}` arm — the second is a local that
     // collects its disposer so a branch swap can stop it. Either spelling counts as a binding.
     expect(client.match(/watch(Effect)?\(/g) ?? []).toHaveLength(1)
@@ -163,7 +165,7 @@ test('a static page emits no client module', async () => {
 //
 // THE SLOT IS ADDRESSABLE AFTERWARDS, which is the half that makes the hole legal rather than a
 // mismatch waiting to happen: a run every part of which is an expression is `blank` (`isBlankRun`),
-// and the client's walk puts its text node back as it passes (`blankHere`). That mechanism
+// and the client's walk puts its text node back as it passes (`runHere`). That mechanism
 // predates this and is why the fix is a catch rather than a placeholder node.
 //
 // THE REVERT: make `unlandable` answer `lowered` unconditionally, so `emitNode`'s expression arm
@@ -188,7 +190,7 @@ const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
 
     // AND IT FILLS. The client re-runs the body (41.6), the value lands, and the binding writes
     // into a text node that was not in the document the server wrote — which is `blank`'s arm.
-    mount(document.body)
+    mount(pageRegion(document.body))
     await Promise.resolve()
     await Promise.resolve()
     flushSync()
@@ -219,7 +221,7 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
     // The block rendered its anchors and no rows, which is 32.23's zero times.
     expect(document.querySelectorAll('#list li')).toHaveLength(0)
 
-    mount(document.body)
+    mount(pageRegion(document.body))
     // A MACROTASK, NOT TWO MICROTASKS. The subject lands in a microtask, the list reconciles in
     // the turn the write wakes, and a slot that is one read is ready a tick sooner than a block
     // that has to build rows — which is why the text case above needs less than this one.
@@ -270,7 +272,7 @@ const width = reactive(() => Promise.resolve('40px'))
 
     // AND BOTH FILL. THE REVERT: drop the `plan.attributes` loop in `emitRegion` — the document
     // is identical and both values stay empty for the life of the page.
-    mount(document.body)
+    mount(pageRegion(document.body))
     await new Promise((resolve) => setTimeout(resolve, 0))
     flushSync()
     expect(document.querySelector('#attr')?.getAttribute('title')).toBe('warm')
@@ -312,7 +314,7 @@ const shown = reactive(() => Promise.resolve(true))
     expect(html).not.toContain('id="arm"')
     expect(html).not.toContain('id="off"')
 
-    mount(document.body)
+    mount(pageRegion(document.body))
     await new Promise((resolve) => setTimeout(resolve, 0))
     flushSync()
     expect(document.querySelector('#arm')?.textContent).toBe('on')
@@ -346,13 +348,13 @@ const kind = 'card'
 
     // ONE BINDING PER LIVE POSITION AND NONE FOR THE OTHER TWO. `class="card"` never reaches the
     // plan at all — it holds no expression — and `data-kind={kind}` does, which is the one the
-    // `readsIn` check is actually for: an expression that reads nothing reactive is written once
+    // `isLive` check is actually for: an expression that reads nothing reactive is written once
     // by the server and never moves, and a binding for it is a reader woken on every page for
     // nothing. The static attribute cannot distinguish that, and asserting it was the whole of
     // this gate until the revert showed nothing failing.
-    // THE REVERT: drop the `readsIn` check in the attribute loop; this reports 3.
+    // THE REVERT: drop the `isLive` check in the attribute loop; this reports 3.
     const mountWork = measure(() => {
-        mount(document.body)
+        mount(pageRegion(document.body))
         flushSync()
     })
     expect(mountWork.bindingRuns).toBe(2)
@@ -401,7 +403,7 @@ let late = reactive(false)
     expect(html).toContain('class="badge"')
     expect(html).not.toContain('overdue')
 
-    mount(document.body)
+    mount(pageRegion(document.body))
     flushSync()
 
     const out = document.querySelector('#out') as HTMLElement
@@ -445,7 +447,7 @@ let shown = reactive('waiting')
 <p id="out">{shown}</p>
 <button id="go" onclick={async () => { shown = String(await total) }}>go</button>`)
 
-    mount(document.body)
+    mount(pageRegion(document.body))
     flushSync()
     ;(document.querySelector('#go') as HTMLElement).click()
     await new Promise((resolve) => setTimeout(resolve, 60))
@@ -483,9 +485,9 @@ const rows = await Promise.resolve(1)
 // A TEMPLATE POSITION CANNOT AWAIT EITHER, and for its own reason: every slot, subject and
 // attribute value is lowered into an ordinary arrow inside the markup concatenation, so there is
 // no function for an `await` to belong to at all. Apart from 34.3 because the refusal is the
-// lowering's rather than the projection's, and a slot has no top level to speak of.
+// checker's slot walk rather than the projection's, and a slot has no top level to speak of.
 //
-// THE REVERT: drop the `refuseAwait` call from `Lowering.slot`. The compile succeeds and the
+// THE REVERT: drop the `await` throw from `slotFacts`. The compile succeeds and the
 // import of the emitted module reports the same bundler error, naming neither the page nor the
 // slot.
 test('a template position cannot await', async () => {
@@ -509,7 +511,7 @@ const rows = reactive(async () => 1)
 // ordinary handler and the `await` belongs to the arrow the author wrote; refused, a shape that
 // had always worked stopped compiling.
 //
-// THE REVERT: drop the `async` arm of `Lowering.refuseAwait`. This reports
+// THE REVERT: drop the `FUNCTIONS` arm of `slotFacts`. This reports
 // `a template position cannot await` against a page that is entirely correct.
 test('a slot that declares its own async may await in it', async () => {
     const { mount } = await mountPage(`<script>
@@ -522,7 +524,7 @@ const later = async () => 'done'
 <p id="out">{shown}</p>
 <button id="go" onclick={async () => { shown = await later() }}>go</button>`)
 
-    mount(document.body)
+    mount(pageRegion(document.body))
     flushSync()
     ;(document.querySelector('#go') as HTMLElement).click()
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -562,7 +564,7 @@ let b = reactive('B')
     const one = document.querySelector('#one') as HTMLElement
     one.innerHTML = '<em>aA</em>'
 
-    mount(document.body)
+    mount(pageRegion(document.body))
     flushSync()
 
     // THE BINDING AFTER THE REFUSAL IS LIVE.
@@ -571,4 +573,31 @@ let b = reactive('B')
     expect(document.querySelector('#two')?.textContent).toBe('bB2')
     // And so is the listener, which stands in a later unit again.
     expect(document.querySelector('#one')?.textContent).toBe('aA')
+})
+
+// 32.28 IN A RUN THAT MOVES. Static text is markup, so `AT&amp;T` is the four characters `AT&T`
+// wherever it is written — and a LIVE run's binding writes the whole run through `data`, which is
+// not a parse, so the static piece has to go in decoded or the entity lands on the screen as its
+// own bytes the first time the binding runs. The build path decodes the same piece the same way
+// (`decodedText`), which is what keeps a painted run and a written one the same text.
+//
+// THE REVERT: push the static piece's bytes as they stand (`JSON.stringify(node.text)`) into the
+// live run's text branch in `emitClient`. This reports `AT&amp;T 0` at mount and `AT&amp;T 1` after
+// the click, where `AT&T 0` and `AT&T 1` are due.
+test('a live run writes its static entities as the characters they stand for — 32.28', async () => {
+    const { mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+let count = reactive(0)
+</script>
+
+<p id="out">AT&amp;T {count}</p>
+<button onclick={() => count = count + 1}>more</button>`)
+    mount(pageRegion(document.body))
+    flushSync()
+    const out = document.querySelector('#out') as HTMLElement
+    expect(out.textContent).toBe('AT&T 0')
+    ;(document.querySelector('button') as HTMLElement).click()
+    flushSync()
+    expect(out.textContent).toBe('AT&T 1')
 })

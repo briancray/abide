@@ -13,7 +13,7 @@ import {
 // `.abide` that carries both — so a gate on the prose asks the body, and a gate on what the page
 // OFFERS asks the two the generator writes around it.
 async function bodyOf(page: Page, pages: Page[]): Promise<string> {
-    return await renderBody(page, pages)
+    return (await renderBody(page, pages)).body
 }
 
 async function markdownPages() {
@@ -100,9 +100,54 @@ test('an embedded example brings its files into the markdown', async () => {
             candidate.slug === 'server/read-data-without-writing-an-api',
     )
     const markdown = await renderPageMarkdown(page!, pages)
-    expect(markdown).toContain('```ts #server/rpc/invoices.ts')
-    expect(markdown).toContain('```abide #ui/pages/invoices/[id]/page.abide')
-    expect(markdown).toContain('[rpc-call.zip](../examples/rpc-call.zip)')
+    expect(markdown).toContain('```ts #server/rpc/rpcCallInvoices.ts')
+    expect(markdown).toContain('```abide #ui/components/RpcCallInvoice.abide')
+})
+
+// A CARD IS A COMPONENT THE PAGE INVOKES, swapped in for the marker the card leaves. A marker
+// that survives into the page is a card with nothing in it and a build that exits 0, so every
+// page is asked: no marker left, and each example's component imported and invoked once.
+test('every card on a page invokes the component its example names', async () => {
+    const pages = await readPages()
+    const empty: string[] = []
+    for (const page of pages) {
+        const { body, examples } = await renderBody(page, pages)
+        const source = pageSource(page, directoryOf(page.slug), body, examples)
+        if (source.includes('<!--render:')) empty.push(`${page.slug}: a marker`)
+        for (const example of examples) {
+            const tag = `<${example.component}/>`
+            if (source.split(tag).length !== 2)
+                empty.push(`${page.slug}: ${example.name} is not invoked once`)
+            if (!source.includes(`import ${example.component} from`))
+                empty.push(`${page.slug}: ${example.name} is not imported`)
+        }
+    }
+    expect(empty).toEqual([])
+})
+
+// HTML WRITTEN INTO A TEMPLATE IS TEMPLATE. A brace in a code sample would open a slot, and a
+// line break between two highlighted spans is a whitespace-only text node the template drops —
+// both render as the wrong code with nothing failing, so the page source is asked for neither.
+test('a page body carries no brace and no bare line break inside a code block', async () => {
+    const pages = await readPages()
+    const leaked: string[] = []
+    for (const page of pages) {
+        const { body, examples } = await renderBody(page, pages)
+        const source = pageSource(page, directoryOf(page.slug), body, examples)
+        const markup = source.slice(
+            source.indexOf('<main'),
+            source.indexOf('</main>'),
+        )
+        const stripped = markup
+            .replace(/<footer>\{raw\(CONTENT\.footer\)\}<\/footer>/, '')
+            .replace(/<header>\{raw\(CONTENT\.header\)\}<\/header>/, '')
+            .replace(/<main[^>]*>/, '')
+        if (/[{}]/.test(stripped)) leaked.push(`${page.slug}: a brace`)
+        for (const block of stripped.matchAll(/<pre\b[\s\S]*?<\/pre>/g))
+            if (block[0].includes('\n'))
+                leaked.push(`${page.slug}: a line break`)
+    }
+    expect(leaked).toEqual([])
 })
 
 test('the bundle carries every page, in nav order', async () => {
@@ -126,7 +171,8 @@ test('every page offers its own markdown and the bundle', async () => {
         const page = pages[index]
         if (!page) continue
         const rail = railOf(page, await bodyOf(page, pages))
-        const source = pageSource(page, directoryOf(page.slug))
+        const { body, examples } = await renderBody(page, pages)
+        const source = pageSource(page, directoryOf(page.slug), body, examples)
         if (!rail.includes(`<a href="/${page.slug}.md" download>`))
             missing.push(`${page.slug}: page`)
         if (!rail.includes('<a href="/abide.md" download>'))

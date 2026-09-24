@@ -1,0 +1,10 @@
+{
+    "title": "A call hands back a `Reactive`, not a promise",
+    "summary": "An invoice and the reminder button that must not fire before it lands. Wait for the total, then press Reload.",
+    "app": "crm",
+    "files": [
+        "src/server/rpc/rpcReactiveInvoices.ts",
+        "src/ui/components/RpcReactiveInvoice.abide"
+    ],
+    "render": "src/ui/components/RpcReactiveInvoice.abide"
+}

@@ -1,5 +1,4 @@
-// THE BUILD'S OWN PAGE, SERVED LIVE. Every suite's pass and fail, every counted
-// benchmark, the machinery triple, and a browser pass over every example card —
+// THE BUILD'S OWN PAGE, SERVED LIVE. Every suite's pass and fail and the machinery triple,
 // each behind an endpoint the reader triggers.
 //
 // IT HOLDS NO RESULTS AND WRITES NO FILE. A generated page could not survive its own
@@ -13,7 +12,6 @@
 // an instrument.
 
 import { machineryCounts } from './machineryCounts.ts'
-import { type CardReading, readExampleReadings } from './readExampleReadings.ts'
 import {
     BUN_REPORT,
     PLAYWRIGHT_REPORT,
@@ -25,7 +23,6 @@ import { STATUS_SCRIPT } from './STATUS_SCRIPT.ts'
 import { serveDocsApp } from './serveDocsApp.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
-const EXAMPLES = new URL('../../dogfood/examples/', import.meta.url)
 
 const UNIT_PATHS = [
     'packages/abide',
@@ -77,70 +74,8 @@ const SUITES: Record<string, () => Promise<SuiteRun>> = {
         }),
 }
 
-async function counted(): Promise<{
-    rows: {
-        example: string
-        metric: string
-        abide: string
-        vanilla: string
-        ratio: string
-    }[]
-}> {
-    const rows = []
-    for (const path of new Bun.Glob('*/example.json').scanSync({
-        cwd: EXAMPLES.pathname,
-    })) {
-        const example = path.slice(0, path.indexOf('/'))
-        const manifest = (await Bun.file(new URL(path, EXAMPLES)).json()) as {
-            bench?: {
-                rows: {
-                    metric: string
-                    abide: string
-                    vanilla: string
-                    ratio: string
-                }[]
-            }
-        }
-        for (const row of manifest.bench?.rows ?? [])
-            rows.push({ example, ...row })
-    }
-    return { rows }
-}
-
 function json(value: unknown): Response {
     return Response.json(value)
-}
-
-// NDJSON, one line per card. A pass that takes minutes fills the table as it goes,
-// and a failure part-way through arrives as a line rather than as a dead request.
-function streamedMeasure(): Response {
-    const encoder = new TextEncoder()
-    return new Response(
-        new ReadableStream({
-            async start(controller) {
-                const send = (value: unknown): void => {
-                    controller.enqueue(
-                        encoder.encode(`${JSON.stringify(value)}\n`),
-                    )
-                }
-                try {
-                    await readExampleReadings(
-                        (card: CardReading, done: number, total: number) =>
-                            send({ card, done, total }),
-                    )
-                } catch (error) {
-                    send({
-                        error:
-                            error instanceof Error
-                                ? error.message
-                                : String(error),
-                    })
-                }
-                controller.close()
-            },
-        }),
-        { headers: { 'content-type': 'application/x-ndjson' } },
-    )
 }
 
 export async function serveStatus(): Promise<void> {
@@ -165,9 +100,7 @@ export async function serveStatus(): Promise<void> {
 
             const suite = /^\/api\/run\/(\w+)$/.exec(path)?.[1]
             if (suite && SUITES[suite]) return json(await SUITES[suite]())
-            if (path === '/api/counted') return json(await counted())
             if (path === '/api/machinery') return json(await machineryCounts())
-            if (path === '/api/measure') return streamedMeasure()
 
             return await fetch(
                 `${docs.origin}${path}${new URL(request.url).search}`,

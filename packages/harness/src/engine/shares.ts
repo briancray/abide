@@ -38,7 +38,7 @@ export type Shares = {
     overTheThreshold: boolean
 }
 
-function measuresNamed(
+export function measuresNamed(
     trace: Trace,
     name: string,
 ): { startNanoseconds: number; endNanoseconds: number }[] {
@@ -46,6 +46,19 @@ function measuresNamed(
     for (const measure of trace.measures)
         if (measure.name === name) found.push(measure)
     return found
+}
+
+// Summed over every measure of that name — an op measured once, or a layer that ran several times.
+export function durationOf(trace: Trace, name: string): number {
+    const found = measuresNamed(trace, name)
+    if (found.length === 0)
+        throw new Error(
+            `no measure named "${name}" in the trace of "${trace.op}"`,
+        )
+    let nanoseconds = 0
+    for (const measure of found)
+        nanoseconds += measure.endNanoseconds - measure.startNanoseconds
+    return nanoseconds
 }
 
 export function shares(trace: Trace, spec: SharesSpec): Shares {

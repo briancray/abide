@@ -1,0 +1,24 @@
+<script>
+import { reactive } from 'abide'
+import { onboarding } from '#shared/channelTailConversations'
+
+const draft = reactive('Can I revoke the old one early?')
+</script>
+
+<ul class="chat">
+{#for turn of onboarding.history(50)}
+    <li data-speaker={turn.speaker}>
+        <span>{turn.speaker}</span>
+        <p>{turn.text}</p>
+    </li>
+{/for}
+</ul>
+
+<div class="row">
+    <label>message
+        <input bind:value={draft}>
+    </label>
+    <button onclick={() => onboarding.publish({ speaker: 'you', text: draft })}>
+        Send
+    </button>
+</div>

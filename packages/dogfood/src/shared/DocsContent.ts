@@ -9,16 +9,14 @@
 // PROP hydrated by replacing its own markup with the source of it. Read straight off a module
 // constant, the slot is static: the server's markup stands and the client never touches it.
 //
-// SO THE PAGE IS DATA AND THE TEMPLATE IS THE SAME ON ALL EIGHTY-FIVE. What differs between two
-// pages is this record, which is why the record is the import.
+// THE BODY IS NOT HERE. It is markup in the page's own template, because an example on it is a
+// component and a component is a tag — `buildPages.ts`'s `pageSource` says why.
 
 export type DocsContent = {
     // The content path, which is also the page's address: `values/index` answers at `/values`.
     slug: string
     // The page's opening — the stub notice where there is one, the title, the intent.
     header: string
-    // The rendered body, the one value a page is mostly made of.
-    body: string
     // The previous and next links, in reading order.
     footer: string
     // The heading list and the two downloads, as the rail renders them.

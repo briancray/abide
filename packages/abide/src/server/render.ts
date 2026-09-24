@@ -4,12 +4,14 @@
 import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
 import { isThenable } from '#shared/reactive/isThenable.ts'
 import {
+    currentShare,
     leaveShare,
     resumeShare,
     type ShareScope,
 } from '#shared/reactive/share.ts'
 import type { RpcRequest } from '#shared/rpcRequest.ts'
-import { earlyCalls } from './requestScope.ts'
+import { REGION_CLOSE, REGION_OPEN } from '#ui/REGION.ts'
+import { currentRequestScope } from './requestScope.ts'
 
 // REGISTRY declares `Component` opaque. What a compiled component IS today is a function
 // returning its markup, and the cast lives here, in one place, rather than in the type an app
@@ -52,44 +54,35 @@ type Rendered = { head: string; body: string }
 // handler that only awaits what it has — is painted rather than left for the browser to fill. A
 // compiled page or layout answers `head` and `body` lazily and says which share scope its setup ran
 // in (`scope`), so the level below is set up inside it as it would have been inside the build
-// (10.5). A component that answers a plain record is simply built at the call, as before.
+// (10.5), and a level's `children` reads a level that is already set up.
 export async function composePage(
     layouts: Component[],
     page: Component,
     props: Record<string, (() => unknown) | undefined>,
 ): Promise<Rendered> {
     const heads: string[] = []
-    const levels: (Rendered & { scope?: ShareScope | null })[] = []
-    // One level set up: inside the share scope of the level above where that level says what it
-    // is, and where it does not — a component that built as it was called — inside that level's
-    // build, which is where its `children` asks for this one.
-    const setUp = (at: number): Rendered => {
+    const levels: (Rendered & { scope: ShareScope | null })[] = []
+    for (let at = 0; at <= layouts.length; at += 1) {
         const inner = at === layouts.length
         const component = (inner ? page : layouts[at]) as (
             props: Record<string, (() => unknown) | undefined>,
-        ) => Rendered & { scope?: ShareScope | null }
+        ) => Rendered & { scope: ShareScope | null }
         const children = inner
             ? undefined
             : (): string => {
-                  const below = levels[at + 1] ?? setUp(at + 1)
+                  const below = levels[at + 1] as Rendered
                   if (below.head !== '') heads.push(below.head)
                   return below.body
               }
         const above = levels[at - 1]
-        const resumed = above !== undefined && above.scope !== undefined
-        const back = resumed
-            ? resumeShare(above.scope as ShareScope | null)
-            : null
+        const back =
+            above === undefined ? currentShare() : resumeShare(above.scope)
         try {
-            const level = component({ ...props, children })
-            levels[at] = level
-            return level
+            levels.push(component({ ...props, children }))
         } finally {
-            if (resumed) leaveShare(back)
+            leaveShare(back)
         }
     }
-    for (let at = 0; at <= layouts.length; at += 1)
-        if (levels[at] === undefined) setUp(at)
     await new Promise((settled) => setImmediate(settled))
     const outermost = levels[0] as Rendered
     // BUILT ON THE FIRST READ, not here: `render` writes the early-call script between the setup
@@ -150,27 +143,37 @@ export async function* render(
     // page makes is known, and a script in the head starts each one as the request the browser's
     // own `Rpc` would make — while the rest of the document and the bundle are still on their way.
     // Each is its own request, so the network panel shows them as it would have anyway.
-    const calls = earlyCalls()
+    const calls = currentRequestScope()?.page?.calls
     if (calls !== undefined && calls.length > 0)
         yield ENCODER.encode(earlyCallScript(calls))
+    // 41.9 — THE PAGE IS A REGION LIKE ANY OTHER, and written between the same pair
+    // `renderComponent` writes a child between. A router swaps what stands between them, and with
+    // the pair on the wire the client finds the page rather than guessing where it ends among
+    // whatever else the shell put in the body.
     yield ENCODER.encode(
-        rendered.head +
-            document.slice(headAt, bodyAt) +
-            rendered.body +
-            document.slice(bodyAt),
+        `${rendered.head}${document.slice(headAt, bodyAt)}<!--${REGION_OPEN}-->${rendered.body}<!--${REGION_CLOSE}-->${document.slice(bodyAt)}`,
     )
 }
 
 // 41.21 — THE SCRIPT ITSELF: each call started with `fetch`, and its answer left under the call's key
 // in `EARLY_CALLS` for `wire` to take (41.22). Inline because nothing else runs before the bundle
-// has arrived, which is the wait it exists to overlap. The data is JSON with `<` escaped, so no
-// string in it can close the element.
+// has arrived, which is the wait it exists to overlap.
+//
+// 29.9, 29.10 — THE CALLS ARE DATA AND THE RUNNER IS A CONSTANT. What a page called differs per
+// response, so it rides in a JSON block a browser never executes, and the one script that does run
+// is the same bytes in every response — which is what lets `csp` permit it by its hash rather than
+// by the nonce an app's own inline script spends. The JSON has `<` escaped, so no string in it can
+// close the element.
 function earlyCallScript(calls: RpcRequest[]): string {
-    const rows: [string, string, string, string | null][] = []
-    for (const call of calls)
-        rows.push([call.key, call.method, call.url, call.body ?? null])
-    return `<script>(function(s,c){for(var i=0;i<c.length;i++)(function(k,m,u,b){var e=s[k]={status:void 0,statusText:void 0,text:void 0,failed:!1};e.promise=fetch(u,b===null?{method:m}:{method:m,headers:{"content-type":"application/json"},body:b}).then(function(r){e.status=r.status;e.statusText=r.statusText;return r.text()}).then(function(t){e.text=t},function(){e.failed=!0})})(c[i][0],c[i][1],c[i][2],c[i][3])})(self.${EARLY_CALLS}||(self.${EARLY_CALLS}={}),${JSON.stringify(rows).replace(/</g, '\\u003c')})</script>`
+    const rows: [string, string, RequestInit][] = []
+    for (const call of calls) rows.push([call.key, call.url, call.init])
+    return `<script type="application/json">${JSON.stringify(rows).replace(/</g, '\\u003c')}</script><script>${EARLY_CALL_RUNNER}</script>`
 }
+
+const EARLY_CALL_RUNNER = `(function(s,c){for(var i=0;i<c.length;i++)(function(k,u,n){var e=s[k]={status:void 0,statusText:void 0,type:void 0,text:void 0};e.promise=fetch(u,n).then(function(r){e.status=r.status;e.statusText=r.statusText;e.type=r.headers.get("content-type");return r.text()}).then(function(t){e.text=t},function(){})})(c[i][0],c[i][1],c[i][2])})(self.${EARLY_CALLS}||(self.${EARLY_CALLS}={}),JSON.parse(document.currentScript.previousElementSibling.textContent))`
+
+// 29.9 — the runner's hash, as `script-src` names it.
+export const EARLY_CALL_HASH = `'sha256-${new Bun.CryptoHasher('sha256').update(EARLY_CALL_RUNNER).digest('base64')}'`
 
 // Where the body's content ends, which is where a page's markup goes.
 function bodyAnchor(document: string): number {
@@ -180,7 +183,7 @@ function bodyAnchor(document: string): number {
 
 // Where a shell's head ends, clamped ahead of its body.
 //
-// NOT PUBLIC SURFACE: `server/index.ts` does not re-export it. `serveBuild` is the second caller —
+// NOT PUBLIC SURFACE: `server/index.ts` does not re-export it. `answerRequest` is the second caller —
 // a shell has to carry the client entry's script tag (38.23), and putting that anywhere but the
 // head this finds is the same clamped-and-ordered question over again.
 export function headAnchor(document: string): number {

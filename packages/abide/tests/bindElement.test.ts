@@ -11,6 +11,7 @@ import { compileFile, emitClient, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
+import { pageRegion, type Region } from '#ui/regions.ts'
 import type { Scope } from '#ui/Scope.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -40,7 +41,7 @@ async function mountPage(source: string): Promise<string> {
         html.indexOf('</body>'),
     )
     const { default: mount } = await import(`${dir}/Page.client.ts`)
-    ;(mount as (root: Element) => Scope)(document.body)
+    ;(mount as (root: Region) => Scope)(pageRegion(document.body))
     return html
 }
 

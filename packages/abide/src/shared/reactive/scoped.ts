@@ -13,6 +13,8 @@
 // for all of them by the first.
 
 import { CELL } from './CELL.ts'
+import { ARGS_GATE } from './ARGS_GATE.ts'
+import type { Gated } from './Keyed.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { brandedPrototype, MEMBER_KEYS } from './Reactive.ts'
 import { SELECTION_MEMBERS } from './SELECTION_MEMBERS.ts'
@@ -78,15 +80,27 @@ export function outsideScope(global: boolean): boolean {
 
 export function scoped(make: () => unknown): unknown {
     const filed = new Filed(make)
-    const home = filed.home as Record<PropertyKey, unknown>
+    // A keyed value, carrying both, or any other value, carrying neither.
+    const home = filed.home as { [KEYED_BRAND]?: true } & Partial<
+        Gated<unknown>
+    >
     if (home[KEYED_BRAND] === true) {
-        // THE KEYED FACE: a reach, the four statics and the entries, each the current instance's.
-        const reach = (args: unknown): unknown =>
-            (instanceOf(filed) as unknown as (args: unknown) => unknown)(args)
-        const keyed = reach as unknown as Record<PropertyKey, unknown>
-        keyed[KEYED_BRAND] = true
+        // THE KEYED FACE: a reach, the four statics and the entries, each the current instance's —
+        // and the `args` gate, which every instance was declared with.
+        const keyed = Object.assign(
+            (args: unknown): unknown =>
+                (instanceOf(filed) as unknown as (args: unknown) => unknown)(
+                    args,
+                ),
+            {
+                [KEYED_BRAND]: true,
+                [ARGS_GATE]: home[ARGS_GATE],
+                [FILED]: filed,
+            },
+        ) satisfies Gated<unknown>
+        const members = keyed as unknown as Record<string, unknown>
         for (const name of SELECTION_MEMBERS)
-            keyed[name] = (pattern?: unknown): unknown =>
+            members[name] = (pattern?: unknown): unknown =>
                 (instanceOf(filed)[name] as (pattern?: unknown) => unknown)(
                     pattern,
                 )
@@ -101,4 +115,9 @@ export function scoped(make: () => unknown): unknown {
     Object.setPrototypeOf(read, FORWARDING_PROTOTYPE)
     read[FILED] = filed
     return read
+}
+
+// Whether `value` is request-local on this server — built without `global`, outside every request.
+export function isForwarder(value: unknown): boolean {
+    return (value as Partial<Forwarder> | null)?.[FILED] !== undefined
 }

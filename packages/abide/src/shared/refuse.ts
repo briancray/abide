@@ -10,7 +10,11 @@
 import { type Failed, failed, isFailed } from './Failed.ts'
 import type { Issues } from './Issues.ts'
 import type { JsonValue } from './JsonValue.ts'
-import { runSchema, type Schema } from './Schema.ts'
+import { namedLogger } from './log.ts'
+import { type Found, runSchema, type Schema } from './Schema.ts'
+
+// 28.8 — 15.13 and 15.15's namespace.
+const REFUSE_LOG = namedLogger('abide:refuse')
 
 // 17.4, 17.5: a status and nothing else. No data and no options bag for any — an
 // undeclared refusal has no name to narrow on, so data on it could only be read by
@@ -61,16 +65,14 @@ refuse.typed = function typed<
         //
         // BOTH EXITS WARN, which is the rest of 15.15. Wrapped and discarded, the call had no
         // observable effect at all: an app whose refusal payload does not match its own schema
-        // paid the walk and was told nothing, and neither did a schema this cannot run. The
-        // `console.warn` is the stand-in for `log.named` (section 28), the same one
-        // `ui/Mismatch.ts` carries for 41.10.
+        // paid the walk and was told nothing, and neither did a schema this cannot run.
         if (options?.schema !== undefined && data !== undefined)
             try {
                 const checked = runSchema(options.schema, data)
                 if (checked.issues !== null)
-                    console.warn('abide:refuse', name, checked.issues)
+                    REFUSE_LOG.warning(name, checked.issues)
             } catch (thrown) {
-                console.warn('abide:refuse', name, thrown)
+                REFUSE_LOG.warning(name, thrown)
             }
         return failed(
             name,
@@ -94,9 +96,7 @@ refuse.typed = function typed<
 // cosmetic fault into a refusal the caller never receives — 15.4 has constructing a
 // `Failed` inert, and a formatter is not an exception to that.
 //
-// THE WARNING 15.13 AND 15.15 ALSO ASK FOR waits on `log`: both name the `abide:refuse`
-// namespace, and `log.named` is section 28 and is not written. Swallowing is the half that
-// is observable and is gated; the line under the namespace lands with the logger.
+// AND WARNED on `abide:refuse`, which is the rest of 15.13.
 function messageFor<Data>(
     name: string,
     message: string | ((data: Data) => string) | undefined,
@@ -106,7 +106,8 @@ function messageFor<Data>(
     if (typeof message !== 'function') return message
     try {
         return message(data)
-    } catch {
+    } catch (thrown) {
+        REFUSE_LOG.warning(name, thrown)
         return name
     }
 }
@@ -139,4 +140,13 @@ export function validationError<T>(
         'ValidationError',
         Issues<T>
     >
+}
+
+// 11.27, 16.18 — THE `args` GATE, for both places it stands: a keyed entry's run and a rung's
+// `ctx.args()`. Here rather than in `Schema.ts` for that module's own reason — it cannot build the
+// refusal it throws.
+export function checkArgs<Args>(gate: Schema<Args>, args: unknown): Args {
+    const answer = runSchema(gate, args)
+    if (answer.issues !== null) throw validationError<Found>(answer.issues)
+    return answer.value as Args
 }

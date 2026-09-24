@@ -13,10 +13,10 @@ covers:
   - `s.catch`
   - `s.finally`
 examples:
-  - packages/dogfood/examples/probe-hole
-  - packages/dogfood/examples/probe-refresh
-  - packages/dogfood/examples/probe-derived
-  - packages/dogfood/examples/probe-error
+  - packages/dogfood/examples/probe-hole.json
+  - packages/dogfood/examples/probe-refresh.json
+  - packages/dogfood/examples/probe-derived.json
+  - packages/dogfood/examples/probe-error.json
 ---
 
 The usual shape of this is a loading flag, an error branch and a value, kept in step by hand —

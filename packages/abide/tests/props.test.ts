@@ -13,6 +13,7 @@ import { emitClient, emitComponent, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
+import { pageRegion } from '#ui/regions.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
@@ -97,7 +98,7 @@ test('a component renders where it stands, and its prop is the caller expression
 // server, is the one that moves.
 test('a prop re-reads when the caller value moves, and nothing is rebuilt — 33.5', async () => {
     const { mount } = await mountPage(PAGE, { Total: TOTAL })
-    mount(document.body)
+    mount(pageRegion(document.body))
     flushSync()
 
     const child = document.querySelector('li:last-child strong') as Element
@@ -191,7 +192,7 @@ let rows = reactive(['one'])
 <button id="add" onclick={() => { rows = ['one', 'two'] }}>add</button>`,
         { Tag: '<b class="tag">static</b>' },
     )
-    mount(document.body)
+    mount(pageRegion(document.body))
     flushSync()
     ;(document.querySelector('#add') as HTMLElement).click()
     flushSync()
@@ -331,7 +332,7 @@ let titles = reactive(['one', 'two'])
     expect(html).toContain('<li>one</li>')
     expect(html).toContain('<li>two</li>')
 
-    mount(document.body)
+    mount(pageRegion(document.body))
     flushSync()
     const first: unknown = document.querySelector('li')
 
@@ -344,6 +345,39 @@ let titles = reactive(['one', 'two'])
     expect(rows).toEqual(['one', 'two', 'three'])
     // 41.8 — the rows that survive are MOVED, never remade: the first row is the same node.
     expect(document.querySelector('li') as unknown).toBe(first)
+})
+
+// A COMPONENT ROW THE LIST GREW IS ITS WHOLE MARKUP. The row the browser builds is its anchor and
+// the child's empty pair; the child fills the pair on the row's MOUNT, after `make` handed its nodes
+// over. A row held as the nodes `make` returned moved the pair and left the child's `<li>` standing
+// where it was, so a reorder of grown rows put every `<li>` in its old order.
+//
+// THE REVERT: move a multi-root row by the nodes `make` returned rather than by the range from its
+// anchor (`moveRow`). This reports `['a', 'b', 'c']` after the reverse.
+test('a component row the list grew reorders with its markup', async () => {
+    const { mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Row from './Row.abide'
+
+let titles = reactive(['a'])
+</script>
+
+<ul>{#for title of titles by title}<Row title={title}/>{/for}</ul>
+<button id="grow" onclick={() => { titles = ['a', 'b', 'c'] }}>grow</button>
+<button id="reverse" onclick={() => { titles = ['c', 'b', 'a'] }}>reverse</button>`,
+        { Row: ROW },
+    )
+    mount(pageRegion(document.body))
+    flushSync()
+    const text = (): (string | null)[] =>
+        [...document.querySelectorAll('li')].map((row) => row.textContent)
+    ;(document.querySelector('#grow') as HTMLElement).click()
+    flushSync()
+    expect(text()).toEqual(['a', 'b', 'c'])
+    ;(document.querySelector('#reverse') as HTMLElement).click()
+    flushSync()
+    expect(text()).toEqual(['c', 'b', 'a'])
 })
 
 // 10.5 THROUGH A ROW ADDED LATER — a descendant is a descendant whenever it was created. The row
@@ -373,7 +407,7 @@ let titles = reactive(['one'])
 <button onclick={() => { titles = [...titles, 'two'] }}>add</button>`,
         { Row: row },
     )
-    mount(document.body)
+    mount(pageRegion(document.body))
     flushSync()
     ;(document.querySelector('button') as HTMLElement).click()
     flushSync()
@@ -414,7 +448,7 @@ let mark = reactive('')
 <button id="bump" onclick={() => { mark = '!' }}>bump</button>`,
         { Row: row },
     )
-    mount(document.body)
+    mount(pageRegion(document.body))
     flushSync()
     expect(document.querySelectorAll('li').length).toBe(2)
 
@@ -455,7 +489,7 @@ import List from './List.abide'
 <main><List/></main>`,
         { List: LIST },
     )
-    mount(document.body)
+    mount(pageRegion(document.body))
     ;(document.querySelector('#grow') as HTMLElement).click()
     flushSync()
     expect(

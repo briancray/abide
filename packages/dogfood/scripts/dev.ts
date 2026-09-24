@@ -36,10 +36,17 @@ const app = Bun.spawn(
 )
 
 let settling: ReturnType<typeof setTimeout> | undefined
-// `examples/` and `scripts/` as well as `content/`: a card's source and the renderer that turns
-// it into markup are both things a page is made of.
-for (const directory of ['content', 'examples', 'scripts', 'assets'])
-    watch(`${DOGFOOD}${directory}`, { recursive: true }, () => {
+// `examples/`, `scripts/` and `src/` as well as `content/`: a card's manifest, the renderer that
+// turns it into markup and the source its Files panel quotes are all things a page is made of.
+// What the build WRITES under `src/` is skipped, or every build would schedule the next one.
+const WRITTEN = ['ui/pages/', 'ui/public/', 'ui/NAV_ITEMS.ts']
+for (const directory of ['content', 'examples', 'scripts', 'assets', 'src'])
+    watch(`${DOGFOOD}${directory}`, { recursive: true }, (_event, name) => {
+        if (
+            directory === 'src' &&
+            WRITTEN.some((written) => String(name).startsWith(written))
+        )
+            return
         if (settling !== undefined) clearTimeout(settling)
         settling = setTimeout(() => {
             void buildPages().catch((thrown: unknown) => {

@@ -1,4 +1,5 @@
 import { type Disposer, type Effect, watch } from '#shared/reactive/watch.ts'
+import { BOUNDARY, inBoundary, type TryBoundary } from './TryBoundary.ts'
 
 // ANYTHING A SCOPE CAN STOP BELOW ITSELF: another `Scope` — an arm's, a row's, an invoked
 // component's — or a `{#for}`'s `List`, which stops every row it still holds. Structural rather
@@ -19,9 +20,18 @@ export class Scope {
     // one is actually opened — most scopes hold only disposers, and a second array a row is the
     // allocation this class exists not to spend.
     children: Stoppable[] | undefined = undefined
+    // 32.16 — the `{#try}` this scope was built under, read once at construction, or `undefined`.
+    boundary: TryBoundary | undefined = BOUNDARY.current
 
     watch(effect: Effect): void {
-        this.stops.push(watch(effect))
+        const boundary = this.boundary
+        if (boundary === undefined) {
+            this.stops.push(watch(effect))
+            return
+        }
+        // UNDER A BOUNDARY, a throw is the boundary's and the scopes a re-run builds are too, and a
+        // failed binding is retried by running it again.
+        this.stops.push(watch(() => inBoundary(boundary, effect, effect)))
     }
 
     // 12.4 — A `watch` REGISTERED INSIDE A COMPONENT IS OWNED BY THAT COMPONENT, and what can

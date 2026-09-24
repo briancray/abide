@@ -6,11 +6,20 @@
     "description": "The abide documentation, as an abide app — and the app abide is dogfooded on",
     "imports": {
         "#shared": "./src/shared/index.ts",
-        "#shared/*": "./src/shared/*",
+        "#shared/*": [
+            "./src/shared/*",
+            "./src/shared/*.ts"
+        ],
         "#ui": "./src/ui/index.ts",
-        "#ui/*": "./src/ui/*",
+        "#ui/*": [
+            "./src/ui/*",
+            "./src/ui/*.ts"
+        ],
         "#server": "./src/server/index.ts",
-        "#server/*": "./src/server/*"
+        "#server/*": [
+            "./src/server/*",
+            "./src/server/*.ts"
+        ]
     },
     "scripts": {
         "pages": "bun run scripts/buildPages.ts",
@@ -20,7 +29,8 @@
         "typecheck": "tsc -p tsconfig.json"
     },
     "dependencies": {
-        "abide": "workspace:*"
+        "abide": "workspace:*",
+        "zod": "^4.6.5"
     },
     "devDependencies": {
         "tailwindcss": "^4.3.3"

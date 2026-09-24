@@ -119,7 +119,8 @@ export async function lower(
 export function namesRead(file: AbideFile, reads: readonly Read[]): string[] {
     const text = projectShadow(file).text
     const names = new Set<string>()
-    for (const read of reads) names.add(text.slice(read.start, read.end))
+    for (const read of reads)
+        if (read.shape !== 'static') names.add(text.slice(read.start, read.end))
     return [...names].sort()
 }
 

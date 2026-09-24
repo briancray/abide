@@ -253,6 +253,57 @@ test('a position declared as a Reactive holds the Reactive — 31.3', async () =
     expect(await lower('const r: number = n', NM)).toBe('const r: number = n()')
 })
 
+// 31.1 — AN IMPORTED NAME IS A NAME BOUND TO A `Reactive` TOO. The module the page imports from
+// is `fixtures/typed/src/conversations.ts`: `onboarding` a `Reactive`, `plain` an object and the
+// default export a `Reactive`. A binding is an import's or a declaration's and the clause does not
+// tell them apart, so the page reads, writes (31.4) and holds (31.3) an imported one exactly as it
+// does its own, and the explicit spelling keeps compiling (31.7). THE REVERT: collect only the
+// top-level `const`/`let`/`var` names in `TypeSession.readsFor`; the four reads and the write are
+// then left as written — 5 wrong where 0 are due, and `onboarding.text` reads a field of the
+// `Reactive` object, which is `undefined` on a page with nothing to say so.
+test('an imported Reactive is read and written by name — 31.1', async () => {
+    const named = "import { onboarding } from './conversations.ts'\n"
+    expect(await lower(`${named}const t = onboarding.text`)).toBe(
+        `${named}const t = onboarding().text`,
+    )
+    expect(await lower(`${named}onboarding = { text: 'hi' }`)).toBe(
+        `${named}onboarding.set({ text: 'hi' })`,
+    )
+    expect(await lower(`${named}onboarding()`)).toBe(`${named}onboarding()`)
+    expect(await lower(`${named}onboarding.set({ text: 'hi' })`)).toBe(
+        `${named}onboarding.set({ text: 'hi' })`,
+    )
+    const watching = `${named}import { watch } from 'abide'\n`
+    expect(await lower(`${watching}watch([onboarding], () => {})`)).toBe(
+        `${watching}watch([onboarding], () => {})`,
+    )
+    // A default import and a renamed one are bindings of the same kind.
+    const defaulted = "import count from './conversations.ts'\n"
+    expect(await lower(`${defaulted}const d = count * 2`)).toBe(
+        `${defaulted}const d = count() * 2`,
+    )
+    const renamed = "import { onboarding as ob } from './conversations.ts'\n"
+    expect(await lower(`${renamed}const t = ob.text`)).toBe(
+        `${renamed}const t = ob().text`,
+    )
+    // Through a module that only re-exports it, it is still the one `Reactive`.
+    const through = "import { greeting } from './reexports.ts'\n"
+    expect(await lower(`${through}const t = greeting.text`)).toBe(
+        `${through}const t = greeting().text`,
+    )
+    // NOT A NAME: a namespace's member is a property access on the namespace, which is not
+    // bound to a `Reactive`, so `conversations.onboarding` is the `Reactive` and is read
+    // explicitly. And an import that is not a `Reactive` is left alone.
+    const namespace = "import * as conversations from './conversations.ts'\n"
+    expect(
+        await lower(`${namespace}const t = conversations.onboarding.text`),
+    ).toBe(`${namespace}const t = conversations.onboarding.text`)
+    const plain = "import { plain } from './conversations.ts'\n"
+    expect(await lower(`${plain}const t = plain.text`)).toBe(
+        `${plain}const t = plain.text`,
+    )
+})
+
 // THE RIGHT OF A WRITE IS LOWERED AS A SPAN OF THE SAME TOKENS, because a substring does not carry
 // the scope it was cut from. THE REVERT: lower the value with `await lower(substring, reactive)` in
 // the assignment branch; the parameter below is lowered as a read inside the value — 1 wrong
@@ -322,6 +373,20 @@ test('a member reaches the value, and the API reaches the Reactive', async () =>
     expect(await lower('n.isError(e, "X")', N)).toBe('n.isError(e, "X")')
     // A member of something else is not ours either way.
     expect(await lower('obj.n.join()', N)).toBe('obj.n.join()')
+})
+
+// 31.5 — A MEMBER REFERENCED RATHER THAN CALLED IS HANDED OVER BOUND. THE REVERT: leave a
+// referenced member as written; `promise.then(n.set)` then hands over `set` with no `this`, and
+// the write throws inside the runtime rather than writing `n`.
+test('a referenced member is bound, and a called one stays as written', async () => {
+    expect(await lower('p.then(n.set)', N)).toBe(
+        'p.then(((...args) => n.set(...args)))',
+    )
+    expect(await lower('const r = n.refresh', N)).toBe(
+        'const r = ((...args) => n.refresh(...args))',
+    )
+    expect(await lower('n.refresh()', N)).toBe('n.refresh()')
+    expect(await lower('n.refresh?.()', N)).toBe('n.refresh?.()')
 })
 
 // AN OPERATOR AT THE START OF ITS LINE CONTINUES THE VALUE, and getting this wrong fails SILENTLY

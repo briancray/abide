@@ -12,14 +12,16 @@
 // with scripting off, or by a crawler, fills entries no call will ever come for.
 
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
+import { chunksOfStream, isStreaming } from './answerValue.ts'
 
 // 41.18.
 const SEED_LIFE_MS = 30_000
 
 // How a handler's call ended, and how long it took from the call to the end — what 21.15's
-// `server-timing` reports, whichever call it was that ran it.
+// `server-timing` reports, whichever call it was that ran it. A stream has no end to time by
+// then, and its `undefined` is timed where its first chunk is answered.
 export type Outcome =
-    | { settled: true; value: unknown; duration: number }
+    | { settled: true; value: unknown; duration: number | undefined }
     | { settled: false; error: unknown; duration: number }
 
 type Entry = {
@@ -31,7 +33,11 @@ type Entry = {
     timer: ReturnType<typeof setTimeout> | undefined
 }
 
-const BUFFER = new Map<string, Entry[]>()
+// INDEXED BY THE THREE THINGS 41.19 MATCHES ON — caller, handler, args key — so a call finds its entry
+// without reading the others. A caller whose calls never match (a crawler, a render whose args the
+// wire does not reproduce) leaves every entry standing for 30 seconds, and a list read end to end
+// made each of its calls pay for all of them. Several entries under one key are taken oldest first.
+const BUFFER = new Map<string, Map<object, Map<string, Entry[]>>>()
 
 // The sink a page's render scope reports each call into, for one caller — `true` where the call was
 // new to this render. A key already reported is reported once: two components reaching one invoice
@@ -59,10 +65,20 @@ export function seedFor(
             expires: Date.now() + SEED_LIFE_MS,
             timer: undefined,
         }
-        let entries = BUFFER.get(caller)
+        let byRpc = BUFFER.get(caller)
+        if (byRpc === undefined) {
+            byRpc = new Map()
+            BUFFER.set(caller, byRpc)
+        }
+        let byKey = byRpc.get(rpc)
+        if (byKey === undefined) {
+            byKey = new Map()
+            byRpc.set(rpc, byKey)
+        }
+        let entries = byKey.get(key)
         if (entries === undefined) {
             entries = []
-            BUFFER.set(caller, entries)
+            byKey.set(key, entries)
         }
         entries.push(entry)
         // UNREF'D, so a process with nothing else to do is not kept up by entries nobody will take.
@@ -76,26 +92,22 @@ export function seedFor(
 
 // The entry this caller's render left for this handler and these args, taken out of the buffer —
 // or `undefined`, where there is none, it has been taken, or its life is over. The args are keyed
-// only once the caller is known to have entries, which a call from a page that was not rendered
-// for it never does.
+// only once the caller is known to have entries for this handler, which a call from a page that
+// was not rendered for it never does.
 export function takeSeed(
     caller: string,
     rpc: object,
     args: unknown,
 ): Promise<Outcome> | undefined {
-    const entries = BUFFER.get(caller)
-    if (entries === undefined) return undefined
+    const byKey = BUFFER.get(caller)?.get(rpc)
+    if (byKey === undefined) return undefined
     const key = seedKey(args)
     if (key === undefined) return undefined
-    const now = Date.now()
-    for (let at = 0; at < entries.length; at += 1) {
-        const entry = entries[at] as Entry
-        if (entry.rpc !== rpc || entry.key !== key) continue
-        drop(caller, entry)
-        // READ AS WELL AS SWEPT: a timer can fire late, and an entry past its life answers nothing.
-        return entry.expires > now ? entry.outcome : undefined
-    }
-    return undefined
+    const entry = byKey.get(key)?.[0]
+    if (entry === undefined) return undefined
+    drop(caller, entry)
+    // READ AS WELL AS SWEPT: a timer can fire late, and an entry past its life answers nothing.
+    return entry.expires > Date.now() ? entry.outcome : undefined
 }
 
 // 11.24's key, or `undefined` where 11.65 refuses the args — which the call itself then says.
@@ -109,16 +121,30 @@ function seedKey(args: unknown): string | undefined {
 
 function drop(caller: string, entry: Entry): void {
     clearTimeout(entry.timer)
-    const entries = BUFFER.get(caller)
+    const byRpc = BUFFER.get(caller)
+    const byKey = byRpc?.get(entry.rpc)
+    const entries = byKey?.get(entry.key)
     if (entries === undefined) return
     const at = entries.indexOf(entry)
     if (at !== -1) entries.splice(at, 1)
-    if (entries.length === 0) BUFFER.delete(caller)
+    if (entries.length > 0) return
+    byKey?.delete(entry.key)
+    if (byKey?.size !== 0) return
+    byRpc?.delete(entry.rpc)
+    if (byRpc?.size === 0) BUFFER.delete(caller)
 }
 
-// 1.4 — a call's `Reactive` is thenable, and this is its settling, timed from here.
+// 1.4 — a call's `Reactive` is thenable, and this is its settling, timed from here. 1.6 — A STREAMING
+// one is read by its brand first and answered as its chunks, which `answerValue` frames as they land:
+// settling it would be one snapshot, once the run had closed.
 export function outcomeOf(reached: unknown): Promise<Outcome> {
     const started = performance.now()
+    if (isStreaming(reached))
+        return Promise.resolve({
+            settled: true,
+            value: chunksOfStream(reached),
+            duration: undefined,
+        })
     return Promise.resolve(reached).then(
         (value): Outcome => ({
             settled: true,

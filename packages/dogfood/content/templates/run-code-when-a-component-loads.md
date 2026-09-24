@@ -6,7 +6,7 @@ covers:
   - `<script>`
   - `<script module>`
 examples:
-  - packages/dogfood/examples/script-scope
+  - packages/dogfood/examples/script-scope.json
 ---
 
 A `.abide` file's `<script>` block is the component's setup. It runs when an instance is

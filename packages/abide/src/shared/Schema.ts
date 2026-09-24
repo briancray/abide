@@ -28,10 +28,12 @@ type StandardResult<Output> =
     | {
           readonly issues: readonly {
               readonly message: string
-              readonly path?: readonly (
-                  | PropertyKey
-                  | { readonly key: PropertyKey }
-              )[]
+              // `| undefined` IS THE SPEC'S, and with `exactOptionalPropertyTypes` it is not
+              // implied by the `?`: without it no library that spells the spec's own type —
+              // zod among them — is a `Schema` at all.
+              readonly path?:
+                  | readonly (PropertyKey | { readonly key: PropertyKey })[]
+                  | undefined
           }[]
       }
 

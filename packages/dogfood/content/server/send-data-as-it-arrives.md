@@ -8,7 +8,7 @@ covers:
   - `bytes`
   - `Values<T>`
 examples:
-  - packages/dogfood/examples/stream-rows
+  - packages/dogfood/examples/stream-rows.json
 ---
 
 A report of fifty thousand rows takes a while. The caller does not have to wait for the last

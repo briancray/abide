@@ -8,9 +8,9 @@
 // `compiler.test.ts` holds the two apart by asserting what `abide/server` exports.
 
 export { compileFile } from './compileFile.ts'
+export { componentGraph } from './componentGraph.ts'
 export { emitClient, type SelfFill } from './emitClient.ts'
 export { emitComponent } from './emitComponent.ts'
-export { invokedComponents } from './invokedComponents.ts'
 export { type AbideFile, parseAbide } from './parseAbide.ts'
 export type { Attribute, TemplateNode } from './TemplateNode.ts'
 export { TypeSession } from './TypeSession.ts'

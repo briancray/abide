@@ -87,6 +87,67 @@ count = count + step
     expect(out).toContain('<p>10</p>')
 })
 
+// 31.1 OVER AN IMPORT, END TO END: the page declares nothing reactive of its own, and the value it
+// renders is a `Reactive` another module exports. THE REVERT: collect only the declared names in
+// `TypeSession.readsFor`; the slot then renders a field of the `Reactive` object rather than of its
+// value — `<p></p>` where `<p>hello</p>` is due, and nothing refuses.
+test('a page reads a Reactive it imports and renders its value', async () => {
+    const source = `<script>
+import { onboarding } from '${ROOT}src/conversations.ts'
+</script>
+
+<p>{onboarding.text}</p>`
+
+    const file = parseAbide(source)
+    const names = await session.reads(PAGE, file)
+    expect(namesRead(file, names)).toEqual(['onboarding'])
+
+    const module = `${temporaryModule({ 'Page.ts': compileFile(source, names) })}/Page.ts`
+    const { default: Page } = await import(module)
+    let out = ''
+    for await (const chunk of render(
+        Page,
+        '<!doctype html><html><head></head><body></body></html>',
+    ))
+        out += new TextDecoder().decode(chunk)
+    expect(out).toContain('<p>hello</p>')
+})
+
+// 31.3 — AN UN-ANNOTATED BINDING OF A REACTIVE NAME HOLDS ITS VALUE, and the name it binds is not a
+// `Reactive`. The lowering reads `a` in `let b = a`, so `b` is handed 1 — while the checker, asked
+// of the shadow, infers `b` as the `Reactive` `a` is there. Both answers have to be the same one, and
+// a declared name and an imported one are the same case. THE REVERT: drop `dropValueHolders` from
+// `TypeSession.readsFor`; `b`, `c` and `greeting` are then read as `b()`, `c()` and `greeting()` —
+// a call on 1 and on `{ text: 'hello' }` — and the render throws `b is not a function`. The
+// annotated `held` is 31.3's own hold, and stays a `Reactive` either way.
+test('a binding of a reactive name holds its value, declared or imported — 31.3', async () => {
+    const source = `<script>
+import { reactive } from 'abide'
+import { onboarding } from '${ROOT}src/conversations.ts'
+let a = reactive(1)
+let b = a
+let c = (b)
+let greeting = onboarding
+const held: import('abide').Reactive<number> = a
+</script>
+
+<p>{b}|{c}|{greeting.text}|{held}</p>`
+
+    const file = parseAbide(source)
+    const names = await session.reads(PAGE, file)
+    expect(namesRead(file, names)).toEqual(['a', 'held', 'onboarding'])
+
+    const module = `${temporaryModule({ 'Page.ts': compileFile(source, names) })}/Page.ts`
+    const { default: Page } = await import(module)
+    let out = ''
+    for await (const chunk of render(
+        Page,
+        '<!doctype html><html><head></head><body></body></html>',
+    ))
+        out += new TextDecoder().decode(chunk)
+    expect(out).toContain('<p>1|1|hello|1</p>')
+})
+
 // Two files through one session, at the same shadow path. THE REVERT: drop `fileChanges` from
 // the `updateSnapshot` call in `TypeSession`; the second query then answers about the FIRST
 // file's text at the second file's offsets and reports `['b']` where `['a']` is due — the names
@@ -185,4 +246,71 @@ test('a page path with a doubled separator still finds its shadow', async () => 
     const probe = parseAbide(PROBE)
     const names = await session.reads(`${ROOT}src//doubled.abide`, probe)
     expect(namesRead(probe, names)).toEqual(['rows'])
+})
+
+// 31.3 — A `Reactive` IS TOLD BY ITS DECLARATION, so a name for it the app made up is still one, and
+// a type of the app's own that merely prints as `Reactive<…>` is not — and neither is an array of
+// them, which a name is read as. THE REVERT: decide by `typeToString(type).startsWith('Reactive<')`;
+// `counter` and `maybe` then print as `Counter` and are missed, `list` prints as `Reactive<…>[]` and
+// is taken for one, and so is the page's own `Reactive` — 4 wrong names out of 8. `signal` and
+// `tagged` pass either way: a renamed import prints under its declared name, and an intersection
+// prints its `Reactive` first.
+test('a Reactive under an alias or another name is reactive, and a lookalike is not', async () => {
+    const file = parseAbide(`<script>
+import { reactive, type Reactive } from 'abide'
+import type { Signal } from './Signal.ts'
+
+type Counter = Reactive<number>
+const counter: Counter = reactive(0)
+const maybe: Counter | undefined = reactive(1)
+const signal: Signal<number> = reactive(2)
+const direct = reactive(3)
+const tagged = Object.assign(reactive(4), { tag: 'x' })
+const list = [reactive(5)]
+</script>
+<p>{counter}{maybe}{signal}{direct}{tagged}{list.length}</p>`)
+    expect(namesRead(file, await session.reads(PAGE, file))).toEqual([
+        'counter',
+        'direct',
+        'maybe',
+        'signal',
+        'tagged',
+    ])
+
+    const lookalike = parseAbide(`<script>
+type Reactive<Value> = { (): Value; label: string }
+declare function own(): Reactive<number>
+const mine = own()
+</script>
+<p>{mine}</p>`)
+    expect(namesRead(lookalike, await session.reads(PAGE, lookalike))).toEqual(
+        [],
+    )
+})
+
+// 33 — `props()` IS ABIDE'S BY ITS CALLEE, not its spelling. An app's own function of that name is an
+// ordinary call and renders what it returns. THE REVERT: drop the callee check in `propsReads`; 1
+// `props` splice comes back where 0 are due, and the page lowers the call to `__props` and throws
+// `label is not a function` rather than rendering `mine`.
+test("an app's own function named props is not compiled away", async () => {
+    const source = `<script>
+function props() {
+    return { label: 'mine' }
+}
+const { label } = props()
+</script>
+<p>{label}</p>`
+    const file = parseAbide(source)
+    const reads = await session.reads(PAGE, file)
+    expect(reads.filter((read) => read.shape === 'props')).toEqual([])
+
+    const module = `${temporaryModule({ 'Page.ts': compileFile(source, reads) })}/Page.ts`
+    const { default: Page } = await import(module)
+    let out = ''
+    for await (const chunk of render(
+        Page,
+        '<!doctype html><html><head></head><body></body></html>',
+    ))
+        out += new TextDecoder().decode(chunk)
+    expect(out).toContain('<p>mine</p>')
 })

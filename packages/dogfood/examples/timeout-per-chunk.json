@@ -1,0 +1,11 @@
+{
+    "title": "`timeout` — milliseconds without progress, not since the first byte",
+    "summary": "A sales report streaming a row a second. North takes three seconds under a two-second bound; south has stopped producing.",
+    "app": "dashboard",
+    "about": "server",
+    "files": [
+        "src/server/rpc/timeoutPerChunkReports.ts",
+        "src/ui/components/TimeoutPerChunkReport.abide"
+    ],
+    "render": "src/ui/components/TimeoutPerChunkReport.abide"
+}

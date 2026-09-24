@@ -6,9 +6,9 @@ covers:
   - `reactive.share`
   - `Shared`
 examples:
-  - packages/dogfood/examples/share-agree
-  - packages/dogfood/examples/share-winner
-  - packages/dogfood/examples/share-scope
+  - packages/dogfood/examples/share-agree.json
+  - packages/dogfood/examples/share-winner.json
+  - packages/dogfood/examples/share-scope.json
 ---
 
 A player owns what is playing. The bar at the top shows it and every row in the library can

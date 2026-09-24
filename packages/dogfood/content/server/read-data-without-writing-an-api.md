@@ -12,8 +12,8 @@ covers:
   - `server/rpc/users.ts`
   - `src/server/rpc/**/*.ts`
 examples:
-  - packages/dogfood/examples/rpc-call
-  - packages/dogfood/examples/rpc-reactive
+  - packages/dogfood/examples/rpc-call.json
+  - packages/dogfood/examples/rpc-reactive.json
 ---
 
 You have a database and a page that needs a row. Most stacks make that four artifacts: a

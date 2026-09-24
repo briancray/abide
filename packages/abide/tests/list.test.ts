@@ -10,10 +10,11 @@ import { measure } from 'harness/measure'
 import { compileFile, emitClient, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
-import { flushSync } from '#shared'
+import { flushSync, reactive } from '#shared'
 import { List, updateList } from '#ui/List.ts'
 import { REGION_CLOSE, REGION_OPEN } from '#ui/REGION.ts'
 import { type Row, reconcile } from '#ui/reconcile.ts'
+import { pageRegion } from '#ui/regions.ts'
 import { Scope } from '#ui/Scope.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { clientOf, closeTyped, refusal } from './typed.ts'
@@ -70,7 +71,7 @@ async function mountPage() {
         html.indexOf('</body>'),
     )
     const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(document.body)
+    mount(pageRegion(document.body))
     return html
 }
 
@@ -82,9 +83,9 @@ const order = (): string[] =>
 test('the server renders every row, and the list carries no per-row marker', async () => {
     const html = await mountPage()
     expect(order()).toEqual(['ada', 'grace', 'katherine', 'dorothy'])
-    // Two anchors for the region, and nothing per row: a row IS its element, so there is nothing
-    // to add to tell rows apart.
-    expect((html.match(/<!--/g) ?? []).length).toBe(2)
+    // Two anchors for the region and two for the page (41.9), and nothing per row: a row IS its
+    // element, so there is nothing to add to tell rows apart.
+    expect((html.match(/<!--/g) ?? []).length).toBe(4)
     expect(html).not.toContain('data-a')
 })
 
@@ -189,7 +190,7 @@ async function mountPairs() {
         html.indexOf('</body>'),
     )
     const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(document.body)
+    mount(pageRegion(document.body))
     return html
 }
 
@@ -235,14 +236,15 @@ test('a row with several top-level nodes mounts and reorders whole', async () =>
 test('a single-element row still carries no anchor', async () => {
     const html = await mountPage()
     expect(html).not.toContain('<!--r-->')
-    expect((html.match(/<!--/g) ?? []).length).toBe(2)
+    // The list's pair and the page's.
+    expect((html.match(/<!--/g) ?? []).length).toBe(4)
 })
 
 // A ROW'S BINDINGS ARE FOUND FROM THE ROW'S NODES — the array the reconcile hands back, whose
 // entries are the row's top-level nodes. Starting the walk INSIDE the row element instead walks
 // one level too deep.
 //
-// THE REVERT: start a row's walk at `__nodes[0]?.firstChild` (and a multi-rooted one a node late)
+// THE REVERT: start a row's walk at `__row.node?.firstChild` (and a multi-rooted one a node late)
 // in `emitComponent`'s `{#for}` arm. Every binding below the row's first child then lands a level
 // off, and this reports the wrong counts with NOTHING warned — no kind check fires, because what
 // the walk lands on is still the kind it expected. Green before, because no fixture bound
@@ -281,7 +283,7 @@ test('a binding below a row’s first child is reached, in both row shapes', asy
         html.indexOf('</body>'),
     )
     const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(document.body)
+    mount(pageRegion(document.body))
 
     ;(document.querySelector('#bump') as HTMLElement).click()
     flushSync()
@@ -343,7 +345,7 @@ test('a row that left stops reading', async () => {
         html.indexOf('</body>'),
     )
     const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(document.body)
+    mount(pageRegion(document.body))
 
     const three = measure(() => {
         ;(document.querySelector('#tick') as HTMLElement).click()
@@ -441,7 +443,7 @@ async function mountRefetch() {
         html.indexOf('</body>'),
     )
     const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(document.body)
+    mount(pageRegion(document.body))
 }
 
 test('a refetch that keeps every key and replaces every row remakes them in place', async () => {
@@ -523,7 +525,7 @@ test('a row whose value is NaN is not remade', async () => {
         html.indexOf('</body>'),
     )
     const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(document.body)
+    mount(pageRegion(document.body))
 
     const before = [...document.querySelectorAll('#nums li')]
     ;(document.querySelector('#append') as HTMLElement).click()
@@ -588,7 +590,7 @@ test('a for over an async iterable appends each item as it arrives', async () =>
         html.indexOf('</body>'),
     )
     const { default: mount } = await import(`${dir}/Async.client.ts`)
-    mount(document.body)
+    mount(pageRegion(document.body))
 
     // The pump is microtasks; one macrotask turn drains every one of them.
     await new Promise((settle) => setTimeout(settle, 0))
@@ -662,7 +664,7 @@ test('a repeated {#for} key keeps the last row, drops what it shadows, and warns
     }
     try {
         const { default: mount } = await import(`${dir}/Page.client.ts`)
-        mount(document.body)
+        mount(pageRegion(document.body))
 
         const rows = (): string[] =>
             [...document.querySelectorAll('#repeated li')].map(
@@ -689,10 +691,10 @@ test('a repeated {#for} key keeps the last row, drops what it shadows, and warns
 
         // 41.15 — ONCE FOR THE BLOCK. The key repeats on every reconcile the region ever runs, and
         // three writes have now gone through it.
-        expect(said.filter((line) => line.startsWith('abide:hydrate'))).toEqual(
-            [
-                'abide:hydrate abide: a {#for} key is repeated in this list, so the last row under it is the one kept and the rows it shadows are dropped. RULEBOOK 41.14.',
-            ],
+        const hydrate = said.filter((line) => line.includes('abide:hydrate'))
+        expect(hydrate).toHaveLength(1)
+        expect(hydrate[0]).toContain(
+            'abide: a {#for} key is repeated in this list, so the last row under it is the one kept and the rows it shadows are dropped. RULEBOOK 41.14.',
         )
     } finally {
         console.warn = warn
@@ -783,7 +785,7 @@ function seeded(): {
         rows.push({
             key: at,
             data: data[at] as object,
-            nodes: [item],
+            node: item,
             scope: new Scope(),
             at,
         })
@@ -895,6 +897,46 @@ test('a list arriving in place of a stream stops the stream', async () => {
     expect(text()).toEqual(['x'])
 })
 
+// A ROW'S BUILD IS NOT THE LIST'S READ. `make` evaluates a row's attributes as it builds them, and
+// under the list's watch that subscribed the whole list to whatever a row read — a `class:danger`
+// on `selected` cost a full reconcile on the next `selected` write. THE REVERT: call `settleList`
+// tracked from `updateList`; this reports 1 list run where 0 are due.
+test('a value a row read while it was built does not re-run the list', () => {
+    document.body.replaceChildren()
+    const host = document.createElement('ul')
+    const open = document.createComment(REGION_OPEN)
+    const close = document.createComment(REGION_CLOSE)
+    host.append(open, close)
+    document.body.append(host)
+
+    const selected = reactive('a')
+    const rows = reactive(['a', 'b'])
+    const make = (made: Document, item: unknown): Node[] => {
+        const row = made.createElement('li')
+        row.className = selected() === item ? 'danger' : ''
+        return [row]
+    }
+    const list = new List(
+        { open, close },
+        [],
+        (item) => item,
+        make,
+        () => new Scope(),
+    )
+    let listRuns = 0
+    const scope = new Scope()
+    scope.watch(() => {
+        listRuns += 1
+        updateList(list, rows())
+    })
+    flushSync()
+    const built = listRuns
+    selected.set('b')
+    flushSync()
+    expect(listRuns - built).toBe(0)
+    scope.stop()
+})
+
 // THE SUBJECT IS READ ONCE ON LOAD, and the rows are hydrated against that one read. Read twice —
 // once to hydrate and again on the watch's first run — a subject building FRESH items matched no
 // row by identity, so every row the server sent was dropped and remade before anyone touched the
@@ -928,7 +970,7 @@ test('a subject building fresh items keeps the rows the server sent', async () =
     )
     const sent = [...document.querySelectorAll('#fresh li')]
     const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(document.body)
+    mount(pageRegion(document.body))
     const kept = [...document.querySelectorAll('#fresh li')].filter(
         (node, at) => node === sent[at],
     )
@@ -989,7 +1031,7 @@ test('a document holding fewer rows than the client computes reconciles — 41.1
         said.push(parts.map(String).join(' '))
     }
     try {
-        mount(document.body)
+        mount(pageRegion(document.body))
     } finally {
         console.warn = warn
     }

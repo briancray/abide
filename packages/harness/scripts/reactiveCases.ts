@@ -1183,7 +1183,104 @@ function mountReaders(width: number): Case {
     }
 }
 
+// A KEYED VALUE, WHICH NOTHING HERE PRICED: every case above is an unkeyed value. Three ops,
+// because the three touch different parts of a `Keyed` — MAKING one (its statics and entry map),
+// REACHING an entry that stands (the key and the lookup), and a STATIC walking the entries
+// (`ready` with no pattern, then `busy` narrowed by one). The hand-written arm is a map of
+// records keyed the same way, so both arms walk the same entries and build the same key.
+const KEYED_WIDTH = 8
+
+function constructKeyed(): Case {
+    return {
+        name: 'construct a keyed value',
+        distinguishes:
+            'the cost of MAKING a keyed factory — its entry map and its statics — before any key is reached',
+        vanilla: (): void => {
+            const entries = new Map<string, { ready: boolean }>()
+            sink = (args: { id: number }) => entries.get(JSON.stringify(args))
+        },
+        abide: (): void => {
+            sink = reactive((args: { id: number }) => args.id)
+        },
+        work: () => ({ vanilla: { values: 1 }, abide: { values: 1 } }),
+    }
+}
+
+function reachKeyed(): Case {
+    const handEntries = new Map<
+        string,
+        { args: { id: number }; value: number }
+    >()
+    const keyed = reactive((args: { id: number }) => args.id)
+    for (let index = 0; index < KEYED_WIDTH; index += 1) {
+        handEntries.set(JSON.stringify({ id: index }), {
+            args: { id: index },
+            value: index,
+        })
+        keyed({ id: index })
+    }
+    let at = 0
+    return {
+        name: `reach a standing keyed entry among ${KEYED_WIDTH}`,
+        distinguishes:
+            'the reach that finds its entry already standing (1.8) — the key and the lookup, no entry built',
+        vanilla: (): void => {
+            at = (at + 1) % KEYED_WIDTH
+            sink = handEntries.get(JSON.stringify({ id: at }))
+        },
+        abide: (): void => {
+            at = (at + 1) % KEYED_WIDTH
+            sink = keyed({ id: at })
+        },
+        work: () => ({ vanilla: { built: 0 }, abide: { built: 0 } }),
+    }
+}
+
+function probeKeyed(): Case {
+    const handEntries = new Map<
+        string,
+        { args: { id: number }; ready: boolean; busy: boolean }
+    >()
+    const keyed = reactive((args: { id: number }) => args.id)
+    for (let index = 0; index < KEYED_WIDTH; index += 1) {
+        handEntries.set(JSON.stringify({ id: index }), {
+            args: { id: index },
+            ready: true,
+            busy: false,
+        })
+        sink = keyed({ id: index })()
+    }
+    const pattern = { id: KEYED_WIDTH - 1 }
+    return {
+        name: `probe a keyed value of ${KEYED_WIDTH} entries, whole and by pattern`,
+        distinguishes:
+            'a keyed STATIC walking its entries — where the statics live is what this reaches first',
+        vanilla: (): void => {
+            let ready = true
+            for (const entry of handEntries.values())
+                if (!entry.ready) {
+                    ready = false
+                    break
+                }
+            let busy = false
+            for (const entry of handEntries.values())
+                if (entry.args.id === pattern.id && entry.busy) {
+                    busy = true
+                    break
+                }
+            sink = ready && !busy
+        },
+        abide: (): void => {
+            sink = keyed.ready() && !keyed.busy(pattern)
+        },
+        work: () => ({ vanilla: { walked: 2 }, abide: { walked: 2 } }),
+    }
+}
+
 export const reactiveCases = (): Case[] => [
+    constructKeyed(),
+    reachKeyed(),
+    probeKeyed(),
     constructValue(),
     constructDerived(),
     readSettled(),

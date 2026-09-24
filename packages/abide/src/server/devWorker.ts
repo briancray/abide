@@ -4,7 +4,7 @@
 // — a module in the registry, a timer, a `share` — survives one.
 //
 // THE COMPILER IS NOT THE APP, and it stays outside: `serveDev` compiles and sends the modules
-// in, so one `TypeSession` serves every reload. It is also the whole of the reload's cost —
+// in, so the compiler is loaded once for every reload. It is also the whole of the reload's cost —
 // importing the checker into a fresh worker each time was 4.5 s against the 80 ms the compile
 // itself takes.
 //
@@ -14,19 +14,14 @@
 // would have written, so a module's imports resolve the same in either.
 //
 // A REQUEST ARRIVES AS A MESSAGE and leaves as one. The body is collected rather than streamed,
-// which is the one thing dev does differently from `abide start` — 41.1's flush is not built, so
-// what is lost today is the head chunk going out ahead of the body's encode.
+// which is the one thing dev does differently from `abide start`.
 
 import { escapeText } from '#shared/escapeText.ts'
 import {
-    type AppSources,
-    answerRequest,
-    clientTags,
-    intoHead,
+    appSources,
     notFound,
     publicFilesUnder,
-    rankRoutes,
-    type ServerRoute,
+    type ServerTable,
 } from './answerRequest.ts'
 import { type Mount, mountHandlers } from './answerRpc.ts'
 import {
@@ -36,6 +31,8 @@ import {
     PUBLIC_DIRECTORY,
 } from './CLIENT_BUILD.ts'
 import { chunksByModule, type Manifest, NO_MANIFEST } from './chunksByModule.ts'
+import { clientBuildOptions } from './clientBuildOptions.ts'
+import { type App, bootApp } from './createApp.ts'
 import { fenceServer } from './fenceServer.ts'
 import { namesUnder } from './namesUnder.ts'
 import { refuseAddressCollision } from './refuseAddressCollision.ts'
@@ -78,7 +75,7 @@ const worker = self as unknown as Worker
 // request after a save is answered with the failure document for a failure that never happened.
 let opening: Promise<void> | undefined
 
-let app: AppSources | undefined
+let app: App | undefined
 // What stopped the app compiling, kept rather than thrown: 38.4 keeps the server up and 38.18
 // keeps it up through a bundle that failed, so the failure is something to SERVE.
 let failure = ''
@@ -88,7 +85,7 @@ worker.onmessage = async (event: MessageEvent): Promise<void> => {
     if (message.kind === 'start') {
         opening = open(message)
         await opening
-        worker.postMessage({ kind: 'ready', failure })
+        worker.postMessage({ kind: 'ready' })
         return
     }
     if (message.kind !== 'request') return
@@ -124,7 +121,7 @@ async function answerAsk(ask: Ask): Promise<{
         response =
             app === undefined
                 ? failedDocument(failure)
-                : await answerRequest(app, request)
+                : await app.fetch(request)
         body = await response.arrayBuffer()
     } catch (thrown) {
         response = failedDocument(
@@ -156,7 +153,10 @@ async function open(start: Start): Promise<void> {
         const modules = new Map<string, string>()
         for (const [name, text] of start.modules)
             modules.set(`${base}/${name}`, text)
-        const routed = modules.has(`${base}/server.ts`)
+        // Anything compiled at all, and a page among it — an app of handlers alone has the tables
+        // and no client to bundle.
+        const compiled = modules.has(`${base}/server.ts`)
+        const paged = modules.has(`${base}/${CLIENT_ENTRY}.ts`)
 
         // ONE PLUGIN, TWO CALLERS: the runtime resolves this worker's `import()` through it and
         // the bundler resolves the browser's graph through it, so the two lanes cannot disagree
@@ -172,25 +172,23 @@ async function open(start: Start): Promise<void> {
         // ONE LISTING of the public directory, for the bundle's externals and for what is served.
         const publicDirectory = `${root}/ui/${PUBLIC_DIRECTORY}`
         const publicNames = namesUnder(publicDirectory)
-        const [bundle, shell, published, table, handlers] = await Promise.all([
+        const [bundle, shell, published, table, mounted] = await Promise.all([
             bundleInMemory(
                 root,
                 base,
                 // 16.29, 16.30 — the browser's view of `server/`, as `abide build` gives it.
                 [plugin, fenceServer(root, start.modules)],
-                routed,
+                paged,
                 publicNames.map((name) => `/${name}`),
             ),
             shellUnder(root),
             // 38.20 — OUT OF THE SOURCE TREE. `abide build` copies these into its output and dev
             // has no output, so the address answers where the author's file actually is.
             publicFilesUnder(publicDirectory, publicNames),
-            routed
-                ? (import(`${base}/server.ts`) as Promise<{
-                      routes: ServerRoute[]
-                  }>)
-                : { routes: [] as ServerRoute[] },
-            routed
+            compiled
+                ? (import(`${base}/server.ts`) as Promise<ServerTable>)
+                : ({ routes: [], errors: [] } satisfies ServerTable),
+            compiled
                 ? (
                       import(`${base}/rpc.ts`) as Promise<{ handlers: Mount[] }>
                   ).then((rpc) => mountHandlers(rpc.handlers, root))
@@ -201,25 +199,21 @@ async function open(start: Start): Promise<void> {
         // for: the command keeps answering and what it answers names both halves. Without it
         // `answerRequest` below would silently prefer the file — its public-before-routes
         // order rests on this collision being impossible.
-        const patterns: string[] = []
-        for (const route of table.routes) patterns.push(route.pattern)
-        refuseAddressCollision(patterns, published.keys(), 'abide dev')
+        refuseAddressCollision(table.routes, published.keys(), 'abide dev')
 
         // 38.18 — THE RELOAD CLIENT IS THIS WORKER'S, not the bundle's, and it goes in whether or
         // not there is an entry beside it: a bundle that failed is exactly when a reader needs the
         // next save to reach them. `clientTags` writes nothing for a manifest with no entry.
         const reload = `<script type="module" src="${DEV_ADDRESS}/client.js"></script>`
-        app = {
-            routes: rankRoutes(table.routes, (route) =>
-                intoHead(
-                    shell,
-                    clientTags(bundle.manifest, route.clientModules) + reload,
-                ),
-            ),
+        const sources = appSources(table, shell, bundle.manifest, reload, {
             framework: (pathname) => served(bundle, pathname),
             published,
-            handlers,
-        }
+            // 18.2 — the sockets are mounted here too, and inert: this worker answers requests as
+            // messages and binds no mux to carry them over.
+            ...mounted,
+        })
+        // THE SAME `App` `abide start` boots, so an app's hooks and middleware run in dev too.
+        app = await bootApp(root, async () => sources)
     } catch (thrown) {
         failure = thrown instanceof Error ? thrown.message : String(thrown)
     }
@@ -255,24 +249,18 @@ async function bundleInMemory(
     root: string,
     base: string,
     plugins: Bun.BunPlugin[],
-    routed: boolean,
+    paged: boolean,
     publicAddresses: string[],
 ): Promise<Bundle> {
     const bundle: Bundle = { files: new Map(), manifest: NO_MANIFEST }
-    if (!routed) return bundle
+    if (!paged) return bundle
     const built = await Bun.build({
-        entrypoints: [`${base}/${CLIENT_ENTRY}.ts`],
+        // 36.15's addresses off the source tree this lane answers them out of (38.20).
+        ...clientBuildOptions(base, plugins, publicAddresses),
         // The app's own root, because `Bun.build` opens this directory and a virtual one is not
         // there to open. What it decides is where the output names are rooted, and the naming
         // below makes them flat anyway.
         root,
-        plugins,
-        target: 'browser',
-        format: 'esm',
-        splitting: true,
-        metafile: true,
-        // 36.15 — as `abide build` does, off the source tree this lane answers them out of (38.20).
-        external: publicAddresses,
         naming: {
             entry: '[name].[ext]',
             chunk: '[name]-[hash].[ext]',
@@ -344,11 +332,41 @@ function virtualModules(modules: Map<string, string>): Bun.BunPlugin {
                 }
             })
             build.onLoad({ filter: /.*/, namespace: 'abide-dev' }, (args) => ({
-                contents: modules.get(args.path) ?? '',
-                loader: 'ts',
+                contents: withSeamsResolved(
+                    modules.get(args.path) ?? '',
+                    args.path,
+                ),
+                // 34.4 — a component's scoped styles are a stylesheet the bundle collects.
+                loader: args.path.endsWith('.css') ? 'css' : 'ts',
             }))
         },
     }
+}
+
+// A `#` SPECIFIER IN A MODULE FROM THE MAP, resolved before the module is handed over. The runtime
+// takes a `#` specifier to the package's `imports` itself rather than through this plugin, and from
+// a module in the map it takes the target as an exact file — so the extensionless
+// `#server/rpc/contacts` a component writes found nothing, where the bundler, which does ask the
+// plugin, probed its way to the `.ts`. Resolved here, both lanes are handed the same path.
+const TRANSPILER = new Bun.Transpiler({ loader: 'ts' })
+
+function withSeamsResolved(source: string, path: string): string {
+    if (!path.endsWith('.ts')) return source
+    const from = path.slice(0, path.lastIndexOf('/'))
+    let resolved = source
+    for (const { path: specifier } of TRANSPILER.scanImports(source)) {
+        if (!specifier.startsWith('#')) continue
+        let target: string
+        try {
+            target = Bun.resolveSync(specifier, from)
+        } catch {
+            continue
+        }
+        resolved = resolved
+            .replaceAll(`'${specifier}'`, `'${target}'`)
+            .replaceAll(`"${specifier}"`, `"${target}"`)
+    }
+    return resolved
 }
 
 // What a reader gets while the project does not compile: the message, and the reload client that

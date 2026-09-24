@@ -3,7 +3,7 @@ title: abide
 nav: Overview
 intent: Type-safe reactive async interfaces for humans and machines. One type, both sides, no API layer.
 examples:
-  - packages/dogfood/examples/read-invoice
+  - packages/dogfood/examples/read-invoice.json
 ---
 
 Most of a web app is plumbing between two computers. A value lives on the server; you want it
@@ -93,6 +93,5 @@ Read on: [Reference](reference/index.md) · [`reactive`](reference/reactive.md) 
 
 > **These docs run ahead of the code.** abide is documented before it is built, on purpose: a
 > capability that cannot be explained as a problem an app author has is not ready to be a
-> capability. Pages marked *stub* have a decided title and intent, and no prose yet, and an
-> example's Result, Bench and Tests panels are written by hand until there is a
-> compiler and a harness to produce them. Files and Download are real.
+> capability. Pages marked *stub* have a decided title and intent, and no prose yet. Every example
+> is real: the card runs the component its Files tab shows, in this app.

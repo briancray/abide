@@ -1,4 +1,8 @@
-import { type Node, SyntaxKind } from 'typescript/unstable/ast'
+import {
+    type BinaryExpression,
+    type Node,
+    SyntaxKind,
+} from 'typescript/unstable/ast'
 import {
     isBinaryExpression,
     isCallExpression,
@@ -18,12 +22,21 @@ import { REACTIVE_MEMBERS } from './REACTIVE_MEMBERS.ts'
 // whether `{ n }` is a literal are TypeScript's answers rather than a token walk's guess at them.
 // Every offset is into the file's projection (`projectShadow`).
 //
+// ONE SHAPE IS NOT A NAME: `static` is a zero-width mark at the start of a template position the
+// checker PROVED reads nothing reactive (`proveStatic`), and it lowers to nothing. It rides this
+// channel rather than a second one because it is the same kind of answer — the checker's, about
+// this projection, at an offset — and every emitter already takes exactly this list.
+//
+// AND `raw` IS NOT ONE EITHER: the callee of a slot's bare `raw(…)` (32.26), which a markup-writing
+// position lowers to the framework's own `raw` and every other position leaves as written.
+//
 // THE SHAPE IS FIXED: every field on every read, so `Lowering`'s splice sees one hidden class.
 export type Read = {
     // The name's own span.
     start: number
     end: number
-    // `value` lowers to `n()`; `asWritten` stays as written (`n.set(v)`, 31.5); `call` is the
+    // `value` lowers to `n()`; `asWritten` stays as written (`n.set(v)`, 31.5); `member` is one of
+    // the `Reactive`'s own members referenced rather than called, named by `path`; `call` is the
     // explicit `n()` (31.7), which `arguments` says was given any; `shorthand` is `{ n }`;
     // `write` and `update` are 31.4, and 31.8 where `path` is not empty.
     // 33's three: the `props<Props>()` call, which lowers to the record the caller passed, and the
@@ -33,6 +46,7 @@ export type Read = {
     shape:
         | 'value'
         | 'asWritten'
+        | 'member'
         | 'call'
         | 'shorthand'
         | 'write'
@@ -40,6 +54,8 @@ export type Read = {
         | 'props'
         | 'defaultOpen'
         | 'defaultClose'
+        | 'static'
+        | 'raw'
     // What the rewrite replaces: the name, or a whole write or update from its first token.
     from: number
     to: number
@@ -53,26 +69,42 @@ export type Read = {
     // computed segment, which may itself hold reads.
     path: { name: string | undefined; start: number; end: number }[]
     value: Span | undefined
+    // 33.7 — the name is a props accessor handing back the caller's `Reactive`, so the `Reactive`
+    // every rewrite reaches is `name()` rather than the name.
+    through: boolean
 }
 
 // THE SHAPE, IN ONE PLACE. The header's invariant is that every read carries every field, and
-// two hand-written literals are exactly how that stops being true — so both classifiers mint
-// their read here and then set only what they part company over.
-function newRead(node: Node): Read {
-    const start = node.getStart()
+// a second hand-written literal is exactly how that stops being true — so every read is minted
+// here and then sets only what it parts company over. A span of zero width is an INSERTION.
+export function newRead(
+    start: number,
+    end: number,
+    shape: Read['shape'] = 'value',
+): Read {
     return {
         start,
-        end: node.end,
-        shape: 'value',
+        end,
+        shape,
         from: start,
-        to: node.end,
+        to: end,
         operator: '',
         prefix: false,
         discarded: false,
         arguments: 0,
         path: [],
         value: undefined,
+        through: false,
     }
+}
+
+function isAssigned(outer: Node, target: Node): outer is BinaryExpression {
+    return (
+        isBinaryExpression(outer) &&
+        outer.left === target &&
+        outer.operatorToken.kind >= SyntaxKind.FirstAssignment &&
+        outer.operatorToken.kind <= SyntaxKind.LastAssignment
+    )
 }
 
 // Neither classifier treats any of these as a read: an import or export specifier names a
@@ -108,10 +140,7 @@ export function classifyPropRead(node: Node): Read | undefined {
     // checker; a `let` pattern does not, and lowering it as a read would emit `amount() = 5` —
     // a module that does not parse, reported against the emitter rather than against the page.
     if (
-        (isBinaryExpression(parent) &&
-            parent.left === node &&
-            parent.operatorToken.kind >= SyntaxKind.FirstAssignment &&
-            parent.operatorToken.kind <= SyntaxKind.LastAssignment) ||
+        isAssigned(parent, node) ||
         ((isPrefixUnaryExpression(parent) ||
             isPostfixUnaryExpression(parent)) &&
             (parent.operator === SyntaxKind.PlusPlusToken ||
@@ -120,7 +149,7 @@ export function classifyPropRead(node: Node): Read | undefined {
         throw new Error(
             `abide: ${(node as { text?: string }).text ?? ''} is a prop, which is a live read of the caller's expression and has no write. RULEBOOK 33.5, 33.6.`,
         )
-    const read = newRead(node)
+    const read = newRead(node.getStart(), node.end)
     if (isShorthandPropertyAssignment(parent)) read.shape = 'shorthand'
     return read
 }
@@ -135,7 +164,7 @@ export function classifyRead(node: Node): Read | undefined {
         (parent as { name?: Node }).name === node
     )
         return undefined
-    const read = newRead(node)
+    const read = newRead(node.getStart(), node.end)
 
     // 31.3 — AN `await` OPERAND HOLDS THE `Reactive`. A `Reactive` is thenable (1.4), so `await n`
     // is already the spelling for its settling (2.8) in every `.ts` file; lowered to `await n()`
@@ -168,9 +197,24 @@ export function classifyRead(node: Node): Read | undefined {
     while (true) {
         const up = top.parent
         if (isPropertyAccessExpression(up) && up.expression === top) {
-            // 31.5 — the `Reactive`'s own member is the API, and no path.
+            // 31.5 — the `Reactive`'s own member is the API, and no path. Called, it stays as
+            // written; REFERENCED, it is handed over bound, so `promise.then(n.set)` writes `n`.
             if (top === node && REACTIVE_MEMBERS.has(up.name.text)) {
-                read.shape = 'asWritten'
+                const outer = up.parent
+                if (
+                    (isCallExpression(outer) && outer.expression === up) ||
+                    isAssigned(outer, up)
+                ) {
+                    read.shape = 'asWritten'
+                    return read
+                }
+                read.shape = 'member'
+                read.to = up.end
+                read.path.push({
+                    name: up.name.text,
+                    start: up.name.getStart(),
+                    end: up.name.end,
+                })
                 return read
             }
             read.path.push({
@@ -189,12 +233,7 @@ export function classifyRead(node: Node): Read | undefined {
     }
 
     const outer = top.parent
-    if (
-        isBinaryExpression(outer) &&
-        outer.left === top &&
-        outer.operatorToken.kind >= SyntaxKind.FirstAssignment &&
-        outer.operatorToken.kind <= SyntaxKind.LastAssignment
-    ) {
+    if (isAssigned(outer, top)) {
         read.shape = 'write'
         read.operator = outer.operatorToken.getText().slice(0, -1)
         read.to = outer.end
@@ -221,3 +260,207 @@ export function classifyRead(node: Node): Read | undefined {
     read.path.length = 0
     return read
 }
+
+// 14.2 — WHETHER EVALUATING A TEMPLATE EXPRESSION CAN RUN AUTHOR CODE, as far as SYNTAX can say.
+// Tracking happens where code runs (14.11), so an expression that runs none reads nothing reactive
+// however its names are bound — and anything that can run code is unproven and gets a binding,
+// runtime tracking deciding what it actually read.
+//
+// WHAT RUNS NO CODE: a literal, a name, the operators that only compare or branch (`!`, `===`,
+// `&&`, `??`, `?:`, `typeof`), and the type-only wrappers. WHAT RUNS CODE ONLY THROUGH ITS OPERAND'S
+// TYPE: arithmetic, ordering, loose equality and a template literal coerce an object through its
+// `valueOf`/`toString`, so each operand is handed back in `primitives` for the checker to confirm;
+// and a member read runs a getter, so each is handed back in `members` for the checker to confirm
+// is a plain property. EVERYTHING ELSE — a call, `new`, a tagged template, an element access, an
+// assignment, `in`, `instanceof`, a function, a literal object — is unproven here, with no question
+// asked of the checker at all.
+//
+// `false` is "unproven", never "reads a Reactive": this is a proof or nothing.
+//
+// A POSITION'S OWN VALUE IS DEMANDED PRIMITIVE, because every position this is asked of converts it
+// to a string or tests it, and an object's `toString` is code. THE ONE OBJECT EXEMPT is 32.26's
+// `raw(x)`: a slot's bare `raw(` is always the framework's (`slotFacts`), which converts its
+// argument and whose result the escaper reads a field of. It is also the one value a LIVE text
+// binding cannot write (`setText` writes text, never markup), so leaving it unproven is not only a
+// binding too many — it put `<b>hi</b>` on the screen where the server had painted an element.
+export function provePosition(
+    node: Node,
+    primitives: Node[],
+    members: Node[],
+): boolean {
+    const argument = rawArgument(node)
+    const value = argument ?? node
+    primitives.push(value)
+    return proveStatic(value, primitives, members)
+}
+
+function rawArgument(node: Node): Node | undefined {
+    let inner = node
+    while (inner.kind === SyntaxKind.ParenthesizedExpression)
+        inner = (inner as unknown as { expression: Node }).expression
+    if (!isCallExpression(inner)) return undefined
+    const callee = inner.expression
+    if (callee.kind !== SyntaxKind.Identifier) return undefined
+    if ((callee as unknown as { text: string }).text !== 'raw') return undefined
+    const only = inner.arguments[0]
+    if (inner.arguments.length !== 1 || only === undefined) return undefined
+    return only.kind === SyntaxKind.SpreadElement ? undefined : only
+}
+
+// WHAT A SLOT'S OWN TREE SAYS WITHOUT A TYPE: every bare `raw(…)` callee, lowered to the
+// framework's `raw` (32.26) — a member (`markdown.raw(x)`) is that object's method, and a `raw`
+// that is not called is whatever the file bound — and whether the slot AWAITS.
+//
+// A TEMPLATE POSITION CANNOT `await`: every slot, subject and attribute value is lowered into an
+// ordinary arrow inside the markup concatenation, so `{await rows}` emitted a module that does not
+// parse, reported by bun against the emitted file rather than the page. UNLESS THE SLOT MAKES ITS
+// OWN FUNCTION — `onclick={async () => await save()}` is an ordinary handler — so the walk stops
+// looking for an `await` at the first function it enters, and keeps looking for `raw` inside it.
+export function slotFacts(
+    node: Node,
+    rawCallees: Node[],
+    inFunction = false,
+): void {
+    if (!inFunction && node.kind === SyntaxKind.AwaitExpression)
+        throw new Error(
+            `abide: a template position cannot await, and \`${node.getText()}\` does. A slot is lowered into an ordinary function, so there is nothing here to await in — await inside a handler or a reactive body, or read the value and let the position fill. RULEBOOK 34.3.`,
+        )
+    if (
+        isCallExpression(node) &&
+        node.expression.kind === SyntaxKind.Identifier &&
+        (node.expression as unknown as { text: string }).text === 'raw'
+    )
+        rawCallees.push(node.expression)
+    const nested = inFunction || FUNCTIONS.has(node.kind)
+    node.forEachChild((child) => {
+        slotFacts(child, rawCallees, nested)
+    })
+}
+
+const FUNCTIONS: ReadonlySet<SyntaxKind> = new Set([
+    SyntaxKind.ArrowFunction,
+    SyntaxKind.FunctionExpression,
+    SyntaxKind.MethodDeclaration,
+    SyntaxKind.GetAccessor,
+    SyntaxKind.SetAccessor,
+    SyntaxKind.Constructor,
+    SyntaxKind.ClassStaticBlockDeclaration,
+])
+
+function proveStatic(node: Node, primitives: Node[], members: Node[]): boolean {
+    switch (node.kind) {
+        case SyntaxKind.StringLiteral:
+        case SyntaxKind.NumericLiteral:
+        case SyntaxKind.BigIntLiteral:
+        case SyntaxKind.NoSubstitutionTemplateLiteral:
+        case SyntaxKind.TrueKeyword:
+        case SyntaxKind.FalseKeyword:
+        case SyntaxKind.NullKeyword:
+        case SyntaxKind.Identifier:
+            return true
+        case SyntaxKind.ParenthesizedExpression:
+        case SyntaxKind.AsExpression:
+        case SyntaxKind.SatisfiesExpression:
+        case SyntaxKind.NonNullExpression:
+        case SyntaxKind.TypeOfExpression:
+        case SyntaxKind.VoidExpression:
+            return proveStatic(
+                (node as unknown as { expression: Node }).expression,
+                primitives,
+                members,
+            )
+        case SyntaxKind.PrefixUnaryExpression: {
+            const { operator, operand } = node as unknown as {
+                operator: SyntaxKind
+                operand: Node
+            }
+            if (operator === SyntaxKind.ExclamationToken)
+                return proveStatic(operand, primitives, members)
+            if (
+                operator === SyntaxKind.PlusPlusToken ||
+                operator === SyntaxKind.MinusMinusToken
+            )
+                return false
+            primitives.push(operand)
+            return proveStatic(operand, primitives, members)
+        }
+        case SyntaxKind.ConditionalExpression: {
+            const { condition, whenTrue, whenFalse } = node as unknown as {
+                condition: Node
+                whenTrue: Node
+                whenFalse: Node
+            }
+            return (
+                proveStatic(condition, primitives, members) &&
+                proveStatic(whenTrue, primitives, members) &&
+                proveStatic(whenFalse, primitives, members)
+            )
+        }
+        case SyntaxKind.TemplateExpression: {
+            for (const span of (
+                node as unknown as {
+                    templateSpans: readonly { expression: Node }[]
+                }
+            ).templateSpans) {
+                primitives.push(span.expression)
+                if (!proveStatic(span.expression, primitives, members))
+                    return false
+            }
+            return true
+        }
+        case SyntaxKind.PropertyAccessExpression: {
+            const access = node as unknown as { expression: Node; name: Node }
+            if (access.name.kind !== SyntaxKind.Identifier) return false
+            members.push(access.name)
+            return proveStatic(access.expression, primitives, members)
+        }
+        case SyntaxKind.BinaryExpression: {
+            const binary = node as BinaryExpression
+            const operator = binary.operatorToken.kind
+            if (!NON_COERCING.has(operator)) {
+                if (!COERCING.has(operator)) return false
+                primitives.push(binary.left, binary.right)
+            }
+            return (
+                proveStatic(binary.left, primitives, members) &&
+                proveStatic(binary.right, primitives, members)
+            )
+        }
+        default:
+            return false
+    }
+}
+
+// The binary operators that read their operands without converting them.
+const NON_COERCING: ReadonlySet<SyntaxKind> = new Set([
+    SyntaxKind.AmpersandAmpersandToken,
+    SyntaxKind.BarBarToken,
+    SyntaxKind.QuestionQuestionToken,
+    SyntaxKind.EqualsEqualsEqualsToken,
+    SyntaxKind.ExclamationEqualsEqualsToken,
+    SyntaxKind.CommaToken,
+])
+
+// The ones that convert an object operand through author code, and so run none only over
+// primitives. `in` and `instanceof` are in neither: a proxy's `has` and `Symbol.hasInstance` are
+// code whatever the operand's type.
+const COERCING: ReadonlySet<SyntaxKind> = new Set([
+    SyntaxKind.PlusToken,
+    SyntaxKind.MinusToken,
+    SyntaxKind.AsteriskToken,
+    SyntaxKind.SlashToken,
+    SyntaxKind.PercentToken,
+    SyntaxKind.AsteriskAsteriskToken,
+    SyntaxKind.LessThanToken,
+    SyntaxKind.GreaterThanToken,
+    SyntaxKind.LessThanEqualsToken,
+    SyntaxKind.GreaterThanEqualsToken,
+    SyntaxKind.EqualsEqualsToken,
+    SyntaxKind.ExclamationEqualsToken,
+    SyntaxKind.AmpersandToken,
+    SyntaxKind.BarToken,
+    SyntaxKind.CaretToken,
+    SyntaxKind.LessThanLessThanToken,
+    SyntaxKind.GreaterThanGreaterThanToken,
+    SyntaxKind.GreaterThanGreaterThanGreaterThanToken,
+])

@@ -15,9 +15,9 @@ covers:
   - `ttl`
   - `s.peek`
 examples:
-  - packages/dogfood/examples/reload-triggers
-  - packages/dogfood/examples/reload-args
-  - packages/dogfood/examples/reload-ttl
+  - packages/dogfood/examples/reload-triggers.json
+  - packages/dogfood/examples/reload-args.json
+  - packages/dogfood/examples/reload-ttl.json
 ---
 
 Reading loads a value. So what decides when a loaded value is stale?

@@ -28,7 +28,7 @@ covers:
   - `NO_COLOR`
   - `FORCE_COLOR`
 examples:
-  - packages/dogfood/examples/log-channels
+  - packages/dogfood/examples/log-channels.json
 ---
 
 `log('invoice paid', { id })` writes a line. What makes it worth having rather than a

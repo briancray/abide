@@ -1,0 +1,21 @@
+<script>
+import { reactive } from 'abide'
+import { getStock } from '#server/rpc/reloadTtlStock'
+
+let opened = reactive(0)
+
+// Re-reading after the lapse fetches; the lapse itself woke nobody.
+const level = reactive(() => {
+    opened
+    return getStock({ warehouse: 'east', sku: 'A-70' })
+})
+</script>
+
+<ul class="fields stacked">
+    <li><span>on hand</span>
+        <strong>{level.ready() ? level.onHand : 'counting…'}</strong>
+    </li>
+    <li><span>loads</span><strong>{level.loads}</strong></li>
+</ul>
+
+<button onclick={() => (opened += 1)}>Read it again</button>

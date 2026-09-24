@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { rulebookClauses } from '../../harness/scripts/rulebookClauses.ts'
 
 // REGISTRY.md holds signatures and RULEBOOK.md holds requirements, and the split is only worth
 // having if it STAYS split. Prose at the top of a document does not make it stay — a rule written
@@ -37,16 +38,7 @@ function rows(source: string): { line: number; cells: string[] }[] {
 }
 
 function clauses(): { id: string; text: string }[] {
-    const out: { id: string; text: string }[] = []
-    for (const paragraph of body(rulebook).split('\n\n')) {
-        const clause = /^(\d+\.\d+)\s+([\s\S]*)$/.exec(paragraph.trim())
-        if (clause)
-            out.push({
-                id: clause[1] ?? '',
-                text: (clause[2] ?? '').replace(/\n/g, ' '),
-            })
-    }
-    return out
+    return rulebookClauses(body(rulebook))
 }
 
 // The categories the clauses are written over, read from the rulebook's own Terms table rather

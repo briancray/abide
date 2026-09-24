@@ -29,8 +29,8 @@ clauses say what must hold and a worked page says what it looks like, which is t
 clauses across two documents do not carry.
 
 BEFORE WRITING A DOCUMENTATION PAGE, read RULEBOOK 40 and BRAND. 40 is the docs system — one
-example per BEHAVIOUR TAUGHT (40.20, 40.21), what a `{% snippet %}` guarantees (40.6-40.10), and
-what a panel earns (40.11, 40.12) —
+example per BEHAVIOUR TAUGHT (40.18, 40.19), what a `{% snippet %}` guarantees (40.6-40.10), and
+what a panel earns (40.11) —
 and BRAND is the voice, the vocabulary, and the register of a title against a nav label. both bind
 today, where most of the rulebook describes a design nothing can run yet.
 
@@ -53,7 +53,7 @@ constants leaf and the file-naming rule; `packages/harness/tests/lanes.test.ts` 
 lane's isolation, walked by RESOLUTION rather than by bundling — two earlier spellings each passed
 with an abide edge planted one module deep, so the test now carries a second test that the walk
 finds abide when abide is there; and
-`packages/dogfood/tests/coverage.test.ts` holds the ratio rule — a bench row with no arm beside it
+`packages/harness/tests/arms.test.ts` holds the ratio rule — an arm with no docs example beside it
 is a figure, not a claim. WHAT IS NOT GATED IS JUDGEMENT, and it is most of the file: whether a name
 is descriptive, whether a comment is load-bearing, whether the share was named before the layer was
 changed. a check produces CANDIDATES and the rule decides; where no check can produce one, the rule

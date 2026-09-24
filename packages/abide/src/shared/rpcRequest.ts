@@ -3,10 +3,10 @@
 // to the byte, or the browser's call misses the request that was already started for it. `key` is
 // that agreement: method, URL and body, which is what makes two requests the same one.
 //
-// A `GET` or `DELETE` carries its args in the URL and a mutation in its body. A query member's
-// value is its text, and a list is the member repeated; 19.8 is where text becomes the declared
-// type again.
+// A `GET` or `DELETE` carries its args in the URL, in `queryText`'s spelling, and a mutation in its
+// body; 19.8 is where text becomes the declared type again.
 
+import { queryText } from './queryText.ts'
 import type { Method } from './rpc.ts'
 
 export type RpcRequest = {
@@ -14,6 +14,8 @@ export type RpcRequest = {
     url: string
     // The JSON body of a mutation, or `undefined` where the args ride in the URL.
     body: string | undefined
+    // What `fetch` is handed: the method, and the JSON content-type beside a body.
+    init: RequestInit
     key: string
 }
 
@@ -31,16 +33,13 @@ export function rpcRequest(
     let body: string | undefined
     if (argsInURL(method)) {
         if (args !== undefined) {
-            const query = new URLSearchParams()
-            for (const [name, value] of Object.entries(args)) {
-                if (value === undefined) continue
-                if (Array.isArray(value))
-                    for (const each of value) query.append(name, String(each))
-                else query.append(name, String(value))
-            }
-            const text = query.toString()
+            const text = queryText(args)
             if (text !== '') url = `${address}?${text}`
         }
     } else if (args !== undefined) body = JSON.stringify(args)
-    return { method, url, body, key: `${method} ${url} ${body ?? ''}` }
+    const init: RequestInit =
+        body === undefined
+            ? { method }
+            : { method, headers: { 'content-type': 'application/json' }, body }
+    return { method, url, body, init, key: `${method} ${url} ${body ?? ''}` }
 }

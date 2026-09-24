@@ -18,20 +18,21 @@ const ROOT = `${REPO}packages/dogfood/src`
 // marker in the nav is visible from whatever address the browser is standing on.
 const NAV = `${ROOT}/ui/components/DocsNav.abide`
 
-// ONE PROJECT RUNS IT. Every project over this directory would spawn a dev server of its own
-// and EDIT THE SAME FILE to provoke a reload, which is two writers on one tree — and the second
-// answers a question the first already did, since the address here is this spec's own rather
-// than the project's base.
-// biome-ignore lint/correctness/noEmptyPattern: playwright refuses a first parameter that is not a destructuring pattern, and this hook reads only the second.
-test.beforeEach(({}, testInfo) => {
-    testInfo.skip(testInfo.project.name !== 'root', 'one dev server is enough')
-})
-
 let dev: ChildProcess | undefined
 let base = ''
 let original = ''
 
-test.beforeAll(async () => {
+// ONE PROJECT RUNS IT. Every project over this directory would spawn a dev server of its own
+// and EDIT THE SAME FILE to provoke a reload, which is two writers on one tree — and the second
+// answers a question the first already did, since the address here is this spec's own rather
+// than the project's base.
+//
+// SKIPPED IN `beforeAll`, not `beforeEach`: a `beforeAll` runs before the first `beforeEach` does,
+// so a skip there still spawned the second dev server and read `NAV` — and its `afterAll` wrote
+// that reading back, which is the marked file if `root` had saved it by then.
+// biome-ignore lint/correctness/noEmptyPattern: playwright refuses a first parameter that is not a destructuring pattern, and this hook reads only the second.
+test.beforeAll(async ({}, testInfo) => {
+    testInfo.skip(testInfo.project.name !== 'root', 'one dev server is enough')
     original = readFileSync(NAV, 'utf8')
     dev = spawn('bun', [BIN, 'dev', '--root', ROOT, '--port', '0'], {
         cwd: REPO,
@@ -51,8 +52,9 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(() => {
+    if (dev === undefined) return
     writeFileSync(NAV, original)
-    dev?.kill()
+    dev.kill()
 })
 
 // THE REVERT: drop the socket terminate from `serveDev`'s `replace`, and this waits out its

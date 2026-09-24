@@ -1,0 +1,11 @@
+{
+    "title": "`tags` — a selection that reaches across keyed values",
+    "summary": "Two regions, each with revenue and recent orders behind keyed values that never mention one another. Press one region's button and watch the other stand still.",
+    "app": "dashboard",
+    "files": [
+        "src/ui/components/CacheTagsDashboard.abide",
+        "src/ui/components/Region.abide",
+        "src/server/rpc/cacheTagsMetrics.ts"
+    ],
+    "render": "src/ui/components/CacheTagsDashboard.abide"
+}

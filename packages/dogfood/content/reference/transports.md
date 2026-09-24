@@ -105,8 +105,8 @@ Spelled per lane, so the same name means what that lane has:
 `(args?) => Reactive` — the **same value** the `Keyed` hands back for those args, so one socket
 carries every channel in it. `Produced` and `Args` come through unchanged, and every channel is
 carried over one web socket mux, so a page subscribed to four channels holds one
-connection. A value a socket carries is process-wide, and a `publish` on it reaches every
-subscriber.
+connection. A value a socket carries is built with `global: true` and is process-wide, so a
+`publish` on it reaches every subscriber — one built without it is refused (18.18).
 
 ## Schemas
 

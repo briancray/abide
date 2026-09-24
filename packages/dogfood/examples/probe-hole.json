@@ -1,0 +1,10 @@
+{
+    "title": "A read starts the load and leaves a hole",
+    "summary": "An invoice with no loading branch anywhere in it. Reload the page and watch the three fields fill.",
+    "app": "crm",
+    "files": [
+        "src/server/rpc/probeHoleInvoices.ts",
+        "src/ui/components/ProbeHoleInvoice.abide"
+    ],
+    "render": "src/ui/components/ProbeHoleInvoice.abide"
+}

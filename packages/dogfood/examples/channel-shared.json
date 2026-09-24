@@ -1,0 +1,11 @@
+{
+    "title": "`reactive<Message>()` — a channel anything can reach",
+    "summary": "A conversation's composer, and the line above it that reports who spoke last. Press Send and watch a component the composer never names.",
+    "app": "chat",
+    "files": [
+        "src/shared/channelSharedConversations.ts",
+        "src/ui/components/ChannelSharedChat.abide",
+        "src/ui/components/LastSpoken.abide"
+    ],
+    "render": "src/ui/components/ChannelSharedChat.abide"
+}

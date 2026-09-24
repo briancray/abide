@@ -7,6 +7,7 @@
 // nothing, which a parse that only looked for the token would get wrong both ways.
 
 import { ENCODING_SUFFIX } from './CLIENT_BUILD.ts'
+import { qualitiesOf } from './qualitiesOf.ts'
 
 export type Encoding = keyof typeof ENCODING_SUFFIX
 
@@ -18,20 +19,7 @@ export function negotiateEncoding(
     offered: readonly Encoding[],
 ): Encoding | undefined {
     if (accepted === null) return undefined
-    const qualities = new Map<string, number>()
-    for (const part of accepted.split(',')) {
-        const [token, ...parameters] = part.split(';')
-        let quality = 1
-        for (const parameter of parameters) {
-            const [key, value] = parameter.split('=')
-            if (key?.trim() === 'q') quality = Number(value)
-        }
-        // A QUALITY THAT DOES NOT PARSE REFUSES, rather than reading as the default of 1.
-        qualities.set(
-            (token as string).trim().toLowerCase(),
-            Number.isNaN(quality) ? 0 : quality,
-        )
-    }
+    const qualities = qualitiesOf(accepted)
     const wildcard = qualities.get('*') ?? 0
     let chosen: Encoding | undefined
     let best = 0

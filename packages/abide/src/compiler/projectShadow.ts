@@ -1,5 +1,5 @@
 import type { AbideFile } from './parseAbide.ts'
-import type { TemplateNode } from './TemplateNode.ts'
+import type { Branch, TemplateNode } from './TemplateNode.ts'
 import { tokenise } from './tokenise.ts'
 
 export type Span = { start: number; end: number }
@@ -59,6 +59,8 @@ function project(file: AbideFile): Projection {
         return span
     }
 
+    let subjects = 0
+
     const walk = (nodes: TemplateNode[]): void => {
         for (const node of nodes) {
             if (node.kind === 'text') continue
@@ -73,6 +75,14 @@ function project(file: AbideFile): Projection {
                 walk(node.children)
                 continue
             }
+            // 32.16 — the catch arm binds the failure, and the checker has to see the name.
+            if (node.block === 'try') {
+                walk((node.branches[0] as Branch).children)
+                text += `{ const ${node.error === '' ? '__failure' : node.error}: any = undefined\n`
+                walk((node.branches[1] as Branch).children)
+                text += '}\n'
+                continue
+            }
             if (node.block === 'if') {
                 for (const branch of node.branches) {
                     if (branch.subject !== '')
@@ -81,15 +91,28 @@ function project(file: AbideFile): Projection {
                 }
                 continue
             }
-            slots.set(node, expression(node.subject))
-            text += `for (const ${node.item} of [] as any[]) {\n`
+            // THE ROW'S ITEM IS TYPED FROM THE SUBJECT, so a member of it is a member the checker
+            // can answer for (`proveStatic`) — bound `any`, `{row.title}` was unprovable in every
+            // row of every list. The subject is held in a `const` of its own rather than written
+            // into the loop's head, where the item's own binding is already in scope.
+            const subject = `${SUBJECT}${subjects}`
+            subjects += 1
+            text += `;const ${subject} = (`
+            slots.set(node, {
+                start: text.length,
+                end: text.length + node.subject.length,
+            })
+            text += `${node.subject})\n`
+            text += `for (const ${node.item} of ${ROWS_OF}(${subject})) {\n`
             if (node.index !== '') text += `const ${node.index} = 0\n`
             if (node.key !== '') keys.set(node, expression(node.key))
             walk(node.children)
             text += '}\n'
         }
     }
+    walk(file.head)
     walk(file.template)
+    if (subjects > 0) text += ROWS_OF_DECLARATION
     // 34.3 — BOTH BLOCKS, and the reason is the SERVER. `<script module>` is request-local there
     // (34.2), so the emitted component carries its body as well as the `<script>`'s — an `await`
     // at the top of either stands in an ordinary function and the module does not parse. In a
@@ -107,6 +130,19 @@ function project(file: AbideFile): Projection {
 }
 
 const AWAIT = 'await'
+
+// What a row's item is, read off the subject as `listOf` iterates it: what a `Reactive` read by
+// name hands back (31.1 lowers `rows` to `rows()`), or the subject itself. THE CALL IS THE FIRST
+// OVERLOAD because a `Reactive` is ALSO an `AsyncIterable` of its productions (2.7), and inferred
+// over one union the item came out as the row OR the whole list. Declared AFTER everything, so no
+// offset above it moves, and ambient, so there is nothing to emit. Where inference fails the item
+// is `unknown`, and a member of that is unprovable — the safe side.
+const SUBJECT = '__subject'
+const ROWS_OF = '__rowsOf'
+const ROWS_OF_DECLARATION = `
+declare function ${ROWS_OF}<T>(subject: () => Iterable<T> | null | undefined): T[]
+declare function ${ROWS_OF}<T>(subject: Iterable<T> | AsyncIterable<T> | null | undefined): T[]
+`
 
 // 34.3 — A SCRIPT BLOCK MAY NOT AWAIT AT ITS TOP LEVEL. Component setup is a function body on both
 // sides, so nothing in the render is held and every value a page reads is a hole the document is

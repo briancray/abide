@@ -1,0 +1,23 @@
+<script>
+import { log } from 'abide'
+
+const billing = log.named('billing')
+const sync = log.named('sync')
+</script>
+
+<div class="row">
+    <button onclick={() => billing.info('invoice sent', { id: '4310' })}>
+        Send an invoice
+    </button>
+    <button onclick={() => sync.debug('polled', { rows: 0 })}>Poll</button>
+</div>
+
+<ul class="fields stacked">
+{#for record of log.records.history(20)}
+    {#if record.namespace === 'billing' || record.namespace === 'sync'}
+        <li>
+            <span>{record.namespace}</span><strong>{record.message}</strong>
+        </li>
+    {/if}
+{/for}
+</ul>

@@ -1045,23 +1045,6 @@ label:has(> input[type=radio]) {
     border-bottom-color: var(--heading);
 }
 
-.ex-download {
-    margin-left: auto;
-    flex: none;
-    padding: .25rem .75rem;
-    border-radius: 5px;
-    border: 1px solid var(--rule);
-    background: var(--raised);
-    color: var(--muted);
-    font: 500 .75rem/.75rem var(--mono);
-    text-decoration: none;
-}
-
-.ex-download:hover {
-    color: var(--ink);
-    border-color: var(--muted);
-}
-
 /* A panel is flush by default — Files is a tab strip with a code block under it and any
    distance between them would read as a seam. The panels that hold a REPORT rather than a
    file take the inset and the rhythm. */
@@ -1069,15 +1052,6 @@ label:has(> input[type=radio]) {
     border-top: 1px solid var(--rule);
     display: flex;
     flex-direction: column;
-}
-
-/* A panel whose body is a TABLE sits in the panel's own rhythm; `files` and `wire`
-   bring their own and stay flush. Written as an EXCLUSION rather than a list of the
-   three that want it — the list is what left `measure` jammed against the tab bar on
-   the day it arrived, with nothing saying so. */
-.ex-panel:not([data-panel=files]):not([data-panel=wire]) {
-    gap: var(--gap-snug);
-    padding-block: var(--gap-snug);
 }
 
 /* WRAPS rather than scrolls. One example per page means four to six files is the normal
@@ -1141,150 +1115,16 @@ label:has(> input[type=radio]) {
     background: transparent;
 }
 
-/* No fake browser chrome: a URL bar is two rows of furniture around the one thing worth
-   looking at, and the address is on the frame's title where it costs nothing. */
-.ex-browser {
-    position: relative;
-    padding: .75rem;
-    background: color-mix(in srgb, var(--ink) 4%, transparent);
-    display: flex;
-    flex-direction: column;
-    gap: var(--gap-tight);
-}
-
-/* THE FRAME IS RUNNING, and nothing else on the page is — a reader who takes the render for
-   a screenshot never presses the button the claim is behind. Green rather than the signal
-   colour: this is a status, and it is the one word that says the counters under it are the
-   arm's own and are moving. */
-.ex-live {
-    font: 500 .5rem/.5rem var(--mono);
-    letter-spacing: .08em;
-    color: var(--good);
-    text-transform: uppercase;
-}
-
-.ex-replay {
-    position: absolute;
-    top: 1.25rem;
-    right: 1.25rem;
-    z-index: 1;
-    padding: .25rem .5rem;
-    border-radius: 999px;
-    border: 1px solid var(--rule);
-    background: var(--raised);
-    color: var(--muted);
-    font: 500 .75rem/.75rem var(--mono);
-}
-
-.ex-replay:hover {
-    background: var(--raised);
-    color: var(--ink);
-    border-color: var(--muted);
-}
-
-/* WHAT THE ARM ACTUALLY DID, in the frame's own register: mono, recessive, and reading as an
-   instrument beside the render rather than as part of it. Hidden until the arm reports, so an
-   example that makes no request shows no empty line where a count would be — and `hidden` is
-   `display:none`, so the gap above it goes with it. */
-/* The height is SET BY THE FRAME, which is the only side that can measure its content —
-   see the driver in renderExample.ts. This is the floor before the first report. */
-/* CONTENT-BOX against the global border-box: the height reported is the CONTENT height, and
-   a border-box frame would be that much shorter than its own document — two pixels of scroll
-   the reader never asked for, and enough to make the frame keep a wheel gesture. */
-.ex-result {
-    box-sizing: content-box;
-    width: 100%;
-    height: 6rem;
-    flex: none;
-    border: 1px solid var(--rule);
-    border-radius: 7px;
+/* THE RUNNING COMPONENT, on the page rather than in a frame: the docs app is the app it runs in.
+   The paper and the column are what a page of the app would give it, so the render reads as a
+   page and not as more of the card's chrome. */
+.ex-render {
+    padding: 1.4rem;
     background: var(--paper);
-    display: block;
-}
-
-/* An exchange is a column of five: two lines, two header tables and a body. */
-.ex-panel>div[data-file] {
+    border-top: 1px solid var(--rule);
     display: flex;
     flex-direction: column;
-    gap: var(--gap-tight);
-    padding-block: var(--gap-snug);
-}
-
-.ex-line {
-    padding: 0 1rem;
-    font-size: .75rem;
-}
-
-.ex-line code {
-    background: none;
-    padding: 0;
-    color: var(--muted);
-}
-
-/* THE TWO MARGINS THE SCALE KEEPS, here and on `.ex-result-pass` below. A gap needs a box
-   on both sides of it and these are glyphs INSIDE a line — a marker on inline content, with
-   no container to own the distance. They take a step off the scale rather than a number. */
-.ex-line code::before {
-    margin-right: var(--gap-tight);
-}
-
-.ex-request code::before {
-    content: '\2192';
-    color: var(--cool);
-}
-
-.ex-status code::before {
-    content: '\2190';
-    color: var(--warm);
-}
-
-/* THE INSET IS THE WIDTH, not a margin: a table cannot be padded from the outside, so the
-   1rem either side is stated as the width it leaves and centred in the column. Request and
-   response headers are two separate tables, so their columns only line up if the geometry is
-   DECLARED — auto layout sizes each one from its own content, which put the values at two
-   different left edges. 11rem fits the longest header name abide sends at this size; a
-   longer one wraps rather than shifting the column. */
-.ex-headers,
-.ex-bench,
-.ex-tests,
-.ex-note {
-    width: calc(100% - 2rem);
-    align-self: center;
-}
-
-.ex-headers {
-    font-size: .75rem;
-    table-layout: fixed;
-}
-
-.ex-headers td {
-    padding: .25rem .5rem .25rem 0;
-    border: 0;
-    overflow-wrap: anywhere;
-}
-
-.ex-headers tr td:first-child {
-    width: 11rem;
-}
-
-.ex-headers code {
-    background: none;
-    padding: 0;
-}
-
-.ex-headers tr td:first-child code {
-    color: var(--muted);
-}
-
-.ex-status {
-    width: 1%;
-    white-space: nowrap;
-    text-align: right;
-    font: 500 .75rem/.75rem var(--mono);
-}
-
-.ex-ratio {
-    text-align: right;
+    gap: var(--gap-flow);
 }
 
 /* A verdict cell: the answer carries the colour, the reason recedes behind it. */
@@ -1301,97 +1141,6 @@ label:has(> input[type=radio]) {
 .verdict-why {
     font-size: .75rem;
     color: var(--muted);
-}
-
-.ex-good {
-    color: var(--good);
-}
-
-.ex-bad {
-    color: var(--bad);
-}
-
-.ex-result-pass {
-    color: var(--good);
-}
-
-.ex-result-pass::before {
-    content: '';
-    display: inline-block;
-    width: .25rem;
-    height: .25rem;
-    margin-right: var(--gap-tight);
-    border-radius: 50%;
-    background: currentColor;
-}
-
-.ex-bench th {
-    padding-bottom: .5rem;
-}
-
-.ex-note {
-    font-size: .75rem;
-    color: var(--muted);
-}
-
-
-/* A tag is not a number and carries no direction — two frame-quantised figures do not
-   divide, and the cell says so instead of dividing them. */
-.ex-tag {
-    font-size: .75rem;
-    color: var(--muted);
-}
-
-/* The reading's own small print. Deliberately NOT uppercased: the chip class it was
-   first written against was, and uppercasing a unit turns 1.16 µs into 1.16 ΜS. */
-.ex-reading-detail {
-    font: 400 .6875rem/1 var(--mono);
-    color: var(--muted);
-}
-
-/* The live panel. It opens EMPTY and says so: nothing here was measured on our
-   machine, and the button is the whole offer.
-
-   The gap is the PANEL's, not this one's own: a reading renders the same tables the
-   Bench tab does, one tab away, and two rhythms on one card read as a mistake. */
-.ex-measure {
-    display: flex;
-    flex-direction: column;
-    gap: var(--gap-snug);
-    align-items: flex-start;
-}
-
-.ex-measure-idle {
-    font-size: .75rem;
-    color: var(--muted);
-    margin: 0;
-}
-
-.ex-measure-refused {
-    font: 400 .8125rem/1.4 var(--mono);
-    color: var(--bad);
-    margin: 0;
-}
-
-/* NOT `width: 100%` on the tables. `.ex-bench` states its inset AS its width —
-   `calc(100% - 2rem)`, centred — so overriding the width here is what pulled the
-   reading's tables a full rem left of the Bench table beside them. Only the button
-   needs anything, and only because the flex container is `align-items: flex-start`. */
-
-/* The same register as Reload — it is the same offer, one step further: run the arm
-   again, and this time count. */
-.ex-measure-run {
-    padding: .25rem .5rem;
-    border-radius: 999px;
-    border: 1px solid var(--rule);
-    background: var(--raised);
-    color: var(--muted);
-    font: 500 .75rem/.75rem var(--mono);
-}
-
-.ex-measure-run:hover {
-    color: var(--ink);
-    border-color: var(--muted);
 }
 
 table {

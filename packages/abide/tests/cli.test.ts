@@ -70,11 +70,26 @@ test('a directory with no app is a refusal naming where it looked — 38.27', ()
 })
 
 test('asking for help is a success and an unknown command is not — 38.13', () => {
-    const helped = Bun.spawnSync(['bun', BIN, 'help'])
-    expect(helped.exitCode).toBe(0)
-    expect(helped.stdout.toString()).toContain('abide <command>')
+    for (const asked of [[], ['help'], ['-h'], ['--help']]) {
+        const helped = Bun.spawnSync(['bun', BIN, ...asked])
+        expect(helped.exitCode).toBe(0)
+        expect(helped.stdout.toString()).toContain('abide <command>')
+    }
+    // GENERATED FROM THE COMMAND LIST the dispatch reads, so every command the registry names is in
+    // the help — and a command the dispatch reaches, rather than 'unknown'. THE REVERT: drop a row
+    // from `COMMANDS`; its registry name goes missing from the help.
+    const said = Bun.spawnSync(['bun', BIN, '--help']).stdout.toString()
+    const registry = require('node:fs').readFileSync(
+        new URL('../../../docs/REGISTRY.md', import.meta.url),
+        'utf8',
+    ) as string
+    const named = [...registry.matchAll(/^\| `abide (\w+)/gm)].map(
+        (match) => match[1],
+    )
+    expect(named.length).toBeGreaterThan(10)
+    for (const command of named) expect(said).toContain(`  ${command}`)
 
-    const unknown = Bun.spawnSync(['bun', BIN, 'scaffold'])
+    const unknown = Bun.spawnSync(['bun', BIN, 'frobnicate'])
     expect(unknown.exitCode).toBe(1)
-    expect(unknown.stderr.toString()).toContain("unknown command 'scaffold'")
+    expect(unknown.stderr.toString()).toContain("unknown command 'frobnicate'")
 })

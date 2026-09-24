@@ -1,13 +1,20 @@
-import { REGION_CLOSE, REGION_OPEN, ROW_OPEN } from '#ui/REGION.ts'
-import { CHILDREN } from './CHILDREN.ts'
-import { Cursor, type Position, placeTemplate, REGION_ROOT } from './Cursor.ts'
-import type { Read } from './classifyRead.ts'
+import { RAW_CLOSE, RAW_OPEN } from '#shared/RAW_RUN.ts'
 import {
-    bindingsOf,
-    isHead,
-    isSingleRooted,
-    isSlot,
-} from './classifyTemplate.ts'
+    REGION_CAUGHT,
+    REGION_CLOSE,
+    REGION_OPEN,
+    ROW_OPEN,
+} from '#ui/REGION.ts'
+import { CHILDREN } from './CHILDREN.ts'
+import {
+    Cursor,
+    type Position,
+    placeTemplate,
+    REGION_ROOT,
+    ROW_ROOT,
+} from './Cursor.ts'
+import type { Read } from './classifyRead.ts'
+import { bindingsOf, isSingleRooted, isSlot } from './classifyTemplate.ts'
 import {
     emitHead,
     emitRow,
@@ -23,6 +30,7 @@ import {
     type WrittenAttribute,
     writtenAttributes,
 } from './emitComponent.ts'
+import { invocationProps } from './invocationProps.ts'
 import { Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { SHARED_NAMES } from './SHARED_NAMES.ts'
@@ -48,6 +56,14 @@ import type { Attribute, TemplateNode } from './TemplateNode.ts'
 // LIVE has been emitted anywhere in the page.
 type Counter = { next: number; live: boolean }
 
+// The next region's name under `prefix`, and the page marked live for holding it.
+function claim(counter: Counter, prefix: string): string {
+    const name = `${prefix}${counter.next}`
+    counter.next += 1
+    counter.live = true
+    return name
+}
+
 // `selfFill` is whether this module can be mounted against an EMPTY region, and how often: a file a
 // ROUTE reaches (30.11) is mounted against a page no server painted, ONCE a navigation; a file
 // another INVOKES as a component (32.18) can stand in a row a list grew by, once A ROW. Both need a
@@ -66,42 +82,30 @@ export function emitClient(
     file: AbideFile,
     reads: readonly Read[] = [],
     selfFill: SelfFill = 'none',
+    // Where each `.abide` this file imports landed in the build (`componentGraph`).
+    components: ReadonlyMap<string, string> = new Map(),
 ): string {
     const carriesOwnMarkup = selfFill !== 'none'
-    const template = file.template.filter((node) => !isHead(node))
     const lowering = new Lowering(file, reads)
     const used = lowering.used
     // THE TEMPLATE IS PLACED ONCE (`placeTemplate`) and everything this module emits is rendered
     // from what was placed: the mount's walk, a region's build, and the markup a region made once
     // fills from — the same positions the server's markup is rendered from.
     const page = new Cursor(
-        PAGE_HEAD,
-        PAGE_PARENT,
-        '',
+        undefined,
+        undefined,
         false,
         selfFill === 'repeated',
     )
-    placeTemplate(template, page)
-    const lines: string[] = []
-    const helpers: string[] = []
-    const chain: string[] = []
+    placeTemplate(file.template, page)
     const counter = { next: 0, live: false }
-    emitRegion(page, lowering, lines, helpers, counter, chain)
+    const { chain, helpers, lines } = emitRegion(page, lowering, counter)
 
     // 34.2 — A `<script module>` IS PROCESS-WIDE IN A BROWSER, which is MODULE SCOPE: it is
     // evaluated once when this module is first imported rather than once per `mount`, so a second
     // mount of the same page reads what the first one left.
     const moduleSetup = splitImports(lowering.modules())
     const setup = splitImports(lowering.scripts())
-    // 32.18 IN A ROW — what a CALLER's client calls to build markup for a row the server never
-    // wrote. The same template the server emitter writes, emitted a second time into this module,
-    // which is the scheme an `{#if}` arm and a `{#for}` row already use for their own markup. It
-    // hangs off `mount` rather than being a second export, so the caller's own
-    // `import Row from './Row.abide'` reaches both halves.
-    //
-    // A PAGE SHIPS ONE TOO, and nothing calls it: which files are INVOKED is the build's knowledge
-    // (see `bin/abide.ts`), not this emitter's. The markup is a string concatenation over the same
-    // template this module already holds — the cost is the template's own bytes, once.
     // 32.18 — A COMPONENT FILLS ITS OWN REGION where the server wrote none. A row the list grew by
     // is built in the browser, and the child's markup is in the child's SERVER module — which the
     // browser may not reach. So the caller writes the anchor pair alone and the child fills it
@@ -111,7 +115,7 @@ export function emitClient(
     const fills =
         !carriesOwnMarkup || page.positions.length === 0
             ? ''
-            : `function __build(__document) {\n    ${emitMaker(page, () => renderMarkup(page, lowering, true), false, lowering)}\n}\nif (${lowering.use('isEmptyRegion')}(root)) ${lowering.use('fillRegion')}(root, __build)\n`
+            : `function __build(__document) {\n    ${emitMaker(page, lowering)}\n}\nif (${lowering.use('isEmptyRegion')}(${REGION_ROOT})) ${lowering.use('fillRegion')}(${REGION_ROOT}, __build)\n`
 
     // 39.6 — THE HEAD A NAVIGATION HAS TO APPLY. Only a module that carries its own markup can be
     // reached without a server having rendered it, so only that module needs one; a page the
@@ -134,7 +138,11 @@ export function emitClient(
     // — the caller writes the anchor pair and nothing else (32.18) — so returning '' here shipped
     // the no-op module and left every browser-grown row of a static child empty, while the rows
     // the server painted looked right.
-    if (!counter.live && fills === '' && headExport === '') return ''
+    //
+    // A FILE MOUNTED AGAINST AN EMPTY REGION SHIPS A MODULE REGARDLESS: the router or the caller's
+    // client module imports it by name, so the no-op is what it ships.
+    if (!counter.live && fills === '' && headExport === '')
+        return carriesOwnMarkup ? 'export default () => {}\n' : ''
 
     // A SCOPE IS WHAT THERE IS TO STOP, so a module with nothing live opens none. A static child
     // still ships a module — it fills the anchors of a row the browser grew — and making it
@@ -160,22 +168,13 @@ export function emitClient(
     // gzipped, where a `guard(() => …)` helper would be a closure allocated per binding at mount.
     const guard = (unit: string): string =>
         `try {\n${unit}\n} catch (thrown) { if (!${lowering.use('warnMismatch')}(thrown)) throw thrown }`
-    //
+
     // THE WALK STANDS OUTSIDE EVERY GUARD, which is why it cannot throw (see `emitRegion`): it runs
     // once, top to bottom, after `fills` has put the page in place, and each unit then checks the
-    // one node it was handed. The page's root is the one root that is not always the same KIND —
-    // a node when the server painted the page, a `Region` when a navigation or a caller mounts it —
-    // so where its run starts is asked of the runtime, and only when the walk reaches it.
-    const walk = chain.join('\n')
-    const units = lines.join('\n')
-    const rooted: string[] = []
-    if (walk.includes(PAGE_HEAD))
-        rooted.push(`const ${PAGE_HEAD} = ${lowering.use('firstIn')}(root)`)
-    if (walk.includes(PAGE_PARENT) || units.includes(PAGE_PARENT))
-        rooted.push(`const ${PAGE_PARENT} = ${lowering.use('parentIn')}(root)`)
+    // one node it was handed.
     const bindings = counter.live
         ? `const ${SCOPE} = new ${lowering.use('Scope')}()
-${[...rooted, ...chain].map((line) => `${line}\n`).join('')}\
+${chain.map((line) => `${line}\n`).join('')}\
 ${lines.map(guard).join('\n')}
 return ${SCOPE}`
         : ''
@@ -184,7 +183,7 @@ return ${SCOPE}`
     // parent's, so the chain a key is looked up is the component tree here too.
     // 10.5 — CAPTURED WHERE A DEFERRED MOUNT CAN NEED IT. A row or an arm mounted after the fact
     // runs from a `watch` effect, with nothing on the stack; this is the scope it resumes.
-    const captured = holdsComponent(page)
+    const captured = page.holdsComponent
         ? `const ${SHARE_AT} = ${lowering.use('currentShare')}()\n`
         : ''
     const shares = lowering.opensShareScope()
@@ -206,18 +205,11 @@ return ${SCOPE}`
             : `import { ${importClause(shared.sort())} } from '${SHARED_SPECIFIER}'\n`
     // THE SETUP IS NOT RE-INDENTED. Adding a margin to every line rewrites the INSIDE of a
     // multi-line template literal, so a string constant gains four spaces it never had.
-    // 41.10 — A MISMATCH MUST NOT REBUILD THE PAGE, and the page is the one region with no block
-    // around it. So the root's own bindings warn and stop rather than rebuilding, while every
-    // block inside rebuilds itself; an author's own throw is not a mismatch and comes straight
-    // back out.
-    //
-    // THE PAGE OPENS A SCOPE LIKE EVERY ARM AND ROW, and nothing ever stops it: the page's
-    // bindings live as long as the page. One object a page buys one way of opening a binding.
     return `${sharedImport}import { ${importClause(runtime.sort())} } from '${RUNTIME_SPECIFIER}'
-${componentImports(withoutProps(moduleSetup.imports), '.client')}${componentImports(withoutProps(setup.imports), '.client')}
+${componentImports(withoutProps(moduleSetup.imports), '.client', components)}${componentImports(withoutProps(setup.imports), '.client', components)}
 ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}\
 ${headExport}\
-export default function mount(root${lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
+export default function mount(${REGION_ROOT}${lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
 ${opened}${setup.body}
 ${helpers.join('\n')}
 ${fills}${captured}${bindings}${closed}
@@ -239,15 +231,15 @@ ${fills}${captured}${bindings}${closed}
 // THE WALK IS PRUNED. A position is walked when something at or after it in its parent needs it —
 // a binding, or a later position found through it — so a static subtree and a static tail are
 // never visited. A blank run standing before something walked is put back as the walk passes
-// (`blankHere`), because what follows it is found from it.
+// (`runHere`), because what follows it is found from it.
 function emitRegion(
     sink: Cursor,
     lowering: Lowering,
-    lines: string[],
-    helpers: string[],
     counter: Counter,
-    chain: string[],
-): void {
+): RegionEmitted {
+    const chain: string[] = []
+    const helpers: string[] = []
+    const lines: string[] = []
     const positions = sink.positions
     // What each element binds, decided once and read by both passes below.
     const bound = new Map<Position, ReturnType<typeof bindingsOf>>()
@@ -258,20 +250,22 @@ function emitRegion(
             continue
         }
         if (at.kind === 'text') {
-            if (readsReactive(at.run, lowering)) live.add(at)
+            if (isLiveRun(at.run, lowering)) live.add(at)
             continue
         }
         const bindings = bindingsOf(at.holder as ElementNode)
-        // ONLY WHERE THE EXPRESSION READS A `Reactive`, which is `readsReactive`'s rule asked of one
-        // attribute: `data-kind={kind}` over a plain `const` is written once by the server and
-        // never moves, and a binding for it is a reader woken on every page for nothing.
+        // ONLY WHERE THE EXPRESSION IS LIVE, which is `isLiveRun`'s rule asked of one attribute:
+        // `data-kind={kind}` over a plain `const` is written once by the server and never moves,
+        // and a binding for it is a reader woken on every page for nothing.
         bindings.attributes = bindings.attributes.filter((one) =>
-            lowering.readsIn(one.attribute),
+            lowering.isLive(one.attribute),
         )
         if (
             bindings.handlers.length === 0 &&
             bindings.attributes.length === 0 &&
-            bindings.elements.length === 0
+            bindings.elements.length === 0 &&
+            bindings.binds.length === 0 &&
+            bindings.spreads.length === 0
         )
             continue
         bound.set(at, bindings)
@@ -297,9 +291,15 @@ function emitRegion(
             chain.push(
                 `const ${at.name} = ${lowering.use('regionHere')}(${at.from})`,
             )
-        else if (at.kind === 'text' && at.blank)
+        // A RUN THAT CAN HOLD MARKUP (32.27) is stepped over to its closing anchor where it does,
+        // and a blank one is put back where it rendered nothing — the same step (`runHere`). A run
+        // of proven parts is text for good and is its node as found.
+        else if (
+            at.kind === 'text' &&
+            (at.blank || lowering.holdsMarkup(at.run))
+        )
             chain.push(
-                `const ${at.name} = ${lowering.use('blankHere')}(${at.from}, ${at.parent}${at.within === null && sink.holds !== '' ? `, ${sink.holds}` : ''})`,
+                `const ${at.name} = ${lowering.use('runHere')}(${at.from}, ${at.blank ? at.parent : 'null'})`,
             )
         else chain.push(`const ${at.name} = ${at.from}`)
     }
@@ -321,20 +321,48 @@ function emitRegion(
         counter.live = true
         const slot = at.name.slice('__c'.length)
         if (at.kind === 'text') {
-            const escapeless = lowering.use('escapeless')
-            const parts: string[] = []
-            for (const piece of at.run)
-                parts.push(
-                    piece.kind === 'text'
-                        ? JSON.stringify(piece.text)
-                        : `${escapeless}(${lowering.slot(piece)})`,
-                )
-            // RESOLVED ONCE, and the binding closes over the node. The node a position lands on is
-            // the same one on every run — the walk put a blank run's back and `setText` never
-            // removes it — so re-finding it per write is the same answer bought again: measured in
-            // Chromium at 0.47 µs a write against 0.22 µs with the node held.
+            const decoded: string[] = []
+            const values: string[] = []
+            const brands: string[] = []
+            const text: string[] = []
+            const markup: string[] = []
+            for (let piece = 0; piece < at.run.length; piece += 1) {
+                const node = at.run[piece] as TemplateNode
+                if (node.kind === 'text') {
+                    markup.push(JSON.stringify(node.text))
+                    // 32.28 — static text is markup, and `data` is not a parse: a piece with an
+                    // entity in it goes in as the characters it stands for, decoded ONCE at mount
+                    // rather than per write — the same `decodedText` the build takes it through.
+                    if (!node.text.includes('&')) {
+                        text.push(JSON.stringify(node.text))
+                        continue
+                    }
+                    const name = `__s${slot}_${piece}`
+                    decoded.push(
+                        `const ${name} = ${lowering.use('decodedText')}(${at.name}, ${JSON.stringify(node.text)})`,
+                    )
+                    text.push(name)
+                    continue
+                }
+                const value = `__v${slot}_${piece}`
+                values.push(`${value} = ${lowering.slot(node)}`)
+                brands.push(`${lowering.use('isRaw')}(${value})`)
+                text.push(`${lowering.use('escapeless')}(${value})`)
+                markup.push(`${lowering.use('escapeText')}(${value})`)
+            }
+            // RESOLVED ONCE, and the binding closes over what it resolved to. The node a position
+            // lands on is the same one on every run while the run holds text — the walk put a blank
+            // run's back and `setText` never removes it — so re-finding it per write is the same
+            // answer bought again: measured in Chromium at 0.47 µs a write against 0.22 µs with the
+            // node held. 32.27 is the one write that changes it: a `Raw` part turns the run into an
+            // anchored one (`setMarkup`) and a later text value turns it back, so each write hands
+            // back what the run now is and the binding holds that.
             texts.push(
-                `const __t${slot} = ${lowering.use('textHere')}(${at.name})\n${SCOPE}.watch(() => ${lowering.use('setText')}(__t${slot}, ${parts.join(' + ')}))`,
+                `let __t${slot} = ${lowering.use('textHere')}(${at.name})
+${decoded.map((line) => `${line}\n`).join('')}${SCOPE}.watch(() => {
+    const ${values.join(', ')}
+    __t${slot} = ${brands.join(' || ')} ? ${lowering.use('setMarkup')}(__t${slot}, ${markup.join(' + ')}) : ${lowering.use('setText')}(__t${slot}, ${text.join(' + ')})
+})`,
             )
             continue
         }
@@ -369,6 +397,17 @@ function emitRegion(
                 `const __a${slot} = ${element}\n${writes.join('\n')}`,
             )
         }
+        // 32.5, 32.7, 32.8 — THE PROPERTY AND THE VALUE, IN STEP BOTH WAYS: a watch on this region's
+        // scope writes the property, and a listener writes it back.
+        for (const bind of bindings.binds)
+            attributes.push(
+                `${lowering.use('bindProperty')}(${element}, ${JSON.stringify(bind.kind)}, ${lowering.reference(bind.attribute)}, ${SCOPE})`,
+            )
+        // 32.11 — THE SPREAD, KEPT WRITTEN: an attribute it stops carrying is removed.
+        for (const spread of bindings.spreads)
+            attributes.push(
+                `${lowering.use('bindSpread')}(${element}, () => (${lowering.expression(spread.attribute)}), ${JSON.stringify(spread.explicit)}, ${SCOPE})`,
+            )
         // 32.9 — THE NODE, HANDED OVER, once. Not a watch: what the value takes is the element,
         // which is the same node on every run a watch would have made — and the callback form's
         // `Disposer` goes on this region's scope, so a widget it set up is torn down when the
@@ -389,34 +428,20 @@ if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
         if (holder.kind === 'block') {
             if (holder.block === 'for')
                 emitList(at, holder, lowering, lines, helpers, counter)
+            else if (holder.block === 'try')
+                emitTry(at, holder, lowering, lines, helpers, counter)
             else emitBlock(at, holder, lowering, lines, helpers, counter)
         } else if (holder.kind === 'element') {
             if (isSlot(holder)) emitSlot(at, lowering, lines, helpers, counter)
             else emitInvocation(at, holder, lowering, lines, helpers, counter)
         }
     }
+    return { chain, helpers, lines }
 }
+
+type RegionEmitted = { chain: string[]; helpers: string[]; lines: string[] }
 
 type ElementNode = Extract<TemplateNode, { kind: 'element' }>
-
-// WHAT A PAGE'S ROOT IS CALLED WHILE IT IS WALKED. A region's root is always one kind of thing —
-// an arm's is a `Region`, a row's is its array — but the page's is a NODE when the server painted
-// it and a `Region` when a navigation or a caller mounts it, so where its run starts and what that
-// run hangs off are asked of the runtime (`firstIn`, `parentIn`) under these two names.
-const PAGE_HEAD = '__head'
-const PAGE_PARENT = '__parent'
-
-// Whether a component is invoked anywhere below this region, which is what decides whether a
-// deferred mount has to resume its instance's share scope (10.5). Walked rather than flagged: a
-// component three regions down is as much a descendant as one in the page's own template.
-function holdsComponent(sink: Cursor): boolean {
-    for (const at of sink.positions) {
-        if (at.kind !== 'region') continue
-        if (at.holder.kind === 'element' && !isSlot(at.holder)) return true
-        for (const inner of at.inner) if (holdsComponent(inner)) return true
-    }
-    return false
-}
 
 // A region's bindings go through its SCOPE, so what replaced the region can stop them (see
 // `Scope`). In the framework's own `__` namespace because a row binds the AUTHOR's item name as a
@@ -436,20 +461,17 @@ const WRITES = {
 // instance OPENS (`SHARED`): a page that shares nothing still carries this for a child that does.
 const SHARE_AT = '__shareAt'
 
-// 41.10 — A MISMATCH REBUILDS THIS BLOCK OR ROW AND NOTHING WIDER. What the server wrote is what
-// hydration walks; where it disagrees, it is re-rendered from the same markup a swap or a new row
-// uses (`rebuild`) and wired again. `__rebuilt` is what stops a document that disagrees for some
-// other reason from rebuilding forever — the second failure is the author's to see.
+// The document a region's maker is handed and builds its nodes from.
+const DOCUMENT = '__document'
+
+// A run's anchors while it holds markup (32.31), as the JS string literals a built run parses with.
+const RAW_OPEN_MARKUP = JSON.stringify(`<!--${RAW_OPEN}-->`)
+const RAW_CLOSE_MARKUP = JSON.stringify(`<!--${RAW_CLOSE}-->`)
+
 // A NESTED REGION'S BODY, in the order the emitted function needs it: its walk first, then its
-// helpers, then its units. Written out at four sites before it was lifted, so a change to one
-// landed on three of them — and nothing about a diff shows the fourth. `emitRegion` fills the three
-// arrays and this is the only reader of all three.
-function regionBody(
-    chain: string[],
-    helpers: string[],
-    lines: string[],
-): string[] {
-    return [...chain, ...helpers, ...lines]
+// helpers, then its units.
+function regionBody(region: RegionEmitted): string[] {
+    return [...region.chain, ...region.helpers, ...region.lines]
 }
 
 // WHAT MAKES A REGION'S NODES, as the body of a function taking the region's `__document`: the
@@ -462,19 +484,18 @@ function regionBody(
 // names (`escapeText`, `slotValue`), and a module that builds would import them for nothing.
 function emitMaker(
     sink: Cursor,
-    markup: () => string,
-    anchored: boolean,
     lowering: Lowering,
+    markup = (): string => renderMarkup(sink, lowering, true),
+    anchored = false,
 ): string {
     // A REGION MADE ONCE IS PARSED. One parse of a whole region costs what building it costs
     // (measured at 86-100% of building it) and ships as the markup string rather than as the code that builds it
     // — building a docs page's own fill was +4.3% gzipped on the whole client for nothing.
-    if (!sink.repeated)
-        return `return ${lowering.use('markupNodes')}(__document, ${markup()})`
-    for (const at of sink.positions)
-        if (at.parserOwned)
-            return `return ${lowering.use('markupNodes')}(__document, ${markup()})`
-    return emitBuild(sink, anchored, lowering, '__document')
+    let parsed = !sink.repeated
+    for (const at of sink.positions) parsed ||= at.parserOwned
+    if (parsed)
+        return `return ${lowering.use('markupNodes')}(${DOCUMENT}, ${markup()})`
+    return emitBuild(sink, anchored, lowering)
 }
 
 // A ROW THE BROWSER BUILDS, from the positions the markup walk placed for it — the same positions
@@ -502,22 +523,17 @@ function emitMaker(
 //
 // A BLANK RUN IS BUILT ONLY WHEN IT HAS SOMETHING IN IT, because that is what the server does: a
 // run of expressions that stringify to '' writes no node, and the mount's walk puts one back
-// (`blankHere`) exactly where it would for a row the server painted.
+// (`runHere`) exactly where it would for a row the server painted.
 //
 // A NESTED REGION IS AN EMPTY ANCHOR PAIR, filled by its own machinery on the mount's first run
 // (`isEmptyRegion`), and a component or a slot is the same pair filled by the child.
-function emitBuild(
-    row: Cursor,
-    anchored: boolean,
-    lowering: Lowering,
-    documentName: string,
-): string {
+function emitBuild(row: Cursor, anchored: boolean, lowering: Lowering): string {
     const lines: string[] = ['const __built = []']
     if (anchored)
         lines.push(
-            `__built.push(${documentName}.createComment(${JSON.stringify(ROW_OPEN)}))`,
+            `__built.push(${DOCUMENT}.createComment(${JSON.stringify(ROW_OPEN)}))`,
         )
-    const render = buildRender(lowering, documentName)
+    const render = buildRender(lowering)
     const into = (at: Position, node: string): string =>
         at.within === null
             ? `__built.push(${node})`
@@ -527,22 +543,21 @@ function emitBuild(
             lines.push(
                 into(
                     at,
-                    `${documentName}.createComment(${JSON.stringify(REGION_OPEN)})`,
+                    `${DOCUMENT}.createComment(${JSON.stringify(REGION_OPEN)})`,
                 ),
                 into(
                     at,
-                    `${documentName}.createComment(${JSON.stringify(REGION_CLOSE)})`,
+                    `${DOCUMENT}.createComment(${JSON.stringify(REGION_CLOSE)})`,
                 ),
             )
             continue
         }
         if (at.kind === 'text') {
-            for (const line of builtRun(at, lowering, documentName, into))
-                lines.push(line)
+            for (const line of builtRun(at, lowering, into)) lines.push(line)
             continue
         }
         lines.push(
-            `const ${at.name} = ${documentName}.createElement(${JSON.stringify(at.tag)})`,
+            `const ${at.name} = ${DOCUMENT}.createElement(${JSON.stringify(at.tag)})`,
         )
         for (const written of writtenAttributes(at.holder as ElementNode)) {
             const value = builtAttribute(written, lowering, render)
@@ -558,22 +573,22 @@ function emitBuild(
 }
 
 // A RUN, BUILT. What the server writes for a run is its static bytes and each expression escaped —
-// except a `Raw` value (32.27), whose html goes in unescaped and is PARSED into elements. A text
-// node cannot hold that, so a run whose expression answers a `Raw` is parsed from the very markup
-// the server writes for it — the parser for the one thing only it makes — and every other run is
-// one text node. The check is an `instanceof` a piece, which is what `escapeText` pays already.
+// except a `Raw` value (32.27), whose html goes in unescaped, is PARSED into elements, and is
+// anchored (`markupRun`). A text node cannot hold that, so a run whose expression answers a `Raw`
+// is parsed from the very markup the server writes for it, anchors and all — the parser for the one
+// thing only it makes — and every other run is one text node. The check is an `instanceof` a piece,
+// which is what `escapeText` pays already.
 //
 // A run reading a `Reactive` is the mount's to write: an empty node where the run always renders
 // one, and none where it can render none (a blank run), which is what the server leaves too.
 function builtRun(
     at: Position,
     lowering: Lowering,
-    documentName: string,
     into: (at: Position, node: string) => string,
 ): string[] {
     const make = (text: string): string =>
-        into(at, `${documentName}.createTextNode(${text})`)
-    if (readsReactive(at.run, lowering)) return at.blank ? [] : [make("''")]
+        into(at, `${DOCUMENT}.createTextNode(${text})`)
+    if (isLiveRun(at.run, lowering)) return at.blank ? [] : [make("''")]
     const lines: string[] = []
     const text: string[] = []
     const markup: string[] = []
@@ -583,7 +598,7 @@ function builtRun(
         if (node.kind === 'text') {
             text.push(
                 node.text.includes('&')
-                    ? `${lowering.use('decodedText')}(${documentName}, ${JSON.stringify(node.text)})`
+                    ? `${lowering.use('decodedText')}(${DOCUMENT}, ${JSON.stringify(node.text)})`
                     : JSON.stringify(node.text),
             )
             markup.push(JSON.stringify(node.text))
@@ -601,7 +616,7 @@ function builtRun(
         return lines
     }
     lines.push(
-        `if (${raw.join(' || ')}) for (const __made of ${lowering.use('markupNodes')}(${documentName}, ${markup.join(' + ')})) ${into(at, '__made')}`,
+        `if (${raw.join(' || ')}) for (const __made of ${lowering.use('markupNodes')}(${DOCUMENT}, ${RAW_OPEN_MARKUP} + ${markup.join(' + ')} + ${RAW_CLOSE_MARKUP})) ${into(at, '__made')}`,
     )
     if (!at.blank) {
         lines.push(`else ${make(whole)}`)
@@ -619,10 +634,10 @@ function builtAttribute(
     render: ValueRender,
 ): string | null {
     if (written.kind === 'merged') return mergedValue(written, lowering, render)
+    // 32.5, 32.11 — a bind and a spread are written by their bindings, installed on a built row too.
+    if (written.kind === 'bound' || written.kind === 'spread') return null
     if (written.kind === 'dynamic') {
-        // 32.11's spread is not built, and a name beginning `...` is one `setAttribute` refuses.
-        if (written.name.startsWith('...')) return null
-        if (lowering.readsIn(written.attribute)) return null
+        if (lowering.isLive(written.attribute)) return null
         return `${lowering.use('escapeless')}(${urlGuarded(lowering, written.attribute.lowerName, lowering.slot(written.attribute))})`
     }
     if (written.value === '') return "''"
@@ -635,7 +650,7 @@ function builtAttribute(
 // The build's half of `ValueRender`: what the parser would have made of each piece the markup
 // escapes. A merge member reading a `Reactive` is still evaluated here, under 41.4's guard, because
 // a merged attribute is written whole or not at all.
-function buildRender(lowering: Lowering, documentName: string): ValueRender {
+function buildRender(lowering: Lowering): ValueRender {
     const guarded = (attribute: Attribute): string =>
         `${lowering.use('escapeless')}(${unlandable(lowering, attribute, lowering.slot(attribute))})`
     return {
@@ -644,12 +659,12 @@ function buildRender(lowering: Lowering, documentName: string): ValueRender {
             `${lowering.use('oneStyleValue')}(${guarded(attribute)})`,
         bytes: (bytes) =>
             bytes.includes('&')
-                ? `${lowering.use('decodedAttribute')}(${documentName}, ${JSON.stringify(bytes)})`
+                ? `${lowering.use('decodedAttribute')}(${DOCUMENT}, ${JSON.stringify(bytes)})`
                 : JSON.stringify(bytes),
     }
 }
 
-// A REGION NOBODY PAINTED, as the pair that fills it: `_html` for the markup and `_mount` for the
+// A REGION NOBODY PAINTED, as the pair that fills it: `_build` for the nodes and `_mount` for the
 // bindings. 32.18 and 32.19 are the same mechanism from two sides — a caller's children handed to a
 // child, and the child's own fallback for a slot nothing was passed — so they are one emitter
 // rather than two that have to be kept byte-compatible by hand.
@@ -660,25 +675,26 @@ function emitFillable(
     helpers: string[],
     counter: Counter,
 ): void {
-    const lines: string[] = []
-    const nested: string[] = []
-    const chain: string[] = []
-    emitRegion(sink, lowering, lines, nested, counter, chain)
+    const region = emitRegion(sink, lowering, counter)
     helpers.push(
-        `function ${name}_build(__document) {\n    ${emitMaker(sink, () => renderMarkup(sink, lowering, true), false, lowering)}\n}`,
+        `function ${name}_build(__document) {\n    ${emitMaker(sink, lowering)}\n}`,
     )
     helpers.push(
         mountFunction(
             name,
             REGION_ROOT,
-            regionBody(chain, nested, lines),
+            regionBody(region),
             `${lowering.use('fillRegion')}(${REGION_ROOT}, ${name}_build)`,
             lowering,
-            holdsComponent(sink),
+            sink.holdsComponent,
         ),
     )
 }
 
+// 41.10 — A MISMATCH REBUILDS THIS BLOCK OR ROW AND NOTHING WIDER. What the server wrote is what
+// hydration walks; where it disagrees, it is re-rendered from the same markup a swap or a new row
+// uses (`rebuild`) and wired again. `__rebuilt` is what stops a document that disagrees for some
+// other reason from rebuilding forever — the second failure is the author's to see.
 function mountFunction(
     name: string,
     parameters: string,
@@ -731,20 +747,13 @@ function emitInvocation(
     counter: Counter,
 ): void {
     counter.live = true
-    const props: string[] = []
-    for (const attribute of node.attributes) {
-        const value = attribute.expression
-            ? lowering.expression(attribute)
-            : JSON.stringify(attribute.value)
-        props.push(`${JSON.stringify(attribute.name)}: () => (${value})`)
-    }
+    const props = invocationProps(node, lowering)
     // 32.19 — THE CHILDREN ARE MARKUP AND A MOUNT, and they have to be both: the markup is what
     // fills a slot the server never painted, and the mount is the CALLER's bindings — which only
     // this module has, addressed from a region only the child knows where to put.
     const children = at.inner[0]
-    if (node.children.length > 0 && children !== undefined) {
-        const kids = `kd${counter.next}`
-        counter.next += 1
+    if (children !== undefined) {
+        const kids = claim(counter, 'kd')
         emitFillable(kids, children, lowering, helpers, counter)
         props.push(
             `${JSON.stringify(CHILDREN)}: () => ({ build: ${kids}_build, mount: ${kids}_mount })`,
@@ -772,9 +781,7 @@ function emitSlot(
     helpers: string[],
     counter: Counter,
 ): void {
-    const name = `sl${counter.next}`
-    counter.next += 1
-    counter.live = true
+    const name = claim(counter, 'sl')
 
     emitFillable(name, at.inner[0] as Cursor, lowering, helpers, counter)
 
@@ -799,16 +806,8 @@ function emitBlock(
     helpers: string[],
     counter: Counter,
 ): void {
-    const name = `rg${counter.next}`
-    counter.next += 1
-    counter.live = true
+    const name = claim(counter, 'rg')
     const fillRegion = lowering.use('fillRegion')
-
-    // HELD RATHER THAN PUSHED, because a block is ONE unit: `${name}` is read by the watch below
-    // and a caller that guards its units apart (`emitClient`) would put a `const` in one block and
-    // its only reader in the next. Every name a unit declares is read inside it — that is what
-    // makes a unit independent, and it is the property the page's per-binding guard rests on.
-    const address = `const ${name} = ${lowering.use('regionFound')}(${at.name})`
 
     // Which arm takes, as one expression. `{:else}` carries no condition and is the floor.
     let take = '-1'
@@ -819,54 +818,13 @@ function emitBlock(
                 ? String(arm)
                 : `(${lowering.expression(branch)}) ? ${arm} : ${take}`
     }
-
-    // Each arm's markup, for the swap. The server's own emitter is not reachable here, so the
-    // client carries its own copy of each arm's markup — which is why `escapeText` is in #shared.
-    const armBuild: string[] = []
-    const armMount: string[] = []
-    for (let arm = 0; arm < block.branches.length; arm += 1) {
-        const armLines: string[] = []
-        // A NESTED REGION'S HELPERS BELONG TO THE SCOPE THAT OWNS THEM. Hoisted to `mount` they
-        // read names this arm binds and nothing else does, which is a ReferenceError at the first
-        // swap rather than at compile time.
-        const armHelpers: string[] = []
-        // AND SO DOES ITS WALK, for the same reason and one step further: each arm is a block of
-        // its own inside `${name}_mount`, so two arms may name a slot `__c0` and neither can see
-        // the other's.
-        const armChain: string[] = []
-        emitRegion(
-            at.inner[arm] as Cursor,
-            lowering,
-            armLines,
-            armHelpers,
-            counter,
-            armChain,
-        )
-        armMount.push(
-            `if (arm === ${arm}) {`,
-            ...regionBody(armChain, armHelpers, armLines).map(
-                (line) => `    ${line}`,
-            ),
-            `}`,
-        )
-        armBuild.push(
-            `    function (__document) {\n        ${emitMaker(at.inner[arm] as Cursor, () => renderMarkup(at.inner[arm] as Cursor, lowering, true), false, lowering).replaceAll('\n', '\n    ')}\n    },`,
-        )
-    }
-
-    helpers.push(
-        mountFunction(
-            name,
-            `${REGION_ROOT}, arm`,
-            armMount,
-            `${fillRegion}(${REGION_ROOT}, ${name}_build[arm])`,
-            lowering,
-            at.inner.some(holdsComponent),
-        ),
-    )
-    // ONE BUILD PER ARM, indexed by the arm the watch took. The `-1` floor — no arm taken — reads
-    // `undefined`, which is `fillRegion` with nothing to build: the region is emptied.
-    helpers.push(`const ${name}_build = [\n${armBuild.join('\n')}\n]`)
+    const mounted = emitArms(name, at, lowering, helpers, counter, undefined)
+    // HELD RATHER THAN PUSHED, because a block is ONE unit: `${name}` is read by the watch below
+    // and a caller that guards its units apart (`emitClient`) would put a `const` in one block and
+    // its only reader in the next. Every name a unit declares is read inside it — that is what
+    // makes a unit independent, and it is the property the page's per-binding guard rests on.
+    const address = `const ${name} = ${lowering.use('regionFound')}(${at.name})`
+    const isEmptyRegion = lowering.use('isEmptyRegion')
 
     // ONE SCOPE FOR THE BLOCK'S WHOLE LIFE, owned by the region above it and REFILLED on every
     // swap rather than replaced. A fresh scope per swap would have to be handed up per swap too,
@@ -881,19 +839,150 @@ function emitBlock(
     // nodes that were never painted. `isEmptyRegion` is the same signal an invoked component
     // already reads (32.18), asked ONCE on the first run: from the second onward `${name}_at` is
     // set and the fill happens anyway, so the region is never scanned twice for it.
+    //
+    // ARMS THAT BIND NOTHING ARE ONLY FILLED: there is no mount to call and no scope to stop.
+    //
+    // 14.2 — A CHAIN WHOSE EVERY SUBJECT IS PROVEN STATIC IS DECIDED ONCE, by the same body run as a
+    // block rather than as a watch: the arm it takes can never change, and a watch over it is a
+    // reader that can never wake. Unproven, the watch stays, and tracking decides what it reads.
+    let decided = true
+    for (const branch of block.branches)
+        if (branch.subject !== '' && lowering.isLive(branch)) decided = false
     lines.push(`${address}
+let ${name}_at${mounted ? `\nconst ${name}_scope = ${SCOPE}.own(new ${lowering.use('Scope')}())` : ''}
+${decided ? '{' : `${SCOPE}.watch(() => {`}
+    const next = ${take}
+    if (next !== ${name}_at) {
+        const filling = ${name}_at !== undefined || ${isEmptyRegion}(${name})
+        ${name}_at = next
+        ${
+            mounted
+                ? `if (filling) {
+            ${name}_scope.stop()
+            ${fillRegion}(${name}, ${name}_build[next])
+        }
+        ${name}_scope.own(${name}_mount(${name}, next))`
+                : `if (filling) ${fillRegion}(${name}, ${name}_build[next])`
+        }
+    }
+${decided ? '}' : '})'}`)
+}
+
+// 32.16 — A `{#try}` TAKES ITS BODY UNTIL SOMETHING IN IT FAILS, and its catch from then until the
+// failure clears. The boundary is the region's, and the catch reads the failure by the name the
+// author bound. Two arms, so the arm taken is `0` or `1` and never the `{#if}` floor.
+function emitTry(
+    at: Position,
+    block: Extract<TemplateNode, { kind: 'block'; block: 'try' }>,
+    lowering: Lowering,
+    lines: string[],
+    helpers: string[],
+    counter: Counter,
+): void {
+    const name = claim(counter, 'rg')
+    const fillRegion = lowering.use('fillRegion')
+    const inBoundary = lowering.use('inBoundary')
+    const boundary = `${name}_boundary`
+    // HANDED IN, not read off the boundary: the builds and mounts are hoisted where the region's own
+    // names are out of reach, and each instance has a failure of its own.
+    emitArms(
+        name,
+        at,
+        lowering,
+        helpers,
+        counter,
+        block.error === '' ? '' : `const ${block.error} = __caught`,
+    )
+
+    // THE BODY BUILDS AND MOUNTS UNDER THE BOUNDARY, the catch outside it — a catch arm that throws
+    // is not its own catch's to swallow. A failure raised while this run builds the body does not
+    // wake this run, so the run reads the boundary again and goes round: a body that failed as it
+    // was built is not mounted, and one that failed as it mounted is replaced. ONE UNIT, for
+    // `emitBlock`'s reason.
+    //
+    // AND THE FIRST RUN HYDRATES THE ARM THE SERVER PAINTED. Where the server's render failed its
+    // anchor says so (`REGION_CAUGHT`), and the body is evaluated under the boundary for the failure
+    // the catch binds — without being filled, so the catch the server sent is the one adopted. A
+    // body that succeeds here after failing there empties the region, and the run fills it.
+    lines.push(`const ${name} = ${lowering.use('regionFound')}(${at.name})
 let ${name}_at
 const ${name}_scope = ${SCOPE}.own(new ${lowering.use('Scope')}())
+const ${boundary} = ${SCOPE}.own(new ${lowering.use('TryBoundary')}())
+// Building the body evaluates it, so a failed body is retried by building it again.
+const ${name}_again = () => ${name}_build[0](document)
 ${SCOPE}.watch(() => {
-    const next = ${take}
-    if (next === ${name}_at) return
-    if (${name}_at !== undefined || ${lowering.use('isEmptyRegion')}(${name})) {
-        ${name}_scope.stop()
-        ${fillRegion}(${name}, ${name}_build[next])
+    if (${name}_at === undefined && ${name}.open.data === ${JSON.stringify(REGION_CAUGHT)} && ${inBoundary}(${boundary}, ${name}_again, ${name}_again) !== undefined) ${fillRegion}(${name})
+    let next = ${boundary}.failure() === undefined ? 0 : 1
+    while (next !== ${name}_at) {
+        const filling = ${name}_at !== undefined || ${lowering.use('isEmptyRegion')}(${name})
+        ${name}_at = next
+        if (filling) {
+            ${name}_scope.stop()
+            if (next === 0 && ${inBoundary}(${boundary}, () => (${fillRegion}(${name}, ${name}_build[0]), true), ${name}_again) === undefined) {
+                next = 1
+                continue
+            }
+            if (next === 1) ${fillRegion}(${name}, (__document) => ${name}_build[1](__document, ${boundary}.failure.peek()))
+        }
+        ${name}_scope.own(next === 0 ? ${inBoundary}(${boundary}, () => ${name}_mount(${name}, 0), ${name}_again) : ${name}_mount(${name}, 1, ${boundary}.failure.peek()))
+        next = ${boundary}.failure.peek() === undefined ? 0 : 1
     }
-    ${name}_at = next
-    ${name}_scope.own(${name}_mount(${name}, next))
 })`)
+}
+
+// A BLOCK'S ARMS: one mount over all of them and ONE BUILD PER ARM, indexed by the arm taken. The
+// `{#if}` floor — no arm taken — reads `undefined`, which is `fillRegion` with nothing to build: the
+// region is emptied. `caught` is the `{#try}`'s failure, bound in its catch (arm 1), and
+// `undefined` for an `{#if}`, whose arms are handed nothing.
+function emitArms(
+    name: string,
+    at: Position,
+    lowering: Lowering,
+    helpers: string[],
+    counter: Counter,
+    caught: string | undefined,
+): boolean {
+    const handed = caught === undefined ? '' : ', __caught'
+    // Each arm's markup, for the swap. The server's own emitter is not reachable here, so the
+    // client carries its own copy of each arm's markup — which is why `escapeText` is in #shared.
+    const armBuild: string[] = []
+    const armMount: string[] = []
+    // A `{#try}` always mounts: its catch binds the failure, and its body mounts under the boundary.
+    let mounted = caught !== undefined
+    for (let arm = 0; arm < at.inner.length; arm += 1) {
+        // A NESTED REGION'S HELPERS BELONG TO THE SCOPE THAT OWNS THEM. Hoisted to `mount` they
+        // read names this arm binds and nothing else does, which is a ReferenceError at the first
+        // swap rather than at compile time. AND SO DOES ITS WALK, for the same reason and one step
+        // further: each arm is a block of its own inside `${name}_mount`, so two arms may name a
+        // slot `__c0` and neither can see the other's.
+        const armRegion = emitRegion(at.inner[arm] as Cursor, lowering, counter)
+        const binding = arm === 1 && caught !== undefined ? caught : ''
+        const body = regionBody(armRegion)
+        if (body.length > 0) mounted = true
+        armMount.push(
+            `if (arm === ${arm}) {`,
+            ...(binding === '' ? [] : [`    ${binding}`]),
+            ...body.map((line) => `    ${line}`),
+            `}`,
+        )
+        armBuild.push(
+            `    function (__document${handed}) {\n        ${binding === '' ? '' : `${binding}\n`}${emitMaker(at.inner[arm] as Cursor, lowering).replaceAll('\n', '\n    ')}\n    },`,
+        )
+    }
+    const build = `${name}_build[arm]`
+    if (mounted)
+        helpers.push(
+            mountFunction(
+                name,
+                `${REGION_ROOT}, arm${handed}`,
+                armMount,
+                `${lowering.use('fillRegion')}(${REGION_ROOT}, ${handed === '' ? build : `(__document) => ${build}(__document, __caught)`})`,
+                lowering,
+                at.inner.some((arm) => arm.holdsComponent),
+            ),
+        )
+    helpers.push(`const ${name}_build = [\n${armBuild.join('\n')}\n]`)
+    return mounted
 }
 
 // 32.13 — the list. The server already rendered the rows, so the first update HYDRATES them:
@@ -909,9 +998,7 @@ function emitList(
     helpers: string[],
     counter: Counter,
 ): void {
-    const name = `ls${counter.next}`
-    counter.next += 1
-    counter.live = true
+    const name = claim(counter, 'ls')
 
     const row = position.inner[0] as Cursor
     const subject = lowering.expression(block)
@@ -930,34 +1017,29 @@ function emitList(
 
     const single = isSingleRooted(block.children)
 
-    const rowLines: string[] = []
-    const rowHelpers: string[] = []
-    const rowChain: string[] = []
-    emitRegion(row, lowering, rowLines, rowHelpers, counter, rowChain)
+    const rowRegion = emitRegion(row, lowering, counter)
 
     // `List` hands the row its document — see `emitMaker` for which rows are parsed instead.
-    const make = `const ${name}_make = (__document, ${item}, ${at}) => {\n    ${emitMaker(row, () => emitRow(row, !single, lowering, true), !single, lowering)}\n}`
+    const make = `const ${name}_make = (__document, ${item}, ${at}) => {\n    ${emitMaker(row, lowering, () => emitRow(row, !single, lowering, true), !single)}\n}`
 
     helpers.push(
         [
             // What the subject iterates as is `listOf`'s question, asked inside the runtime.
             `const ${name}_subject = () => ${subject}`,
             `const ${name}_key = (${item}, ${at}) => ${key}`,
-            // `root` is `mount`'s own parameter, so it is in scope from every helper whatever
-            // region owns it, and a row is made in the mount root's document.
             make,
-            // A row that cannot be hydrated is REBUILT by the same `make`, in place and into the
-            // same array, so the reconcile still holds every node the row has.
+            // A row that cannot be hydrated is REBUILT by the same `make`, in place, and the row's
+            // record takes its new first node.
             mountFunction(
                 name,
-                `__nodes, ${item}, ${at}`,
+                `${ROW_ROOT}, ${item}, ${at}`,
                 // The row's walk, INSIDE the mount's one `try` rather than above it, because a row
                 // rebuilds whole: a node that refused is the row disagreeing, and re-making it is
                 // the answer the page does not have.
-                regionBody(rowChain, rowHelpers, rowLines),
-                `${lowering.use('replaceNodes')}(__nodes, ${name}_make(__nodes[0].ownerDocument, ${item}, ${at}))`,
+                regionBody(rowRegion),
+                `${lowering.use('replaceRow')}(${ROW_ROOT}, ${name}_make(${ROW_ROOT}.node.ownerDocument, ${item}, ${at}))`,
                 lowering,
-                holdsComponent(row),
+                row.holdsComponent,
             ),
         ].join('\n'),
     )
@@ -973,13 +1055,11 @@ ${SCOPE}.watch(() => ${lowering.use('updateList')}(${name}_list, ${name}_subject
     )
 }
 
-// Whether any expression in the run reads a name the checker called reactive. A run of static
-// parts and unreactive expressions is written once by the server and never again; opening a
+// Whether any expression in the run is live (`Lowering.isLive`). A run of static parts and
+// expressions the checker proved static is written once by the server and never again; opening a
 // binding for it is one waking reader per run on a page for nothing.
-//
-// ASKED OF THE READS, not of the rewrite — see `Lowering.readsIn`.
-function readsReactive(run: TemplateNode[], lowering: Lowering): boolean {
+function isLiveRun(run: TemplateNode[], lowering: Lowering): boolean {
     for (const piece of run)
-        if (piece.kind === 'expression' && lowering.readsIn(piece)) return true
+        if (piece.kind === 'expression' && lowering.isLive(piece)) return true
     return false
 }

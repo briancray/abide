@@ -42,7 +42,7 @@ export type Work = {
     listenersBound: number
     // THE THREE ROWS THIS LANE DOES NOT COUNT. They are read off the record abide
     // publishes (`PUBLISHED_WORK.ts`), and `null` is "abide published nothing" rather
-    // than "the op did none of it" — 44.23. A prototype patch cannot see an effect
+    // than "the op did none of it" — 44.20. A prototype patch cannot see an effect
     // re-run and the lane may not import abide to count one, so zero here would be the
     // silent zero the `refused` list exists to prevent, with eleven `REACTIVE.md` gates
     // green against a counter that was never wired.

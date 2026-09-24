@@ -13,9 +13,9 @@ covers:
   - `JsonSchema`
   - `jsonSchema`
 examples:
-  - packages/dogfood/examples/schema-browser
-  - packages/dogfood/examples/schema-issues
-  - packages/dogfood/examples/schema-key
+  - packages/dogfood/examples/schema-browser.json
+  - packages/dogfood/examples/schema-issues.json
+  - packages/dogfood/examples/schema-key.json
 ---
 
 A handler's arguments are a shape written down twice in most stacks: once as a TypeScript type
@@ -247,9 +247,8 @@ Read on: [Failures](refuse-a-request-and-say-why.md)
 
 {% example schema-key %}
 
-A keyed value's entry is filed under the arguments **as sent**, and `args` runs after (11.26). It
-refuses and does nothing else (11.28), so a normalisation in it changes neither which entry it is
-nor what the body sees.
+A keyed value's entry is filed under the arguments **as sent**, and `args` runs after (11.26). A
+normalisation in it reaches the body (11.69) but never changes which entry it is (11.28).
 
 The order is forced rather than chosen. A browser has to compute the same key the server does in
 order to find its seeded value, and it cannot run a gate it was never sent. So the key is
@@ -270,6 +269,7 @@ A channel's message is its input, so that is `schema` — the same option a valu
 export const thread = reactive<Post>(undefined, {
     history: 50,
     schema: messageSchema,
+    global: true,
 })
 ```
 
@@ -287,6 +287,7 @@ export const threads = reactive(
         history: 50,
         args: z.object({ id: z.string().uuid() }),
         schema: messageSchema,
+        global: true,
     },
 )
 ```

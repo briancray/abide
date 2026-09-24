@@ -4,10 +4,11 @@
 // and the one thing only a browser can say.
 //
 // THE APP IS THE DOCUMENTATION NOW, so these are gates on the real thing rather than on a pair
-// of demo pages: eighty-five markdown files compiled into pages, one nav, one rail, and the card
-// machinery the page hands its own `<main>` to (32.9).
+// of demo pages: eighty-five markdown files compiled into pages, one nav, one rail, and every
+// example running inline as a component of the page it is on.
 
 import { expect, test } from '@playwright/test'
+import { NAV_ITEMS } from '../src/ui/NAV_ITEMS.ts'
 
 // SERVING UNDER A SUB-PATH IS NOT BUILT. The client entry's address is absolute (`CLIENT_BUILD`)
 // and nothing mounts the route table below a prefix, so the second project has nothing to run
@@ -54,6 +55,8 @@ test('a link to another page navigates without reloading — 30.7', async ({
     // A marker a document reload erases, which is the only way to tell the two apart.
     await page.evaluate(() => {
         ;(window as { __KEPT__?: string }).__KEPT__ = 'yes'
+        ;(document.querySelector('nav') as { __KEPT__?: string }).__KEPT__ =
+            'yes'
     })
 
     await page.click('nav a[href="/values/derive-a-value-from-other-values"]')
@@ -75,6 +78,15 @@ test('a link to another page navigates without reloading — 30.7', async ({
     await expect(page.locator('nav a[aria-current="page"]')).toHaveText(
         'Derived values',
     )
+    // AND IT IS THE SAME NAV. It is the layout's, and a layout is not rebuilt between
+    // navigations (41.11) — a marker on the node before the click is still on it after.
+    expect(
+        await page.evaluate(
+            () =>
+                (document.querySelector('nav') as { __KEPT__?: string } | null)
+                    ?.__KEPT__,
+        ),
+    ).toBe('yes')
 })
 
 // `#ui/docs.ts` is a module and is evaluated ONCE, but the INSTALL is the page's own: the
@@ -98,18 +110,49 @@ test('the rail follows the page a reader navigated to', async ({ page }) => {
     await expect(first).toHaveAttribute('aria-current', 'true')
 })
 
-// An example card is an iframe the page fills from a `srcdoc` it carries, and the fill is the
-// same install — on a page the reader NAVIGATED to, which is the arm that was dead while the
-// docs were a tree of files and every page load ran the script fresh.
+// AN EXAMPLE CARD IS A COMPONENT THE PAGE INVOKES, so a card on a page the reader NAVIGATED to is
+// built by the client rather than adopted from the server's markup — the arm a direct hit never
+// runs. Pressed rather than looked at: a card that painted and never hydrated reads the same.
 test('an example card runs on a page a reader navigated to', async ({
     page,
 }) => {
     await page.goto('/values/show-a-value-that-changes')
-    await page.click('nav a[href="/values/patch-a-list-from-a-live-feed"]')
-    const frame = page.locator('iframe.ex-result').first()
-    await expect(frame).toBeVisible()
-    await expect(frame.contentFrame().locator('body')).not.toBeEmpty()
+    await page.click('nav a[href="/values/derive-a-value-from-other-values"]')
+    const card = page.locator('.example .ex-render').first()
+    await expect(card.locator('strong', { hasText: '$50' })).toBeVisible()
+    await card.getByRole('button', { name: '+' }).click()
+    await expect(card.locator('strong', { hasText: '$75' })).toBeVisible()
 })
+
+// EVERY CARD ON EVERY PAGE, on a direct hit: the component renders on the server, adopts on the
+// client and its handlers answer. A card that throws takes its whole page with it, and one that
+// mis-adopts rebuilds itself with only a warning — so what is collected is the page error, the
+// hydration warning and a handler that FAILED. A refusal is an answer: `probe-error` and
+// `rung-order` refuse on purpose (503, 401), and that is what those cards are about.
+// ONE TEST PER SECTION, so the sections run in parallel rather than as one long walk.
+for (const group of NAV_ITEMS)
+    test(`every card under ${group.section} renders, adopts and answers`, async ({
+        page,
+    }) => {
+        const problems: string[] = []
+        let at = ''
+        page.on('pageerror', (error) =>
+            problems.push(`${at}: ${error.message}`),
+        )
+        page.on('console', (message) => {
+            if (message.text().includes('abide:hydrate'))
+                problems.push(`${at}: ${message.text()}`)
+        })
+        page.on('response', (response) => {
+            if (response.status() >= 500 && response.status() !== 503)
+                problems.push(`${at}: ${response.status()} ${response.url()}`)
+        })
+        for (const item of group.pages) {
+            at = item.href
+            await page.goto(item.href, { waitUntil: 'networkidle' })
+        }
+        expect(problems).toEqual([])
+    })
 
 test('a file under public is answered at its own address — 36.11', async ({
     page,

@@ -16,6 +16,8 @@
 // A NAME IN THE OUTPUT IS A LINE TO READ, never a line to change. Whether the clause still
 // describes what the code does is the reading; this only says nobody wrote the number down.
 
+import { CITATION, rulebookClauses } from './rulebookClauses.ts'
+
 const ROOT = new URL('../../../', import.meta.url)
 
 const SCANNED = [
@@ -23,17 +25,6 @@ const SCANNED = [
     'packages/abide/tests',
     'packages/dogfood/tests',
 ]
-
-// A clause opens its own paragraph. Same shape `rulebook.test.ts` and `conventions.test.ts` both
-// read the document with, and the three must agree or two of them are reading a different rulebook.
-function clauseIds(rulebook: string): string[] {
-    const ids: string[] = []
-    for (const paragraph of rulebook.split(/\n\s*\n/)) {
-        const clause = /^(\d+\.\d+)\s/.exec(paragraph.trim())
-        if (clause?.[1]) ids.push(clause[1])
-    }
-    return ids
-}
 
 // Every `\d.\d` in the file, comment or not. A citation in a string or an identifier is a false
 // POSITIVE here — it marks a clause as cited when nothing meant to cite it — and that only ever
@@ -45,7 +36,7 @@ async function citedInSources(): Promise<Set<string>> {
         const base = new URL(`${directory}/`, ROOT)
         for await (const path of files.scan(base.pathname)) {
             const text = await Bun.file(new URL(path, base)).text()
-            for (const found of text.matchAll(/\b(\d{1,2}\.\d{1,2})\b/g))
+            for (const found of text.matchAll(CITATION))
                 cited.add(found[1] ?? '')
         }
     }
@@ -56,7 +47,7 @@ const rulebook = await Bun.file(new URL('docs/RULEBOOK.md', ROOT)).text()
 const cited = await citedInSources()
 
 const groups = new Map<string, { cited: number; uncited: string[] }>()
-for (const id of clauseIds(rulebook)) {
+for (const { id } of rulebookClauses(rulebook)) {
     const group = id.slice(0, id.indexOf('.'))
     const entry = groups.get(group) ?? { cited: 0, uncited: [] }
     if (cited.has(id)) entry.cited += 1

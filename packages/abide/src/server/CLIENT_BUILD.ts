@@ -16,6 +16,12 @@ export const ABIDE_ADDRESS = '/__abide'
 // its own — the reload client `abide dev` serves (38.18) — adds one rather than a lane.
 export const CLIENT_ADDRESS = `${ABIDE_ADDRESS}/client`
 
+// 20.5, 20.9, 36.7 — the generated surfaces, which the CLI reaches as well as the server answers.
+export const OPENAPI_ADDRESS = `${ABIDE_ADDRESS}/openapi.json`
+export const MCP_ADDRESS = `${ABIDE_ADDRESS}/mcp`
+export const LOGS_ADDRESS = `${ABIDE_ADDRESS}/logs`
+export const HEALTH_ADDRESS = `${ABIDE_ADDRESS}/health`
+
 // The directory the bundle lands in, below the build's own output directory.
 export const CLIENT_DIRECTORY = 'client'
 
@@ -48,7 +54,7 @@ export const PUBLIC_DIRECTORY = 'public'
 // for the same reason as the address above: the LISTENER upgrades it on the main thread and the
 // dev WORKER serves the script that opens it, and a string spelled out in both is a reload that
 // silently never happens.
-export const DEV_ADDRESS = '/__abide/dev'
+export const DEV_ADDRESS = `${ABIDE_ADDRESS}/dev`
 
 // 16.2 — where a handler under `server/rpc` is answered over http: its path below that directory,
 // then its export name (19.1). Here for `CLIENT_ADDRESS`'s reason: the build writes the address

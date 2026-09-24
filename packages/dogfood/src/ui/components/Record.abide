@@ -1,0 +1,15 @@
+<script>
+import { reactive } from 'abide'
+import { getContact } from '#server/rpc/stateLoadedContacts'
+
+const contact = reactive(getContact({ id: '42' }))
+</script>
+
+<ul class="fields">
+    <li><span>name</span>
+        <strong>{contact.ready() ? contact.name : '—'}</strong></li>
+    <li><span>role</span>
+        <strong>{contact.ready() ? contact.role : '—'}</strong></li>
+</ul>
+
+<p class="status">{contact.busy() ? 'loading…' : ''}</p>

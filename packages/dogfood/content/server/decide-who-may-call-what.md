@@ -7,7 +7,7 @@ covers:
   - rpc › `middleware`
   - Lifecycle hooks › `middleware`
 examples:
-  - packages/dogfood/examples/rung-order
+  - packages/dogfood/examples/rung-order.json
 ---
 
 Auth is middleware. Not a decorator, not a config file mapping routes to roles, and not a

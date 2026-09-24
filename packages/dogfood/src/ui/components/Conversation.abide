@@ -1,0 +1,31 @@
+<script>
+import { reactive } from 'abide'
+import { turns } from '#shared/channelRoomsConversations'
+
+let here = reactive('onboarding')
+// Follows the room: switching is changing one value and nothing else.
+const thread = reactive(() => turns({ conversation: here }))
+const draft = reactive('Does the old key keep working?')
+</script>
+
+<div class="tabs">
+    <button aria-selected={here === 'onboarding'}
+        onclick={() => { here = 'onboarding' }}>onboarding</button>
+    <button aria-selected={here === 'billing'}
+        onclick={() => { here = 'billing' }}>billing</button>
+</div>
+
+<ul class="fields stacked">
+    <li><span>conversation</span><strong>{here}</strong></li>
+    <li><span>last turn</span>
+        <strong>{thread ? thread.text : 'nothing here yet'}</strong>
+    </li>
+</ul>
+
+<div class="row">
+    <label>message
+        <input bind:value={draft}>
+    </label>
+    <button onclick={() => turns({ conversation: here })
+        .publish({ speaker: 'you', text: draft })}>Send</button>
+</div>

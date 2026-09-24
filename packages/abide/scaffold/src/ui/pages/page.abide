@@ -1,0 +1,13 @@
+<script>
+import { reactive } from 'abide'
+
+let count = reactive(0)
+</script>
+
+<head><title>Hello</title></head>
+
+<main>
+    <h1>Hello</h1>
+    <p>Clicked {count} times.</p>
+    <button onclick={() => { count = count + 1 }}>Click</button>
+</main>

@@ -38,6 +38,10 @@ export type TemplateNode =
     // makes it the one place a marker earns its bytes. `invariance.spec.ts` is why that marker
     // has to be a comment, and `benchGrid.ts` is why there are none anywhere else.
     | { kind: 'block'; block: 'if'; branches: Branch[] }
+    // 32.16 — a render-time boundary over a region. Two arms, the body and the catch, each carrying
+    // its own copy of the `{:finally}` markup, which stands either way; `error` is the name the catch
+    // binds, `''` where the author bound none.
+    | { kind: 'block'; block: 'try'; branches: Branch[]; error: string }
     // 32.13 — repeats its body over a list. A REGION like `{#if}`, and the body is planned once
     // and instantiated per row, so a row's paths are the row's own.
     | {
@@ -50,3 +54,12 @@ export type TemplateNode =
           key: string
           children: TemplateNode[]
       }
+
+// THE NODE LISTS ONE LEVEL DOWN — an element's children, a row's body, each arm of an `{#if}` or a
+// `{#try}` — so a walk that only descends is written once over kinds rather than once per kind.
+export function childListsOf(node: TemplateNode): TemplateNode[][] {
+    if (node.kind === 'element') return [node.children]
+    if (node.kind !== 'block') return []
+    if (node.block === 'for') return [node.children]
+    return node.branches.map((branch) => branch.children)
+}

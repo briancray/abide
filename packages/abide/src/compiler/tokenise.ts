@@ -1,8 +1,8 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner, type Scanner } from 'typescript/unstable/ast/scanner'
 
-// ONE TOKENISER, read by `splitImports`, `forBlock` and `Lowering`'s slot `raw`, and by `slotEnd`
-// through the same scan. Two of them was two answers to the same question and they
+// ONE TOKENISER, read by `splitImports`, `forBlock` and `projectShadow`, and by `slotEnd` through
+// the same scan. Two of them was two answers to the same question and they
 // drifted: a template re-scan written for one reader and never for the split left every import
 // after a template literal inside the component body, and the emitted module did not parse.
 //
@@ -236,4 +236,20 @@ export function isSpace(char: string): boolean {
         char === '\f' ||
         char === '\r'
     )
+}
+
+// Past the CSS string opening at `open`. A `;` or a `:` inside one is the value's own.
+export function skipQuoted(source: string, open: number): number {
+    const quote = source[open]
+    let at = open + 1
+    while (at < source.length) {
+        const char = source[at]
+        if (char === '\\') {
+            at += 2
+            continue
+        }
+        if (char === quote) return at + 1
+        at += 1
+    }
+    return at
 }

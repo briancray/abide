@@ -1,0 +1,10 @@
+{
+    "title": "`{ history: n }` — a window onto the recent past",
+    "summary": "A pane over an answer arriving one token at a time. Press Next token a few times and watch the top of the list.",
+    "app": "chat",
+    "files": [
+        "src/shared/tailWindowTokens.ts",
+        "src/ui/components/TailWindowConsole.abide"
+    ],
+    "render": "src/ui/components/TailWindowConsole.abide"
+}

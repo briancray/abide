@@ -1,0 +1,10 @@
+{
+    "title": "`reactive(load)` — the settled value, never the promise",
+    "summary": "A contact fetched when the page is built. Reload the page to watch it land again.",
+    "app": "crm",
+    "files": [
+        "src/ui/components/Record.abide",
+        "src/server/rpc/stateLoadedContacts.ts"
+    ],
+    "render": "src/ui/components/Record.abide"
+}

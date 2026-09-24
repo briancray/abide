@@ -93,9 +93,9 @@ Every `Reactive` takes these, whichever overload made it.
 | `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator an app declares on `identity`, whose default is the reference. Answers "not equal" wherever it cannot decide. |
 | `history` | `number` | How many past productions a value retains beside the standing one. Default 0, the standing production alone. Per entry on a keyed value, and refused at construction on a stream. |
 | `ttl` | `number` | The life of a production, in ms. Default infinity. At the deadline the production is released and the value reads as neither ready nor busy; nothing reloads until a read, which runs the producer. On a `Keyed` it is the life of the entry. On a value with no producer it expires past productions and keeps the standing one. |
-| `args` | `Schema<Args>` | The gate on a keyed value's args. Refuses only — it never decides which entry a key lands on, and the body gets the args the caller sent. Refused at construction on a value with no parameter. |
+| `args` | `Schema<Args>` | The gate on a keyed value's args. It never decides which entry a key lands on, and the body gets what it returned. Refused at construction on a value with no parameter. |
 | `global` | `boolean` | One cache shared by every caller in the process, outliving every request. |
-| `tags` | `string[] \| ((args?: Args) => string[])` | What a [Selections](selections.md) entry matches on, and the only thing that reaches across values. |
+| `tags` | `string[] \| ((args: Args) => string[])` | What a [Selections](selections.md) entry matches on, and the only thing that reaches across values. |
 | `throttle` | `number` | A change lands immediately, then at most once per window. What a window collapses depends on what moves the value — a write, a publish, a chunk, a reload. On a stream a read serves what the window last released. On a `Keyed` it holds back starting a newly reached entry, which reports busy meanwhile. |
 | `debounce` | `number` | A change waits until the changes stop. Declaring both is a build error. |
 
@@ -104,7 +104,7 @@ Every `Reactive` takes these, whichever overload made it.
 | Name | Signature | Description |
 | --- | --- | --- |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | What a `transform` is. Returning a `Failed` refuses the write. |
-| `Store` | `{ get: () => Stored \| Promise<Stored>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void> }` | Both halves, and there is no way to spell either alone. A restore runs neither gate, so what it cannot read is a miss. |
+| `Store` | `{ get: () => Stored \| undefined \| Promise<Stored \| undefined>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void> }` | Both halves, and there is no way to spell either alone. A restore runs neither gate, so what it cannot read is a miss. |
 | `History<Stored>` | `Iterable<Stored> & AsyncIterable<Stored>` | What `s.history` hands back. Nothing is allocated until one of the two faces is pulled. |
 
 ## Reads

@@ -1,6 +1,17 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
-import type { Attribute, Branch, TemplateNode } from './TemplateNode.ts'
-import { isSpace, slotEnd, type Token, tokenise } from './tokenise.ts'
+import {
+    type Attribute,
+    type Branch,
+    childListsOf,
+    type TemplateNode,
+} from './TemplateNode.ts'
+import {
+    isSpace,
+    skipQuoted,
+    slotEnd,
+    type Token,
+    tokenise,
+} from './tokenise.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 // A `.abide` file is a script, a style and a template, and this splits it into the three
@@ -17,6 +28,9 @@ export type AbideFile = {
     modules: string[]
     // `<style>` bodies in source order. Scoping is 34.4 and is not implemented yet.
     styles: string[]
+    // 39.1, 39.3 — what every top-level `<head>` contributes to the document head, split off the
+    // template here so no walk over the body steps around it. In tree order, which is 39.5.
+    head: TemplateNode[]
     template: TemplateNode[]
 }
 
@@ -235,6 +249,62 @@ export function parseAbide(source: string): AbideFile {
                 at = end + 1
                 continue
             }
+            // 32.16 — `{#try}`, `{:catch e}`, `{:finally}`, `{/try}`.
+            if (inner === '#try') {
+                const body: Branch = { subject: '', children: [] }
+                const block: TemplateNode = {
+                    kind: 'block',
+                    block: 'try',
+                    branches: [body],
+                    error: '',
+                }
+                children.push(block)
+                blocks.push(block)
+                stack.push(body.children)
+                open.push(ARM)
+                at = end + 1
+                continue
+            }
+            if (inner.startsWith(':catch') || inner === ':finally') {
+                const block = blocks[blocks.length - 1]
+                if (
+                    block !== undefined &&
+                    block.kind === 'block' &&
+                    block.block === 'try'
+                ) {
+                    unwindTo(armLevel(open), open, stack)
+                    // The finally arm is a third branch until `{/try}` folds it into the other two.
+                    if (inner.startsWith(':catch'))
+                        block.error = inner.slice(6).trim()
+                    const branch: Branch = {
+                        subject: inner === ':finally' ? FINALLY : '',
+                        children: [],
+                    }
+                    block.branches.push(branch)
+                    stack.push(branch.children)
+                    open.push(ARM)
+                }
+                at = end + 1
+                continue
+            }
+            if (inner === '/try') {
+                const level = armLevel(open)
+                const block = blocks[blocks.length - 1]
+                if (
+                    block !== undefined &&
+                    block.kind === 'block' &&
+                    block.block === 'try' &&
+                    level > 0
+                ) {
+                    blocks.pop()
+                    unwindTo(level, open, stack)
+                    ;(stack[stack.length - 1] as TemplateNode[]).push(
+                        ...closeTry(block),
+                    )
+                }
+                at = end + 1
+                continue
+            }
             if (inner.startsWith('#for')) {
                 const block = forBlock(inner.slice(4).trim())
                 children.push(block)
@@ -271,7 +341,61 @@ export function parseAbide(source: string): AbideFile {
     }
 
     collapseWhitespace(root)
-    return { scripts, modules, styles, template: root }
+    const head: TemplateNode[] = []
+    const template: TemplateNode[] = []
+    for (const node of root) {
+        if (node.kind === 'element' && node.lowerTag === 'head') {
+            assertNoNestedHead(node.children, '<head>')
+            for (const child of node.children) head.push(child)
+            continue
+        }
+        assertNoNestedHead([node], '')
+        template.push(node)
+    }
+    return { scripts, modules, styles, head, template }
+}
+
+// 39.2 — a `<head>` MUST be top level, and MUST NOT appear inside a control block. Nested, it
+// would render inside the body, which is the silent wrong answer this refuses instead.
+//
+// BOTH HALVES OF THE CLAUSE. The walk returned on anything that was not an element, so a block
+// was a floor it never went through and `{#if a}<head>…{/if}` emitted `<head>` markup into the
+// body — the exact wrong answer, from the check written to stop it. A `<head>` inside a top-level
+// `<head>` was the other way past it, the hoist pushing its children without asking.
+function assertNoNestedHead(nodes: TemplateNode[], within: string): void {
+    for (const node of nodes) {
+        if (node.kind === 'element' && node.lowerTag === 'head')
+            throw new Error(
+                `abide: a <head> must be top level in a .abide file, and this one is inside ${within}. RULEBOOK 39.2.`,
+            )
+        const label =
+            node.kind === 'element'
+                ? `<${node.tag}>`
+                : node.kind === 'block' && node.block === 'for'
+                  ? '{#for}'
+                  : '{#if}'
+        for (const children of childListsOf(node))
+            assertNoNestedHead(children, label)
+    }
+}
+
+// The subject a `{:finally}` branch is parsed under, until `closeTry` folds it away.
+const FINALLY = '\u0000finally'
+
+// 32.16 — THE TWO ARMS A `{#try}` RENDERS ONE OF: the body, and the catch — an empty one where the
+// author wrote none. The `{:finally}` markup stands on both paths, so it stands AFTER the region
+// rather than in either arm, and is handed back for the caller to place there.
+function closeTry(
+    block: TemplateNode & { kind: 'block'; block: 'try' },
+): TemplateNode[] {
+    let after: TemplateNode[] = []
+    const kept: Branch[] = []
+    for (const branch of block.branches)
+        if (branch.subject === FINALLY) after = branch.children
+        else kept.push(branch)
+    if (kept.length === 1) kept.push({ subject: '', children: [] })
+    block.branches = kept.slice(0, 2)
+    return after
 }
 
 // An HTML tag name is ASCII case-INSENSITIVE, so `</DIV>` closes a `<div>`. A component name is
@@ -482,6 +606,19 @@ function readTag(
         if (source[at] === '/' && source[at + 1] === '>')
             return { name, attributes, selfClosing: true, end: at + 2 }
 
+        // 32.11 — `{...expr}` IN ATTRIBUTE POSITION IS A SPREAD, not an attribute named by its own
+        // braces. Carried as `...` holding the expression, so the shadow projects it and the
+        // lowering reads it exactly as it reads any other attribute's.
+        if (source[at] === '{') {
+            const close = slotEnd(source, at)
+            const inner = source.slice(at + 1, close).trim()
+            if (inner.startsWith('...')) {
+                attributes.push(attribute('...', inner.slice(3).trim(), true))
+                at = close + 1
+                continue
+            }
+        }
+
         const attrStart = at
         while (
             at < source.length &&
@@ -678,39 +815,13 @@ function topLevelAt(source: string, target: string, from: number): number {
     return -1
 }
 
-// Past the CSS string opening at `open`. A `;` or a `:` inside one is the value's own.
-function skipQuoted(source: string, open: number): number {
-    const quote = source[open]
-    let at = open + 1
-    while (at < source.length) {
-        const char = source[at]
-        if (char === '\\') {
-            at += 2
-            continue
-        }
-        if (char === quote) return at + 1
-        at += 1
-    }
-    return at
-}
-
 // 33.17 and 33.18. A whitespace run with a newline and no space or tab is dropped wherever it
 // stands; one that also carries indentation is dropped only at the ends of a body, where it is
 // the author's layout rather than a space the document asked for.
 function collapseWhitespace(children: TemplateNode[]): void {
     for (let i = children.length - 1; i >= 0; i -= 1) {
         const node = children[i] as TemplateNode
-        if (node.kind === 'element') {
-            collapseWhitespace(node.children)
-            continue
-        }
-        if (node.kind === 'block') {
-            if (node.block === 'for') collapseWhitespace(node.children)
-            else
-                for (const branch of node.branches)
-                    collapseWhitespace(branch.children)
-            continue
-        }
+        for (const inner of childListsOf(node)) collapseWhitespace(inner)
         if (node.kind !== 'text' || node.text.trim() !== '') continue
         if (!node.text.includes('\n')) continue
         const indented = /[ \t]/.test(node.text)

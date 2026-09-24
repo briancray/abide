@@ -1,9 +1,0 @@
-<script>
-import { reactive, route } from 'abide'
-import { getInvoice } from '#server/rpc/invoices'
-
-const invoice = reactive(() => getInvoice({ id: route.params.id }))
-</script>
-
-<h1>Invoice {invoice.number}</h1>
-<p>{invoice.total} due {invoice.dueOn}</p>

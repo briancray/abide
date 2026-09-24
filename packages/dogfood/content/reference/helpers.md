@@ -22,7 +22,7 @@ declares what a page may load, `url` builds an address, and `navigate` goes to o
 | `Logger` | `typeof log` | What `log.named` hands back. |
 | `log.enabled` | `() => boolean` | Whether a gated line under this namespace would be written. |
 | `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; namespace: string; message: string; trace: string }` | One line, as a value. |
-| `log.records` | `Reactive<LogRecord[], LogRecord, never, LogRecord>` | The channel every line is published to. |
+| `log.records` | `Reactive<LogRecord>` | The channel every line is published to. |
 | `abide:request` | `debug` | One line per request. |
 | `abide:socket` | `debug` | One line per socket event. |
 | `abide:lifecycle` | `debug` `error` | A lifecycle that ran. |

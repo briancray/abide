@@ -79,7 +79,8 @@ test('an expression slot is escaped', () => {
     const emitted = compileFile(
         `<script>const t = '<img src=x onerror=alert(1)>'</script><h1>{t}</h1>`,
     )
-    expect(emitted).toContain('escapeText(t)')
+    // No checker answered, so nothing is proven static and the slot is guarded (14.2).
+    expect(emitted).toContain('escapeText(__slotValue(() => t))')
     expect(emitted).not.toContain('String(t)')
 })
 
@@ -127,8 +128,11 @@ test('the compiler is not reachable from the server seam', async () => {
     const server = await import('#server')
     // THE WHOLE ISOMORPHIC SURFACE CROSSES, so the list is the shared seam's plus what the server
     // owns: `listOf` is 32.15's — the emitted `{#for}` and the client's `updateList` ask the one
-    // function what a subject iterates as — `render` is 35.4's, the five methods are 16.2's, and
-    // `request` and `response` are 22.1's.
+    // function what a subject iterates as — `render` is 35.4's, the five methods are 16.2's,
+    // `request`, `response` and `server` are 22.1's, `createApp` is 42's, the seven hooks are 37's,
+    // `trace` is 24's, `health` is 25's, `config` is 27's
+    // and `csp` is 29's; the five response helpers are 17's
+    // and `socket` is 18's.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
         [
@@ -138,10 +142,29 @@ test('the compiler is not reachable from the server seam', async () => {
             'PATCH',
             'POST',
             'PUT',
+            'bytes',
+            'config',
+            'createApp',
+            'csp',
+            'health',
+            'jsonl',
+            'middleware',
+            'onConfig',
+            'onError',
+            'onHealth',
+            'onPrincipal',
+            'onStart',
+            'onStop',
+            'page',
+            'redirect',
             'render',
             'renderComponent',
             'request',
             'response',
+            'server',
+            'socket',
+            'sse',
+            'trace',
         ].sort(),
     )
 })
@@ -166,11 +189,13 @@ test('a compiled page renders as bytes into a shell', async () => {
     expect(out.indexOf('<title>abide</title>')).toBeLessThan(
         out.indexOf('</head>'),
     )
-    // NOTHING IS ADDED TO THE DOCUMENT. The markup is what the author would have written by
-    // hand, and the client finds its bindings by position rather than by anything put there.
+    // NOTHING IS ADDED TO THE DOCUMENT but the page's own region pair (41.9). The markup is what
+    // the author would have written by hand, and the client finds its bindings by position rather
+    // than by anything put there.
     expect(out).toContain('<h1 class="title">abide</h1>')
     expect(out).toContain('<title>abide</title>')
-    expect(out).not.toContain('<!--')
+    expect(out).toContain('<body><!--[--><h1')
+    expect((out.match(/<!--/g) ?? []).length).toBe(2)
     expect(out).not.toContain('data-a')
     // The escape is asserted on the RENDERED document, not on the emitted source: the
     // mechanism is what reaches a browser, and a grep for `escapeText(` passes against a
@@ -536,13 +561,13 @@ test('escaping keeps everything between and after the escapes', () => {
 
 // 31.10 — A TEMPLATE-LOCAL BINDING SHADOWS A NAME BOUND TO A `Reactive` FOR THE BODY IT IS BOUND
 // IN. THE REVERT: pass `reactive` rather than `inner` to `emitChildren` in `emitComponent`'s
-// `{#for}` branch and to `emitMarkup`/`emitRegion` in `emitClient`'s `emitList`. Both emitters
+// `{#for}` branch and to `renderMarkup`/`emitRegion` in `emitClient`'s `emitList`. Both emitters
 // then write `for (const rows of __list) { … rows().name … }` — 2 bodies calling a row as a
 // function, which is `rows is not a function` thrown on the server render of a page that named
 // one thing twice.
 test('a for item shadows a reactive name of the same spelling', async () => {
     const source =
-        '<script>let rows = reactive([])</script>{#for rows of groups}<li>{rows.name}</li>{/for}'
+        "<script>let rows = reactive([]); const groups = [{ name: 'a' }]</script>{#for rows of groups}<li>{rows.name}</li>{/for}"
     const server = await serverOf(source, ['rows'])
     expect(server).toContain('for (const rows of __list)')
     expect(server).toContain('__escapeText(rows.name)')
@@ -566,26 +591,27 @@ test('a default value in a binding pattern is read, not bound — 31.10', async 
         '{#for { id, tone = pick(rows) } of items}<i>{tone}{rows}</i>{/for}',
         names,
     )
-    expect(server).toContain('__escapeText(tone)')
+    // `items` is typed `any`, so the row's `tone` is unproven and guarded (14.2) — but not read.
+    expect(server).toContain('__escapeText(__slotValue(() => tone))')
     expect(server).toContain('__escapeText(__slotValue(() => rows()))')
     // A rename binds the right of the `:` and reads the left.
     const renamed = await serverOf(
         '{#for { id: rows } of items}<i>{rows}{tone}</i>{/for}',
         names,
     )
-    expect(renamed).toContain('__escapeText(rows)')
+    expect(renamed).toContain('__escapeText(__slotValue(() => rows))')
     expect(renamed).toContain('__escapeText(__slotValue(() => tone()))')
 })
 
 // THE CLIENT HALF IS ITS OWN GATE, because the row's MARKUP and the row's BINDINGS are emitted by
 // two different paths and a shadow threaded to one is not threaded to the other. THE REVERT: pass
-// `reactive` rather than `inner` to `emitMarkup` and to `emitRegion` in `emitClient`'s `emitList`.
+// `reactive` rather than `inner` to `renderMarkup` and to `emitRegion` in `emitClient`'s `emitList`.
 // The markup then reads `rows().name`, and the run reads as reactive so a `setText` binding is
 // opened over it as well — 2 sites calling a row parameter as a function, and a waking reader that
 // should not exist, on a page whose server render is fine.
 test('a for row binds its item on the client too', async () => {
     const client = await clientOf(
-        '<script>let rows = reactive([])</script>{#for rows of groups}<li>{rows.name}</li>{/for}',
+        "<script>let rows = reactive([]); const groups = [{ name: 'a' }]</script>{#for rows of groups}<li>{rows.name}</li>{/for}",
         ['rows'],
     )
     expect(client).toContain('const ls0_make = (__document, rows, __at)')
@@ -613,14 +639,14 @@ test('a for row binds its item on the client too', async () => {
 // subject is not.
 test('a for index and a destructured item shadow as the item does', async () => {
     const indexed = await serverOf(
-        '<script>let at = reactive(0)</script>{#for row, at of rows}<li>{at}</li>{/for}',
+        '<script>let at = reactive(0); const rows = [1]</script>{#for row, at of rows}<li>{at}</li>{/for}',
         ['at'],
     )
     expect(indexed).toContain('__escapeText(at)')
     expect(indexed).not.toContain('__escapeText(at())')
 
     const destructured = await serverOf(
-        '<script>let name = reactive(0)</script>{#for { id, name } of rows}<li>{name}</li>{/for}',
+        "<script>let name = reactive(0); const rows = [{ id: 1, name: 'a' }]</script>{#for { id, name } of rows}<li>{name}</li>{/for}",
         ['name'],
     )
     expect(destructured).toContain('__escapeText(name)')
@@ -650,11 +676,11 @@ test('an interpolated quoted attribute is one expression', async () => {
     expect(emitted).not.toContain('badge {tone}')
     // Several slots and the text between them.
     expect(compileFile('<div title="a{b}c{d}e">x</div>')).toContain(
-        '__escapeAttribute(`a${b}c${d}e`)',
+        '__escapeAttribute(__slotValue(() => `a${b}c${d}e`))',
     )
     // 32.21 — an interpolated URL-typed attribute is scheme-checked where the value arrives.
     expect(compileFile('<a href="/x/{id}">x</a>')).toContain(
-        '__safeUrl(`/x/${id}`)',
+        '__safeUrl(__slotValue(() => `/x/${id}`))',
     )
     // A value with NO slot is still a literal, and its braces are text.
     expect(compileFile('<div class="badge">x</div>')).toContain(
@@ -702,7 +728,7 @@ test('an interpolated style lowers to one attribute per property', async () => {
         '<div style=\\"color: red\\">',
     )
     expect(compileFile('<div style={s}>x</div>')).toContain(
-        '<div style=\\"" + __escapeAttribute(s)',
+        '<div style=\\"" + __escapeAttribute(__slotValue(() => s))',
     )
 
     // A PROPERTY NAME THAT IS NOT STATIC has no property to bind and is refused.
@@ -735,7 +761,7 @@ test('a script module is a block of its own on each side', async () => {
     // PROCESS-WIDE is module scope, ahead of `mount`.
     const client = await clientOf(source, ['n'])
     expect(client).toContain(
-        'let hits = 0\nexport default function mount(root) {',
+        'let hits = 0\nexport default function mount(__root) {',
     )
     expect(client.indexOf('let hits = 0')).toBeLessThan(
         client.indexOf('export default function mount'),
@@ -777,9 +803,10 @@ test('a script the author wrote for the document stays in the markup', async () 
     )
 })
 
-// One document out of one page, for the three gates below.
+// One document out of one page, for the three gates below — typed, because 32.26's lowering is
+// the checker's answer (`slotFacts`).
 async function renderPage(source: string): Promise<string> {
-    const module = `${temporaryModule({ 'Page.ts': compileFile(source) })}/Page.ts`
+    const module = `${temporaryModule({ 'Page.ts': await serverOf(source) })}/Page.ts`
     const { default: Page } = await import(module)
     let out = ''
     for await (const chunk of render(
@@ -800,7 +827,7 @@ async function renderPage(source: string): Promise<string> {
 // then report `[object Object]` where `<b>bold</b>` is due — the IMPORT row too, which is what
 // says the brand and not the spelling is what carries it.
 //
-// AND THE SECOND REVERT, which the first page cannot make: drop `rawCalls` from `Lowering`'s splice.
+// AND THE SECOND REVERT, which the first page cannot make: drop the `raw` case from `Lowering.rewrite`.
 // The page above still passes, its own `<script>` having imported `raw` — so the second page below
 // carries no import, and without the lowering it reports
 // `ReferenceError: Can't find variable: raw` and no document at all. That is what 32.2's one
@@ -826,22 +853,31 @@ const snippet = '<b>bold</b>'
 
 test('a raw value renders as markup, from the slot spelling and from an import alike', async () => {
     const out = await renderPage(RAW_PAGE)
-    expect(out).toContain('<p id="slot"><b>bold</b></p>')
-    expect(out).toContain('<p id="imported"><b>bold</b></p>')
+    // 32.27 — a run holding markup is anchored, so the client finds where the markup ends.
+    expect(out).toContain('<p id="slot"><!--{--><b>bold</b><!--}--></p>')
+    expect(out).toContain('<p id="imported"><!--{--><b>bold</b><!--}--></p>')
     // 32.1 is untouched by any of it: a value nobody branded is still escaped.
     expect(out).toContain('<p id="escaped">&lt;b&gt;bold&lt;/b&gt;</p>')
 
     const bare = await renderPage(RAW_UNIMPORTED)
-    expect(bare).toContain('<p id="slot"><b>bold</b></p>')
+    expect(bare).toContain('<p id="slot"><!--{--><b>bold</b><!--}--></p>')
 })
 
 test('the raw spelling lowers to the framework’s own name, on both sides', async () => {
-    const server = compileFile(RAW_PAGE)
+    const server = await serverOf(RAW_PAGE)
     expect(server).toContain('__escapeText(__raw(snippet))')
     expect(server).toContain('raw as __raw')
+    // TYPED, the slot is proven static (14.2) and its proof is a zero-width mark at the very offset
+    // the `raw` token stands at — which is where a page's own `Reactive` named `raw` is looked for.
+    // THE REVERT: skip a callee wherever ANY read starts at its offset in `proveSlots`; the
+    // proof is taken for that read, the call is left as the author's `raw`, and a page that never
+    // imported one throws a ReferenceError at render.
+    expect(await serverOf(RAW_UNIMPORTED)).toContain(
+        '__escapeText(__raw(snippet))',
+    )
     // A MEMBER IS NOT THE NAME, and a bare reference is not the spelling: neither is rewritten.
-    expect(compileFile('<p>{md.raw(x)}</p>')).not.toContain('__raw')
-    expect(compileFile('<p>{raw}</p>')).not.toContain('__raw')
+    expect(await serverOf('<p>{md.raw(x)}</p>')).not.toContain('__raw')
+    expect(await serverOf('<p>{raw}</p>')).not.toContain('__raw')
     // The client takes the same road AND the two rewrites compose in one walk: the call is
     // renamed and the page's own name inside it is read.
     const client = await clientOf(
@@ -850,7 +886,7 @@ test('the raw spelling lowers to the framework’s own name, on both sides', asy
             "const snippet = reactive('<b>bold</b>')",
         ),
     )
-    expect(client).toContain('__escapeless(__raw(snippet()))')
+    expect(client).toContain('const __v1_0 = __raw(snippet())')
 })
 
 // 39.11, 39.12 — THE MERGE KEY, and the last contribution for one wins. Two `<title>` elements in
@@ -1127,7 +1163,8 @@ test('a default value holding an `=` is skipped whole — 31.10', async () => {
         '{#for { id, tone = pick(seed = 1) + rows } of items}<i>{tone}{rows}</i>{/for}',
         ['rows', 'tone', 'items', 'seed'],
     )
-    expect(server).toContain('__escapeText(tone)')
+    // `items` is typed `any`, so `tone` is unproven and guarded (14.2) — but not read.
+    expect(server).toContain('__escapeText(__slotValue(() => tone))')
     expect(server).toContain('__escapeText(__slotValue(() => rows()))')
 })
 
@@ -1140,11 +1177,11 @@ test('a default value holding an `=` is skipped whole — 31.10', async () => {
 test('an uppercase head is hoisted by both emitters', async () => {
     const source = '<HEAD><title>t</title></HEAD><p>{n}</p>'
     expect(await serverOf(source, ['n'])).toContain(
-        '__body = "<p>" + __escapeText(__slotValue(() => n())) + "</p>"',
+        '__body = "<p>" + __markupRun(__RAW_WRITES.count, __escapeText(__slotValue(() => n()))) + "</p>"',
     )
     const client = await clientOf(source, ['n'])
-    expect(client).toContain('const __c0 = __head\n')
-    expect(client).toContain('__blankHere(__c0?.firstChild, __c0)')
+    expect(client).toContain('const __c0 = __root.open.nextSibling\n')
+    expect(client).toContain('__runHere(__c0?.firstChild, __c0)')
 })
 
 // 32.3 HOLDS WHETHER OR NOT THE VALUE IS QUOTED. THE REVERT: push the unquoted value as a literal
@@ -1177,7 +1214,7 @@ test('an interpolated style property cannot set a second one', async () => {
 
 // 32.26 — `{raw(x)}` LOWERS IN AN ATTRIBUTE THE WAY IT DOES IN A TEXT SLOT. Left out of the
 // attribute paths, the emitted markup called a bare `raw` no import binds. THE REVERT: drop
-// `rawCalls` from `Lowering`'s splice; this reports `__safeUrl(raw(u))` against an import clause
+// the `raw` case from `Lowering.rewrite`; this reports `__safeUrl(raw(u))` against an import clause
 // holding only `escapeAttribute, safeUrl` — a ReferenceError at render.
 test('a raw call lowers in an attribute value too', async () => {
     const emitted = await serverOf('<a href={raw(u)}>x</a>', ['u'])

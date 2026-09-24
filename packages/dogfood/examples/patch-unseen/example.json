@@ -1,7 +1,0 @@
-{
-    "title": "`applyOrderCount(byId, …)` — the same fold, reached without `patch`",
-    "summary": "The same dashboard, and a helper handed the held table directly.",
-    "app": "dashboard",
-    "files": ["src/shared/regions.ts", "src/ui/pages/dashboard/page.abide"],
-    "route": "/dashboard"
-}

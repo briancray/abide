@@ -9,11 +9,7 @@ import { defineConfig, devices } from '@playwright/test'
 // harness pair serves nothing and the app pair serves everything, so the two are told apart
 // by project name rather than by a config each.
 const PORT = 3131
-// EXPORTED, because a spec that needs the APP rather than a blank page needs its address, and a
-// second copy of the port in a spec file is the one way the two can disagree. `panel.spec.ts` is
-// the reader: the measure panel is a docs artifact, so the docs have to be served for it to
-// exist at all.
-export const BASE = `http://localhost:${PORT}`
+const BASE = `http://localhost:${PORT}`
 const SUB_PATH = '/docs'
 
 export default defineConfig({

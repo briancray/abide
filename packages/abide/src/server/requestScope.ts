@@ -1,5 +1,5 @@
-// THE REQUEST SCOPE. What 11.32 files a value under on a server, what 22.1's ambients read, and —
-// once there is an `App` — what `App.run` opens (42.7). One `AsyncLocalStorage`, because a request
+// THE REQUEST SCOPE. What 11.32 files a value under on a server, what 22.1's ambients read, and
+// what `App.run` opens (42.7). One `AsyncLocalStorage`, because a request
 // is carried across every `await` its handlers and bodies make, and an ambient read after one has
 // to find the request it was made for.
 //
@@ -10,16 +10,47 @@
 // values forwarders rather than process-wide.
 
 import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLocalStorage and has no context-carrying api of its own
+import { COOKIES, Cookies } from '#shared/cookies.ts'
+import type { Principal } from '#shared/principal.ts'
+import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { SCOPING, type Scope } from '#shared/reactive/scoping.ts'
 import type { RpcRequest } from '#shared/rpcRequest.ts'
 
-type RequestScope = Scope & {
+// 17.6 — the three framings a stream is answered in.
+export type Framing = 'jsonl' | 'sse' | 'bytes'
+
+export type RequestScope = Scope & {
+    // 17.6 — the framing a helper fixed for a streaming answer, or `undefined` to negotiate it.
+    framing: Framing | 'html' | undefined
+    // 26.5 — which browser is calling, once read or minted in this request.
+    caller: string | undefined
+    // 26.14 — this request's one resolve of the principal.
+    principal: Promise<Principal> | undefined
+    // 16.24 — the longest `timeout` any handler that ran in this request asked for, in seconds.
+    timeout: number
+    // 29.3 — this response's nonce, minted by the `csp` rung or on the first ask.
+    nonce: string | undefined
+    // 22.2 — this request's cookie jar, built on the first ask.
+    cookies: Cookies | undefined
+    // Whether an answer has taken what was written through `response` (`applyWritten`).
+    applied: boolean
+    // 24.1 — this scope's trace, built on the first ask (`trace.ts`).
+    trace: { id: string; span: string; flags: string } | undefined
     // `undefined` where the scope was opened without one — 42.8's scope, which 22.1 throws in.
     request: Request | undefined
     // 22.9 — what a write through `response` is collected onto, for whoever answers to apply.
     response: { status: number; headers: Headers }
-    // 41.21 — the requests a page's render made, as the browser will make them, for the early-call
-    // script. Empty in every scope but a page's.
+    // 41.13, 41.21 — the page this scope is rendering, which its calls report into; `undefined` in
+    // every scope but a page's.
+    page: PageRender | undefined
+}
+
+// A PAGE'S RENDER, as its calls see it: the seed buffer's sink for this caller (41.13), and the
+// requests the browser will make for them, for the early-call script (41.21). ON THE SCOPE because
+// that is the only thing a call made deep in a page's setup can find it through when requests
+// interleave — `RPC_SERVER.reached` is one slot for every request in flight.
+export type PageRender = {
+    seed: (rpc: object, args: unknown, reached: unknown) => boolean
     calls: RpcRequest[]
 }
 
@@ -33,14 +64,18 @@ SCOPING.provider = {
         STORAGE.run(scope as RequestScope | undefined, body, given),
 }
 
-function scopeFor(
-    given: Request | undefined,
-    seed: Scope['seed'],
-): RequestScope {
+function scopeFor(given: Request | undefined): RequestScope {
     return {
         instances: new Map(),
-        seed,
-        calls: [],
+        page: undefined,
+        trace: undefined,
+        cookies: undefined,
+        nonce: undefined,
+        framing: undefined,
+        timeout: 0,
+        caller: undefined,
+        principal: undefined,
+        applied: false,
         request: given,
         response: { status: 200, headers: new Headers() },
     }
@@ -51,34 +86,65 @@ export function inScope<Result>(
     given: Request | undefined,
     body: () => Result,
 ): Result {
-    return STORAGE.run(scopeFor(given, null), body)
+    return STORAGE.run(scopeFor(given), body)
+}
+
+// 37.3 — A RUNG MAY HAND `next` A REQUEST OF ITS OWN, and it is served in the scope `App.fetch`
+// opened rather than a second one (42.6), so `request` reads it from here on.
+export function adoptRequest(given: Request): void {
+    ;(STORAGE.getStore() as RequestScope).request = given
+}
+
+// 42.9 — what `App.listen` bound, for `server` to hand back.
+export const LISTENING: { server: Bun.Server<unknown> | undefined } = {
+    server: undefined,
 }
 
 // ONE SCOPE ACROSS EVERY PULL of what `open` hands back. A response body is pulled by the server's
 // reader, which runs in no request at all, and a render builds its page on the first pull — so a
 // scope opened around the call alone would be gone before any of the page ran.
 //
-// `seed` is where the calls made in it are reported (41.13) — a page's render passes one.
-export async function* inScopeEachPull<Chunk>(
-    given: Request,
-    seed: Scope['seed'],
+// `page` is what the calls made in it report into (41.13) — a page's render passes one.
+//
+// THE SCOPE IS RESOLVED AT THE CALL, not on the first pull: a generator's body runs when it is first
+// pulled, in whatever context the reader pulls from, and would miss the scope the request is
+// answered in (42.6) — and with it the route and the `response` writes made before the page began.
+export function inScopeEachPull<Chunk>(
+    page: PageRender | undefined,
     open: () => AsyncGenerator<Chunk>,
 ): AsyncGenerator<Chunk> {
-    const scope = scopeFor(given, seed)
+    const scope = STORAGE.getStore() as RequestScope
+    scope.page = page
+    return pullIn(scope, open)
+}
+
+async function* pullIn<Chunk>(
+    scope: RequestScope,
+    open: () => AsyncGenerator<Chunk>,
+): AsyncGenerator<Chunk> {
     const chunks = STORAGE.run(scope, open)
     try {
         for (;;) {
-            const step = await STORAGE.run(scope, () => chunks.next())
+            const step = await STORAGE.run(scope, pullNext, chunks)
             if (step.done === true) return
             yield step.value
         }
     } finally {
         // A reader who hung up stops the render inside the scope it was running in.
-        await STORAGE.run(scope, () => chunks.return(undefined))
+        await STORAGE.run(scope, closeEarly, chunks)
     }
 }
 
-function within(name: string): RequestScope {
+const pullNext = <Chunk>(chunks: AsyncGenerator<Chunk>) => chunks.next()
+const closeEarly = <Chunk>(chunks: AsyncGenerator<Chunk>) =>
+    chunks.return(undefined)
+
+// The scope a request or `App.run` opened, or `undefined` outside every one.
+export function currentRequestScope(): RequestScope | undefined {
+    return STORAGE.getStore()
+}
+
+export function within(name: string): RequestScope {
     const scope = STORAGE.getStore()
     if (scope?.request === undefined)
         throw new Error(
@@ -87,18 +153,56 @@ function within(name: string): RequestScope {
     return scope
 }
 
+// 22.2, 22.8 — THE REQUEST'S JAR, whose writes are collected onto the response being built.
+COOKIES.current = (): Cookies => {
+    const scope = within('cookies')
+    scope.cookies ??= new Cookies(
+        scope.request?.headers.get('cookie') ?? '',
+        (serialized) => scope.response.headers.append('set-cookie', serialized),
+        false,
+    )
+    return scope.cookies
+}
+
+// 21.10, 22.9 — WHAT WAS WRITTEN THROUGH `response`, onto the headers of an answer: over whatever
+// the answer carried, and a `set-cookie` appended rather than replacing the one before it. ONCE, at
+// `App.fetch`'s exit — the moment the head goes out, which is what `applied` tells 26.21.
+export function applyWritten(headers: Headers): number {
+    const scope = STORAGE.getStore()
+    if (scope === undefined || scope.applied) return 200
+    scope.applied = true
+    for (const [name, value] of scope.response.headers)
+        if (name === 'set-cookie') headers.append(name, value)
+        else headers.set(name, value)
+    return scope.response.status
+}
+
+// 22.9 — the status written through `response`, for a lane that builds its answer at it: 200 where
+// nothing wrote one. The headers are laid over the answer once, at `App.fetch`'s exit (`applyWritten`).
+export function writtenStatus(): number {
+    return STORAGE.getStore()?.response.status ?? 200
+}
+
 // 22.1 — the request being served.
 export function request(): Request {
     return within('request').request as Request
 }
+
+// 16.12 — the request a handler's rung is handed.
+RPC_SERVER.request = request
 
 // 22.1, 22.9 — the response being built for it.
 export function response(): { status: number; headers: Headers } {
     return within('response').response
 }
 
-// 41.21 — the requests the current page's render has made so far, for `render` to write into the
-// early-call script once the page is set up. `undefined` outside a request.
-export function earlyCalls(): RpcRequest[] | undefined {
-    return STORAGE.getStore()?.calls
+// 22.1, 42.9 — the listening server. Inside a request and with nothing bound — `App.fetch` on an
+// app nobody called `listen` on — there is no server to hand back, and that is a throw too.
+export function server<WebSocketData = unknown>(): Bun.Server<WebSocketData> {
+    within('server')
+    if (LISTENING.server === undefined)
+        throw new Error(
+            'abide: server() was called in an app with no socket bound. App.listen is what binds one. RULEBOOK 42.9.',
+        )
+    return LISTENING.server as Bun.Server<WebSocketData>
 }

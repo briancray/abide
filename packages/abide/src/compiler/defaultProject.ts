@@ -12,7 +12,7 @@ import { mkdtemp, rm } from 'node:fs/promises' // bun exposes no temporary-direc
 import { tmpdir } from 'node:os' // bun exposes no temporary-directory path of its own
 
 // What every abide app in the docs and the scaffold is written against.
-const COMPILER_OPTIONS = {
+export const COMPILER_OPTIONS = {
     strict: true,
     target: 'esnext',
     module: 'preserve',

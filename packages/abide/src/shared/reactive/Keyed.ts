@@ -7,11 +7,12 @@
 // entry and starts it, `keyed.busy(pattern)` reads the map and allocates nothing.
 
 import type { Failed } from '../Failed.ts'
-import { validationError } from '../refuse.ts'
-import { type Found, runSchema, type Schema } from '../Schema.ts'
+import { checkArgs } from '../refuse.ts'
+import type { Schema } from '../Schema.ts'
 import { CELL } from './CELL.ts'
 import { canonicalKey } from './canonicalKey.ts'
 import { armTimer } from './Expiry.ts'
+import { ARGS_GATE } from './ARGS_GATE.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { NotLanded } from './NotLanded.ts'
 import {
@@ -52,9 +53,15 @@ export type Keyed<
     entries: Map<string, Reactive<Stored, Accepted, Failures>>
 }
 
+// 19.8 — WHAT A KEYED VALUE CARRIES PAST THE FACE AN APP IS HANDED: the `args` it was declared with,
+// for a transport to coerce by and a rung to check against. Declared on what the framework builds
+// rather than on `Keyed`, so no app type names it — and declared rather than stamped, so a face built
+// over one (a server's forwarder, an `Rpc`) that forgets to carry it does not compile.
+export type Gated<Args> = { [ARGS_GATE]: Schema<Args> | undefined }
+
 export function isKeyed(
     value: unknown,
-): value is Keyed<unknown, unknown, unknown, never, unknown> {
+): value is Keyed<unknown, unknown, unknown, never, unknown> & Gated<unknown> {
     return (
         typeof value === 'function' &&
         (value as { [KEYED_BRAND]?: boolean })[KEYED_BRAND] === true
@@ -212,7 +219,7 @@ class StartWindow {
 // 11.27's LAST TWO STEPS, validate then the body, as one body. The gate runs on every run of
 // the entry — a refresh re-validates — and throws the refusal, which is what a body failing
 // already does: the entry's `error` holds it and its read throws it (2.2), and the body the
-// gate stands in front of is never called.
+// gate stands in front of is never called. What it accepts is what the body is handed (11.69).
 //
 // A STREAM STAYS A STREAM. 9.20 reads the body's KIND, so the wrapper around an async generator
 // is an async generator, or gating a keyed stream would silently make it a value holding one.
@@ -220,19 +227,12 @@ function gated<Args>(
     body: (args: Args) => unknown,
     gate: Schema<Args>,
 ): (args: Args) => unknown {
-    const check = (args: Args): void => {
-        const answer = runSchema(gate, args)
-        if (answer.issues !== null) throw validationError<Found>(answer.issues)
-    }
+    const check = (args: Args): Args => checkArgs(gate, args)
     if (isStreamBody(body))
         return async function* (args: Args) {
-            check(args)
-            yield* (body as (args: Args) => AsyncIterable<unknown>)(args)
+            yield* (body as (args: Args) => AsyncIterable<unknown>)(check(args))
         }
-    return (args: Args): unknown => {
-        check(args)
-        return body(args)
-    }
+    return (args: Args): unknown => body(check(args))
 }
 
 // 14.4, 11.6 AND 11.23: AN ENTRY KEEPS NOTHING IT READ past a run that completed, so a value
@@ -274,12 +274,13 @@ export function createKeyed<
     label: string,
     body: (args: Args) => unknown,
     options: ReactiveOptions<Accepted, Stored, never, Args> | undefined,
-): Keyed<Stored, Args, Accepted, Failures> {
+): Keyed<Stored, Args, Accepted, Failures> & Gated<Args> {
     const entries = new Map<string, Reactive<Stored, Accepted, Failures>>()
     // 11.46: A KEYED `ttl` IS THE LIFE OF AN ENTRY, not of a production inside one, so it is
     // taken off the options every entry is built from — forwarded, it would build the
     // unkeyed mechanism in every entry and evict nothing from this map.
-    const { ttl, args: gate, throttle, debounce, ...rest } = options ?? {}
+    const { ttl, args, throttle, debounce, ...rest } = options ?? {}
+    const gate = args as Schema<Args> | undefined
     // 9.28: `history` is among what every entry is built from, so each entry keeps its own.
     const entryOptions = rest
     // 5.15, at the factory: a keyed value is capped one way or the other.
@@ -293,9 +294,7 @@ export function createKeyed<
                   (throttle ?? debounce) as number,
               )
     const lifetime = ttl === undefined ? null : new Lifetime(ttl)
-    const entryBody = heldOnce(
-        gate === undefined ? body : gated(body, gate as Schema<Args>),
-    )
+    const entryBody = heldOnce(gate === undefined ? body : gated(body, gate))
 
     // Out of the map and out of every selection with it, rather than reachable by a sweep until a
     // collection happens to run.
@@ -307,9 +306,7 @@ export function createKeyed<
         untag(created)
     }
 
-    const self = function reach(
-        args: Args,
-    ): Reactive<Stored, Accepted, Failures> {
+    function reach(args: Args): Reactive<Stored, Accepted, Failures> {
         const key = canonicalKey(args)
         const standing = entries.get(key)
         // 1.8: reaching an instance that exists joins the standing work.
@@ -337,30 +334,35 @@ export function createKeyed<
                 if (entries.get(key) === created) release(key, created)
             })
         return created
-    } as Keyed<Stored, Args, Accepted, Failures>
+    }
 
-    ;(self as unknown as Record<symbol, boolean>)[KEYED_BRAND] = true
-    self.entries = entries
-    self.busy = (pattern?: Partial<Args>): boolean => {
-        for (const entry of entries.values())
-            if (matches(argsOf(entry), pattern) && entry.busy()) return true
-        return false
-    }
-    // ALL rather than ANY, and the quantifiers are not a pair of preferences: `busy`
-    // asks whether anything is loading, `ready` whether everything is servable, and
-    // that is the only pairing under which `busy && !ready` reads as one sentence.
-    self.ready = (pattern?: Partial<Args>): boolean => {
-        for (const entry of entries.values())
-            if (matches(argsOf(entry), pattern) && !entry.ready()) return false
-        return true
-    }
-    self.refresh = (pattern?: Partial<Args>): void => {
-        for (const entry of entries.values())
-            if (matches(argsOf(entry), pattern)) entry.refresh()
-    }
-    self.invalidate = (pattern?: Partial<Args>): void => {
-        for (const entry of entries.values())
-            if (matches(argsOf(entry), pattern)) entry.invalidate()
-    }
-    return self
+    // A KEYED VALUE IS ITS REACH, with the brand, the gate, the entries and the four statics on it.
+    const self = Object.assign(reach, {
+        [KEYED_BRAND]: true,
+        [ARGS_GATE]: gate,
+        entries,
+        busy: (pattern?: Partial<Args>): boolean => {
+            for (const entry of entries.values())
+                if (matches(argsOf(entry), pattern) && entry.busy()) return true
+            return false
+        },
+        // ALL rather than ANY, and the quantifiers are not a pair of preferences: `busy`
+        // asks whether anything is loading, `ready` whether everything is servable, and
+        // that is the only pairing under which `busy && !ready` reads as one sentence.
+        ready: (pattern?: Partial<Args>): boolean => {
+            for (const entry of entries.values())
+                if (matches(argsOf(entry), pattern) && !entry.ready())
+                    return false
+            return true
+        },
+        refresh: (pattern?: Partial<Args>): void => {
+            for (const entry of entries.values())
+                if (matches(argsOf(entry), pattern)) entry.refresh()
+        },
+        invalidate: (pattern?: Partial<Args>): void => {
+            for (const entry of entries.values())
+                if (matches(argsOf(entry), pattern)) entry.invalidate()
+        },
+    }) satisfies Gated<Args>
+    return self as Keyed<Stored, Args, Accepted, Failures> & Gated<Args>
 }

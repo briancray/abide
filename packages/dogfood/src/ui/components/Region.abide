@@ -1,0 +1,32 @@
+<script>
+import { props, reactive, refresh } from 'abide'
+import { getOrders, getTotals } from '#server/rpc/cacheTagsMetrics'
+
+type Props = { region: string }
+
+const { region } = props<Props>()
+
+const totals = reactive(() => getTotals({ region }))
+const orders = reactive(() => getOrders({ region }))
+</script>
+
+<ul class="fields">
+    <li><span>region</span><strong>{region}</strong></li>
+    <li><span>revenue</span>
+        <strong>{totals.ready() ? totals.revenue : '—'}</strong>
+    </li>
+    <li><span>recent orders</span>
+        <strong>{orders.ready() ? orders.count : '—'}</strong>
+    </li>
+    <li><span>revenue computed</span>
+        <strong>{totals.ready() ? totals.computed : '—'}</strong>
+    </li>
+    <li><span>orders loaded</span>
+        <strong>{orders.ready() ? orders.loaded : '—'}</strong>
+    </li>
+    <li><span>late figures</span>
+        <button onclick={() => refresh({ tags: [`region:${region}`] })}>
+            Reload
+        </button>
+    </li>
+</ul>

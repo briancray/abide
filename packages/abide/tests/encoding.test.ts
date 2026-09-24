@@ -7,6 +7,7 @@ import { expect, test } from 'bun:test'
 import { brotliDecompressSync } from 'node:zlib' // bun decompresses gzip and zstd of its own, and no brotli
 import { compressStream } from '#server/compressStream.ts'
 import { ENCODINGS, negotiateEncoding } from '#server/negotiateEncoding.ts'
+import { prefers } from '#server/prefers.ts'
 
 test('no header, or only identity, is the bytes as they are — 38.30', () => {
     expect(negotiateEncoding(null, ENCODINGS)).toBeUndefined()
@@ -37,6 +38,26 @@ test('only what is on offer is chosen — 38.30', () => {
     expect(negotiateEncoding('br, gzip', ['gzip'])).toBe('gzip')
     expect(negotiateEncoding('br', ['gzip'])).toBeUndefined()
     expect(negotiateEncoding('br, gzip', [])).toBeUndefined()
+})
+
+// `accept` IS THE SAME GRAMMAR, read by `prefers` for 16.40's html-or-json and 16.33's framing. THE
+// REVERT: find each type by `indexOf`, as it was; `text/html;q=0` then reads as preferring html,
+// and a type named second at a higher quality loses to the one written first.
+test('an accept header prefers by quality, then by order, and q=0 refuses', () => {
+    const asks = (accept: string): Request =>
+        new Request('http://x/', { headers: { accept } })
+    const html = (accept: string): boolean =>
+        prefers(asks(accept), 'text/html', 'application/json')
+    // What a browser sends on a navigation, and what `fetch` sends by default.
+    expect(html('text/html,application/xhtml+xml,*/*;q=0.8')).toBe(true)
+    expect(html('*/*')).toBe(false)
+    expect(html('application/json')).toBe(false)
+    expect(html('text/html, application/json')).toBe(true)
+    expect(html('application/json, text/html')).toBe(false)
+    expect(html('text/html;q=0, application/json')).toBe(false)
+    expect(html('text/html;q=0')).toBe(false)
+    expect(html('application/json;q=0.5, text/html')).toBe(true)
+    expect(html('text/html;q=0.5, application/json')).toBe(false)
 })
 
 // A CHUNK THAT COMPRESSES TO NOTHING. Brotli flushes an empty chunk that follows a flush to zero

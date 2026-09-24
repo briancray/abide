@@ -1,3 +1,5 @@
+import { RAW_CLOSE, RAW_OPEN } from './RAW_RUN.ts'
+
 // 32.25 — the value `raw` hands back, and the brand a slot reads to know not to escape it. In
 // #shared because both sides render: the server writes the markup and a client swapping a `{#if}`
 // branch re-renders that region, so one brand has to be readable from both.
@@ -38,9 +40,28 @@ export function raw(value: unknown): Raw {
     return new Raw(textOf(value))
 }
 
-// Whether a value is the brand, for the one place that has to ask rather than just read it: a run a
-// browser BUILDS is a text node unless one of its values is `Raw`, and then it is parsed from the
-// markup the server writes for it (`emitClient`'s `builtRun`).
+// Whether a value is the brand, for the places that have to ask rather than just read it: a run the
+// browser builds or binds is a text node unless one of its values is `Raw` (`emitClient`).
 export function isRaw(value: unknown): value is Raw {
     return value instanceof Raw
+}
+
+// HOW MANY `Raw` PARTS THE TEXT ESCAPER HAS WRITTEN, ever — the one thing a run's markup cannot say
+// about itself once it is a string. `escapeText` counts a `Raw` as it hands its html back, so a run
+// read the count before its parts were escaped and compares after: moved means a part was markup,
+// and the run is anchored (`markupRun`). A counter rather than a flag because a flag has to be
+// reset, and a reset inside a part's own evaluation would hide the part before it.
+//
+// NEVER RESET, and what that lets through is stated: a part whose EVALUATION escaped a `Raw` it did
+// not return anchors a run that holds text. The client reads that as a run holding markup whose
+// value is text, and its first write puts the text node back — one node, never a wrong page.
+export const RAW_WRITES = { count: 0 }
+
+// 32.31 — A RUN HOLDING MARKUP IS ANCHORED, and one holding text is written as it always was. What
+// the server writes and what a browser parses for a row or an arm, so the walk that finds a run
+// (`runHere`) reads the same thing either way.
+export function markupRun(before: number, markup: string): string {
+    return RAW_WRITES.count === before
+        ? markup
+        : `<!--${RAW_OPEN}-->${markup}<!--${RAW_CLOSE}-->`
 }

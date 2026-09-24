@@ -25,9 +25,9 @@ import type { Work } from './Work.ts'
 // TWO WAYS FOR A WIRE PROTOCOL TO GO QUIET, and the type system catches neither —
 // abide and this lane cannot share a declaration, so the shape is agreed by two
 // documents rather than by one type. ABSENT is answered by leaving the three rows
-// `null` (44.23) rather than by throwing, which would take every DOM-only case and the
+// `null` (44.20) rather than by throwing, which would take every DOM-only case and the
 // whole hand-written arm with it. INCOMPLETE — a record published with a field
-// misnamed, or not yet added — is answered by a throw naming the field (44.24).
+// misnamed, or not yet added — is answered by a throw naming the field (44.21).
 //
 // And it is `armCase()` that makes the incomplete case the worse of the two, which is
 // not what it looks like: the zeroing pass below WRITES all three fields onto whatever

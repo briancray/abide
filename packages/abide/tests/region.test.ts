@@ -12,6 +12,7 @@ import { compileFile, emitClient, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
+import { pageRegion } from '#ui/regions.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { clientOf, closeTyped } from './typed.ts'
 
@@ -64,16 +65,17 @@ test('the server renders one branch, between anchors', async () => {
     // 32.12 — ONE branch. `open` is false, so the else arm is what was sent.
     expect(html).toContain('<em id="shut">closed</em>')
     expect(html).not.toContain('id="body"')
-    // The anchors, and nothing else added: no `data-`, no wrapper, no per-slot marker.
+    // The anchors, and nothing else added: no `data-`, no wrapper, no per-slot marker. Four is the
+    // branch's pair and the page's own (41.9).
     expect(html).toContain('<!--[-->')
     expect(html).toContain('<!--]-->')
     expect(html).not.toContain('data-a')
-    expect((html.match(/<!--/g) ?? []).length).toBe(2)
+    expect((html.match(/<!--/g) ?? []).length).toBe(4)
 })
 
 test('a sibling after the region is bound through the anchor, not by index', async () => {
     const { mount } = await mountPage(PAGE)
-    mount(document.body)
+    mount(pageRegion(document.body))
     const foot = document.querySelector('#foot') as HTMLElement
     expect(foot.textContent).toBe('ada')
 
@@ -87,7 +89,7 @@ test('a sibling after the region is bound through the anchor, not by index', asy
 
 test('a branch swap replaces the arm and nothing around it', async () => {
     const { mount } = await mountPage(PAGE)
-    mount(document.body)
+    mount(pageRegion(document.body))
 
     expect(document.querySelector('#shut')).not.toBeNull()
     expect(document.querySelector('#body')).toBeNull()
@@ -122,7 +124,7 @@ test('a branch swap replaces the arm and nothing around it', async () => {
 // plus the `if` arm's `hello {name}`, still awake over a node that was removed.
 test('the arm a swap replaced stops waking', async () => {
     const { mount } = await mountPage(PAGE)
-    mount(document.body)
+    mount(pageRegion(document.body))
     const toggle = document.querySelector('#go') as HTMLElement
     const rename = document.querySelector('#rename') as HTMLElement
 
@@ -168,7 +170,7 @@ let name = reactive('ada')
 
 test('two regions under different parents each find their own', async () => {
     const { mount } = await mountPage(SPREAD)
-    mount(document.body)
+    mount(pageRegion(document.body))
     expect((document.querySelector('#left b') as HTMLElement).textContent).toBe(
         'ada',
     )
