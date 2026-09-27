@@ -35,11 +35,17 @@ export function parseRoutePattern(pattern: string): Segment[] {
     return out
 }
 
+const ROUTES = 'ui/pages/'
+
 // THE PAGE'S ADDRESS FROM ITS PATH. `page.abide` is an address rather than a name (CLAUDE.md), so
 // the directories above it ARE the route and the file itself contributes nothing.
+//
+// 23.3 — BELOW THE FIRST `ui/pages/`, which is the routes directory, and not below the last `pages/`:
+// a section an app files as `ui/pages/pages/` is the address `/pages`, and cutting at the last one
+// served `ui/pages/pages/add-a-page` at `/add-a-page` and gave `/` two pages.
 export function routeOf(pagePath: string): string {
-    const at = pagePath.lastIndexOf('/pages/')
-    const tail = at === -1 ? pagePath : pagePath.slice(at + '/pages/'.length)
+    const at = pagePath.indexOf(ROUTES)
+    const tail = at === -1 ? pagePath : pagePath.slice(at + ROUTES.length)
     const parts: string[] = []
     for (const part of tail.split('/'))
         if (part !== '' && !part.endsWith('.abide')) parts.push(part)

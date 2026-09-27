@@ -13,10 +13,12 @@
 // read downstream of it deoptimises.
 
 import { type Failed, isFailed, isFailedNamed } from '../Failed.ts'
+import { namedLogger } from '../log.ts'
 import { validationError } from '../refuse.ts'
 import { type Found, runSchema, type Schema } from '../Schema.ts'
 import { WORK } from '../WORK.ts'
 import { CELL } from './CELL.ts'
+import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
 import {
     armTimer,
     dropExpired,
@@ -25,6 +27,7 @@ import {
     headDeadline,
     type Ringed,
 } from './Expiry.ts'
+import { FOLLOWED } from './FOLLOWED.ts'
 import {
     type History,
     historyFrom,
@@ -35,7 +38,9 @@ import { isReactive } from './isReactive.ts'
 import { isThenable } from './isThenable.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import { NotLanded } from './NotLanded.ts'
+import { PATCH_SINKS } from './PATCH_SINKS.ts'
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
+import { recordWrites } from './recordWrites.ts'
 import { currentScope, runInScope, type Scope } from './scoping.ts'
 import {
     CHECK,
@@ -128,11 +133,20 @@ export type ReactiveOptions<
     // RULEBOOK 11.32, 11.34: one value for the whole process rather than one per request. Inert in a
     // browser, where the process IS the scope.
     global?: boolean
+    // RULEBOOK 5.23, 32.33: what tells one element from another. The property-name form is the one
+    // that crosses a wire (18.19) — a function has no serialisation.
+    by?:
+        | (keyof ElementOf<Stored> & string)
+        | ((element: ElementOf<Stored>) => unknown)
 }
 
 // What a function-form option is handed: the entry's args, or `undefined` on a value whose body
 // takes none (11.45).
 type ArgsOf<Args> = [Args] extends [never] ? undefined : Args
+
+// `unknown` on a value that is not an array, where `by` has no element to key and names no property.
+type ElementOf<Stored> =
+    NonNullable<Stored> extends readonly (infer Element)[] ? Element : unknown
 
 // `Produced` is the fourth parameter and RULEBOOK 1.2 is what it means: the unit the
 // producer yielded, which is `Stored` for every producer but a stream, and one chunk for a
@@ -230,11 +244,14 @@ type Cap = {
     // 5.10 forbids dropping — A, B, A inside one window is three productions, and only the
     // third's own predecessor makes it a repeat.
     minted: unknown
-    // A BODY RUN THE WINDOW IS HOLDING BACK (5.12), against `holding`'s production. A cap
-    // is one arm or the other for its whole life — a value form has no body to defer and a
-    // body form caps the run rather than what the run produced, so the two are never both
-    // set on one value.
+    // A BODY RUN THE WINDOW IS HOLDING BACK (5.12), against `holding`'s production. The two
+    // are separate flags because they can stand together: a stream has a body AND tells its
+    // chunks through the window (5.18), so one close can owe a run and a telling at once.
     owed: boolean
+    // 5.25 — A RELOAD THE WINDOW IS HOLDING BACK: a refresh made inside it, started when it closes.
+    // Started there rather than owed like a run, because 7.11 reloads whether or not anything reads
+    // and an owed run waits for a read to pull it.
+    reloading: boolean
 }
 
 // A VALUE'S STORE AND WHAT ITS WRITES ARE DOING, allocated only where a `store` was declared.
@@ -539,6 +556,8 @@ class Cell {
     declare tags: string[] | null
     // `null` on every value declaring no `store`, which is what keeps `serve` from persisting.
     declare store: Persisted | null
+    // 5.23 — held as declared rather than as a function, so the property name is still there to send.
+    declare by: string | ((element: unknown) => unknown) | null
     // The probe pass this cell was last visited in. See `walkBusy` and `walkReady`.
     declare probePass: number
     // `OWES_NOTHING`, `OWES_ABOVE` or `OWES_RELOAD` — what an `invalidate` left for the next read
@@ -571,6 +590,9 @@ class Cell {
     // 11.32 — THE SCOPE THIS VALUE WAS BUILT IN, and so the one its body runs under. `undefined` in a
     // browser, and on a server for a value built outside any request.
     declare scope: Scope | undefined
+    // 11.34, 13.13 — one value for the process, and so inside every scope a selection is made in. An
+    // entry of a `global` keyed value is one too, whichever request first reached it.
+    declare global: boolean
 
     constructor(
         label: string,
@@ -646,6 +668,10 @@ class Cell {
                       pending: false,
                       unconfirmed: undefined,
                   }
+        this.by = (options?.by ?? null) as
+            | string
+            | ((element: unknown) => unknown)
+            | null
         this.probePass = 0
         this.owes = OWES_NOTHING
         this.isEffect = false
@@ -658,6 +684,7 @@ class Cell {
             this.schema === null && this.transform === null && !streaming
         this.simple = false
         this.scope = currentScope()
+        this.global = options?.global === true
         simpleShape(this)
     }
 
@@ -701,6 +728,7 @@ function capFor(
         holding: false,
         minted: undefined,
         owed: false,
+        reloading: false,
     }
 }
 
@@ -862,8 +890,12 @@ function markReaders(cell: Cell, wanted: number): void {
         if (reader.isEffect) {
             // A MIRROR RUNS HERE rather than at the end of the turn: it carries a VALUE,
             // and a read taken before the drain has to find it. No body runs inside it —
-            // the production it mints marks on through this same walk.
-            if (reader.isMirror) {
+            // the production it mints marks on through this same walk. BUT ONLY WHERE WHAT
+            // IT MIRRORS HAS PRODUCED: an adopted DERIVED value reached by this walk is only
+            // marked, still holding what it held, and copied here it is copied stale and the
+            // reader left clean. That one is queued like any effect, and the drain's `CHECK`
+            // pulls the derived body forward before the mirror copies anything.
+            if (reader.isMirror && cell.state === CLEAN) {
                 reader.state = CLEAN
                 reader.notify()
                 continue
@@ -907,13 +939,7 @@ function markReaders(cell: Cell, wanted: number): void {
         // stored to on the line above, so this reads a line already in cache.
         const cap = below.cap
         if (cap !== null && below.body !== null) {
-            const open = cap.timer !== null
-            // 5.13: a throttle's leading change goes through and opens the window that
-            // caps what follows, and re-arming inside that window would make it a
-            // debounce. 5.14: a debounce has no leading change and every production
-            // pushes its window back.
-            if (!open || !cap.leading) openWindow(below, cap)
-            if (open || !cap.leading) {
+            if (windowHolds(below, cap)) {
                 cap.owed = true
                 // BACK TO CLEAN so the next source production marks it again and re-arms.
                 // Left marked it takes this walk's own `state >= wanted` short-circuit,
@@ -1150,9 +1176,10 @@ function produce(cell: Cell, produced: unknown, gated: boolean): number {
     // apart.
     //
     // A CAP OVER A BODY MOVES NEITHER. 5.12 caps the RUN there, so the production goes
-    // straight out and `capped` — the only writer of `cap.minted` — is never reached. Read
-    // unconditionally, `previous` was `undefined` on every recompute of a capped derived
-    // value, so 5.2 collapsed nothing and every reader woke on a value that had not moved.
+    // straight out and `capped` — which writes `cap.minted` for a production — is never
+    // reached. Read unconditionally, `previous` was `undefined` on every recompute of a
+    // capped derived value, so 5.2 collapsed nothing and every reader woke on a value that
+    // had not moved.
     // The same test `produce` already picks `capped` by, one frame down.
     if (gated && cell.landed) {
         const previous =
@@ -1274,19 +1301,38 @@ function serve(cell: Cell, value: unknown): void {
     if (cell.store !== null) persist(cell, cell.store, value)
 }
 
-// GO NOW OR HOLD, for what a window caps the wake of — a value's production and a stream's
-// chunks alike (5.18) — and the window is opened or pushed back either way. 5.16: the first
-// landing goes through, having nothing to collapse against. 5.13: a throttle with no window open
-// lets this one through and opens one, and re-arming inside an open one would make it a
-// debounce. 5.14: a debounce holds everything and every arrival pushes its window back, so the
-// release is what happens when they stop. A body's cap is the same decision without 5.16, and is
-// made in the mark walk, where a run rather than an arrival is what is held (5.12).
+// HOLD OR GO, for everything a window caps — a body's run (5.12), a refresh (5.25), a production
+// and a stream's chunks (5.18) — and the window is opened or pushed back either way. 5.13: a
+// throttle with no window open lets this one through and opens one, and re-arming inside an open
+// one would make it a debounce. 5.14: a debounce holds everything and every arrival pushes its
+// window back, so the release is what happens when they stop.
+function windowHolds(cell: Cell, cap: Cap): boolean {
+    const open = cap.timer !== null
+    if (!open || !cap.leading) openWindow(cell, cap)
+    return open || !cap.leading
+}
+
+// 5.16: the first landing goes through, having nothing to collapse against — and a debounce's
+// window is not opened by it, where a throttle's is.
 function passes(cell: Cell, cap: Cap): boolean {
-    if (!cell.landed || (cap.leading && cap.timer === null)) {
-        if (cap.leading) openWindow(cell, cap)
-        return true
-    }
-    if (!cap.leading) openWindow(cell, cap)
+    if (cell.landed) return !windowHolds(cell, cap)
+    if (cap.leading) openWindow(cell, cap)
+    return true
+}
+
+// A production's wake goes now or is held for the window's close — the pass-or-hold tail that a
+// write (`capped`) and a patch (5.24) share. The window moves `minted` apart from `value` either way.
+function wakes(cell: Cell, cap: Cap, produced: unknown): boolean {
+    cap.minted = produced
+    if (passes(cell, cap)) return true
+    hold(cell, cap, produced)
+    return false
+}
+
+// A stream's chunks: the buffer already has them, so what the window holds is the telling (5.18).
+function tellsChunks(cell: Cell, cap: Cap | null): boolean {
+    if (cap === null || passes(cell, cap)) return true
+    cap.holding = true
     return false
 }
 
@@ -1298,27 +1344,28 @@ function capped(
     produced: unknown,
     moved: boolean,
 ): number {
-    cap.minted = produced
     // 5.16 CANNOT BE SATISFIED BY HOLDING THE FIRST LANDING: there is no held value to go
     // on serving, so a reader would get neither the value it had nor the one that arrived
     // — a `debounce` of 300 left a value not ready for 300 ms after construction. A window
     // collapses a RUN of changes and the first landing has nothing to collapse with.
-    if (passes(cell, cap)) {
+    if (wakes(cell, cap, produced)) {
         serve(cell, produced)
         cascade(cell)
         if (moved) probesMoved(cell)
-        return cell.ordinal
     }
-    cap.held = produced
+    return cell.ordinal
+}
+
+// HELD FOR THE WINDOW'S CLOSE, which `release` serves. 5.16: `loading` IS "work in flight", and a
+// window with something held is exactly that — so the probe answers from the field it already
+// reads rather than from a second one. `isBusy` is the leaf a spinner reads every frame and a load
+// it did not need was refused there once already.
+function hold(cell: Cell, cap: Cap, value: unknown): void {
+    cap.held = value
     cap.holding = true
-    // 5.16: `loading` IS "work in flight", and a window with something held is exactly
-    // that — so the probe answers from the field it already reads rather than from a
-    // second one. `isBusy` is the leaf a spinner reads every frame and a load it did not
-    // need was refused there once already.
     cell.loading = true
     // Nothing a reader can see moved, and `busy` did.
     probesMoved(cell)
-    return cell.ordinal
 }
 
 // The window closing, and the one wake per window that 5.13 and 5.14 each allow.
@@ -1333,6 +1380,14 @@ function release(cell: Cell, cap: Cap): void {
     probesMoved(cell)
 }
 
+function releaseHeld(cell: Cell, cap: Cap): void {
+    const stream = cell.stream
+    if (stream !== null) {
+        cap.holding = false
+        releaseChunks(cell, stream)
+    } else release(cell, cap)
+}
+
 function openWindow(cell: Cell, cap: Cap): void {
     // 5.14 NEEDS THIS: a debounce calls in here on every production inside its window, and
     // the reset is what "until the changes stop" means. Without it each write arms its own
@@ -1343,6 +1398,17 @@ function openWindow(cell: Cell, cap: Cap): void {
     // process open. The keyed window already armed through it, so the two agree.
     armTimer(cap, cap.ms, () => {
         cap.timer = null
+        // 5.25: the reload the window held back, which is the run as well. A production held beside
+        // it is served first — the reload re-reads a store that production has not been written to
+        // yet, and skipping it dropped the write and left `holding` standing.
+        if (cap.reloading) {
+            cap.reloading = false
+            cap.owed = false
+            if (cap.holding) releaseHeld(cell, cap)
+            reloadNow(cell)
+            if (cap.leading) openWindow(cell, cap)
+            return
+        }
         // 5.12: the run the window held back. Marking and cascading is all it does — the
         // body is pulled forward by the read that wants it, which is the same laziness
         // every other recompute gets.
@@ -1361,11 +1427,7 @@ function openWindow(cell: Cell, cap: Cap): void {
         // what landed meanwhile. Branched HERE, in the timer, rather than inside `release`: a stream
         // call reachable from `release` sits on the path every `publish` walks through `capped`, and
         // measured 8.4 ns -> 10.5 ns on `publish into a capped ring` under V8 with no stream in it.
-        const stream = cell.stream
-        if (stream !== null) {
-            cap.holding = false
-            releaseChunks(cell, stream)
-        } else release(cell, cap)
+        releaseHeld(cell, cap)
         // A write made by one of the effects this release woke has already opened the
         // next window, and opening a second here would leave `cap.timer` pointing at this
         // one while that one goes on to fire and clear it.
@@ -1537,10 +1599,8 @@ function absorb(
         return
     }
     const generation = cell.generation
-    // NOTHING IS NOTIFIED HERE, and nothing ever was. The call that stood here notified
-    // only readers a mark had stamped, and going loading stamps nobody — 11.22 derives a
-    // propagated probe on the read that asks for it rather than pushing it.
-    // A PROBE MOVES WITHOUT A PRODUCTION, and nothing used to carry that. Going loading
+    // A PROBE MOVES WITHOUT A PRODUCTION — 11.22 derives a propagated probe on the read that
+    // asks for it rather than pushing it. Going loading
     // changes what every reader downstream reports and mints no value for a cascade to
     // carry, so the flip opens one itself.
     beginLoad(cell)
@@ -1985,14 +2045,8 @@ function acceptChunk(cell: Cell, stream: Stream, chunk: unknown): void {
     cell.ordinal += 1
     // 3.8: `ready` from the first chunk, and `error` cleared by an accepted production (4.11).
     if (!cell.servable || cell.failure !== undefined) stream.probesOwed = true
-    const cap = cell.cap
-    if (cap === null) {
-        releaseChunks(cell, stream)
-        return
-    }
     // 5.18: THE WINDOW CAPS THE WAKE, and the chunk is already in the buffer for a cursor.
-    if (passes(cell, cap)) releaseChunks(cell, stream)
-    else cap.holding = true
+    if (tellsChunks(cell, cell.cap)) releaseChunks(cell, stream)
 }
 
 // What a reader is told of: every chunk landed so far becomes what a read materialises, and the
@@ -2468,7 +2522,12 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
     if (!cell.landed) throw new NotLanded(cell.callable as object, cell.label)
     const stream = cell.stream
     if (stream === null) {
-        mutate(cell.value)
+        const cap = cell.cap
+        // THE HEAD IS THE LAST PRODUCTION MINTED, which a window may be holding apart from the one
+        // served: patching the served one overwrote the held production with it, and the write
+        // the window held was never seen.
+        const head = cap?.holding && cell.body === null ? cap.held : cell.value
+        recordWrites(head, mutate, PATCH_SINKS.get(cell))
         // 5.7: REPLACES THE HEAD PRODUCTION RATHER THAN APPENDING ONE, and that is why no
         // sequence number is minted here. The head is the object the callback just mutated, and
         // the ring already holds that same reference — so retention needs no write and the
@@ -2478,16 +2537,25 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
         // ordinal `ringBase + i + 1`, so a bump with no push put the two out of step and the next
         // turn read one past the end of the ring and handed over `undefined`. The wake was never
         // the ordinal's doing — it is the cascade's.
-        cascade(cell)
-        // A patch mints a production (5.7), and 8.8 writes every production.
-        if (cell.store !== null) persist(cell, cell.store, cell.value)
+        //
+        // 5.24 — AND THE CASCADE IS WHAT A WINDOW CAPS. The object has already changed, so what is
+        // held is the wake alone: readers are told once per window, and `busy` stands meanwhile
+        // (5.16). A body's cap caps its runs instead (5.12), so a patch there wakes as before.
+        //
+        // 8.8 AS `serve` READS IT: a patch the window held is written by the release that serves
+        // it, so a run of patches in one window is one write rather than one per patch (5.12).
+        if (cap === null || cell.body !== null || wakes(cell, cap, head)) {
+            cascade(cell)
+            if (cell.store !== null) persist(cell, cell.store, cell.value)
+        }
         return
     }
     // 9.27: the accumulation itself, so the next chunk lands after the change rather than
     // rebuilding a snapshot from chunks the patch never saw.
-    mutate(stream.chunks)
+    recordWrites(stream.chunks, mutate, PATCH_SINKS.get(cell))
     stream.version += 1
-    cascade(cell)
+    // 5.24, as for a chunk (5.18): the window's close is what tells the readers.
+    if (tellsChunks(cell, cell.cap)) cascade(cell)
 }
 
 // WHAT AN INVALIDATE LEAVES BEHIND, and it is a debt rather than a mark. The mark walk's states
@@ -2522,6 +2590,18 @@ function refreshOne(cell: Cell): void {
     // 7.6: inert on a value with no producer. 8.2 makes a store one, so a refresh re-reads it —
     // another tab may have written.
     if (!reloads(cell)) return
+    // 5.25 — A WINDOW HOLDS A REFRESH AS IT HOLDS A PRODUCTION: a throttle lets the first through
+    // and opens, a debounce holds every one and is pushed back by each, and what a window held is
+    // one reload when it closes. Three refreshes in a row were three loads, two of them superseded.
+    const cap = cell.cap
+    if (cap !== null && windowHolds(cell, cap)) {
+        cap.reloading = true
+        return
+    }
+    reloadNow(cell)
+}
+
+function reloadNow(cell: Cell): void {
     // A refresh IS the reload an invalidate owed, so the read after it must not run a second.
     if (cell.owes === OWES_RELOAD) reloadOwed(cell)
     else reload(cell)
@@ -2545,6 +2625,9 @@ function reloadOwed(cell: Cell): void {
 // being served (7.8). Making it unservable here instead woke a `{#if s.ready()}` guard onto a branch
 // that never reads the value again, and nothing was ever left to run the producer.
 function invalidateOne(cell: Cell): void {
+    // 7.6 — sent on to the browsers following it whether or not there is a producer to mark.
+    const followed = FOLLOWED.get(cell)
+    if (followed !== undefined) for (const sendOn of followed) sendOn()
     if (!reloads(cell)) return
     // Not directly servable, so the next read goes a frame in and settles the debt.
     cell.direct = false
@@ -2657,9 +2740,11 @@ function readStore(cell: Cell, persisted: Persisted): unknown {
 }
 
 // 8.12 SAYS `onError` TOO, and there is no `onError` yet. The warning is under the namespace the
-// clause names, spelled as a prefix until the logger that owns namespaces exists.
+// clause names.
+const STORE_LOG = namedLogger('abide:reactive')
+
 function warnStore(cell: Cell, what: string, failed: unknown): void {
-    console.warn(`abide:reactive ${cell.label}: a store ${what}.`, failed)
+    STORE_LOG.warning(`${cell.label}: a store ${what}.`, failed)
 }
 
 // 8.4: A SYNCHRONOUS `get` IS NOT A LOAD — the value is there at construction and nothing is
@@ -2885,11 +2970,6 @@ function storeWritten(cell: Cell, persisted: Persisted): void {
 
 // ── Selections over `tags` ─────────────────────────────────────────────────────────────
 //
-// PROCESS-WIDE FOR NOW, AND 13.8 SAYS OTHERWISE. A selection is bounded by scope there, and there
-// is no scope yet — no component instance and no request to file a value under — so a tag here
-// reaches every value in the process carrying it. What that permits, and 13.8 exists to stop, is
-// one request's sweep reaching another's values on a server.
-//
 // THE INDEX HOLDS VALUES WEAKLY. A tag is a way to find a value, never a reason to keep one, and a
 // strong index would hold every tagged value a page ever made for the life of the process. A
 // collected value is pruned from its sets by the next sweep that finds it gone.
@@ -2929,7 +3009,8 @@ export function untag(value: unknown): void {
 }
 
 // 13.8 — A TAG IS SCOPE-BOUNDED, so a selection inside one request never reaches the values another
-// request filed under the same tag. In a browser every cell's scope is `undefined`, and so is this.
+// request filed under the same tag. 13.13 — a `global` value is in every scope, so every selection
+// reaches it. In a browser every cell's scope is `undefined`, and so is this.
 function carrying(tags: string[]): Cell[] {
     const found = new Set<Cell>()
     const scope = currentScope()
@@ -2939,7 +3020,7 @@ function carrying(tags: string[]): Cell[] {
         for (const ref of refs) {
             const cell = ref.deref()
             if (cell === undefined) refs.delete(ref)
-            else if (cell.scope === scope) found.add(cell)
+            else if (cell.scope === scope || cell.global) found.add(cell)
         }
     }
     return [...found]
@@ -3146,10 +3227,70 @@ const MEMBERS = {
 // and this is the backstop for a fire that came late. Before any cursor exists, so 6.7 is untouched:
 // what must not observe an expiry is a LIVE cursor.
 export function pastOf(value: unknown): Cell {
-    let cell = (value as Callable)[CELL]
-    while (cell.adoption !== null) cell = cell.adoption.source
+    const cell = adoptedCellOf(value)
     if (cell.expiry !== null && cell.ringDepth > 0)
         dropExpired(cell.expiry, ringedOf(cell), standingKept(cell))
+    return cell
+}
+
+// 21.8 — WHEN THE PRODUCTION A VALUE IS SERVING STOPS BEING SERVABLE, as a wall-clock time: its
+// own `ttl` from when it was minted (6.11), or its entry's from when the entry last produced
+// (11.46), through whatever it adopts. Infinity where neither bounds it.
+export function deadlineOf(value: unknown): number {
+    const cell = adoptedCellOf(value)
+    if (cell.expiry !== null) return cell.expiry.at + cell.expiry.ms
+    const entry = ENTRY_LIVES.get(cell)
+    return entry === undefined ? Number.POSITIVE_INFINITY : entry.at + entry.ms
+}
+
+// 16.53 — WHICH LOAD A VALUE HAS IN FLIGHT, as the generation that started it, or `undefined` where
+// none is. Read off the cell rather than through `busy`, which is a probe and would subscribe the
+// caller that asked (3.3).
+export function loadOf(value: unknown): number | undefined {
+    const cell = (value as Callable)[CELL]
+    return cell.loading ? cell.generation : undefined
+}
+
+// 16.54 — THE LOAD IN FLIGHT, ENDED WHERE IT STANDS. The generation moves so a settle arriving after
+// is the stale one `absorb` already drops, a stream stops reaching the value, and the value refuses
+// with `failure` — which leaves what it held being served (2.4), a stream's chunks so far included.
+export function abandonLoad(value: unknown, failure: unknown): void {
+    const cell = (value as Callable)[CELL]
+    if (!cell.loading) return
+    cell.generation += 1
+    if (cell.stream !== null) stopStream(cell.stream)
+    refused(cell, failure)
+}
+
+// A streaming producer's own `Reactive` — a handler declared as an async generator (9.20).
+export function isStreaming(value: unknown): boolean {
+    if (!isReactive(value)) return false
+    const stream = (value as Partial<Callable>)[CELL]?.stream
+    return stream !== null && stream !== undefined
+}
+
+// 16.33 — THE CHUNKS A STREAMING VALUE HAS TOLD ITS READERS OF PAST `from`, for a writer sending each
+// once. Ungated they are read out of the accumulation in place, to `visible` rather than its length
+// (5.19): a read materialises a copy of the whole of it (9.2), which for a writer woken per chunk is
+// n²/2 elements copied to send n. A schema or a transform has to see the whole accumulation (9.22),
+// so a gated value answers from what a read would.
+export function* chunksFrom(value: unknown, from: number): Generator<unknown> {
+    const cell = (value as Callable)[CELL]
+    if (cell.schema === null && cell.transform === null) {
+        const stream = cell.stream as Stream
+        for (let index = from; index < stream.visible; index += 1)
+            yield stream.chunks[index]
+        return
+    }
+    const held = MEMBERS.peek.call(value as Callable)
+    if (Array.isArray(held))
+        for (let index = from; index < held.length; index += 1)
+            yield held[index]
+}
+
+function adoptedCellOf(value: unknown): Cell {
+    let cell = (value as Callable)[CELL]
+    while (cell.adoption !== null) cell = cell.adoption.source
     return cell
 }
 

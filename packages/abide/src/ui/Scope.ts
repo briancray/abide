@@ -61,3 +61,7 @@ export class Scope {
         children.length = 0
     }
 }
+
+// A SCOPE WITH NOTHING IN IT, shared. What a mount whose body binds nothing answers, and what a
+// row holds until its mount returns — `stop` on it is a no-op, so any number of owners can hold it.
+export const EMPTY_SCOPE = new Scope()

@@ -11,13 +11,14 @@
 // wire, fills `s.error` and narrows through `s.isError`.
 
 // EMITTED CODE'S: the value a `bind:` operand holds, as the server writes it into the tag (32.5).
-export { boundValue, groupHolds } from './boundValue.ts'
+export { boundProp, boundValue, groupHolds } from './boundValue.ts'
 export {
     escapeAttribute,
     escapeStyleValue,
     escapeText,
 } from './escapeText.ts'
 export { type Cookies, cookies } from './cookies.ts'
+export { csp } from './csp.ts'
 export { type Failed, isFailed } from './Failed.ts'
 export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
@@ -37,6 +38,8 @@ export { navigate } from './navigate.ts'
 export { online } from './online.ts'
 export { type Principal, principal } from './principal.ts'
 export { props } from './props.ts'
+// EMITTED CODE'S: a prop the child writes (33.6, 33.7).
+export { propCell, propCells } from './propCell.ts'
 // `markupRun` and `RAW_WRITES` are EMITTED CODE'S: a text run anchored while it holds markup (32.31).
 export { markupRun, RAW_WRITES, Raw, raw } from './Raw.ts'
 export {
@@ -69,10 +72,12 @@ export {
     watch,
 } from './reactive/index.ts'
 export type { Params } from './matchRoute.ts'
-export { notFound, refuse, validationError } from './refuse.ts'
+export { aborted, notFound, refuse, validationError } from './refuse.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'
 export { route } from './route.ts'
 export { safeUrl } from './safeUrl.ts'
+// 32.38 — what a value writes into an attribute, on both sides.
+export { attributeMarkup, attributeText } from './attributeText.ts'
 // EMITTED CODE'S — 32.11's spread, as props and as markup.
 export { spreadAttributes, spreadProps } from './spread.ts'
 // EMITTED CODE'S, not an author's — no REGISTRY row, the way `escapeText` and `listOf` have

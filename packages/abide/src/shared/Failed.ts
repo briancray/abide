@@ -10,7 +10,7 @@
 // caught one from somewhere else still finds the shape it expects.
 
 // `Data` IS UNCONSTRAINED, and that is the registry row rather than an oversight here.
-// `refuse.typed` is where `JsonValue` binds, because that is the factory whose refusals
+// `refuse.named` is where `JsonValue` binds, because that is the factory whose refusals
 // cross a wire — and `Issues<T>` is the case that proves the two must differ: it is
 // `Partial<Record<…, string[]>>`, whose members are `string[] | undefined`, so it is a
 // perfectly good refusal payload that `JsonValue` does not describe.

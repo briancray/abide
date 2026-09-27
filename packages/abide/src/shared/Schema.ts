@@ -105,7 +105,7 @@ function pathOf(
 }
 
 // 4.7 — A SCHEMA RUNS UNTRACKED, and the clearing is HERE because running one is what the clause
-// is about. Held in the two callers `Reactive.ts` owns, `refuse.typed`'s gate and `Keyed`'s
+// is about. Held in the two callers `Reactive.ts` owns, `refuse.named`'s gate and `Keyed`'s
 // argument gate ran tracked: a refusal built inside an effect subscribed that effect to whatever
 // its schema read, and the read was spliced into the body's cursor-ordered `sources` besides.
 export function runSchema(schema: unknown, value: unknown): Checked {

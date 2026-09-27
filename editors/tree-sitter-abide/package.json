@@ -1,0 +1,18 @@
+{
+    "name": "tree-sitter-abide",
+    "version": "0.0.1",
+    "description": "The .abide grammar for tree-sitter: HTML with {\u2026} slots and {#\u2026} blocks",
+    "private": true,
+    "license": "MIT",
+    "scripts": {
+        "generate": "tree-sitter generate",
+        "test": "tree-sitter test"
+    },
+    "devDependencies": {
+        "tree-sitter-cli": "0.25.10",
+        "tree-sitter-html": "0.23.2"
+    },
+    "trustedDependencies": [
+        "tree-sitter-cli"
+    ]
+}

@@ -6,13 +6,11 @@
 //
 // ON AN ELEMENT, attributes: what the server writes into the tag, and what the client keeps writing.
 // A key the element names explicitly is the explicit attribute's (33.12's rule, held for elements
-// too); `false`, `null` and `undefined` write nothing and `true` writes the bare attribute; a
-// function is a listener where the key is `on<event>`, and never markup.
+// too); a value is written as a named attribute's is (32.38); a function is a listener where the
+// key is `on<event>`, and never markup.
 
-import { escapeAttribute } from './escapeText.ts'
+import { attributeText, writtenMarkup } from './attributeText.ts'
 import { isEventName } from './isEventName.ts'
-import { safeUrl } from './safeUrl.ts'
-import { URL_ATTRIBUTES } from './URL_ATTRIBUTES.ts'
 
 export function spreadProps(
     read: () => unknown,
@@ -50,15 +48,9 @@ export function spreadEntries(
             continue
         }
         if (!ATTRIBUTE_NAME.test(name)) continue
-        if (member === undefined || member === null || member === false)
-            continue
-        if (member === true) {
-            entries.push([name, ''])
-            continue
-        }
-        const text = String(member)
-        // 32.21 — a URL arriving through a spread is scheme-checked as one arriving by name is.
-        entries.push([name, URL_ATTRIBUTES.has(lower) ? safeUrl(text) : text])
+        // 32.38 — the named attribute's answer, so a spread and `name={expr}` never disagree.
+        const text = attributeText(name, member)
+        if (text !== null) entries.push([name, text])
     }
     return entries
 }
@@ -70,7 +62,6 @@ export function spreadAttributes(
 ): string {
     let markup = ''
     for (const [name, text] of spreadEntries(value, explicit))
-        markup +=
-            text === '' ? ` ${name}` : ` ${name}="${escapeAttribute(text)}"`
+        markup += writtenMarkup(name, text)
     return markup
 }

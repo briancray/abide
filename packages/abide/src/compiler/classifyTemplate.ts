@@ -5,8 +5,6 @@ import {
     type TemplateNode,
 } from './TemplateNode.ts'
 
-export { isEventName }
-
 // THE CLASSIFICATION both emitters share. Where a node STANDS is not decided here: `renderMarkup`
 // carries a `Cursor`, so the walk that writes a node is the walk that places it. What IS decided
 // here is what a node IS — and a decision that must bind BOTH lanes belongs here, because one copy
@@ -128,9 +126,6 @@ export function bindingsOf(node: TemplateNode & { kind: 'element' }): {
     return bound
 }
 
-// `onclick={f}` is a listener, never an attribute — the client binds it and the server writes
-// nothing for it, so the two emitters have to agree on the test. One copy is that agreement.
-// Given the FOLDED name (`Attribute.lowerName`).
 // 32.18 — `<Row/>` is a component and `<row/>` is the element. An HTML tag is matched
 // case-insensitively everywhere else (`lowerTag`), and this is the one comparison where the
 // author's own spelling decides. Here rather than beside the emitter that calls it most, because
@@ -151,8 +146,7 @@ export function isSlot(node: TemplateNode): boolean {
 // 32.19 — WHETHER THIS FILE HAS A SLOT ANYWHERE IN IT, which is what says its emitted function
 // takes the props record: the caller's children arrive on it, and a component whose only prop is
 // its own body never calls `props` (33.2) and would otherwise be handed nothing to read them
-// from. Over the NODES rather than the plan, because the server emitter reads the template
-// directly and never builds one — and one walk answering for both lanes is why it is here.
+// from. One walk answering for both lanes is why it is here.
 export function holdsSlot(nodes: TemplateNode[]): boolean {
     for (const node of nodes) {
         if (isSlot(node)) return true
@@ -163,8 +157,8 @@ export function holdsSlot(nodes: TemplateNode[]): boolean {
 }
 
 // 32.9 — `bind:element` is the one `bind:` the server writes nothing for and the client does not
-// set: it hands the node over. Here for `isEventName`'s reason — the server declining to write
-// it and the client binding it are one predicate answering twice.
+// set: it hands the node over. The server declining to write it and the client binding it are one
+// predicate answering twice.
 export function isElementBind(lowerName: string): boolean {
     return lowerName === 'bind:element'
 }
@@ -183,8 +177,8 @@ export function valueBindOf(lowerName: string): ValueBind | undefined {
 }
 
 // 32.10 — `style:prop` sets ONE style property and `class:name` ONE class. Here rather than beside
-// the emitter that writes them out, for `isComponentTag`'s reason: the plan is what both emitters
-// read, and an edge from the plan to an emitter is a cycle. The prefix is matched on the FOLDED
+// the emitter that writes them out, for `isComponentTag`'s reason: this is what both emitters
+// read, and an edge from here to an emitter is a cycle. The prefix is matched on the FOLDED
 // name; the part after it is read from the author's spelling, because a custom property and a
 // class are both case-sensitive.
 //
@@ -278,6 +272,18 @@ const PARSER_OWNED = new Set([
 
 export function isParserOwned(lowerTag: string): boolean {
     return PARSER_OWNED.has(lowerTag)
+}
+
+// 32.6, 32.10 — THE KEY A COMPONENT'S ATTRIBUTE PASSES A PROP UNDER, or `undefined` where it is
+// no prop: a `bind:` handing over a `Reactive` keys the name after it, and any other `:` name —
+// `class:`, `style:`, a `bind:` with nothing bound — is an element's own. The build writes the
+// props record by this and the checker projects it by this, so a tag is held to what it sends.
+export function propKeyOf(attribute: Attribute): string | undefined {
+    if (attribute.lowerName.startsWith('bind:'))
+        return attribute.expression
+            ? attribute.name.slice('bind:'.length)
+            : undefined
+    return attribute.name.includes(':') ? undefined : attribute.name
 }
 
 // 32.11 — THE ATTRIBUTE NAMES AN ELEMENT WRITES FOR ITSELF, which a spread on it does not override:

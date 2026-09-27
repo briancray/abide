@@ -10,6 +10,7 @@ import {
     type ShareScope,
 } from '#shared/reactive/share.ts'
 import type { RpcRequest } from '#shared/rpcRequest.ts'
+import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
 import { REGION_CLOSE, REGION_OPEN } from '#ui/REGION.ts'
 import { currentRequestScope } from './requestScope.ts'
 
@@ -33,7 +34,7 @@ const ENCODER = new TextEncoder()
 
 // What a compiled component answers. One reference beyond the cast that reads it — the `await`
 // guard needs the settled shape and the promise shape to be the same name.
-type Rendered = { head: string; body: string }
+export type Rendered = { head: string; body: string }
 
 // 35.1 — THE PAGE, INSIDE ITS LAYOUTS, outermost first. A layout renders its child through a
 // slot (32.19), so the composition is the same `children` thunk a caller writing markup between
@@ -114,13 +115,9 @@ export async function* render(
     // unconditionally wrapped a promise and spent a microtask turn per request for nothing.
     const document = typeof shell === 'string' ? shell : await shellText(shell)
 
-    // TWO INSERTION POINTS, CLAMPED AND ORDERED — not three shapes. `</head>` and `</body>` are
-    // both OPTIONAL end tags, so a valid shell can carry neither, and the three hand-written arms
-    // this replaces dropped `rendered.head` on the floor in two of them: a page's `<title>`,
-    // `<meta>` and stylesheet links vanished with no error. A shell whose `</head>` came AFTER its
-    // `</body>` made `slice(headAt, bodyAt)` empty and duplicated the head region on top of that.
-    // An absent anchor now means "the end of the document", and the clamp is what keeps the head
-    // ahead of the body whatever order the shell wrote them in.
+    // TWO INSERTION POINTS, CLAMPED AND ORDERED. `</head>` and `</body>` are both OPTIONAL end
+    // tags, so a valid shell can carry neither: an absent anchor means "the end of the document",
+    // and the clamp is what keeps the head ahead of the body whatever order the shell wrote them in.
     const bodyAt = bodyAnchor(document)
     const headAt = headAnchor(document)
     // 41.1 — THE SHELL'S HEAD BEFORE THE COMPONENT IS ASKED. It is known the moment the shell is,
@@ -156,7 +153,8 @@ export async function* render(
 }
 
 // 41.21 — THE SCRIPT ITSELF: each call started with `fetch`, and its answer left under the call's key
-// in `EARLY_CALLS` for `wire` to take (41.22). Inline because nothing else runs before the bundle
+// in `EARLY_CALLS` for `wire` to take (41.22). A framed answer's body is left UNREAD (16.33), so a
+// streaming handler's copy takes its chunks as they land rather than after the last one. Inline because nothing else runs before the bundle
 // has arrived, which is the wait it exists to overlap.
 //
 // 29.9, 29.10 — THE CALLS ARE DATA AND THE RUNNER IS A CONSTANT. What a page called differs per
@@ -170,7 +168,7 @@ function earlyCallScript(calls: RpcRequest[]): string {
     return `<script type="application/json">${JSON.stringify(rows).replace(/</g, '\\u003c')}</script><script>${EARLY_CALL_RUNNER}</script>`
 }
 
-const EARLY_CALL_RUNNER = `(function(s,c){for(var i=0;i<c.length;i++)(function(k,u,n){var e=s[k]={status:void 0,statusText:void 0,type:void 0,text:void 0};e.promise=fetch(u,n).then(function(r){e.status=r.status;e.statusText=r.statusText;e.type=r.headers.get("content-type");return r.text()}).then(function(t){e.text=t},function(){})})(c[i][0],c[i][1],c[i][2])})(self.${EARLY_CALLS}||(self.${EARLY_CALLS}={}),JSON.parse(document.currentScript.previousElementSibling.textContent))`
+const EARLY_CALL_RUNNER = `(function(s,c){for(var i=0;i<c.length;i++)(function(k,u,n){var e=s[k]={status:void 0,statusText:void 0,type:void 0,version:void 0,life:void 0,text:void 0,body:void 0};e.promise=fetch(u,n).then(function(r){e.status=r.status;e.statusText=r.statusText;e.type=r.headers.get("content-type");e.version=r.headers.get("${VERSION_HEADER}");e.life=r.headers.get("cache-control");if(r.ok&&/^(application\\/jsonl|text\\/event-stream)/.test(e.type||"")){e.body=r.body;return}return r.text()}).then(function(t){if(t!==void 0)e.text=t},function(){})})(c[i][0],c[i][1],c[i][2])})(self.${EARLY_CALLS}||(self.${EARLY_CALLS}={}),JSON.parse(document.currentScript.previousElementSibling.textContent))`
 
 // 29.9 — the runner's hash, as `script-src` names it.
 export const EARLY_CALL_HASH = `'sha256-${new Bun.CryptoHasher('sha256').update(EARLY_CALL_RUNNER).digest('base64')}'`
@@ -217,9 +215,8 @@ async function shellText(shell: URL | undefined): Promise<string> {
 // root `abide build` compiled and the two need not be the same directory. NOT PUBLIC SURFACE —
 // `server/index.ts` does not re-export it.
 export async function shellUnder(root: string): Promise<string> {
-    // One syscall rather than two: `.text()` already fails when the file is not there, which is
-    // the question `.exists()` was asked ahead of it. The read still happens per render for a
-    // bare `render` call — 20 µs and 98% of the op — and `serveBuild` is the caller that hoists
+    // `.text()` already fails when the file is not there, so no `.exists()` asks first. The read
+    // happens per render for a bare `render` call — 20 µs and 98% of the op — and `serveBuild` is the caller that hoists
     // it, reading the shell once at boot rather than once a request.
     try {
         return await Bun.file(`${root}/ui/app.html`).text()

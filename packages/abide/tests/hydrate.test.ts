@@ -242,9 +242,9 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
 // server left empty, exactly as `blank` does for a text run. Before that binding existed the
 // empty attribute was permanent, and the test below asserted it and called that the answer.
 //
-// EACH ABSENCE IS THE ONE ALREADY DECIDED WHERE IT LANDS — `escapeAttribute` and
-// `escapeStyleValue` both read `undefined` as '' through `textOf`, so nothing new was decided to
-// make this work.
+// EACH ABSENCE IS THE ONE ALREADY DECIDED WHERE IT LANDS — an attribute holding `undefined` is
+// absent (32.38), and `escapeStyleValue` reads it as '' through `textOf`, so nothing new was decided
+// to make this work.
 //
 // THE REVERT: make `unlandable` answer `lowered` unconditionally and `render` throws
 // `NotLanded: reactive has not landed` — no document at all, on a page whose static markup is
@@ -264,7 +264,7 @@ const width = reactive(() => Promise.resolve('40px'))
     expect(html).toContain('<h1 id="static">Panel</h1>')
     expect(document.querySelector('#static')?.textContent).toBe('Panel')
     // The holes: both values are still in flight, so both render as the absence they escape to.
-    expect(document.querySelector('#attr')?.getAttribute('title')).toBe('')
+    expect(document.querySelector('#attr')?.hasAttribute('title')).toBe(false)
     expect(html).not.toContain('40px')
     expect(document.querySelector('#styled')?.getAttribute('style')).toBe(
         'width: ',
@@ -278,6 +278,86 @@ const width = reactive(() => Promise.resolve('40px'))
     expect(document.querySelector('#attr')?.getAttribute('title')).toBe('warm')
     expect((document.querySelector('#styled') as HTMLElement).style.width).toBe(
         '40px',
+    )
+})
+
+// 32.38 — `disabled="false"` IS A DISABLED BUTTON. A whole-value attribute was written as its text,
+// so `disabled={busy}` shipped every button disabled whatever `busy` held, and the docs' own cards
+// were written around it. Presence is the answer for an attribute HTML reads by presence; text for
+// every other, where `aria-busy="false"` means something its absence does not; and `undefined`
+// is absent for all of them — on the server, in a binding, in a row the browser builds and through
+// a spread alike.
+//
+// THE REVERT: skip the `BOOLEAN_ATTRIBUTES` arm of `attributeText`; the server then writes
+// `disabled="false"` and `hidden="false"`, and the first assertion reports it.
+test('a boolean attribute is present or absent, and any other is its text — 32.38', async () => {
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+let busy = reactive(false)
+let rows = reactive([{ id: 1, off: true }])
+const shown = reactive(() => ({ hidden: busy(), 'aria-hidden': busy() }))
+
+function flip() {
+    busy = !busy
+    rows = [...rows, { id: rows.length + 1, off: false }]
+}
+</script>
+
+<main><button id="b" disabled={busy} aria-busy={busy} title={undefined}>go</button><div id="s" {...shown}>s</div><button id="flip" onclick={flip}>flip</button><ul>{#for row of rows by row.id}<li><input id={'r' + row.id} disabled={row.off}></li>{/for}</ul></main>`)
+
+    expect(html).toContain('<button id="b" aria-busy="false">')
+    expect(html).toContain('<div id="s" aria-hidden="false">')
+    expect(html).toContain('<input id="r1" disabled>')
+
+    mount(pageRegion(document.body))
+    flushSync()
+    const button = document.querySelector('#b') as HTMLElement
+    const flipButton = document.querySelector('#flip') as HTMLElement
+    flipButton.click()
+    flushSync()
+    expect(button.hasAttribute('disabled')).toBe(true)
+    expect(button.getAttribute('disabled')).toBe('')
+    expect(button.getAttribute('aria-busy')).toBe('true')
+    expect(document.querySelector('#s')?.hasAttribute('hidden')).toBe(true)
+    expect(document.querySelector('#s')?.getAttribute('aria-hidden')).toBe(
+        'true',
+    )
+    // A row the browser built: absent where its value is false.
+    expect(document.querySelector('#r2')?.hasAttribute('disabled')).toBe(false)
+    expect(document.querySelector('#r1')?.hasAttribute('disabled')).toBe(true)
+
+    flipButton.click()
+    flushSync()
+    expect(button.hasAttribute('disabled')).toBe(false)
+    expect(button.hasAttribute('title')).toBe(false)
+    expect(document.querySelector('#s')?.hasAttribute('hidden')).toBe(false)
+})
+
+// 32.38 — A STRING THAT MAKES A PRESENCE ATTRIBUTE PRESENT IS ITS TEXT. `hidden` is one, and
+// `hidden="until-found"` is a real value: written bare, the content is hidden for good and a reader's
+// find-in-page can no longer reveal it. THE REVERT: answer `''` for every truthy value in
+// `attributeText`'s presence arm; the server writes a bare `hidden` and the binding does too.
+test('a presence attribute given a string carries it — 32.38', async () => {
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+let found = reactive<string | boolean>('until-found')
+</script>
+
+<main><div id="d" hidden={found}>d</div><button id="f" onclick={() => (found = found === true ? 'until-found' : true)}>f</button></main>`)
+
+    expect(html).toContain('<div id="d" hidden="until-found">')
+    mount(pageRegion(document.body))
+    flushSync()
+    const toggle = document.querySelector('#f') as HTMLElement
+    toggle.click()
+    flushSync()
+    expect(document.querySelector('#d')?.getAttribute('hidden')).toBe('')
+    toggle.click()
+    flushSync()
+    expect(document.querySelector('#d')?.getAttribute('hidden')).toBe(
+        'until-found',
     )
 })
 

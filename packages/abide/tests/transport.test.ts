@@ -2,10 +2,40 @@
 // for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { gate } from 'harness/gate'
+import { reactive } from '#shared'
+import { chunksOfStream } from '../src/server/answerValue.ts'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, page, POST, redirect, sse } from 'abide/server'
+const HANDLERS = `import { reactive, refuse } from 'abide'
+import { GET, page, POST, redirect, sse } from 'abide/server'
+
+export const shared = GET(reactive(() => ({ n: 1 }), { global: true, ttl: 90_500 }))
+
+export const sharedForever = GET(reactive(() => ({ n: 1 }), { global: true }))
+
+export const aging = GET(reactive(() => ({ n: 1 }), { global: true, ttl: 60_500 }))
+
+export const agingKeyed = GET(
+    reactive((args: { n: number }) => ({ n: args.n }), { global: true, ttl: 60_500 }),
+)
+
+export const agingGuarded = GET(
+    reactive((args: { n: number }) => ({ n: args.n }), { global: true, ttl: 60_500 }),
+    { middleware: [async (next) => next()] },
+)
+
+export const sharedWrite = POST(reactive(() => ({ n: 1 }), { global: true, ttl: 90_000 }))
+
+export const local = GET(reactive(() => ({ n: 1 }), { ttl: 90_000 }))
+
+export const sharedRefused = GET(
+    reactive((args: { n: number }) => (args.n > 0 ? { n: args.n } : refuse(404, 'none')), {
+        global: true,
+        ttl: 90_000,
+    }),
+)
 
 export const feed = GET(async function* () {
     yield { n: 1 }
@@ -29,6 +59,8 @@ export const doc = GET(() => page('<h1>hello</h1>'))
 
 export const moved = POST(() => redirect('/there', 303))
 
+export const nothing = POST(() => undefined)
+
 export const raw = GET(() => new Response('teapot', { status: 418 }))
 
 export const file = GET(() => new Blob(['hello world'], { type: 'text/plain' }))
@@ -48,6 +80,34 @@ beforeAll(async () => {
 afterAll(() => {
     stop()
     removeTemporaryModules()
+})
+
+// 16.32, 16.57 — nothing to say is a 204 with no type for the nothing. THE REVERT: drop the
+// `delete('content-type')` in `answerValue`; the 204 reads `application/json`.
+test('a handler returning undefined answers 204 with no content-type — 16.32, 16.57', async () => {
+    const answer = await Bun.fetch(`${base}${RPC}/nothing`, { method: 'POST' })
+    expect(answer.status).toBe(204)
+    expect(answer.headers.get('content-type')).toBeNull()
+})
+
+// 16.59 — NO CEILING WHERE NOTHING NAMES ONE, bun's own included. THE REVERT: fall back to
+// `1024 * 1024` in `answerRpc`'s ceiling; the body is refused 413.
+test('a mutation with no ceiling named takes a body of any size — 16.59', async () => {
+    const answer = await Bun.fetch(`${base}${RPC}/nothing`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ note: 'x'.repeat(2 * 1024 * 1024) }),
+    })
+    expect(answer.status).toBe(204)
+})
+
+// 16.55 — A `HEAD` IS THE `GET`'S ANSWER without its body. THE REVERT: match `found.method` against
+// `request.method` alone in `answerRpc`; the `HEAD` is refused 404.
+test('a HEAD is answered by the GET handler at its address — 16.55', async () => {
+    const answer = await Bun.fetch(`${base}${RPC}/shared`, { method: 'HEAD' })
+    expect(answer.status).toBe(200)
+    expect(answer.headers.get('content-type')).toBe('application/json')
+    expect(await answer.text()).toBe('')
 })
 
 // 16.33, 16.46 — A STREAMING HANDLER IS ANSWERED AS IT PRODUCES, jsonl by default, one line a chunk:
@@ -70,6 +130,69 @@ test('a streaming handler is framed as jsonl, a chunk per line, as it produces �
     }
     expect(rest).toBe('{"n":2}\n')
 })
+
+// 16.33 — A STREAMED ANSWER COPIES EACH CHUNK ONCE, not the accumulation per chunk. The count is every
+// element `Array.prototype.slice` hands back while the answer drains, at two lengths woken a chunk a
+// task; the claim is the RATIO, which is 2 for a linear drain and 4 for a quadratic one. THE REVERT
+// reads every wake through `peek()` — the arm a gated value still takes, so a `transform` that
+// returns its input installs it — and reports 125,250 elements at 500 chunks, a ratio of 4.0.
+async function elementsCopied(chunks: number): Promise<number> {
+    const reverted = (globalThis as { REVERT_PEEK?: boolean | undefined })
+        .REVERT_PEEK
+    const feed = reactive(
+        async function* () {
+            for (let index = 0; index < chunks; index += 1) {
+                await new Promise((resolve) => setImmediate(resolve))
+                yield index
+            }
+        },
+        reverted
+            ? { transform: (accumulation: number[]) => accumulation }
+            : undefined,
+    )
+    const slice = Array.prototype.slice
+    let copied = 0
+    Array.prototype.slice = function (
+        this: unknown[],
+        start?: number,
+        end?: number,
+    ) {
+        const copy = slice.call(this, start, end)
+        copied += copy.length
+        return copy
+    }
+    const sent: unknown[] = []
+    try {
+        for await (const chunk of chunksOfStream(feed)) sent.push(chunk)
+    } finally {
+        Array.prototype.slice = slice
+    }
+    expect(sent).toEqual(Array.from({ length: chunks }, (_, index) => index))
+    return copied
+}
+
+gate(
+    'a streamed answer copies each chunk once — 16.33',
+    {
+        revert: () => {
+            ;(globalThis as { REVERT_PEEK?: boolean | undefined }).REVERT_PEEK =
+                true
+            return () => {
+                ;(
+                    globalThis as { REVERT_PEEK?: boolean | undefined }
+                ).REVERT_PEEK = undefined
+            }
+        },
+        worth: { copied: 125250, ratio: '4.0' },
+    },
+    async () => {
+        const short = await elementsCopied(250)
+        const long = await elementsCopied(500)
+        expect(`copied: ${long}, ratio: ${(long / short).toFixed(1)}`).toBe(
+            'copied: 500, ratio: 2.0',
+        )
+    },
+)
 
 // 21.15 — A STREAM'S DURATION IS TO ITS FIRST CHUNK, which is what its head waited for. THE REVERT:
 // time a stream as settled at the call (`duration: 0` in `outcomeOf`); the header reads `dur=0.0`.
@@ -128,8 +251,8 @@ test('page answers a document and redirect a navigation — 17.2, 17.3', async (
 // 16.36 — A FILE ON DISK IS ANSWERED WITHOUT READING IT INTO MEMORY: its etag is a stat, and the body
 // the file or a slice of it. A slice of a file, and a blob in memory, are still named by their bytes.
 // Run in a script of its own, for `serve.test.ts`'s reason, counting what `Blob.prototype.bytes`
-// reads. THE REVERT: derive every etag from `await blob.bytes()` in `answerBlob`; each of the three
-// answers reads the whole file, 3 x 65536 bytes.
+// reads. THE REVERT: derive every etag from `await blob.bytes()` in `answerValue`'s blob arm; each
+// of the three answers reads the whole file, 3 x 65536 bytes.
 test('a returned file is answered off a stat, a slice and a blob off their bytes — 16.36', async () => {
     const dir = temporaryModule({
         'probe.ts': `import { answerValue } from '${new URL('../src/server/answerValue.ts', import.meta.url).pathname}'
@@ -228,3 +351,50 @@ test('a Blob is answered at its type and honors Range — 16.35, 16.36', async (
     })
     expect(stale.status).toBe(200)
 })
+
+// 21.8, 21.9, 21.11 — A `GET` OVER A `global` VALUE IS CACHED FOR AS LONG AS THE VALUE LIVES, and
+// privately; one over a request-local value, one that lives until `invalidate`, and a refusal keep
+// 21.3's `no-store`, as does a mutation over one. THE REVERT: drop the `GLOBAL_GETS` read in `answerOutcome`; `shared`
+// reads `private, no-store` where a `max-age` is due.
+test('a GET over a global value answers a max-age its ttl derives — 21.8, 21.9, 21.11', async () => {
+    const header = async (name: string) =>
+        (await Bun.fetch(`${base}${RPC}/${name}`)).headers.get('cache-control')
+    expect(await header('shared')).toMatch(/^private, max-age=(8\d|90)$/)
+    expect(await header('sharedForever')).toBe('private, no-store')
+    expect(await header('local')).toBe('private, no-store')
+    expect(await header('sharedRefused?n=1')).toMatch(
+        /^private, max-age=(8\d|90)$/,
+    )
+    expect(await header('sharedRefused?n=0')).toBe('private, no-store')
+    // A MUTATION IS NEVER A CACHE ENTRY, whatever it is declared over. THE REVERT: drop the method
+    // check in `declare`; this reads `private, max-age=90`.
+    const written = await Bun.fetch(`${base}${RPC}/sharedWrite`, {
+        method: 'POST',
+        headers: { origin: base, 'content-type': 'application/json' },
+        body: '{}',
+    })
+    expect(written.headers.get('cache-control')).toBe('private, no-store')
+})
+
+// 21.8 — THE AGE OF THE PRODUCTION, NOT THE LENGTH OF THE TTL: each answer out of one production says
+// how long that production has left, so no cache holds it past the moment the server itself stops
+// serving it. Unkeyed, keyed, and keyed behind a rung — which reaches the entry through an adoption.
+// A value built at boot is already older than its first request, so the numbers are read as a drop
+// rather than against the `ttl`. THE REVERT: answer `ttl / 1000` in `answerOutcome` rather than the
+// deadline less now; every answer reads `max-age=60`, and the second is no lower than the first.
+test('a GET over a global value answers the life its production has left — 21.8', async () => {
+    const maxAge = async (name: string) =>
+        Number(
+            /max-age=(\d+)/.exec(
+                (await Bun.fetch(`${base}${RPC}/${name}`)).headers.get(
+                    'cache-control',
+                ) ?? '',
+            )?.[1],
+        )
+    for (const name of ['aging', 'agingKeyed?n=1', 'agingGuarded?n=1']) {
+        const first = await maxAge(name)
+        expect(first).toBeLessThanOrEqual(60)
+        await Bun.sleep(1_100)
+        expect(await maxAge(name)).toBeLessThan(first)
+    }
+}, 10_000)

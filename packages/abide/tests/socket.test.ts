@@ -2,7 +2,7 @@
 // over a real web socket: happy-dom's preload is in this process, and its `WebSocket` is not bun's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { serveApp } from './builtApp.ts'
+import { BIN, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const SOCKETS = `import { reactive, refuse, socket } from 'abide/server'
@@ -43,15 +43,26 @@ export const post = POST(({ text }: { text: string }) => {
 })
 `
 
+// 37.3 — an app rung that refuses a request it can tell by a header, the mux's upgrade included.
+const APP = `import { middleware } from 'abide/server'
+
+middleware(async (next, { request }) => {
+    if (request.headers.get('x-denied') !== null) return new Response('denied', { status: 401 })
+    return next()
+})
+`
+
+let app = ''
 let base = ''
 let stop = (): void => {}
 
 beforeAll(async () => {
-    ;({ base, stop } = await serveApp({
+    ;({ app, base, stop } = await serveApp({
         'ui/pages/page.abide': '<main>home</main>',
         'server/sockets/chat.ts': SOCKETS,
         'server/board.ts': `import { reactive } from 'abide/server'\n\nexport const board = reactive<string>(undefined, { history: 3, global: true })\n`,
         'server/rpc/chat.ts': HANDLERS,
+        'server/app.ts': APP,
     }))
 }, 30_000)
 
@@ -186,6 +197,15 @@ test('a connection from another origin is refused a socket that did not declare 
     expect(crossing).toEqual([
         { op: 'error', id: 1, error: expect.objectContaining({ status: 403 }) },
     ])
+    // 18.17 — and a handler followed over the mux, through the handler's own gate (16.25).
+    const followed = await client(
+        `send({ op: 'sub', id: 2, address: '/__abide/rpc/chat/latest' })
+`,
+        'https://elsewhere.test',
+    )
+    expect(followed).toEqual([
+        { op: 'error', id: 2, error: expect.objectContaining({ status: 403 }) },
+    ])
     const own = await client(
         `send({ op: 'sub', id: 1, address: '/__abide/socket/chat/locked', args: { token: 'ok' } })
 `,
@@ -208,6 +228,35 @@ send({ op: 'sub', id: 2, address: '/__abide/socket/chat/locked', args: { token: 
     expect(
         frames.filter((frame) => frame.id === 2).map((frame) => frame.value),
     ).toEqual(['secret'])
+})
+
+// 37.3 — THE APP LANE RUNS OVER THE MUX'S UPGRADE as over any request, so a connection its rung
+// refused is never opened — and with it every `GET` the mux would have followed past that rung.
+// THE REVERT: upgrade in `listen`'s `fetch` before asking `fetch`; the refused connection opens.
+test('an app rung that refuses the upgrade keeps the mux closed — 37.3', async () => {
+    const dir = temporaryModule({
+        'upgrade.ts': `const url = process.argv[2].replace('http', 'ws') + '/__abide/socket'
+const opened = async (headers: Record<string, string>) => {
+    const ws = new WebSocket(url, { headers })
+    const outcome = await new Promise<string>((done) => {
+        ws.onopen = () => done('open')
+        ws.onerror = () => done('refused')
+    })
+    ws.close()
+    return outcome
+}
+console.log(JSON.stringify([await opened({}), await opened({ 'x-denied': '1' })]))
+`,
+    })
+    const ran = Bun.spawn(['bun', `${dir}/upgrade.ts`, base], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+    })
+    const printed = await new Response(ran.stdout).text()
+    expect(JSON.parse(printed.trim().split('\n').at(-1) as string)).toEqual([
+        'open',
+        'refused',
+    ])
 })
 
 // 9.29, 18.6 — THE BROWSER'S COPY, through `socketWire` itself: busy until the first production lands,
@@ -241,4 +290,59 @@ process.exit(0)
     })
     const owner = await Bun.fetch(`${base}/__abide/rpc/chat/latest`)
     expect(await owner.json()).toBe('from the browser')
+})
+
+// 18.2 — A MUX CONNECTION OPENED IS A LINE ON `abide:socket`, under `abide start` as under the mux alone.
+// THE REVERT: override the listener's `open` without calling the mux's; 0 lines where there was 1.
+test('abide start logs each mux connection on abide:socket — 18.2', async () => {
+    const server = Bun.spawn(
+        [
+            'bun',
+            BIN,
+            'start',
+            '--root',
+            app,
+            '--out',
+            `${app}/.abide`,
+            '--port',
+            '0',
+        ],
+        {
+            stdout: 'pipe',
+            stderr: 'pipe',
+            env: { ...process.env, DEBUG: 'abide:socket' },
+        },
+    )
+    try {
+        const reader = (server.stdout as ReadableStream<Uint8Array>).getReader()
+        let seen = ''
+        let address: RegExpExecArray | null = null
+        while (address === null) {
+            const { value, done } = await reader.read()
+            if (done) throw new Error(`abide start printed no address: ${seen}`)
+            seen += new TextDecoder().decode(value)
+            address = /http:\/\/[^\s]+/.exec(seen)
+        }
+        const url = new URL(address[0])
+        const opened = Bun.spawn(
+            [
+                'bun',
+                '-e',
+                `const ws = new WebSocket(${JSON.stringify(`ws://${url.host}/__abide/socket`)}); ws.onopen = () => { ws.close(); process.exit(0) }`,
+            ],
+            { stdout: 'pipe', stderr: 'pipe' },
+        )
+        await opened.exited
+        while (!/abide:socket.*open/.test(seen)) {
+            const { value, done } = await Promise.race([
+                reader.read(),
+                Bun.sleep(2_000).then(() => ({ value: undefined, done: true })),
+            ])
+            if (done) break
+            seen += new TextDecoder().decode(value)
+        }
+        expect(seen.match(/abide:socket.*open/g)?.length ?? 0).toBe(1)
+    } finally {
+        server.kill()
+    }
 })

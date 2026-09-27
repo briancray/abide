@@ -8,7 +8,6 @@
 // reason to run them rather than more of my own pages.
 
 import { expect, test } from 'bun:test'
-import { resolve } from 'node:path' // bun has no path helpers of its own
 import {
     type AbideFile,
     componentGraph,
@@ -54,13 +53,8 @@ async function appTree(session: TypeSession): Promise<Record<string, string>> {
         })
     // 32.18 — which components another one invokes decides whether a module carries its own
     // markup for a row built in the browser.
-    const graph = componentGraph(files, (specifier, from) => {
-        const seam = /^#(server|shared|ui)\//.exec(specifier)
-        return seam === null
-            ? resolve(from, specifier)
-            : `${APP}src/${seam[1]}/${specifier.slice(seam[0].length)}`
-    })
-    const reads = await session.readsFor(files)
+    const graph = componentGraph(files, Bun.resolveSync)
+    const { reads } = await session.readsFor(files)
     for (let at = 0; at < files.length; at += 1) {
         const { path: absolute, file } = files[at] as (typeof files)[number]
         const names = reads[at] as Awaited<ReturnType<TypeSession['reads']>>

@@ -5,8 +5,11 @@
 //
 // 32.11, 33.12, 33.13 — SPREADS FIRST, IN SOURCE ORDER, then every explicit prop: an explicit prop
 // beats a spread whatever the order the author wrote them in, and two spreads resolve as written.
-// 32.6, 33.7 — `bind:prop` passes the caller's own `Reactive`, which is the write path.
+// 32.6 — `bind:prop` passes the caller's own `Reactive` behind the prop's accessor, which reads it
+// like any prop and hands the `Reactive` over to a child that writes (`boundProp`). Any prop takes
+// one, whatever the child declares (33.8).
 
+import { propKeyOf } from './classifyTemplate.ts'
 import type { Lowering } from './Lowering.ts'
 import type { TemplateNode } from './TemplateNode.ts'
 
@@ -23,23 +26,23 @@ export function invocationProps(
             )
             continue
         }
-        if (attribute.lowerName.startsWith('bind:') && attribute.expression) {
-            const name = attribute.name.slice('bind:'.length)
-            explicit.push(
-                `${JSON.stringify(name)}: () => (${lowering.reference(attribute)})`,
-            )
-            continue
-        }
-        if (attribute.name.includes(':'))
+        const key = propKeyOf(attribute)
+        if (key === undefined)
             throw new Error(
-                `abide: ${attribute.name} on <${node.tag}> is not a prop a component takes — \`class:\` and \`style:\` set an element's own class and style. RULEBOOK 32.10.`,
+                `abide: ${attribute.name} on <${node.tag}> is not a prop a component takes — \`bind:\` hands over the \`Reactive\` in its braces (32.6), and \`class:\` and \`style:\` set an element's own class and style. RULEBOOK 32.10.`,
             )
         // A STATIC PROP IS STILL AN ACCESSOR. One shape per prop whatever the call site spelled
         // (33.10), so the child reads every key the same way and a literal is not a second case.
+        if (attribute.lowerName.startsWith('bind:')) {
+            explicit.push(
+                `${JSON.stringify(key)}: ${lowering.use('boundProp')}(() => (${lowering.reference(attribute)}))`,
+            )
+            continue
+        }
         const value = attribute.expression
             ? lowering.expression(attribute)
             : JSON.stringify(attribute.value)
-        explicit.push(`${JSON.stringify(attribute.name)}: () => (${value})`)
+        explicit.push(`${JSON.stringify(key)}: () => (${value})`)
     }
     return [...spreads, ...explicit]
 }

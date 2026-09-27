@@ -6,8 +6,10 @@
 // PROCESS-WIDE (9.16): a value built with `global` (11.34), refused otherwise (18.18), so a publish
 // inside a request reaches the one every subscriber is fed from rather than a copy filed under it.
 
+import type { Failed } from './Failed.ts'
 import { compose, type Middleware } from './Middleware.ts'
 import { isKeyed, type Keyed, type Reactive } from './reactive/index.ts'
+import type { PatchOp } from './reactive/PATCH_SINKS.ts'
 import { isForwarder } from './reactive/scoped.ts'
 import type { Clients } from './rpc.ts'
 
@@ -24,6 +26,42 @@ export type SocketOptions<Produced = unknown, Args = unknown> = {
     crossOrigin?: boolean | string[]
     clientPublish?: boolean
     clients?: Clients
+}
+
+// 18.2 — WHAT A BROWSER SENDS OVER THE MUX: a subscription — a socket's, resumed where `seq` is
+// given (18.13), or a handler's naming the version it holds (18.17) — its end, or a publish (18.6).
+export type BrowserFrame = {
+    op: 'sub' | 'unsub' | 'pub'
+    id: number
+    address?: string
+    args?: unknown
+    seq?: number | undefined
+    epoch?: string | undefined
+    version?: number | undefined
+    message?: unknown
+}
+
+// AND WHAT IT IS SENT: a production (9.14), the owner's ring (18.14), a refusal as the four fields it
+// is, a handler's value where it moved (18.21), what patches wrote over `base` (18.26), and a
+// handler's trigger per match (7.10, 7.18).
+export type ServerFrame = {
+    op:
+        | 'prod'
+        | 'reset'
+        | 'error'
+        | 'value'
+        | 'patch'
+        | 'invalidate'
+        | 'refresh'
+    id: number
+    seq?: number
+    epoch?: string
+    version?: number
+    base?: number
+    ops?: PatchOp[]
+    value?: unknown
+    ring?: [number, unknown][]
+    error?: Failed<string, unknown>
 }
 
 export type Socket<Produced, Args, Failures = never> = ((

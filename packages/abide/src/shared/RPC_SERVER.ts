@@ -7,6 +7,19 @@ export const RPC_SERVER: {
     request: () => Request
     raw: ((request: Request) => Promise<Response>) | null
     reached: ((rpc: object, args: unknown, value: unknown) => void) | null
+    // 16.63 — `ABIDE_RPC_TIMEOUT`, the `timeout` of a handler that names none.
+    timeout: () => number | undefined
+    // 7.10, 7.18 — a trigger on an `Rpc`, sent to every browser following what its pattern names.
+    broadcast:
+        | ((
+              rpc: object,
+              member: 'invalidate' | 'refresh',
+              pattern: unknown,
+          ) => void)
+        | null
+    // 18.23 — the `global` entry an answer came from, so a follower subscribed before it existed, or
+    // fed from one since evicted, is fed from this one.
+    served: ((rpc: object, serving: unknown) => void) | null
 } = {
     request: () => {
         throw new Error(
@@ -15,4 +28,7 @@ export const RPC_SERVER: {
     },
     raw: null,
     reached: null,
+    timeout: () => undefined,
+    broadcast: null,
+    served: null,
 }

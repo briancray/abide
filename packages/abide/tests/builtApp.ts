@@ -4,7 +4,7 @@
 
 import { temporaryModule } from './temporaryModule.ts'
 
-const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
+export const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 // The shell and the package every fixture needs, under `files`. No tsconfig: an app without one is
 // typed against the default project (38.31), which is the path an author starting out takes.
@@ -20,7 +20,10 @@ export function appFixture(files: Record<string, string>): string {
     })
 }
 
-export function buildApp(app: string): { exitCode: number; stderr: string } {
+export function buildApp(
+    app: string,
+    out = `${app}/.abide`,
+): { exitCode: number; stderr: string } {
     const built = Bun.spawnSync([
         'bun',
         BIN,
@@ -28,7 +31,7 @@ export function buildApp(app: string): { exitCode: number; stderr: string } {
         '--root',
         app,
         '--out',
-        `${app}/.abide`,
+        out,
     ])
     return { exitCode: built.exitCode, stderr: built.stderr.toString() }
 }
@@ -36,31 +39,30 @@ export function buildApp(app: string): { exitCode: number; stderr: string } {
 // `abide start` on a built app, on a port the OS picks — answered once it has printed where.
 export async function startApp(
     app: string,
+    env: Record<string, string | undefined> = process.env,
+    out = `${app}/.abide`,
 ): Promise<{ base: string; stop: () => void }> {
     const server = Bun.spawn(
-        [
-            'bun',
-            BIN,
-            'start',
-            '--root',
-            app,
-            '--out',
-            `${app}/.abide`,
-            '--port',
-            '0',
-        ],
+        ['bun', BIN, 'start', '--root', app, '--out', out, '--port', '0'],
         // THE ENVIRONMENT AS IT STANDS, which a spawn does not take by default: bun hands a child
         // the one this process started with, so a test that set a variable would not reach it.
-        { stdout: 'pipe', stderr: 'pipe', env: process.env },
+        { stdout: 'pipe', stderr: 'pipe', env },
     )
+    return { base: await addressOf(server), stop: () => server.kill() }
+}
+
+// The origin `abide start` or `abide dev` printed. Read rather than assumed — and a boot that fails
+// says so here rather than leaving every request after it to time out against a socket nothing is on.
+export async function addressOf(child: Bun.Subprocess): Promise<string> {
     let seen = ''
-    for await (const chunk of server.stdout as ReadableStream<Uint8Array>) {
+    for await (const chunk of child.stdout as ReadableStream<Uint8Array>) {
         seen += new TextDecoder().decode(chunk)
         const found = /http:\/\/[^\s]+/.exec(seen)
-        if (found)
-            return { base: new URL(found[0]).origin, stop: () => server.kill() }
+        if (found) return new URL(found[0]).origin
     }
-    throw new Error(`abide start printed no address: ${seen}`)
+    throw new Error(
+        `abide printed no address: ${seen}${await new Response(child.stderr as ReadableStream<Uint8Array>).text()}`,
+    )
 }
 
 // Both, for a file that only needs the app running.

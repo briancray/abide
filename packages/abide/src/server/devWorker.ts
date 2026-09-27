@@ -4,27 +4,26 @@
 // — a module in the registry, a timer, a `share` — survives one.
 //
 // THE COMPILER IS NOT THE APP, and it stays outside: `serveDev` compiles and sends the modules
-// in, so the compiler is loaded once for every reload. It is also the whole of the reload's cost —
-// importing the checker into a fresh worker each time was 4.5 s against the 80 ms the compile
-// itself takes.
+// in, so the compiler is loaded once for every reload — `serveDev` says what that saves.
 //
 // NOTHING IS WRITTEN TO DISK (38.17). The modules arrive as text and are reached through a
 // plugin: `Bun.plugin` for the server modules this worker imports, and a build plugin for the
 // bundle a browser fetches. The paths they are keyed under mirror the output tree `abide build`
 // would have written, so a module's imports resolve the same in either.
 //
-// A REQUEST ARRIVES AS A MESSAGE and leaves as one. The body is collected rather than streamed,
-// which is the one thing dev does differently from `abide start`.
+// A REQUEST ARRIVES AS A MESSAGE, and its answer leaves as a head and then a chunk per pull (38.36,
+// 38.37): the listener asks for the next chunk when its connection has taken the last, so a stream
+// is read no faster than the browser reads it. A request BODY is still collected, which is what
+// lets the listener re-ask a request of the replacement (38.25).
+//
+// 18.2, 18.17 — AND SO DOES A SOCKET. The listener holds the browser's web socket, which has to
+// outlive this worker; what crosses is each frame, tagged with the connection it came over, and
+// what goes back is each frame this worker's mux sends. The mux is the one `abide start` runs.
 
 import { CLIENT_ADDRESS, DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import { escapeText } from '#shared/escapeText.ts'
-import {
-    appSources,
-    notFound,
-    publicFilesUnder,
-    type ServerTable,
-} from './answerRequest.ts'
-import { type Mount, mountHandlers } from './answerRpc.ts'
+import { appSources, publicFilesUnder } from './answerRequest.ts'
+import { connectionOf, type MuxSocket, socketHandlers } from './answerSocket.ts'
 import { CLIENT_ENTRY, PUBLIC_DIRECTORY } from './CLIENT_BUILD.ts'
 import { chunksByModule, type Manifest, NO_MANIFEST } from './chunksByModule.ts'
 import { clientBuildOptions } from './clientBuildOptions.ts'
@@ -33,12 +32,16 @@ import { fenceServer } from './fenceServer.ts'
 import { namesUnder } from './namesUnder.ts'
 import { refuseAddressCollision } from './refuseAddressCollision.ts'
 import { shellUnder } from './render.ts'
+import { loadTables } from './serveBuild.ts'
 
 // Where the compiled modules pretend to live. Under the app's own root so that `#ui/…` and a bare
 // package name resolve from here exactly as they resolve from the build tree — both sit inside
 // the app's package — and under a `__abide` directory for the reason the addresses are: no app
 // writes one.
 const VIRTUAL_DIRECTORY = '__abide'
+
+// The reload client, which the worker serves and every document it answers loads.
+const RELOAD_CLIENT_ADDRESS = `${DEV_ADDRESS}/client.js`
 
 // The bundle this worker answers `/__abide/client/…` out of, the type each name is served as, and
 // the chunks each route module needs (38.29).
@@ -47,15 +50,45 @@ type Bundle = {
     manifest: Manifest
 }
 
-// What the listener sends to start this worker: the app's root, the modules it compiled to, and
-// what stopped it compiling where nothing did.
-type Start = {
-    root: string
-    modules: Map<string, string>
-    failure: string
-}
+// 38.15 — WHAT CROSSES BETWEEN THE LISTENER AND THIS WORKER, one union per direction. In: the app
+// compiled (and what stopped it compiling, where something did), a request, a pull or cancel of its
+// body, and each browser web socket's frames for the mux.
+export type ToWorker =
+    | {
+          kind: 'start'
+          root: string
+          modules: Map<string, string>
+          failure: string
+      }
+    | ({ kind: 'request' } & Ask)
+    | { kind: 'pull'; id: number }
+    | { kind: 'cancel'; id: number }
+    | {
+          kind: 'socket-open'
+          conn: number
+          url: string
+          headers: [string, string][]
+      }
+    | { kind: 'socket-message'; conn: number; text: string }
+    | { kind: 'socket-close'; conn: number }
 
-type Ask = {
+// Out: ready, a frame the mux sends a browser, and a request's head, each chunk, and its end.
+export type FromWorker =
+    | { kind: 'ready' }
+    | { kind: 'socket-send'; conn: number; text: string }
+    | {
+          kind: 'head'
+          id: number
+          status: number
+          statusText: string
+          headers: [string, string][]
+          empty: boolean
+      }
+    | { kind: 'chunk'; id: number; bytes: ArrayBuffer }
+    | { kind: 'end'; id: number }
+    | { kind: 'fail'; id: number; message: string }
+
+export type Ask = {
     id: number
     method: string
     url: string
@@ -63,7 +96,10 @@ type Ask = {
     body: ArrayBuffer | null
 }
 
-const worker = self as unknown as Worker
+const worker = self as unknown as {
+    onmessage: (event: MessageEvent<ToWorker>) => unknown
+    postMessage(message: FromWorker, transfer?: Transferable[]): void
+}
 
 // THE COMPILE, AS SOMETHING TO WAIT ON. A request that arrives while the worker is still
 // compiling has to wait for the app rather than be told there is none: the listener forwards
@@ -72,75 +108,142 @@ const worker = self as unknown as Worker
 let opening: Promise<void> | undefined
 
 let app: App | undefined
+// 18.2 — the mux over this worker's handlers and sockets, and each connection the listener holds,
+// as the stand-in the mux sends through.
+let mux: ReturnType<typeof socketHandlers> | undefined
+const connections = new Map<number, MuxSocket>()
 // What stopped the app compiling, kept rather than thrown: 38.4 keeps the server up and 38.18
 // keeps it up through a bundle that failed, so the failure is something to SERVE.
 let failure = ''
 
-worker.onmessage = async (event: MessageEvent): Promise<void> => {
-    const message = event.data as { kind: string } & Ask & Start
+worker.onmessage = async ({ data: message }) => {
     if (message.kind === 'start') {
         opening = open(message)
         await opening
         worker.postMessage({ kind: 'ready' })
         return
     }
-    if (message.kind !== 'request') return
+    if (message.kind === 'pull') return pull(message.id)
+    if (message.kind === 'cancel') {
+        const reading = bodies.get(message.id)
+        bodies.delete(message.id)
+        return reading?.reader.cancel()
+    }
     await opening
-    const answer = await answerAsk(message)
-    worker.postMessage(answer, [answer.body])
+    if (message.kind === 'request') return answerAsk(message)
+    if (message.kind === 'socket-open') {
+        const { conn } = message
+        const connection: MuxSocket = {
+            data: connectionOf(
+                new Request(message.url, { headers: message.headers }),
+            ),
+            send(text: string) {
+                worker.postMessage({ kind: 'socket-send', conn, text })
+            },
+        }
+        connections.set(conn, connection)
+        mux?.open(connection)
+        return
+    }
+    const connection = connections.get(message.conn)
+    if (connection === undefined) return
+    if (message.kind === 'socket-message')
+        return mux?.message(connection, message.text)
+    connections.delete(message.conn)
+    mux?.close(connection)
 }
 
-async function answerAsk(ask: Ask): Promise<{
-    kind: 'response'
-    id: number
-    status: number
-    headers: [string, string][]
-    body: ArrayBuffer
-}> {
+// Each answer whose head has gone out, by request id: what its chunks are read from, and whether a
+// failure in the middle can still be shown as markup.
+const bodies = new Map<
+    number,
+    { reader: ReadableStreamDefaultReader<Uint8Array>; html: boolean }
+>()
+
+// A status whose response has no body to send, which `Response` refuses to be built with one.
+const BODILESS = new Set([101, 204, 205, 304])
+
+// A THROW BEFORE THE HEAD IS AN ANSWER, not a dropped message. The listener is waiting on a head for
+// this id and nothing else will send one, so an escape left the reader's tab hanging until they gave
+// up.
+async function answerAsk(ask: Ask): Promise<void> {
     const request = new Request(ask.url, {
         method: ask.method,
         headers: ask.headers,
         body: ask.body,
     })
-    // A THROW HERE IS AN ANSWER, not a dropped message. The listener is waiting on a reply for
-    // this id and nothing else will send one, so an escape left the reader's tab hanging until
-    // they gave up — and the commonest escape is the whole point of a dev server: a page whose
-    // module does not parse throws when the route table imports it.
-    //
-    // THE BODY IS READ INSIDE THE TRY. `render` flushes the head before the page is imported
-    // (41.1), so that throw arrives while the body is being read rather than when the response is
-    // made — and this lane collects the body anyway, so it can still answer the failure document
-    // where `abide start` can only end the stream.
     let response: Response
-    let body: ArrayBuffer
     try {
         response =
             app === undefined
                 ? failedDocument(failure)
                 : await app.fetch(request)
-        body = await response.arrayBuffer()
     } catch (thrown) {
-        response = failedDocument(
-            thrown instanceof Error
-                ? (thrown.stack ?? thrown.message)
-                : String(thrown),
-        )
-        body = await response.arrayBuffer()
+        response = failedDocument(describe(thrown))
     }
-    return {
-        kind: 'response',
+    const body = BODILESS.has(response.status) ? null : response.body
+    worker.postMessage({
+        kind: 'head',
         id: ask.id,
         status: response.status,
-        headers: [...response.headers.entries()] as [string, string][],
-        body,
+        statusText: response.statusText,
+        headers: [...response.headers.entries()],
+        empty: body === null,
+    })
+    if (body === null) return
+    bodies.set(ask.id, {
+        reader: body.getReader(),
+        html: (response.headers.get('content-type') ?? '').startsWith(
+            'text/html',
+        ),
+    })
+}
+
+// ONE CHUNK PER ASK, transferred rather than copied. A throw in the middle ends the stream in an
+// error, as `abide start` does (41.16) — and where the answer is a page, what broke goes out as markup
+// first. `render` flushes the head before a page's module is imported (41.1), so a page that does not
+// parse fails HERE, after the status has gone, and a reader shown a blank tab is told nothing.
+async function pull(id: number): Promise<void> {
+    const reading = bodies.get(id)
+    if (reading === undefined) return
+    try {
+        const { done, value } = await reading.reader.read()
+        if (done) {
+            bodies.delete(id)
+            worker.postMessage({ kind: 'end', id })
+            return
+        }
+        // COPIED, THEN TRANSFERRED. A chunk may be a view on a buffer its producer still owns — a
+        // compressor's `Buffer` is a slice of a shared pool, and `Buffer#slice` copies nothing — so
+        // handing over `value.buffer` sent the whole pool and detached it under the producer.
+        const bytes = new Uint8Array(value).buffer as ArrayBuffer
+        worker.postMessage({ kind: 'chunk', id, bytes }, [bytes])
+    } catch (thrown) {
+        bodies.delete(id)
+        const why = describe(thrown)
+        if (reading.html) {
+            const shown = new TextEncoder().encode(failureMarkup(why))
+                .buffer as ArrayBuffer
+            worker.postMessage({ kind: 'chunk', id, bytes: shown }, [shown])
+        }
+        worker.postMessage({ kind: 'fail', id, message: why })
     }
+}
+
+function describe(thrown: unknown): string {
+    return thrown instanceof Error
+        ? (thrown.stack ?? thrown.message)
+        : String(thrown)
 }
 
 // The app, compiled and wired. A throw anywhere in here leaves `app` undefined and the message in
 // `failure`, which is what 38.4 asks for: the command keeps answering, and what it answers says
 // what is wrong.
-async function open(start: Start): Promise<void> {
+async function open(
+    start: Extract<ToWorker, { kind: 'start' }>,
+): Promise<void> {
     app = undefined
+    mux = undefined
     failure = start.failure
     if (failure !== '') return
     const root = start.root
@@ -149,9 +252,8 @@ async function open(start: Start): Promise<void> {
         const modules = new Map<string, string>()
         for (const [name, text] of start.modules)
             modules.set(`${base}/${name}`, text)
-        // Anything compiled at all, and a page among it — an app of handlers alone has the tables
-        // and no client to bundle.
-        const compiled = modules.has(`${base}/server.ts`)
+        // A page among what compiled — an app of handlers alone has the tables and no client to
+        // bundle.
         const paged = modules.has(`${base}/${CLIENT_ENTRY}.ts`)
 
         // ONE PLUGIN, TWO CALLERS: the runtime resolves this worker's `import()` through it and
@@ -168,7 +270,7 @@ async function open(start: Start): Promise<void> {
         // ONE LISTING of the public directory, for the bundle's externals and for what is served.
         const publicDirectory = `${root}/ui/${PUBLIC_DIRECTORY}`
         const publicNames = namesUnder(publicDirectory)
-        const [bundle, shell, published, table, mounted] = await Promise.all([
+        const [bundle, shell, published, [table, mounted]] = await Promise.all([
             bundleInMemory(
                 root,
                 base,
@@ -181,14 +283,7 @@ async function open(start: Start): Promise<void> {
             // 38.20 — OUT OF THE SOURCE TREE. `abide build` copies these into its output and dev
             // has no output, so the address answers where the author's file actually is.
             publicFilesUnder(publicDirectory, publicNames),
-            compiled
-                ? (import(`${base}/server.ts`) as Promise<ServerTable>)
-                : ({ routes: [], errors: [] } satisfies ServerTable),
-            compiled
-                ? (
-                      import(`${base}/rpc.ts`) as Promise<{ handlers: Mount[] }>
-                  ).then((rpc) => mountHandlers(rpc.handlers, root))
-                : mountHandlers([], root),
+            loadTables(base, root),
         ])
 
         // 36.13, IN THIS LANE TOO. A throw here lands in `failure`, which is what 38.4 asks
@@ -200,14 +295,13 @@ async function open(start: Start): Promise<void> {
         // 38.18 — THE RELOAD CLIENT IS THIS WORKER'S, not the bundle's, and it goes in whether or
         // not there is an entry beside it: a bundle that failed is exactly when a reader needs the
         // next save to reach them. `clientTags` writes nothing for a manifest with no entry.
-        const reload = `<script type="module" src="${DEV_ADDRESS}/client.js"></script>`
+        const reload = `<script type="module" src="${RELOAD_CLIENT_ADDRESS}"></script>`
         const sources = appSources(table, shell, bundle.manifest, reload, {
             framework: (pathname) => served(bundle, pathname),
             published,
-            // 18.2 — the sockets are mounted here too, and inert: this worker answers requests as
-            // messages and binds no mux to carry them over.
             ...mounted,
         })
+        mux = socketHandlers(mounted.sockets, mounted.handlers)
         // THE SAME `App` `abide start` boots, so an app's hooks and middleware run in dev too.
         app = await bootApp(root, async () => sources)
     } catch (thrown) {
@@ -216,16 +310,16 @@ async function open(start: Start): Promise<void> {
 }
 
 function served(bundle: Bundle, pathname: string): Response | undefined {
-    if (pathname === `${DEV_ADDRESS}/client.js`)
+    if (pathname === RELOAD_CLIENT_ADDRESS)
         return new Response(RELOAD_CLIENT, {
             headers: {
                 'content-type': 'text/javascript; charset=utf-8',
                 'cache-control': 'no-store',
             },
         })
-    if (!pathname.startsWith(`${CLIENT_ADDRESS}/`)) return notFound()
+    if (!pathname.startsWith(`${CLIENT_ADDRESS}/`)) return undefined
     const found = bundle.files.get(pathname.slice(CLIENT_ADDRESS.length + 1))
-    if (found === undefined) return notFound()
+    if (found === undefined) return undefined
     // NO CACHING AT ALL, which is where dev parts company with 21.5: the names are stable across
     // rebuilds, so a browser told to keep `entry.js` for a year keeps the app it had at boot.
     return new Response(found.bytes, {
@@ -327,11 +421,17 @@ function virtualModules(modules: Map<string, string>): Bun.BunPlugin {
                     return undefined
                 }
             })
+            // ONLY THE RUNTIME'S LOADS ARE REWRITTEN: the bundler asks `onResolve` above for a `#`
+            // specifier itself, and a reload's loads are nearly all the bundler's — 181 of 183 on
+            // the docs app, where the rewrite's parse was ~25 ms of each reload.
+            const bundling = 'config' in build
             build.onLoad({ filter: /.*/, namespace: 'abide-dev' }, (args) => ({
-                contents: withSeamsResolved(
-                    modules.get(args.path) ?? '',
-                    args.path,
-                ),
+                contents: bundling
+                    ? (modules.get(args.path) ?? '')
+                    : withSeamsResolved(
+                          modules.get(args.path) ?? '',
+                          args.path,
+                      ),
                 // 34.4 — a component's scoped styles are a stylesheet the bundle collects.
                 loader: args.path.endsWith('.css') ? 'css' : 'ts',
             }))
@@ -343,7 +443,8 @@ function virtualModules(modules: Map<string, string>): Bun.BunPlugin {
 // takes a `#` specifier to the package's `imports` itself rather than through this plugin, and from
 // a module in the map it takes the target as an exact file — so the extensionless
 // `#server/rpc/contacts` a component writes found nothing, where the bundler, which does ask the
-// plugin, probed its way to the `.ts`. Resolved here, both lanes are handed the same path.
+// plugin, probed its way to the `.ts` through the same `Bun.resolveSync` — so the rewrite is the
+// runtime's alone, and both lanes land on the same path.
 const TRANSPILER = new Bun.Transpiler({ loader: 'ts' })
 
 function withSeamsResolved(source: string, path: string): string {
@@ -371,13 +472,17 @@ function withSeamsResolved(source: string, path: string): string {
 function failedDocument(why: string): Response {
     return new Response(
         `<!doctype html><html><head><meta charset="utf-8"><title>abide dev</title>
-<script type="module" src="${DEV_ADDRESS}/client.js"></script></head>
-<body><main><h1>abide dev</h1><pre>${escapeText(why)}</pre></main></body></html>`,
+<script type="module" src="${RELOAD_CLIENT_ADDRESS}"></script></head>
+<body>${failureMarkup(why)}</body></html>`,
         {
             status: 500,
             headers: { 'content-type': 'text/html; charset=utf-8' },
         },
     )
+}
+
+function failureMarkup(why: string): string {
+    return `<main><h1>abide dev</h1><pre>${escapeText(why)}</pre></main>`
 }
 
 // 38.16's other end. The listener force-closes every live socket when it replaces this worker, so

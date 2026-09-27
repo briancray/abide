@@ -10,7 +10,6 @@ import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
 import {
     appSources,
     type LoadedSources,
-    notFound,
     publicFilesUnder,
     type ServerTable,
 } from './answerRequest.ts'
@@ -51,10 +50,33 @@ export async function serveBuild(
     return LISTENING.server as Bun.Server<unknown>
 }
 
+// THE ROUTE TABLE AND THE MOUNTED HANDLERS, out of the directory the compiled modules sit in — on
+// disk for `abide start`, and the dev worker's virtual one (38.17). 16.2 — the handlers answered
+// out of the app's own source, and 18.2's sockets among them, mounted as soon as they load.
+export function loadTables(
+    directory: string,
+    root: string,
+): Promise<[ServerTable, Awaited<ReturnType<typeof mountHandlers>>]> {
+    return Promise.all([
+        import(
+            Bun.pathToFileURL(`${directory}/server.ts`).href
+        ) as Promise<ServerTable>,
+        (
+            import(Bun.pathToFileURL(`${directory}/rpc.ts`).href) as Promise<{
+                handlers: Mount[]
+            }>
+        ).then((rpc) => mountHandlers(rpc.handlers, root)),
+    ])
+}
+
 // WHAT `abide build` LEFT ON DISK, as the parts an `App` is booted over.
 export async function loadBuild(
     options: Pick<ServeOptions, 'root' | 'out'>,
 ): Promise<LoadedSources> {
+    if (!(await Bun.file(`${options.out}/server.ts`).exists()))
+        throw new Error(
+            `abide: no build at ${options.out}. Run \`abide build\` first.`,
+        )
     // THE BOOT READS OVERLAP: the route table, the handler table, the shell, the manifest and the
     // public files are independent of each other, and this is the whole of `abide start`'s boot.
     //
@@ -62,20 +84,9 @@ export async function loadBuild(
     // op and leaves the caching to whatever server got written; this is that server. The manifest
     // names the stylesheet only where the bundler collected one, so an app that imports none links
     // none.
-    const [table, mountedHandlers, shell, manifest, published] =
+    const [[table, mountedHandlers], shell, manifest, published] =
         await Promise.all([
-            import(
-                Bun.pathToFileURL(`${options.out}/server.ts`).href
-            ) as Promise<ServerTable>,
-            // 16.2 — the handlers the build found, answered out of the app's own source, and 18.2's
-            // sockets among them — mounted as soon as they load, as the dev lane does.
-            (
-                import(
-                    Bun.pathToFileURL(`${options.out}/rpc.ts`).href
-                ) as Promise<{
-                    handlers: Mount[]
-                }>
-            ).then((rpc) => mountHandlers(rpc.handlers, options.root)),
+            loadTables(options.out, options.root),
             shellUnder(options.root),
             Bun.file(`${options.out}/${MANIFEST}`).json() as Promise<Manifest>,
             publicFilesUnder(`${options.out}/${PUBLIC_DIRECTORY}`),
@@ -102,10 +113,10 @@ export async function loadBuild(
 
     return appSources(table, shell, manifest, '', {
         framework: (pathname, request) => {
-            if (!pathname.startsWith(`${CLIENT_ADDRESS}/`)) return notFound()
+            if (!pathname.startsWith(`${CLIENT_ADDRESS}/`)) return undefined
             const name = pathname.slice(CLIENT_ADDRESS.length + 1)
             const encodings = assets.get(name)
-            if (encodings === undefined) return notFound()
+            if (encodings === undefined) return undefined
             const file = Bun.file(`${clientRoot}/${name}`)
             // 21.5 — EVERY NAME IN THE BUNDLE CARRIES A HASH OF ITS BYTES, the entry's too (38.5),
             // so a name never answers two different files and a year is safe for all of them. A

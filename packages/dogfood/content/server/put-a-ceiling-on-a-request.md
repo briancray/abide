@@ -82,9 +82,9 @@ option is the real knob, being the one that knows what the work costs.
 
 Read on: [Config](../app/configure-the-app.md)
 
-## A `signal` aborts one reader, not the load
+## A `signal` lets a caller stop waiting
 
-A ceiling protects the server. The caller has its own way out, and it is reader-local:
+A ceiling protects the server. The caller has its own way out:
 
 ```ts browser
 const rows = reactive(() =>
@@ -92,11 +92,12 @@ const rows = reactive(() =>
 )
 ```
 
-`signal` detaches **this** reader and rejects **this** read. The shared load runs to completion
-for the other readers, and still populates the entry when every reader has left — so the
-next reader gets it free. An aborted read never becomes the value's `error()`.
+Calls with the same arguments share one load, so a `signal` is one caller saying it has stopped
+waiting, not a switch on the load. The load ends when every call that reached it passed a signal
+and all of those have aborted; a call with no signal keeps it going. An ended load aborts its
+request, goes on serving what the value already held, and refuses with `aborted`.
 
-Read on: [Caching](../values/load-once-per-set-of-arguments.md)
+Read on: [Caching](../values/load-once-per-set-of-arguments.md) · [Failures](refuse-a-request-and-say-why.md)
 
 ## Neither ceiling is a rate limit
 

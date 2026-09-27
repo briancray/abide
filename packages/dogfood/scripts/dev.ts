@@ -8,6 +8,7 @@
 
 import { watch } from 'node:fs' // bun exposes no file watcher of its own
 
+import { SETTLE_MILLISECONDS } from '../../abide/src/server/SETTLE_MILLISECONDS.ts'
 import { buildPages } from './buildPages.ts'
 
 const DOGFOOD = new URL('../', import.meta.url).pathname
@@ -17,10 +18,6 @@ const ABIDE = new URL('../../abide/bin/abide.ts', import.meta.url).pathname
 // served and the browser gate does not need a second one. `--port` on this command wins, and
 // `PORT` wins over the default — which is what the CLI does on its own and what the docs say.
 const PORT = '3131'
-
-// The same settle the dev server uses: an editor's save is more than one event, and one
-// regeneration per event is three passes over eighty-five pages for one keystroke.
-const SETTLE_MILLISECONDS = 25
 
 await buildPages()
 

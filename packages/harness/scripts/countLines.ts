@@ -17,26 +17,30 @@ export async function countLines(
     files: string[],
 ): Promise<number> {
     let lines = 0
-    for (const name of files) {
-        const text = await Bun.file(new URL(name, directory)).text()
-        // A `/* */` BODY IS STILL A COMMENT even when its lines do not start with `*`.
-        // The per-line test alone counts the prose inside one as code, which makes the
-        // ratio a function of which comment style an arm was written in.
-        let inBlock = false
-        for (const line of text.split('\n')) {
-            const trimmed = line.trim()
-            if (trimmed === '') continue
-            if (inBlock) {
-                if (trimmed.includes('*/')) inBlock = false
-                continue
-            }
-            if (COMMENT_ONLY.test(line)) {
-                if (trimmed.startsWith('/*') && !trimmed.includes('*/'))
-                    inBlock = true
-                continue
-            }
-            lines += 1
+    for (const name of files)
+        lines += codeLinesOf(await Bun.file(new URL(name, directory)).text())
+    return lines
+}
+
+export function codeLinesOf(text: string): number {
+    let lines = 0
+    // A `/* */` BODY IS STILL A COMMENT even when its lines do not start with `*`.
+    // The per-line test alone counts the prose inside one as code, which makes the
+    // ratio a function of which comment style an arm was written in.
+    let inBlock = false
+    for (const line of text.split('\n')) {
+        const trimmed = line.trim()
+        if (trimmed === '') continue
+        if (inBlock) {
+            if (trimmed.includes('*/')) inBlock = false
+            continue
         }
+        if (COMMENT_ONLY.test(line)) {
+            if (trimmed.startsWith('/*') && !trimmed.includes('*/'))
+                inBlock = true
+            continue
+        }
+        lines += 1
     }
     return lines
 }

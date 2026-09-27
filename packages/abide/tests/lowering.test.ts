@@ -253,6 +253,20 @@ test('a position declared as a Reactive holds the Reactive — 31.3', async () =
     expect(await lower('const r: number = n', NM)).toBe('const r: number = n()')
 })
 
+// 31.14 — A `Selection` POSITION HOLDS THE `Reactive`: the free `refresh`, `invalidate`, `busy` and
+// `ready` take `Chosen extends Selection`, optional, and a value is never a selection of itself.
+// THE REVERT: drop the `isSelection` call in `isReactiveType`; all four lower to a read, and `refresh(n())` hands `refresh` the number.
+test('a position typed as a Selection holds the Reactive — 31.14', async () => {
+    const NM = new Set(['n', 'm'])
+    const free = "import { busy, invalidate, ready, refresh } from 'abide'\n"
+    for (const call of ['refresh(n)', 'invalidate(n)', 'busy(n)', 'ready(n)'])
+        expect(await lower(`${free}${call}`, NM)).toBe(`${free}${call}`)
+    // Beside a plain value's parameter, the same name still reads.
+    expect(await lower(`${free}refresh(n); String(m)`, NM)).toBe(
+        `${free}refresh(n); String(m())`,
+    )
+})
+
 // 31.1 — AN IMPORTED NAME IS A NAME BOUND TO A `Reactive` TOO. The module the page imports from
 // is `fixtures/typed/src/conversations.ts`: `onboarding` a `Reactive`, `plain` an object and the
 // default export a `Reactive`. A binding is an import's or a declaration's and the clause does not

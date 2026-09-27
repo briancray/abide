@@ -443,7 +443,7 @@ for (const [which, heading] of Object.entries(HEADINGS)) {
         console.log(`    refused     ${samples[0]?.refusal}`)
     else {
         console.log(
-            `    share       median ${(median(taken) * 100).toFixed(1)}%   spread ${spread(taken, percent)}`,
+            `    share       median ${percent(median(taken))}   spread ${spread(taken, percent)}`,
         )
     }
     console.log('')

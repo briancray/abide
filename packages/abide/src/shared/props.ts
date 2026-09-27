@@ -8,8 +8,8 @@
 //
 // THE RETURN TYPE IS THE PLAIN SHAPE, not one accessor per key, and that is the point of the
 // lowering rather than a gap in it: `amount.toFixed(2)` is what an author writes and what the
-// checker sees, and the accessor is the compiler's business. 33.6 — a plain prop has no
-// `Reactive` face at all.
+// checker sees, and the accessor is the compiler's business. A prop is declared as its value's
+// type, never as a `Reactive`, and one the child writes is lowered to a cell (33.6, 33.7).
 
 export function props<Props = Record<string, unknown>>(): {
     [Key in keyof Props]: Props[Key]

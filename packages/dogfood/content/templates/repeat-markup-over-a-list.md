@@ -4,8 +4,10 @@ nav: Lists
 intent: Render a list so that reordering it moves nodes instead of rebuilding them.
 covers:
   - `{#for item, index of list by key}`
+  - `by`
 examples:
   - packages/dogfood/examples/list-keyed.json
+  - packages/dogfood/examples/list-by.json
 ---
 
 A list block renders its body once per item. What separates one implementation from another is
@@ -47,6 +49,24 @@ A key is any expression, and the honest one is whatever the row is identified by
 it came from. `by row.id` and `by row` differ only in whether identity survives a re-fetch.
 
 Read on: [Patching a list](../values/patch-a-list-from-a-live-feed.md)
+
+## A value can carry its own key
+
+{% example list-by %}
+
+*1 option, 2 tables* — the arm keeps a key-to-node map per list, and `by: 'id'` on the value is
+both of them.
+
+Where one list is rendered in more than one place, the key belongs to the value rather than to
+each block that walks it. `by` on the `reactive` names what tells two elements apart — a property,
+or a function of the element — and a `{#for}` that writes no key of its own takes it.
+
+It reaches a block whose subject is the value **named alone**. `{#for c of contacts.slice(0, 3)}`
+walks a new array computed from the value, which declared no key, so that block is positional
+again and writes `by c.id` itself. A key the block writes wins over the value's.
+
+`by` is not `identity`. `identity` decides whether the whole value changed, and `by` decides
+which row is which once it has.
 
 ## Two cases catch two different mistakes
 

@@ -1,0 +1,54 @@
+<script>
+import { reactive } from 'abide'
+
+let contacts = reactive(
+    [
+        { id: 'ada', name: 'Ada Lovelace' },
+        { id: 'grace', name: 'Grace Hopper' },
+        { id: 'katherine', name: 'Katherine Johnson' },
+    ],
+    { by: 'id' },
+)
+
+function swapTop() {
+    const [first, second, ...rest] = contacts
+    contacts = [second, first, ...rest]
+}
+</script>
+
+<ul class="fields">
+{#for contact of contacts}
+    <li><span>{contact.id}</span><strong>{contact.name}</strong></li>
+{/for}
+</ul>
+
+<ul class="fields">
+    <li><span>Call queue</span>
+        <ol class="queue">
+        {#for contact of contacts}
+            <li>{contact.name}</li>
+        {/for}
+        </ol>
+    </li>
+</ul>
+
+<div class="row">
+    <button onclick={swapTop}>Swap top two</button>
+</div>
+
+<style>
+.queue {
+    flex-direction: row;
+    padding: 0;
+    list-style: none;
+}
+
+.queue li {
+    padding: 0;
+}
+
+.queue li + li::before {
+    content: '→ ';
+    color: var(--muted);
+}
+</style>

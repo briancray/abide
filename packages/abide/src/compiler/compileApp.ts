@@ -7,15 +7,22 @@ import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
 // The page's address from its path, read off `routePattern`'s own rule so the compiler and
 // the routers cannot disagree about what a directory is called.
 import { routeOf } from '#shared/routePattern.ts'
+import type { Read } from './classifyRead.ts'
 import { componentGraph } from './componentGraph.ts'
 import { defaultProject } from './defaultProject.ts'
 import { emitClient } from './emitClient.ts'
 import { emitComponent } from './emitComponent.ts'
+import { formatDiagnosis } from './formatDiagnosis.ts'
 import { declaresHandlers, handlersUnder } from './handlersUnder.ts'
 import { type AbideFile, parseAbide } from './parseAbide.ts'
 import { ROUTING_SPECIFIER, WIRE_SPECIFIER } from './SPECIFIERS.ts'
-import { markScoped, scopeCss, scopeToken } from './scopeStyles.ts'
-import { TypeSession } from './TypeSession.ts'
+import {
+    markScoped,
+    namesViewTransition,
+    scopeCss,
+    scopeToken,
+} from './scopeStyles.ts'
+import { type Diagnosis, TypeSession } from './TypeSession.ts'
 
 // AN APP'S `.abide` SOURCES, COMPILED — every module the output tree holds, keyed by where it goes
 // in it. Nothing here touches the output directory: `abide build` writes what this hands back and
@@ -45,17 +52,23 @@ export type CompiledApp = {
     routes: AppRoute[]
     // How many `.abide` files were read, which is what the commands report.
     sources: number
+    // What the compiler has to say that does not stop the build, on the `.abide` line.
+    warnings: Diagnosis[]
 }
 
-// THE CHECKER AN APP IS TYPED WITH. `abide build` opens one for its one compile; `abide dev` keeps
-// one across saves, because spawning it is most of what a reload's compile costs, and tells it what
-// moved on disk (`TypeSession.edited`).
+// THE CHECKER AN APP IS TYPED WITH. `abide build` opens one for its one compile; `abide dev` and
+// `abide lsp` keep one for as long as they run, because spawning it is most of what a compile costs
+// — and a kept checker answers from the text it cached, so each is told what its watcher saw move.
 export type AppChecker = {
     session: TypeSession
+    // A path a watcher saw move, or `undefined` for a move it could not place — held until `current`.
+    saw: (path: string | undefined) => void
     // Whether the project it was opened on is still the app's: the same nearest tsconfig and
     // package.json, neither touched since. Asked rather than heard, because either can sit above
-    // the watched root — the dogfood's do — and either changes what every file resolves to.
-    isCurrent: () => boolean
+    // the watched root — the dogfood's do — and either changes what every file resolves to. Where
+    // it is, the session is told every move `saw` held (`TypeSession.edited`); where it is not, the
+    // caller opens another.
+    current: () => boolean
     close: () => Promise<void>
 }
 
@@ -69,9 +82,22 @@ export async function openChecker(root: string): Promise<AppChecker> {
             ? await defaultProject(root)
             : { tsconfig: found, remove: async (): Promise<void> => {} }
     const session = await TypeSession.open(project.tsconfig)
+    const moved = new Set<string>()
+    let movedSomewhere = false
     return {
         session,
-        isCurrent: () => projectFiles(root) === opened,
+        saw: (path) => {
+            if (path === undefined) movedSomewhere = true
+            else moved.add(path)
+        },
+        current: () => {
+            if (projectFiles(root) !== opened) return false
+            if (movedSomewhere || moved.size > 0)
+                session.edited(movedSomewhere ? undefined : [...moved])
+            moved.clear()
+            movedSomewhere = false
+            return true
+        },
         close: async () => {
             session.close()
             await project.remove()
@@ -89,179 +115,223 @@ function projectFiles(root: string): string {
     return files
 }
 
-// `kept` is a checker the caller holds across compiles and closes itself; without one, this opens
-// and closes its own.
+// A CHECKER FOR ONE RUN: `kept` where the caller holds one across runs and closes it itself, or
+// one opened for `run` and closed after it, whatever `run` did.
+export async function withChecker<Result>(
+    root: string,
+    kept: AppChecker | undefined,
+    run: (session: TypeSession) => Promise<Result>,
+): Promise<Result> {
+    const checker = kept ?? (await openChecker(root))
+    try {
+        return await run(checker.session)
+    } finally {
+        if (kept === undefined) await checker.close()
+    }
+}
+
+// EVERY `.abide` UNDER THE APP, read, in path order — and THE ROOT AS BUN RESOLVES IT.
+// `Bun.resolveSync` answers a symlink-free path (`/tmp` is `/private/tmp` on macOS), so a root
+// spelled through a link would have every import resolve to a file this walk never listed, and
+// every component read as uninvoked. THE READS OVERLAP: nothing a source is read for depends on
+// another, and this runs again on every `abide dev` save.
+export async function sourcesUnder(
+    appRoot: string,
+): Promise<{ root: string; sources: { path: string; text: string }[] }> {
+    const root = realpathSync(appRoot)
+    const paths = [
+        ...new Bun.Glob('**/*.abide').scanSync({ cwd: root, absolute: true }),
+    ].sort()
+    const texts = await Promise.all(paths.map((path) => Bun.file(path).text()))
+    const sources: { path: string; text: string }[] = []
+    for (let at = 0; at < paths.length; at += 1)
+        sources.push({ path: paths[at] as string, text: texts[at] as string })
+    return { root, sources }
+}
+
+// `kept` is a checker the caller holds across compiles and closes itself.
 export async function compileApp(
     appRoot: string,
     kept?: AppChecker,
 ): Promise<CompiledApp> {
-    // THE ROOT AS BUN RESOLVES IT. `Bun.resolveSync` answers a symlink-free path (`/tmp` is
-    // `/private/tmp` on macOS), so a root spelled through a link would have every import resolve
-    // to a file this walk never listed, and every component read as uninvoked.
-    const root = realpathSync(appRoot)
-    const sources = [
-        ...new Bun.Glob('**/*.abide').scanSync({ cwd: root, absolute: true }),
-    ].sort()
-    const modules = new Map<string, string>()
-    const routes: AppRoute[] = []
+    const { root, sources } = await sourcesUnder(appRoot)
     if (sources.length === 0 && !declaresHandlers(root))
-        return { modules, routes, sources: 0 }
+        return { modules: new Map(), routes: [], sources: 0, warnings: [] }
 
     // One session for the whole build: opening it spawns the checker, and the cost is paid once
     // rather than per file.
-    const checker = kept ?? (await openChecker(root))
-    const session = checker.session
-    try {
-        // THE READS OVERLAP, THE PARSE DOES NOT. Nothing a source is read for depends on
-        // another, and this runs again on every `abide dev` save — so the whole tree is asked
-        // for at once and parsed in the order `sources` is already sorted into.
-        const texts = await Promise.all(
-            sources.map((source) => Bun.file(source).text()),
-        )
-        const parsed: {
-            path: string
-            relative: string
-            kind: FileKind
-            file: AbideFile
-        }[] = []
-        for (let index = 0; index < sources.length; index += 1) {
-            const path = sources[index] as string
-            const relative = path.slice(root.length + 1)
-            parsed.push({
-                path,
-                relative,
-                kind: fileKind(relative),
-                file: parseAbide(texts[index] as string),
-            })
-        }
+    return withChecker(root, kept, async (session) => {
+        const parsed: { path: string; text: string; file: AbideFile }[] = []
+        for (const source of sources)
+            parsed.push({ ...source, file: parseAbide(source.text) })
 
         // ONE SNAPSHOT FOR THE WHOLE BUILD. Asking file by file costs 19.7 ms each against 0.8 ms
         // sharing one, because what is expensive is adding a file to the project's root set
         // rather than asking about it — and a fresh build adds every file it has.
-        const reads = await session.readsFor(parsed)
-
-        // 32.18 — WHICH FILES ARE INVOKED AS COMPONENTS, and where each import of one lands. A
-        // caller's client module imports its child's, so a child with nothing to hydrate still
-        // needs one to exist (the no-op below), and only a child carries its own markup
-        // (`emitClient`). Built before the emit loop because a page may invoke a component the
-        // walk reaches later.
-        const graph = componentGraph(parsed, resolveFrom)
-
-        // 30.7 — A ROUTABLE PAGE CARRIES ITS OWN MARKUP for the same reason an invoked component
-        // does, and it is the same mechanism: a page the reader ARRIVED at was painted by the
-        // server and hydrates, and a page they NAVIGATED to is handed the empty anchor pair and
-        // fills it from the template in its own module. `emitClient`'s `isEmptyRegion` guard is
-        // what makes one module serve both, so "routable" joins "invoked" as a module that fills
-        // itself — and parts from it only in how OFTEN it can be filled, which is what decides
-        // whether the fill is markup or a build (`SelfFill`).
-        const layouts: string[] = []
-        for (const entry of parsed)
-            if (entry.kind === 'layout') layouts.push(entry.relative)
-        // 35.2 — every `error.abide`, with the directory it answers for and the layouts around it.
-        const errors: AppRoute[] = []
-        for (const entry of parsed)
-            if (entry.kind === 'error')
-                errors.push({
-                    pattern: routeOf(entry.relative),
-                    source: entry.relative,
-                    layouts: layoutsAround(entry.relative, layouts),
-                })
-        for (const entry of parsed) {
-            if (entry.kind !== 'page') continue
-            routes.push({
-                pattern: routeOf(entry.relative),
-                source: entry.relative,
-                layouts: layoutsAround(entry.relative, layouts),
-            })
+        const { reads, warnings } = await session.readsFor(parsed)
+        // 11.37 — a build error, every read named, rather than a first one and a second run.
+        const ambient = await session.ambientReads(root)
+        if (ambient.length > 0) {
+            const lines: string[] = []
+            for (const read of ambient)
+                lines.push(formatDiagnosis(read, process.cwd()))
+            throw new Error(lines.join('\n'))
         }
+        const emitted = await emitApp(root, session, parsed, reads)
+        return {
+            ...emitted,
+            sources: sources.length,
+            warnings: [...warnings, ...emitted.warnings],
+        }
+    })
+}
 
-        for (let at = 0; at < parsed.length; at += 1) {
-            const entry = parsed[at] as (typeof parsed)[number]
-            const relative = entry.relative
-            // 34.4 — A COMPONENT WITH STYLES: its elements carry its token, and the styles, scoped,
-            // are a stylesheet its client module imports — which the bundle collects into the
-            // stylesheet the document links (38.24).
-            const styled = entry.file.styles.length > 0
-            if (styled) {
-                const token = scopeToken(relative)
-                markScoped(entry.file.template, token)
-                modules.set(
-                    relative.replace(/\.abide$/, '.style.css'),
-                    scopeCss(entry.file.styles.join('\n'), token),
-                )
+// THE EMIT HALF, over sources already parsed and read — which `abide check` has done by then, file
+// by file, and asks this for only what the whole app can refuse: two handlers at one address, or a
+// template the emit cannot lower.
+export async function emitApp(
+    root: string,
+    session: TypeSession,
+    sources: readonly { path: string; file: AbideFile }[],
+    reads: readonly Read[][],
+): Promise<Pick<CompiledApp, 'modules' | 'routes' | 'warnings'>> {
+    const modules = new Map<string, string>()
+    const routes: AppRoute[] = []
+    const parsed: {
+        path: string
+        relative: string
+        kind: FileKind
+        file: AbideFile
+    }[] = []
+    for (const source of sources) {
+        const relative = source.path.slice(root.length + 1)
+        parsed.push({
+            path: source.path,
+            relative,
+            kind: fileKind(relative),
+            file: source.file,
+        })
+    }
+    // 32.18 — WHICH FILES ARE INVOKED AS COMPONENTS, and where each import of one lands. A
+    // caller's client module imports its child's, so a child with nothing to hydrate still
+    // needs one to exist (the no-op below), and only a child carries its own markup
+    // (`emitClient`). Built before the emit loop because a page may invoke a component the
+    // walk reaches later.
+    const graph = componentGraph(parsed, resolveFrom)
+
+    // 30.7 — A ROUTABLE PAGE CARRIES ITS OWN MARKUP for the same reason an invoked component
+    // does, and it is the same mechanism: a page the reader ARRIVED at was painted by the
+    // server and hydrates, and a page they NAVIGATED to is handed the empty anchor pair and
+    // fills it from the template in its own module. `emitClient`'s `isEmptyRegion` guard is
+    // what makes one module serve both, so "routable" joins "invoked" as a module that fills
+    // itself — and parts from it only in how OFTEN it can be filled, which is what decides
+    // whether the fill is markup or a build (`SelfFill`).
+    const layouts: string[] = []
+    for (const entry of parsed)
+        if (entry.kind === 'layout') layouts.push(entry.relative)
+    // 35.2 — every `error.abide`, with the directory it answers for and the layouts around it.
+    const errors: AppRoute[] = []
+    for (const entry of parsed) {
+        if (entry.kind !== 'page' && entry.kind !== 'error') continue
+        ;(entry.kind === 'page' ? routes : errors).push({
+            pattern: routeOf(entry.relative),
+            source: entry.relative,
+            layouts: layoutsAround(entry.relative, layouts),
+        })
+    }
+
+    // 39.8 — read off the `<style>` blocks here, once, rather than off the document at run time.
+    let transitions = false
+    for (let at = 0; at < parsed.length; at += 1) {
+        const entry = parsed[at] as (typeof parsed)[number]
+        const relative = entry.relative
+        // 34.4 — A COMPONENT WITH STYLES: its elements carry its token, and the styles, scoped,
+        // are a stylesheet its client module imports — which the bundle collects into the
+        // stylesheet the document links (38.24).
+        // 34.13 — each body's own `<style>`, scoped to the token its elements carry; the
+        // component's token is added only where a component-level `<style>` requires it.
+        const token = scopeToken(relative)
+        const componentStyled = entry.file.styles.length > 0
+        const bodies = markScoped(
+            entry.file.template,
+            token,
+            componentStyled ? [token] : [],
+        )
+        const styled = componentStyled || bodies.length > 0
+        if (styled) {
+            const styles = entry.file.styles.join('\n')
+            let sheet = scopeCss(styles, token)
+            for (const body of bodies) {
+                sheet += `\n${scopeCss(body.css, body.token)}`
+                transitions ||= namesViewTransition(body.css)
             }
-            const fileReads = reads[at]
-            const components = graph.imports.get(entry.path)
-            modules.set(
-                relative.replace(/\.abide$/, '.ts'),
-                // 41.20 — a page and a layout are built a level at a time by `render`.
-                emitComponent(
-                    entry.file,
-                    fileReads,
-                    entry.kind !== 'component',
-                    components,
-                ),
-            )
-
-            // The client module is emitted only where there is something to hydrate, or where
-            // something imports it by name (`emitClient` answers which). A static page has no
-            // `.client.ts` beside it, which is what makes "this page ships no runtime" a fact about
-            // the build rather than a claim about the bundler.
-            // 35.1 — A LAYOUT CARRIES ITS OWN MARKUP for the same reason a routable page does:
-            // nothing imports it, the router is what invokes it, and a reader who navigated to a
-            // page under it may arrive with the layout already standing or with nothing at all.
-            // An `error.abide` is never navigated to — only the server holds the error table.
-            const name = relative.slice(relative.lastIndexOf('/') + 1)
-            const selfFill = graph.invoked.has(entry.path)
-                ? 'repeated'
-                : entry.kind === 'page' || entry.kind === 'layout'
-                  ? 'once'
-                  : 'none'
-            const client = emitClient(
+            transitions ||= namesViewTransition(styles)
+            modules.set(relative.replace(/\.abide$/, '.style.css'), sheet)
+        }
+        const fileReads = reads[at]
+        const components = graph.imports.get(entry.path)
+        modules.set(
+            relative.replace(/\.abide$/, '.ts'),
+            // 41.20 — a page and a layout are built a level at a time by `render`.
+            emitComponent(
                 entry.file,
                 fileReads,
-                selfFill,
+                entry.kind !== 'component',
                 components,
+            ),
+        )
+
+        // The client module is emitted only where there is something to hydrate, or where
+        // something imports it by name (`emitClient` answers which). A static page has no
+        // `.client.ts` beside it, which is what makes "this page ships no runtime" a fact about
+        // the build rather than a claim about the bundler.
+        // 35.1 — A LAYOUT CARRIES ITS OWN MARKUP for the same reason a routable page does:
+        // nothing imports it, the router is what invokes it, and a reader who navigated to a
+        // page under it may arrive with the layout already standing or with nothing at all.
+        // An `error.abide` is never navigated to — only the server holds the error table.
+        const name = relative.slice(relative.lastIndexOf('/') + 1)
+        const selfFill = graph.invoked.has(entry.path)
+            ? 'repeated'
+            : entry.kind === 'page' || entry.kind === 'layout'
+              ? 'once'
+              : 'none'
+        const client = emitClient(entry.file, fileReads, selfFill, components)
+        const stylesheet = styled
+            ? `import './${name.replace(/\.abide$/, '.style.css')}'\n`
+            : ''
+        if (client !== '')
+            modules.set(
+                relative.replace(/\.abide$/, '.client.ts'),
+                stylesheet + client,
             )
-            const stylesheet = styled
-                ? `import './${name.replace(/\.abide$/, '.style.css')}'\n`
-                : ''
-            if (client !== '')
-                modules.set(
-                    relative.replace(/\.abide$/, '.client.ts'),
-                    stylesheet + client,
-                )
-        }
-        // THE ROUTE TABLE, as the build's own knowledge rather than a list an app maintains. Which
-        // addresses exist is a fact about the file tree (`page.abide` is an address, CLAUDE.md),
-        // so a route that is not a directory cannot be written and a directory that is one cannot
-        // be forgotten. The loaders are dynamic imports, which is what keeps a destination's
-        // markup and bindings off the entry page's bundle until somebody navigates there.
-        //
-        // TWO TABLES OFF ONE WALK. The client's loads the `.client.ts` that mounts a page and the
-        // server's loads the `.ts` that paints it — the same addresses either way, which is what
-        // keeps the pair from being two walks that can disagree. The server's is written with no
-        // page too — an app of handlers alone still answers — and the client's, with the entry
-        // that boots it, only where there is a page to boot.
-        modules.set('server.ts', serverTable(routes, errors))
-        if (routes.length > 0) {
-            modules.set('routes.ts', clientTable(routes))
-            // The entry's SOURCE carries the name the bundle is written under — `entry-<hash>.js`
-            // from a build and `entry.js` in dev — and its key in the manifest (38.23, 38.5).
-            modules.set(`${CLIENT_ENTRY}.ts`, ENTRY_MODULE)
-        }
-        // 16.2 AND 16.29 — THE HANDLERS, TWICE OFF ONE READ: the table the server mounts them
-        // from, and the module a browser is handed in place of each one's source. Written whether
-        // or not there is a page: a handler is answered over http to a caller that has none.
-        // 18.2 — and every socket, written into the same table and wrapped the same way.
-        const mounts = await handlersUnder(root, session)
-        modules.set('rpc.ts', mountTable(mounts))
-        for (const [source, wrapper] of wrappersOf(mounts))
-            modules.set(`${WIRE_DIRECTORY}/${source}`, wrapper)
-    } finally {
-        if (kept === undefined) await checker.close()
     }
-    return { modules, routes, sources: sources.length }
+    // THE ROUTE TABLE, as the build's own knowledge rather than a list an app maintains. Which
+    // addresses exist is a fact about the file tree (`page.abide` is an address, CLAUDE.md),
+    // so a route that is not a directory cannot be written and a directory that is one cannot
+    // be forgotten. The loaders are dynamic imports, which is what keeps a destination's
+    // markup and bindings off the entry page's bundle until somebody navigates there.
+    //
+    // TWO TABLES OFF ONE WALK. The client's loads the `.client.ts` that mounts a page and the
+    // server's loads the `.ts` that paints it — the same addresses either way, which is what
+    // keeps the pair from being two walks that can disagree. The server's is written with no
+    // page too — an app of handlers alone still answers — and the client's, with the entry
+    // that boots it, only where there is a page to boot.
+    modules.set('server.ts', serverTable(routes, errors))
+    if (routes.length > 0) {
+        modules.set('routes.ts', clientTable(routes, transitions))
+        // The entry's SOURCE carries the name the bundle is written under — `entry-<hash>.js`
+        // from a build and `entry.js` in dev — and its key in the manifest (38.23, 38.5).
+        modules.set(`${CLIENT_ENTRY}.ts`, ENTRY_MODULE)
+    }
+    // 16.2 AND 16.29 — THE HANDLERS, TWICE OFF ONE READ: the table the server mounts them
+    // from, and the module a browser is handed in place of each one's source. Written whether
+    // or not there is a page: a handler is answered over http to a caller that has none.
+    // 18.2 — and every socket, written into the same table and wrapped the same way.
+    const { mounts, warnings } = await handlersUnder(root, session)
+    modules.set('rpc.ts', mountTable(mounts))
+    for (const [source, wrapper] of wrappersOf(mounts))
+        modules.set(`${WIRE_DIRECTORY}/${source}`, wrapper)
+    return { modules, routes, warnings }
 }
 
 type FileKind = 'page' | 'layout' | 'error' | 'component'
@@ -295,7 +365,10 @@ function layoutsAround(page: string, layouts: string[]): string[] {
 
 // A COMPONENT IMPORT RESOLVES THE WAY THE APP'S OWN IMPORTS DO — its import map, from the file
 // that wrote it. One that does not resolve is left as written, and the bundle names it.
-function resolveFrom(specifier: string, from: string): string | undefined {
+export function resolveFrom(
+    specifier: string,
+    from: string,
+): string | undefined {
     try {
         return Bun.resolveSync(specifier, from)
     } catch {
@@ -330,7 +403,7 @@ function tableOf(
 // `host: Element` IS NOT DECORATION. This is a `.ts` file an app bundles, so an app whose own
 // tsconfig includes its build output typechecks it — and a bare `host` is an implicit `any` that
 // fails `tsc` under the `strict` every abide app is written against.
-function clientTable(routes: AppRoute[]): string {
+function clientTable(routes: AppRoute[], transitions: boolean): string {
     return `// Written by \`abide build\`. The addresses this app answers, and what to load for each.
 import { listenForRoutes, startRouter } from '${ROUTING_SPECIFIER}'
 
@@ -342,7 +415,7 @@ ${tableOf(routes, '.client.ts')}
 // from (30.7). Hydrating here rather than leaving it to the app is what makes the page the server
 // painted live without anybody wiring it.
 export function start(host: Element) {
-    const router = startRouter(routes, host)
+    const router = startRouter(routes, host${transitions ? ', true' : ''})
     listenForRoutes(router)
     const ready = router.hydrate()
     return { router, ready }
@@ -398,7 +471,10 @@ function wrappersOf(mounts: Mount[]): Map<string, string> {
         const name = mount.method === 'SOCKET' ? 'socketWire' : 'wire'
         const method =
             mount.method === 'SOCKET' ? '' : `${JSON.stringify(mount.method)}, `
-        const call = `${name}(${method}new URL(${at}, import.meta.url).pathname)`
+        // 18.19 — what the handler's value declares that the browser's copy behaves by.
+        const copy =
+            mount.copy === undefined ? '' : `, ${JSON.stringify(mount.copy)}`
+        const call = `${name}(${method}new URL(${at}, import.meta.url).pathname${copy})`
         const line =
             mount.name === 'default'
                 ? `export default ${call}\n`

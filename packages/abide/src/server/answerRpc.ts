@@ -5,14 +5,19 @@
 // WIRE-ONLY, per 16.14: the `Origin` gate on a mutation, `maxBodySize`, the `crossOrigin` preflight,
 // raising the request's idle timeout (16.23), and 19.8's coercion of the text a URL carried.
 
+import type { CopyOptions } from '#shared/CopyOptions.ts'
 import { type Failed, isFailed, wireFailure } from '#shared/Failed.ts'
+import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { mounted as underMount } from '#shared/mount.ts'
 import type { Gated } from '#shared/reactive/Keyed.ts'
+import { deadlineOf } from '#shared/reactive/index.ts'
 import { notFound, refuse } from '#shared/refuse.ts'
+import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import type { Method, Rpc } from '#shared/rpc.ts'
 import { argsInURL } from '#shared/rpcRequest.ts'
 import type { Socket } from '#shared/socket.ts'
+import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
 import { answerValue } from './answerValue.ts'
 import { callerOf } from './callerOf.ts'
 import { argsDocumentOf, coerceArgs, type Document } from './coerceArgs.ts'
@@ -25,6 +30,7 @@ import {
     writtenStatus,
 } from './requestScope.ts'
 import { type Outcome, outcomeOf, takeSeed } from './seedBuffer.ts'
+import { versionOf } from './versionOf.ts'
 
 // One row of the table the build writes to `<out>/rpc.ts`: where a handler answers, and where its
 // module is — relative to the app's root, which both commands that serve already know. 18.2 — a
@@ -36,6 +42,9 @@ export type Mount = {
     name: string
     // 20.4 — whether a browser is handed a wrapper for it.
     ui: boolean
+    // 18.19 — what a `GET`'s value declares that the browser's copy behaves by, where its declaration
+    // names any of it. `undefined` otherwise.
+    copy: CopyOptions | undefined
 }
 
 export type Mounted = Mount & {
@@ -46,10 +55,8 @@ export type Mounted = Mount & {
     argsDocument: Document | undefined
 }
 
-// 16.14 — the ceiling on a mutation's body where neither the handler nor the environment names one.
-const DEFAULT_MAX_BODY_SIZE = 1024 * 1024
-// 16.23 — how long a call may go without progress where neither names one.
-const DEFAULT_TIMEOUT_MS = 30_000
+// 16.63 — the environment's `timeout`, for every call a handler that names none makes.
+RPC_SERVER.timeout = () => positiveSetting('ABIDE_RPC_TIMEOUT', undefined)
 
 // The table, as addresses to what answers them — imported from the SOURCE tree, so a page rendering
 // on the server and a call over the wire reach one module and so one handler. AT BOOT rather than
@@ -114,13 +121,20 @@ export async function answerRpc(
         allows(found.handler.crossOrigin, origin)
     )
         return preflight(found, origin, request)
+    // 16.55 — a `HEAD` is the `GET`'s answer, which the server sends without its body.
+    const head = request.method === 'HEAD'
     // 15.7 — no handler at this address AND this method is one refusal, not two.
-    if (found === undefined || found.method !== request.method)
+    if (found === undefined || found.method !== (head ? 'GET' : request.method))
         return answered(notFound({ path: pathname, method: request.method }))
     const handler = found.handler
     const inUrl = argsInURL(found.method)
     const form = isForm(request)
     const crossing = crossingOrigin(origin, url)
+    // 21.19 — the origin the answer admits, where the handler declared it may read.
+    const admitted =
+        crossing !== null && allows(handler.crossOrigin, crossing)
+            ? crossing
+            : null
     // 16.14 — A MUTATION FROM ANOTHER ORIGIN IS REFUSED unless the handler declared it may come.
     if (crossing !== null && !inUrl && !allows(handler.crossOrigin, crossing))
         return answered(
@@ -129,21 +143,14 @@ export async function answerRpc(
                 `A ${found.method} from ${crossing} is not allowed here.`,
             ),
         )
-    // 16.14 — THE BODY CEILING, read off the declared length before a byte of it is.
-    if (!inUrl) {
-        const ceiling =
-            handler.maxBodySize ??
-            positiveSetting(
-                'ABIDE_MAX_REQUEST_BODY_SIZE',
-                DEFAULT_MAX_BODY_SIZE,
-            )
-        const declared = Number(request.headers.get('content-length') ?? 0)
-        if (declared > ceiling)
-            return answered(
-                refuse(413, `The request body is over ${ceiling} bytes.`),
-            )
-    }
-    const raw = await argsOf(request, url, inUrl, form)
+    // 16.59 — THE BODY CEILING, none where neither the handler nor the environment names one; 16.60 —
+    // read off the declared length before a byte of the body is.
+    const ceiling =
+        handler.maxBodySize ??
+        positiveSetting('ABIDE_MAX_REQUEST_BODY_SIZE', Number.POSITIVE_INFINITY)
+    if (!inUrl && Number(request.headers.get('content-length') ?? 0) > ceiling)
+        return answered(overCeiling(ceiling))
+    const raw = await argsOf(request, url, inUrl, form, ceiling)
     if (isFailed(raw)) return answered(raw)
     // 19.8 — the text a URL carried, as the types the handler's `args` declares — and a form's, which
     // is text for the same reason.
@@ -154,14 +161,13 @@ export async function answerRpc(
                   found.argsDocument,
               )
             : raw
-    raiseTimeout(
-        request,
-        handler.timeout ??
-            positiveSetting('ABIDE_RPC_TIMEOUT', DEFAULT_TIMEOUT_MS),
-    )
+    // 16.61 — where neither names one, nothing is raised and the server's own idle timeout stands.
+    const timeout = handler.timeout ?? RPC_SERVER.timeout()
+    if (timeout !== undefined) raiseTimeout(request, timeout)
     // 41.7 — the call a hydrating page makes for what its render already reached is answered from
     // that, and the handler is not run again (41.13).
-    const caller = callerOf()
+    // 16.56 — a `HEAD` leaves the seed for the `GET` it stands in front of.
+    const caller = head ? undefined : callerOf()
     const seeded =
         caller === undefined ? undefined : takeSeed(caller, handler, args)
     const started = performance.now()
@@ -170,29 +176,33 @@ export async function answerRpc(
     // 16.40 — A MUTATION A DOCUMENT MADE — a form posted with no script — is answered as a navigation.
     if (!inUrl && prefers(request, 'text/html', 'application/json'))
         return navigated(outcome, request, failurePage)
-    const answer = await answerOutcome(outcome, request)
-    // A `Response` the handler built is its own.
-    if (outcome.settled && outcome.value instanceof Response)
-        return stamped(answer, crossing, undefined, false)
+    const answer = await answerOutcome(outcome, request, handler, args)
+    // A `Response` the handler built is its own — but the origin answer below is laid over it, so it
+    // varies on `Origin` too (21.7), which `defaultHeaders` never reached.
+    if (outcome.settled && outcome.value instanceof Response) {
+        answer.headers.append('vary', 'origin')
+        return stamped(answer, admitted, undefined, false)
+    }
     // A stream's time is to its first chunk, which the answer's head waited for.
     return stamped(
         answer,
-        crossing,
+        admitted,
         outcome.duration ?? performance.now() - started,
         seeded !== undefined,
     )
 }
 
-// 21.7 — the origin a crossing call came from; 21.15 — HOW LONG THE HANDLER TOOK, AND WHICH RUN THIS
+// 21.19 — the origin a crossing call came from, where the handler admits it; 21.15 — HOW LONG THE HANDLER TOOK, AND WHICH RUN THIS
 // IS, for the network panel: an answer from the render's run looks exactly like a fresh one
 // otherwise, and the time is the handler's own rather than this request's.
 function stamped(
     answer: Response,
-    crossing: string | null,
+    admitted: string | null,
     duration: number | undefined,
     seeded: boolean,
 ): Response {
-    if (crossing !== null) allowOrigin(answer, crossing)
+    if (admitted !== null)
+        answer.headers.set('access-control-allow-origin', admitted)
     if (duration !== undefined)
         answer.headers.set(
             'server-timing',
@@ -206,21 +216,54 @@ function stamped(
 async function answerOutcome(
     outcome: Outcome,
     request: Request,
+    handler: { guarded: boolean },
+    args: unknown,
 ): Promise<Response> {
     if (!outcome.settled) return answered(failureOf(outcome.error))
+    // The `global` value the answer came from, or `undefined` for one built per request.
+    const serving = GLOBAL_GETS.get(handler)?.(args)
     // 21.3 — what the handler wrote through `response` is laid over it at the exit (21.10).
-    return answerValue(
-        outcome.value,
-        request,
-        defaultHeaders(),
-        writtenStatus(),
-    )
+    const headers = defaultHeaders()
+    // When the production answered stops being servable, or Infinity where nothing bounds it.
+    const deadline =
+        serving === undefined ? Number.POSITIVE_INFINITY : deadlineOf(serving)
+    // 18.20 — the version a follower resumes from (18.21), where the mux would feed one (18.23).
+    if (serving !== undefined && !handler.guarded) {
+        headers.set(VERSION_HEADER, String(versionOf(serving)))
+        RPC_SERVER.served?.(handler, serving)
+    }
+    // 21.8, 21.9, 21.11 — WHAT IS LEFT OF THE LIFE OF THE PRODUCTION ANSWERED, in place of `no-store`
+    // and nothing else. A `ttl` of Infinity is bounded by `invalidate` alone (11.35), which no cache
+    // downstream hears, so it keeps `no-store`.
+    if (Number.isFinite(deadline))
+        headers.set(
+            'cache-control',
+            `private, max-age=${Math.max(0, Math.floor((deadline - Date.now()) / 1000))}`,
+        )
+    // 16.42 FOR A STREAM TOO. A stream's head waits on its first chunk, so one refusing before it
+    // said anything throws out of the answer rather than settling into the outcome — and was answered
+    // 500, as a throw that is not a `Failed` is (16.43), where the refusal named its own status. Any
+    // other throw goes on to where it went before.
+    try {
+        return await answerValue(
+            outcome.value,
+            request,
+            headers,
+            writtenStatus(),
+        )
+    } catch (error) {
+        if (isFailed(error)) return answered(error)
+        throw error
+    }
 }
 
+// 21.7 — whether it is another origin's to read, and whether a mutation from one is refused, both
+// depend on `Origin`, however this one came.
 function defaultHeaders(): Headers {
     return new Headers({
         'content-type': 'application/json',
         'cache-control': 'private, no-store',
+        vary: 'origin',
     })
 }
 
@@ -250,17 +293,22 @@ async function argsOf(
     url: URL,
     inUrl: boolean,
     form: boolean,
+    ceiling: number,
 ): Promise<unknown | Failed<'HttpError', undefined>> {
     if (inUrl) {
         const query = url.searchParams
         if (query.size === 0) return undefined
         return collapsed(query)
     }
+    const body = Number.isFinite(ceiling)
+        ? await bodyUnder(request, ceiling)
+        : request
+    if (isFailed(body)) return body
     // 16.40 — a form's fields, a field given more than once a list, as a query's are.
     if (form) {
-        return collapsed(await request.formData())
+        return collapsed(await body.formData())
     }
-    const text = await request.text()
+    const text = await body.text()
     if (text === '') return undefined
     // 16.21 — a body that is not an `Args` is the caller's fault.
     let parsed: unknown
@@ -272,6 +320,32 @@ async function argsOf(
     if (!isRecord(parsed))
         return refuse(400, 'The request body is not an object of args.')
     return parsed
+}
+
+// 16.60 — A BODY WITH NO DECLARED LENGTH, BOUNDED AS IT STREAMS: counted chunk by chunk and cut off at
+// the chunk that passes the ceiling, so a caller that never said how much it would send is never
+// held past it. What it read is handed back as a `Response` for the parse to read as it would the
+// request.
+async function bodyUnder(
+    request: Request,
+    ceiling: number,
+): Promise<Response | Failed<'HttpError', undefined>> {
+    const chunks: Uint8Array[] = []
+    let size = 0
+    if (request.body !== null)
+        for await (const chunk of request.body) {
+            size += chunk.byteLength
+            // Leaving the loop cancels the stream, so the rest is never read.
+            if (size > ceiling) return overCeiling(ceiling)
+            chunks.push(chunk)
+        }
+    return new Response(Bun.concatArrayBuffers(chunks), {
+        headers: request.headers,
+    })
+}
+
+function overCeiling(ceiling: number): Failed<'HttpError', undefined> {
+    return refuse(413, `The request body is over ${ceiling} bytes.`)
 }
 
 // 36.2 — the `Origin` a request came from when it is not the app's own, and `null` when it is: the
@@ -296,12 +370,6 @@ export function allows(
     )
 }
 
-// 21.7 — the answer depends on `Origin`, and says so.
-function allowOrigin(answer: Response, origin: string): void {
-    answer.headers.set('access-control-allow-origin', origin)
-    answer.headers.append('vary', 'origin')
-}
-
 function preflight(found: Mounted, origin: string, request: Request): Response {
     const headers = new Headers({
         'access-control-allow-origin': origin,
@@ -316,14 +384,19 @@ function preflight(found: Mounted, origin: string, request: Request): Response {
 
 // 16.23, 16.24 — THE REQUEST'S IDLE TIMEOUT, RAISED AND NEVER LOWERED: the floor is the longest any
 // handler in the request asked for. Where no socket is bound there is no idle timeout to raise.
+//
+// 16.62 — `Infinity` is never reaped, which bun spells 0; any finite bound is capped at the 255
+// seconds bun's idle timeout can hold.
 function raiseTimeout(request: Request, milliseconds: number): void {
     const scope = currentRequestScope()
     const bound = LISTENING.server
     if (scope === undefined || bound === undefined) return
-    const seconds = Math.min(255, Math.ceil(milliseconds / 1000))
+    const seconds = Number.isFinite(milliseconds)
+        ? Math.min(255, Math.ceil(milliseconds / 1000))
+        : Number.POSITIVE_INFINITY
     if (seconds <= scope.timeout) return
     scope.timeout = seconds
-    bound.timeout(request, seconds)
+    bound.timeout(request, Number.isFinite(seconds) ? seconds : 0)
 }
 
 function isForm(request: Request): boolean {
@@ -353,6 +426,15 @@ async function navigated(
         written?.headers.has('location') === true
     )
         return new Response(null, { status, headers })
-    headers.set('location', request.headers.get('referer') ?? '/')
+    // 16.58 — back where the form was only where that is this app: a `Referer` naming another
+    // origin makes the 303 an open redirect.
+    const referer = request.headers.get('referer')
+    const from = referer === null ? null : URL.parse(referer)
+    headers.set(
+        'location',
+        from !== null && crossingOrigin(from.origin, request.url) === null
+            ? from.href
+            : underMount('/'),
+    )
     return new Response(null, { status: 303, headers })
 }

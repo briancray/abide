@@ -73,7 +73,7 @@ function report(name: string, rows: Row[]): void {
         `    layout     median ${milliseconds(median(rows.map((row) => row.layout))).padStart(8)} ms`,
     )
     console.log(
-        `    SCRIPT/OP  median ${(median(shares) * 100).toFixed(1)}%   spread ${spread(shares, percent)}   <- the ceiling for any JS-layer change`,
+        `    SCRIPT/OP  median ${percent(median(shares))}   spread ${spread(shares, percent)}   <- the ceiling for any JS-layer change`,
     )
     console.log(
         `    counters   recalcStyle ${rows.map((row) => row.recalcStyle).join('/')}   layout ${rows.map((row) => row.layoutCount).join('/')}   paint ${rows.map((row) => row.paint).join('/')}   forced ${rows.map((row) => row.forcedLayout).join('/')}`,
@@ -211,7 +211,7 @@ for (const layer of [LAYER_NAVIGATE, LAYER_MOUNT, LAYER_FILL]) {
     if (taken !== undefined && taken.length > 0) {
         const ran = layerRuns[layer] ?? []
         console.log(
-            `    ${layer.padEnd(16)} median ${(median(taken) * 100).toFixed(1)}%   spread ${spread(taken, percent)}   ran ${ran.length > 0 ? median(ran) : 0}x an op`,
+            `    ${layer.padEnd(16)} median ${percent(median(taken))}   spread ${spread(taken, percent)}   ran ${ran.length > 0 ? median(ran) : 0}x an op`,
         )
     }
     // NAMED, NOT COUNTED. A layer that refused every run refused for ONE reason, and the reason is

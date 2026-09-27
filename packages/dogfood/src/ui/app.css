@@ -78,6 +78,8 @@
     /* one section to the next */
     --gap-page: 3.5rem;
     /* one region of the page to the next */
+    --bar: 3.5rem;
+    /* the site bar's height, and so where everything sticky below it stops */
     color-scheme: light dark;
 }
 
@@ -181,11 +183,11 @@ a[aria-current] {
     border-radius: 4px;
 }
 
-nav {
+.sidebar {
     position: sticky;
-    top: 0;
+    top: var(--bar);
     align-self: start;
-    height: 100vh;
+    height: calc(100vh - var(--bar));
     overflow-y: auto;
     padding: 1.75rem 1rem 4rem;
     border-right: 1px solid var(--rule);
@@ -211,20 +213,72 @@ nav {
     color: var(--muted);
 }
 
-nav section {
+/* THE SITE BAR names the four places this site is — the guides, the reference, and the two
+   instruments beside them — and spans every column of the body grid. Its own two columns are the
+   sidebar's and the reading column's, so the brand sits over the nav it used to head and the
+   tabs start where a page's title does. Sticky, which is why the sidebar and the rail stop at
+   `--bar` rather than at the top of the viewport. */
+.site {
+    grid-column: 1 / -1;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    height: var(--bar);
+    display: grid;
+    grid-template-columns: 15.5rem minmax(0, 1fr);
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper);
+}
+
+.site .brand {
+    align-self: center;
+    padding: 0 1rem;
+}
+
+.site-nav {
+    display: flex;
+    gap: var(--gap-flow);
+    padding: 0 2.5rem;
+    overflow-x: auto;
+}
+
+/* An underline ON the bar's own rule, so where you are reads as the bar opening onto the page
+   under it. The negative margin sets the 2px line over the 1px border rather than above it. */
+.site-nav a {
+    display: flex;
+    align-items: center;
+    margin-bottom: -1px;
+    border-bottom: 2px solid transparent;
+    text-decoration: none;
+    color: var(--muted);
+    font: 500 .75rem/1rem var(--sans);
+    white-space: nowrap;
+    transition: color .12s ease, border-color .12s ease;
+}
+
+.site-nav a:hover {
+    color: var(--ink);
+}
+
+.site-nav a[aria-current] {
+    color: var(--ink);
+    border-bottom-color: var(--signal);
+}
+
+.sidebar section {
     display: flex;
     flex-direction: column;
     gap: var(--gap-snug);
 }
 
-nav h2 {
+.sidebar h2 {
     font: 500 .5rem/.5rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .14em;
     color: var(--muted);
 }
 
-nav ul {
+.sidebar ul {
     list-style: none;
     padding: 0;
     display: flex;
@@ -232,7 +286,7 @@ nav ul {
     gap: var(--gap-hair);
 }
 
-nav li {
+.sidebar li {
     display: flex;
     align-items: baseline;
     gap: var(--gap-tight);
@@ -240,7 +294,7 @@ nav li {
 
 /* The negative inset is not spacing: it pulls the link's own padding back off the rail so
    the TEXT lines up with the section name above it, hover surface and all. */
-nav a {
+.sidebar a {
     flex: 1;
     display: block;
     padding: .25rem .5rem;
@@ -253,12 +307,12 @@ nav a {
     transition: opacity .12s ease, background-color .12s ease;
 }
 
-nav a:hover {
+.sidebar a:hover {
     opacity: 1;
     background: color-mix(in srgb, var(--signal) 10%, transparent);
 }
 
-nav a[aria-current] {
+.sidebar a[aria-current] {
     opacity: 1;
     color: var(--signal);
     font-weight: 600;
@@ -275,12 +329,12 @@ nav a[aria-current] {
     align-self: center;
 }
 
-nav li:has(.stub) a {
+.sidebar li:has(.stub) a {
     opacity: .52;
 }
 
-nav li:has(.stub) a:hover,
-nav li:has(.stub) a[aria-current] {
+.sidebar li:has(.stub) a:hover,
+.sidebar li:has(.stub) a[aria-current] {
     opacity: 1;
 }
 
@@ -321,14 +375,14 @@ main section {
 
 main h2,
 main h3 {
-    scroll-margin-top: 1.5rem;
+    scroll-margin-top: calc(var(--bar) + 1.5rem);
 }
 
 .toc {
     position: sticky;
-    top: 0;
+    top: var(--bar);
     align-self: start;
-    max-height: 100vh;
+    max-height: calc(100vh - var(--bar));
     overflow-y: auto;
     padding: 3.5rem 1.5rem 4rem 1.5rem;
     display: flex;
@@ -676,8 +730,8 @@ label:has(> input[type=radio]) {
     color: var(--ink);
 }
 
-/* A PAGE'S OWN NAV, which is not this site's sidebar — `nav a` is already the sidebar, so
-   an app's switcher takes a name rather than fighting it for the element. Segmented rather
+/* A PAGE'S OWN NAV, which is neither this site's sidebar nor its bar — both of those are
+   `nav` too, so an app's switcher takes a name rather than fighting them for the element. Segmented rather
    than underlined, because it is a control you operate and not a list you read. */
 .switch {
     display: flex;
@@ -972,8 +1026,8 @@ label:has(> input[type=radio]) {
     border-radius: 4px;
 }
 
-/* An example is a whole artifact, so it reads as one object with panels rather than
-   as several code blocks that happen to be adjacent. */
+/* An example is a whole artifact, so it reads as one object rather than as several code
+   blocks that happen to be adjacent. */
 .example {
     background: var(--raised);
     border: 1px solid var(--rule);
@@ -1001,59 +1055,6 @@ label:has(> input[type=radio]) {
     color: var(--muted);
 }
 
-.ex-tabs {
-    display: flex;
-    align-items: center;
-    gap: var(--gap-tight);
-    padding: 0 .5rem;
-    background: color-mix(in srgb, var(--ink) 4%, transparent);
-}
-
-.ex-tablist {
-    display: flex;
-    gap: var(--gap-hair);
-    overflow-x: auto;
-    scrollbar-width: none;
-}
-
-.ex-tablist::-webkit-scrollbar {
-    display: none;
-}
-
-/* `border-radius:0` is the one property the bare `button` default above is not already
-   overridden for, and it rounded the focus ring on a tab. A tab is an underline, not a
-   pill — the app default is for an app's own buttons, and this is chrome. */
-.ex-tablist button {
-    flex: none;
-    appearance: none;
-    background: none;
-    border: 0;
-    border-radius: 0;
-    border-bottom: 2px solid transparent;
-    padding: .5rem;
-    cursor: pointer;
-    font: 500 .75rem/.75rem var(--mono);
-    color: var(--muted);
-}
-
-.ex-tablist button:hover {
-    color: var(--ink);
-}
-
-.ex-tablist button[aria-selected=true] {
-    color: var(--heading);
-    border-bottom-color: var(--heading);
-}
-
-/* A panel is flush by default — Files is a tab strip with a code block under it and any
-   distance between them would read as a seam. The panels that hold a REPORT rather than a
-   file take the inset and the rhythm. */
-.ex-panel {
-    border-top: 1px solid var(--rule);
-    display: flex;
-    flex-direction: column;
-}
-
 /* WRAPS rather than scrolls. One example per page means four to six files is the normal
    case, and a hidden scrollbar put the last of them off the edge with nothing to say so. */
 .ex-files {
@@ -1061,6 +1062,7 @@ label:has(> input[type=radio]) {
     flex-wrap: wrap;
     gap: var(--gap-hair);
     padding: .5rem;
+    border-top: 1px solid var(--rule);
     border-bottom: 1px solid var(--rule);
 }
 
@@ -1189,6 +1191,154 @@ footer .next {
     text-align: right;
 }
 
+/* THE BENCH AND THE TESTS are instruments beside the docs rather than pages of them, so they
+   take the width the sidebar and the rail would have and give it to the table. */
+main.board {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: 80rem;
+    margin: 0 auto;
+    gap: var(--gap-section);
+}
+
+/* The controls stay in reach over a table two hundred rows long. */
+.board-bar {
+    position: sticky;
+    top: var(--bar);
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--gap-snug);
+    padding: .75rem 0;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper);
+}
+
+.board-bar input[type=search] {
+    flex: 1;
+    min-width: 15rem;
+}
+
+.board-bar label:has(> input[type=checkbox]) {
+    font-size: .75rem;
+    line-height: 1rem;
+    color: var(--muted);
+}
+
+/* A section's name and its table are one thing, so they sit a name's distance apart. */
+main.board section {
+    gap: var(--gap-snug);
+}
+
+.board-summary,
+.board-count {
+    font: 500 .75rem/1rem var(--mono);
+    color: var(--muted);
+}
+
+.board-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--gap-snug);
+}
+
+.board-head h2 {
+    margin-right: auto;
+}
+
+.board td,
+.board th {
+    padding: .5rem 1rem .5rem 0;
+    vertical-align: baseline;
+}
+
+.board td {
+    font-size: .75rem;
+    line-height: 1.25rem;
+}
+
+/* Figures line up by the digit, so a column of timings reads as a column. */
+.board-figure {
+    text-align: right;
+    white-space: nowrap;
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+}
+
+th.board-figure {
+    text-align: right;
+}
+
+.board-note {
+    display: block;
+    color: var(--muted);
+}
+
+/* ONE BUTTON A ROW, so two hundred of them cannot all be the page's loudest thing: outlined and
+   quiet until the row is the one being looked at. */
+.board-run {
+    padding: .25rem .5rem;
+    background: none;
+    color: var(--muted);
+    border: 1px solid var(--rule);
+    font: 500 .75rem/1rem var(--mono);
+}
+
+.board-run:hover:not(:disabled) {
+    background: none;
+    color: var(--signal);
+    border-color: var(--signal);
+}
+
+.board tr .board-run {
+    opacity: .5;
+    transition: opacity .12s ease;
+}
+
+.board tr:hover .board-run,
+.board tr .board-run:focus-visible {
+    opacity: 1;
+}
+
+.board-good {
+    color: var(--good);
+}
+
+.board-bad {
+    color: var(--bad);
+}
+
+.board-waiting {
+    color: var(--muted);
+}
+
+.board-running {
+    color: var(--signal);
+    animation: board-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes board-pulse {
+    50% {
+        opacity: .4;
+    }
+}
+
+.board details {
+    margin-top: .25rem;
+}
+
+.board summary {
+    cursor: pointer;
+    color: var(--bad);
+}
+
+.board details pre {
+    margin-top: .5rem;
+    white-space: pre-wrap;
+    color: var(--bad);
+}
+
 @media (max-width:82rem) {
     body.has-toc {
         grid-template-columns: 15.5rem minmax(0, 1fr);
@@ -1206,7 +1356,15 @@ footer .next {
         grid-template-columns: 1fr;
     }
 
-    nav {
+    .site {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .site-nav {
+        padding: 0 1.25rem;
+    }
+
+    .sidebar {
         position: static;
         height: auto;
         border-right: 0;
@@ -1225,5 +1383,6 @@ footer .next {
 @media (prefers-reduced-motion:reduce) {
     * {
         transition: none !important;
+        animation: none !important;
     }
 }

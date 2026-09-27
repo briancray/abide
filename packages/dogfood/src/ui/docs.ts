@@ -94,8 +94,7 @@ function installScrollSpy(signal: AbortSignal) {
     })
 }
 
-// Panel tabs and file tabs are the same interaction, so one delegated listener per example serves
-// both rather than a listener per button.
+// One delegated listener per example rather than a listener per file tab.
 function installExamples(main: Element, signal: AbortSignal) {
     for (const example of main.querySelectorAll('.example')) {
         example.addEventListener(
@@ -104,44 +103,17 @@ function installExamples(main: Element, signal: AbortSignal) {
                 // A DELEGATED LISTENER READS WHERE THE CLICK LANDED, which is an `EventTarget` to
                 // the type and always an element to a document that has no shadow roots in it.
                 const target = event.target as Element
-                // The running component is the example's own, and so are its buttons: a tab it
-                // renders is not one of the card's.
-                if (target.closest('.ex-render')) return
+                // The running component's own buttons sit under `.ex-render`, never `.ex-files`.
                 const button = target.closest(
-                    'button[role=tab]',
+                    '.ex-files button',
                 ) as HTMLElement | null
                 if (!button) return
-                const panel = button.dataset.panel
-                if (panel) {
-                    for (const tab of example.querySelectorAll(
-                        '.ex-tablist button',
-                    ))
-                        tab.setAttribute(
-                            'aria-selected',
-                            String(tab === button),
-                        )
-                    for (const body of example.querySelectorAll<HTMLElement>(
-                        '.ex-panel',
-                    ))
-                        body.hidden = body.dataset.panel !== panel
-                    return
-                }
-                const file = button.dataset.file
-                if (!file) return
-                const group = file.slice(0, file.indexOf(':') + 1)
-                for (const tab of example.querySelectorAll<HTMLElement>(
-                    '.ex-files button',
-                ))
-                    if (tab.dataset.file?.startsWith(group) === true)
-                        tab.setAttribute(
-                            'aria-selected',
-                            String(tab === button),
-                        )
+                for (const tab of example.querySelectorAll('.ex-files button'))
+                    tab.setAttribute('aria-selected', String(tab === button))
                 for (const body of example.querySelectorAll<HTMLElement>(
-                    '.ex-panel > [data-file]',
+                    ':scope > pre[data-file]',
                 ))
-                    if (body.dataset.file?.startsWith(group) === true)
-                        body.hidden = body.dataset.file !== file
+                    body.hidden = body.dataset.file !== button.dataset.file
             },
             { signal },
         )

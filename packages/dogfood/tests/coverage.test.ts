@@ -415,11 +415,11 @@ test('front matter names exactly the example manifests the page embeds', async (
 })
 
 // ONE TEACHING PAGE PER EXAMPLE, which is what is left of "one example per page" once a page
-// carries a demo per behaviour instead (40.18). The property that rule was protecting
+// carries a demo per behaviour instead (40.17). The property that rule was protecting
 // survives the inversion: a reader meets an example where it is taught, so a directory taught
-// from two pages is code one of those readers has never been shown running. RULEBOOK 40.21.
+// from two pages is code one of those readers has never been shown running. RULEBOOK 40.20.
 //
-// `covers` IS THE DISCRIMINANT, and it is the one already in the front matter (40.12): an
+// `covers` IS THE DISCRIMINANT, and it is the one already in the front matter (40.11): an
 // overview carries a section's opening example and a style experiment re-renders one to
 // compare voices, and neither is teaching the names in it. A page that claims a name is.
 test('an example directory is taught by exactly one page', async () => {
@@ -451,7 +451,7 @@ test('every example declares an app the brand names', async () => {
     expect(wrong).toEqual([])
 })
 
-// ONE APP PER PAGE (RULEBOOK 40.23). Six cards from four worlds is four worlds to enter, and
+// ONE APP PER PAGE (RULEBOOK 40.22). Six cards from four worlds is four worlds to enter, and
 // the reader pays that per card while the thing being taught is one thing throughout.
 test('every example a page embeds is drawn from the same app', async () => {
     const mixed: string[] = []
@@ -467,9 +467,9 @@ test('every example a page embeds is drawn from the same app', async () => {
     expect(mixed).toEqual([])
 })
 
-// THE OLD SHAPE, LISTED SO IT IS A NUMBER RATHER THAN A READING. A page in the shape 40.18 and
-// 40.19 replaced — one example in the lead and every section hanging a snippet off it —
-// passes every check there is: 40.25 and 40.26 are judgement, and the example it embeds declares
+// THE OLD SHAPE, LISTED SO IT IS A NUMBER RATHER THAN A READING. A page in the shape 40.17 and
+// 40.18 replaced — one example in the lead and every section hanging a snippet off it —
+// passes every check there is: 40.24 and 40.25 are judgement, and the example it embeds declares
 // `unconverted`, which the app check waves through. So an agent asked to convert a section can
 // polish its prose, leave the structure untouched, and go green.
 //
@@ -640,7 +640,7 @@ test('no nav label begins with a preposition', async () => {
     expect(offenders).toEqual([])
 })
 
-// RULEBOOK 40.12: a page declares in `covers` which REGISTRY names it covers, and an overview or
+// RULEBOOK 40.11: a page declares in `covers` which REGISTRY names it covers, and an overview or
 // a reference page declares none. `machines/index` had grown four entries the section's topic pages
 // should have owned, and nothing said so — the coverage tests above are satisfied by a
 // claim from any page, which is exactly what makes the WRONG page's claim invisible.

@@ -165,9 +165,9 @@ test('a mismatch or an unlanded value passes through the boundary — 2.13, 41.1
     const unlanded = () => {
         throw new NotLanded({}, 'rate')
     }
-    expect(escaped(() => inBoundary(mounting, unlanded))).toBeInstanceOf(
-        NotLanded,
-    )
+    expect(
+        escaped(() => inBoundary(mounting, unlanded, unlanded)),
+    ).toBeInstanceOf(NotLanded)
     expect(mounting.failure.peek()).toBeUndefined()
 
     const binding = new TryBoundary()

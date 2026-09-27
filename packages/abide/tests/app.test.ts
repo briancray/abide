@@ -195,7 +195,11 @@ test('an unexpected throw is answered 500 — 37.5', async () => {
 })
 
 // 42.5, 42.7, 42.8, 37.4, 37.5 — `createApp` IN PROCESS, with no socket. The script is the host.
-test('createApp boots inside onStart, answers with no socket, and stops inside onStop — 42, 37.4', async () => {
+//
+// 17.8 — IN PROCESS IS WHERE A REASON PHRASE IS OURS TO GIVE: over a socket bun writes one into the
+// status line itself, but a `Response` handed straight back reads '' until `stamp` names it. THE
+// REVERT: drop the `statusText` default from `stamp`; `exploded` reads '500 '.
+test('createApp boots inside onStart, answers with no socket, and stops inside onStop — 42, 37.4, 17.8', async () => {
     await Bun.write(
         `${app}/host.ts`,
         `import { createApp, request } from 'abide/server'
@@ -212,7 +216,7 @@ try {
     outside = (thrown as Error).message.includes('22.1') ? 'threw' : 'wrong throw'
 }
 await app.stop()
-console.log(JSON.stringify({ own: await own.text(), exploded: exploded.status, inRequest, outside, marks }))
+console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.status} \${exploded.statusText}\`, inRequest, outside, marks }))
 `,
     )
     const ran = Bun.spawnSync(['bun', `${app}/host.ts`], { cwd: app })
@@ -220,7 +224,7 @@ console.log(JSON.stringify({ own: await own.text(), exploded: exploded.status, i
     expect(ran.exitCode).toBe(0)
     expect(JSON.parse(printed)).toEqual({
         own: 'own route for POST',
-        exploded: 500,
+        exploded: '500 Internal Server Error',
         inRequest: 'http://app.test/x',
         outside: 'threw',
         marks: [
@@ -230,6 +234,33 @@ console.log(JSON.stringify({ own: await own.text(), exploded: exploded.status, i
             'stopped',
         ],
     })
+}, 30_000)
+
+// 42.14 — `await using` STOPS THE APP where its block ends, through `stop` itself. THE REVERT: drop
+// `[Symbol.asyncDispose]` from the `App` `createApp` returns; `await using` throws a TypeError at
+// the declaration and the script exits non-zero.
+test('an App held by await using stops when its block ends — 42.14', async () => {
+    await Bun.write(
+        `${app}/disposed.ts`,
+        `import { createApp } from 'abide/server'
+import { marks } from './server/app.ts'
+
+{
+    await using held = await createApp()
+    marks.push(held[Symbol.asyncDispose] === held.stop ? 'held' : 'a second stop')
+}
+console.log(JSON.stringify(marks))
+`,
+    )
+    const ran = Bun.spawnSync(['bun', `${app}/disposed.ts`], { cwd: app })
+    const printed = ran.stdout.toString().trim().split('\n').at(-1) as string
+    expect(ran.exitCode).toBe(0)
+    expect(JSON.parse(printed)).toEqual([
+        'before start',
+        'after start',
+        'held',
+        'stopped',
+    ])
 }, 30_000)
 
 // 37.6 — A THROWING `onStart` FAILS HARD: `abide start` exits rather than serving. THE REVERT: catch
@@ -304,6 +335,25 @@ test('every answer carries nosniff and traceresponse; a page its referrer policy
         'strict-origin-when-cross-origin',
     )
     expect(page.headers.get('cache-control')).toBe('private, no-store')
+})
+
+// 21.18 — a page may not be framed unless the app says so. THE REVERT: drop the
+// `content-security-policy` default from `DOCUMENT_HEADERS`; the header reads null.
+test('a page may not be framed by default — 21.18', async () => {
+    const page = await Bun.fetch(`${base}/`)
+    expect(page.headers.get('content-security-policy')).toBe(
+        "frame-ancestors 'none'",
+    )
+})
+
+// 21.3 — A REFUSAL ABIDE ANSWERS AS TEXT is typed as text and uncached, through `stamp`'s rebuild
+// for its reason phrase. THE REVERT: `notFound` as a bare `new Response('not found', …)`; the type
+// reads `application/octet-stream`, which `nosniff` turns into a download, and `cache-control` null.
+test('a refusal answered as text is typed and uncached — 21.3', async () => {
+    const answer = await Bun.fetch(`${base}/__abide/client/none.js`)
+    expect(answer.status).toBe(404)
+    expect(answer.headers.get('content-type')).toBe('text/plain; charset=utf-8')
+    expect(answer.headers.get('cache-control')).toBe('private, no-store')
 })
 
 // 30.15, 30.16 — THE CLIENT ROUTER ASKING runs `middleware` and not the render: a go-ahead is a

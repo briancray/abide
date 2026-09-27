@@ -2,7 +2,12 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import type { Read } from './classifyRead.ts'
 import { holdsSlot } from './classifyTemplate.ts'
 import type { AbideFile } from './parseAbide.ts'
-import { type Projection, projectShadow, type Span } from './projectShadow.ts'
+import {
+    type Origin,
+    type Projection,
+    projectShadow,
+    type Span,
+} from './projectShadow.ts'
 import type { TemplateNode } from './TemplateNode.ts'
 import { type Token, tokenise } from './tokenise.ts'
 
@@ -40,11 +45,27 @@ export class Lowering {
     // `takesProps()` about the same file, and the walk was a recursion over the whole template per
     // lane per file — twice the work for an answer fixed when the file was parsed.
     readonly holdsSlot: boolean
+    // 38.3 — LOWERING FOR THE CHECKER rather than for a module that runs (`checkedShadow`). Three
+    // spellings differ, each because the emitted one is right at run time and untyped: the props
+    // record, which the checker needs typed as the accessors it is; a member referenced rather
+    // than called, whose forwarding arrow takes an untyped rest; and a slot's `raw`, which is the
+    // framework's own in every position.
+    readonly checking: boolean
+    // THE NAMES A CHECKED LOWERING READ, each with whether it was read through a props accessor.
+    // A read is `__values.name` there rather than `name()`: two calls are two values to the
+    // checker, so `{thread ? thread.text : ''}` failed to narrow where the program it lowers to
+    // reads one value twice — and a property of one declared record narrows (`checkedShadow`).
+    readonly values = new Map<string, boolean>()
+    // What a checked lowering found that a build refuses, at the projection offset of the read —
+    // collected rather than thrown, so one refusal is one finding and the rest of the file is still
+    // checked.
+    readonly refusals: { at: number; message: string }[] = []
 
-    constructor(file: AbideFile, reads: readonly Read[]) {
+    constructor(file: AbideFile, reads: readonly Read[], checking = false) {
         this.projection = projectShadow(file)
         this.reads = reads
         this.holdsSlot = holdsSlot(file.template)
+        this.checking = checking
     }
 
     // 33 — WHETHER THIS FILE IS A COMPONENT THAT TAKES PROPS, which is the one thing the emitters
@@ -130,6 +151,21 @@ export class Lowering {
         return this.lower(this.spanOf(holder), false, true)
     }
 
+    // 32.35 — THE COMPONENT A TAG CHOOSES BY A VALUE, lowered to the read of it; `undefined` where
+    // the tag names a component itself. The checker's answer and nothing else: a tag holding no
+    // read is a binding that never moves, and a file lowered with no checker invokes it as written.
+    chosenTag(node: object): string | undefined {
+        const span = this.projection.tags.get(node)
+        if (span === undefined) return undefined
+        const read = this.firstRead(span.start)
+        if (
+            read === this.reads.length ||
+            (this.reads[read] as Read).start >= span.end
+        )
+            return undefined
+        return this.lower(span, false)
+    }
+
     key(block: object): string {
         const span = this.projection.keys.get(block)
         if (span === undefined)
@@ -138,9 +174,8 @@ export class Lowering {
     }
 
     // 14.2 — WHETHER A POSITION IS BOUND, and it is bound unless the checker PROVED it reads nothing
-    // reactive (`proveSlots`). Asking whether it NAMED a `Reactive` was the old rule, and it wrote
-    // `{big()}` once where `big` reads `n` in its body — and the diff was the rule before that, which
-    // dropped `{n()}` as static because the rewrite leaves it exactly as written (31.7).
+    // reactive (`proveSlots`) — not whether it NAMES a `Reactive`, which writes `{big()}` once where
+    // `big` reads `n` in its body.
     //
     // ABSENCE IS LIVE: a file lowered with no checker answers binds every position, which is the
     // safe side of a question nobody asked.
@@ -199,7 +234,27 @@ export class Lowering {
     // The source from `from` to `to`, every read in it rewritten. A write's value and a computed
     // segment are spans inside it, lowered by the same call, and the reads they hold are skipped
     // by the outer walk because it resumes past them.
-    private lower(span: Span, raw: boolean, holds = false): string {
+    // 38.3 — `lowerMapped`: the same splice, each run it copies recorded against where the
+    // projection held it, so a checker's position in the output is a position in the file.
+    lowerMapped(
+        span: Span,
+        holds: boolean,
+        origins: Origin[],
+        base: number,
+    ): string {
+        return this.lower(span, true, holds, origins, base)
+    }
+
+    // `origins`, where given, collects what `lowerMapped` says it does: a copied run at its own
+    // offset, and a rewritten one as a run of no length at the read it replaced, so anything inside
+    // the rewrite is placed at the read.
+    private lower(
+        span: Span,
+        raw: boolean,
+        holds = false,
+        origins?: Origin[],
+        base = 0,
+    ): string {
         const from = span.start
         const to = span.end
         const source = this.projection.text
@@ -212,72 +267,134 @@ export class Lowering {
         if (
             read === this.reads.length ||
             (this.reads[read] as Read).start >= to
-        )
+        ) {
+            origins?.push({ at: base, source: from, length: to - from })
             return source.slice(from, to)
+        }
 
         let out = ''
         let at = from
+        const copy = (until: number): void => {
+            origins?.push({
+                at: base + out.length,
+                source: at,
+                length: until - at,
+            })
+            out += source.slice(at, until)
+        }
+        // What is written next stands in for the source at `origin`, and has no length there.
+        const pin = (origin: number): void => {
+            origins?.push({ at: base + out.length, source: origin, length: 0 })
+        }
         for (; read < this.reads.length; read += 1) {
             const current = this.reads[read] as Read
             if (current.start >= to) break
             if (current.start < at) continue
-            // 31.3 — the operand's own read is the one that does not lower — save that a `Reactive`
-            // prop's name is its accessor, and the operand is what the accessor hands back (33.7).
+            // 31.3 — the operand's own read is the one that does not lower — save that a written
+            // prop's name is its accessor, and the operand is the cell the accessor hands back.
             if (holds && current.from === wholeFrom && current.to === wholeTo) {
                 if (current.through) {
-                    out += `${source.slice(at, current.from)}${this.projection.text.slice(current.start, current.end)}()`
+                    copy(current.from)
+                    pin(current.from)
+                    out += `${this.projection.text.slice(current.start, current.end)}()`
                     at = current.to
                 }
                 continue
             }
+            // 31.4 — A WHOLE-NAME WRITE BRACKETS ITS RIGHT-HAND SIDE, which is lowered by this same
+            // walk and so MAPPED RUN BY RUN where a map is asked for: it is the author's own
+            // expression, and pinned to the write's start every error in it read as the same column.
+            if (current.shape === 'write' && current.path.length === 0) {
+                const [open, close] =
+                    this.checkedWriteParts(current) ??
+                    writeParts(this.nameOf(current), current.operator)
+                copy(current.from)
+                pin(current.from)
+                out += open
+                out += this.lower(
+                    current.value as Span,
+                    raw,
+                    false,
+                    origins,
+                    base + out.length,
+                ).trim()
+                pin(current.to)
+                out += close
+                at = current.to
+                continue
+            }
             const rewritten = this.rewrite(current, raw)
             if (rewritten === undefined) continue
-            out += source.slice(at, current.from) + rewritten
+            copy(current.from)
+            pin(current.from)
+            out += rewritten
             at = current.to
         }
-        return out + source.slice(at, to)
+        copy(to)
+        return out
+    }
+
+    // 33.6 — a written prop's cell is reached through its accessor.
+    private nameOf(read: Read): string {
+        const spelled = this.projection.text.slice(read.start, read.end)
+        return read.through ? `${spelled}()` : spelled
     }
 
     // What one read lowers to, or `undefined` where it stays exactly as written.
     private rewrite(read: Read, raw: boolean): string | undefined {
         const spelled = this.projection.text.slice(read.start, read.end)
-        // 33.7 — a `Reactive` prop is reached through its accessor.
-        const name = read.through ? `${spelled}()` : spelled
+        const name = this.nameOf(read)
         switch (read.shape) {
             case 'asWritten':
                 return read.through ? name : undefined
             // 31.5 — the member BOUND to the `Reactive`, arguments and all.
             case 'member':
-                return `((...args) => ${name}.${read.path[0]?.name}(...args))`
+                return this.checking
+                    ? `${name}.${read.path[0]?.name}`
+                    : `((...args) => ${name}.${read.path[0]?.name}(...args))`
             // 31.7 — the explicit spelling keeps compiling. 31.11 — AND IT TAKES NO ARGUMENTS.
             // Passed through, `count(5)` calls the read with a value the read ignores: an author
             // who meant a write, silently given one.
             case 'call':
-                if (read.arguments > 0)
-                    throw new Error(
-                        `abide: ${spelled}() is a read by name and takes no arguments, and this one is given one. Write ${spelled}.set(…) to write it. RULEBOOK 31.11.`,
-                    )
+                if (read.arguments > 0) {
+                    const message = `abide: ${spelled}() is a read by name and takes no arguments, and this one is given one. Write ${spelled}.set(…) to write it. RULEBOOK 31.11.`
+                    if (!this.checking) throw new Error(message)
+                    this.refusals.push({ at: read.start, message })
+                }
                 return read.through ? name : undefined
             // 31.1 — a read. A member that is not the `Reactive`'s own reaches the value (31.5,
             // 31.6), so `regions.join(', ')` reads first and `n?.x` reads `n()?.x`.
             case 'value':
-                return `${name}()`
+                return this.valueOf(spelled, read, name)
             // AN OBJECT SHORTHAND IS A KEY AND A VALUE. `{ n }` means `{ n: n }`, so the key has
             // to stay `n` and only the value lowers — `{ n() }` is a method with no body.
             case 'shorthand':
-                return `${spelled}: ${name}()`
+                return `${spelled}: ${this.valueOf(spelled, read, name)}`
             // 33.4 — the call IS the record of accessors the caller passed, so the pattern an
-            // author wrote destructures that rather than a value nothing has.
-            case 'props':
-                return PROPS
+            // author wrote destructures that rather than a value nothing has. 33.6, 33.7 — a key
+            // the child writes (`path`) is its cell instead (`propCells`).
+            case 'props': {
+                const written =
+                    read.path.length === 0
+                        ? ''
+                        : `, ${JSON.stringify(read.path.map((key) => key.name))}`
+                if (this.checking)
+                    return `__accessors(${this.projection.text.slice(read.from, read.to)}${written})`
+                return written === ''
+                    ? PROPS
+                    : `${this.use('propCells')}(${PROPS}${written})`
+            }
             // 33.4 again, on the other side of the `=`: every key is an accessor, so a default
             // has to be one too — bound as written, `currency` would be a string where every
             // read of it is a call. The two insertions BRACKET the author's expression rather
-            // than replacing it, so a default that reads a `Reactive` still lowers inside.
+            // than replacing it, so a default that reads a `Reactive` still lowers inside. A
+            // written prop's default is its cell, as the caller's value would have been.
             case 'defaultOpen':
-                return '() => ('
+                return read.through
+                    ? `${this.use('propCell')}(() => (`
+                    : '() => ('
             case 'defaultClose':
-                return ')'
+                return read.through ? '))' : ')'
             case 'static':
                 return undefined
             // 32.26, 32.2 — THE SLOT SPELLING `raw(x)` IS A CALL TO THE FRAMEWORK'S `raw`, the
@@ -289,7 +406,6 @@ export class Lowering {
         const value =
             read.value === undefined ? '1' : this.lower(read.value, raw).trim()
         if (read.path.length > 0) return this.pathWrite(read, name, value, raw)
-        if (read.shape === 'write') return writeOf(name, read.operator, value)
         // 31.4 — `n++`, `--n`. The read is bound once so a postfix can hand back what it read,
         // which is what JavaScript hands back; a statement discards it and takes the short form —
         // which is not a saving but a requirement: the value-preserving form begins with `(`, and
@@ -300,6 +416,30 @@ export class Lowering {
         return `((__previous) => (${name}.set(__previous ${step} 1), ${
             read.prefix ? `__previous ${step} 1` : '__previous'
         }))(${name}())`
+    }
+
+    // 38.3 — A WRITE IS AN ASSIGNMENT TO WHAT A READ READS, where the checker is asked. Lowered to
+    // `set`, it is a call, and a call does not undo a narrowing: `if (x === null) { x = 3; x.toFixed() }`
+    // reads `x` as still `null`. Assigned, it narrows as JavaScript's own `x = 3` does — and the value
+    // still goes through `CHECKED_WRITE`, held to what `set` takes.
+    private checkedWriteParts(read: Read): [string, string] | undefined {
+        if (!this.checking || read.local) return undefined
+        const spelled = this.projection.text.slice(read.start, read.end)
+        this.values.set(spelled, read.through)
+        const held = `${CHECKED_VALUES}.${spelled}`
+        const written = `${CHECKED_WRITE}(${this.nameOf(read)}, `
+        const op = read.operator
+        if (op === '') return [`(${held} = ${written}`, '))']
+        if (SHORT_CIRCUIT.has(op)) return [`(${held} ${op}= ${written}`, '))']
+        return [`(${held} = ${written}${held} ${op} (`, ')))']
+    }
+
+    private valueOf(spelled: string, read: Read, name: string): string {
+        // A branch-local name is out of scope where the record is declared, and two bodies may
+        // each declare one of the same spelling — it is called, and narrows as a call does.
+        if (!this.checking || read.local) return `${name}()`
+        this.values.set(spelled, read.through)
+        return `${CHECKED_VALUES}.${spelled}`
     }
 
     // 31.8 — A WRITE THROUGH A MEMBER PATH COPIES DOWN THE PATH AND THEN WRITES. Read as a plain
@@ -337,11 +477,18 @@ export class Lowering {
 // may have bound themselves.
 export const PROPS = '__props'
 
-// 31.4 — the write a name and an assignment operator stand for. THE SIXTEEN ARE ONE MECHANISM:
-// the operator is the token's own text without its `=`, so completeness is a property rather
-// than a list.
-function writeOf(name: string, op: string, value: string): string {
-    if (op === '') return `${name}.set(${value})`
-    if (SHORT_CIRCUIT.has(op)) return `${name}() ${op} ${name}.set(${value})`
-    return `${name}.set(${name}() ${op} (${value}))`
+export const CHECKED_VALUES = '__values'
+
+// Holds a checked write's value to what the `Reactive`'s `set` takes, and hands it back as its own
+// type — or the value's, where `set` takes what a read never hands back — for the assignment to
+// narrow by.
+export const CHECKED_WRITE = '__written'
+
+// 31.4 — what stands either side of the value in the write a name and an assignment operator stand
+// for. THE SIXTEEN ARE ONE MECHANISM: the operator is the token's own text without its `=`, so
+// completeness is a property rather than a list.
+function writeParts(name: string, op: string): [string, string] {
+    if (op === '') return [`${name}.set(`, ')']
+    if (SHORT_CIRCUIT.has(op)) return [`${name}() ${op} ${name}.set(`, ')']
+    return [`${name}.set(${name}() ${op} (`, '))']
 }

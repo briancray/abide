@@ -13,6 +13,7 @@ covers:
   - `foo.bar(…)`
   - `foo()` / `foo.set(v)`
   - `await foo`
+  - `refresh(foo)` / a `Selection`-typed parameter
 examples:
   - packages/dogfood/examples/name-path-write.json
 ---
@@ -33,6 +34,7 @@ both of those keep compiling in the same file.
 | `foo.bar` / `foo.bar(…)` where `bar` is one of its members | the `Reactive` API |
 | `foo()` / `foo.set(v)` | the two explicit forms |
 | `await foo` | the value, once it has settled |
+| `refresh(foo)` / a `Selection`-typed parameter | the `Reactive` itself |
 
 The rule is **position**, not decoration. An operand is a place a value belongs, so the name
 reads; a position whose declared type is a `Reactive` — an annotated binding, a parameter, a
@@ -47,8 +49,8 @@ it does.
 
 `{total}` re-reads whenever `total` produces. `const held = total` reads too, like any other
 position with no type to say otherwise. **Holding is declared in the type**:
-`const held: Reactive<number> = total` takes the `Reactive`, which is what a prop typed as one
-wants, and what `bind:` needs on both sides of the arrow. Destructuring and spreading read once:
+`const held: Reactive<number> = total` takes the `Reactive`, which is also what a `bind:`
+operand hands over. Destructuring and spreading read once:
 `const [first, second] = rows` takes two rows, not two pieces of a `Reactive`.
 
 A name on the right of `=` is read like any operand. A `Reactive` that arrives any other way is
@@ -62,6 +64,10 @@ settling, so `await invoice` waits for the value and hands it to you — the sam
 write in a `.ts` file, meaning the same thing. Lowered as a read it would be `await invoice()`,
 which takes what has landed and throws where nothing has, and that is never what an `await` was
 asking for.
+
+`refresh(foo)` holds for the same kind of reason. `refresh`, `invalidate`, `busy` and `ready` take a
+`Selection` — the thing to reload or ask about — and a value is never a selection of itself, so
+`refresh(invoice)` hands over `invoice` rather than the invoice it holds.
 
 **Where you can write one** is anywhere there is a function to write it in: a handler, a `reactive`
 body, an `async` arrow of your own. Not at the top of a `<script>`, and not in a template position.

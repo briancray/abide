@@ -4,6 +4,7 @@ nav: CORS
 intent: Open one handler to a named origin without opening the app.
 covers:
   - rpc › `crossOrigin`
+  - `access-control-allow-origin`
   - `vary`
   - `referrer-policy: strict-origin-when-cross-origin`
 ---
@@ -47,6 +48,12 @@ carries no credentials, so there is nothing for a rung to authorise.
 An address with no `crossOrigin` answers `OPTIONS` with `404`, the same as any other unmounted
 method.
 
+## An address with no `crossOrigin` is not another origin's to read
+
+A `GET` from another origin still runs — its args are in the URL, and a read changes nothing —
+but its answer carries no `access-control-allow-origin`, so the browser hands the body to nobody.
+The header only ever names an origin the handler admitted.
+
 Read on: [Authorization](decide-who-may-call-what.md)
 
 ## `crossOrigin` replaces a mutation's origin gate
@@ -66,7 +73,7 @@ abide emits it wherever an answer depends on a request header:
 
 | `vary` | On |
 | --- | --- |
-| `origin` | a cross-origin rpc — a shared cache must not serve one origin's answer to another |
+| `origin` | every rpc answer — whether another origin may read it depends on who asked |
 | `accept` | a stream that can be framed as jsonl or as SSE |
 | `accept-encoding` | anything compressed or compressible |
 

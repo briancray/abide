@@ -108,3 +108,19 @@ test('a form feed is whitespace in template grammar', () => {
         tag: 'p',
     })
 })
+
+// EVERY CLOSE DIRECTIVE IS TEMPLATE GRAMMAR, not only the two a list once named. `{/try}` inside an
+// element was scanned as a regular expression running on to the `/` of `</div>`, and the markup
+// after it compiled as the slot's expression. THE REVERT: recognise `/if` and `/for` alone — the
+// slot below ends at 12, the source's length, where 5 is due.
+test('a {/try} inside an element closes the block rather than opening a regular expression', () => {
+    expect(slotEnd('{/try}</div>', 0)).toBe(5)
+    const file = parseAbide(
+        '<div>{#try}<b>{x}</b>{:catch problem}<p>{count}</p>{/try}</div>',
+    )
+    expect(file.template).toHaveLength(1)
+    expect(file.template[0]).toMatchObject({
+        tag: 'div',
+        children: [{ kind: 'block', block: 'try' }],
+    })
+})

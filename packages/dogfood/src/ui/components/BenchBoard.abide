@@ -1,0 +1,158 @@
+<script>
+// THE BENCH, RUN FROM THE PAGE. Every row is abide against the hand-written arm in one engine, and
+// nothing here is a result until somebody presses a button — the numbers are the machine's today,
+// not a table somebody typed (`harness/scripts/benchRows.ts` is what produces them).
+//
+// ONE VALUE HOLDS THE ROWS, and a run patches into it as each row lands, so running one bench
+// leaves the other hundred and seventy standing.
+import { reactive } from 'abide'
+import { type BenchRow, matchesFilter, type RowItem } from 'harness/rows'
+import { benchCatalog, runBench } from '#server/rpc/bench'
+import { messageOf } from '#ui/messageOf.ts'
+import { readRows } from '#ui/readRows.ts'
+import { ROW_STATES } from '#ui/ROW_STATES.ts'
+
+type Section = { name: string; items: RowItem[] }
+
+let filter = reactive('')
+const catalog = reactive(() => benchCatalog())
+const landed = reactive(new Map<string, BenchRow>())
+let running = reactive(false)
+let failure = reactive('')
+let stopping: AbortController | undefined
+
+// THE CATALOG'S OWN ITEMS, grouped — and NOT the readings. A keyed list keeps a row whose item is
+// the same object and remakes one whose item is new, so a section rebuilt per landed row would
+// remake all hundred and seventy of them each time. The readings are looked up by each row's own
+// slots, which is what lets one row change alone.
+const sections = reactive(() => {
+    const grouped: Section[] = []
+    for (const item of catalog) {
+        if (!matchesFilter(item, filter)) continue
+        let section = grouped[grouped.length - 1]
+        if (section === undefined || section.name !== item.section) {
+            section = { name: item.section, items: [] }
+            grouped.push(section)
+        }
+        section.items.push(item)
+    }
+    return grouped
+})
+
+const shown = reactive(() => {
+    let count = 0
+    for (const section of sections) count += section.items.length
+    return count
+})
+
+// A ROW'S CELLS, AS TEXT AND TONE, read from `landed` inside the row's own slots — so a reading
+// landing rewrites the slots of the row it belongs to and no other.
+function cellsOf(item: RowItem) {
+    const row = landed.get(item.id)
+    if (row === undefined || row.state !== 'done') {
+        const state = ROW_STATES[row?.state ?? 'none']
+        return {
+            abide: '—',
+            vanilla: '—',
+            claim: state.label,
+            figureTone: 'board-waiting',
+            claimTone: state.tone,
+            note: row?.note ?? '',
+        }
+    }
+    return {
+        abide: figure(row.abide, row.unit),
+        vanilla: figure(row.vanilla, row.unit),
+        claim: row.claim,
+        figureTone: '',
+        claimTone: verdictOf(row.claim),
+        note: row.note,
+    }
+}
+
+async function start(scope: string) {
+    running = true
+    failure = ''
+    stopping = new AbortController()
+    try {
+        await readRows<BenchRow>(
+            await runBench.raw({ scope, filter }, { signal: stopping.signal }),
+            (row) => landed.patch((map) => map.set(row.id, row)),
+        )
+    } catch (error) {
+        if (!stopping.signal.aborted) failure = messageOf(error)
+    }
+    // A row a stopped run only queued or started has no reading, so it goes back to having none.
+    landed.patch((map) => {
+        for (const [id, row] of map)
+            if (row.state === 'queued' || row.state === 'running') map.delete(id)
+    })
+    running = false
+}
+
+function stop() {
+    stopping?.abort()
+}
+
+function figure(value: number | null, unit: string): string {
+    if (value === null) return '—'
+    if (unit === 'lines') return `${value} lines`
+    return `${value < 10 ? value.toFixed(2) : value.toFixed(1)} ${unit}`
+}
+
+// Over 1.00x is abide slower, or larger. Under is the claim; twice is the one worth a look.
+function verdictOf(claim: string): string {
+    const times = Number.parseFloat(claim)
+    if (Number.isNaN(times)) return ''
+    return times <= 1 ? 'board-good' : times >= 2 ? 'board-bad' : ''
+}
+</script>
+
+<main id="content" class="board">
+    <header>
+        <h1>Bench</h1>
+        <p class="intent">Every bench with a hand-written arm, abide against vanilla in the same engine. Over 1.00x, abide is slower or larger.</p>
+    </header>
+
+    <div class="board-bar">
+        <input type="search" placeholder="Filter benches" aria-label="Filter benches" bind:value={filter}>
+        {#if running}
+            <button onclick={stop}>Stop</button>
+        {:else}
+            <button onclick={() => start('all')}>{filter.trim() === '' ? 'Run all' : `Run ${shown} shown`}</button>
+        {/if}
+        <span class="board-summary" class:board-bad={failure !== ''}>{failure !== '' ? failure : running ? 'running — one bench at a time, so no two timings share the machine' : `${shown} benches`}</span>
+    </div>
+
+    {#if catalog.error()}
+        <p class="board-bad">{messageOf(catalog.error())}</p>
+    {:else if catalog.ready()}
+        {#for section of sections by section.name}
+            <section>
+                <div class="board-head">
+                    <h2>{section.name}</h2>
+                    <span class="board-count">{section.items.length}</span>
+                    <button class="board-run" onclick={() => start(`section:${section.name}`)} disabled={running}>Run section</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>Bench</th><th class="board-figure">abide</th><th class="board-figure">vanilla</th><th class="board-figure">abide / vanilla</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        {#for item of section.items by item.id}
+                            <tr>
+                                <td>{item.name}<span class="board-note" class:board-bad={landed.get(item.id)?.state === 'broken'}>{cellsOf(item).note}</span></td>
+                                <td class={`board-figure ${cellsOf(item).figureTone}`}>{cellsOf(item).abide}</td>
+                                <td class={`board-figure ${cellsOf(item).figureTone}`}>{cellsOf(item).vanilla}</td>
+                                <td class={`board-figure ${cellsOf(item).claimTone}`}>{cellsOf(item).claim}</td>
+                                <td class="board-figure"><button class="board-run" onclick={() => start(`item:${item.id}`)} disabled={running}>Run</button></td>
+                            </tr>
+                        {/for}
+                    </tbody>
+                </table>
+            </section>
+        {/for}
+    {:else}
+        <p class="board-summary">Listing the benches…</p>
+    {/if}
+</main>

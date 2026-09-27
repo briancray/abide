@@ -11,7 +11,7 @@
 import type { Mount } from '#server/answerRpc.ts'
 import { namesUnder } from '#server/namesUnder.ts'
 import { RPC_ADDRESS, SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
-import type { TypeSession } from './TypeSession.ts'
+import type { Diagnosis, TypeSession } from './TypeSession.ts'
 
 const HANDLER_DIRECTORY = 'server/rpc'
 // 18.1 AND 19.1 — EVERY SOCKET, MOUNTED AS A HANDLER IS: the module's path below `server/sockets`,
@@ -42,20 +42,24 @@ export function declaresHandlers(root: string): boolean {
 }
 
 // Both trees, off one read of the checker, into one table — a socket is a row whose method is
-// `SOCKET`. 19.2 — one owner per address, and the error names both files.
+// `SOCKET`. 19.2 — one owner per address, and the error names both files. 18.30 — with what the
+// build could not read of a copy's options.
 export async function handlersUnder(
     root: string,
     session: TypeSession,
-): Promise<Mount[]> {
+): Promise<{ mounts: Mount[]; warnings: Diagnosis[] }> {
     const modules = modulesUnder(root)
     const paths: string[] = []
     for (const { source } of modules) paths.push(`${root}/${source}`)
     const declared = await session.handlersIn(paths)
     const mounts: Mount[] = []
+    const warnings: Diagnosis[] = []
     const owners = new Map<string, string>()
     for (let at = 0; at < modules.length; at += 1) {
         const { source, path, isSocket } = modules[at] as HandlerModule
-        for (const { name: exported, method, ui } of declared[at] ?? []) {
+        for (const { name: exported, method, ui, copy, unread } of declared[
+            at
+        ] ?? []) {
             if (method === undefined || (method === 'SOCKET') !== isSocket)
                 throw new Error(
                     isSocket
@@ -69,8 +73,9 @@ export async function handlersUnder(
                     `abide: ${owner} and ${source} both declare a ${isSocket ? 'socket' : 'handler'} at ${address}. RULEBOOK 19.2.`,
                 )
             owners.set(address, source)
-            mounts.push({ address, method, source, name: exported, ui })
+            mounts.push({ address, method, source, name: exported, ui, copy })
+            warnings.push(...unread)
         }
     }
-    return mounts
+    return { mounts, warnings }
 }

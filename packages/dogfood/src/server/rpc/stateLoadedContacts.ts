@@ -1,3 +1,4 @@
+import { refuse } from 'abide'
 import { GET } from 'abide/server'
 
 const CONTACTS: Record<string, { name: string; role: string }> = {
@@ -7,5 +8,5 @@ const CONTACTS: Record<string, { name: string; role: string }> = {
 export const getContact = GET(async (args: { id: string }) => {
     // A slow service, so the wait is on screen.
     await Bun.sleep(900)
-    return CONTACTS[args.id]
+    return CONTACTS[args.id] ?? refuse(404, 'No such contact.')
 })

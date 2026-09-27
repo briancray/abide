@@ -41,11 +41,9 @@ read of the caller's expression rather than a snapshot of it. So the child re-re
 parent's value moves, and neither of them arranges that: the parent does not call the child
 again, and the child does not subscribe to anything by name.
 
-A prop declared as a plain type has **no `Reactive` face at all** — not a `Reactive` with the
-write removed, which would be a type that looks writable at every site that has one. Declaring
-it as a `Reactive` instead passes the caller's own through unchanged, and then `bind:` becomes
-a compile requirement at every call site, because a child that can write is a child every
-caller has to have agreed to.
+You declare every prop as the type of its value, never as a `Reactive`. A child may write one
+by name, and the caller decides where the write goes: `bind:` sends it to the caller's value,
+and without `bind:` it stays in the child until the caller's expression changes.
 
 Destructuring keeps every binding live, and the pattern is **flat**: renames, defaults and a
 rest element, and no nested patterns. The rest element is live too, one accessor per key the

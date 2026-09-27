@@ -9,10 +9,9 @@
 // SERVER ONLY, for `benchRender`'s reason: no DOM is touched, so a bun clock is a real number
 // rather than a fact about happy-dom (44.18).
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
-import { emitComponent, parseAbide, TypeSession } from 'abide/compiler'
 import { batch, type Sample } from 'harness/report'
 import { allocated, closures } from 'harness/server'
+import { openBenchCompiler, type Render } from './openBenchCompiler.ts'
 import {
     abideCardSource,
     abideComponentSource,
@@ -21,30 +20,22 @@ import {
     vanillaMarkup,
 } from './renderCases.ts'
 
-const REPO = new URL('../../../', import.meta.url).pathname
 const SIZES = [10, 100, 1000]
-const made: string[] = []
-
-type Render = () => { head: string; body: string }
 
 async function main(): Promise<void> {
-    const session = await TypeSession.open(
-        `${REPO}packages/abide/tsconfig.json`,
-    )
+    const { compile, close } = await openBenchCompiler()
     try {
-        const card = await compile(session, 'Card', abideCardSource())
+        const card = await compile('Card', abideCardSource())
         console.log(
             'A COMPONENT PER ROW — against the same row written inline, and the page written by hand\n',
         )
         for (const size of SIZES) {
             const list = cards(size)
             const inline = await compile(
-                session,
                 'Inline',
                 abideLoopSource().replace('CARDS', JSON.stringify(list)),
             )
             const nested = await compile(
-                session,
                 'Page',
                 abideComponentSource().replace('CARDS', JSON.stringify(list)),
                 { 'Card.ts': card.module },
@@ -80,8 +71,7 @@ async function main(): Promise<void> {
             }
         }
     } finally {
-        session.close()
-        for (const dir of made) rmSync(dir, { recursive: true, force: true })
+        close()
     }
 }
 
@@ -130,30 +120,5 @@ const times = (sample: Sample, against: Sample): string =>
     `${(sample.nanoseconds / against.nanoseconds).toFixed(2)}x`
 const perRow = (sample: Sample, size: number): string =>
     (sample.nanoseconds / size).toFixed(0)
-
-// The emitted module, written where the tests write theirs — outside `packages/abide`, so
-// `conventions.test.ts`'s glob does not scan it. ITS OWN DIR PER CALL, because `Inline` and `Page`
-// are compiled once per size and an import path is cached: a second `Page.ts` at a path already
-// imported hands back the first size's module.
-async function compile(
-    session: TypeSession,
-    name: string,
-    source: string,
-    beside: Record<string, string> = {},
-): Promise<{ module: string; render: Render }> {
-    const file = parseAbide(source)
-    const reads = await session.reads(
-        `${REPO}packages/abide/tests/fixtures/typed/src/${name}.abide`,
-        file,
-    )
-    const module = emitComponent(file, reads)
-    const dir = mkdtempSync(`${REPO}.test-modules/bench-`)
-    made.push(dir)
-    for (const [at, text] of Object.entries(beside))
-        writeFileSync(`${dir}/${at}`, text)
-    writeFileSync(`${dir}/${name}.ts`, module)
-    const loaded = (await import(`${dir}/${name}.ts`)) as { default: Render }
-    return { module, render: loaded.default }
-}
 
 await main()

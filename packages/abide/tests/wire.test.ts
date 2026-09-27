@@ -16,7 +16,9 @@ const SECRET = 'db-password-7f3a91'
 const INVOICES = `import { GET, POST, refuse, request, response } from 'abide/server'
 import { SECRET } from '#server/database.ts'
 
-const notYours = refuse.typed<'NotYours', { owner: string }>('NotYours', 403, 'That invoice belongs to someone else.')
+const notYours = refuse.named('NotYours', 403, 'That invoice belongs to someone else.', {
+    schema: (value: unknown) => value as { owner: string },
+})
 
 export const getInvoice = GET(async ({ id }: { id: string }) => {
     if (SECRET === '') return refuse(500)
@@ -39,6 +41,10 @@ export const created = POST(() => {
 })
 
 export const whoAsked = GET(() => request().headers.get('x-caller'))
+
+export const lines = GET(async function* () {
+    yield 1
+})
 `
 
 const PAGE = `<script>
@@ -53,6 +59,19 @@ const invoice = reactive(() => getInvoice({ id: '4021' }))
 let app = ''
 let stop = (): void => {}
 let base = ''
+
+// 18.17 — EVERY `GET` THE WIRE LOADS IS FOLLOWED over the mux, and `followWire.test.ts` is where that
+// is asserted. Here the socket never opens: happy-dom's `WebSocket` wraps `ws`, which throws an
+// unhandled `error` for a host nobody listens on — which three of these tests' addresses are.
+const unstubbedSocket = globalThis.WebSocket
+globalThis.WebSocket = class {
+    static OPEN = 1
+    readyState = 0
+    send(): void {}
+} as unknown as typeof WebSocket
+afterAll(() => {
+    globalThis.WebSocket = unstubbedSocket
+})
 
 beforeAll(async () => {
     ;({ app, base, stop } = await serveApp({
@@ -393,6 +412,76 @@ test('the wire collects a jsonl or sse answer into its chunks — 16.33', async 
     } finally {
         window.fetch = previous
     }
+})
+
+// 16.33 — A STREAMING HANDLER'S COPY TAKES EACH CHUNK AS ITS LINE ARRIVES. The answer's second line
+// is not sent until the copy has shown the first, so a copy that collected would show nothing at
+// all and the race reports it. No clock is read: the order is the claim.
+//
+// THE REVERT: declare `body` rather than `streamed` for a marked copy in `wire`; the first read loses
+// the race, and the value lands once, whole, when the answer closes.
+test('a copy the build marked as streaming holds each chunk as it lands — 16.33', async () => {
+    const window = globalThis as unknown as Record<string, unknown>
+    const previous = window.fetch
+    let send = (_line: string): void => {}
+    let close = (): void => {}
+    window.fetch = (async () => ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers({ 'content-type': 'application/jsonl' }),
+        body: new ReadableStream<Uint8Array>({
+            start(controller) {
+                const encoder = new TextEncoder()
+                send = (line) => controller.enqueue(encoder.encode(line))
+                close = () => controller.close()
+            },
+        }),
+        text: async () => {
+            throw new Error('a streamed answer is not read to its end')
+        },
+    })) as unknown
+    try {
+        const rows = (
+            wire('GET', '/rpc/rows', {
+                stream: true,
+            }) as () => (() => unknown) & {
+                ready(): boolean
+                busy(): boolean
+            } & PromiseLike<unknown>
+        )()
+        send('{"n":1}\n{"n"')
+        const landed = await Promise.race([
+            (async () => {
+                while (!rows.ready())
+                    await new Promise((done) => setTimeout(done, 0))
+                return rows()
+            })(),
+            Bun.sleep(2000).then(() => 'nothing before the answer closed'),
+        ])
+        expect(landed).toEqual([{ n: 1 }])
+        expect(rows.busy()).toBe(true)
+        // The second line, split across two reads, is one chunk.
+        send(':2}\n')
+        close()
+        expect(await rows).toEqual([{ n: 1 }, { n: 2 }])
+    } finally {
+        window.fetch = previous
+    }
+})
+
+// 16.33 — AND THE BUILD IS WHAT MARKS IT: a handler declared as an async generator is written into the
+// browser's wrapper as a stream, and one that is not is left a value. THE REVERT: drop `declaresStream`
+// from `declaringMethod`; the wrapper carries no `stream` and the copy collects.
+test('the build marks an async generator handler as a stream in its wrapper — 16.33', async () => {
+    const wrapper = await Bun.file(
+        `${app}/.abide/wire/server/rpc/invoices.ts`,
+    ).text()
+    const lineOf = (name: string): string =>
+        wrapper.split('\n').find((line) => line.includes(`const ${name} =`)) ??
+        ''
+    expect(lineOf('lines')).toContain('{"stream":true}')
+    expect(lineOf('getInvoice')).not.toContain('stream')
 })
 
 // 20.4 — A HANDLER WITHHELD FROM THE UI GETS NO WRAPPER, so a page importing it is 16.30's compile

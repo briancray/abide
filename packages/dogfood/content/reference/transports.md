@@ -139,7 +139,11 @@ calls `jsonSchema` never carries one (19.14).
 | `cache-control: public, max-age=0, must-revalidate` | a file under `src/ui/public` | A file at an address the build never chose. |
 | `etag` | a file under `src/ui/public` | The answered bytes, addressed by their content. |
 | `referrer-policy: strict-origin-when-cross-origin` | a page | The browsers' own default, written down. |
+| `content-security-policy: frame-ancestors 'none'` | a page | The default a write through `response()` or `csp()` overrides. |
+| `access-control-allow-origin` | an rpc answer to another origin | The origin a handler admitted through `crossOrigin`, and never one it did not. |
+| `allow: GET, HEAD` | a page, a public file or the bundle, asked by another method | The methods the address answers, on the 405. |
 | `vary` | wherever an answer depends on a request header | Names the header the answer varied on. |
+| `abide-version` | a `GET` answered from a `global` value with no `middleware` | The version of the production answered, which the browser names when it follows the handler over the socket, so it is sent a later value only. |
 | `server-timing` | an rpc answer | The handler's duration, and whether the render's run answered it. |
 
 Every response declares its own content type and carries `x-content-type-options: nosniff`

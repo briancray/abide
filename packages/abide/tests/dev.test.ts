@@ -8,9 +8,8 @@
 // runs is the more honest arm anyway. `Bun.fetch` for the same clobbering on the other side.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { addressOf, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-
-const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 const SHELL = `<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>`
 
@@ -85,18 +84,6 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-// The origin the command printed. Read rather than assumed — and a boot that fails says so here
-// rather than leaving every test below to time out against a socket nothing is on.
-async function addressOf(child: Bun.Subprocess): Promise<string> {
-    let seen = ''
-    for await (const chunk of child.stdout as ReadableStream<Uint8Array>) {
-        seen += new TextDecoder().decode(chunk)
-        const found = /http:\/\/[^\s]+/.exec(seen)
-        if (found) return new URL(found[0]).origin
-    }
-    throw new Error(`abide dev printed no address: ${seen}`)
-}
-
 // A save, and the first answer that carries it. The watcher settles before it replaces the
 // worker, so the poll is what the browser's own reload does — and a timeout here is the failure
 // rather than a flake, since nothing else in the loop is timing-dependent.
@@ -109,10 +96,27 @@ async function waitFor(
     holds: (body: string) => boolean,
 ): Promise<string> {
     return await waitUntil(
-        async () => await (await Bun.fetch(address)).text(),
+        async () => await received(await Bun.fetch(address)),
         holds,
         address,
     )
+}
+
+// WHAT ARRIVED, where a body can end in an error: a page that fails after its head has gone out does
+// (41.16, 38.38), with what broke streamed ahead of the error — which is what a browser shows.
+async function received(response: Response): Promise<string> {
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader()
+    const decoder = new TextDecoder()
+    let text = ''
+    try {
+        for (;;) {
+            const { done, value } = await reader.read()
+            if (done) return text
+            text += decoder.decode(value, { stream: true })
+        }
+    } catch {
+        return text
+    }
 }
 
 async function waitUntil(
@@ -265,7 +269,7 @@ test('a save reaches the next request — 38.4, 38.16', async () => {
 // `Reactive`, and a page reading it has to be compiled against the new type — a checker answering
 // from what it cached at boot paints the reactive as though it were the value.
 //
-// THE REVERT: drop the `checker.session.edited(…)` call in `serveDev`'s `compile` and the second
+// THE REVERT: drop the `session.edited(…)` call in `AppChecker.current` and the second
 // wait times out on a page painting the reactive's own function source where its 8 was due.
 test('an edit to a plain .ts reaches the types the next compile reads — 31.3, 38.4', async () => {
     const reading = HOME.replace(

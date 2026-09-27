@@ -1,6 +1,8 @@
 import {
     type BinaryExpression,
     type Node,
+    type PostfixUnaryExpression,
+    type PrefixUnaryExpression,
     SyntaxKind,
 } from 'typescript/unstable/ast'
 import {
@@ -66,12 +68,18 @@ export type Read = {
     discarded: boolean
     arguments: number
     // 31.8 — the member path between the name and the write: a property's name, or the span of a
-    // computed segment, which may itself hold reads.
+    // computed segment, which may itself hold reads. On the `props` call, the keys the child
+    // writes, by name (33.6).
     path: { name: string | undefined; start: number; end: number }[]
     value: Span | undefined
-    // 33.7 — the name is a props accessor handing back the caller's `Reactive`, so the `Reactive`
-    // every rewrite reaches is `name()` rather than the name.
+    // 33.6 — the name is a props accessor handing back the prop's cell, so the `Reactive` every
+    // rewrite reaches is `name()` rather than the name. On a default's pair, that the default is
+    // one too.
     through: boolean
+    // 32.33 — the name is bound to a `reactive(…)` whose options declare `by`.
+    byValue: boolean
+    // 14.8 — the name is declared by a branch-local `<script>`, inside the body it scopes.
+    local: boolean
 }
 
 // THE SHAPE, IN ONE PLACE. The header's invariant is that every read carries every field, and
@@ -95,6 +103,8 @@ export function newRead(
         path: [],
         value: undefined,
         through: false,
+        byValue: false,
+        local: false,
     }
 }
 
@@ -104,6 +114,16 @@ function isAssigned(outer: Node, target: Node): outer is BinaryExpression {
         outer.left === target &&
         outer.operatorToken.kind >= SyntaxKind.FirstAssignment &&
         outer.operatorToken.kind <= SyntaxKind.LastAssignment
+    )
+}
+
+function isIncrement(
+    outer: Node,
+): outer is PrefixUnaryExpression | PostfixUnaryExpression {
+    return (
+        (isPrefixUnaryExpression(outer) || isPostfixUnaryExpression(outer)) &&
+        (outer.operator === SyntaxKind.PlusPlusToken ||
+            outer.operator === SyntaxKind.MinusMinusToken)
     )
 }
 
@@ -122,11 +142,11 @@ function isNotARead(parent: Node): boolean {
     }
 }
 
-// ONE OCCURRENCE OF A NAME THE `props` PATTERN BOUND (33.4, 33.9). Every one of them is a read of
-// that key's accessor, which is where this parts company with `classifyRead`: `onsave()` is the
-// prop's own value being CALLED and lowers to `onsave()()`, where the same spelling on a
-// `Reactive` is 31.7's explicit read; and `amount.set` is the value's member, there being no
-// `Reactive` face on a plain prop at all (33.6).
+// ONE OCCURRENCE OF A NAME THE `props` PATTERN BOUND AND THE CHILD ONLY READS (33.4, 33.9). Every
+// one of them is a read of that key's accessor, which is where this parts company with
+// `classifyRead`: `onsave()` is the prop's own value being CALLED and lowers to `onsave()()`, where
+// the same spelling on a `Reactive` is 31.7's explicit read; and `amount.set` is the value's
+// member, a prop nothing writes having no cell. A prop the child writes is `classifyRead`'s.
 export function classifyPropRead(node: Node): Read | undefined {
     const parent = node.parent
     if (isNotARead(parent)) return undefined
@@ -136,19 +156,6 @@ export function classifyPropRead(node: Node): Read | undefined {
         if ((parent as { propertyName?: Node }).propertyName === node)
             return undefined
     }
-    // 33.5, 33.6 — A PROP IS A LIVE READ AND HAS NO WRITE. `const` already refuses this in the
-    // checker; a `let` pattern does not, and lowering it as a read would emit `amount() = 5` —
-    // a module that does not parse, reported against the emitter rather than against the page.
-    if (
-        isAssigned(parent, node) ||
-        ((isPrefixUnaryExpression(parent) ||
-            isPostfixUnaryExpression(parent)) &&
-            (parent.operator === SyntaxKind.PlusPlusToken ||
-                parent.operator === SyntaxKind.MinusMinusToken))
-    )
-        throw new Error(
-            `abide: ${(node as { text?: string }).text ?? ''} is a prop, which is a live read of the caller's expression and has no write. RULEBOOK 33.5, 33.6.`,
-        )
     const read = newRead(node.getStart(), node.end)
     if (isShorthandPropertyAssignment(parent)) read.shape = 'shorthand'
     return read
@@ -240,11 +247,7 @@ export function classifyRead(node: Node): Read | undefined {
         read.value = { start: outer.right.getStart(), end: outer.right.end }
         return read
     }
-    if (
-        (isPrefixUnaryExpression(outer) || isPostfixUnaryExpression(outer)) &&
-        (outer.operator === SyntaxKind.PlusPlusToken ||
-            outer.operator === SyntaxKind.MinusMinusToken)
-    ) {
+    if (isIncrement(outer)) {
         read.shape = 'update'
         read.operator = outer.operator === SyntaxKind.PlusPlusToken ? '+' : '-'
         read.prefix = isPrefixUnaryExpression(outer)
@@ -337,9 +340,11 @@ export function slotFacts(
     })
 }
 
-const FUNCTIONS: ReadonlySet<SyntaxKind> = new Set([
+// A node that opens a function scope of its own.
+export const FUNCTIONS: ReadonlySet<SyntaxKind> = new Set([
     SyntaxKind.ArrowFunction,
     SyntaxKind.FunctionExpression,
+    SyntaxKind.FunctionDeclaration,
     SyntaxKind.MethodDeclaration,
     SyntaxKind.GetAccessor,
     SyntaxKind.SetAccessor,

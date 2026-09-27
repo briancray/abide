@@ -50,6 +50,7 @@ presentational component usually is.
 | `foo.bar(…)` | the `Reactive` API where `bar` is a member | A call reaches the `Reactive` where the name is one of its members. |
 | `foo()` / `foo.set(v)` | the explicit forms | The two members, which keep compiling. |
 | `await foo` | the value, settled | A `Reactive` is a promise for its own settling, so an `await` operand holds it rather than reading it. |
+| `refresh(foo)` | the `Reactive` | A `Selection`-typed parameter holds it: a value is never a selection of itself. |
 
 
 The rule is **position**. An operand, a text hole, an attribute and a value-typed argument are
@@ -73,11 +74,11 @@ places a value belongs, so the name reads. A position whose declared type is a
 | `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4 |
 | `name="…{expr}…"` | An interpolated quoted value. | 32.3 |
 | `bind:value` | Two-way bind on an element. | 5.17, 32.5 |
-| `bind:prop={state}` | Adds the write path to a component prop. | 32.6 |
+| `bind:prop={state}` | Hands a component prop the caller's `Reactive`, or a `{get, set}` pair, to write through. | 32.6, 33.6, 33.8, 14.18 |
 | `bind:checked` | A boolean bind on an input. | 32.7 |
 | `bind:open` | The same, on a `<details>`. | 32.7 |
 | `bind:group` | Radio or checkbox membership. | 32.8 |
-| `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair. | 32.5 |
+| `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair, on an element or a component. | 32.5, 32.6 |
 | `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9 |
 | `class:name={cond}` | Toggles a class. | 32.10 |
 | `style:prop={value}` | Sets one style property. | 32.10, 32.20 |

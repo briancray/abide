@@ -3,7 +3,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { serveApp } from './builtApp.ts'
-import { removeTemporaryModules } from './temporaryModule.ts'
+import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const PAGE = `<script>
 import { reactive, url } from 'abide'
@@ -23,7 +23,7 @@ beforeAll(async () => {
         'ui/pages/page.abide': PAGE,
         'ui/pages/invoices/[id]/page.abide': '<main>an invoice</main>',
         'ui/public/robots.txt': 'User-agent: *\n',
-        'server/rpc/invoices.ts': `import { GET } from 'abide/server'\n\nexport const getInvoice = GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n`,
+        'server/rpc/invoices.ts': `import { GET, reactive } from 'abide/server'\n\nexport const getInvoice = GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n\nexport const count = GET(reactive({ open: 3 }, { global: true }))\n`,
     }))
     delete process.env.APP_URL
 }, 30_000)
@@ -69,4 +69,33 @@ test('routes, handlers and public files answer under the mount — 36.11', async
     expect(await (await Bun.fetch(`${base}/docs/robots.txt`)).text()).toBe(
         'User-agent: *\n',
     )
+})
+
+// 18.2, 36.11 — THE MUX ANSWERS UNDER THE MOUNT, and an address named as the browser's wrapper resolved
+// it — a path under the mount, or a whole URL — reaches the handler it names.
+test('the mux answers under the mount, for an address under it or a whole URL — 18.2, 36.11', async () => {
+    const dir = temporaryModule({
+        'client.ts': `const base = process.argv[2]
+const frames: unknown[] = []
+const ws = new WebSocket(base.replace('http', 'ws') + '/docs/__abide/socket')
+ws.onmessage = (event) => frames.push(JSON.parse(String(event.data)))
+await new Promise((done) => (ws.onopen = done))
+ws.send(JSON.stringify({ op: 'sub', id: 1, address: '/docs/__abide/rpc/invoices/count' }))
+ws.send(JSON.stringify({ op: 'sub', id: 2, address: base + '/docs/__abide/rpc/invoices/count' }))
+await new Promise((done) => setTimeout(done, 150))
+ws.close()
+console.log(JSON.stringify(frames))
+`,
+    })
+    const ran = Bun.spawn(['bun', `${dir}/client.ts`, base], { stdout: 'pipe' })
+    const printed = await new Response(ran.stdout).text()
+    const frames = JSON.parse(printed.trim().split('\n').at(-1) as string) as {
+        op: string
+        id: number
+        value?: unknown
+    }[]
+    expect(frames.map((frame) => [frame.op, frame.id, frame.value])).toEqual([
+        ['value', 1, { open: 3 }],
+        ['value', 2, { open: 3 }],
+    ])
 })

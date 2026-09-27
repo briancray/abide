@@ -6,8 +6,8 @@
 // does not throw is the body coming back: a rate typed wrong and then right shows the message and
 // then the figure, without anything else arranging that.
 
-import { NotLanded } from '#shared/reactive/NotLanded.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
+import { NotLanded } from '#shared/reactive/NotLanded.ts'
 import { untracked } from '#shared/reactive/tracking.ts'
 import { type Disposer, watch } from '#shared/reactive/watch.ts'
 import { Mismatch } from './Mismatch.ts'
@@ -26,25 +26,23 @@ export class TryBoundary {
         this.retry = undefined
     }
 
-    fail(error: unknown, again: (() => unknown) | undefined): void {
+    fail(error: unknown, again: () => unknown): void {
         this.stop()
-        if (again !== undefined) {
-            let first = true
-            this.retry = watch(() => {
-                try {
-                    again()
-                } catch (thrown) {
-                    if (thrown instanceof NotLanded) throw thrown
-                    first = false
-                    return
-                }
-                if (first) {
-                    first = false
-                    return
-                }
-                untracked(recoverOf, this, undefined)
-            })
-        }
+        let first = true
+        this.retry = watch(() => {
+            try {
+                again()
+            } catch (thrown) {
+                if (thrown instanceof NotLanded) throw thrown
+                first = false
+                return
+            }
+            if (first) {
+                first = false
+                return
+            }
+            untracked(recoverOf, this, undefined)
+        })
         this.failure.set(error)
     }
 
@@ -68,7 +66,7 @@ export class TryBoundary {
 export function inBoundary<T>(
     boundary: TryBoundary,
     mount: () => T,
-    again?: () => unknown,
+    again: () => unknown,
 ): T | undefined {
     const previous = BOUNDARY.current
     BOUNDARY.current = boundary

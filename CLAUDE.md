@@ -12,25 +12,9 @@ IS, and the clauses that govern it. behaviour is cited, never described.
 number rather than restating it, because a second copy drifts and only one of them gets fixed.
 * `docs/BRAND.md` — positioning, voice, vocabulary, visual identity.
 
-`explorations/` IS NOT A FOURTH DOCUMENT. it holds work done to find out whether something is
-worth doing — dated arguments, a measurement, and findings about the code as it is — and nothing
-in it is decided or citable as a rule. it sits outside `docs/` on purpose: amending a clause means
-grepping its number across `docs/`, and these files cite clause numbers freely, so putting them
-there would bury a real amendment under speculative hits. start at
-`explorations/STANDING-FINDINGS.md`, which is the half that outlived the exercise that produced
-it.
-
-CONVERTING A PAGE TO THE CARD SHAPE is taught by a CONVERTED page, never by a description of one.
-`OLD_SHAPE` in `packages/dogfood/tests/coverage.test.ts` is what was the backlog. IT IS EMPTY: the
-conversion is done and the set is now a RATCHET, so a page arriving in the old shape has to add its
-own slug and that is the moment somebody notices. A new page is matched against a CONVERTED one —
-any of them, `derive-a-value-from-other-values` being the worked case. The
-clauses say what must hold and a worked page says what it looks like, which is the part sixteen
-clauses across two documents do not carry.
-
 BEFORE WRITING A DOCUMENTATION PAGE, read RULEBOOK 40 and BRAND. 40 is the docs system — one
-example per BEHAVIOUR TAUGHT (40.18, 40.19), what a `{% snippet %}` guarantees (40.6-40.10), and
-what a panel earns (40.11) —
+example per BEHAVIOUR TAUGHT (40.17, 40.18), and what a `{% snippet %}` guarantees
+(40.6-40.10) —
 and BRAND is the voice, the vocabulary, and the register of a title against a nav label. both bind
 today, where most of the rulebook describes a design nothing can run yet.
 

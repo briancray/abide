@@ -2,9 +2,10 @@
 // and linked stylesheet carry it (spawned, for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { scopeCss } from '#compiler/scopeStyles.ts'
+import { compileApp } from '#compiler/compileApp.ts'
+import { namesViewTransition, scopeCss } from '#compiler/scopeStyles.ts'
 import { serveApp } from './builtApp.ts'
-import { removeTemporaryModules } from './temporaryModule.ts'
+import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 // 34.4 — THE RIGHTMOST COMPOUND REQUIRES THE TOKEN, ahead of a pseudo-element; 34.5 — `:global(…)`
 // is unwrapped and exempts its compound. THE REVERT: append the token to every compound; the
@@ -27,6 +28,17 @@ test('every selector requires the token on its rightmost compound — 34.4, 34.5
     expect(scoped('input[type="a,b"] {x:y}')).toBe(
         'input[type="a,b"][a-t] {x:y}',
     )
+})
+
+// A COMMENT IS NOT A COMBINATOR, and a newline is one. THE REVERT: count only a space, comments
+// included; the last space is inside the comment, the compound reads `it. */\n:global(.y)`, and
+// the rule the comment explains is scoped to `.y[a-t]` — dogfood's own `:global` example did this.
+test('a comment on its own line ahead of a selector leaves the rightmost compound alone — 34.4, 34.5', () => {
+    const scoped = (css: string) => scopeCss(css, 'a-t')
+    expect(scoped('/* reaches\n   it. */\n:global(.y){x:y}')).toBe(
+        '/* reaches\n   it. */\n.y{x:y}',
+    )
+    expect(scoped('.x\n.y{x:y}')).toBe('.x\n.y[a-t]{x:y}')
 })
 
 const CARD = `<script>
@@ -88,4 +100,51 @@ test("each component's elements carry its token, and the stylesheet is scoped �
     expect(css).toContain(`h2[${card}]`)
     expect(css).toContain(`main[${page}]`)
     expect(css).not.toContain(':global')
+})
+
+// 39.7 — A PROPERTY, A PSEUDO-ELEMENT OR THE AT-RULE turns view transitions on, and the same words
+// in a comment, a string or a custom property's name do not. THE REVERT: test the stylesheet with
+// `includes('view-transition')`; the four refusals below read true.
+test('a stylesheet names a view transition by a rule, not by the words — 39.7', () => {
+    expect(namesViewTransition('.total { view-transition-name: total }')).toBe(
+        true,
+    )
+    expect(
+        namesViewTransition(':global(::view-transition-old(root)) { a: b }'),
+    ).toBe(true)
+    expect(namesViewTransition('@view-transition { navigation: auto }')).toBe(
+        true,
+    )
+    expect(
+        namesViewTransition('/* view-transition-name: total */ .x { a: b }'),
+    ).toBe(false)
+    expect(
+        namesViewTransition('.x::after { content: "view-transition" }'),
+    ).toBe(false)
+    expect(namesViewTransition('.x { --view-transition-name: total }')).toBe(
+        false,
+    )
+    expect(namesViewTransition('.x { color: red }')).toBe(false)
+})
+
+// 39.8 — DECIDED BY THE BUILD, written into the route table the client boots from. THE REVERT:
+// leave `transitions` false in `compileApp`; the styled app's table reads `startRouter(routes, host)`.
+test('the build turns view transitions on from the compiled styles — 39.8', async () => {
+    const app = (style: string) => ({
+        'package.json': JSON.stringify({
+            name: 'transition-fixture',
+            type: 'module',
+            imports: { '#ui/*': './ui/*' },
+        }),
+        'ui/app.html': '<!doctype html><html><head></head><body></body></html>',
+        'ui/pages/page.abide': `<main><p class="total">1</p></main>\n\n<style>\n${style}\n</style>`,
+    })
+    const on = await compileApp(
+        temporaryModule(app('.total { view-transition-name: total }')),
+    )
+    const off = await compileApp(temporaryModule(app('.total { color: red }')))
+    expect(on.modules.get('routes.ts')).toContain(
+        'startRouter(routes, host, true)',
+    )
+    expect(off.modules.get('routes.ts')).toContain('startRouter(routes, host)')
 })

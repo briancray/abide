@@ -54,7 +54,7 @@ export async function buildCompiledPage(
         }))
         // ONE SNAPSHOT FOR EVERY FILE, which is what `bin/abide.ts` takes. `reads` per file adds
         // each to the project's root set on its own, and `TypeSession` prices that at 25x.
-        const reads = await session.readsFor(files)
+        const { reads } = await session.readsFor(files)
         // WHICH FILES ARE INVOKED IS THE BUILD'S KNOWLEDGE and already has a name, so a component
         // that itself invokes one is answered here rather than by a flag this file guesses.
         const { invoked } = componentGraph(files, (specifier, from) =>

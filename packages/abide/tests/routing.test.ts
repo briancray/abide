@@ -105,19 +105,23 @@ async function pages(
     return { home, invoice }
 }
 
-function router(mounts: Record<string, PageMount>) {
-    return startRouter([
-        {
-            pattern: '/invoices/[id]',
-            load: async () => ({ default: mounts.invoice as PageMount }),
-            layouts: [],
-        },
-        {
-            pattern: '/',
-            load: async () => ({ default: mounts.home as PageMount }),
-            layouts: [],
-        },
-    ])
+function router(mounts: Record<string, PageMount>, transitions = false) {
+    return startRouter(
+        [
+            {
+                pattern: '/invoices/[id]',
+                load: async () => ({ default: mounts.invoice as PageMount }),
+                layouts: [],
+            },
+            {
+                pattern: '/',
+                load: async () => ({ default: mounts.home as PageMount }),
+                layouts: [],
+            },
+        ],
+        document.body,
+        transitions,
+    )
 }
 
 function matchRoute(segments: Segment[], pathname: string): Params | null {
@@ -401,6 +405,12 @@ test('a route literal is matched in the spelling its directory is filed under �
         '/invoices/[id]',
     )
     expect(routeOf('src/ui/pages/page.abide')).toBe('/')
+    // 23.3 — the routes directory is the first `ui/pages/`, so a section named `pages` keeps its
+    // name. THE REVERT: cut at the last `/pages/`; this reports `/add-a-page`.
+    expect(routeOf('ui/pages/pages/add-a-page/page.abide')).toBe(
+        '/pages/add-a-page',
+    )
+    expect(routeOf('ui/pages/pages/page.abide')).toBe('/pages')
     expect(
         matchRoute(parseRoutePattern('/invoices/[id]'), '/invoices/42'),
     ).toEqual({ id: '42' })
@@ -698,4 +708,150 @@ test('a page hydrates inside the layout the server painted — 35.1', async () =
     flushSync()
     expect(document.querySelector('#settings h1')?.textContent).toBe('Settings')
     expect(document.querySelector('#chrome')).toBeNull()
+})
+
+// 39.9, 39.10 — A STAND-IN FOR THE BROWSER'S `startViewTransition`: the callback runs when the test
+// releases it, the way a browser runs it a frame later, and `finished` settles only when the test
+// says the animation is over. `undefined` removes it, which is a browser with no support.
+function viewTransitions(): {
+    calls: number
+    release: () => void
+    finish: () => void
+    finished: boolean
+    remove: () => void
+} {
+    const pending: (() => void)[] = []
+    const ends: (() => void)[] = []
+    const stub = {
+        calls: 0,
+        finished: false,
+        release: () => {
+            for (const run of pending.splice(0)) run()
+        },
+        finish: () => {
+            stub.finished = true
+            for (const end of ends.splice(0)) end()
+        },
+        remove: () => {
+            delete (document as { startViewTransition?: unknown })
+                .startViewTransition
+        },
+    }
+    Object.defineProperty(document, 'startViewTransition', {
+        configurable: true,
+        value: (update: () => void) => {
+            stub.calls += 1
+            const updateCallbackDone = new Promise<void>((resolve) =>
+                pending.push(() => {
+                    update()
+                    resolve()
+                }),
+            )
+            const finished = new Promise<void>((resolve) => ends.push(resolve))
+            return { updateCallbackDone, finished, ready: updateCallbackDone }
+        },
+    })
+    return stub
+}
+
+async function until(done: () => boolean): Promise<void> {
+    for (let turn = 0; turn < 100 && !done(); turn += 1)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+// 39.9 — THE NAVIGATION IS OVER WHEN THE DOM IS WRITTEN, while the animation is still playing.
+// THE REVERT: await `finished` in `Router.write` rather than `updateCallbackDone`; `navigated`
+// stays false with the invoice already on screen, and the test times out waiting on it.
+test('a view transition is awaited to the write, not to the animation — 39.9', async () => {
+    history.replaceState(null, '', '/')
+    const transition = viewTransitions()
+    try {
+        const r = router(await pages(), true)
+        await r.hydrate()
+        let navigated = false
+        const going = navigate('/invoices/42').then(() => {
+            navigated = true
+        })
+        await until(() => transition.calls === 1)
+        // CAPTURED, NOT YET WRITTEN: the outgoing page is what the browser snapshots.
+        expect(document.querySelector('#home')).not.toBeNull()
+        transition.release()
+        await going
+        flushSync()
+        expect(navigated).toBe(true)
+        expect(transition.finished).toBe(false)
+        expect(document.querySelector('#invoice h1')?.textContent).toBe(
+            'Invoice',
+        )
+        transition.finish()
+    } finally {
+        transition.remove()
+    }
+})
+
+// 39.7 — NOTHING IN THE STYLES, NO TRANSITION, even in a browser that has them. THE REVERT: drop
+// `this.transitions` from `Router.write`'s guard; the one navigation calls the browser once.
+test('a build whose styles name no view transition never starts one — 39.7', async () => {
+    history.replaceState(null, '', '/')
+    const transition = viewTransitions()
+    try {
+        const r = router(await pages())
+        await r.hydrate()
+        await navigate('/invoices/42')
+        flushSync()
+        expect(transition.calls).toBe(0)
+        expect(document.querySelector('#invoice h1')?.textContent).toBe(
+            'Invoice',
+        )
+    } finally {
+        transition.remove()
+    }
+})
+
+// 39.10 — A BROWSER WITH NO SUPPORT NAVIGATES AS IT OTHERWISE WOULD. happy-dom has no
+// `startViewTransition`, which is the browser this case is. THE REVERT: call it unguarded; the
+// navigation rejects with a TypeError and the invoice never mounts.
+test('a browser without view transitions navigates as it would with none — 39.10', async () => {
+    history.replaceState(null, '', '/')
+    expect(
+        typeof (document as { startViewTransition?: unknown })
+            .startViewTransition,
+    ).toBe('undefined')
+    const r = router(await pages(), true)
+    await r.hydrate()
+    await navigate('/invoices/42')
+    flushSync()
+    expect(document.querySelector('#invoice h1')?.textContent).toBe('Invoice')
+})
+
+// 39.9 — A TRANSITION ANOTHER NAVIGATION OVERTOOK WRITES NOTHING. The browser runs a callback a
+// frame after it was handed one, and runs it even for a transition it skipped. THE REVERT: drop the
+// ticket check inside `Router.write`'s callback; the superseded invoice mounts once (1 against 0)
+// before the home page replaces it.
+test('a view transition a later navigation overtook writes nothing — 39.9', async () => {
+    history.replaceState(null, '', '/')
+    const transition = viewTransitions()
+    try {
+        const mounts = await pages()
+        let invoiceMounts = 0
+        const invoice = mounts.invoice as PageMount
+        mounts.invoice = (region, props) => {
+            invoiceMounts += 1
+            return invoice(region, props)
+        }
+        const r = router(mounts, true)
+        await r.hydrate()
+        const first = navigate('/invoices/42')
+        await until(() => transition.calls === 1)
+        const second = navigate('/')
+        await until(() => transition.calls === 2)
+        transition.release()
+        await Promise.all([first, second])
+        flushSync()
+        expect(invoiceMounts).toBe(0)
+        expect(location.pathname).toBe('/')
+        expect(document.querySelector('#home h1')?.textContent).toBe('Home')
+    } finally {
+        transition.remove()
+    }
 })

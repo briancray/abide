@@ -1,10 +1,11 @@
-// SECTION 29 — THE CONTENT SECURITY POLICY, as one rung (29.1) an app puts in its `middleware`. The
+// SECTION 29 — THE SERVER HALF OF `csp` (`#shared/csp.ts`), as one rung (29.1) an app puts in its `middleware`. The
 // policy is the baseline (29.5) with the app's `sources` over it, and it goes on a document alone
 // (29.2): a policy on JSON or a script restricts nothing, since nothing is rendered from it.
 //
-// THE NONCE IS MINTED BEFORE THE ROUTE RUNS, so a page reading `csp.nonce` while it renders reads
-// the one the header already carries — the header is written before the body streams.
+// THE NONCE IS MINTED BY WHICHEVER ASKS FIRST — a page reading `csp.nonce` while it renders, or this
+// rung writing a document's header — so the two agree, and an answer that is not a document mints none.
 
+import { CSP } from '#shared/csp.ts'
 import type { Middleware } from '#shared/Middleware.ts'
 import { randomToken } from './randomToken.ts'
 import { EARLY_CALL_HASH } from './render.ts'
@@ -57,22 +58,16 @@ function policy(
     }
 }
 
-export const csp = Object.assign(
-    (
-        sources?: Record<string, string[]>,
-    ): Middleware<{ request: Request }, Response> => {
-        const written = policy(sources)
-        return async (next) => {
-            const minted = nonce()
-            const answer = await next()
-            // 29.2.
-            if (
-                answer.headers.get('content-type')?.startsWith('text/html') ===
-                true
-            )
-                answer.headers.set('content-security-policy', written(minted))
-            return answer
-        }
-    },
-    { nonce },
-)
+CSP.rung = (sources): Middleware<{ request: Request }, Response> => {
+    const written = policy(sources)
+    return async (next) => {
+        const answer = await next()
+        // 29.2.
+        if (
+            answer.headers.get('content-type')?.startsWith('text/html') === true
+        )
+            answer.headers.set('content-security-policy', written(nonce()))
+        return answer
+    }
+}
+CSP.nonce = nonce

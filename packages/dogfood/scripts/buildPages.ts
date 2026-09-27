@@ -37,7 +37,7 @@ import {
     renderPageMarkdown,
     routeOf,
 } from './readContent.ts'
-import type { Example } from './renderExample.ts'
+import { type Example, renderSlot } from './renderExample.ts'
 import { renderInline } from './renderMarkdown.ts'
 
 const ENCODER = new TextEncoder()
@@ -153,23 +153,47 @@ export const CONTENT: DocsContent = ${JSON.stringify(record, null, 4)}
 `
 }
 
-// THE CHROME EVERY PAGE SHARES, as the one layout around all of them: the skip link, the nav and
-// the stylesheet. A layout is not rebuilt between navigations (41.11), so the nav a reader has
-// scrolled stays where it is while the page beside it changes — which is why the nav reads where
-// it is from the route rather than being told by the page.
+// THE CHROME EVERY PAGE SHARES, as the one layout around all of them: the skip link, the site bar,
+// the nav and the stylesheet. A layout is not rebuilt between navigations (41.11), so the nav a
+// reader has scrolled stays where it is while the page beside it changes — which is why the bar and
+// the nav read where they are from the route rather than being told by the page.
 //
-// `<slot/>` AT THE BODY'S OWN LEVEL, because the body is a three-column grid — nav, `<main>`, rail
-// — and the page's `<main>` and rail are its second and third columns. The region anchors round the
-// slot are comments, which are not grid items.
+// `<slot/>` AT THE BODY'S OWN LEVEL, because the body is a grid — the bar across the top, then nav,
+// `<main>`, rail — and the page's `<main>` and rail are its second and third columns. The region
+// anchors round the slot are comments, which are not grid items.
 const LAYOUT = `<script>
 import DocsNav from '#ui/components/DocsNav.abide'
+import SiteBar from '#ui/components/SiteBar.abide'
 import '#ui/app.css'
 </script>
 
 <a class="skip" href="#content">Skip to content</a>
+<SiteBar/>
 <DocsNav/>
 <slot/>
 `
+
+// THE INSTRUMENTS BESIDE THE DOCS — pages of the app with no `content/` behind them, so they are
+// not in `NAV` and no coverage gate reads them as documentation. Written here rather than by hand
+// because this script owns `pages/` whole and deletes what it did not write; the page is its
+// component and a title, and the component is where the page lives.
+const INSTRUMENTS = [
+    { directory: 'bench/', component: 'BenchBoard', title: 'Bench' },
+    { directory: 'tests/', component: 'TestBoard', title: 'Tests' },
+]
+
+function instrumentSource(instrument: (typeof INSTRUMENTS)[number]): string {
+    return `<script>
+import ${instrument.component} from '#ui/components/${instrument.component}.abide'
+</script>
+
+<head>
+    <title>${instrument.title} — abide</title>
+</head>
+
+<${instrument.component}/>
+`
+}
 
 // THE PAGE: the head it contributes (39.1), the record beside it, and the BODY AS MARKUP. The body is the one part written into the template rather than carried in the
 // record, because an example is a component and a component is a tag — a `{raw}` string cannot
@@ -202,7 +226,7 @@ export function pageSource(
     for (const example of examples) {
         imports += `import ${example.component} from '#${example.render.slice('src/'.length)}'\n`
         markup = markup.replace(
-            `<!--render:${example.name}-->`,
+            renderSlot(example.name),
             () => `<${example.component}/>`,
         )
     }
@@ -245,12 +269,7 @@ export async function buildPages(): Promise<Page[]> {
                   ? contents
                   : new Uint8Array(await contents.arrayBuffer())
         const held = await ifPresent(existing.bytes())
-        if (
-            held !== undefined &&
-            held.length === next.length &&
-            sameBytes(held, next)
-        )
-            return
+        if (held !== undefined && Bun.deepEquals(held, next)) return
         await Bun.write(at, next)
     }
 
@@ -278,6 +297,12 @@ export async function buildPages(): Promise<Page[]> {
         await put(new URL(`${page.slug}.md`, PUBLIC), markdown[index] as string)
     }
 
+    for (const instrument of INSTRUMENTS)
+        await put(
+            new URL(`${instrument.directory}page.abide`, PAGES),
+            instrumentSource(instrument),
+        )
+
     // ONE FILE in reading order, for an agent that would otherwise fetch eighty.
     await put(new URL('abide.md', PUBLIC), renderBundle(pages, markdown))
 
@@ -288,12 +313,6 @@ export async function buildPages(): Promise<Page[]> {
     await prune(PAGES, written)
     await prune(PUBLIC, written)
     return pages
-}
-
-function sameBytes(held: Uint8Array, next: Uint8Array): boolean {
-    for (let at = 0; at < held.length; at += 1)
-        if (held[at] !== next[at]) return false
-    return true
 }
 
 // WHAT THIS RUN DID NOT WRITE. A page renamed in `NAV.ts` leaves a directory behind, and a
@@ -309,7 +328,7 @@ async function prune(root: URL, written: Set<string>): Promise<void> {
     }
     // AND THE DIRECTORIES THAT LEAVES EMPTY, deepest first so a parent is asked after its
     // children went. Under `pages/` an empty directory is harmless; under `public/` it is a folder
-    // the app serves a listing-shaped nothing from, and the zips' left one standing.
+    // the app serves a listing-shaped nothing from.
     const directories = [
         ...new Bun.Glob('**/*').scanSync({
             cwd: root.pathname,

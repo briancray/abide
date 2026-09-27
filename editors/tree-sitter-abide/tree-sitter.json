@@ -1,0 +1,21 @@
+{
+    "grammars": [
+        {
+            "name": "abide",
+            "camelcase": "Abide",
+            "scope": "source.abide",
+            "path": ".",
+            "external-files": ["src/tag.h"],
+            "file-types": ["abide"],
+            "highlights": "queries/highlights.scm",
+            "injections": "queries/injections.scm",
+            "injection-regex": "abide"
+        }
+    ],
+    "metadata": {
+        "version": "0.0.1",
+        "license": "MIT",
+        "description": "The .abide grammar for tree-sitter",
+        "links": { "repository": "https://github.com/briancray/abide" }
+    }
+}

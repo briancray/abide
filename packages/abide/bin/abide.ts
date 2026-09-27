@@ -8,8 +8,11 @@ import { resolve } from 'node:path' // bun exposes no path helpers of its own
 import { parseArgs } from 'node:util' // bun exposes no argv parser of its own yet
 import { brotliCompress, constants } from 'node:zlib' // bun has gzip and zstd of its own, and no brotli
 
+import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
+import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
 import { scaffold } from '#compiler/scaffold.ts'
+import { serveLanguage } from '#compiler/serveLanguage.ts'
 import {
     CLIENT_DIRECTORY,
     ENCODING_SUFFIX,
@@ -64,10 +67,14 @@ const COMMANDS: [
         'a live subscription to log.records',
         ({ values }) => logs(values.url),
     ],
-    ['check', 'not built yet', notBuilt],
+    [
+        'check [dir…]',
+        'type-check the templates and the TypeScript, on the line you wrote',
+        inApp(check),
+    ],
     ['compile', 'not built yet', notBuilt],
     ['bundle', 'not built yet', notBuilt],
-    ['lsp', 'not built yet', notBuilt],
+    ['lsp', 'the .abide language server, over stdio', lsp],
 ]
 
 async function notBuilt({ positionals }: Given): Promise<number> {
@@ -91,9 +98,12 @@ function usage(): string {
 }
 
 async function build({ root, out }: AppDirectories): Promise<number> {
+    process.env.NODE_ENV ??= 'production'
     // `--out` is a real flag rather than a constant because two test files each building into
     // one `.abide/` is the contention CLAUDE.md's "checks" section already records once.
     const app = await compileApp(root)
+    for (const warning of app.warnings)
+        console.warn(formatDiagnosis(warning, process.cwd()))
     if (app.modules.size === 0) {
         console.log(`abide build: no .abide sources or handlers under ${root}`)
         return 0
@@ -106,11 +116,9 @@ async function build({ root, out }: AppDirectories): Promise<number> {
         writes.push(Bun.write(`${out}/${name}`, text))
     await Promise.all(writes)
 
-    // A MODULE WHOSE SOURCE IS GONE IS REMOVED, not left standing. Nothing removed what a DELETED
-    // `.abide` used to compile to, so the output was the union of every build: a `DocsRail.ts`
-    // outlived its source by a day here, and a grep over the emitted modules answered about code
-    // no build produces — which is how a coverage count came back wrong. The same class as the
-    // orphan chunks `bundleClient` empties, one level up and found the same way.
+    // A MODULE WHOSE SOURCE IS GONE IS REMOVED, not left standing, or the output is the union of
+    // every build and a grep over it answers about code no build produces — the same class as the
+    // orphan chunks `bundleClient` empties, one level up.
     //
     // PRUNED AGAINST WHAT WAS JUST WRITTEN rather than by emptying `out`: the directory is named
     // by `--out` and a flag that deletes a tree is a different kind of thing from one that writes
@@ -181,9 +189,8 @@ async function bundleClient(
 ): Promise<void> {
     // EMPTIED FIRST. `Bun.build` writes its chunks in and removes nothing, so a chunk whose content
     // hash changed leaves the old one behind and the directory is the union of every build ever run
-    // into it. The docs app accumulated 1,423 orphans against 86 live chunks, and the cost is not
-    // disk: a grep over the built output answers about code no page loads, which is how one
-    // exploration priced the client bundle off files nothing imports.
+    // into it — and the cost is not disk: a grep over the built output answers about code no page
+    // loads.
     await rm(`${out}/${CLIENT_DIRECTORY}`, { recursive: true, force: true })
     // AN APP OF HANDLERS ALONE has no page to boot, and is served with no client — the manifest
     // written anyway, so `abide start` reads one shape whatever the app holds.
@@ -505,12 +512,63 @@ async function mcp({ values: { url } }: Given): Promise<number> {
     return 0
 }
 
+// 38.3 — every finding under the app, or under the directories named; a failure where any is an
+// error, and a success where the findings are warnings alone.
+async function check(
+    { root }: AppDirectories,
+    { positionals }: Given,
+): Promise<number> {
+    const within: string[] = []
+    for (const directory of positionals.slice(1))
+        within.push(
+            existsSync(directory)
+                ? realpathSync(resolve(directory))
+                : resolve(directory),
+        )
+    const found = await checkApp(root)
+    let errors = 0
+    let warnings = 0
+    for (const diagnosis of found) {
+        if (
+            within.length > 0 &&
+            !within.some(
+                (directory) =>
+                    diagnosis.path === directory ||
+                    diagnosis.path.startsWith(`${directory}/`),
+            )
+        )
+            continue
+        if (diagnosis.category === 'error') errors += 1
+        else if (diagnosis.category === 'warning') warnings += 1
+        else continue
+        console.log(formatDiagnosis(diagnosis, process.cwd()))
+    }
+    console.log(
+        `abide check: ${errors} error${errors === 1 ? '' : 's'}, ${warnings} warning${warnings === 1 ? '' : 's'}`,
+    )
+    return errors > 0 ? 1 : 0
+}
+
+// 38.12 — the language server, for as long as the editor holds stdin open. Nothing is printed: stdout
+// is the protocol.
+// Not `inApp`: an editor starts it wherever its workspace is, and each document finds its own app.
+async function lsp({ values }: Given): Promise<number> {
+    const root = values.root === undefined ? undefined : resolve(values.root)
+    await serveLanguage(root, Bun.stdin.stream(), (bytes) => {
+        process.stdout.write(bytes)
+    })
+    return 0
+}
+
 // 38.4 — the project, watched, with the app kept up. Hands back no exit code for `start`'s
 // reason: the process IS the server.
+// 36.3 — `dev`, `build` and `start` each name the environment where the process was started with
+// none, and leave one it was started with exactly as given.
 async function dev(
     { root }: AppDirectories,
     { values: { port } }: Given,
 ): Promise<undefined> {
+    process.env.NODE_ENV ??= 'development'
     const server = await serveDev({
         root,
         port: port === undefined ? undefined : Number(port),
@@ -525,10 +583,7 @@ async function start(
     { root, out }: AppDirectories,
     { values: { port } }: Given,
 ): Promise<undefined> {
-    if (!existsSync(`${out}/server.ts`))
-        throw new Error(
-            `abide start: no build at ${out}. Run \`abide build\` first.`,
-        )
+    process.env.NODE_ENV ??= 'production'
     const server = await serveBuild({
         root,
         out,

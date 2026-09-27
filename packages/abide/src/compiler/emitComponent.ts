@@ -1,5 +1,6 @@
 import { escapeAttribute } from '#shared/escapeText.ts'
 import { headKeyOf } from '#shared/headKeyOf.ts'
+import { isEventName } from '#shared/isEventName.ts'
 import { safeUrl } from '#shared/safeUrl.ts'
 import { URL_ATTRIBUTES } from '#shared/URL_ATTRIBUTES.ts'
 import {
@@ -12,16 +13,15 @@ import { CHILDREN } from './CHILDREN.ts'
 import { Cursor, type Position, placeTemplate } from './Cursor.ts'
 import type { Read } from './classifyRead.ts'
 import {
+    explicitNames,
     isClassToggle,
     isComponentTag,
-    explicitNames,
     isElementBind,
-    type ValueBind,
-    valueBindOf,
-    isEventName,
     isSingleRooted,
     isSlot,
     isStyleProperty,
+    type ValueBind,
+    valueBindOf,
 } from './classifyTemplate.ts'
 import { invocationProps } from './invocationProps.ts'
 import { Lowering, PROPS } from './Lowering.ts'
@@ -51,7 +51,21 @@ const BACK = '__back'
 
 // The share scope an instance opens (10.5), named apart from the client's binding `Scope`: one is
 // what a component's descendants look a key up through, the other is what stops its bindings.
-export const SHARED = '__shared'
+const SHARED = '__shared'
+
+// 10.5 — THE INSTANCE'S OWN SHARE SCOPE, opened around everything the instance does on either side,
+// or nothing where it shares nothing. Closed in a `finally`, so an instance that threw leaves the
+// scope it entered.
+export function shareScope(
+    lowering: Lowering,
+    indent: string,
+): { opened: string; closed: string } {
+    if (!lowering.opensShareScope()) return { opened: '', closed: '' }
+    return {
+        opened: `${indent}const ${SHARED} = ${lowering.use('enterShare')}()\n${indent}try {\n`,
+        closed: `\n${indent}} finally { ${lowering.use('leaveShare')}(${SHARED}) }`,
+    }
+}
 
 // A parsed `.abide` file becomes one ESM module exporting a component. The `<script>` body is
 // copied VERBATIM into the component function, which is the whole of 19.12 at this stage: the
@@ -102,16 +116,9 @@ export function emitComponent(
         .join('\n')
 
     const heads = body.some((part) => part.includes(HEADS))
-    // 10.5 — the instance's own scope, opened around everything the instance does: the setup that
-    // calls `reactive.share`, and the body whose children are rendered inside it and find it on
-    // the way up. Closed in a `finally`, so a component that threw leaves the scope it entered.
-    const shares = lowering.opensShareScope()
-    const opened = shares
-        ? `    const ${SHARED} = ${lowering.use('enterShare')}()\n    try {\n`
-        : ''
-    const closed = shares
-        ? `\n    } finally { ${lowering.use('leaveShare')}(${SHARED}) }`
-        : ''
+    // 10.5 — around the setup that calls `reactive.share`, and the body whose children are
+    // rendered inside it and find it on the way up.
+    const { opened, closed } = shareScope(lowering, '    ')
 
     // THE SETUP IS NOT RE-INDENTED. Adding a margin to every line rewrites the INSIDE of a
     // multi-line template literal, so `\`line one\nline two\`` gains four spaces it never had —
@@ -265,11 +272,15 @@ function renderPosition(
         // that as absent, and 32.23's zero rows is already what absent means here. Read ONCE for
         // the block (32.22), so the thunk is per block rather than per row.
         const guarded = unlandable(lowering, node, subject)
+        // 14.8 — the row's branch-local `<script>`, run at the head of each row, untracked like the
+        // component's own setup (14.7) since the render tracks nothing.
+        const setup =
+            node.setup === null ? '' : `${lowering.expression(node.setup)}\n`
         return `${OPEN_ANCHOR} + ((__list) => {
         if (!Array.isArray(__list)) return ''
         let __out = ''
         let ${index} = 0
-        for (const ${item} of __list) { __out += ${row}; ${index} += 1 }
+        for (const ${item} of __list) { ${setup}__out += ${row}; ${index} += 1 }
         return __out
     })(${listOf}(${guarded})) + ${CLOSE_ANCHOR}`
     }
@@ -315,10 +326,18 @@ function renderPosition(
         // which arm was painted.
         // EACH ARM IS ITS OWN REGION ROOT — one sink apiece, so two arms may hold the same slot
         // names and neither can see the other's.
-        const arms = node.branches.map((branch, arm) => ({
-            subject: branch.subject === '' ? '' : lowering.expression(branch),
-            body: renderMarkup(at.inner[arm] as Cursor, lowering, client),
-        }))
+        // 14.8 — an arm's branch-local `<script>` runs before its markup, in a scope of its own.
+        const arms = node.branches.map((branch, arm) => {
+            const body = renderMarkup(at.inner[arm] as Cursor, lowering, client)
+            return {
+                subject:
+                    branch.subject === '' ? '' : lowering.expression(branch),
+                body:
+                    branch.setup === null
+                        ? body
+                        : `(() => {\n${lowering.expression(branch.setup)}\nreturn ${body}\n})()`,
+            }
+        })
         let expression = "''"
         for (let at = arms.length - 1; at >= 0; at -= 1) {
             const arm = arms[at] as (typeof arms)[number]
@@ -374,13 +393,20 @@ function renderPosition(
             open = ''
             continue
         }
+        // 32.38 — a whole-value attribute may be absent, so it writes its own name and quotes.
+        if (written.kind === 'dynamic') {
+            parts.push(
+                JSON.stringify(open),
+                dynamicMarkup(written.attribute, lowering),
+            )
+            open = ''
+            continue
+        }
         // A computed value breaks the static run: what precedes it is a literal, the value is an
         // expression, and the tag carries on after it.
         parts.push(
             JSON.stringify(`${open} ${written.name}="`),
-            written.kind === 'merged'
-                ? mergedValue(written, lowering, markupRender(lowering))
-                : dynamicMarkup(written.attribute, lowering),
+            mergedValue(written, lowering, markupRender(lowering)),
             "'\"'",
         )
         open = ''
@@ -456,7 +482,7 @@ function emitInvocation(
         )
     return client
         ? EMPTY_REGION
-        : `${lowering.use('renderComponent')}(${node.tag}, { ${props.join(', ')} }, ${HEADS})`
+        : `${lowering.use('renderComponent')}(${lowering.chosenTag(node) ?? node.tag}, { ${props.join(', ')} }, ${HEADS})`
 }
 
 // 39.6 — THE CONTRIBUTIONS A PAGE MAKES TO THE DOCUMENT HEAD, as an expression, for the lane that
@@ -635,17 +661,17 @@ export function writtenAttributes(
 // 32.3 — an expression attribute is reactive. Its CURRENT value is written here, and `emitClient`'s
 // own attribute loop is what keeps writing it after hydration.
 //
-// 32.21 IS THE INTERPOLATION'S CLAUSE, and the check used to run on the path it does not name: the
-// literal `href` was scheme-checked and `<a href={u}>` was served verbatim, which is the one of the
-// two where untrusted data actually arrives. The value is not known here, so the guard is a call in
-// the emitted markup — the same shape the escaping already is, and the same one on both sides.
+// 32.21 IS THE INTERPOLATION'S CLAUSE: `<a href={u}>` is where untrusted data actually arrives, not
+// the literal `href`. The value is not known here, so the guard is a call in the emitted markup —
+// `attributeMarkup`, which also decides 32.38's absence, and which the client's binding answers
+// through the same `attributeText`.
 //
 // 41.4 INSIDE BOTH GUARDS. The abort is nearest the read and the scheme check wraps it, so a `href`
 // still in flight is checked as the empty value it renders as rather than skipping 32.21 on its way
 // past.
 function dynamicMarkup(attribute: Attribute, lowering: Lowering): string {
     const value = unlandable(lowering, attribute, lowering.slot(attribute))
-    return `${lowering.use('escapeAttribute')}(${urlGuarded(lowering, attribute.lowerName, value)})`
+    return `${lowering.use('attributeMarkup')}(${JSON.stringify(attribute.name)}, ${value})`
 }
 
 // 32.5, 32.7, 32.8 — A BIND'S VALUE AT RENDER, under 41.4's guard: a value still in flight writes
@@ -654,7 +680,10 @@ function boundMarkup(
     written: WrittenAttribute & { kind: 'bound' },
     lowering: Lowering,
 ): string {
-    const read = `${lowering.use('slotValue')}(() => ${lowering.use('boundValue')}(${lowering.reference(written.attribute)}))`
+    const read = slotValueOf(
+        lowering,
+        `${lowering.use('boundValue')}(${lowering.reference(written.attribute)})`,
+    )
     if (written.bind === 'value')
         return `' value="' + ${lowering.use('escapeAttribute')}(${read}) + '"'`
     const on =
@@ -720,18 +749,17 @@ function mergeHead(children: TemplateNode[]): TemplateNode[] {
     return kept
 }
 
-// 39.11 THROUGH THE ONE GRAMMAR (`headKeyOf`), asked with what the COMPILER can read. A key the
-// compiler cannot read is no key: `<meta name={x}>` carries a name only the run time knows, so it
-// appends under 39.5 rather than merging against a string that is not its value. `<TITLE>` is the
+// 39.11 THROUGH THE ONE GRAMMAR (`headKeyOf`), asked with what the COMPILER can read: an expression
+// is present but unknown, so `<meta name={x}>` appends under 39.5 rather than merging against a
+// string that is not its value. `<TITLE>` is the
 // same singleton as `<title>`, which `lowerTag` already gives.
 function headKey(node: TemplateNode): string | undefined {
     if (node.kind !== 'element') return undefined
-    // An `href` that is an EXPRESSION is a different URL per render, so the pair is not a key —
-    // told apart from an ABSENT one, which is, and which two `<link rel="canonical">` share.
-    // `headKeyOf` cannot tell the two apart, both reaching it as `undefined`, so the bail is here.
-    if (node.lowerTag === 'link' && attributeOf(node, 'href')?.expression)
-        return undefined
-    return headKeyOf(node.lowerTag, (name) => staticAttribute(node, name))
+    return headKeyOf(node.lowerTag, (name) => {
+        const attribute = attributeOf(node, name)
+        if (attribute === undefined) return null
+        return attribute.expression ? undefined : attribute.value
+    })
 }
 
 function attributeOf(
@@ -921,18 +949,4 @@ function classValue(
 // whole. `srcdoc` is markup rather than a URL and is guarded by the escaping instead.
 export function isUrlAttribute(lowerName: string): boolean {
     return URL_ATTRIBUTES.has(lowerName)
-}
-
-// 32.21's scheme check, as the emitted call both lanes write. ONE FUNCTION RATHER THAN THE
-// PREDICATE PLUS THE BRANCH TWICE: the server writes the value standing at render and the client's
-// binding writes every one after it, so a `javascript:` the server refuses and the client lets
-// through is the guard being half applied. The STATIC arms below ask the predicate instead —
-// there the value is known here, so the answer is a compile-time drop rather than a call.
-export function urlGuarded(
-    lowering: Lowering,
-    lowerName: string,
-    value: string,
-): string {
-    if (!isUrlAttribute(lowerName)) return value
-    return `${lowering.use('safeUrl')}(${value})`
 }

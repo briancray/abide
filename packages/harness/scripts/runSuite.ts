@@ -1,11 +1,26 @@
-// A SUITE, RUN AND PARSED. `bun test` and playwright both speak JUnit, so one parser
-// serves both and the status page does not learn two shapes.
+// ONE TEST FILE, RUN AND PARSED. `bun test` and playwright both speak JUnit, so one parser
+// serves both and the tests page does not learn two shapes.
 //
-// A FAILING SUITE IS A RESULT, NOT AN ERROR. This never throws on a red run — a
-// status page whose whole job is showing what is red cannot fall over when something
-// is. It throws only when the runner produced no report at all, which is a different
-// thing and one the page has to say out loud: a suite that HANGS reports nothing, and
-// "0 failures" read off an absent file is the worst answer available.
+// ONE FILE PER PROCESS, so a row lands the moment its file finishes rather than after the
+// slowest one — and a file that fails ALONE is the honest reading (CLAUDE.md, "checks").
+//
+// A FAILING SUITE IS A RESULT, NOT AN ERROR. This never throws on a red run — a page whose
+// whole job is showing what is red cannot fall over when something is. It throws only when the
+// runner produced no report at all, which is a different thing and one the page has to say out
+// loud: a suite that HANGS reports nothing, and "0 failures" read off an absent file is the worst
+// answer available.
+
+import { tmpdir } from 'node:os' // bun has no temporary-directory lookup of its own
+
+// A RUNNER THAT IS STOPPED STOPS ITS SUITES. SIGTERM reaches this process and nothing under it, so
+// without passing it on a Stop orphans every `bun test` and browser still running, and the next
+// run shares the machine with them — which is what turns a timing gate red.
+// A killed suite never reaches the end where its JUnit file is written, so there is none to delete.
+const LIVE = new Set<Bun.Subprocess>()
+process.on('SIGTERM', () => {
+    for (const child of LIVE) child.kill()
+    process.exit(143)
+})
 
 export type SuiteCase = {
     name: string
@@ -19,19 +34,6 @@ export type Suite = {
     failures: number
     skipped: number
     cases: SuiteCase[]
-}
-
-export type SuiteRun = {
-    label: string
-    command: string
-    ran: boolean
-    // Why it did not run, where it did not. An absent browser is not a red suite.
-    unavailable: string | null
-    seconds: number
-    tests: number
-    failures: number
-    skipped: number
-    suites: Suite[]
 }
 
 function attribute(tag: string, name: string): string {
@@ -94,62 +96,35 @@ export const PLAYWRIGHT_REPORT: ReportTo = (path) => ({
 })
 
 export async function runSuite(spec: {
-    label: string
     command: string[]
     reportTo: ReportTo
     cwd: string
     environment?: Record<string, string>
-    // Where the runner could not be used at all — no browser installed, say.
-    skipWhen?: () => string | null
-}): Promise<SuiteRun> {
-    const empty = {
-        label: spec.label,
-        command: spec.command.join(' '),
-        seconds: 0,
-        tests: 0,
-        failures: 0,
-        skipped: 0,
-        suites: [] as Suite[],
-    }
-    const unavailable = spec.skipWhen?.() ?? null
-    if (unavailable) return { ...empty, ran: false, unavailable }
-
-    const report = `${spec.cwd}/.status-${spec.label.replaceAll(/\W+/g, '-')}.xml`
+}): Promise<{ suites: Suite[]; milliseconds: number }> {
+    const report = `${tmpdir()}/abide-suite-${crypto.randomUUID()}.xml`
     const pointed = spec.reportTo(report)
     const startedAt = Bun.nanoseconds()
-    Bun.spawnSync({
+    const child = Bun.spawn({
         cmd: [...spec.command, ...pointed.args],
         cwd: spec.cwd,
         env: { ...process.env, ...spec.environment, ...pointed.environment },
-        stdout: 'pipe',
+        stdout: 'ignore',
         stderr: 'pipe',
     })
-    const seconds = (Bun.nanoseconds() - startedAt) / 1e9
+    LIVE.add(child)
+    const [stderr] = await Promise.all([
+        new Response(child.stderr).text(),
+        child.exited,
+    ])
+    LIVE.delete(child)
+    const milliseconds = (Bun.nanoseconds() - startedAt) / 1e6
 
     const file = Bun.file(report)
     if (!(await file.exists()))
         throw new Error(
-            `${spec.label}: the runner wrote no report. A suite that HANGS reports nothing at all, and an absent file must not be read as zero failures.`,
+            `the runner wrote no report — a suite that HANGS or never starts reports nothing, and an absent file must not be read as zero failures.\n${stderr.slice(-2000)}`,
         )
     const suites = parseJUnit(await file.text())
     await file.delete()
-
-    let tests = 0
-    let failures = 0
-    let skipped = 0
-    for (const suite of suites) {
-        tests += suite.tests
-        failures += suite.failures
-        skipped += suite.skipped
-    }
-    return {
-        ...empty,
-        ran: true,
-        unavailable: null,
-        seconds,
-        tests,
-        failures,
-        skipped,
-        suites,
-    }
+    return { suites, milliseconds }
 }

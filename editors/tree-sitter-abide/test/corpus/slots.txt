@@ -1,0 +1,88 @@
+================================================================================
+A slot in text
+================================================================================
+
+<p>Total: {total}</p>
+
+--------------------------------------------------------------------------------
+
+(document
+  (element
+    (start_tag
+      (tag_name))
+    (text)
+    (expression
+      (code))
+    (end_tag
+      (tag_name))))
+
+================================================================================
+A slot whose code holds braces in a string, a template literal and a comment
+================================================================================
+
+<p>{"}" + `${n}}` + /* } */ x}</p>
+
+--------------------------------------------------------------------------------
+
+(document
+  (element
+    (start_tag
+      (tag_name))
+    (expression
+      (code))
+    (end_tag
+      (tag_name))))
+
+================================================================================
+An expression attribute, a slotted quoted value and a spread
+================================================================================
+
+<Card class="badge {tone}" onclick={() => { n = n + 1 }} {...rest}/>
+
+--------------------------------------------------------------------------------
+
+(document
+  (element
+    (self_closing_tag
+      (tag_name)
+      (attribute
+        (attribute_name)
+        (quoted_attribute_value
+          (attribute_value)
+          (expression
+            (code))))
+      (attribute
+        (attribute_name)
+        (expression
+          (code)))
+      (attribute
+        (spread
+          (code))))))
+
+================================================================================
+Braces inside script and style stay their raw text
+================================================================================
+
+<script>
+let n = reactive({ a: 1 })
+</script>
+
+<style>
+.card { color: red }
+</style>
+
+--------------------------------------------------------------------------------
+
+(document
+  (script_element
+    (start_tag
+      (tag_name))
+    (raw_text)
+    (end_tag
+      (tag_name)))
+  (style_element
+    (start_tag
+      (tag_name))
+    (raw_text)
+    (end_tag
+      (tag_name))))

@@ -33,9 +33,19 @@ export type { History } from './History.ts'
 export { isKeyed, type Keyed } from './Keyed.ts'
 export { isReactive } from './isReactive.ts'
 export { NotLanded } from './NotLanded.ts'
+// The server reaches the core through here rather than `./Reactive.ts`: `Reactive.ts` →
+// `log.ts` → this barrel → `scoped.ts` → `Reactive.ts` is a cycle, and a server module loaded
+// first that imports the core directly meets `MEMBER_KEYS` before it is initialised.
 export {
+    abandonLoad,
+    chunksFrom,
+    deadlineOf,
     flushSync,
     type Identity,
+    isStreamBody,
+    isStreaming,
+    loadOf,
+    pastOf,
     type Reactive,
     type ReactiveOptions,
     type Store,

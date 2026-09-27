@@ -9,6 +9,7 @@ covers:
   - `App.run`
   - `App.listen`
   - `App.stop`
+  - `App[Symbol.asyncDispose]`
 ---
 
 ```ts server
@@ -104,6 +105,18 @@ off the network, so two test files holding an app are not queueing for the same 
 and clears the timers the app holds — and then `onStop` runs. A file that builds an app and
 never stops it leaves a timer standing, and a suite that hangs reports nothing at all: no
 failure, no summary, nothing to read.
+
+Hold it with `await using` and it stops where the block ends, a failed assertion included.
+
+```ts server
+test('a contact loads', async () => {
+    await using app = await createApp()
+    const answer = await app.fetch(
+        new Request('http://app.invalid/__abide/rpc/contacts/getContact?id=42'),
+    )
+    expect(answer.status).toBe(200)
+})
+```
 
 ## There is no test client
 

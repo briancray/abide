@@ -6,6 +6,9 @@ export const SHARED_NAMES: ReadonlySet<string> = new Set([
     'escapeAttribute',
     'escapeStyleValue',
     'safeUrl',
+    // 32.38 — present, absent or text: the markup's answer and a built row's.
+    'attributeMarkup',
+    'attributeText',
     'raw',
     // 32.31's anchored run, which the server's markup and a browser's parsed row both write.
     'markupRun',
@@ -18,6 +21,10 @@ export const SHARED_NAMES: ReadonlySet<string> = new Set([
     // 32.5, 32.8 — what a `bind:` operand holds, which the markup writes into the tag.
     'boundValue',
     'groupHolds',
+    // 32.6, 33.6, 33.7 — a component's `bind:`, and the cell a child writing that prop builds.
+    'boundProp',
+    'propCell',
+    'propCells',
     // 32.11 — a spread's props, which an invocation passes on both sides, and its markup.
     'spreadProps',
     'spreadAttributes',

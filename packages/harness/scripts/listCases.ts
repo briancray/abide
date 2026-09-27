@@ -121,18 +121,21 @@ function listCase(
             const orders: Datum[][] = [moved, seed]
 
             const a = host(seed)
-            // HYDRATED from the rows `host` rendered, the way a served page's list is.
-            const list = listAt(
-                a.region as never,
-                false,
-                (row) => (row as Datum).id,
-                (made, row) => {
+            const builders = {
+                make: (made: Document, row: unknown): Node[] => {
                     const item = made.createElement('li')
                     item.setAttribute('data-id', String((row as Datum).id))
                     item.textContent = (row as Datum).label
                     return [item]
                 },
-                () => new Scope(),
+                mount: (): Scope => new Scope(),
+            }
+            // HYDRATED from the rows `host` rendered, the way a served page's list is.
+            const list = listAt(
+                a.region as never,
+                false,
+                (row) => (row as Datum).id,
+                () => builders,
             )
             updateList(list, seed)
             const b = host(seed)

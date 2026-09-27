@@ -1,0 +1,165 @@
+<script>
+// EVERY TEST FILE, RUN FROM THE PAGE — one file per process, so a row lands when its own file
+// finishes (`harness/scripts/testRows.ts`). The bench board's shape, for the bench board's
+// reasons: one value holds the rows and a run patches into it as each lands.
+import { reactive } from 'abide'
+import { matchesFilter, type RowItem, type TestRow } from 'harness/rows'
+import { runTests, testCatalog } from '#server/rpc/tests'
+import { messageOf } from '#ui/messageOf.ts'
+import { readRows } from '#ui/readRows.ts'
+import { ROW_STATES } from '#ui/ROW_STATES.ts'
+
+type Section = { name: string; items: RowItem[] }
+
+let filter = reactive('')
+// 44.9 — every `gate()` also runs the broken arm it names and asserts it fails.
+let gates = reactive(false)
+const catalog = reactive(() => testCatalog())
+const landed = reactive(new Map<string, TestRow>())
+let running = reactive(false)
+let failure = reactive('')
+let stopping: AbortController | undefined
+
+// THE CATALOG'S OWN ITEMS, grouped — and NOT the readings, for the bench board's reason: a keyed
+// list remakes a row whose item is a new object, so the readings are looked up by each row's slots.
+const sections = reactive(() => {
+    const grouped: Section[] = []
+    for (const item of catalog) {
+        if (!matchesFilter(item, filter)) continue
+        let section = grouped[grouped.length - 1]
+        if (section === undefined || section.name !== item.section) {
+            section = { name: item.section, items: [] }
+            grouped.push(section)
+        }
+        section.items.push(item)
+    }
+    return grouped
+})
+
+function failingIn(items: RowItem[]): number {
+    let failing = 0
+    for (const item of items) {
+        const row = landed.get(item.id)
+        if (row !== undefined && (row.failures > 0 || row.state === 'broken')) failing += 1
+    }
+    return failing
+}
+
+const tally = reactive(() => {
+    let shown = 0
+    let failing = 0
+    for (const section of sections) {
+        shown += section.items.length
+        failing += failingIn(section.items)
+    }
+    return { shown, failing }
+})
+
+// A ROW'S CELLS, AS TEXT AND TONE, read from `landed` inside the row's own slots — so a file
+// finishing rewrites the slots of its own row and no other.
+function cellsOf(item: RowItem) {
+    const row = landed.get(item.id)
+    if (row === undefined || row.state !== 'done') {
+        const state = ROW_STATES[row?.state ?? 'none']
+        return { passing: state.label, passingTone: state.tone, skipped: '', time: '—', timeTone: 'board-waiting' }
+    }
+    return {
+        passing: `${row.tests - row.failures - row.skipped}/${row.tests - row.skipped}`,
+        passingTone: row.failures > 0 ? 'board-bad' : 'board-good',
+        skipped: row.skipped > 0 ? String(row.skipped) : '',
+        time: seconds(row),
+        timeTone: '',
+    }
+}
+
+async function start(scope: string) {
+    running = true
+    failure = ''
+    stopping = new AbortController()
+    try {
+        await readRows<TestRow>(
+            await runTests.raw({ scope, filter, gates }, { signal: stopping.signal }),
+            (row) => landed.patch((map) => map.set(row.id, row)),
+        )
+    } catch (error) {
+        if (!stopping.signal.aborted) failure = messageOf(error)
+    }
+    // A row a stopped run only queued or started has no reading, so it goes back to having none.
+    landed.patch((map) => {
+        for (const [id, row] of map)
+            if (row.state === 'queued' || row.state === 'running') map.delete(id)
+    })
+    running = false
+}
+
+function stop() {
+    stopping?.abort()
+}
+
+function seconds(row: TestRow): string {
+    return `${(row.milliseconds / 1000).toFixed(row.milliseconds < 10_000 ? 2 : 1)} s`
+}
+</script>
+
+<main id="content" class="board">
+    <header>
+        <h1>Tests</h1>
+        <p class="intent">Every test file in the repo, and every browser spec, one file to a process. Unit files run eight at a time; browser specs one at a time, because they share one app server.</p>
+    </header>
+
+    <div class="board-bar">
+        <input type="search" placeholder="Filter test files" aria-label="Filter test files" bind:value={filter}>
+        <label><input type="checkbox" bind:checked={gates}> Run gate reverts</label>
+        {#if running}
+            <button onclick={stop}>Stop</button>
+        {:else}
+            <button onclick={() => start('all')}>{filter.trim() === '' ? 'Run all' : `Run ${tally.shown} shown`}</button>
+        {/if}
+        <span class="board-summary" class:board-bad={failure !== '' || tally.failing > 0}>{failure !== '' ? failure : running ? 'running…' : tally.failing > 0 ? `${tally.failing} failing` : `${tally.shown} files`}</span>
+    </div>
+
+    {#if catalog.error()}
+        <p class="board-bad">{messageOf(catalog.error())}</p>
+    {:else if catalog.ready()}
+        {#for section of sections by section.name}
+            <section>
+                <div class="board-head">
+                    <h2>{section.name}</h2>
+                    <span class="board-count" class:board-bad={failingIn(section.items) > 0}>{failingIn(section.items) > 0 ? `${failingIn(section.items)} of ${section.items.length} failing` : section.items.length}</span>
+                    <button class="board-run" onclick={() => start(`section:${section.name}`)} disabled={running}>Run section</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>File</th><th class="board-figure">Passing</th><th class="board-figure">Skipped</th><th class="board-figure">Time</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        {#for item of section.items by item.id}
+                            <tr>
+                                <td>
+                                    {item.name}
+                                    {#if landed.get(item.id)?.state === 'broken'}
+                                        <span class="board-note board-bad">{landed.get(item.id)?.note}</span>
+                                    {:else if (landed.get(item.id)?.failed.length ?? 0) > 0}
+                                        <details>
+                                            <summary>{landed.get(item.id)?.failed.length} failing</summary>
+                                            {#for failed of landed.get(item.id)?.failed ?? []}
+                                                <pre><strong>{failed.name}</strong>
+{failed.failure}</pre>
+                                            {/for}
+                                        </details>
+                                    {/if}
+                                </td>
+                                <td class={`board-figure ${cellsOf(item).passingTone}`}>{cellsOf(item).passing}</td>
+                                <td class="board-figure">{cellsOf(item).skipped}</td>
+                                <td class={`board-figure ${cellsOf(item).timeTone}`}>{cellsOf(item).time}</td>
+                                <td class="board-figure"><button class="board-run" onclick={() => start(`item:${item.id}`)} disabled={running}>Run</button></td>
+                            </tr>
+                        {/for}
+                    </tbody>
+                </table>
+            </section>
+        {/for}
+    {:else}
+        <p class="board-summary">Listing the test files…</p>
+    {/if}
+</main>

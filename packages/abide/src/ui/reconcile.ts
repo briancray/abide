@@ -1,10 +1,11 @@
+import { PATCHES } from '#shared/reactive/PATCHES.ts'
 import { LAYER_RECONCILE } from './LAYER_NAMES.ts'
-import type { List } from './List.ts'
-import { beginLayer, endLayer } from './measureLayer.ts'
+import type { List, RowBuilders } from './List.ts'
 import { HYDRATE_LOG } from './Mismatch.ts'
+import { beginLayer, endLayer } from './measureLayer.ts'
 import { moveNode } from './moveNode.ts'
 import { closeOf, type Region, removeUntil } from './regions.ts'
-import { Scope } from './Scope.ts'
+import { EMPTY_SCOPE, type Scope } from './Scope.ts'
 
 // 41.8 — a KEYED list, reconciled by moving the nodes that are already there rather than by
 // rebuilding them. A rebuild produces the right screen and the wrong document: focus, selection,
@@ -37,6 +38,9 @@ export type Row = {
     // avoid. Written by every reconcile, so it is a fact about the last one rather than about the
     // caller, and a hydration seed sets it because that IS the order the server painted.
     at: number
+    // 32.34 — the patch epoch the row was made at. Its item written past this is content the row
+    // never saw, under the same object a kept row is matched by.
+    seen: number
 }
 
 // 41.10 — a row that cannot be hydrated is REBUILT, in place: the fresh nodes go where the row
@@ -179,16 +183,21 @@ export function reconcile(list: List, data: unknown[]): void {
         // NaN never matched itself and was stopped, removed and remade on every reconcile —
         // taking its focus, selection, scroll position and any transition mid-flight with it —
         // while the text on screen stayed identical, so nothing about the output could show it.
-        if (existing !== undefined && Object.is(existing.data, data[at])) {
+        if (
+            existing !== undefined &&
+            Object.is(existing.data, data[at]) &&
+            !patchedSince(existing)
+        ) {
             held.delete(key)
+            existing.seen = PATCHES.epoch
             survivor[at] = existing
             from[at] = existing.at
             if (existing.at < lastSurvivor) ordered = false
             lastSurvivor = existing.at
             continue
         }
-        // Either a key never seen, or one whose value is a different object — both are a row this
-        // document does not have, and both are made. A stale one's nodes go NOW: the placement
+        // Either a key never seen, or one whose value is a different object or one a patch wrote
+        // to — each is a row this document does not have, and each is made. A stale one's nodes go NOW: the placement
         // walk anchors on nodes that are still attached, and a node about to be replaced is not
         // one of them.
         if (existing !== undefined) {
@@ -246,28 +255,44 @@ export function makeRow(
     item: unknown,
     at: number,
 ): Row {
-    const nodes = list.make(parent.ownerDocument as Document, item, at)
+    // 14.8 — set up ONCE for the row, and the same builders make it and mount it.
+    const builders = list.setUp(item, at)
+    const nodes = builders.make(parent.ownerDocument as Document, item, at)
     for (const node of nodes) parent.insertBefore(node, before)
-    return rowOf(list, key, item, nodes[0] as ChildNode, at)
+    return rowOf(builders, key, item, nodes[0] as ChildNode, at)
 }
-
-// WHAT A ROW'S SCOPE IS UNTIL ITS MOUNT RETURNS — a `Scope` rather than `undefined`, so the field
-// holds one class for the record's whole life.
-const UNMOUNTED = new Scope()
 
 // A row over nodes already in the document, mounted. The one place a row's record is written, so
 // its shape is fixed once for every path that makes one — a made row and a hydrated one alike. The
 // mount is handed the RECORD, because a row it rebuilds (41.10) has a new first node to write back.
 export function rowOf(
-    list: List,
+    builders: RowBuilders,
     key: unknown,
     item: unknown,
     node: ChildNode,
     at: number,
 ): Row {
-    const row: Row = { key, data: item, node, scope: UNMOUNTED, at }
-    row.scope = list.mount(row, item, at)
+    const row: Row = {
+        key,
+        data: item,
+        node,
+        // A `Scope` rather than `undefined` until the mount returns, so the field holds one class
+        // for the record's whole life.
+        scope: EMPTY_SCOPE,
+        at,
+        seen: PATCHES.epoch,
+    }
+    row.scope = builders.mount(row, item, at)
     return row
+}
+
+// 32.34 — THE EPOCH IS COMPARED FIRST, so a reconcile with no patch since its rows were made pays one
+// integer compare a row and never reaches the map.
+function patchedSince(row: Row): boolean {
+    if (row.seen === PATCHES.epoch) return false
+    const item = row.data
+    if (item === null || typeof item !== 'object') return false
+    return (PATCHES.written.get(item) ?? 0) > row.seen
 }
 
 // Stopped before removal, so a binding cannot wake over a node that is already gone.

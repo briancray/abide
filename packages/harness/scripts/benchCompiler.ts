@@ -15,7 +15,6 @@
 // the compiler", so it is reported as an absolute ceiling with the machine and the date on it —
 // a budget, never a claim.
 
-import { resolve } from 'node:path' // bun has no path helpers of its own
 import {
     compileFile,
     componentGraph,
@@ -24,7 +23,7 @@ import {
     parseAbide,
     TypeSession,
 } from 'abide/compiler'
-import { countLines } from './countLines.ts'
+import { codeLinesOf, countLines } from './countLines.ts'
 import { abideSourcesOf, DOGFOOD } from './exampleSources.ts'
 
 const ARMS = new URL('../arms/', import.meta.url)
@@ -33,7 +32,7 @@ const REPO = new URL('../../../', import.meta.url)
 // Enough rounds that one slow scheduling hiccup cannot carry the average.
 const ROUNDS = 10
 
-type Arm = {
+export type Arm = {
     name: string
     abideSources: string[]
     authoredAbide: number
@@ -43,86 +42,88 @@ type Arm = {
     typeable: boolean
 }
 
-// `#ui/x` is the docs app's `src/ui/x`, as its import map says.
-function resolveSeam(specifier: string, from: string): string {
-    const seam = /^#(server|shared|ui)\//.exec(specifier)
-    return seam === null
-        ? resolve(from, specifier)
-        : `${DOGFOOD.pathname}src/${seam[1]}/${specifier.slice(seam[0].length)}`
+// The paired examples: every `arms/<name>` with a hand-written page beside the `.abide` one.
+export function armNames(): string[] {
+    const names: string[] = []
+    for (const entry of new Bun.Glob('*/index.html').scanSync({
+        cwd: ARMS.pathname,
+    }))
+        names.push(entry.slice(0, entry.indexOf('/')))
+    return names
+}
+
+// One example's two budgets, or `null` where the arm has no script to count.
+export async function armOf(
+    session: TypeSession,
+    name: string,
+): Promise<Arm | null> {
+    const abideSources = await abideSourcesOf(name)
+    const vanillaScripts = [
+        ...new Bun.Glob(`${name}/*.js`).scanSync({ cwd: ARMS.pathname }),
+    ]
+    if (vanillaScripts.length === 0) return null
+
+    const authoredAbide = await countLines(DOGFOOD, abideSources)
+    const authoredVanilla = await countLines(ARMS, vanillaScripts)
+
+    // What the browser gets: the emitted client module for each page. A page with nothing to
+    // hydrate emits none, and counts zero — which is the point of that emptiness.
+    let shippedAbide = 0
+    let typeable = true
+    // 32.18 — only a file another one INVOKES carries its own markup, so the example's whole
+    // set is read before any of it is emitted. Charging every page for one is 34% of this
+    // number.
+    const files: { path: string; file: ReturnType<typeof parseAbide> }[] = []
+    for (const source of abideSources)
+        files.push({
+            path: `${DOGFOOD.pathname}${source}`,
+            file: parseAbide(await Bun.file(new URL(source, DOGFOOD)).text()),
+        })
+    // An unresolvable specifier is left as written (componentGraph's contract), not thrown.
+    const { invoked } = componentGraph(files, (specifier, from) => {
+        try {
+            return Bun.resolveSync(specifier, from)
+        } catch {
+            return undefined
+        }
+    })
+    for (const { path, file } of files) {
+        let names: Awaited<ReturnType<typeof session.reads>>
+        try {
+            names = await session.reads(path, file)
+        } catch {
+            // Counted as UNTYPEABLE rather than dropped: a budget over the subset that
+            // happens to work is a budget that improves by failing.
+            typeable = false
+            break
+        }
+        const client = emitClient(
+            file,
+            names,
+            invoked.has(path) ? 'repeated' : 'none',
+        )
+        if (client !== '') shippedAbide += codeLinesOf(client)
+        // The server module is not charged here: it never reaches a browser.
+        emitComponent(file, names)
+    }
+    return {
+        name,
+        abideSources,
+        authoredAbide,
+        authoredVanilla,
+        shippedAbide,
+        shippedVanilla: authoredVanilla,
+        typeable,
+    }
 }
 
 async function armsFor(session: TypeSession): Promise<Arm[]> {
     const arms: Arm[] = []
-    for (const entry of new Bun.Glob('*/index.html').scanSync({
-        cwd: ARMS.pathname,
-    })) {
-        const name = entry.slice(0, entry.indexOf('/'))
-        const abideSources = await abideSourcesOf(name)
-        const vanillaScripts = [
-            ...new Bun.Glob(`${name}/*.js`).scanSync({ cwd: ARMS.pathname }),
-        ]
-        if (vanillaScripts.length === 0) continue
-
-        const authoredAbide = await countLines(DOGFOOD, abideSources)
-        const authoredVanilla = await countLines(ARMS, vanillaScripts)
-
-        // What the browser gets: the emitted client module for each page. A page with nothing to
-        // hydrate emits none, and counts zero — which is the point of that emptiness.
-        let shippedAbide = 0
-        let typeable = true
-        // 32.18 — only a file another one INVOKES carries its own markup, so the example's whole
-        // set is read before any of it is emitted. Charging every page for one is 34% of this
-        // number.
-        const files: { path: string; file: ReturnType<typeof parseAbide> }[] =
-            []
-        for (const source of abideSources)
-            files.push({
-                path: `${DOGFOOD.pathname}${source}`,
-                file: parseAbide(
-                    await Bun.file(new URL(source, DOGFOOD)).text(),
-                ),
-            })
-        const { invoked } = componentGraph(files, resolveSeam)
-        for (const { path, file } of files) {
-            let names: Awaited<ReturnType<typeof session.reads>>
-            try {
-                names = await session.reads(path, file)
-            } catch {
-                // Counted as UNTYPEABLE rather than dropped: a budget over the subset that
-                // happens to work is a budget that improves by failing.
-                typeable = false
-                break
-            }
-            const client = emitClient(
-                file,
-                names,
-                invoked.has(path) ? 'repeated' : 'none',
-            )
-            if (client !== '') shippedAbide += codeLines(client)
-            // The server module is not charged here: it never reaches a browser.
-            emitComponent(file, names)
-        }
-        arms.push({
-            name,
-            abideSources,
-            authoredAbide,
-            authoredVanilla,
-            shippedAbide,
-            shippedVanilla: authoredVanilla,
-            typeable,
-        })
+    for (const name of armNames()) {
+        const arm = await armOf(session, name)
+        if (arm !== null) arms.push(arm)
     }
     return arms
-}
-
-function codeLines(text: string): number {
-    let lines = 0
-    for (const line of text.split('\n')) {
-        const trimmed = line.trim()
-        if (trimmed === '' || trimmed.startsWith('//')) continue
-        lines += 1
-    }
-    return lines
 }
 
 async function compileCeiling(
@@ -288,4 +289,4 @@ async function main(): Promise<void> {
     }
 }
 
-await main()
+if (import.meta.main) await main()

@@ -1,12 +1,14 @@
 // HOW A REFUSAL IS DECLARED AND HOW ONE IS MADE WITHOUT DECLARING IT. `refuse(status)` is
-// the undeclared form (17.4) and `refuse.typed(name)` mints a factory for a named one
+// the undeclared form (17.4) and `refuse.named(name)` mints a factory for a named one
 // (15.3): the bare call is the plain case, and the member is the one that says more.
 //
-// THREE NAMES AND NO MORE. 15.9 caps what this framework may declare at `NotFound`,
-// `ValidationError` and the `HttpError` 17.4 names — everything else is the app's, through
-// `refuse.typed`. A fourth built-in here is a refusal an app cannot have predicted and
-// cannot narrow against a name it never wrote.
+// FOUR NAMES AND NO MORE. 15.9 caps what this framework may declare at `NotFound`,
+// `ValidationError`, `Aborted` and the `HttpError` 17.4 names — everything else is the app's,
+// through `refuse.named`. A fifth built-in here is a refusal an app cannot have predicted and
+// cannot narrow against a name it never wrote. `Aborted` is the one the app asks for itself: it
+// comes back only from a call the app handed a signal and then aborted (16.54).
 
+import { FAILURE_STATUS_TEXT } from './FAILURE_STATUS_TEXT.ts'
 import { type Failed, failed, isFailed } from './Failed.ts'
 import type { Issues } from './Issues.ts'
 import type { JsonValue } from './JsonValue.ts'
@@ -19,11 +21,17 @@ const REFUSE_LOG = namedLogger('abide:refuse')
 // 17.4, 17.5: a status and nothing else. No data and no options bag for any — an
 // undeclared refusal has no name to narrow on, so data on it could only be read by
 // something that already knew what it was, and something that knew would have declared it.
+// 17.8 — no message is the status's reason phrase.
 export function refuse(
     status: number,
     message?: string,
 ): Failed<'HttpError', undefined> {
-    return failed('HttpError', status, message ?? 'HttpError', undefined)
+    return failed(
+        'HttpError',
+        status,
+        message ?? FAILURE_STATUS_TEXT[status] ?? 'HttpError',
+        undefined,
+    )
 }
 
 // 15.3: STATUS 400 BY DEFAULT, which is the answer to "the caller sent something this
@@ -34,17 +42,42 @@ export function refuse(
 // that knows the name, so it is the only place that can hand back a narrowing that cannot
 // be spelled wrong. An app comparing `error.name === 'NotFound'` by hand is a string
 // literal nothing checks.
-refuse.typed = function typed<
-    Name extends string,
-    Data extends JsonValue | undefined = undefined,
->(
+type Declared<Name extends string, Data> = ((
+    data?: Data,
+) => Failed<Name, Data>) & {
+    is: (error: unknown) => error is Failed<Name, Data>
+}
+
+// 15.18 — DATA IS DECLARED BY ITS `schema` AND BY NOTHING ELSE, so the name is never written
+// twice. TypeScript has no partial inference: an app that could hand `Data` over as a type
+// argument had to hand `Name` over beside it, spelling `<'TooBig', …>('TooBig')`. Taken off the
+// schema, both are inferred — and a message function is typed by the data it is given.
+type Named = {
+    <Name extends string>(
+        name: Name,
+        status?: number,
+        message?: string,
+    ): Declared<Name, undefined>
+    <Name extends string, Data extends JsonValue>(
+        name: Name,
+        status: number | undefined,
+        message: string | ((data: Data) => string) | undefined,
+        options: { schema: Schema<Data> },
+    ): Declared<Name, Data>
+}
+
+refuse.named = named as Named
+
+// The one body both overloads share, and what the framework's own declarations call with their
+// `Data` spelled out — they are trusted, and a schema run on every 404 would buy nothing.
+function named<Name extends string, Data>(
     name: Name,
     status = 400,
     message?: string | ((data: Data) => string),
     options?: { schema?: Schema<Data> },
-): ((data?: Data) => Failed<Name, Data>) & {
-    is: (error: unknown) => error is Failed<Name, Data>
-} {
+): Declared<Name, Data> {
+    // 15.13 — resolved once, here, rather than on every construction.
+    const fallback = FAILURE_STATUS_TEXT[status] ?? name
     const make = (data?: Data): Failed<Name, Data> => {
         // 15.11 AND 15.14: the data is checked at construction, and before the message
         // function — a formatter reading data the schema was about to refuse is a message
@@ -77,7 +110,7 @@ refuse.typed = function typed<
         return failed(
             name,
             status,
-            messageFor(name, message, data as Data),
+            messageFor(name, message, fallback, data as Data),
             data as Data,
         )
     }
@@ -91,36 +124,41 @@ refuse.typed = function typed<
 // 15.12: A FUNCTION `message` RUNS AT CONSTRUCTION, on the data — not at read, so the
 // string is fixed by the time anything can see it and cannot answer differently twice.
 //
-// 15.13: A THROW FROM IT IS CAUGHT and the message falls back to the NAME. A formatter
-// that failed is a bug in the app, and taking the construction down with it would turn a
-// cosmetic fault into a refusal the caller never receives — 15.4 has constructing a
-// `Failed` inert, and a formatter is not an exception to that.
+// 15.13: NO MESSAGE IS THE STATUS'S REASON PHRASE (17.8), or the NAME for a status with none —
+// and so is a message function that threw. A formatter that failed is a bug in the app, and
+// taking the construction down with it would turn a cosmetic fault into a refusal the caller
+// never receives — 15.4 has constructing a `Failed` inert, and a formatter is not an exception.
 //
 // AND WARNED on `abide:refuse`, which is the rest of 15.13.
 function messageFor<Data>(
     name: string,
     message: string | ((data: Data) => string) | undefined,
+    fallback: string,
     data: Data,
 ): string {
-    if (message === undefined) return name
+    if (message === undefined) return fallback
     if (typeof message !== 'function') return message
     try {
         return message(data)
     } catch (thrown) {
         REFUSE_LOG.warning(name, thrown)
-        return name
+        return fallback
     }
 }
 
 // 15.7: the address nothing answers. Both halves — no route matched, and no handler
 // mounted at that address and method — are one refusal, because a caller cannot tell them
 // apart and telling them apart is what an enumeration attack is.
-export const notFound = refuse.typed<
+export const notFound = named<'NotFound', { path: string; method: string }>(
     'NotFound',
-    { path: string; method: string }
->('NotFound', 404)
+    404,
+)
 
-// 15.8: 422 rather than `refuse.typed`'s 400, and the difference is not decoration. A 400
+// 16.54: a load every caller of which aborted. 499 is the status a server logs for a request its
+// client closed, and the one thing true of this refusal is that nobody is waiting for the answer.
+export const aborted = named<'Aborted', undefined>('Aborted', 499)
+
+// 15.8: 422 rather than `refuse.named`'s 400, and the difference is not decoration. A 400
 // is "this request is malformed"; a 422 is "it parsed and the contents are wrong", which
 // is exactly what a schema that ran and refused has found out.
 //
@@ -128,10 +166,7 @@ export const notFound = refuse.typed<
 // per call site and a `Failed`'s `data` does not care which shape it holds, so minting a
 // factory per call would allocate one to throw away and hand back a `.is` that compares
 // the same string the shared one does.
-const validation = refuse.typed<'ValidationError', JsonValue>(
-    'ValidationError',
-    422,
-)
+const validation = named<'ValidationError', JsonValue>('ValidationError', 422)
 
 export function validationError<T>(
     data?: Issues<T>,

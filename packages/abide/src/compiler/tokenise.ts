@@ -39,22 +39,22 @@ export function tokenise(source: string): Token[] {
 // question, a template literal's substitutions, strings and comments are answered once for both
 // — `{f('}')}`, `{ /* } */ x }` and `{xs.filter(s => /}/.test(s))}` end where they read as ending.
 //
-// A CLOSE DIRECTIVE IS THE ONE PLACE THE TEMPLATE'S GRAMMAR OVERRIDES JAVASCRIPT'S. `{/if}` and
-// `{/for}` — with any whitespace around the name — read as a regular expression would run on to
-// the next `/` and take the markup after the block with them.
+// A CLOSE DIRECTIVE IS THE ONE PLACE THE TEMPLATE'S GRAMMAR OVERRIDES JAVASCRIPT'S. `{/if}`,
+// `{/for}`, `{/try}` — any `/name`, with any whitespace around it — read as a regular expression
+// would run on to the next `/` and take the markup after the block with them. No expression is a
+// bare `/name` either, so the whole shape is the directive rather than a list of block names.
 export function slotEnd(source: string, open: number): number {
     let first = open + 1
     while (first < source.length && isSpace(source[first] as string)) first += 1
-    const directive = source.startsWith('/if', first)
-        ? first + 3
-        : source.startsWith('/for', first)
-          ? first + 4
-          : -1
-    if (directive !== -1) {
-        let close = directive
-        while (close < source.length && isSpace(source[close] as string))
+    if (source[first] === '/') {
+        let close = first + 1
+        while (close < source.length && isLetter(source[close] as string))
             close += 1
-        if (source[close] === '}') return close
+        if (close > first + 1) {
+            while (close < source.length && isSpace(source[close] as string))
+                close += 1
+            if (source[close] === '}') return close
+        }
     }
     let depth = 0
     let end = source.length
@@ -252,4 +252,9 @@ export function skipQuoted(source: string, open: number): number {
         at += 1
     }
     return at
+}
+
+// A block name is lower-case ASCII.
+function isLetter(char: string): boolean {
+    return char >= 'a' && char <= 'z'
 }

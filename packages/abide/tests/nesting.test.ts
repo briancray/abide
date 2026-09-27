@@ -705,6 +705,72 @@ let on = reactive(true)
     expect(page.children).toHaveLength(1)
 })
 
+// 14.1 — AN ARM IS BUILT UNTRACKED. The browser fills an arm from inside the watch that chose it,
+// and the build evaluates every value it writes — so the `{#if}` below subscribed to `count`, which
+// only its arm shows, and every write re-ran the arm choice as well as the two bindings. The output
+// is identical either way; the wake is the whole of the difference, so the wake is what is counted.
+// The arm is toggled ON in the browser first: an arm the server painted is hydrated, never built.
+//
+// THE REVERT: call `build` tracked in `fillRegion` — `wakes` 2 -> 3 on each write of `count`.
+test('a value shown only inside an arm does not wake the arm choice — 14.1', async () => {
+    await mountPage(`<script>
+import { reactive } from 'abide'
+
+let show = reactive(false)
+let count = reactive(0)
+</script>
+
+<button id="show" onclick={() => { show = true }}>show</button>
+<button id="more" onclick={() => { count = count + 1 }}>more</button>
+<div>{#if show}<p id="in" title={count}>{count}</p>{/if}</div>`)
+    flushSync()
+    click('#show')
+    expect(document.querySelector('#in')?.textContent).toBe('0')
+    const work = measure(() => click('#more'))
+    expect(document.querySelector('#in')?.textContent).toBe('1')
+    expect(document.querySelector('#in')?.getAttribute('title')).toBe('1')
+    expect(work.bindingRuns).toBe(2)
+    expect(work.wakes).toBe(2)
+})
+
+// AND A `{#try}`'S CATCH ARM, which its own watch swaps in the same way. The catch below shows
+// `count` and the failure alone decides which arm stands, so a write of `count` wakes its two
+// bindings and not the boundary.
+//
+// THE REVERT: call `rgN_swap` tracked in `emitTry` — `wakes` 2 -> 3 on each write of `count`.
+test('a value shown only inside a catch arm does not wake the boundary — 14.1', async () => {
+    await mountPage(`<script>
+import { reactive } from 'abide'
+
+let broken = reactive(false)
+let count = reactive(0)
+
+function checked(flag: boolean) {
+    if (flag) throw new Error('broken')
+    return 'fine'
+}
+</script>
+
+<button id="break" onclick={() => { broken = true }}>break</button>
+<button id="more" onclick={() => { count = count + 1 }}>more</button>
+<div>
+{#try}
+    <b id="body">{checked(broken)}</b>
+{:catch problem}
+    <p id="in" title={count}>{count}</p>
+{/try}
+</div>`)
+    flushSync()
+    click('#break')
+    flushSync()
+    expect(document.querySelector('#in')?.textContent).toBe('0')
+    const work = measure(() => click('#more'))
+    expect(document.querySelector('#in')?.textContent).toBe('1')
+    expect(document.querySelector('#in')?.getAttribute('title')).toBe('1')
+    expect(work.bindingRuns).toBe(2)
+    expect(work.wakes).toBe(2)
+})
+
 // What a scope tree holds: the scopes in it, a `{#for}`'s rows included, and the disposers on them
 // — a `watch` is one disposer, so `stops` is the readers still open.
 function held(owner: unknown, into = { scopes: 0, stops: 0 }) {

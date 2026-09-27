@@ -30,19 +30,16 @@ export class List {
     // Whether each row carries its own anchor — a body with several top-level nodes.
     anchored: boolean
     key: (item: unknown, at: number) => unknown
-    // A row's nodes, BUILT in the document the list stands in — handed over by the reconcile
-    // rather than found by the row, which is the one place a row's document is decided.
-    make: (document: Document, item: unknown, at: number) => Node[]
-    // Handed the row's RECORD rather than its nodes: a row it rebuilds (41.10) writes its new
-    // first node back there.
-    mount: (row: Row, item: unknown, at: number) => Scope
+    // ONCE PER ROW, the `make` and `mount` that row is built and mounted by. 14.8 — a row with a
+    // branch-local `<script>` runs it here and gets builders closing over its names; every other
+    // list hands back the one record it was built with, so a row allocates nothing more.
+    setUp: (item: unknown, at: number) => RowBuilders
 
     constructor(
         region: Region,
         rows: Row[],
         key: (item: unknown, at: number) => unknown,
-        make: (document: Document, item: unknown, at: number) => Node[],
-        mount: (row: Row, item: unknown, at: number) => Scope,
+        setUp: (item: unknown, at: number) => RowBuilders,
     ) {
         this.region = region
         this.rows = rows
@@ -51,8 +48,7 @@ export class List {
         this.hydrating = false
         this.anchored = false
         this.key = key
-        this.make = make
-        this.mount = mount
+        this.setUp = setUp
     }
 
     // 12.13 — WHAT THE BLOCK'S OWN SCOPE STOPS WHEN THE REGION HOLDING IT LEAVES. A row's bindings
@@ -76,10 +72,9 @@ export function listAt(
     region: Region,
     anchored: boolean,
     key: (item: unknown, at: number) => unknown,
-    make: (document: Document, item: unknown, at: number) => Node[],
-    mount: (row: Row, item: unknown, at: number) => Scope,
+    setUp: (item: unknown, at: number) => RowBuilders,
 ): List {
-    const list = new List(region, [], key, make, mount)
+    const list = new List(region, [], key, setUp)
     list.hydrating = true
     list.anchored = anchored
     return list
@@ -108,7 +103,13 @@ function hydrate(list: List, items: unknown[]): boolean {
     for (let at = 0; at < found.length; at += 1) {
         const item = items[at]
         list.rows.push(
-            rowOf(list, list.key(item, at), item, found[at] as ChildNode, at),
+            rowOf(
+                list.setUp(item, at),
+                list.key(item, at),
+                item,
+                found[at] as ChildNode,
+                at,
+            ),
         )
     }
     if (found.length === items.length) return true
@@ -186,4 +187,13 @@ async function pump(list: List, source: AsyncIterable<unknown>): Promise<void> {
         )
         at += 1
     }
+}
+
+export type RowBuilders = {
+    // A row's nodes, BUILT in the document the list stands in — handed over by the reconcile
+    // rather than found by the row, which is the one place a row's document is decided.
+    make: (document: Document, item: unknown, at: number) => Node[]
+    // Handed the row's RECORD rather than its nodes: a row it rebuilds (41.10) writes its new
+    // first node back there.
+    mount: (row: Row, item: unknown, at: number) => Scope
 }

@@ -6,29 +6,18 @@
 // NOT HERE YET: 16.50–16.52, a `history` value's sequence numbers on the wire, which wait on the
 // socket lane that mints them; and 16.34's transcript of a stream in the seed buffer.
 
-import { CELL } from '#shared/reactive/CELL.ts'
-import { isReactive } from '#shared/reactive/index.ts'
+import { chunksFrom } from '#shared/reactive/index.ts'
 import { prefers } from './prefers.ts'
 import { currentRequestScope, type Framing } from './requestScope.ts'
 
 const ENCODER = new TextEncoder()
-
-// A streaming producer's own `Reactive` — a handler declared as an async generator (9.20).
-export function isStreaming(value: unknown): boolean {
-    if (!isReactive(value)) return false
-    const cell = (
-        value as unknown as Record<symbol, { stream?: unknown } | undefined>
-    )[CELL]
-    return cell?.stream !== null && cell?.stream !== undefined
-}
 
 // THE CHUNKS OF A STREAMING VALUE, AS THEY LAND, ENDING WHEN ITS RUN CLOSES. The live cursor is the
 // wake and not the source: a cursor outlives the run (it waits on the next one), and a chunk landing
 // in the same turn as the close could be lost to whichever settled first — so each wake sends what
 // the accumulation holds past what has already gone, and the close sends the rest.
 export async function* chunksOfStream(value: unknown): AsyncGenerator<unknown> {
-    const stream = value as PromiseLike<unknown> &
-        AsyncIterable<unknown> & { peek(): unknown }
+    const stream = value as PromiseLike<unknown> & AsyncIterable<unknown>
     let closed = false
     let failure: unknown
     // ONE REACTION ON THE CLOSE FOR THE WHOLE STREAM, which wakes whichever wait is current. A
@@ -56,9 +45,10 @@ export async function* chunksOfStream(value: unknown): AsyncGenerator<unknown> {
                     wake = resolve
                     woken.then(() => resolve(), reject)
                 })
-            const held = stream.peek()
-            if (Array.isArray(held))
-                for (; sent < held.length; sent += 1) yield held[sent]
+            for (const chunk of chunksFrom(value, sent)) {
+                sent += 1
+                yield chunk
+            }
             if (closed) break
             woken = cursor.next()
         }
@@ -87,14 +77,23 @@ export async function answerValue(
 ): Promise<Response> {
     if (value instanceof Response) return value
     const framing = currentRequestScope()?.framing
-    // 16.32 — nothing to say is 204, where the handler wrote no status of its own.
-    if (value === undefined)
+    // 16.32 — nothing to say is 204, where the handler wrote no status of its own, and 16.57 — a
+    // type for no content is noise.
+    if (value === undefined) {
+        if (status === 200) headers.delete('content-type')
         return new Response(null, {
             status: status === 200 ? 204 : status,
             headers,
         })
+    }
     if (value instanceof Blob)
-        return answerBlob(value, request, headers, status)
+        return answerBlobTagged(
+            value,
+            await etagOf(value),
+            request,
+            headers,
+            status,
+        )
     if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
         headers.set('content-type', 'application/octet-stream')
         return new Response(value as BodyInit, { status, headers })
@@ -104,14 +103,14 @@ export async function answerValue(
         headers.set('content-type', 'text/html; charset=utf-8')
         if (typeof value === 'string')
             return new Response(value, { status, headers })
-        return new Response(bodyOf(asChunks(value), 'bytes'), {
+        return new Response(bodyOf(chunksOf(value), 'bytes'), {
             status,
             headers,
         })
     }
     // A sync iterable is a stream only where a helper fixed the framing: an array is a value.
     if (isValues(value) || (framing !== undefined && isIterable(value)))
-        return answerStream(asChunks(value), framing, request, headers, status)
+        return answerStream(chunksOf(value), framing, request, headers, status)
     // 16.31.
     return new Response(JSON.stringify(value), { status, headers })
 }
@@ -124,19 +123,23 @@ function isIterable(value: unknown): value is Iterable<unknown> {
     )
 }
 
-async function* asChunks(value: unknown): AsyncGenerator<unknown> {
-    if (value instanceof ReadableStream) {
-        for await (const chunk of value as unknown as AsyncIterable<unknown>)
-            yield chunk
-        return
-    }
-    yield* value as AsyncIterable<unknown> | Iterable<unknown>
+// AN ASYNC ITERABLE IS READ THROUGH ITS OWN ITERATOR — a `ReadableStream` is one in bun — rather than
+// through a generator delegating to it, which is one more resumption per chunk. A sync iterable is
+// lifted, which also awaits a promise it holds.
+function chunksOf(value: unknown): AsyncIterator<unknown> {
+    if (Symbol.asyncIterator in (value as object))
+        return (value as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+    return lifted(value as Iterable<unknown>)
+}
+
+async function* lifted(value: Iterable<unknown>): AsyncGenerator<unknown> {
+    yield* value
 }
 
 // 16.33, 16.48, 16.49 — THE FRAMING a helper fixed, or the first the first chunk's type admits:
 // binary chunks admit bytes alone, and values admit jsonl and then sse, sse where `Accept` asks for it.
 async function answerStream(
-    chunks: AsyncGenerator<unknown>,
+    chunks: AsyncIterator<unknown>,
     fixed: Framing | undefined,
     request: Request,
     headers: Headers,
@@ -144,7 +147,7 @@ async function answerStream(
 ): Promise<Response> {
     const first = await chunks.next()
     return framed(
-        replay(first, chunks),
+        chunks,
         fixed ??
             (first.done !== true && first.value instanceof Uint8Array
                 ? 'bytes'
@@ -153,6 +156,7 @@ async function answerStream(
                   : 'jsonl'),
         headers,
         status,
+        first,
     )
 }
 
@@ -162,6 +166,7 @@ export function framed(
     framing: Framing,
     headers: Headers,
     status: number,
+    first?: IteratorResult<unknown>,
 ): Response {
     if (framing === 'bytes')
         headers.set('content-type', 'application/octet-stream')
@@ -173,19 +178,10 @@ export function framed(
         headers.set('cache-control', 'no-cache')
         headers.set('x-accel-buffering', 'no')
     }
-    return new Response(bodyOf(chunks, framing), {
+    return new Response(bodyOf(chunks, framing, first), {
         status,
         headers,
     })
-}
-
-async function* replay(
-    first: IteratorResult<unknown>,
-    rest: AsyncGenerator<unknown>,
-): AsyncGenerator<unknown> {
-    if (first.done === true) return
-    yield first.value
-    yield* rest
 }
 
 // 16.46, 16.47 — ONE FRAME PER PULL, so a reader sees each chunk as it is produced rather than once
@@ -194,22 +190,31 @@ async function* replay(
 //
 // AN EVENT STREAM OPENS ON A COMMENT: a streamed answer's head goes out with its first byte, so a
 // stream with nothing yet to say — an empty `log.records` — held its reader's headers until it did.
+//
+// `first` is a result already pulled — the one a framing was decided from — and is sent ahead of the
+// rest.
 export function bodyOf(
     chunks: AsyncIterator<unknown>,
     framing: Framing,
+    first?: IteratorResult<unknown>,
 ): ReadableStream<Uint8Array> {
+    let pulled = first
     return new ReadableStream<Uint8Array>({
         start(controller) {
             if (framing === 'sse') controller.enqueue(ENCODER.encode(':\n\n'))
         },
         async pull(controller) {
             let next: IteratorResult<unknown>
-            try {
-                next = await chunks.next()
-            } catch (thrown) {
-                controller.error(thrown)
-                return
-            }
+            if (pulled !== undefined) {
+                next = pulled
+                pulled = undefined
+            } else
+                try {
+                    next = await chunks.next()
+                } catch (thrown) {
+                    controller.error(thrown)
+                    return
+                }
             if (next.done === true) {
                 controller.close()
                 return
@@ -237,17 +242,7 @@ export function bodyOf(
 // 16.35, 16.36 — A BLOB, AT ITS OWN TYPE AND RANGE-AWARE: `If-None-Match` answered 304, one `Range`
 // answered 206 — or 416 where it lies past the end — and `If-Range` naming another version answered in
 // full. The body is the blob itself, or a slice of it, so a file is sent from disk rather than
-// through a copy in memory.
-async function answerBlob(
-    blob: Blob,
-    request: Request,
-    headers: Headers,
-    status: number,
-): Promise<Response> {
-    return answerBlobTagged(blob, await etagOf(blob), request, headers, status)
-}
-
-// `answerBlob` for a caller that already holds the etag — a public file's, read at boot (21.13).
+// through a copy in memory. The etag is handed in, because a public file's was read at boot (21.13).
 export function answerBlobTagged(
     blob: Blob,
     etag: string,
@@ -261,7 +256,7 @@ export function answerBlobTagged(
     )
     headers.set('etag', etag)
     headers.set('accept-ranges', 'bytes')
-    if (request.headers.get('if-none-match') === etag)
+    if (namesEtag(request.headers.get('if-none-match'), etag))
         return new Response(null, { status: 304, headers })
     const range = request.headers.get('range')
     const ifRange = request.headers.get('if-range')
@@ -298,6 +293,18 @@ export function answerBlobTagged(
     const body =
         range === null ? blob : blob.stream().pipeThrough(new TransformStream())
     return new Response(body, { status, headers })
+}
+
+// 21.14 — WEAK COMPARISON, which is what `If-None-Match` is defined to use: a proxy compressing on
+// the way out weakens the etag, and the browser sends back the `W/` form. `If-Range` compares
+// strongly, and stays an equality.
+function namesEtag(header: string | null, etag: string): boolean {
+    if (header === null) return false
+    for (const listed of header.split(',')) {
+        const tag = listed.trim()
+        if (tag === '*' || tag === etag || tag === `W/${etag}`) return true
+    }
+    return false
 }
 
 // THE ETAG 16.36 HONORS `If-Range` AGAINST. A whole file on disk is named by its path, size and write

@@ -11,8 +11,8 @@ import {
     type Sample,
 } from 'harness/report'
 import { countExportedNames } from './countExportedNames.ts'
-import { countLines } from './countLines.ts'
 import { type Case, reactiveCases } from './reactiveCases.ts'
+import { reactiveCoreLines } from './reactiveCoreLines.ts'
 
 function report(measured: Batched, work: Case['work']): void {
     const counted = work()
@@ -42,27 +42,8 @@ function report(measured: Batched, work: Case['work']): void {
 }
 
 async function machinery(): Promise<void> {
-    const abideRoot = new URL(
-        '../../abide/src/shared/reactive/',
-        import.meta.url,
-    )
-    const abideFiles = [
-        'index.ts',
-        'Reactive.ts',
-        'Keyed.ts',
-        'watch.ts',
-        'tracking.ts',
-        'structural.ts',
-        'canonicalKey.ts',
-        'isThenable.ts',
-        'NotLanded.ts',
-        'REACTIVE_BRAND.ts',
-    ]
-    const abideLines = await countLines(abideRoot, abideFiles)
-    const vanillaLines = await countLines(
-        new URL('../src/measure/vanilla/', import.meta.url),
-        ['signal.ts'],
-    )
+    const { abide: abideLines, vanilla: vanillaLines } =
+        await reactiveCoreLines()
     const names = await countExportedNames(['abide'])
     console.log('\nMACHINERY BUDGET — the other half of the trade')
     console.log(

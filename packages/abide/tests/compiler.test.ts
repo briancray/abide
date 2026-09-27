@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from 'bun:test'
 import { compileFile, emitClient, parseAbide } from '#compiler'
-import { escapeStyleValue, escapeText, render } from '#server'
+import { attributeText, escapeStyleValue, escapeText, render } from '#server'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import {
     clientOf,
@@ -130,8 +130,7 @@ test('the compiler is not reachable from the server seam', async () => {
     // owns: `listOf` is 32.15's — the emitted `{#for}` and the client's `updateList` ask the one
     // function what a subject iterates as — `render` is 35.4's, the five methods are 16.2's,
     // `request`, `response` and `server` are 22.1's, `createApp` is 42's, the seven hooks are 37's,
-    // `trace` is 24's, `health` is 25's, `config` is 27's
-    // and `csp` is 29's; the five response helpers are 17's
+    // `trace` is 24's, `health` is 25's and `config` is 27's; the five response helpers are 17's
     // and `socket` is 18's.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
@@ -145,7 +144,6 @@ test('the compiler is not reachable from the server seam', async () => {
             'bytes',
             'config',
             'createApp',
-            'csp',
             'health',
             'jsonl',
             'middleware',
@@ -412,7 +410,7 @@ const u = 'javascript:alert(1)'
 const ok = '/docs'
 </script>
 <a id="bad" href={u}>x</a><a id="good" href={ok}>y</a>`
-    expect(compileFile(page)).toContain('safeUrl(')
+    expect(compileFile(page)).toContain('attributeMarkup("href", ')
 
     const dir = temporaryModule({ 'Page.ts': compileFile(page) })
     const { default: Page } = await import(`${dir}/Page.ts`)
@@ -482,7 +480,7 @@ test('a head inside a control block or inside a head is refused', () => {
 
 // AN HTML ATTRIBUTE NAME IS ASCII CASE-INSENSITIVE, so the parser answers `href` for every
 // spelling of it and 32.21 has to as well. Compared as written, a capital letter walked past the
-// check on BOTH paths — the interpolated one lost its `safeUrl` wrapper and the literal one was
+// check on BOTH paths — the interpolated one skipped `safeUrl` and the literal one was
 // copied through byte for byte.
 //
 // THE REVERT: compare `name` against the lowercase literals without lowering it first. This test
@@ -496,7 +494,9 @@ test('a url attribute is recognised however it is capitalised', () => {
             compileFile(
                 `<script>\nconst u = '/ok'\n</script>\n<a ${name}={u}>x</a>`,
             ),
-        ).toContain('safeUrl(')
+        ).toContain(`attributeMarkup("${name}", `)
+        // The interpolated path's check is made at run time, against the name as written.
+        expect(attributeText(name, 'javascript:alert(1)')).toBe('')
     }
 })
 
@@ -671,16 +671,16 @@ test('an interpolated quoted attribute is one expression', async () => {
         'tone',
     ])
     expect(emitted).toContain(
-        '__escapeAttribute(__slotValue(() => `badge ${tone()}`))',
+        '__attributeMarkup("class", __slotValue(() => `badge ${tone()}`))',
     )
     expect(emitted).not.toContain('badge {tone}')
     // Several slots and the text between them.
     expect(compileFile('<div title="a{b}c{d}e">x</div>')).toContain(
-        '__escapeAttribute(__slotValue(() => `a${b}c${d}e`))',
+        '__attributeMarkup("title", __slotValue(() => `a${b}c${d}e`))',
     )
     // 32.21 — an interpolated URL-typed attribute is scheme-checked where the value arrives.
     expect(compileFile('<a href="/x/{id}">x</a>')).toContain(
-        '__safeUrl(__slotValue(() => `/x/${id}`))',
+        '__attributeMarkup("href", __slotValue(() => `/x/${id}`))',
     )
     // A value with NO slot is still a literal, and its braces are text.
     expect(compileFile('<div class="badge">x</div>')).toContain(
@@ -728,7 +728,7 @@ test('an interpolated style lowers to one attribute per property', async () => {
         '<div style=\\"color: red\\">',
     )
     expect(compileFile('<div style={s}>x</div>')).toContain(
-        '<div style=\\"" + __escapeAttribute(__slotValue(() => s))',
+        '__attributeMarkup("style", __slotValue(() => s))',
     )
 
     // A PROPERTY NAME THAT IS NOT STATIC has no property to bind and is refused.
@@ -904,6 +904,7 @@ const HEADS = `<head>
     <meta name="description" content="first"/>
     <link rel="stylesheet" href="/a.css"/>
     <meta property="og:title" content="first"/>
+    <meta property="og:image" content="first"/>
 </head>
 
 <script>
@@ -916,6 +917,7 @@ const named = 'robots'
     <link rel="stylesheet" href="/b.css"/>
     <meta property="og:title" content="second"/>
     <meta name={named} content="dynamic"/>
+    <meta name={named} property="og:image" content="second"/>
     <meta charset="utf-8"/>
 </head>
 
@@ -942,6 +944,9 @@ test('a head contribution merges by key, and the last one for a key wins', async
     // carrying neither `name` nor `property`.
     expect(head).toContain('name="robots" content="dynamic"')
     expect(head).toContain('charset="utf-8"')
+    // A `name` only the run time knows outranks a static `property`, so the pair is no key here
+    // either — the client keys it by the name it resolves to, never by `og:image`.
+    expect(head).toContain('property="og:image" content="first"')
 })
 
 // 32.28, 32.29 — STATIC TEMPLATE TEXT IS MARKUP. `title="AT&amp;T"` went through the same rewrite
@@ -1189,10 +1194,10 @@ test('an uppercase head is hoisted by both emitters', async () => {
 // and past the `safeUrl` 32.21 asks a URL attribute for.
 test('a slot in an unquoted attribute value is an expression', async () => {
     expect(await serverOf('<a href=/x/{id}>y</a>', ['id'])).toContain(
-        '__escapeAttribute(__safeUrl(__slotValue(() => `/x/${id()}`)))',
+        '__attributeMarkup("href", __slotValue(() => `/x/${id()}`))',
     )
     expect(await serverOf('<a class=badge-{tone}>y</a>', ['tone'])).toContain(
-        '__escapeAttribute(__slotValue(() => `badge-${tone()}`))',
+        '__attributeMarkup("class", __slotValue(() => `badge-${tone()}`))',
     )
     // A value with no slot in it stays a literal.
     expect(compileFile('<a href=/plain>y</a>')).toContain('href=\\"/plain\\"')
@@ -1208,17 +1213,17 @@ test('an interpolated style property cannot set a second one', async () => {
     expect(escapeStyleValue('red; position: fixed; top: 0')).toBe('red')
     // A WHOLE `style={expr}` IS A DECLARATION LIST and keeps the attribute escaping.
     expect(await serverOf('<div style={s}>x</div>', ['s'])).toContain(
-        '__escapeAttribute(__slotValue(() => s()))',
+        '__attributeMarkup("style", __slotValue(() => s()))',
     )
 })
 
 // 32.26 — `{raw(x)}` LOWERS IN AN ATTRIBUTE THE WAY IT DOES IN A TEXT SLOT. Left out of the
 // attribute paths, the emitted markup called a bare `raw` no import binds. THE REVERT: drop
-// the `raw` case from `Lowering.rewrite`; this reports `__safeUrl(raw(u))` against an import clause
-// holding only `escapeAttribute, safeUrl` — a ReferenceError at render.
+// the `raw` case from `Lowering.rewrite`; this reports `__attributeMarkup("href", raw(u))` against an import
+// clause holding only `attributeMarkup` — a ReferenceError at render.
 test('a raw call lowers in an attribute value too', async () => {
     const emitted = await serverOf('<a href={raw(u)}>x</a>', ['u'])
-    expect(emitted).toContain('__safeUrl(__slotValue(() => __raw(u())))')
+    expect(emitted).toContain('__attributeMarkup("href", __slotValue(() => __raw(u())))')
     expect(emitted).toContain('raw as __raw')
 })
 
@@ -1406,8 +1411,8 @@ test('a region made once is parsed, and one made once a row is built', async () 
     const { file, reads } = await typed(source, ['rows', 'on'])
     const once = emitClient(file, reads, 'once')
     const page = once.slice(
-        once.indexOf('const rg0_build'),
-        once.indexOf('const rg0_build') + 200,
+        once.indexOf('const rg0_a0_build'),
+        once.indexOf('const rg0_a0_build') + 200,
     )
     expect(page).toContain('__markupNodes(__document')
     expect(page).not.toContain('createElement')

@@ -123,8 +123,13 @@ test('an error page that fails escalates to the next ancestor — 35.3', async (
 const FORM_HEADERS = {
     accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'content-type': 'application/x-www-form-urlencoded',
-    referer: 'http://example.test/invoices/42',
 }
+
+// The form's own page, on the app's own origin — 16.58 sends a foreign one to the root.
+const formHeaders = (): Record<string, string> => ({
+    ...FORM_HEADERS,
+    referer: `${base}/invoices/42`,
+})
 
 // 16.40 — A FORM POSTED WITH NO SCRIPT IS ANSWERED AS A NAVIGATION: a value is a 303 back where the
 // form was, a refusal is the error page at its own status, and a redirect passes through. A call made
@@ -133,18 +138,16 @@ const FORM_HEADERS = {
 test('a mutation a form posted is answered as a navigation — 16.40', async () => {
     const saved = await Bun.fetch(`${base}/__abide/rpc/forms/save`, {
         method: 'POST',
-        headers: FORM_HEADERS,
+        headers: formHeaders(),
         body: 'amount=5',
         redirect: 'manual',
     })
     expect(saved.status).toBe(303)
-    expect(saved.headers.get('location')).toBe(
-        'http://example.test/invoices/42',
-    )
+    expect(saved.headers.get('location')).toBe(`${base}/invoices/42`)
 
     const refused = await Bun.fetch(`${base}/__abide/rpc/forms/save`, {
         method: 'POST',
-        headers: FORM_HEADERS,
+        headers: formHeaders(),
         body: 'amount=0',
     })
     expect(refused.status).toBe(422)
@@ -153,7 +156,7 @@ test('a mutation a form posted is answered as a navigation — 16.40', async () 
 
     const moved = await Bun.fetch(`${base}/__abide/rpc/forms/move`, {
         method: 'POST',
-        headers: FORM_HEADERS,
+        headers: formHeaders(),
         redirect: 'manual',
     })
     expect(moved.status).toBe(303)
@@ -165,4 +168,45 @@ test('a mutation a form posted is answered as a navigation — 16.40', async () 
         body: '{"amount":"7"}',
     })
     expect(await scripted.json()).toEqual({ saved: '7' })
+})
+
+// 16.58 — A `Referer` FROM ANOTHER ORIGIN IS NOT WHERE A FORM GOES BACK TO, and nor is one that is
+// missing. THE REVERT: put `request.headers.get('referer') ?? '/'` back in `navigated`; the first
+// reads `https://elsewhere.example/phish`.
+test('a form posted with a foreign referer goes back to the root — 16.58', async () => {
+    const post = (referer: string | undefined) =>
+        Bun.fetch(`${base}/__abide/rpc/forms/save`, {
+            method: 'POST',
+            headers:
+                referer === undefined
+                    ? FORM_HEADERS
+                    : { ...FORM_HEADERS, referer },
+            body: 'amount=5',
+            redirect: 'manual',
+        })
+    const foreign = await post('https://elsewhere.example/phish')
+    expect(foreign.status).toBe(303)
+    expect(foreign.headers.get('location')).toBe('/')
+    expect((await post(undefined)).headers.get('location')).toBe('/')
+})
+
+// 15.17 — A PAGE ANSWERS `GET` AND `HEAD` ALONE, and another method is a refusal painted by the
+// nearest error page, carrying what it would answer. THE REVERT: drop the `readsOnly` check ahead of
+// the page in `answerRequest`; the POST renders the invoice at 200.
+test('a page asked by another method is refused 405 with allow — 15.17', async () => {
+    const answer = await Bun.fetch(`${base}/invoices/42`, { method: 'POST' })
+    expect(answer.status).toBe(405)
+    expect(answer.headers.get('allow')).toBe('GET, HEAD')
+    expect(answer.headers.get('content-type')).toBe('text/html; charset=utf-8')
+    expect(await answer.text()).not.toContain('an invoice')
+})
+
+// A `HEAD` IS THE PAGE'S HEADERS WITHOUT ITS RENDER: nothing is painted for a body the server drops,
+// and no caller is minted for a request that never becomes a page. THE REVERT: drop the `HEAD`
+// branch in `answerRequest`; the answer carries a `set-cookie`.
+test('a HEAD for a page answers its headers and mints no caller', async () => {
+    const answer = await Bun.fetch(`${base}/invoices/42`, { method: 'HEAD' })
+    expect(answer.status).toBe(200)
+    expect(answer.headers.get('content-type')).toBe('text/html; charset=utf-8')
+    expect(answer.headers.get('set-cookie')).toBeNull()
 })

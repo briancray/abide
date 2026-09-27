@@ -15,7 +15,7 @@ import { List, updateList } from '#ui/List.ts'
 import { REGION_CLOSE, REGION_OPEN } from '#ui/REGION.ts'
 import { type Row, reconcile } from '#ui/reconcile.ts'
 import { pageRegion } from '#ui/regions.ts'
-import { Scope } from '#ui/Scope.ts'
+import { EMPTY_SCOPE, Scope } from '#ui/Scope.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { clientOf, closeTyped, refusal } from './typed.ts'
 
@@ -739,7 +739,8 @@ test('a second call with the same source does not restart the pump', async () =>
     const text = (): string[] =>
         [...host.querySelectorAll('li')].map((node) => node.textContent ?? '')
 
-    const list = new List(region, [], key, make, mount)
+    const builders = { make, mount }
+    const list = new List(region, [], key, () => builders)
     updateList(list, source)
     await new Promise((settle) => setTimeout(settle, 0))
     expect(text()).toEqual(['a', 'b'])
@@ -788,6 +789,7 @@ function seeded(): {
             node: item,
             scope: new Scope(),
             at,
+            seen: 0,
         })
     }
     list.append(close)
@@ -807,8 +809,10 @@ function reorder(permute: (order: number[]) => number[]): {
         region as never,
         rows,
         (item) => (item as { id: number }).id,
-        () => [document.createElement('li')],
-        () => new Scope(),
+        () => ({
+            make: () => [document.createElement('li')],
+            mount: () => new Scope(),
+        }),
     )
     const work = measure(() => {
         reconcile(list, wanted)
@@ -881,8 +885,7 @@ test('a list arriving in place of a stream stops the stream', async () => {
         { open, close },
         [],
         (item) => item,
-        make,
-        () => new Scope(),
+        () => ({ make, mount: () => new Scope() }),
     )
     const text = (): string[] =>
         [...host.querySelectorAll('li')].map((node) => node.textContent ?? '')
@@ -920,8 +923,7 @@ test('a value a row read while it was built does not re-run the list', () => {
         { open, close },
         [],
         (item) => item,
-        make,
-        () => new Scope(),
+        () => ({ make, mount: () => new Scope() }),
     )
     let listRuns = 0
     const scope = new Scope()
@@ -1044,4 +1046,283 @@ test('a document holding fewer rows than the client computes reconciles — 41.1
     // and this reports [].
     expect(said.filter((line) => line.includes('41.10'))).toHaveLength(1)
     expect(said.join(' ')).toContain('holds 3 rows')
+})
+
+// 32.33 — A `{#for}` WITH NO KEY OVER A `Reactive` NAMED ALONE KEYS BY THAT VALUE'S `by`. The page
+// is `PAGE` with the key moved off the block and onto the value, so the counts are the ones the
+// written key earns above.
+//
+// THE REVERT: emit `written` whatever the subject in `emitList`. The order still comes out right —
+// a positional list remakes every row where it stands — and the swap reports 4 nodes created where
+// 0 are due.
+function byPage(by: string, subject = 'rows'): string {
+    return `<script>
+import { reactive } from 'abide'
+
+let rows = reactive([
+    { id: 'ada', name: 'Ada Lovelace' },
+    { id: 'grace', name: 'Grace Hopper' },
+    { id: 'katherine', name: 'Katherine Johnson' },
+    { id: 'dorothy', name: 'Dorothy Vaughan' },
+], { by: ${by} })
+
+function swapTop() {
+    const [first, second, ...rest] = rows
+    rows = [second, first, ...rest]
+}
+
+function reverse() {
+    rows = [...rows].reverse()
+}
+</script>
+
+<ul id="list">{#for row of ${subject}}<li data-id={row.id}>{row.name}</li>{/for}</ul>
+<button id="swap" onclick={swapTop}>swap</button>
+<button id="reverse" onclick={reverse}>reverse</button>`
+}
+
+async function mountSource(source: string): Promise<void> {
+    const file = parseAbide(source)
+    const names = await session.reads(`${ROOT}src/by.abide`, file)
+    const dir = temporaryModule({
+        'Page.ts': compileFile(source, names),
+        'Page.client.ts': emitClient(file, names),
+    })
+    const { default: Component } = await import(`${dir}/Page.ts`)
+    let html = ''
+    for await (const chunk of render(
+        Component,
+        '<!doctype html><html><head></head><body></body></html>',
+    ))
+        html += new TextDecoder().decode(chunk)
+    document.body.innerHTML = html.slice(
+        html.indexOf('<body>') + '<body>'.length,
+        html.indexOf('</body>'),
+    )
+    const { default: mount } = await import(`${dir}/Page.client.ts`)
+    mount(pageRegion(document.body))
+}
+
+const nodesById = (): Map<string | null, Element> =>
+    new Map(
+        [...document.querySelectorAll('#list li')].map((node) => [
+            node.getAttribute('data-id'),
+            node,
+        ]),
+    )
+
+test('a {#for} with no key takes the property its value names on `by`', async () => {
+    await mountSource(byPage(`'id'`))
+    const before = document.querySelectorAll('#list li')[2] as HTMLElement
+
+    const work = measure(() => {
+        ;(document.querySelector('#swap') as HTMLElement).click()
+        flushSync()
+    })
+
+    expect(order()).toEqual(['grace', 'ada', 'katherine', 'dorothy'])
+    expect(work.nodesCreated).toBe(0)
+    expect(work.elementsMoved).toBe(1)
+    expect(document.querySelectorAll('#list li')[2]).toBe(before)
+})
+
+test('a {#for} with no key takes the function its value declares on `by`, and reverses whole', async () => {
+    await mountSource(byPage('(row) => row.id'))
+    const nodes = nodesById()
+
+    ;(document.querySelector('#reverse') as HTMLElement).click()
+    flushSync()
+
+    expect(order()).toEqual(['dorothy', 'katherine', 'grace', 'ada'])
+    for (const [id, node] of nodes)
+        expect(document.querySelector(`#list li[data-id="${id}"]`)).toBe(node)
+})
+
+// A SUBJECT COMPUTED FROM THE VALUE declared no `by` of its own, and stays positional (32.13):
+// every row is rewritten where it stands rather than moved.
+test('a {#for} over a value computed from one declaring `by` stays positional', async () => {
+    await mountSource(byPage(`'id'`, 'rows.slice()'))
+    const nodes = nodesById()
+
+    ;(document.querySelector('#reverse') as HTMLElement).click()
+    flushSync()
+
+    expect(order()).toEqual(['dorothy', 'katherine', 'grace', 'ada'])
+    for (const [id, node] of nodes)
+        expect(document.querySelector(`#list li[data-id="${id}"]`)).not.toBe(
+            node,
+        )
+})
+
+// 5.7 — A PATCH MUTATES IN PLACE, so the list's next run finds every key over the SAME object and
+// `reconcile` keeps the row. The row's text reads a field of a plain object, which wakes nothing.
+//
+// THE REVERT, for this and the three 32.34 cases below it: `patchedSince` answering false. Every row
+// is kept, and each of the four reports the text it showed before the patch.
+test('a row patched in place shows the patch', async () => {
+    await mountSource(
+        byPage(`'id'`).replace(
+            '<button id="reverse"',
+            `<button id="rename" onclick={() => rows.patch((list) => { list[1].name = 'Grace Brewster Hopper' })}>rename</button>
+<button id="reverse"`,
+        ),
+    )
+    ;(document.querySelector('#rename') as HTMLElement).click()
+    flushSync()
+    expect(
+        document.querySelector('#list li[data-id="grace"]')?.textContent,
+    ).toBe('Grace Brewster Hopper')
+})
+
+// 32.34 — AND ONLY THAT ROW. The array is written by nothing but a mutation of its own, so the rows
+// whose items the patch never reached are the same nodes.
+const PATCHED = (subject: string, mutation: string): string => `<script>
+import { reactive } from 'abide'
+
+let rows = reactive([
+    { id: 'ada', name: 'Ada Lovelace', place: { city: 'London' } },
+    { id: 'grace', name: 'Grace Hopper', place: { city: 'New York' } },
+    { id: 'katherine', name: 'Katherine Johnson', place: { city: 'Hampton' } },
+])
+</script>
+
+<ul id="list">{#for row of ${subject} by row.id}<li data-id={row.id}>{row.name}, {row.place.city}</li>{/for}</ul>
+<button id="patch" onclick={() => rows.patch((list) => { ${mutation} })}>patch</button>`
+
+const textOf = (id: string): string | null | undefined =>
+    document.querySelector(`#list li[data-id="${id}"]`)?.textContent
+
+test('a patch remakes the one row it wrote to and keeps the rest', async () => {
+    await mountSource(PATCHED('rows', `list[1].name = 'Grace Brewster Hopper'`))
+    const nodes = nodesById()
+
+    const work = measure(() => {
+        ;(document.querySelector('#patch') as HTMLElement).click()
+        flushSync()
+    })
+
+    expect(textOf('grace')).toBe('Grace Brewster Hopper, New York')
+    expect(document.querySelector('#list li[data-id="ada"]')).toBe(
+        nodes.get('ada') as Element,
+    )
+    expect(document.querySelector('#list li[data-id="katherine"]')).toBe(
+        nodes.get('katherine') as Element,
+    )
+    // ONE ROW: its `<li>` and the text inside it.
+    expect(work.nodesCreated).toBe(2)
+})
+
+// THE CASE A KEY ON THE VALUE CANNOT REACH: the list walks a new array built from the value, over the
+// same objects, so what was written travels with the object rather than with the value.
+test('a list over an array computed from a patched value shows the patch', async () => {
+    await mountSource(
+        PATCHED(
+            'rows.filter(() => true)',
+            `list[2].name = 'Katherine G. Johnson'`,
+        ),
+    )
+    ;(document.querySelector('#patch') as HTMLElement).click()
+    flushSync()
+    expect(textOf('katherine')).toBe('Katherine G. Johnson, Hampton')
+})
+
+// A WRITE BELOW THE ROW'S OWN OBJECT. The row reads `row.place.city`, and the object written is
+// `place` — so the whole path down to it is what the patch marks.
+test('a patch nested below a row remakes that row', async () => {
+    await mountSource(PATCHED('rows', `list[0].place.city = 'Marylebone'`))
+    ;(document.querySelector('#patch') as HTMLElement).click()
+    flushSync()
+    expect(textOf('ada')).toBe('Ada Lovelace, Marylebone')
+})
+
+test('a patch that adds a row makes that row alone', async () => {
+    await mountSource(
+        PATCHED(
+            'rows',
+            `list.push({ id: 'dorothy', name: 'Dorothy Vaughan', place: { city: 'Hampton' } })`,
+        ),
+    )
+    const nodes = nodesById()
+
+    const work = measure(() => {
+        ;(document.querySelector('#patch') as HTMLElement).click()
+        flushSync()
+    })
+
+    expect(order()).toEqual(['ada', 'grace', 'katherine', 'dorothy'])
+    // ONE ROW: its `<li>` and the text inside it.
+    expect(work.nodesCreated).toBe(2)
+    for (const [id, node] of nodes)
+        expect(document.querySelector(`#list li[data-id="${id}"]`)).toBe(node)
+})
+
+// ONE OBJECT UNDER TWO ROWS, reached through the second only AFTER the write. The early stop in
+// `mark` never climbs to a parent it has not met, so a parent met late is marked where it is met.
+// THE REVERT: drop the `mark(parent)` at the end of `adopt`, and Grace keeps "Arlington".
+test('an object two rows share is fresh in both once the patch reaches it through each', async () => {
+    await mountSource(`<script>
+import { reactive } from 'abide'
+
+const office = { city: 'Arlington' }
+let rows = reactive([
+    { id: 'ada', name: 'Ada', place: office },
+    { id: 'grace', name: 'Grace', place: office },
+])
+</script>
+
+<ul id="list">{#for row of rows by row.id}<li data-id={row.id}>{row.name}, {row.place.city}</li>{/for}</ul>
+<button id="patch" onclick={() => rows.patch((list) => { list[0].place.city = 'Crystal City'; void list[1].place })}>patch</button>`)
+    ;(document.querySelector('#patch') as HTMLElement).click()
+    flushSync()
+    expect(textOf('ada')).toBe('Ada, Crystal City')
+    expect(textOf('grace')).toBe('Grace, Crystal City')
+})
+
+// A ROW THAT BINDS NOTHING OPENS NO SCOPE — a hydrated row and a made one alike hold the one shared
+// empty scope, so a static row costs no `Scope` and no `stops` array. A count of allocations, not a
+// value: a row with a scope of its own renders the same. THE REVERT: emit the scope and `try` for an
+// empty body in `mountFunction`; this reports 5 of 5 rows with a scope of their own where 0 are due.
+const STATIC_ROWS = `<script>
+import { reactive } from 'abide'
+
+let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
+
+function more() {
+    rows = [...rows, { id: 'd' }, { id: 'e' }]
+}
+</script>
+
+<ul id="static-rows">{#for row of rows by row.id}<li>{row.id}</li>{/for}</ul>
+<button id="more" onclick={more}>more</button>`
+
+test('a row that binds nothing allocates no scope, hydrated or made', async () => {
+    const file = parseAbide(STATIC_ROWS)
+    const names = await session.reads(`${ROOT}src/staticRows.abide`, file)
+    const dir = temporaryModule({
+        'Page.ts': compileFile(STATIC_ROWS, names),
+        'Page.client.ts': emitClient(file, names),
+    })
+    const { default: Component } = await import(`${dir}/Page.ts`)
+    let html = ''
+    for await (const chunk of render(
+        Component,
+        '<!doctype html><html><head></head><body></body></html>',
+    ))
+        html += new TextDecoder().decode(chunk)
+    document.body.innerHTML = html.slice(
+        html.indexOf('<body>') + '<body>'.length,
+        html.indexOf('</body>'),
+    )
+    const { default: mount } = await import(`${dir}/Page.client.ts`)
+    const page = mount(pageRegion(document.body)) as Scope
+    ;(document.querySelector('#more') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelectorAll('#static-rows li').length).toBe(5)
+    const list = (page.children ?? []).find(
+        (child): child is List => child instanceof List,
+    ) as List
+    const owned = list.rows.filter((row) => row.scope !== EMPTY_SCOPE)
+    expect(`${owned.length} of ${list.rows.length} rows own a scope`).toBe(
+        `0 of 5 rows own a scope`,
+    )
 })

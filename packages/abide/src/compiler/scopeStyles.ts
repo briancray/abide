@@ -30,9 +30,33 @@ export function scopeToken(relative: string): string {
 
 // Every element the component authors, the token added as a static bare attribute — so the server's
 // markup, a row the browser builds and hydration all carry it with nothing added to any of them.
-export function markScoped(nodes: TemplateNode[], token: string): void {
+//
+// 34.13 — AND A BODY WITH A `<style>` OF ITS OWN adds a token of its own to every element it holds,
+// beside the component's and any enclosing body's, so its rules reach that body and nothing else
+// the component wrote. Numbered in the order the walk meets them, which is the file's, so a body's
+// token is stable across builds. What it hands back is each such body's styles and its token.
+export function markScoped(
+    nodes: TemplateNode[],
+    token: string,
+    tokens: string[] = [token],
+    bodies: { css: string; token: string }[] = [],
+): { css: string; token: string }[] {
     for (const node of nodes) {
-        for (const children of childListsOf(node)) markScoped(children, token)
+        if (node.kind === 'block') {
+            const arms = node.block === 'for' ? [node] : node.branches
+            for (const arm of arms) {
+                let own = tokens
+                if (arm.style !== null) {
+                    const body = `${token}-${bodies.length}`
+                    bodies.push({ css: arm.style, token: body })
+                    own = [...tokens, body]
+                }
+                markScoped(arm.children, token, own, bodies)
+            }
+            continue
+        }
+        for (const children of childListsOf(node))
+            markScoped(children, token, tokens, bodies)
         if (node.kind !== 'element') continue
         // A child's own elements are the child's; what the caller passes between its tags is the
         // caller's, and is marked as the caller's.
@@ -41,18 +65,39 @@ export function markScoped(nodes: TemplateNode[], token: string): void {
             !isSlot(node) &&
             !UNSCOPED.has(node.lowerTag)
         if (own)
-            node.attributes.push({
-                name: token,
-                lowerName: token,
-                value: '',
-                expression: false,
-            })
+            for (const each of tokens)
+                node.attributes.push({
+                    name: each,
+                    lowerName: each,
+                    value: '',
+                    expression: false,
+                })
     }
+    return bodies
 }
 
 // The styles, every selector made to require the token.
 export function scopeCss(css: string, token: string): string {
     return scopeRules(css, `[${token}]`)
+}
+
+// 39.7 — WHETHER A STYLESHEET NAMES A VIEW TRANSITION: a `view-transition-*` property, a
+// `::view-transition*` pseudo-element or an `@view-transition` rule. Comments and strings are
+// skipped, so a rule that was commented out, or a `content:` that spells the words, turns nothing on.
+export function namesViewTransition(css: string): boolean {
+    for (let at = 0; at < css.length; at += 1) {
+        const past = skipOpaque(css, at)
+        if (past !== at) {
+            at = past - 1
+            continue
+        }
+        if (
+            css.startsWith('view-transition', at) &&
+            !/[\w-]/.test(css[at - 1] ?? '')
+        )
+            return true
+    }
+    return false
 }
 
 // Statements at one level: at-rules, and qualified rules whose preludes are selector lists. Block
@@ -164,21 +209,29 @@ function scopeSelector(selector: string, attribute: string): string {
     return `${lead}${unwrapGlobal(before)}${scoped}${trail}`
 }
 
-// Where the rightmost compound starts: just past the last combinator at depth zero.
+// Where the rightmost compound starts: just past the last combinator at depth zero. A comment ends
+// a compound and is never inside one, so its own spaces are not combinators.
 function lastCombinator(selector: string): number {
     let depth = 0
     let start = 0
     for (let at = 0; at < selector.length; at += 1) {
-        const char = selector[at] as string
-        if (char === '"' || char === "'") {
-            at = skipQuoted(selector, at) - 1
+        const past = skipOpaque(selector, at)
+        if (past !== at) {
+            if (selector[at] === '/') start = past
+            at = past - 1
             continue
         }
+        const char = selector[at] as string
         if (char === '(' || char === '[') depth += 1
         else if (char === ')' || char === ']') depth -= 1
         else if (
             depth === 0 &&
-            (char === ' ' || char === '>' || char === '+' || char === '~')
+            (char === ' ' ||
+                char === '\n' ||
+                char === '\t' ||
+                char === '>' ||
+                char === '+' ||
+                char === '~')
         )
             start = at + 1
     }

@@ -1,0 +1,10 @@
+{
+    "title": "A `GET` over a `global` value follows the server",
+    "summary": "The open deals, and a button that moves one on the server. Open this page in a second tab and press it in either: both move, and nothing on the page reloads the list.",
+    "app": "crm",
+    "files": [
+        "src/server/rpc/rpcFollowDeals.ts",
+        "src/ui/components/RpcFollowDeals.abide"
+    ],
+    "render": "src/ui/components/RpcFollowDeals.abide"
+}

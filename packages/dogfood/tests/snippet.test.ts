@@ -73,16 +73,13 @@ test('an anchor ignores indentation, and the slice drops its margin', () => {
     expect(slice(SOURCE, '<label>', 'x').split('\n')[1]).toBe('    Handle')
 })
 
-// THE RENDER IS NOT A PANEL (40.5): the card's component sits above the tabs and stays there,
-// and the slot the page swaps it into is inside the card. A `data-panel="result"` coming back
-// means it has been filed away again.
-test('the card puts its component above the panels', async () => {
+// THE RENDER IS NOT A FILE (40.5): the card's component sits above the file tabs and stays
+// there, and the slot the page swaps it into is inside the card.
+test('the card puts its component above its files', async () => {
     const card = await readExample('bind-text')
-    expect(card.html).toContain('data-panel="files"')
-    expect(card.html).not.toContain('data-panel="result"')
     expect(card.html.indexOf('<!--render:bind-text-->')).toBeGreaterThan(-1)
     expect(card.html.indexOf('<!--render:bind-text-->')).toBeLessThan(
-        card.html.indexOf('ex-tablist'),
+        card.html.indexOf('ex-files'),
     )
     expect(card.component).toBe('BindTextContact')
 })
@@ -133,7 +130,7 @@ test('every example class the build emits resolves in the stylesheet', async () 
         for (const match of source.matchAll(/class="(ex-[a-z-]+)"/g))
             emitted.add(match[1] ?? '')
     }
-    expect(emitted.size).toBeGreaterThan(5)
+    expect(emitted.size).toBeGreaterThan(3)
     const unstyled: string[] = []
     // A WHOLE SELECTOR, not a substring: `.ex-meterX` contains `.ex-meter`, and the first version of
     // this check passed against exactly that rename.

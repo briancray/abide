@@ -1284,6 +1284,28 @@ test('a transform runs untracked, whatever reader made the write', () => {
     stop()
 })
 
+// 11.13 OVER A DERIVED VALUE. What the walk reaches through an adopted derived value has only been
+// MARKED, and still holds what it held — a mirror copying it there copies the old value and leaves
+// the adopter clean, so neither a read nor a watch ever sees the change. THE REVERT: run the mirror
+// in `markReaders` whatever the state of the cell being walked; the watch saw `3` once and the
+// read says 3, where both are due 4.
+test('an adopted derived value mirrors what it recomputes to — 11.13', () => {
+    const cents = reactive(300)
+    const dollars = reactive(() => cents() / 100)
+    const watched = reactive(() => dollars)
+    const seen: unknown[] = []
+    const stop = watch(() => {
+        seen.push(watched())
+    })
+    const read = reactive(() => dollars)
+    read()
+    cents.set(400)
+    flushSync()
+    expect(seen).toEqual([3, 4])
+    expect(read()).toBe(4)
+    stop()
+})
+
 test('adopted productions mirror into the outer value, through its own transform', () => {
     const feed = reactive(1)
     const outer = reactive(() => feed, {
@@ -1970,6 +1992,71 @@ test('the identity gate compares against the last production, not the last relea
 // about the OUTPUT moves — the sanity case beside this one is what says the gate still
 // wakes where the value really changed, which is the pairing that tells a fixed gate from
 // a dead one.
+// 5.24 — A PATCH IS CAPPED LIKE A PRODUCTION. The object changes at once, so what the window holds is
+// the wake: ten patches inside one window reach a reader once, when it closes, carrying the last.
+// THE REVERT: cascade unconditionally in `patchCell`; the reader is woken inside the window, 1 where
+// 0 are due.
+test('a throttle caps the wakes a run of patches makes', async () => {
+    const rows = reactive([{ n: 0 }], { throttle: WINDOW })
+    const woken = wakes(rows)
+    for (let write = 1; write <= 10; write += 1)
+        rows.patch((list) => {
+            ;(list[0] as { n: number }).n = write
+        })
+    expect(woken.count()).toBe(0)
+    // 5.16: the window is holding a change, so the value reads as busy while it does.
+    expect(rows.busy()).toBe(true)
+    await sleep(AFTER_WINDOW)
+    expect(woken.count()).toBe(1)
+    expect((rows()[0] as { n: number }).n).toBe(10)
+    expect(rows.busy()).toBe(false)
+    woken.stop()
+})
+
+// 5.25 — A REFRESH IS HELD LIKE A PRODUCTION: a throttle starts the first reload and holds the rest,
+// and what it held is ONE reload when the window closes. THE REVERT: drop the window arm from
+// `refreshOne`; three refreshes start 3 loads at once where 1 is due.
+test('a throttle collapses a run of refreshes into one reload per window', async () => {
+    let loads = 0
+    const loaded = reactive(
+        async () => {
+            loads += 1
+            return loads
+        },
+        { throttle: WINDOW },
+    )
+    await loaded
+    await sleep(AFTER_WINDOW)
+    const before = loads
+    loaded.refresh()
+    loaded.refresh()
+    loaded.refresh()
+    expect(loads - before).toBe(1)
+    await sleep(AFTER_WINDOW)
+    expect(loads - before).toBe(2)
+})
+
+// 5.25 AND 7.11 — a debounce holds every refresh until they stop, and the one reload it owes runs
+// though nothing reads the value. THE REVERT: owe the run (`cap.owed`) instead of the reload; with
+// no reader the run is never pulled, and 0 loads start where 1 is due.
+test('a debounce holds refreshes until they stop, and reloads with nobody reading', async () => {
+    let loads = 0
+    const loaded = reactive(
+        async () => {
+            loads += 1
+            return loads
+        },
+        { debounce: WINDOW },
+    )
+    await loaded
+    const before = loads
+    loaded.refresh()
+    loaded.refresh()
+    expect(loads - before).toBe(0)
+    await sleep(AFTER_WINDOW)
+    expect(loads - before).toBe(1)
+})
+
 test('a throttled derived value that recomputes to the same figure wakes nobody', async () => {
     const source = reactive(1)
     const derived = reactive(() => source() > 0, { throttle: WINDOW })
@@ -3074,7 +3161,7 @@ function walkSubjects(): Subject[] {
         if (abortNow) return unlanded()
         if (failNow) throw new Error('refused')
         // 15.5: a refusal handed back rather than thrown, which `run` lands on its own arm.
-        if (refuseNow) return refuse.typed('Refused')() as unknown as number
+        if (refuseNow) return refuse.named('Refused')() as unknown as number
         if (adoptPendingNow) return unlanded
         if (adoptNow) return source
         return source() + 1
@@ -3429,10 +3516,12 @@ test('a released value still reads servable implies landed', async () => {
 // indistinguishable from the producer having failed, and those two must not be one case.
 //
 // THE REVERT: dropping the `isFailed(shaped)` test from `accept` reports
-// `value: TooBig: TooBig` — the refusal stored as though it were the new value, minting a
+// `value: TooBig: Content Too Large` — the refusal stored as though it were the new value, minting a
 // production for it and waking every reader with an `Error` where a number belongs.
 test('a transform that refuses stores nothing and mints nothing', () => {
-    const tooBig = refuse.typed<'TooBig', { n: number }>('TooBig', 413)
+    const tooBig = refuse.named('TooBig', 413, undefined, {
+        schema: (value: unknown) => value as { n: number },
+    })
     // NO TYPE ARGUMENTS. The transform's return is inferred whole and split: the kept `number`
     // is what is stored, and the refusal is what `s.error()` is typed as.
     const bounded = reactive(1, {
@@ -3467,7 +3556,9 @@ test('a transform that refuses stores nothing and mints nothing', () => {
 //
 // THE REVERT: dropping `cell.failure = undefined` from `produce` reports `error: TooBig`.
 test('an accepted write clears the standing refusal', () => {
-    const tooBig = refuse.typed<'TooBig', { n: number }>('TooBig', 413)
+    const tooBig = refuse.named('TooBig', 413, undefined, {
+        schema: (value: unknown) => value as { n: number },
+    })
     const bounded = reactive(1, {
         transform: (value) => (value > 10 ? tooBig({ n: value }) : value),
     })
@@ -3526,7 +3617,7 @@ test('a body that fails over a value still being served wakes nobody, thrown or 
         const loaded = reactive(() => {
             if (!failNext) return 'held'
             if (how === 'thrown') throw new Error('the reload failed')
-            return refuse.typed('Reload')() as unknown as string
+            return refuse.named('Reload')() as unknown as string
         })
         expect(loaded()).toBe('held')
         const counter = wakes(loaded)
@@ -3586,7 +3677,7 @@ test('a reload that fails over an invalidated value wakes the reader it left wai
 // THE REVERT: spelling `isError`'s first parameter `_this: Cell` reports
 // `narrows: false`, because the name arrives where the error is expected.
 test('s.isError takes the error and the name, in that order', () => {
-    const mine = refuse.typed('Mine')
+    const mine = refuse.named('Mine')
     const value = reactive(1)
     expect(`narrows: ${value.isError(mine(), 'Mine')}`).toBe('narrows: true')
     expect(`other: ${value.isError(mine(), 'Yours')}`).toBe('other: false')
@@ -3709,7 +3800,9 @@ test('a schema gates publish as well as set', () => {
 // THE REVERT is `refused` returning `cell.ordinal`: `publish refused: false` and
 // `set refused: false`, with the ordinal unmoved behind both.
 test('a refused write hands its refusal back, and an accepted one does not', () => {
-    const tooBig = refuse.typed<'TooBig', { n: number }>('TooBig', 413)
+    const tooBig = refuse.named('TooBig', 413, undefined, {
+        schema: (value: unknown) => value as { n: number },
+    })
     const bounded = reactive(1, {
         transform: (value) => (value > 10 ? tooBig({ n: value }) : value),
     })
@@ -5721,7 +5814,7 @@ test('a body answering with a value that adopts it fails with the refusal', () =
 // 4.7 governs the SCHEMA as much as the transform, and only the transform was cleared. Run
 // tracked, the gate's own reads were attributed to whatever reader stood on the stack. The revert
 // is dropping the save/restore from `runSchema` in `#shared/Schema.ts`: the body then runs twice.
-// The clearing is there rather than at the call site because `refuse.typed` and `Keyed`'s
+// The clearing is there rather than at the call site because `refuse.named` and `Keyed`'s
 // argument gate reach `runSchema` without passing through `accept` at all.
 test('a schema runs untracked', () => {
     const other = reactive(1)

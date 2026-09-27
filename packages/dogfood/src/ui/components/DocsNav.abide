@@ -11,13 +11,15 @@
 //
 // WHERE YOU ARE COMES FROM THE ROUTE. The nav is the layout's, and a layout outlives the page it
 // wraps (41.11), so a prop the page passed would be the FIRST page's for as long as the nav stands.
+// The same route decides WHICH pages it lists — the guides, or the reference, or none beside an
+// instrument — and the site bar above it is where a reader moves between those.
 import { raw, route } from 'abide'
-import { NAV_ITEMS } from '#ui/NAV_ITEMS.ts'
+import { sidebarGroupsOf } from '#ui/siteSections.ts'
 </script>
 
-<nav>
-    <a class="brand" href="/">abide<span>docs</span></a>
-    {#for group of NAV_ITEMS}
+{#if sidebarGroupsOf(route.url().pathname).length > 0}
+<nav class="sidebar">
+    {#for group of sidebarGroupsOf(route.url().pathname)}
         <section>
             <h2>{group.section}</h2>
             <ul>
@@ -28,3 +30,4 @@ import { NAV_ITEMS } from '#ui/NAV_ITEMS.ts'
         </section>
     {/for}
 </nav>
+{/if}

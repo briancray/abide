@@ -15,6 +15,7 @@ import {
     OPENAPI_ADDRESS,
     PRINCIPAL_ADDRESS,
     RPC_ADDRESS,
+    SOCKET_ADDRESS,
 } from '#shared/ADDRESSES.ts'
 import { DEBUG_META } from '#shared/DEBUG_META.ts'
 import { escapeAttribute } from '#shared/escapeText.ts'
@@ -47,6 +48,7 @@ import { chunksOf, type Manifest } from './chunksByModule.ts'
 import { compressStream } from './compressStream.ts'
 import { answerLogs, answerMcp, openApi } from './generatedSurfaces.ts'
 import { reportHealth } from './health.ts'
+import { MUX_ADMITTED } from './MUX_ADMITTED.ts'
 import { namesUnder } from './namesUnder.ts'
 import { ENCODINGS, negotiateEncoding } from './negotiateEncoding.ts'
 import { callerFor, resolvePrincipal } from './principal.ts'
@@ -84,8 +86,8 @@ type Ranked = RankedError & {
     document: string
 }
 
-// A public file, read once at boot: where the bytes are, and the etag off them.
-export type PublicFile = { path: string; etag: string }
+// A public file, read once at boot: where the bytes are, the etag off them, and its type.
+export type PublicFile = { path: string; etag: string; type: string }
 
 export type AppSources = {
     // 30.9's order, which `appSources` is the only way to get.
@@ -146,15 +148,30 @@ export async function answerRequest(
             200,
         )
     }
-    if (asked.startsWith(`${ABIDE_ADDRESS}/`))
-        return app.framework(asked, request) ?? notFound()
+    // 37.3 — THE MUX'S UPGRADE PASSES THE APP LANE as every request does, and arriving here is the
+    // lane having let it through: `MUX_ADMITTED` is what the listener upgrades on, and whatever a rung
+    // answered instead is sent as it was answered.
+    if (
+        asked === SOCKET_ADDRESS &&
+        request.headers.get('upgrade') === 'websocket' &&
+        (app.sockets.size > 0 || app.handlers.size > 0)
+    )
+        return new Response(null, { status: MUX_ADMITTED })
+    if (asked.startsWith(`${ABIDE_ADDRESS}/`)) {
+        const answer = app.framework(asked, request)
+        if (answer === undefined) return notFound()
+        return readsOnly(request) ? answer : methodRefused(app, asked)
+    }
 
     // 36.11 — A PUBLIC FILE IS ITS PATH BELOW THE DIRECTORY, so `/favicon.ico` is answered
     // before any route is tried. The order is not load-bearing: `abide build` and `abide dev`
     // run `refuseAddressCollision` (36.13) over the same two trees before anything is served,
     // so at run time there can never be a collision to resolve.
     const file = app.published.get(asked)
-    if (file !== undefined) return publicResponse(request, file)
+    if (file !== undefined)
+        return readsOnly(request)
+            ? publicResponse(request, file)
+            : methodRefused(app, asked)
 
     // 15.16 — an address that will not percent-decode names nothing, and is the caller's fault.
     const parts = partsOf(asked)
@@ -178,6 +195,8 @@ export async function answerRequest(
             ))
         )
 
+    if (!readsOnly(request)) return methodRefused(app, asked)
+
     // 30.16 — THE CLIENT ROUTER ASKING, not a reader loading the page. `middleware` has already run
     // over this request by the time it gets here, and it is what the router came for: a refusal
     // or a redirect it wrote. `stamp` puts that written status over this 204, and the router
@@ -198,6 +217,10 @@ export async function answerRequest(
     // 11.32 — the page renders in a scope of its own, so what its values hold is this request's —
     // and 41.13, every call it makes is left for the browser's own call to be answered from.
     const headers = new Headers(DOCUMENT_HEADERS)
+    // THE HEADERS A `GET` WOULD CARRY, and no render for a body nobody is sent — nor a caller
+    // minted for a request that never becomes a page.
+    if (request.method === 'HEAD')
+        return new Response(null, { status: writtenStatus(), headers })
     // 26.5 — the caller the seed buffer is keyed by, minted where the browser carries none: the same
     // one `principal.caller` reads for the rest of the request.
     const caller = callerFor()
@@ -284,11 +307,12 @@ RPC_SERVER.reached = (rpc, args, reached) => {
     )
 }
 
-// 21.3, 21.6.
+// 21.3, 21.6, 21.18.
 const DOCUMENT_HEADERS = {
     'content-type': 'text/html; charset=utf-8',
     'cache-control': 'private, no-store',
     'referrer-policy': 'strict-origin-when-cross-origin',
+    'content-security-policy': "frame-ancestors 'none'",
     vary: 'accept-encoding',
 }
 
@@ -404,16 +428,53 @@ export async function publicFilesUnder(
     )
     for (let index = 0; index < names.length; index += 1) {
         const name = names[index] as string
+        const path = `${root}/${name}`
         files.set(`/${name}`, {
-            path: `${root}/${name}`,
+            path,
             etag: etags[index] as string,
+            type: publicType(path),
         })
     }
     return files
 }
 
-export function notFound(): Response {
-    return new Response('not found', { status: 404 })
+// 36.14, 36.17 — the type off the extension, and a text type without a charset given UTF-8's
+// rather than whatever a browser guesses.
+function publicType(path: string): string {
+    const type = Bun.file(path).type
+    return type.startsWith('text/') && !type.includes('charset')
+        ? `${type}; charset=utf-8`
+        : type
+}
+
+// 21.3 — A REFUSAL ABIDE ANSWERS AS TEXT, typed. `stamp` rebuilds an answer to give it a reason
+// phrase (17.8), and a string body rebuilt goes out as `application/octet-stream`.
+export function plainAnswer(message: string, status: number): Response {
+    return new Response(message, {
+        status,
+        headers: {
+            'content-type': 'text/plain; charset=utf-8',
+            'cache-control': 'private, no-store',
+        },
+    })
+}
+
+function notFound(): Response {
+    return plainAnswer('not found', 404)
+}
+
+// 15.17.
+function readsOnly(request: Request): boolean {
+    return request.method === 'GET' || request.method === 'HEAD'
+}
+
+async function methodRefused(
+    app: AppSources,
+    pathname: string,
+): Promise<Response> {
+    const answer = await answerFailure(app, pathname, refuse(405))
+    answer.headers.set('allow', 'GET, HEAD')
+    return answer
 }
 
 // 21.14 and 16.36's range, answered off the etag read at boot, before a byte is read. 36.12 and
@@ -421,7 +482,7 @@ export function notFound(): Response {
 // already derives rather than a table kept here.
 function publicResponse(request: Request, file: PublicFile): Response {
     return answerBlobTagged(
-        Bun.file(file.path),
+        Bun.file(file.path, { type: file.type }),
         file.etag,
         request,
         // 21.12. Revalidated every time and cached in between, which is what an unhashed name

@@ -63,8 +63,7 @@ export function applyHead(markup: string): void {
 // name only the run time knows) — here every attribute is resolved, so a contribution the compiler
 // had to append arrives with a key. That is the same rule reaching further, not a different one.
 function headKey(element: Element): string | undefined {
-    return headKeyOf(
-        element.tagName.toLowerCase(),
-        (name) => element.getAttribute(name) ?? undefined,
+    return headKeyOf(element.tagName.toLowerCase(), (name) =>
+        element.getAttribute(name),
     )
 }

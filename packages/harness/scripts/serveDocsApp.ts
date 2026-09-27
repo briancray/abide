@@ -6,10 +6,12 @@
 // would be a second answer to "what does this address serve", and the whole point of driving the
 // built app is that a card measured here is the card a reader gets.
 
+// The CLI-driving helpers are the framework tests' own: harness scripts are not a lane, and a second
+// copy of "build, start on port 0, read the origin back" is one more place for the two to disagree.
+import { buildApp, startApp } from '../../abide/tests/builtApp.ts'
 import { buildPages } from '../../dogfood/scripts/buildPages.ts'
 
 const DOGFOOD = new URL('../../dogfood/', import.meta.url).pathname
-const ABIDE = new URL('../../abide/bin/abide.ts', import.meta.url).pathname
 
 export type DocsApp = {
     // The origin `abide start` bound, with no trailing slash.
@@ -17,49 +19,17 @@ export type DocsApp = {
     stop: () => void
 }
 
+// `--port 0` and the address read back off stdout: this runs beside whatever else a developer has
+// bound, and a fixed port is the one way a script that works alone fails on a busy machine.
 export async function serveDocsApp(): Promise<DocsApp> {
     await buildPages()
-    const built = Bun.spawnSync([
-        'bun',
-        ABIDE,
-        'build',
-        '--root',
-        `${DOGFOOD}src`,
-        '--out',
-        `${DOGFOOD}.abide`,
-    ])
+    const built = buildApp(`${DOGFOOD}src`, `${DOGFOOD}.abide`)
     if (built.exitCode !== 0)
-        throw new Error(`abide build failed: ${built.stderr.toString()}`)
-
-    // `--port 0` and the address read back off stdout: this runs beside whatever else a
-    // developer has bound, and a fixed port is the one way a script that works alone fails on a
-    // busy machine.
-    const server = Bun.spawn(
-        [
-            'bun',
-            ABIDE,
-            'start',
-            '--root',
-            `${DOGFOOD}src`,
-            '--out',
-            `${DOGFOOD}.abide`,
-            '--port',
-            '0',
-        ],
-        { stdout: 'pipe', stderr: 'pipe' },
+        throw new Error(`abide build failed: ${built.stderr}`)
+    const { base, stop } = await startApp(
+        `${DOGFOOD}src`,
+        process.env,
+        `${DOGFOOD}.abide`,
     )
-
-    let seen = ''
-    for await (const chunk of server.stdout as ReadableStream<Uint8Array>) {
-        seen += new TextDecoder().decode(chunk)
-        const found = /http:\/\/[^\s]+/.exec(seen)
-        if (found)
-            return {
-                origin: new URL(found[0]).origin,
-                stop: () => {
-                    server.kill()
-                },
-            }
-    }
-    throw new Error(`abide start printed no address: ${seen}`)
+    return { origin: base, stop }
 }

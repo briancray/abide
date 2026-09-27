@@ -146,16 +146,16 @@ clause it lands on, and the clause is the page's title rather than the card's.
 | Dashboard | A total that follows its filter · a metric three tiles want and one load answers · a poll that has to be capped · a count that quietly stopped following its filter | an unkeyed `reactive` body, `global`, `throttle`, tracking after `await` |
 | Player | A now-playing bar and a library that agree · a volume that survives the tab · a scrub that fires per frame | `reactive.share`, `store`, `debounce` |
 
-**Why 40.23 holds a page to one app.** Six cards drawn from four worlds is six worlds to enter, and
+**Why 40.22 holds a page to one app.** Six cards drawn from four worlds is six worlds to enter, and
 the reader pays that toll per card while the thing being taught is the same one throughout.
 
-**Why 40.24 seats a control with its value.** Held apart from it a button has to name its own
+**Why 40.23 seats a control with its value.** Held apart from it a button has to name its own
 subject — "add one" of what — and that name is longer and vaguer than the arrow it replaced. This
 is the same economy the readouts are under: what the layout can say, the words do not have to.
 
 # What an example has to prove
 
-40.25, 40.26 and 40.27 are one rule rather than three, because dropping any one is a distinct way
+40.24, 40.25 and 40.26 are one rule rather than three, because dropping any one is a distinct way
 for a card to go wrong: a card that proves nothing is
 decoration, a card that proves it in forty lines has buried the proof under the setup, and a card
 that proves it in a world nobody has is proving it to nobody.
@@ -179,16 +179,16 @@ Three levels, and a reader may stop at any of them.
 | Section overview | that same opening, then what does not fit on a landing page — every part linking to the page that covers it |
 | Topic page | one problem, solved |
 
-The three levels are 40.12's, the constraint on a lead is 40.31's and the map section is 40.32's;
+The three levels are 40.11's, the constraint on a lead is 40.30's and the map section is 40.31's;
 the `{% lead %}` directive is the build's. SOME OF WHAT IS BELOW IS GATED as well, in
 `packages/dogfood/tests/coverage.test.ts` and `voice.test.ts` — the tests are the list, an
 enumeration here being a second copy of them that nothing re-runs. A rule here that turns out to be
 checkable belongs in a test rather than in prose; what stays is what only a reader can decide.
 
-* **A page's LEAD is what the section overview says about it.** 40.31 is the constraint and also
+* **A page's LEAD is what the section overview says about it.** 40.30 is the constraint and also
   the test: the lead is about the whole page rather than about whatever the first heading happens
   to be, and an opening that describes the first card advertises the page as that one card.
-* **Where a page's subject is a NAME, the first section is the map 40.32 asks for.** A reader
+* **Where a page's subject is a NAME, the first section is the map 40.31 asks for.** A reader
   arriving to compare two spellings gets them in the first screen instead of assembling them from
   six sections; one who came to learn scrolls past a table costing four lines. It fits a page whose
   subject is one name with variants, which is most of the primitives, and it does not fit a page
@@ -221,7 +221,7 @@ three pages later.
 | reactive value | container, store, atom, signal, observable | The type is `Reactive` and the prose word is "reactive value" — one word family at two registers, which is why nothing needs a separate noun for the thing as against its current value. Vue's `reactive()` is a transparent proxy rather than something you read with a call; the collision is accepted because every alternative is owned too and none of them is more precise. The ban is on the reader-facing NOUN — `signal` stays available for the internal mechanism a probe or a selection holds |
 | handler (noun), declare (verb) | declaration, hook | `hook` is taken — `onStart`, `onStop`, `onConfig` are abide's lifecycle hooks — and "a declaration" names the one shape these are not, a JavaScript function declaration being `function f() {}` where every handler is a `const` bound to an expression. You DECLARE a handler with `GET` |
 | channel | room, topic, feed, subscription | A reactive value declaring `history` that the system keeps sending to everyone connected — presence, progress, a price, messages, log lines. "A reactive value is state your code has; a channel is state the system keeps sending to everyone connected." It is a word for that use and not an API name: `reactive` with `history` is the value, and `publish` is what sends it to every subscriber (9.1). A ROOM promised membership a channel does not have — no revoke, no clear (9.17) — and a FEED promised one publisher. `channel` is not the logger's word: a log line is written under a NAMESPACE, the word the `DEBUG` grammar already uses |
-| refusal, failure | error (as the noun for a declared answer) | An error is what went wrong unexpectedly — `onError`'s subject, and what `s.error()` hands back. A refusal is a declared answer with a name and data, and `refuse` / `refuse.typed` are how one is spelled. The API keeps `error` where it means the first thing; prose keeps `refusal` where it means the second |
+| refusal, failure | error (as the noun for a declared answer) | An error is what went wrong unexpectedly — `onError`'s subject, and what `s.error()` hands back. A refusal is a declared answer with a name and data, and `refuse` / `refuse.named` are how one is spelled. The API keeps `error` where it means the first thing; prose keeps `refusal` where it means the second |
 | middleware, rung | onion (as a noun for the mechanism) | `middleware` is the API and a rung is one layer of it. "Onion" describes the ORDER and is worth reaching for only where the order is the subject |
 | reactive value | state, memo (as kinds of value) | There is one factory, `reactive`, and the by-name rule, the probes and `Reactive` reach every value it hands back. Where the kind matters it is said by what the value has — a value the scope owns, a derived value, a keyed value, a channel — and calling a derived value or `route.url` "a state" made the by-name guide read as a rule about one of them |
 | selection | group, set, query, batch | What `busy`, `refresh` and `invalidate` take — one value, one keyed value, or every entry carrying a tag. A selection names entries; it does not run a query over them |
@@ -251,11 +251,11 @@ three pages later.
   `.ts` file in the docs app, running on the page that teaches it, and 40.3 asks it for a spec,
   which is what keeps it evidence rather than illustration.
 * **Four layers reach a card, and each says a thing the others cannot.** The HEADING is the
-  claim, in the reader's words, and 40.25 is what binds the card to it. The card's TITLE is the
+  claim, in the reader's words, and 40.24 is what binds the card to it. The card's TITLE is the
   signature and a gloss, which is the address in the API the claim is about. The card's SUMMARY
   is the situation and what to do in it, one or two sentences. And the copy AFTER the card is
   everything none of those can carry: the reason, the refusal, the thing the running page cannot
-  show. 40.28 is what keeps a fourth voice out from between a heading and its card — the layer that kept being
+  show. 40.27 is what keeps a fourth voice out from between a heading and its card — the layer that kept being
   written and is always a fourth voice restating one of the other three — a card had a heading
   saying a derived value re-runs when what it read changes, then a paragraph saying reading is what
   subscribes, then a title saying auto-tracked derivation, then a summary saying the total
@@ -363,11 +363,11 @@ for prose, and 1.25rem and up for headings and stat values.
 thing wherever it appears: an aside in prose, written `> [!TIP]`, and an annotation the
 documentation adds beside something a reader is looking at. A reader is entitled to read every
 pixel of a render as the app's output, which is why the documentation's own instrumentation sits
-OUTSIDE the render rather than inside it wearing a tip (40.17).
+OUTSIDE the render rather than inside it wearing a tip (40.16).
 
 **An example leads with the running component, and the component is really running.** The render
 sits above the tabs and stays there, and what it runs is the example's own component, inline in the
-docs app (40.15), answered by the docs app's own handlers (40.16) — the code in the Files tab is the
+docs app (40.14), answered by the docs app's own handlers (40.15) — the code in the Files tab is the
 code on screen, with nothing standing in for either half. Files is what a reader consults ABOUT it.
 The thing an example is for is the thing that runs, and a reader who has to find a tab before
 seeing one has been handed source to read instead of something to try.

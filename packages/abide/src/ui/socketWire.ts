@@ -11,17 +11,21 @@
 // NOT HERE YET: 18.15's reset of a `{#for}` over the copy, which is the compiler's; a reset here
 // publishes the owner's ring into the copy.
 
-import { SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
+import { ABIDE_ADDRESS, SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
 import { failed, isFailedNamed } from '#shared/Failed.ts'
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
+import type { BrowserFrame, ServerFrame } from '#shared/socket.ts'
+import { applyPatch } from './applyPatch.ts'
 import { HYDRATE_LOG } from './Mismatch.ts'
 
 // How many productions a subscriber's copy retains for a cursor to replay.
 const COPY_HISTORY = 100
+const RETRY_FLOOR_MS = 250
 const RETRY_CEILING_MS = 10_000
 
-type Subscription = {
+// A SOCKET SUBSCRIBED: a log, numbered by its owner (9.14), resumed from where it stood (18.13).
+class Subscription {
     id: number
     address: string
     args: unknown
@@ -31,79 +35,35 @@ type Subscription = {
     refuse: ((error: unknown) => void) | null
     seq: number | undefined
     epoch: string | undefined
-}
 
-type Frame = {
-    op: 'prod' | 'reset' | 'error'
-    id: number
-    seq?: number
-    epoch?: string
-    value?: unknown
-    ring?: [number, unknown][]
-    error?: { name: string; status: number; message: string; data: unknown }
-}
-
-class Mux {
-    url: string
-    socket: WebSocket | null
-    subscriptions: Map<number, Subscription>
-    pending: string[]
-    nextId: number
-    retry: number
-
-    constructor(url: string) {
-        this.url = url
-        this.socket = null
-        this.subscriptions = new Map()
-        this.pending = []
-        this.nextId = 1
-        this.retry = 250
+    // 9.29 — BUSY UNTIL THE FIRST PRODUCTION ARRIVES, which settles the value it was built over.
+    constructor(id: number, address: string, args: unknown) {
+        this.id = id
+        this.address = address
+        this.args = args
+        const settled = Promise.withResolvers<unknown>()
+        this.first = settled.resolve
+        this.refuse = settled.reject
+        this.copy = reactive<unknown>(settled.promise, {
+            history: COPY_HISTORY,
+        }) as Reactive<unknown>
+        this.publish = this.copy.publish
+        this.seq = undefined
+        this.epoch = undefined
     }
 
-    send(frame: unknown): void {
-        const text = JSON.stringify(frame)
-        if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(text)
-        else {
-            this.pending.push(text)
-            this.connect()
+    frame(): BrowserFrame {
+        return {
+            op: 'sub',
+            id: this.id,
+            address: this.address,
+            args: this.args,
+            seq: this.seq,
+            epoch: this.epoch,
         }
     }
 
-    // A subscription is never queued: `onopen` sends every one standing, so one registered before
-    // the socket opens goes out with them.
-    subscribe(subscription: Subscription): void {
-        this.subscriptions.set(subscription.id, subscription)
-        if (this.socket?.readyState === WebSocket.OPEN)
-            this.socket.send(JSON.stringify(subscribeFrame(subscription)))
-        else this.connect()
-    }
-
-    connect(): void {
-        if (this.socket !== null) return
-        const socket = new WebSocket(this.url)
-        this.socket = socket
-        socket.onopen = () => {
-            this.retry = 250
-            // 18.13 — every subscription again, carrying where it stood.
-            for (const each of this.subscriptions.values())
-                socket.send(JSON.stringify(subscribeFrame(each)))
-            const queued = this.pending
-            this.pending = []
-            for (const text of queued) socket.send(text)
-        }
-        socket.onmessage = (event) =>
-            this.receive(JSON.parse(String(event.data)) as Frame)
-        socket.onclose = () => {
-            this.socket = null
-            if (this.subscriptions.size === 0) return
-            setTimeout(() => this.connect(), this.retry)
-            this.retry = Math.min(this.retry * 2, RETRY_CEILING_MS)
-        }
-    }
-
-    receive(frame: Frame): void {
-        const subscription = this.subscriptions.get(frame.id)
-        if (subscription === undefined) return
+    receive(frame: ServerFrame): void {
         if (frame.op === 'error') {
             const error = frame.error
             const refusal =
@@ -115,54 +75,179 @@ class Mux {
                           error.message,
                           error.data,
                       )
-            if (subscription.refuse !== null) {
-                subscription.refuse(refusal)
-                subscription.first = null
-                subscription.refuse = null
+            if (this.refuse !== null) {
+                this.refuse(refusal)
+                this.first = null
+                this.refuse = null
             } else HYDRATE_LOG.warning('a socket refused', refusal)
             return
         }
-        subscription.epoch = frame.epoch
+        this.epoch = frame.epoch
         if (frame.op === 'reset') {
             for (const [seq, value] of frame.ring ?? []) {
-                subscription.seq = seq
-                deliver(subscription, value)
+                this.seq = seq
+                this.deliver(value)
             }
             return
         }
-        subscription.seq = frame.seq
-        deliver(subscription, frame.value)
+        this.seq = frame.seq
+        this.deliver(frame.value)
+    }
+
+    deliver(value: unknown): void {
+        if (this.first !== null) {
+            this.first(value)
+            this.first = null
+            this.refuse = null
+            return
+        }
+        this.publish.call(this.copy, value)
     }
 }
 
-function subscribeFrame(subscription: Subscription): unknown {
-    return {
-        op: 'sub',
-        id: subscription.id,
-        address: subscription.address,
-        args: subscription.args,
-        seq: subscription.seq,
-        epoch: subscription.epoch,
+// 18.17 — A HANDLER FOLLOWED, beside the sockets on the same mux. Its copy is the `Rpc`'s entry for
+// these args, reached through `entry` — a lookup by then, the follow starting once it has loaded.
+// STATE, NOT A LOG: it names the version it holds (18.24) and takes whatever value it is sent (18.25).
+class Following {
+    id: number
+    address: string
+    args: unknown
+    version: number | undefined
+    entry: () => unknown
+    expiry: ReturnType<typeof setTimeout> | undefined
+
+    constructor(
+        id: number,
+        address: string,
+        args: unknown,
+        version: number | undefined,
+        entry: () => unknown,
+    ) {
+        this.id = id
+        this.address = address
+        this.args = args
+        this.version = version
+        this.entry = entry
+        this.expiry = undefined
+    }
+
+    // 18.29 — THE COPY GOES STALE WHEN THE ANSWER'S `max-age` RUNS OUT, which is what is left of the
+    // production's own life on the server (21.8). Stale rather than dropped: it goes on being served
+    // until a read runs the producer (7.17). The later answer's timer replaces the earlier.
+    expireAfter(life: string | null | undefined): void {
+        clearTimeout(this.expiry)
+        const seconds = Number(/max-age=(\d+)/.exec(life ?? '')?.[1] ?? 0)
+        this.expiry =
+            seconds > 0
+                ? setTimeout(
+                      () => (this.entry() as Reactive<unknown>).invalidate(),
+                      seconds * 1000,
+                  )
+                : undefined
+    }
+
+    frame(): BrowserFrame {
+        return {
+            op: 'sub',
+            id: this.id,
+            address: this.address,
+            args: this.args,
+            version: this.version,
+        }
+    }
+
+    receive(frame: ServerFrame): void {
+        const copy = this.entry() as Reactive<unknown>
+        if (frame.op === 'value') {
+            this.version = frame.version
+            copy.publish(frame.value)
+        } else if (frame.op === 'patch') {
+            // 18.27 — WRITES MADE OVER ANOTHER VERSION WOULD LAND SOMEWHERE ELSE, so the copy reads
+            // the value again instead, and the answer's version puts it back in step (18.24).
+            if (this.version !== frame.base) copy.refresh()
+            else {
+                this.version = frame.version
+                copy.patch((value) => applyPatch(value, frame.ops ?? []))
+            }
+        } else if (frame.op === 'invalidate') copy.invalidate()
+        else if (frame.op === 'refresh') copy.refresh()
+        else if (frame.op === 'error')
+            HYDRATE_LOG.warning('a handler refused to be followed', frame.error)
     }
 }
 
-function deliver(subscription: Subscription, value: unknown): void {
-    if (subscription.first !== null) {
-        subscription.first(value)
-        subscription.first = null
-        subscription.refuse = null
-        return
+class Mux {
+    url: string
+    socket: WebSocket | null
+    subscriptions: Map<number, Subscription | Following>
+    pending: string[]
+    nextId: number
+    retry: number
+
+    constructor(url: string) {
+        this.url = url
+        this.socket = null
+        this.subscriptions = new Map()
+        this.pending = []
+        this.nextId = 1
+        this.retry = RETRY_FLOOR_MS
     }
-    subscription.publish.call(subscription.copy, value)
+
+    send(frame: BrowserFrame): void {
+        const text = JSON.stringify(frame)
+        if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(text)
+        else {
+            this.pending.push(text)
+            this.connect()
+        }
+    }
+
+    // A subscription is never queued: `onopen` sends every one standing, so one registered before
+    // the socket opens goes out with them.
+    subscribe(subscription: Subscription | Following): void {
+        this.subscriptions.set(subscription.id, subscription)
+        if (this.socket?.readyState === WebSocket.OPEN)
+            this.socket.send(JSON.stringify(subscription.frame()))
+        else this.connect()
+    }
+
+    connect(): void {
+        if (this.socket !== null) return
+        const socket = new WebSocket(this.url)
+        this.socket = socket
+        socket.onopen = () => {
+            this.retry = RETRY_FLOOR_MS
+            // 18.13 — every subscription again, carrying where it stood.
+            for (const each of this.subscriptions.values())
+                socket.send(JSON.stringify(each.frame()))
+            const queued = this.pending
+            this.pending = []
+            for (const text of queued) socket.send(text)
+        }
+        // THE CLOSE THAT FOLLOWS IS WHAT RETRIES; an error left unhandled is only noise on top of it.
+        socket.onerror = () => {}
+        socket.onmessage = (event) =>
+            this.receive(JSON.parse(String(event.data)) as ServerFrame)
+        socket.onclose = () => {
+            this.socket = null
+            if (this.subscriptions.size === 0) return
+            setTimeout(() => this.connect(), this.retry)
+            this.retry = Math.min(this.retry * 2, RETRY_CEILING_MS)
+        }
+    }
+
+    receive(frame: ServerFrame): void {
+        this.subscriptions.get(frame.id)?.receive(frame)
+    }
 }
 
 const MUXES = new Map<string, Mux>()
 
-// The mux a socket's address is carried over: the address up to and including `SOCKET_ADDRESS`,
-// so an app under a sub-path opens its own.
+// The mux a socket's or a handler's address is carried over: `SOCKET_ADDRESS` under whatever the
+// address stands below, so an app under a sub-path opens its own.
 function muxFor(address: string): Mux {
-    const at = address.indexOf(SOCKET_ADDRESS)
-    const path = address.slice(0, at + SOCKET_ADDRESS.length)
+    const below = address.indexOf(ABIDE_ADDRESS)
+    const path = `${below === -1 ? '' : address.slice(0, below)}${SOCKET_ADDRESS}`
     const url = new URL(path, location.href)
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
     let mux = MUXES.get(url.href)
@@ -180,31 +265,11 @@ export function socketWire(address: string): unknown {
         const standing = copies.get(key)
         if (standing !== undefined) return standing
         const mux = muxFor(address)
-        let first: ((value: unknown) => void) | null = null
-        let refuse: ((error: unknown) => void) | null = null
-        const landed = new Promise<unknown>((resolve, reject) => {
-            first = resolve
-            refuse = reject
-        })
-        const copy = reactive<unknown>(landed, {
-            history: COPY_HISTORY,
-        }) as Reactive<unknown>
-        const subscription: Subscription = {
-            id: mux.nextId++,
-            address,
-            args,
-            copy,
-            publish: copy.publish,
-            first,
-            refuse,
-            seq: undefined,
-            epoch: undefined,
-        }
+        const subscription = new Subscription(mux.nextId++, address, args)
+        const copy = subscription.copy
         // 18.6 — A PUBLISH FROM HERE GOES TO THE OWNER, which admits it or refuses it; what it admits
         // comes back as a production.
-        ;(
-            copy as unknown as { publish: (message: unknown) => number }
-        ).publish = (message) => {
+        copy.publish = (message) => {
             mux.send({ op: 'pub', id: subscription.id, address, args, message })
             return subscription.seq ?? 0
         }
@@ -213,4 +278,30 @@ export function socketWire(address: string): unknown {
         return copy
     }
     return Object.assign(call, { address, isError: isFailedNamed })
+}
+
+// ONE FOLLOW PER HANDLER AND ARGS for the life of the page, however often the entry loads. A later
+// answer names a later version, which is what a reconnect then names (18.24).
+const FOLLOWING = new Map<string, Following>()
+
+export function followRpc(
+    address: string,
+    args: unknown,
+    version: string | null | undefined,
+    life: string | null | undefined,
+    entry: () => unknown,
+): void {
+    const key = `${address} ${canonicalKey(args)}`
+    const named =
+        version === null || version === undefined ? undefined : Number(version)
+    let following = FOLLOWING.get(key)
+    if (following === undefined) {
+        const mux = muxFor(address)
+        following = new Following(mux.nextId++, address, args, named, entry)
+        FOLLOWING.set(key, following)
+        mux.subscribe(following)
+    } else if (named !== undefined && (following.version ?? 0) < named)
+        // 18.22 — versions only rise, so the larger is the later.
+        following.version = named
+    following.expireAfter(life)
 }

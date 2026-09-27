@@ -9,29 +9,89 @@
 // takes its answer — at once where it has arrived, which lands the value in the same run as
 // hydration's setup — and every reach after that fetches, a refresh being a new call.
 //
+// 18.17, 18.24 — EVERY `GET` LOADED IS FOLLOWED over the mux, naming the version its answer carried:
+// a trigger on the server reaches the copy for these args, and a `global` value's changes arrive as
+// values the copy takes (18.25).
+//
 // An entry of its own (`abide/wire`) rather than a name on the runtime barrel: only a generated
 // wrapper imports it, and a page with no handler pays nothing for it.
 
+import type { CopyOptions } from '#shared/CopyOptions.ts'
 import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
+import { LOAD_SIGNAL } from '#shared/LOAD_SIGNAL.ts'
 import { failed, isFailed } from '#shared/Failed.ts'
+import { reactive, structural } from '#shared/reactive/index.ts'
 import { refuse } from '#shared/refuse.ts'
 import { declare, type Method } from '#shared/rpc.ts'
 import { type RpcRequest, rpcRequest } from '#shared/rpcRequest.ts'
+import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
+import { followRpc } from './socketWire.ts'
 
-// What the early-call script leaves per call: the request in flight, and once it has answered, the
-// status and the text — which stays unset where the request itself did not complete.
-type Early = {
-    promise: Promise<void>
+// What a call answered: the status and the text — which stays unset where the request itself did
+// not complete.
+type Answer = {
     status: number | undefined
     statusText: string | undefined
     type: string | null | undefined
+    // 18.20 — `null` where the answer named none, which is a value built per request.
+    version: string | null | undefined
+    // 21.8 — the answer's `cache-control`, whose `max-age` is how long the copy may serve it.
+    life: string | null | undefined
     text: string | undefined
+    // 16.33 — a streamed answer's body, left unread so its chunks are taken as they land. Set in
+    // place of `text` for a handler the build marked as streaming, and by the early-call script for
+    // any framed answer.
+    body: ReadableStream<Uint8Array> | null | undefined
 }
 
-export function wire(method: Method, address: string): unknown {
+// What the early-call script leaves per call: the request in flight, and once it has answered, what
+// it answered.
+type Early = Answer & { promise: Promise<void> }
+
+export function wire(
+    method: Method,
+    address: string,
+    // 18.19 — what the build read off the handler's declaration.
+    options?: CopyOptions,
+): unknown {
     // ONE PARAMETER, so the value is keyed by args whatever the handler declared (16.6's arity rule):
     // an unkeyed handler is reached with no args, which is one key.
-    const rpc = declare(method)((args: Record<string, unknown> | undefined) => {
+    const body = (args: Record<string, unknown> | undefined) => {
+        // 16.54 — the load's own signal, set by the call starting it and read before anything awaits.
+        const signal = LOAD_SIGNAL.current
+        const request = rpcRequest(method, address, args)
+        const settle = (answer: Answer): unknown => {
+            if (method === 'GET') {
+                const copy = (): unknown =>
+                    (value as (args: unknown) => unknown)(args)
+                followRpc(address, args, answer.version, answer.life, copy)
+            }
+            return answered(answer)
+        }
+        const started = (
+            globalThis as unknown as Record<
+                string,
+                Record<string, Early | undefined> | undefined
+            >
+        )[EARLY_CALLS]
+        const early = started?.[request.key]
+        if (early === undefined)
+            return fetched(request, false, signal).then(settle)
+        ;(started as Record<string, Early | undefined>)[request.key] = undefined
+        if (early.text !== undefined) return settle(early)
+        return early.promise.then(() =>
+            textOf(early, request, signal).then(settle),
+        )
+    }
+    // 16.33 — A STREAMING HANDLER'S COPY IS A STREAM OF ITS OWN, whose chunks land as the answer's
+    // lines arrive: collected into one value, a page reading it showed nothing until the handler's
+    // last chunk. A refusal is thrown, which is how a stream refuses (9.20).
+    const streamed = async function* (
+        args: Record<string, unknown> | undefined,
+    ): AsyncGenerator<unknown> {
+        // 16.54 — read on the first line: the core's pump takes the first step inside the reach, so
+        // this runs while the call that started the load still has its signal set.
+        const signal = LOAD_SIGNAL.current
         const request = rpcRequest(method, address, args)
         const started = (
             globalThis as unknown as Record<
@@ -40,26 +100,135 @@ export function wire(method: Method, address: string): unknown {
             >
         )[EARLY_CALLS]
         const early = started?.[request.key]
-        if (early === undefined) return fetched(request)
-        ;(started as Record<string, Early | undefined>)[request.key] = undefined
-        if (early.text !== undefined) return answered(early)
-        return early.promise.then(() =>
-            early.text === undefined ? fetched(request) : answered(early),
-        )
-    })
+        let answer: Answer
+        if (early === undefined) answer = await fetched(request, true, signal)
+        else {
+            ;(started as Record<string, Early | undefined>)[request.key] =
+                undefined
+            await early.promise
+            answer =
+                early.body === undefined && early.text === undefined
+                    ? await fetched(request, true, signal)
+                    : early
+        }
+        if (method === 'GET')
+            followRpc(address, args, answer.version, answer.life, () =>
+                (value as (args: unknown) => unknown)(args),
+            )
+        if (answer.body !== undefined && answer.body !== null) {
+            yield* framedStream(answer.body, framingPrefix(answer.type))
+            return
+        }
+        const value = answered(answer)
+        if (isFailed(value)) throw value
+        if (Array.isArray(value)) yield* value
+    }
+    // A KEYED VALUE OF ITS OWN where the handler's declares what its copy behaves by, so every entry —
+    // the copy a page walks — carries it: its key (32.33), its tags (11.44), its retention (6.1) and
+    // its comparator (5.3). A `GET` alone: a mutation's value is written and read once.
+    const produce = options?.stream === true ? streamed : body
+    // A `GET`'S ENTRY IS LOOKED UP BY ITS FOLLOW through the value, not the `Rpc`: a call made with no
+    // signal pins the load it reaches (16.53), and a frame from the server would pin one a page was
+    // still free to abort.
+    const value =
+        method === 'GET' || options !== undefined
+            ? reactive(
+                  produce,
+                  options === undefined ? undefined : copyOptions(options),
+              )
+            : produce
+    const rpc = declare(method)(value)
     // 16.10 — the address `rpc.url` and `rpc.raw` build on.
     rpc.address = address
     return rpc
 }
 
-async function fetched(request: RpcRequest): Promise<unknown> {
-    const answer = await fetch(request.url, request.init)
-    return answered({
+// Checked against the value's own types where they were written, on the server; here they are data.
+function copyOptions(options: CopyOptions): never {
+    // `stream` is the wire's to read, and not an option a value takes.
+    const { identity, stream: _, ...rest } = options
+    return (
+        identity === 'structural' ? { ...rest, identity: structural } : rest
+    ) as never
+}
+
+// A framed answer to a streaming handler's copy keeps its body unread (16.33); anything else is text.
+async function fetched(
+    request: RpcRequest,
+    streams: boolean,
+    signal: AbortSignal | undefined,
+): Promise<Answer> {
+    const answer = await fetch(
+        request.url,
+        signal === undefined ? request.init : { ...request.init, signal },
+    )
+    const type = answer.headers.get('content-type')
+    const framed = streams && answer.ok && framingPrefix(type) !== null
+    return {
         status: answer.status,
         statusText: answer.statusText,
-        type: answer.headers.get('content-type'),
-        text: await answer.text(),
-    })
+        type,
+        version: answer.headers.get(VERSION_HEADER),
+        life: answer.headers.get('cache-control'),
+        text: framed ? undefined : await answer.text(),
+        body: framed ? answer.body : undefined,
+    }
+}
+
+// An early call's answer as text, for a copy that is one value: the early-call script leaves a framed
+// answer's body unread, which a streaming copy reads as it lands and this one reads to the end.
+async function textOf(
+    early: Early,
+    request: RpcRequest,
+    signal: AbortSignal | undefined,
+): Promise<Answer> {
+    if (early.text !== undefined) return early
+    if (early.body === undefined || early.body === null)
+        return fetched(request, false, signal)
+    return {
+        ...early,
+        text: await new Response(early.body).text(),
+        body: undefined,
+    }
+}
+
+// What precedes a chunk's JSON on its line: nothing for jsonl, `data: ` for sse, and `null` where
+// the answer is not framed at all.
+function framingPrefix(type: string | null | undefined): string | null {
+    if (type?.startsWith('application/jsonl')) return ''
+    if (type?.startsWith('text/event-stream')) return 'data: '
+    return null
+}
+
+// A framed body's chunks as each line completes. Cancelled when the copy stops reading — a refresh
+// starts a new run and the old one's reader has nothing left to hand anything.
+async function* framedStream(
+    body: ReadableStream<Uint8Array>,
+    prefix: string | null,
+): AsyncGenerator<unknown> {
+    const reader = body.getReader()
+    const decoder = new TextDecoder()
+    let buffered = ''
+    try {
+        for (;;) {
+            const { done, value } = await reader.read()
+            buffered += done
+                ? decoder.decode()
+                : decoder.decode(value, { stream: true })
+            let newline = buffered.indexOf('\n')
+            while (newline !== -1 || (done && buffered !== '')) {
+                const end = newline === -1 ? buffered.length : newline
+                const line = buffered.slice(0, end)
+                buffered = buffered.slice(end + 1)
+                if (line !== '' && line.startsWith(prefix ?? ''))
+                    yield JSON.parse(line.slice((prefix ?? '').length))
+                newline = buffered.indexOf('\n')
+            }
+            if (done) return
+        }
+    } finally {
+        void reader.cancel().catch(() => {})
+    }
 }
 
 // What the body hands back: the value, nothing (16.32), or the refusal it was answered with (15.1),
@@ -67,9 +236,9 @@ async function fetched(request: RpcRequest): Promise<unknown> {
 // failing the way a network error does.
 //
 // 16.33 — A FRAMED STREAM IS COLLECTED INTO THE CHUNKS IT CARRIED, which is the value a streaming
-// handler holds once its run has closed. Collected rather than streamed: a `reactive` adopting a
-// streaming one does not yet forward its chunks as they land.
-function answered(answer: Omit<Early, 'promise'>): unknown {
+// handler holds once its run has closed — for a copy the build did not mark as streaming, whose
+// value is one production. A marked one reads its body as it lands (`framedStream`).
+function answered(answer: Answer): unknown {
     const status = answer.status ?? 0
     if (status === 204) return undefined
     const type = answer.type ?? ''

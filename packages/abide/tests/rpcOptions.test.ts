@@ -50,7 +50,39 @@ export const pay = POST(({ amount }: { amount: number }) => ({ paid: amount }), 
 
 export const shared = POST(() => 'shared', { crossOrigin: ['https://partner.example'] })
 
+export const untimed = GET(() => 1)
+
+export const slow = GET(() => 1, { timeout: 40_000 })
+
+export const endless = GET(() => 1, { timeout: Infinity })
+
+export const stalls = GET(() => new Promise<string>(() => {}), { timeout: 100 })
+
 export const addressOfLookup = GET(() => guarded.url({ id: 5 }))
+
+let release: () => void = () => {}
+
+export const streamed = GET(
+    async function* ({ n }: { n: number }) {
+        yield 'first ' + n
+        await new Promise<void>((resolve) => {
+            release = resolve
+        })
+        yield 'second'
+    },
+    {
+        middleware: [
+            // No args schema, so the URL's text is what arrives (19.8).
+            async (next, ctx) =>
+                (ctx.args() as { n: string }).n === '13' ? refuse(451, 'unlucky') : next(),
+        ],
+    },
+)
+
+export const releaseStream = GET(() => {
+    release()
+    return 'released'
+})
 
 export const rawLookup = GET(async () => {
     const answer = await guarded.raw({ id: 7 })
@@ -58,14 +90,20 @@ export const rawLookup = GET(async () => {
 })
 `
 
+let app = ''
 let base = ''
 let stop = (): void => {}
 const RPC = '/__abide/rpc/options'
 
 beforeAll(async () => {
-    ;({ base, stop } = await serveApp({
+    ;({ app, base, stop } = await serveApp({
         'ui/pages/page.abide': '<main>home</main>',
         'server/rpc/options.ts': HANDLERS,
+        // 16.60 — the environment's ceiling, for a handler that names none of its own.
+        'server/app.ts': `import { onConfig } from 'abide/server'
+
+onConfig(() => ({ ABIDE_MAX_REQUEST_BODY_SIZE: 1024 }))
+`,
     }))
 }, 30_000)
 
@@ -131,6 +169,49 @@ test('a mutation over maxBodySize is refused 413 — 16.14', async () => {
     expect(large.status).toBe(413)
 })
 
+// 16.60 — A BODY THAT NEVER SAID HOW LONG IT WAS IS BOUNDED AS IT STREAMS, at the handler's ceiling
+// and at the environment's. THE REVERT: read the body with `request.text()` in `argsOf` rather than
+// through `bodyUnder`; both are paid 200.
+test('a streamed body over the ceiling is refused 413 — 16.60', async () => {
+    const streamed = (text: string) =>
+        new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(new TextEncoder().encode(text))
+                controller.close()
+            },
+        })
+    const overHandler = await Bun.fetch(`${base}${RPC}/pay`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: streamed(JSON.stringify({ amount: 5, note: 'x'.repeat(64) })),
+    })
+    expect(overHandler.status).toBe(413)
+    const overEnvironment = await Bun.fetch(`${base}${RPC}/shared`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: streamed(JSON.stringify({ note: 'x'.repeat(2048) })),
+    })
+    expect(overEnvironment.status).toBe(413)
+    // AND UNDER IT, the streamed body is still the args.
+    const under = await Bun.fetch(`${base}${RPC}/pay`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: streamed('{"amount":5}'),
+    })
+    expect(await under.json()).toEqual({ paid: 5 })
+})
+
+// 16.64 OVER THE WIRE — a call that timed out is answered at the refusal's own status. THE REVERT:
+// drop the `timeLoad` call in `#shared/rpc.ts`; the request hangs until the test's own timeout.
+test('a call that goes its timeout without settling is answered 504 — 16.64', async () => {
+    const answer = await Bun.fetch(`${base}${RPC}/stalls`)
+    expect(answer.status).toBe(504)
+    expect(await answer.json()).toMatchObject({
+        name: 'HttpError',
+        status: 504,
+    })
+})
+
 // 16.14, 16.25 — A MUTATION FROM ANOTHER ORIGIN IS REFUSED, unless the handler named that origin, and
 // then abide answers its preflight. THE REVERT: skip the origin gate; the stranger's POST is paid 200.
 test('a cross-origin mutation is refused unless declared, and its preflight answered — 16.14, 16.25', async () => {
@@ -176,6 +257,20 @@ test('a cross-origin mutation is refused unless declared, and its preflight answ
     expect(own.status).toBe(200)
 })
 
+// 21.19 — A HANDLER THAT DID NOT DECLARE `crossOrigin` IS NOT ANOTHER ORIGIN'S TO READ: its `GET` is
+// answered, and the browser is not told it may hand the body over. 21.7 — whether it is depends on
+// `Origin`, so the same-origin answer says so too. THE REVERT: stamp `access-control-allow-origin`
+// on every crossing answer in `stamped`; the stranger's reads its own origin back.
+test('a GET from an origin the handler did not admit carries no allow-origin — 21.19, 21.7', async () => {
+    const stranger = await Bun.fetch(`${base}${RPC}/seenOrder`, {
+        headers: { origin: 'https://stranger.example' },
+    })
+    expect(stranger.status).toBe(200)
+    expect(stranger.headers.get('access-control-allow-origin')).toBeNull()
+    const own = await Bun.fetch(`${base}${RPC}/seenOrder`)
+    expect(own.headers.get('vary')).toContain('origin')
+})
+
 // 16.10, 16.44 — `url` is the address a call makes, and `raw` the same call as its response.
 test('rpc.url builds the address and rpc.raw answers the call as a response — 16.10, 16.44', async () => {
     expect(
@@ -186,3 +281,71 @@ test('rpc.url builds the address and rpc.raw answers the call as a response — 
         { id: 7, type: 'number' },
     ])
 })
+
+// 16.33 BEHIND A RUNG — A STREAMING HANDLER'S CHUNKS LEAVE AS THEY LAND. The onion's centre is async
+// and a `Reactive` is thenable, so a rung between the call and a generator used to settle the stream
+// and answer its accumulation when it closed. The generator here does not close until the test asks
+// it to, AFTER the first chunk has arrived — so a collecting onion never sends that chunk, and the
+// race below reports it. No clock is read: the order is the claim.
+//
+// THE REVERT: drop the `streams` arm in `rpc.ts`'s `declare`; the first read loses the race, and
+// the answer is `application/json` rather than jsonl.
+test('a streaming handler behind a rung sends each chunk as it lands — 16.33, 16.12', async () => {
+    const answer = await Bun.fetch(`${base}${RPC}/streamed?n=1`)
+    expect(answer.headers.get('content-type')).toStartWith('application/jsonl')
+    const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
+    const decoder = new TextDecoder()
+    const first = await Promise.race([
+        reader.read().then((step) => decoder.decode(step.value)),
+        Bun.sleep(3000).then(() => 'nothing before the stream closed'),
+    ])
+    expect(first).toContain('"first 1"')
+    await Bun.fetch(`${base}${RPC}/releaseStream`)
+    let rest = ''
+    for (;;) {
+        const step = await reader.read()
+        if (step.done) break
+        rest += decoder.decode(step.value)
+    }
+    expect(rest).toContain('"second"')
+
+    // And the rung still answers in the handler's place (16.17), at its own status.
+    expect((await Bun.fetch(`${base}${RPC}/streamed?n=13`)).status).toBe(451)
+})
+
+// 16.23, 16.61, 16.62 — WHAT A CALL RAISES THE REQUEST'S IDLE TIMEOUT TO, read off a recording server:
+// nothing where no `timeout` is named, the seconds where one is, and bun's 0 — never reaped — for
+// `Infinity`. In process, because the idle timeout a socket was given is not observable from the
+// far end short of waiting it out. THE REVERT: fall back to 30_000 for `ABIDE_RPC_TIMEOUT`; the
+// untimed call raises to 30.
+test('a call raises the idle timeout only as far as its timeout says — 16.61, 16.62', async () => {
+    const server = new URL('../src/server/', import.meta.url).pathname
+    await Bun.write(
+        `${app}/timeouts.ts`,
+        `import { bootApp } from '${server}createApp.ts'
+import { LISTENING } from '${server}requestScope.ts'
+import { loadBuild } from '${server}serveBuild.ts'
+
+const raised: Record<string, number[]> = {}
+const answered: Record<string, number> = {}
+let calling = ''
+LISTENING.server = { timeout: (_request: Request, seconds: number) => raised[calling]?.push(seconds) } as never
+// \`createApp\`'s boot, over the build this fixture made beside itself.
+const app = await bootApp('${app}', () => loadBuild({ root: '${app}', out: '${app}/.abide' }))
+for (const name of ['untimed', 'slow', 'endless']) {
+    calling = name
+    raised[name] = []
+    answered[name] = (await app.fetch(new Request(\`http://app.test${RPC}/\${name}\`))).status
+}
+await app.stop()
+console.log(JSON.stringify({ raised, answered }))
+`,
+    )
+    const ran = Bun.spawnSync(['bun', `${app}/timeouts.ts`], { cwd: app })
+    const printed = ran.stdout.toString().trim().split('\n').at(-1) as string
+    expect(ran.exitCode).toBe(0)
+    expect(JSON.parse(printed)).toEqual({
+        raised: { untimed: [], slow: [40], endless: [0] },
+        answered: { untimed: 200, slow: 200, endless: 200 },
+    })
+}, 30_000)

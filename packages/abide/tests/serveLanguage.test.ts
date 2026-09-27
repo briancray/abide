@@ -1,0 +1,397 @@
+// 38.12 — `abide lsp`, OVER STDIO, as an editor drives it: the handshake, a document opened with text
+// that was never saved, a change that fixes it, and the shutdown. What it publishes is what `abide
+// check` finds (38.3), on the line and character the editor shows — the editor's text, not the
+// disk's.
+
+import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { appFixture } from './builtApp.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+
+const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
+
+const SAVED = `<script>
+import { reactive } from 'abide'
+import Card from '../components/Card.abide'
+
+let count = reactive(0)
+</script>
+
+<p>{count.toFixed(1)}</p>
+<Card title="x"/>`
+
+// Never written to disk — only the editor holds it.
+const EDITED = `<script>
+import { reactive } from 'abide'
+import Card from '../components/Card.abide'
+
+let count = reactive(0)
+</script>
+
+<p>{count.toUpperCase()}</p>
+<Card title="x"/>`
+
+const CARD = `<script>
+import { props } from 'abide'
+
+const { title } = props<{ title: string }>()
+</script>
+
+<p>{title}</p>`
+
+// Reads a name its neighbour does not export until the test saves it.
+const LATER = `<script>
+import { later } from '../../extra.ts'
+</script>
+
+<p>{later}</p>`
+
+let app = ''
+let server: Bun.Subprocess<'pipe', 'pipe', 'pipe'> | undefined
+const received: { method?: string; id?: number; params?: unknown }[] = []
+
+function send(message: object): void {
+    const body = JSON.stringify({ jsonrpc: '2.0', ...message })
+    server?.stdin.write(
+        `Content-Length: ${new TextEncoder().encode(body).length}\r\n\r\n${body}`,
+    )
+    server?.stdin.flush()
+}
+
+async function readAll(stdout: ReadableStream<Uint8Array>): Promise<void> {
+    let pending = ''
+    for await (const chunk of stdout) {
+        pending += new TextDecoder().decode(chunk)
+        for (;;) {
+            const end = pending.indexOf('\r\n\r\n')
+            if (end === -1) break
+            const length = Number(/Content-Length: (\d+)/.exec(pending)?.[1])
+            if (pending.length < end + 4 + length) break
+            received.push(JSON.parse(pending.slice(end + 4, end + 4 + length)))
+            pending = pending.slice(end + 4 + length)
+        }
+    }
+}
+
+async function next(
+    matches: (message: (typeof received)[number]) => boolean,
+): Promise<(typeof received)[number]> {
+    for (let turn = 0; turn < 600; turn += 1) {
+        const at = received.findIndex(matches)
+        if (at !== -1)
+            return received.splice(at, 1)[0] as (typeof received)[number]
+        await Bun.sleep(50)
+    }
+    throw new Error(`no such message in ${JSON.stringify(received)}`)
+}
+
+beforeAll(() => {
+    app = appFixture({
+        'ui/pages/page.abide': SAVED,
+        'ui/components/Card.abide': CARD,
+        'ui/extra.ts': 'export const extra = 1\n',
+        'ui/pages/more/page.abide': LATER,
+    })
+    // AS AN EDITOR STARTS IT: no `--root`, and from a directory that is not the app — a monorepo's
+    // root, here the filesystem's. The document says which app it is in.
+    server = Bun.spawn(['bun', BIN, 'lsp'], {
+        cwd: '/',
+        stdin: 'pipe',
+        stdout: 'pipe',
+        stderr: 'pipe',
+    })
+    void readAll(server.stdout)
+})
+
+afterAll(() => {
+    server?.kill()
+    removeTemporaryModules()
+})
+
+// THE REVERT: publish the diagnostics of the saved file (`Bun.file(path).text()`) in place of the
+// document's; the edited text's error is never reported, and the first publish is empty. Or check
+// every document against the directory the server started in; nothing is published at all.
+test('an open document is checked as the editor holds it, and cleared when fixed — 38.12', async () => {
+    send({ id: 1, method: 'initialize', params: { capabilities: {} } })
+    const initialized = await next((message) => message.id === 1)
+    expect(initialized).toMatchObject({
+        result: { capabilities: { textDocumentSync: 1 } },
+    })
+    const uri = Bun.pathToFileURL(`${app}/ui/pages/page.abide`).href
+    send({
+        method: 'textDocument/didOpen',
+        params: {
+            textDocument: {
+                uri,
+                languageId: 'abide',
+                version: 1,
+                text: EDITED,
+            },
+        },
+    })
+    const published = await next(
+        (message) => message.method === 'textDocument/publishDiagnostics',
+    )
+    const line = EDITED.split('\n').findIndex((text) =>
+        text.includes('toUpperCase'),
+    )
+    expect(published.params).toMatchObject({
+        uri,
+        diagnostics: [
+            {
+                range: {
+                    start: { line, character: 10 },
+                    end: { line, character: 21 },
+                },
+                severity: 1,
+                code: 2339,
+            },
+        ],
+    })
+
+    send({
+        method: 'textDocument/didChange',
+        params: {
+            textDocument: { uri, version: 2 },
+            contentChanges: [{ text: SAVED }],
+        },
+    })
+    const cleared = await next(
+        (message) => message.method === 'textDocument/publishDiagnostics',
+    )
+    expect(cleared.params).toEqual({ uri, diagnostics: [] })
+}, 60_000)
+
+// THE REVERT: answer `textDocument/hover` from the checked module alone, as a build lowers it; the
+// name read by name is a rewrite there and nothing is found at `count`. Or map the position through
+// the projection only; `toFixed` is then asked of the `Reactive`, which has no such member.
+test('a hover and a jump answer about the document as the editor holds it — 38.40', async () => {
+    const uri = Bun.pathToFileURL(`${app}/ui/pages/page.abide`).href
+    const line = SAVED.split('\n').findIndex((text) => text.includes('toFixed'))
+    const character = (name: string): number =>
+        (SAVED.split('\n')[line] as string).indexOf(name) + 1
+
+    send({
+        id: 3,
+        method: 'textDocument/hover',
+        params: {
+            textDocument: { uri },
+            position: { line, character: character('count') },
+        },
+    })
+    expect(await next((message) => message.id === 3)).toMatchObject({
+        result: {
+            contents: {
+                kind: 'markdown',
+                value: '```ts\nlet count: Reactive<number, number, never>\n```',
+            },
+        },
+    })
+
+    send({
+        id: 4,
+        method: 'textDocument/definition',
+        params: {
+            textDocument: { uri },
+            position: { line, character: character('count') },
+        },
+    })
+    expect(await next((message) => message.id === 4)).toMatchObject({
+        result: [
+            {
+                uri,
+                range: {
+                    start: { line: 4, character: 4 },
+                    end: { line: 4, character: 9 },
+                },
+            },
+        ],
+    })
+
+    send({
+        id: 5,
+        method: 'textDocument/hover',
+        params: {
+            textDocument: { uri },
+            position: { line, character: character('toFixed') },
+        },
+    })
+    const member = (await next((message) => message.id === 5)) as {
+        result: { contents: { value: string } }
+    }
+    expect(member.result.contents.value).toStartWith('```ts\n(method) toFixed(')
+
+    send({
+        id: 6,
+        method: 'textDocument/definition',
+        params: {
+            textDocument: { uri },
+            position: { line, character: character('toFixed') },
+        },
+    })
+    const declared = (await next((message) => message.id === 6)) as {
+        result: { uri: string }[]
+    }
+    expect(declared.result[0]?.uri).toEndWith('.d.ts')
+
+    // A COMPONENT TAG IS THE NAME IT INVOKES, and the component is its file. THE REVERT: leave the
+    // tag out of the projection (`projectShadow`); nothing is found on it, and the hover is null.
+    const tag = SAVED.split('\n').findIndex((text) => text.includes('<Card'))
+    send({
+        id: 7,
+        method: 'textDocument/hover',
+        params: {
+            textDocument: { uri },
+            position: { line: tag, character: 2 },
+        },
+    })
+    expect(await next((message) => message.id === 7)).toMatchObject({
+        result: {
+            contents: {
+                value: '```ts\n(component) Card(props: { title: string; })\n```',
+            },
+        },
+    })
+    send({
+        id: 8,
+        method: 'textDocument/definition',
+        params: {
+            textDocument: { uri },
+            position: { line: tag, character: 2 },
+        },
+    })
+    expect(await next((message) => message.id === 8)).toMatchObject({
+        result: [
+            {
+                uri: Bun.pathToFileURL(`${app}/ui/components/Card.abide`).href,
+                range: { start: { line: 0, character: 0 } },
+            },
+        ],
+    })
+
+    // 38.41 — A TAG IS HELD TO THE PROPS ITS COMPONENT DECLARES, with the component not open: the
+    // page's imports are lowered beside it. THE REVERT: check the page alone (`checkSource` with
+    // no imports); `Card`'s checked module is the stand-in that takes anything, and nothing is
+    // published but the empty list.
+    send({
+        method: 'textDocument/didChange',
+        params: {
+            textDocument: { uri, version: 3 },
+            contentChanges: [
+                { text: SAVED.replace('title="x"', 'title={count}') },
+            ],
+        },
+    })
+    expect(
+        (
+            await next(
+                (message) =>
+                    message.method === 'textDocument/publishDiagnostics',
+            )
+        ).params,
+    ).toMatchObject({
+        uri,
+        diagnostics: [
+            {
+                range: { start: { line: tag, character: 13 } },
+                code: 2322,
+                message: "Type 'number' is not assignable to type 'string'.",
+            },
+        ],
+    })
+    send({
+        method: 'textDocument/didChange',
+        params: {
+            textDocument: { uri, version: 4 },
+            contentChanges: [{ text: SAVED }],
+        },
+    })
+    expect(
+        (
+            await next(
+                (message) =>
+                    message.method === 'textDocument/publishDiagnostics',
+            )
+        ).params,
+    ).toEqual({ uri, diagnostics: [] })
+
+    // AND WITH THE COMPONENT OPEN, its checked module is lowered rather than stood in for, and the
+    // stand-in is scaffolding after the author's last line. THE REVERT: map a span of it back as a
+    // copied one (`mapBack` for `copiedFrom`); the jump lands at the end of `Card`'s markup.
+    const card = Bun.pathToFileURL(`${app}/ui/components/Card.abide`).href
+    send({
+        method: 'textDocument/didOpen',
+        params: {
+            textDocument: {
+                uri: card,
+                languageId: 'abide',
+                version: 1,
+                text: CARD,
+            },
+        },
+    })
+    await next(
+        (message) =>
+            message.method === 'textDocument/publishDiagnostics' &&
+            (message.params as { uri: string }).uri === card,
+    )
+    send({
+        id: 9,
+        method: 'textDocument/definition',
+        params: {
+            textDocument: { uri },
+            position: { line: tag, character: 2 },
+        },
+    })
+    expect(await next((message) => message.id === 9)).toMatchObject({
+        result: [{ uri: card, range: { start: { line: 0, character: 0 } } }],
+    })
+}, 60_000)
+
+// 38.12 — THE DISK MOVES UNDER A KEPT CHECKER: a page open in the editor imports a name its `.ts`
+// neighbour does not export yet, and the neighbour is saved with it. The page itself is not touched,
+// so nothing but the watcher can say the finding is gone. THE REVERT: drop the `session.edited(…)`
+// call in `AppChecker.current`; the page reports "has no exported member" for as long as it is open.
+test('a save to a plain .ts beside an open page reaches its findings — 38.12', async () => {
+    const uri = Bun.pathToFileURL(`${app}/ui/pages/more/page.abide`).href
+    send({
+        method: 'textDocument/didOpen',
+        params: {
+            textDocument: {
+                uri,
+                languageId: 'abide',
+                version: 1,
+                text: LATER,
+            },
+        },
+    })
+    const before = await next(
+        (message) =>
+            message.method === 'textDocument/publishDiagnostics' &&
+            (message.params as { uri: string }).uri === uri,
+    )
+    expect(
+        (before.params as { diagnostics: { code: number }[] }).diagnostics.map(
+            (diagnostic) => diagnostic.code,
+        ),
+    ).toEqual([2305])
+
+    await Bun.write(
+        `${app}/ui/extra.ts`,
+        'export const extra = 1\nexport const later = 2\n',
+    )
+    const after = await next(
+        (message) =>
+            message.method === 'textDocument/publishDiagnostics' &&
+            (message.params as { uri: string }).uri === uri,
+    )
+    expect(after.params).toMatchObject({ uri, diagnostics: [] })
+})
+
+test('the server shuts down when asked — 38.12', async () => {
+    send({ id: 2, method: 'shutdown' })
+    expect(await next((message) => message.id === 2)).toMatchObject({
+        result: null,
+    })
+    send({ method: 'exit' })
+    expect(await server?.exited).toBe(0)
+}, 60_000)

@@ -57,6 +57,9 @@ export function isEmptyRegion(region: Region): boolean {
 // in. A region's document is its anchor's, and a mount's root is a `Region`, not a node, so the
 // root has no document to ask for. And the `abide.fill` layer then times the build as well as the
 // insert, which is the whole of what filling a region costs.
+//
+// 14.1 — A BUILD EVALUATES EVERY VALUE IT WRITES, so it must not run tracked: an arm's swap runs
+// untracked (`emitBlock`) and so do a list's rows (`updateList`).
 export function fillRegion(
     region: Region,
     build?: (document: Document) => Node[],

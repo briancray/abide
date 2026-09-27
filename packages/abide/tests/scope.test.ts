@@ -132,6 +132,34 @@ test('a refresh by tag reaches the request it was made in and no other — 13.8'
     expect(loads).toBe(1)
 })
 
+// 13.13 — A `global` VALUE IS IN EVERY SCOPE, so a selection made inside a request reaches it — the
+// value built at import, and an entry of a `global` keyed value that another request made. THE
+// REVERT: drop `|| cell.global` from `carrying`; neither body runs again — 0 loads where 2 are due.
+test('a refresh by tag inside a request reaches a global value and its entries — 13.13', () => {
+    let loads = 0
+    const prices = reactive(
+        () => {
+            loads += 1
+            return 3
+        },
+        { tags: ['prices'], global: true },
+    )
+    const price = reactive(
+        (args: { id: number }) => {
+            loads += 1
+            return args.id
+        },
+        { tags: ['prices'], global: true },
+    )
+    prices()
+    inScope(new Request('http://app/a'), () => price({ id: 1 })())
+    loads = 0
+    inScope(new Request('http://app/b'), () => refresh({ tags: ['prices'] }))
+    prices()
+    price({ id: 1 })()
+    expect(loads).toBe(2)
+})
+
 // 11.34 — `global` IS ONE VALUE FOR THE PROCESS. THE REVERT: drop the `global` test from
 // `outsideScope`; the second request reads 0 where the first wrote 7.
 test('a global value is shared by every request — 11.34', async () => {

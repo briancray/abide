@@ -55,8 +55,9 @@ test('a link to another page navigates without reloading — 30.7', async ({
     // A marker a document reload erases, which is the only way to tell the two apart.
     await page.evaluate(() => {
         ;(window as { __KEPT__?: string }).__KEPT__ = 'yes'
-        ;(document.querySelector('nav') as { __KEPT__?: string }).__KEPT__ =
-            'yes'
+        ;(
+            document.querySelector('nav.sidebar') as { __KEPT__?: string }
+        ).__KEPT__ = 'yes'
     })
 
     await page.click('nav a[href="/values/derive-a-value-from-other-values"]')
@@ -83,8 +84,11 @@ test('a link to another page navigates without reloading — 30.7', async ({
     expect(
         await page.evaluate(
             () =>
-                (document.querySelector('nav') as { __KEPT__?: string } | null)
-                    ?.__KEPT__,
+                (
+                    document.querySelector('nav.sidebar') as {
+                        __KEPT__?: string
+                    } | null
+                )?.__KEPT__,
         ),
     ).toBe('yes')
 })

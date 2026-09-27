@@ -6,10 +6,9 @@
 // happy-dom (44.18 refuses the other kind at the instrument). The client half is `render.spec.ts`,
 // in a browser, for the same reason.
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
-import { emitComponent, parseAbide, TypeSession } from 'abide/compiler'
 import { render } from 'abide/server'
 import { batch, type Sample } from 'harness/report'
+import { openBenchCompiler, type Render } from './openBenchCompiler.ts'
 import {
     abideLoopSource,
     abideSource,
@@ -17,41 +16,28 @@ import {
     vanillaMarkup,
 } from './renderCases.ts'
 
-const REPO = new URL('../../../', import.meta.url).pathname
 const SIZES = [10, 100, 1000]
-const made: string[] = []
 
 async function main(): Promise<void> {
-    const session = await TypeSession.open(
-        `${REPO}packages/abide/tsconfig.json`,
-    )
+    const { compile, close } = await openBenchCompiler()
     console.log(
         'SERVER RENDER — a card list, against the page written by hand\n',
     )
     try {
         for (const size of SIZES) {
             const list = cards(size)
-            const source = abideSource(size).replace(
-                'CARDS',
-                JSON.stringify(list),
-            )
-            const file = parseAbide(source)
-            const names = await session.reads(
-                `${REPO}packages/abide/tests/fixtures/typed/src/render.abide`,
-                file,
-            )
-            const Component = await load(emitComponent(file, names))
-
-            const loopSource = abideLoopSource().replace(
-                'CARDS',
-                JSON.stringify(list),
-            )
-            const loopFile = parseAbide(loopSource)
-            const loopNames = await session.reads(
-                `${REPO}packages/abide/tests/fixtures/typed/src/loop.abide`,
-                loopFile,
-            )
-            const Loop = await load(emitComponent(loopFile, loopNames))
+            const Component = (
+                await compile(
+                    'Unrolled',
+                    abideSource(size).replace('CARDS', JSON.stringify(list)),
+                )
+            ).render
+            const Loop = (
+                await compile(
+                    'Loop',
+                    abideLoopSource().replace('CARDS', JSON.stringify(list)),
+                )
+            ).render
 
             const measured = batch({
                 case: `render ${size} cards`,
@@ -71,28 +57,13 @@ async function main(): Promise<void> {
             report(size, measured)
         }
     } finally {
-        session.close()
-        for (const dir of made) rmSync(dir, { recursive: true, force: true })
+        close()
     }
-}
-
-// The emitted module, written where the tests write theirs — outside `packages/abide`, so
-// `conventions.test.ts`'s glob does not scan it and two runs cannot share one path.
-async function load(
-    module: string,
-): Promise<() => { head: string; body: string }> {
-    const dir = mkdtempSync(`${REPO}.test-modules/bench-`)
-    made.push(dir)
-    writeFileSync(`${dir}/Page.ts`, module)
-    const loaded = (await import(`${dir}/Page.ts`)) as {
-        default: () => { head: string; body: string }
-    }
-    return loaded.default
 }
 
 // The component produces its markup; `render` is what turns it into bytes. Timed together,
 // because together is what a request pays.
-function drain(component: () => { head: string; body: string }): string {
+function drain(component: Render): string {
     const rendered = component()
     return rendered.head + rendered.body
 }

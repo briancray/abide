@@ -1,6 +1,7 @@
 // SECTION 29 — `csp` as an app's rung, served by `abide start` (spawned, for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { documentNonce } from '#shared/csp.ts'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -13,12 +14,26 @@ const total = reactive(() => getTotal())
 
 <main><p id="total">{total()}</p></main>`
 
+// A PAGE THAT HYDRATES and writes the nonce, reading `csp` from `abide` as any page reads a name.
+const INLINE = `<script>
+import { csp, reactive } from 'abide'
+
+let count = reactive(0)
+</script>
+
+<head>
+    <script id="inline" nonce={csp.nonce()}>window.inlineRan = true</script>
+</head>
+
+<main><button onclick={() => { count = count + 1 }}>{count}</button></main>`
+
 let base = ''
 let stop = (): void => {}
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'ui/pages/page.abide': PAGE,
+        'ui/pages/inline/page.abide': INLINE,
         'server/rpc/totals.ts': `import { GET } from 'abide/server'\n\nexport const getTotal = GET(() => 1240)\n`,
         'server/app.ts': `import { csp, middleware } from 'abide/server'
 
@@ -98,4 +113,34 @@ test('csp.nonce is the nonce in the header, and a non-document carries no policy
     expect(await second.text()).not.toBe(nonce)
     const json = await Bun.fetch(`${base}/__abide/rpc/totals/getTotal`)
     expect(json.headers.get('content-security-policy')).toBeNull()
+})
+
+// 29.3, 29.11 — `csp` IS ONE NAME ON BOTH SIDES. A page that hydrates imports it from `abide`, the
+// server writes the response's nonce into the page's own inline script, and the page's client module
+// builds — `csp` was once `abide/server`'s alone, so a page reading it could not be bundled for a
+// browser at all. THE REVERT: export `csp` from `abide/server` only; the page's `csp` import is
+// unresolved and `abide build` fails before `serveApp` answers.
+test('a page that hydrates writes the nonce the header carries — 29.3, 29.11', async () => {
+    const page = await Bun.fetch(`${base}/inline`)
+    const html = await page.text()
+    const written = /<script id="inline" nonce="([^"]+)"/.exec(html)?.[1]
+    expect(written).toBeDefined()
+    expect(
+        directives(page.headers.get('content-security-policy')).get(
+            'script-src',
+        ),
+    ).toContain(`'nonce-${written}'`)
+})
+
+// 29.11 — IN A BROWSER, THE DOCUMENT'S NONCE: the attribute is blanked once parsed and the property
+// keeps it, so the answer is read from the property.
+test('in a browser, csp.nonce answers the nonce the document was served with — 29.11', () => {
+    const script = document.createElement('script')
+    script.setAttribute('nonce', 'served')
+    document.head.append(script)
+    try {
+        expect(documentNonce()).toBe('served')
+    } finally {
+        script.remove()
+    }
 })

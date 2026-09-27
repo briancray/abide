@@ -113,7 +113,10 @@ export function appIdentity(): { name: string; version: string } {
 }
 
 // A setting that must be a positive number, and `fallback` where it is not one.
-export function positiveSetting(name: string, fallback: number): number {
+export function positiveSetting<Fallback extends number | undefined>(
+    name: string,
+    fallback: Fallback,
+): number | Fallback {
     const declared = Number(config.peek()?.[name])
     return Number.isFinite(declared) && declared > 0 ? declared : fallback
 }

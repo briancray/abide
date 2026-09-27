@@ -9,6 +9,7 @@
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
 import { SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
+import { FAILURE_STATUS_TEXT } from '#shared/FAILURE_STATUS_TEXT.ts'
 import { namedLogger } from '#shared/log.ts'
 import { compose } from '#shared/Middleware.ts'
 import { MOUNT, unmounted } from '#shared/mount.ts'
@@ -17,6 +18,7 @@ import {
     type AppSources,
     answerRequest,
     type LoadedSources,
+    plainAnswer,
 } from './answerRequest.ts'
 import {
     type Connection,
@@ -24,7 +26,10 @@ import {
     socketHandlers,
 } from './answerSocket.ts'
 import { CONFIG_ROOT, config } from './config.ts'
+// 29 — `csp`'s server half, filled in before any app's rung or page can ask for it.
+import './csp.ts'
 import { HOOKS, reportUnexpected } from './hooks.ts'
+import { MUX_ADMITTED } from './MUX_ADMITTED.ts'
 import { applyWritten, inScope, LISTENING } from './requestScope.ts'
 import { traceResponse } from './trace.ts'
 
@@ -39,6 +44,7 @@ export interface App {
     ): Promise<Result>
     listen(options?: { port?: number; unix?: string }): Promise<void>
     stop(): Promise<void>
+    [Symbol.asyncDispose](): Promise<void>
 }
 
 // 37.2 — the two shapes `default` may take.
@@ -63,10 +69,6 @@ export async function createApp(): Promise<App> {
             `abide: createApp found no app. Looked for ui/ in ${process.cwd()} and in ${resolve('src')}.`,
         )
     const out = buildDirectory(root)
-    if (!existsSync(`${out}/server.ts`))
-        throw new Error(
-            `abide: createApp found no build at ${out}. Run \`abide build\` first.`,
-        )
     const { loadBuild } = await import('./serveBuild.ts')
     return bootApp(root, () => loadBuild({ root, out }))
 }
@@ -128,7 +130,6 @@ export async function bootApp(
     )
 
     const open = new Set<Bun.ServerWebSocket<Connection>>()
-    const sockets = socketHandlers(booted.sockets)
     let inFlight = 0
     let drained: (() => void) | undefined
     let stopping = false
@@ -140,8 +141,7 @@ export async function bootApp(
     ): Promise<Result> => inScope(options?.request, fn)
 
     const fetch = async (given: Request): Promise<Response> => {
-        if (stopping)
-            return new Response('the app is stopping', { status: 503 })
+        if (stopping) return plainAnswer('the app is stopping', 503)
         const request = belowMount(given)
         inFlight += 1
         const started = performance.now()
@@ -155,9 +155,7 @@ export async function bootApp(
                         answered = await answer({ request })
                     } catch (thrown) {
                         reportUnexpected(thrown)
-                        answered = new Response('internal server error', {
-                            status: 500,
-                        })
+                        answered = plainAnswer('internal server error', 500)
                     }
                     const stamped = stamp(answered)
                     // 28.7 — a closed namespace does not pay for the line it would have written.
@@ -181,60 +179,79 @@ export async function bootApp(
     // 16.44 — a `raw` call made on this server is answered by this app, in process.
     RPC_SERVER.raw = fetch
 
+    // 42.10 — stop accepting, drain, and only then the teardown `onStop` wraps (37.4).
+    async function stop(): Promise<void> {
+        stopping = true
+        // 42.11 — every open socket is closed rather than left to the process's exit.
+        for (const ws of open) ws.close(1001, 'the app is stopping')
+        open.clear()
+        await bound?.stop()
+        if (inFlight > 0)
+            await new Promise<void>((done) => {
+                drained = done
+            })
+        if (LISTENING.server === bound) LISTENING.server = undefined
+        bound = undefined
+        await compose(HOOKS.stops, async () => {})(undefined)
+    }
+
     return {
         fetch,
         run,
         // 42.9 — the socket, and what `server` hands back from then on.
         async listen(options) {
             const port = options?.port
+            // Built here, where it is bound: `abide dev` holds its sockets on another thread and
+            // runs a mux of its own over the same tables.
+            const sockets = socketHandlers(booted.sockets, booted.handlers)
             const server = Bun.serve<Connection>({
                 ...(options?.unix !== undefined
                     ? { unix: options.unix }
                     : port !== undefined
                       ? { port }
                       : {}),
+                // 16.59 — THE CEILING IS THE HANDLER'S, and bun's own 128 MB would refuse a body
+                // before one that declared none could accept it.
+                maxRequestBodySize: Number.MAX_SAFE_INTEGER,
                 // 18.2 — THE ONE MUX, upgraded before anything else is asked of the request.
-                fetch: (request, server) => {
+                fetch: async (request, server) => {
+                    // 18.17 — a handler is followed over the mux as a socket is carried. 16.11 —
+                    // the mux's address is read below the mount as every other request's is, so
+                    // an address under some other prefix is not the mux.
                     if (
-                        booted.sockets.size > 0 &&
+                        (booted.sockets.size > 0 || booted.handlers.size > 0) &&
                         request.headers.get('upgrade') === 'websocket' &&
-                        new URL(request.url).pathname.endsWith(
-                            SOCKET_ADDRESS,
-                        ) &&
-                        server.upgrade(request, { data: connectionOf(request) })
-                    )
-                        return undefined
+                        isMux(new URL(request.url).pathname)
+                    ) {
+                        // 37.3 — through the app lane first, and upgraded only where it let it by.
+                        const answered = await fetch(request)
+                        if (answered.status !== MUX_ADMITTED) return answered
+                        return server.upgrade(request, {
+                            data: connectionOf(request),
+                        })
+                            ? undefined
+                            : plainAnswer('expected a websocket', 400)
+                    }
                     return fetch(request)
                 },
                 websocket: {
                     ...sockets,
                     open(ws) {
                         open.add(ws)
+                        sockets.open(ws)
                     },
-                    close(ws, code, reason) {
+                    close(ws) {
                         open.delete(ws)
-                        sockets.close?.(ws, code, reason)
+                        sockets.close(ws)
                     },
                 },
             })
             bound = server as unknown as Bun.Server<unknown>
             LISTENING.server = bound
         },
-        // 42.10 — stop accepting, drain, and only then the teardown `onStop` wraps (37.4).
-        async stop() {
-            stopping = true
-            // 42.11 — every open socket is closed rather than left to the process's exit.
-            for (const ws of open) ws.close(1001, 'the app is stopping')
-            open.clear()
-            await bound?.stop()
-            if (inFlight > 0)
-                await new Promise<void>((done) => {
-                    drained = done
-                })
-            if (LISTENING.server === bound) LISTENING.server = undefined
-            bound = undefined
-            await compose(HOOKS.stops, async () => {})(undefined)
-        },
+        stop,
+        // 42.14.
+        [Symbol.asyncDispose]: stop,
     }
 }
 
@@ -251,16 +268,26 @@ function stamp(answered: Response): Response {
         stamped = new Response(answered.body, answered)
         stamped.headers.set('x-content-type-options', 'nosniff')
     }
-    const status = applyWritten(stamped.headers)
-    if (status !== 200 && status !== stamped.status)
+    const written = applyWritten(stamped.headers)
+    const status = written !== 200 ? written : stamped.status
+    // 17.8 — a failure nobody named a reason for is given its registered one.
+    const statusText =
+        stamped.statusText === '' && status >= 400
+            ? (FAILURE_STATUS_TEXT[status] ?? '')
+            : stamped.statusText
+    if (status !== stamped.status || statusText !== stamped.statusText)
         stamped = new Response(stamped.body, {
             status,
-            statusText: stamped.statusText,
+            statusText,
             headers: stamped.headers,
         })
     const traced = traceResponse()
     if (traced !== undefined) stamped.headers.set('traceresponse', traced)
     return stamped
+}
+
+function isMux(pathname: string): boolean {
+    return (unmounted(pathname) ?? pathname) === SOCKET_ADDRESS
 }
 
 // 16.11 — A REQUEST UNDER THE MOUNT IS ANSWERED AS THE ADDRESS BELOW IT; one that is not — a proxy

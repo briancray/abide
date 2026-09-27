@@ -7,9 +7,8 @@
 // `Bun.serve` refuses one it did not define.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { addressOf, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-
-const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 const SHELL = `<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>`
 
@@ -70,16 +69,7 @@ const { params } = props<{ params: { id: string } }>()
         stdout: 'pipe',
         stderr: 'pipe',
     })
-    let seen = ''
-    for await (const chunk of server.stdout as ReadableStream<Uint8Array>) {
-        seen += new TextDecoder().decode(chunk)
-        const found = /http:\/\/[^\s]+/.exec(seen)
-        if (found) {
-            base = new URL(found[0]).origin
-            break
-        }
-    }
-    if (base === '') throw new Error(`abide start printed no address: ${seen}`)
+    base = await addressOf(server)
 }, 30_000)
 
 afterAll(() => {

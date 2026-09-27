@@ -1,0 +1,18 @@
+<script>
+// THE BAR OVER EVERY PAGE, the layout's like the sidebar under it — so where you are comes from
+// the route for the same reason: a layout outlives the page it wraps (41.11).
+//
+// `aria-current="true"` rather than `"page"`: a tab marks the PLACE you are in, and the sidebar's
+// link is the page — two `"page"` marks on one document would each claim the same thing.
+import { route } from 'abide'
+import { SITE_TABS, tabOf } from '#ui/siteSections.ts'
+</script>
+
+<header class="site">
+    <a class="brand" href="/">abide<span>docs</span></a>
+    <nav class="site-nav" aria-label="Site">
+        {#for tab of SITE_TABS}
+            {#if tab.href === tabOf(route.url().pathname)}<a href={tab.href} aria-current="true">{tab.label}</a>{:else}<a href={tab.href}>{tab.label}</a>{/if}
+        {/for}
+    </nav>
+</header>

@@ -58,6 +58,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | refusal | A `Failed` answered in place of a value. |
 | wired | A `Reactive` a `socket` or an `Rpc` carries, at either end of the connection. |
 | subscriber | A far end of a connection a wired `Reactive` is carried to. |
+| version | The number one production of a `global` value a `GET` serves is named by on the wire. |
 | namespace | The name a log line is written under, and what `DEBUG` selects. |
 | ring | The productions retained under `history`. |
 | entry | One key's slot in a `Keyed`. |
@@ -237,6 +238,14 @@ window allows it.
 MUST NOT be held.
 
 5.22 An entry a `Keyed` window is holding back MUST report `s.busy` true.
+
+5.23 `by` MUST key an element by the property it names, or by what the function it is returns for
+that element.
+
+5.24 `throttle` and `debounce` MUST cap the wakes an `s.patch` makes as they cap a production's.
+
+5.25 `throttle` and `debounce` MUST hold an `s.refresh` as they hold a production, and a refresh a
+window held MUST start one reload when the window closes.
 
 # 6. Retention
 
@@ -679,6 +688,9 @@ in the process.
 13.12 A pattern given beside a `Selection` MUST narrow it to the entries whose `Args` match the
 pattern.
 
+13.13 A `Selection` made in any scope MUST reach every `global` `reactive` it matches, and every
+entry of a `global` `Keyed` it matches.
+
 # 14. Tracking
 
 14.1 A `Reactive` MUST be tracked only where something downstream will be rebuilt from it.
@@ -714,7 +726,7 @@ against nothing.
 the read.
 
 14.15 The compiler MUST warn on a reactive read in a condition position inside an unkeyed
-`reactive` body, naming the read.
+`reactive` body, where what the condition decides reads another value, naming the read.
 
 14.16 The compiler MUST warn on a reactive read inside a function a tracked body creates and
 does not call synchronously, naming the read.
@@ -722,13 +734,16 @@ does not call synchronously, naming the read.
 14.17 The compiler MUST warn on a reactive read left of `??` where the type the read yields
 excludes `null` and `undefined`, naming `s.ready`.
 
+14.18 The compiler MUST NOT warn under 14.16 on a read inside the `get` or `set` of a component's
+`bind:` pair.
+
 # 15. Refusals
 
 15.1 A refusal MUST be a declared value, and MUST NOT be a status code or a transport concern.
 
 15.2 A refusal MUST fill the `Failures` of the `Reactive` that produced it.
 
-15.3 A refusal declared through `refuse.typed` MUST default to status 400.
+15.3 A refusal declared through `refuse.named` MUST default to status 400.
 
 15.4 Constructing a `Failed` MUST be inert, and MUST NOT throw.
 
@@ -741,17 +756,18 @@ address and method.
 
 15.8 `validationError` MUST be returned where a `schema` or an `args` gate refuses, at status 422.
 
-15.9 An implementation MUST declare no refusal names beyond those `notFound` and `validationError`
-carry and the one 17.4 names.
+15.9 An implementation MUST declare no refusal names beyond those `notFound`, `validationError` and
+`aborted` carry and the one 17.4 names.
 
 15.10 An expression statement whose type is `Failed` MUST be a compile error naming both repairs.
 
-15.11 Where `refuse.typed` is given a `schema`, the data MUST be checked at construction.
+15.11 Where `refuse.named` is given a `schema`, the data MUST be checked at construction.
 
 15.12 A `message` given as a function MUST run at construction, on the data.
 
-15.13 A throw from that function MUST be caught, the `message` falling back to the name, and MUST
-warn on `abide:refuse`.
+15.13 A `refuse.named` given no `message` MUST take its status's reason phrase (17.8), or its name
+for a status with none. A throw from a `message` function MUST be caught, the `message` falling
+back the same way, and MUST warn on `abide:refuse`.
 
 15.14 The `schema` MUST run before the `message` function.
 
@@ -759,6 +775,13 @@ warn on `abide:refuse`.
 being built.
 
 15.16 An address that will not percent-decode MUST be answered `refuse(400)`.
+
+15.17 A page, a file under `src/ui/public` and the built bundle MUST answer a method other than
+`GET` or `HEAD` with a refusal at status 405 carrying `allow: GET, HEAD`.
+
+15.18 A refusal declared through `refuse.named` MUST carry data only where it is given a `schema`,
+and its data's type MUST be inferred from that `schema`; a `message` function MUST be accepted only
+beside one.
 
 # 16. Handlers and transports
 
@@ -894,6 +917,44 @@ a moved epoch as `event: reset`.
 
 16.52 `Last-Event-ID` MUST be read as the last sequence number a reconnect carries, per 18.13.
 
+16.53 A call's `signal` MUST end the load the call reached only where every call that reached that
+load passed a `signal`, and every one of those has aborted.
+
+16.54 A load ended under 16.53 MUST keep serving what its value held, MUST report `s.busy` false,
+MUST refuse with `aborted` at status 499, and MUST abort the request carrying it where one does.
+
+16.55 A `HEAD` MUST be answered by the `GET` handler mounted at its address.
+
+16.56 A `HEAD` MUST NOT take from the seed buffer.
+
+16.57 An `Rpc` answered 204 MUST NOT carry `content-type`.
+
+16.58 The 303 16.40 answers MUST go to the mount's root where the referrer is absent or is not of
+`APP_URL`'s origin, per 36.2.
+
+16.59 `maxBodySize` and `ABIDE_MAX_REQUEST_BODY_SIZE` MUST default to no ceiling.
+
+16.60 A mutation's body over the ceiling `maxBodySize` or `ABIDE_MAX_REQUEST_BODY_SIZE` sets MUST
+be refused 413, whether its length was declared or streamed.
+
+16.61 Where neither `timeout` nor `ABIDE_RPC_TIMEOUT` is set, a call MUST NOT raise the request's
+idle timeout.
+
+16.62 A `timeout` of `Infinity` MUST leave the request's idle timeout off.
+
+16.63 Where a handler names no `timeout`, `ABIDE_RPC_TIMEOUT` MUST be its `timeout`.
+
+16.64 A load that goes `timeout` milliseconds without settling, or without a stream's next chunk,
+MUST be ended and MUST refuse with `refuse(504)`.
+
+16.65 A load ended under 16.64 MUST keep serving what its value held, a stream's chunks so far
+included, and MUST report `s.busy` false.
+
+16.66 A call joining a load MUST NOT extend that load's `timeout`.
+
+16.67 A call reaching a value whose last load ended under 16.53 MUST start a new load, under the `signal`
+that call passed.
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.
@@ -913,6 +974,10 @@ the given status.
 framing of a streaming answer.
 
 17.7 An implementation MUST NOT negotiate past a framing a handler fixed.
+
+17.8 An answer at a failure status (400-599) MUST carry that status's registered reason phrase as
+its `statusText` when nothing wrote one, and `refuse` given no `message` MUST take the same phrase,
+falling back to `HttpError` for a status with none.
 
 # 18. Sockets
 
@@ -956,6 +1021,37 @@ equality rather than for order.
 for those `Args`.
 
 18.18 `socket` MUST refuse a `Reactive` built without `global`.
+
+18.19 A subscriber's copy of a wired `Reactive` MUST carry what that `Reactive` declares of `by` as a
+property name, `tags` as a list of names, `history`, and `identity` as `structural`.
+
+18.20 A `GET` answered from a `global` value that declares no `middleware` MUST carry the version of
+the production it answered with in `abide-version`.
+
+18.21 A subscription to a `GET` MUST be sent the value standing where the version it names is not
+that value's version, and MUST NOT be sent it where it is.
+
+18.22 A version MUST name one production or one `s.patch` of one value, and no other production or
+patch in this process or in any earlier one.
+
+18.23 A production MUST NOT be sent to a subscription to a `GET` that declares `middleware`.
+
+18.24 A client subscribing to a `GET` MUST name the version the answer it holds carried.
+
+18.25 A subscriber's copy of a `GET` MUST take every value sent to it.
+
+18.26 An `s.patch` of a value a `GET` serves MUST be sent to a subscription standing at the version it
+was made over as what it wrote, and MUST NOT be sent as the value.
+
+18.27 A subscriber's copy of a `GET` sent what a patch wrote over a version it does not hold MUST read
+the value again.
+
+18.28 An `s.patch` whose writes cannot be sent as data MUST be sent as the value.
+
+18.29 A subscriber's copy of a `GET` MUST go stale when the `max-age` its answer carried runs out.
+
+18.30 The build MUST warn where a `GET`'s `Reactive` declares `by`, `tags` or `history` by a value
+that is not a function and whose type is not the one 18.19 carries.
 
 # 19. Mount paths and schemas
 
@@ -1064,10 +1160,19 @@ of that header.
 
 21.13 A file under `src/ui/public` MUST answer an `etag` derived from its bytes.
 
-21.14 A request whose `if-none-match` matches the `etag` 21.13 derives MUST be answered 304.
+21.14 A request whose `if-none-match` is `*`, or lists the `etag` 21.13 derives under weak
+comparison, MUST be answered 304.
 
 21.15 An `Rpc` answer MUST carry `server-timing` with its handler's duration, and MUST say where it
 was answered from the `render`'s run.
+
+21.16 The `max-age` 21.8 derives MUST be what is left of the answered production's `ttl`.
+
+21.17 A `GET` over a `global` `reactive` whose `ttl` is `Infinity` MUST keep 21.3's `no-store`.
+
+21.18 A page MUST default to `content-security-policy: frame-ancestors 'none'`.
+
+21.19 `access-control-allow-origin` MUST name only an origin the handler's `crossOrigin` admits.
 
 # 22. Request-scoped ambients
 
@@ -1237,7 +1342,7 @@ MUST NOT override it.
 
 29.3 `csp.nonce` MUST be this response's nonce.
 
-29.4 `csp.nonce` MUST be readable only inside a request scope, per 11.37.
+29.4 On a server, `csp.nonce` MUST be readable only inside a request scope, per 11.37.
 
 29.5 The `csp` baseline MUST be `default-src 'self'`, `script-src 'self'`, `style-src 'self'`,
 `img-src 'self' data:`, `font-src 'self'`, `connect-src 'self'`, `style-src-attr 'unsafe-inline'`,
@@ -1253,6 +1358,8 @@ MUST NOT override it.
 MUST NOT consume `csp.nonce`.
 
 29.10 The inline output `render` emits MUST be byte-invariant across responses.
+
+29.11 In a browser, `csp.nonce` MUST answer the nonce the document was served with.
 
 # 30. Addresses and navigation
 
@@ -1310,7 +1417,7 @@ on.
 
 31.3 A name MUST hold the `Reactive` only where the declared type of its position is a `Reactive`: an
 annotated binding, an annotated return, a `Reactive`-typed parameter, a `bind:` operand, an `await`
-operand, or a prop declared as one.
+operand — or where 31.14 holds it.
 
 31.4 Assignment to such a name MUST be a write, and the assigned value MAY be settled, a load, or a
 `Reactive`.
@@ -1338,6 +1445,9 @@ the member name.
 31.13 The compiler MUST warn where 31.5 reaches a `Reactive` member the value's type also declares,
 naming the explicit read.
 
+31.14 A name MUST hold the `Reactive` where the declared type of its position is a `Selection`, or a
+type parameter constrained by one.
+
 # 32. Templating
 
 32.1 `{expr}` MUST render reactive text, escaped.
@@ -1351,7 +1461,8 @@ component.
 
 32.5 `bind:value` MUST read the property and write it back on input or change.
 
-32.6 `bind:prop` on a component MUST add the write path to a prop that already reads live.
+32.6 `bind:prop` on a component MUST hand the child the caller's `Reactive`, or its `{ get, set }` pair,
+as that prop's write path.
 
 32.7 A boolean bind MUST mirror a boolean DOM property as a boolean attribute, and MUST NOT write a
 string.
@@ -1367,9 +1478,10 @@ string.
 
 32.12 `{#if}` MUST render one branch.
 
-32.13 `{#for}` without a key MUST be positional.
+32.13 `{#for}` with neither a key nor a `by` 32.33 reads MUST be positional.
 
-32.14 `{#for}` without a key over a stateful body MUST warn in development.
+32.14 `{#for}` without a key over a stateful body and a subject that reads a `Reactive` or calls a
+function MUST warn in development.
 
 32.15 `{#for}` over an async iterable MUST render each item as it arrives, and MUST append rather
 than reconcile.
@@ -1416,6 +1528,25 @@ and MUST NOT be bounded by one while it holds none.
 32.32 The anchor pair bounding a slot under 32.31 MUST be distinct from the one bounding a `{#if}`,
 a `{#for}`, a `{#try}`, a `<slot/>` or a `<Name/>`.
 
+32.33 `{#for}` without a key over a subject that is a `Reactive` named alone MUST key its rows by
+that value's `by`, where it declares one.
+
+32.34 A `{#for}` MUST NOT keep a row showing an item as it stood before an `s.patch` wrote to that
+item, or to an object the patch reached through it.
+
+32.35 A `<Name/>` whose name is bound to a `Reactive`, or to a prop `props` hands back, MUST invoke
+the component the value holds.
+
+32.36 A `<Name/>` under 32.35 MUST replace its component when the value changes to a different
+one, and MUST NOT rebuild it when the value is the same component.
+
+32.37 A `<Name/>` under 32.35 whose value is absent MUST render nothing.
+
+32.38 An attribute whose value is `null` or `undefined` MUST be absent; an attribute HTML reads by
+presence MUST be present or absent by the value's truthiness, and a string that makes one present
+MUST be written as its text; and any other MUST be written as its text — whether named or spread,
+and whether the server writes it or the browser does.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
@@ -1429,16 +1560,14 @@ MUST be an error.
 33.4 `props` MUST hand back one accessor per key, and the accessor's shape MUST be what that key's
 type declares.
 
-33.5 A prop declared as a plain type MUST be a live read of the caller's expression, and MUST NOT
-be a snapshot.
+33.5 A prop MUST be a live read of the caller's expression, and MUST NOT be a snapshot.
 
-33.6 A prop declared as a plain type MUST have no `Reactive` face at all, rather than a `Reactive`
-without its write.
+33.6 A write by name to a prop the caller bound MUST reach the caller's `Reactive`.
 
-33.7 A prop declared as a `Reactive` MUST be the caller's own `Reactive`, passed through unchanged.
+33.7 A write by name to a prop the caller did not bind MUST stand in the child until the caller's
+expression next changes.
 
-33.8 A child declaring a `Reactive` prop MUST make `bind:` a compile requirement at every call
-site.
+33.8 `bind:` MUST be accepted on every prop, whatever type the child declares for it.
 
 33.9 Destructuring `props` MUST keep every binding live.
 
@@ -1474,8 +1603,8 @@ indentation MUST be dropped at both ends of every block body and of the top-leve
 34.3 A `<script>` or a `<script module>` MUST NOT await at its top level, and one that does MUST be
 a compile error.
 
-34.4 A `<style>` block MUST be component-scoped: every root element MUST carry a scope token, and
-every selector MUST require it on its rightmost compound.
+34.4 A `<style>` block written outside a block body MUST be component-scoped: every root element MUST
+carry a scope token, and every selector MUST require it on its rightmost compound.
 
 34.5 `:global(…)` MUST exempt the compound inside it from carrying the scope token.
 
@@ -1486,6 +1615,19 @@ dependency of that component.
 `document.adoptedStyleSheets`.
 
 34.8 An implementation MUST NOT provide a fallback for `document.adoptedStyleSheets`.
+
+34.9 A branch-local `<script>` MUST run once each time the `{#for}` row or `{#if}` arm it is written
+in is built.
+
+34.10 A name a branch-local `<script>` declares MUST be in scope in the body it is written in, and in
+no other.
+
+34.11 A block body holding two branch-local `<script>` blocks MUST be a build error.
+
+34.12 A `<script>` or a `<style>` inside a `{#try}` MUST be a build error.
+
+34.13 A `<style>` written in a `{#for}` row or an `{#if}` arm MUST apply to the elements that body holds,
+and to no other element the component writes.
 
 # 35. Pages, rendering and sinks
 
@@ -1550,13 +1692,20 @@ mount rather than at the origin.
 36.15 A URL in the client bundle naming the address of a file under `src/ui/public` MUST be left as
 that address by `abide build` and by `abide dev`, and MUST NOT be resolved as a path on disk.
 
+36.16 `NODE_ENV` MUST default to `development` under `abide dev`, and to `production` under
+`abide build` and `abide start`.
+
+36.17 A file under `src/ui/public` whose `content-type` is `text/*` MUST name `charset=utf-8` where
+its extension's type names none.
+
 # 37. Lifecycle hooks
 
 37.1 A lifecycle hook MUST be called rather than exported, and `src/server/app.ts` MUST be optional.
 
 37.2 The `default` export MUST be the app's own route, answering where it returns a `Response`.
 
-37.3 `middleware` MUST run pre-routing, over the request and the response.
+37.3 `middleware` MUST run pre-routing, over the request and the response, and over the upgrade to the
+socket mux, which MUST NOT open where a rung answered in the lane's place.
 
 37.4 `onStart` MUST wrap `createApp` and `onStop` MUST wrap `App.stop`.
 
@@ -1625,8 +1774,8 @@ nothing else there.
 38.24 The document `abide start` serves MUST link the stylesheet `abide build` bundled, and MUST
 link none where the build bundled none.
 
-38.25 A request in flight when `abide dev` replaces the worker MUST be answered by the
-replacement.
+38.25 A request `abide dev` has not begun to answer when it replaces the worker MUST be answered
+by the replacement.
 
 38.26 `--root` MUST default to `src` where that holds a `src/ui`, and to the working directory
 where that holds a `ui`.
@@ -1643,6 +1792,32 @@ where it has one, and MUST name `accept-encoding` in `vary`.
 
 38.31 `abide build` and `abide dev` MUST type an app with no `tsconfig.json` against a default
 project, and MUST NOT compile it untyped.
+
+38.32 `abide check` MUST check each `.abide` file as the program it lowers to.
+
+38.33 `abide check` MUST exit non-zero where it reports an error, and MUST exit zero where it reports
+warnings alone.
+
+38.34 `abide check` MUST report a refusal the build would make as a finding, and MUST go on checking
+every file that refusal does not stop.
+
+38.35 `abide lsp` MUST report what 38.3 reports, over the text the editor holds rather than the
+text on disk.
+
+38.36 `abide dev` MUST send a response body as the app produces it.
+
+38.37 `abide dev` MUST read no more of a response body than the connection has taken.
+
+38.38 A response `abide dev` has begun to answer when it replaces the worker MUST end in an error.
+
+38.39 `abide dev` MUST answer in the identity encoding.
+
+38.40 `abide lsp` MUST answer a hover and a jump to a definition about the text it last checked, with
+a name read by name as the `Reactive` it was declared as, a member of it as a member of the value, and
+a component tag as the component it invokes.
+
+38.41 `abide check` MUST hold every attribute a component tag passes to the type its component's
+`props` call declares, and MUST report a mismatch on the attribute.
 
 # 39. Head and view transitions
 
@@ -1690,8 +1865,8 @@ app MUST NOT be required to feature-detect.
 40.4 A file an `{% example %}` names that is not part of the problem its summary names MUST NOT be
 one of its files.
 
-40.5 `{% example %}` MUST render the example's component inline, above a tab per artifact it has,
-and the render MUST NOT be one of those tabs.
+40.5 `{% example %}` MUST render the example's component inline, above a tab per file it is made
+of, and the render MUST NOT be one of those tabs.
 
 40.6 `{% snippet %}` MUST be how a page shows code from an example, in place of pasting it into a
 fence.
@@ -1706,59 +1881,57 @@ order, with the gap marked rather than closed.
 
 40.10 A `{% snippet %}` anchor matching none or matching two MUST be a build failure.
 
-40.11 A panel an `{% example %}` has no artifact for MUST NOT be rendered.
-
-40.12 A page MUST declare in `covers` which REGISTRY names it covers, and an overview or a reference
+40.11 A page MUST declare in `covers` which REGISTRY names it covers, and an overview or a reference
 page MUST declare none.
 
-40.13 Every name `covers` may claim MUST be claimed by exactly one page.
+40.12 Every name `covers` may claim MUST be claimed by exactly one page.
 
-40.14 The voice, the vocabulary and the register of a title against a nav label MUST be
+40.13 The voice, the vocabulary and the register of a title against a nav label MUST be
 `docs/BRAND.md`'s, and MUST NOT be stated here.
 
-40.15 An `{% example %}` MUST run the component it names in the docs app, and MUST NOT run a
+40.14 An `{% example %}` MUST run the component it names in the docs app, and MUST NOT run a
 stand-in for it.
 
-40.16 A request an `{% example %}` makes MUST be answered by the docs app's own handlers, and MUST
+40.15 A request an `{% example %}` makes MUST be answered by the docs app's own handlers, and MUST
 NOT be answered by a fixture.
 
-40.17 Instrumentation the documentation adds to an `{% example %}` MUST sit outside the render.
+40.16 Instrumentation the documentation adds to an `{% example %}` MUST sit outside the render.
 
-40.18 A page MUST embed one `{% example %}` per behaviour it teaches.
+40.17 A page MUST embed one `{% example %}` per behaviour it teaches.
 
-40.19 An `{% example %}` MUST demonstrate exactly one behaviour.
+40.18 An `{% example %}` MUST demonstrate exactly one behaviour.
 
-40.20 A readout the hand-written arm paired with an `{% example %}` renders MUST be one that example's
+40.19 A readout the hand-written arm paired with an `{% example %}` renders MUST be one that example's
 own source names.
 
-40.21 An `{% example %}` MUST be embedded by exactly one page declaring `covers`.
+40.20 An `{% example %}` MUST be embedded by exactly one page declaring `covers`.
 
-40.22 An `{% example %}` MUST model a pattern from an app `docs/BRAND.md` names.
+40.21 An `{% example %}` MUST model a pattern from an app `docs/BRAND.md` names.
 
-40.23 Every `{% example %}` a page embeds MUST be drawn from the same app.
+40.22 Every `{% example %}` a page embeds MUST be drawn from the same app.
 
-40.24 A control an `{% example %}` renders MUST sit with the value it changes.
+40.23 A control an `{% example %}` renders MUST sit with the value it changes.
 
-40.25 An `{% example %}` MUST prove the heading it sits under.
+40.24 An `{% example %}` MUST prove the heading it sits under.
 
-40.26 An `{% example %}` MUST NOT carry code its proof does not need.
+40.25 An `{% example %}` MUST NOT carry code its proof does not need.
 
-40.27 The capability an `{% example %}` proves MUST be one the app it is drawn from would reach
+40.26 The capability an `{% example %}` proves MUST be one the app it is drawn from would reach
 for.
 
-40.28 A heading that carries an `{% example %}` MUST be followed by it, with nothing between
+40.27 A heading that carries an `{% example %}` MUST be followed by it, with nothing between
 them.
 
-40.29 An `{% example %}`'s summary MUST state the situation it is in, and MUST NOT restate the
+40.28 An `{% example %}`'s summary MUST state the situation it is in, and MUST NOT restate the
 heading.
 
-40.30 A comment in an `{% example %}`'s own source MUST fit on one line, and a reason longer than
+40.29 A comment in an `{% example %}`'s own source MUST fit on one line, and a reason longer than
 that MUST go in the copy after the card.
 
-40.31 A page's lead MUST read standalone, being what a section overview shows for that page, and
+40.30 A page's lead MUST read standalone, being what a section overview shows for that page, and
 MUST NOT carry a relative link.
 
-40.32 A page whose `covers` names one REGISTRY entry SHOULD open on a section giving that entry's
+40.31 A page whose `covers` names one REGISTRY entry SHOULD open on a section giving that entry's
 forms, the options they share, and a link to its reference page.
 
 # 41. Rendering and hydration
@@ -1855,6 +2028,9 @@ entries, per 9.16, 27.9 and 11.34.
 42.13 A test MUST reach a handler through the same `App` a host holds, and abide MUST NOT generate a
 client of its own for one.
 
+42.14 `App[Symbol.asyncDispose]` MUST be `App.stop`, so an `App` held by `await using` MUST stop as
+42.10 and 42.11 do when its scope exits.
+
 # 44. The measurement harness
 
 *Free-standing: these clauses govern the measurement harness, which REGISTRY does not name — a
@@ -1919,4 +2095,4 @@ MUST throw naming each field that is absent.
 44.22 A counter `measure` reads rather than counts MUST be published as a fixed-shape record
 reached through `globalThis.__ABIDE_WORK__`.
 
-40.33 A page reporting the build's own results MUST NOT be listed in `NAV`.
+40.32 A page reporting the build's own results MUST NOT be listed in `NAV`.

@@ -119,6 +119,49 @@ test('a prop re-reads when the caller value moves, and nothing is rebuilt — 33
     expect(work.wakes).toBe(2)
 })
 
+// 14.7 — A CHILD'S SETUP DOES NOT TRACK, WHEREVER IT IS INVOKED. An arm mounts inside the watch
+// that chose it, so a child in an arm whose setup read a prop subscribed the caller's `{#if}` to
+// that prop: a write re-ran the arm choice as well as the child's binding. The setup's snapshot
+// staying `0` is the same with the fix in or out — the wake is the difference.
+//
+// THE REVERT: drop the `untracked` round the call in `emitInvocation` — `wakes` 1 -> 2.
+test('a child setup in an arm does not wake the arm choice — 14.7', async () => {
+    const { mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Total from './Total.abide'
+
+let show = reactive(false)
+let count = reactive(0)
+</script>
+
+<button id="show" onclick={() => { show = true }}>show</button>
+<button id="more" onclick={() => { count = count + 1 }}>more</button>
+<div>{#if show}<Total amount={count}/>{/if}</div>`,
+        {
+            Total: `<script>
+import { props } from 'abide'
+
+const { amount } = props<{ amount: number }>()
+const first = amount * 2
+</script>
+
+<strong id="in">{amount} {first}</strong>`,
+        },
+    )
+    mount(pageRegion(document.body))
+    flushSync()
+    ;(document.querySelector('#show') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelector('#in')?.textContent).toBe('0 0')
+    const work = measure(() => {
+        ;(document.querySelector('#more') as HTMLElement).click()
+        flushSync()
+    })
+    expect(document.querySelector('#in')?.textContent).toBe('1 0')
+    expect(work.wakes).toBe(1)
+})
+
 // 33.4 — ONE ACCESSOR PER KEY, so a default is an accessor too: bound as the author wrote it,
 // `currency` is a string and every read of it in the child is a call on a string.
 test('a default prop is answered where the caller passed none — 33.4', async () => {
@@ -143,7 +186,7 @@ import Total from './Total.abide'
 // server painted has it already and a row the browser GREW does not. Shipping
 // `export default () => {}` here satisfied the import and left every grown row empty, and the
 // page looked right because the only rows anybody checked were the server's.
-// THE REVERT: return '' from `emitClient` on `!counter.live` alone — `Static.client.ts` is the
+// THE REVERT: return '' from `emitClient` on `!live` (`lines.length === 0`) alone — `Static.client.ts` is the
 // no-op again, and the second row below comes out `<!--[--><!--]-->`.
 test('an invoked static component still gets a client module — 32.18', async () => {
     const source = temporaryModule({
@@ -495,4 +538,59 @@ import List from './List.abide'
     expect(
         [...document.querySelectorAll('#grown li')].map((li) => li.textContent),
     ).toEqual(['a', 'b'])
+})
+
+const STEPPER = `<script>
+import { props } from 'abide'
+
+const { count } = props<{ count: number }>()
+</script>
+
+<button class="step" onclick={() => { count += 1 }}>{count}</button>`
+
+const STEPPED = `<script>
+import { reactive } from 'abide'
+import Stepper from './Stepper.abide'
+
+let bound = reactive(1)
+let passed = reactive(10)
+let cents = reactive(300)
+</script>
+
+<p id="bound"><Stepper bind:count={bound}/>{bound}</p>
+<p id="pair"><Stepper bind:count={{ get: () => cents / 100, set: (dollars) => { cents = dollars * 100 } }}/>{cents}</p>
+<p id="passed"><Stepper count={passed}/>{passed}</p>
+<button id="reset" onclick={() => { passed = 20 }}>reset</button>`
+
+// 33.6, 33.7 — THE CALLER DECIDES WHERE A CHILD'S WRITE GOES, and the child is one component either
+// way. Bound, the write is the caller's value; passed, it stands in the child until the caller's
+// value moves, and then the caller's wins. THE REVERTS: build `propCell`'s cell over `read()`
+// rather than `read(true)`, and `#bound` reads "21" — the child on 2, the caller still on 1; or
+// `set` an empty `reactive` once from `read(true)` rather than computing it, and the bound half
+// still passes while the reset reads "1120" — the child kept 11 over the caller's 20.
+test("a child's write goes where the caller bound it — 33.6, 33.7", async () => {
+    const { mount } = await mountPage(STEPPED, { Stepper: STEPPER })
+    mount(pageRegion(document.body))
+    flushSync()
+    const text = (id: string): string =>
+        (document.getElementById(id) as Element).textContent ?? ''
+    const step = (id: string): void => {
+        ;(document.querySelector(`#${id} .step`) as HTMLElement).click()
+        flushSync()
+    }
+
+    step('bound')
+    expect(text('bound')).toBe('22')
+
+    // 32.6 — a pair binds a component as it binds an element: the child reads `get` and its
+    // write is `set`.
+    expect(text('pair')).toBe('3300')
+    step('pair')
+    expect(text('pair')).toBe('4400')
+
+    step('passed')
+    expect(text('passed')).toBe('1110')
+    ;(document.getElementById('reset') as HTMLElement).click()
+    flushSync()
+    expect(text('passed')).toBe('2020')
 })

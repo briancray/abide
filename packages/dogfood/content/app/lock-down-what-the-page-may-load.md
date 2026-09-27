@@ -5,6 +5,7 @@ intent: A content security policy with a per-request nonce, without breaking you
 covers:
   - `csp`
   - `csp.nonce`
+  - `content-security-policy: frame-ancestors 'none'`
 ---
 
 A content security policy is worth having and painful to write, because the hard part is not
@@ -35,8 +36,12 @@ browser nobody was testing in.
 ## `csp.nonce` is this response's nonce
 
 ```abide #ui/pages/layout.abide — excerpt
+<script>
+import { csp } from 'abide'
+</script>
+
 <head>
-    <script nonce={csp.nonce()}>{raw(bootstrapSnippet)}</script>
+    <script nonce={csp.nonce()}>window.dataLayer = []</script>
 </head>
 ```
 
@@ -58,6 +63,13 @@ a different one is only ever the vulnerability — a JSON refusal sniffed as HTM
 running on your origin.
 
 Read on: [Response types](../server/answer-with-something-other-than-json.md)
+
+## No page can be framed by default
+
+Every page carries `content-security-policy: frame-ancestors 'none'` before any rung runs, so
+another site cannot put your page in an invisible frame and steer a click onto it. `csp()`
+replaces that header with the whole policy, whose baseline says the same thing — so opening the
+page to a frame is one directive: `csp({ 'frame-ancestors': ["'self'"] })`.
 
 ## `csp()` is a rung, and composes with the others
 

@@ -1,0 +1,137 @@
+================================================================================
+If, else if and else
+================================================================================
+
+{#if a}one{:else if b}two{:else}three{/if}
+
+--------------------------------------------------------------------------------
+
+(document
+  (if_block
+    (if_start
+      (block_keyword)
+      (code))
+    (text)
+    (else_if_clause
+      (else_if_start
+        (block_keyword)
+        (code))
+      (text))
+    (else_clause
+      (else_start
+        (block_keyword))
+      (text))
+    (if_end
+      (block_keyword))))
+
+================================================================================
+An element an arm leaves open is closed by the next arm
+================================================================================
+
+<div>{#if a}<p>open{:else}<br>{/if}</div>
+
+--------------------------------------------------------------------------------
+
+(document
+  (element
+    (start_tag
+      (tag_name))
+    (if_block
+      (if_start
+        (block_keyword)
+        (code))
+      (element
+        (start_tag
+          (tag_name))
+        (text))
+      (else_clause
+        (else_start
+          (block_keyword))
+        (element
+          (start_tag
+            (tag_name))))
+      (if_end
+        (block_keyword)))
+    (end_tag
+      (tag_name))))
+
+================================================================================
+For, with an index and a key
+================================================================================
+
+{#for row, i of rows by row.id}<li>{row.name}</li>{/for}
+
+--------------------------------------------------------------------------------
+
+(document
+  (for_block
+    (for_start
+      (block_keyword)
+      (code))
+    (element
+      (start_tag
+        (tag_name))
+      (expression
+        (code))
+      (end_tag
+        (tag_name)))
+    (for_end
+      (block_keyword))))
+
+================================================================================
+Try, catch and finally
+================================================================================
+
+{#try}<Invoice/>{:catch error}<p>{error.message}</p>{:finally}<hr/>{/try}
+
+--------------------------------------------------------------------------------
+
+(document
+  (try_block
+    (try_start
+      (block_keyword))
+    (element
+      (self_closing_tag
+        (tag_name)))
+    (catch_clause
+      (catch_start
+        (block_keyword)
+        (code))
+      (element
+        (start_tag
+          (tag_name))
+        (expression
+          (code))
+        (end_tag
+          (tag_name))))
+    (finally_clause
+      (finally_start
+        (block_keyword))
+      (element
+        (self_closing_tag
+          (tag_name))))
+    (try_end
+      (block_keyword))))
+
+================================================================================
+An inline component
+================================================================================
+
+{#component Row({ label })}<li>{label}</li>{/component}
+
+--------------------------------------------------------------------------------
+
+(document
+  (component_block
+    (component_start
+      (block_keyword)
+      (code))
+    (element
+      (start_tag
+        (tag_name))
+      (expression
+        (code))
+      (end_tag
+        (tag_name)))
+    (component_end
+      (block_keyword))))

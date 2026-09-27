@@ -11,9 +11,11 @@ covers:
   - `server/rpc/name.ts`
   - `server/rpc/users.ts`
   - `src/server/rpc/**/*.ts`
+  - `abide-version`
 examples:
   - packages/dogfood/examples/rpc-call.json
   - packages/dogfood/examples/rpc-reactive.json
+  - packages/dogfood/examples/rpc-follow.json
 ---
 
 You have a database and a page that needs a row. Most stacks make that four artifacts: a
@@ -91,6 +93,26 @@ tracks two variables of its own to say the same thing, because a promise answers
 everything after that is the caller's to remember.
 
 See [Loading states](../values/show-a-value-that-isnt-there-yet.md).
+
+## A `GET` over a `global` value follows the server
+
+{% example rpc-follow %}
+
+*1 import, 0 sockets* — the arm opens a socket of its own, names a version and re-renders from the
+frames by hand.
+
+A browser that reads a `GET` stays subscribed to it over one web socket the whole page shares. When
+the handler serves a `global` value, a change the server makes — a `set`, a `patch`, a reload —
+reaches every browser holding it, and the list above moves with nothing on the page asking.
+
+The first read and the feed are two channels, and a change landing between them would be lost. So
+the answer names the version it carried in `abide-version`, the browser names that version when it
+subscribes, and the server sends the value only if it has moved since.
+
+A trigger reaches browsers too, for any `GET`: `getContact.invalidate({ id })` inside a handler
+marks every browser's copy of that contact stale, whether or not the value is `global`. A `GET`
+declaring `middleware` is followed for its triggers alone, and each browser re-reads through the
+rungs, which a value pushed down the socket would have skipped.
 
 ## Two callers asking for one invoice are one request
 

@@ -4,7 +4,7 @@
 // second app, no frame and no stand-in network between the reader and what the source says.
 //
 // This module renders the CARD around it: the caption, the slot the page puts the component in,
-// and the panels. `{% example name %}` becomes this card for the site and the same files as
+// and the file tabs. `{% example name %}` becomes this card for the site and the same files as
 // fences for the markdown bundle.
 
 import { escapeAttribute } from 'abide'
@@ -93,15 +93,15 @@ async function readFiles(
     return group
 }
 
-function renderFileGroup(files: ExampleFile[], key: string): string {
+function renderFileGroup(files: ExampleFile[]): string {
     let tabs = ''
     let bodies = ''
     for (let index = 0; index < files.length; index += 1) {
         const file = files[index]
         if (!file) continue
         const selected = index === 0
-        tabs += `<button role="tab" aria-selected="${selected}" data-side="${sideOf(file.path)}" data-file="${key}:${index}">${escapeAttribute(displayPath(file.path))}</button>`
-        bodies += `<pre data-file="${key}:${index}"${selected ? '' : ' hidden'}><code>${highlight(file.source.trimEnd())}</code></pre>`
+        tabs += `<button role="tab" aria-selected="${selected}" data-side="${sideOf(file.path)}" data-file="${index}">${escapeAttribute(displayPath(file.path))}</button>`
+        bodies += `<pre data-file="${index}"${selected ? '' : ' hidden'}><code>${highlight(file.source.trimEnd())}</code></pre>`
     }
     return `<div class="ex-files" role="tablist">${tabs}</div>${bodies}`
 }
@@ -128,18 +128,12 @@ export async function readExample(name: string): Promise<Example> {
         orderedFiles(manifest.files, manifest.about ?? 'ui'),
     )
 
-    // ONE PANEL, and it keeps the tab: the card reads the same whether a later artifact joins it
-    // or not, and 40.11 is what keeps an empty one from being drawn.
-    const tabs = `<button role="tab" aria-selected="true" data-panel="files">Files</button>`
-    const bodies = `<div class="ex-panel" data-panel="files">${renderFileGroup(files, 'files')}</div>`
-
-    // THE RENDER IS NOT A PANEL (40.5). It is the thing the example IS, so it sits above the
-    // tabs and stays there — what the tabs hold is everything you consult ABOUT it.
+    // THE RENDER IS NOT A FILE (40.5). It is the thing the example IS, so it sits above the
+    // files and stays there — what they hold is what you consult ABOUT it.
     const html = `<figure class="example">
 <figcaption><span class="ex-title">${renderInline(manifest.title)}</span><span class="ex-summary">${escapeAttribute(manifest.summary)}</span></figcaption>
 <div class="ex-render">${renderSlot(name)}</div>
-<div class="ex-tabs"><div class="ex-tablist" role="tablist">${tabs}</div></div>
-${bodies}
+${renderFileGroup(files)}
 </figure>`
 
     return {
@@ -150,7 +144,7 @@ ${bodies}
     }
 }
 
-// The same files the panels are built from, flattened for a reader who gets TEXT instead of
+// The same files the tabs are built from, flattened for a reader who gets TEXT instead of
 // tabs.
 export async function exampleMarkdown(name: string): Promise<string> {
     const manifest = await readManifest(name)

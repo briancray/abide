@@ -1,7 +1,7 @@
 import { CURRENT_ROUTER, type NavigateOptions } from '#shared/CURRENT_ROUTER.ts'
 import { firstMatch, type Params, partsOf } from '#shared/matchRoute.ts'
-import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
 import { unmounted } from '#shared/mount.ts'
+import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
 import { arrive, route } from '#shared/route.ts'
 import {
     parseRoutePattern,
@@ -35,6 +35,8 @@ export type Route = {
 }
 
 type Compiled = Route & { segments: Segment[] }
+
+type Found = { route: Compiled; params: Params }
 
 // 41.11 — ONE LEVEL OF WHAT IS MOUNTED: the module standing there, the scope that stops it, and
 // the region its child occupies. The router holds these rather than letting each level own the
@@ -70,19 +72,23 @@ export class Router {
     // pointer crossing a link's children asks again at every edge, and after the first time the
     // answer is the module cache's anyway.
     prefetched: Set<Compiled>
+    // 39.7, 39.8 — WHETHER A NAVIGATION'S WRITE IS A VIEW TRANSITION, as the build read it off the
+    // compiled `<style>` blocks. Nothing here looks at the document's stylesheets.
+    transitions: boolean
 
-    constructor(region: Region, routes: Compiled[]) {
+    constructor(region: Region, routes: Compiled[], transitions: boolean) {
         this.region = region
         this.routes = routes
         this.levels = []
         this.navigation = 0
         this.prefetched = new Set()
+        this.transitions = transitions
     }
 
     // 16.11 — AN ADDRESS OUTSIDE THE MOUNT IS NO ROUTE OF THIS APP'S, and one inside it is matched
     // as the address below the app's root. Every way in — a click, an intent, back and forward, a
     // hydration — is matched here.
-    match(pathname: string): { route: Compiled; params: Params } | undefined {
+    match(pathname: string): Found | undefined {
         const below = unmounted(pathname)
         const parts = below === undefined ? undefined : partsOf(below)
         return parts === undefined ? undefined : firstMatch(this.routes, parts)
@@ -132,7 +138,7 @@ export class Router {
         try {
             // 30.15 — THE SERVER IS ASKED ALONGSIDE THE LOAD, so its `middleware` decides the
             // navigation for the price of the one round trip the chunks already cost.
-            const [answer, arriving] = await Promise.all([
+            const [answer, loaded] = await Promise.all([
                 ask(target),
                 load(found.route),
             ])
@@ -148,32 +154,51 @@ export class Router {
                 location.href = answer?.url ?? target.href
                 return
             }
-            if (!answer.redirected) {
-                this.commit(target, found, arriving, options)
-                return
-            }
             // 30.17 — REDIRECTED, and the server already said yes to where it landed: the answer is
             // the 204 at the end of the chain. That address is mounted in place of the one asked
             // for, and a route the client has no row for is the document's (30.10).
-            const landed = new URL(answer.url)
-            const landing = this.match(landed.pathname)
+            const landed = answer.redirected ? new URL(answer.url) : target
+            const landing = answer.redirected
+                ? this.match(landed.pathname)
+                : found
             if (landing === undefined) {
                 location.href = landed.href
                 return
             }
-            const redirected = await load(landing.route)
+            const arriving =
+                landing === found ? loaded : await load(landing.route)
             if (this.navigation !== ticket) return
-            this.commit(landed, landing, redirected, options)
+            await this.write(ticket, () =>
+                this.commit(landed, landing, arriving, options),
+            )
         } finally {
             if (this.navigation === ticket) route.navigating.set(false)
         }
+    }
+
+    // 39.9 — AWAITED TO THE WRITE, NOT TO THE ANIMATION: `updateCallbackDone` settles once the
+    // arriving page is in the document, and `finished` would hold the navigation for however long
+    // the app's transition plays. 39.10 — a browser with no `startViewTransition` writes directly.
+    //
+    // THE TICKET IS CHECKED AGAIN INSIDE THE CALLBACK, because the browser runs it a frame later,
+    // after capturing the outgoing page — and a transition another navigation skipped still runs
+    // its callback, which would mount the page the reader clicked away from.
+    private async write(ticket: number, commit: () => void): Promise<void> {
+        if (
+            !this.transitions ||
+            typeof document.startViewTransition !== 'function'
+        )
+            return commit()
+        await document.startViewTransition(() => {
+            if (this.navigation === ticket) commit()
+        }).updateCallbackDone
     }
 
     // WHAT A NAVIGATION DOES ONCE IT IS NO LONGER SUPERSEDABLE: the old part stopped and emptied,
     // the address written, the arriving part's head applied and its levels mounted.
     private commit(
         target: URL,
-        found: { route: Compiled; params: Params },
+        found: Found,
         arriving: PageModule[],
         options: NavigateOptions,
     ): void {
@@ -303,7 +328,7 @@ export class Router {
     // SETUP, which reads it.
     private mountChain(
         href: string,
-        found: { route: Compiled; params: Params },
+        found: Found,
         modules: PageModule[],
         from: number,
         into: Region,
@@ -363,11 +388,16 @@ function paramsProp(
 export function startRouter(
     routes: Route[],
     host: Element = document.body,
+    transitions = false,
 ): Router {
     const compiled: Compiled[] = []
     for (const route of routes)
         compiled.push({ ...route, segments: parseRoutePattern(route.pattern) })
-    const router = new Router(pageRegion(host), rankBySpecificity(compiled))
+    const router = new Router(
+        pageRegion(host),
+        rankBySpecificity(compiled),
+        transitions,
+    )
     CURRENT_ROUTER.current = router
     return router
 }

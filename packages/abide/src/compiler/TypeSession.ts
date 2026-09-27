@@ -1,9 +1,16 @@
 import { type Dirent, readdirSync, statSync } from 'node:fs' // Bun exposes no sync directory listing of its own
 import { basename, dirname, join, resolve } from 'node:path' // Bun exposes no path helpers of its own
-import { type Node, SyntaxKind, type TypeNode } from 'typescript/unstable/ast'
+import {
+    ModifierFlags,
+    type Node,
+    NodeFlags,
+    SyntaxKind,
+    type TypeNode,
+} from 'typescript/unstable/ast'
 import {
     isArrayLiteralExpression,
     isArrowFunction,
+    isBinaryExpression,
     isCallExpression,
     isExportAssignment,
     isFunctionDeclaration,
@@ -27,17 +34,33 @@ import {
     API,
     type Symbol as CheckedSymbol,
     type Checker,
+    NodeBuilderFlags,
     ObjectFlags,
     type ObjectType,
     type Project,
+    SignatureKind,
     SymbolFlags,
     type Type,
     TypeFlags,
+    type TypeParameter,
     type TypeReference,
     type UnionOrIntersectionType,
 } from 'typescript/unstable/async'
 import type { Mount } from '#server/answerRpc.ts'
+import type { CopyOptions } from '#shared/CopyOptions.ts'
 import type { Method } from '#shared/rpc.ts'
+import { aliasedSymbol } from './aliasedSymbol.ts'
+import { AMBIENT_SOURCES, ambientReadsIn } from './ambientReads.ts'
+import {
+    CHECKED_SUFFIX,
+    type CheckedShadow,
+    COMPONENT_MODULE,
+    COMPONENT_STAND_IN,
+    checkedShadow,
+    copiedFrom,
+    mapBack,
+    mapForward,
+} from './checkedShadow.ts'
 import {
     classifyPropRead,
     classifyRead,
@@ -46,8 +69,23 @@ import {
     type Read,
     slotFacts,
 } from './classifyRead.ts'
+import { CHECKED_VALUES } from './Lowering.ts'
+import { diagnosisAt, lineOf } from './lineOf.ts'
 import type { AbideFile } from './parseAbide.ts'
-import { projectShadow, type Span } from './projectShadow.ts'
+import {
+    type Origin,
+    type Projection,
+    projectShadow,
+    type Span,
+} from './projectShadow.ts'
+import { REACTIVE_MEMBERS } from './REACTIVE_MEMBERS.ts'
+import {
+    isReactiveCall,
+    optionNamed,
+    reactiveOptions,
+} from './reactiveOptions.ts'
+import { templateWarnings } from './templateWarnings.ts'
+import { trackingWarnings, type Warning } from './trackingWarnings.ts'
 
 // Where 31.3 gets its answer. A `.abide` file is projected into a SHADOW `.ts` held in a virtual
 // filesystem and never written to disk, and TypeScript's own checker is asked what each declared
@@ -59,15 +97,46 @@ import { projectShadow, type Span } from './projectShadow.ts'
 // and bun exposes no fd on a child pipe, so the sync channel cannot connect. The async channel is
 // a stream and needs nothing.
 
+// What a `.abide`'s projection is registered with the checker as, beside the `.abide` itself.
+const SHADOW_SUFFIX = '.shadow.ts'
+
 // Whether a script can bind a name at all — a file that cannot is never handed to the checker.
 const DECLARES = /\b(?:const|let|var|import)\b/
 
 export class TypeSession {
     private api: API
     private shadows = new Map<string, string>()
+    // Per canonical `.abide` path, what `diagnose` last lowered it to, for `inspect` to map through.
+    private lowered = new Map<
+        string,
+        { text: string; projection: Projection; shadow: CheckedShadow }
+    >()
+    // THE `.abide` BEHIND EACH SHADOW, for a finding in one to be placed in the other.
+    private authored = new Map<
+        string,
+        { path: string; text: string | undefined; origins: readonly Origin[] }
+    >()
 
     private constructor(api: API) {
         this.api = api
+    }
+
+    // 38.40 — A `.abide` THIS SESSION HAS NOT LOWERED IS STILL A MODULE ANOTHER CAN IMPORT. What its
+    // checked module exports does not depend on what the component holds (`COMPONENT_MODULE`), so an
+    // editor checking one page resolves the components it imports without lowering each of them.
+    // Remembered, so the lowering that replaces a stand-in is reported as a change to it.
+    private stoodIn = new Set<string>()
+
+    private standIn(name: string): string | undefined {
+        if (!name.endsWith(`.abide${CHECKED_SUFFIX}`)) return undefined
+        try {
+            if (!statSync(name.slice(0, -CHECKED_SUFFIX.length)).isFile())
+                return undefined
+        } catch {
+            return undefined
+        }
+        this.stoodIn.add(name)
+        return COMPONENT_MODULE
     }
 
     static async open(tsconfig: string): Promise<TypeSession> {
@@ -75,9 +144,13 @@ export class TypeSession {
             new API({
                 cwd: dirname(tsconfig),
                 fs: {
-                    readFile: (name) => session.shadows.get(name),
+                    readFile: (name) =>
+                        session.shadows.get(name) ?? session.standIn(name),
                     fileExists: (name) =>
-                        session.shadows.has(name) ? true : undefined,
+                        session.shadows.has(name) ||
+                        session.standIn(name) !== undefined
+                            ? true
+                            : undefined,
                     getAccessibleEntries: (directory) =>
                         session.entriesIn(directory),
                 },
@@ -184,7 +257,8 @@ export class TypeSession {
                 // nobody has as a root of the project for the rest of the session.
                 for (const shadowPath of this.shadows.keys())
                     if (
-                        shadowPath === `${this.canonical(path)}.shadow.ts` ||
+                        shadowPath ===
+                            `${this.canonical(path)}${SHADOW_SUFFIX}` ||
                         shadowPath.startsWith(`${this.canonical(path)}/`)
                     ) {
                         this.shadows.delete(shadowPath)
@@ -231,10 +305,52 @@ export class TypeSession {
         )
     }
 
+    private async currentProject(
+        created: string[] = [],
+        changed: string[] = [],
+    ): Promise<Project | undefined> {
+        return created.length === 0 && changed.length === 0 && this.current
+            ? this.project
+            : await this.snapshot(created, changed)
+    }
+
+    // THE APP'S OWN FILES the checker holds as roots: under `within`, and neither a dependency nor a
+    // declaration file. Canonical, which is how a shadow is keyed.
+    private rootsUnder(project: Project, within: string): string[] {
+        const root = `${this.canonical(within)}/`
+        const roots: string[] = []
+        for (const path of project.rootFiles) {
+            const canonical = this.canonical(path)
+            if (
+                canonical.startsWith(root) &&
+                !path.includes('/node_modules/') &&
+                !path.endsWith('.d.ts')
+            )
+                roots.push(canonical)
+        }
+        return roots
+    }
+
     // A relative path from the checker is relative to the API's own cwd, which is the tsconfig's
     // directory rather than the process's.
     private canonical(path: string): string {
         return resolve(dirname(this.tsconfig), path)
+    }
+
+    // A file the checker reads out of `shadows`, reported to the next snapshot only when it is new,
+    // its text moved, or a stand-in answered for it until now.
+    private register(
+        path: string,
+        text: string,
+        created: string[],
+        changed: string[],
+    ): void {
+        const previous = this.shadows.get(path)
+        const stoodIn = this.stoodIn.delete(path)
+        if (previous === undefined) created.push(path)
+        if (stoodIn || (previous !== undefined && previous !== text))
+            changed.push(path)
+        this.shadows.set(path, text)
     }
 
     // THE READS IN `file`: every occurrence of a name bound to a `Reactive` (31.3), classified, in
@@ -242,7 +358,7 @@ export class TypeSession {
     // build wants `readsFor`.
     async reads(abidePath: string, file: AbideFile): Promise<Read[]> {
         const answers = await this.readsFor([{ path: abidePath, file }])
-        return answers[0] ?? []
+        return answers.reads[0] ?? []
     }
 
     // EVERY FILE IN ONE SNAPSHOT, which is the whole of the compiler's build time. Measured at
@@ -255,14 +371,41 @@ export class TypeSession {
     // key, a member, a label and a class field of the same spelling are other symbols, and are
     // absent. What each reference DOES — a read, a write, an update, a shorthand — is read off its
     // parents by `classifyRead`, so no token walk re-derives the grammar.
+    //
+    // WHAT IT HAS TO SAY THAT IS NOT A TYPE ERROR comes back beside the reads: the compiler's own
+    // warnings (14.14 to 14.17, 31.13, 32.14), each on the `.abide` line where the source's text
+    // was handed in.
     async readsFor(
-        sources: { path: string; file: AbideFile }[],
-    ): Promise<Read[][]> {
+        sources: { path: string; file: AbideFile; text?: string }[],
+    ): Promise<{ reads: Read[][]; warnings: Diagnosis[] }> {
+        const answered = await this.classify(sources)
+        for (let at = 0; at < sources.length; at += 1) {
+            const source = sources[at] as (typeof sources)[number]
+            if (source.text !== undefined)
+                answered.warnings.push(
+                    ...templateWarnings(
+                        source.path,
+                        source.text,
+                        source.file,
+                        answered.reads[at] ?? [],
+                    ),
+                )
+        }
+        answered.warnings.sort(byPlace)
+        return answered
+    }
+
+    private async classify(
+        sources: { path: string; file: AbideFile; text?: string }[],
+    ): Promise<{ reads: Read[][]; warnings: Diagnosis[] }> {
+        const warnings: Diagnosis[] = []
         // Per source, its shadow's path and where its scripts end, or '' where nothing is declared.
         const queries: {
             shadowPath: string
             scriptsEnd: number
             slots: readonly Span[]
+            setups: readonly Span[]
+            origins: readonly Origin[]
         }[] = []
         const created: string[] = []
         const changed: string[] = []
@@ -276,39 +419,47 @@ export class TypeSession {
             // writes `{format(total)}` has a position only the checker can prove static.
             const slots = [...projection.slots.values()]
             if (!DECLARES.test(scripts) && slots.length === 0) {
-                queries.push({ shadowPath: '', scriptsEnd: 0, slots })
+                queries.push({
+                    shadowPath: '',
+                    scriptsEnd: 0,
+                    slots,
+                    setups: projection.setups,
+                    origins: projection.origins,
+                })
                 continue
             }
             // CANONICAL AT THE KEY, not at the comparison. A doubled separator or a relative
             // path is the same file and a raw string is not the same string — registered as it
             // arrived, the shadow appeared in nobody's directory listing AND named a file the
             // checker could not open, and the refusal below blamed the app's tsconfig for it.
-            const shadowPath = `${this.canonical(source.path)}.shadow.ts`
+            const shadowPath = `${this.canonical(source.path)}${SHADOW_SUFFIX}`
             // A shadow STAYS registered for the life of the session and the snapshot is told it
             // changed. Deleting and re-adding under the same path does not invalidate the
             // source-file cache, and the checker then answers about the PREVIOUS file at these
             // offsets — right-looking types for the wrong names, with nothing to say so.
             // AN UNCHANGED SHADOW IS NOT REPORTED, which is what a kept session saves on a save:
             // the one page that moved is re-read rather than all of them.
-            const previous = this.shadows.get(shadowPath)
-            if (previous === undefined) created.push(shadowPath)
-            else if (previous !== projection.text) changed.push(shadowPath)
-            this.shadows.set(shadowPath, projection.text)
+            this.register(shadowPath, projection.text, created, changed)
+            this.authored.set(shadowPath, {
+                path: source.path,
+                text: source.text,
+                origins: projection.origins,
+            })
             queries.push({
                 shadowPath,
                 scriptsEnd: projection.scripts.end,
                 slots,
+                setups: projection.setups,
+                origins: projection.origins,
             })
         }
 
         const answers: Read[][] = sources.map(() => [])
-        if (queries.every((query) => query.shadowPath === '')) return answers
+        if (queries.every((query) => query.shadowPath === ''))
+            return { reads: answers, warnings }
 
-        const project =
-            created.length === 0 && changed.length === 0 && this.current
-                ? this.project
-                : await this.snapshot(created, changed)
-        if (project === undefined) return answers
+        const project = await this.currentProject(created, changed)
+        if (project === undefined) return { reads: answers, warnings }
         const checker = project.checker
         const abide = await abideIn(project)
 
@@ -359,6 +510,34 @@ export class TypeSession {
                         for (const element of named.elements)
                             if (!element.isTypeOnly) bind(element.name)
                 }
+                // 31.1 REACHES A BRANCH-LOCAL `<script>` (14.8), which stands inside the arm's braces
+                // or the row's loop rather than at the top — and a name there is spelled apart from
+                // the page's, since two arms may each declare their own `inner`.
+                const topLevel = names.length
+                if (query.setups.length > 0) {
+                    const inSetup = (node: Node): boolean => {
+                        const start = node.getStart()
+                        for (const span of query.setups)
+                            if (start >= span.start && start < span.end)
+                                return true
+                        return false
+                    }
+                    const visit = (node: Node): void => {
+                        if (node.end <= query.scriptsEnd) return
+                        // The script's own statements, as the top-level walk takes the page's: a
+                        // declaration inside one of its functions is not a name the body reads.
+                        if (inSetup(node)) {
+                            if (isVariableStatement(node))
+                                for (const declaration of node.declarationList
+                                    .declarations)
+                                    if (isIdentifier(declaration.name))
+                                        names.push(declaration.name)
+                            return
+                        }
+                        node.forEachChild(visit)
+                    }
+                    sourceFile.forEachChild(visit)
+                }
                 // 33's pass runs whatever 31.3's found: a `props` pattern binds no name the walk
                 // above collects — `const { amount } = props()` declares a PATTERN — so a file
                 // whose only declaration is one would have returned with its props unread.
@@ -370,18 +549,11 @@ export class TypeSession {
                     query.scriptsEnd,
                     answers[at] as Read[],
                 )
-                if (names.length === 0) {
-                    await props
-                    await proveSlots(
-                        checker,
-                        sourceFile,
-                        query.slots,
-                        answers[at] as Read[],
-                    )
-                    ;(answers[at] as Read[]).sort(byPosition)
-                    return
-                }
-                const symbols = await checker.getSymbolAtLocation(names)
+                // No name is no round trip to ask about none.
+                const symbols =
+                    names.length === 0
+                        ? []
+                        : await checker.getSymbolAtLocation(names)
                 const reactive = await Promise.all(
                     symbols.map(async (symbol) =>
                         symbol !== undefined &&
@@ -391,6 +563,20 @@ export class TypeSession {
                     ),
                 )
                 await dropValueHolders(checker, names, reactive)
+                // 32.33 — A VALUE WHOSE `reactive(…)` DECLARES `by` keys a `{#for}` over it,
+                // wherever the value is declared.
+                const byValue = await Promise.all(
+                    reactive.map(async (symbol) => {
+                        if (symbol === undefined) return false
+                        const options = reactiveOptions(
+                            await boundInitializer(checker, symbol),
+                        )
+                        return (
+                            options !== undefined &&
+                            optionNamed(options, 'by') !== undefined
+                        )
+                    }),
+                )
                 const nodes = await Promise.all(
                     reactive.map(async (symbol) => {
                         if (symbol === undefined) return []
@@ -406,12 +592,16 @@ export class TypeSession {
                 )
                 const reads = answers[at] as Read[]
                 const holding: Promise<void>[] = []
-                for (const resolved of nodes)
-                    for (const node of resolved) {
+                const located: { node: Node; read: Read }[] = []
+                for (let index = 0; index < nodes.length; index += 1)
+                    for (const node of nodes[index] as (Node | undefined)[]) {
                         if (node === undefined) continue
                         const read = classifyRead(node)
                         if (read === undefined) continue
+                        read.byValue = byValue[index] as boolean
+                        read.local = index >= topLevel
                         reads.push(read)
+                        located.push({ node, read })
                         if (read.shape === 'value')
                             holding.push(
                                 declaredType(checker, node).then(
@@ -434,9 +624,81 @@ export class TypeSession {
                 await props
                 await proveSlots(checker, sourceFile, query.slots, reads)
                 reads.sort(byPosition)
+                const source = sources[at] as (typeof sources)[number]
+                const warned = await warningsFor(
+                    checker,
+                    located,
+                    query.scriptsEnd,
+                )
+                for (const warning of warned)
+                    warnings.push(
+                        diagnosisAt(
+                            source.path,
+                            source.text,
+                            mapBack(query.origins, warning.at),
+                            'warning',
+                            warning.message,
+                        ),
+                    )
             }),
         )
-        return answers
+        return { reads: answers, warnings }
+    }
+
+    // 11.37 — every read of a request's ambient inside a `global` value's body, in the `.abide`
+    // files `readsFor` was last handed and every `.ts` under `within`, each on its own line.
+    async ambientReads(within: string): Promise<Diagnosis[]> {
+        const project = await this.currentProject()
+        if (project === undefined) return []
+        const checker = project.checker
+        const paths = new Map<string, string>()
+        const declared = await Promise.all(
+            AMBIENT_SOURCES.map((source) =>
+                project.program.getSourceFile(source),
+            ),
+        )
+        for (let at = 0; at < AMBIENT_SOURCES.length; at += 1) {
+            const found = declared[at]?.path
+            if (found !== undefined)
+                paths.set(AMBIENT_SOURCES[at] as string, found)
+        }
+        if (paths.size === 0) return []
+        const files: string[] = []
+        for (const path of this.rootsUnder(project, within))
+            if (
+                !path.endsWith(CHECKED_SUFFIX) &&
+                (this.authored.has(path) || !this.shadows.has(path))
+            )
+                files.push(path)
+        const found = await Promise.all(
+            files.map(async (path): Promise<Diagnosis[]> => {
+                const sourceFile = await project.program.getSourceFile(path)
+                if (sourceFile === undefined) return []
+                const reads = await ambientReadsIn(checker, sourceFile, paths)
+                if (reads.length === 0) return []
+                const authored = this.authored.get(path)
+                const text =
+                    authored === undefined
+                        ? await Bun.file(path).text()
+                        : authored.text
+                const origins = authored?.origins
+                const said: Diagnosis[] = []
+                for (const read of reads)
+                    said.push(
+                        diagnosisAt(
+                            authored?.path ?? path,
+                            text,
+                            origins === undefined
+                                ? read.at
+                                : mapBack(origins, read.at),
+                            'error',
+                            `abide: a \`global\` value's body reads \`${read.ambient}\`, which belongs to the request it was built in — every later request would be answered with this one's. Take it out of the body, or drop \`global\`. RULEBOOK 11.37.`,
+                        ),
+                    )
+                return said
+            }),
+        )
+        return found.flat().sort(byPlace)
     }
 
     // 19.16 — EVERY VALUE EACH MODULE EXPORTS, and the method of the abide call that declares it, or
@@ -446,9 +708,7 @@ export class TypeSession {
     // namespace is abide's, and an app's own function of that spelling is not. A type is not an
     // export here: it is erased, and has no address to answer at.
     async handlersIn(paths: string[]): Promise<DeclaredExport[][]> {
-        const project = this.current
-            ? this.project
-            : await this.snapshot([], [])
+        const project = await this.currentProject()
         if (project === undefined) return paths.map(() => [])
         const checker = project.checker
         // ABIDE'S FILE AS THE CHECKER NAMES IT, not as this module does: it canonicalises a path to
@@ -471,7 +731,7 @@ export class TypeSession {
                 const exports = await checker.getExportsOfModule(module)
                 const found = await Promise.all(
                     exports.map(async (exported) => {
-                        const target = await aliased(checker, exported)
+                        const target = await aliasedSymbol(checker, exported)
                         if ((target.flags & SymbolFlags.Value) === 0)
                             return undefined
                         const declared = await declaringMethod(
@@ -480,10 +740,27 @@ export class TypeSession {
                             methodsPath,
                             socketPath,
                         )
+                        const unread: Diagnosis[] = []
+                        for (const value of declared?.unread ?? []) {
+                            const file = value.getSourceFile()
+                            unread.push(
+                                diagnosisAt(
+                                    file.fileName === sourceFile.fileName
+                                        ? path
+                                        : file.fileName,
+                                    file.text,
+                                    value.getStart(),
+                                    'warning',
+                                    `abide: \`${value.parent.getText()}\` is not a value the build can read, so \`${exported.name}\`'s browser copy is built without it. Write it as a literal, or as a \`const\` whose type is one. RULEBOOK 18.30.`,
+                                ),
+                            )
+                        }
                         return {
                             name: exported.name,
                             method: declared?.method,
                             ui: declared?.ui ?? true,
+                            copy: declared?.copy,
+                            unread,
                         }
                     }),
                 )
@@ -495,9 +772,488 @@ export class TypeSession {
         )
     }
 
+    // 38.3 — WHAT THE CHECKER SAYS ABOUT EACH FILE AS IT RUNS, placed on the `.abide` line. Each
+    // source is checked as its lowered program (`checkedShadow`), which is registered for the life
+    // of the session beside its shadow for the reason a shadow is; and every `.ts` root of the
+    // project under `within` is checked as it stands, where `scripts` asks for them — an editor
+    // asking about one page does not want the whole app. `sources` carry their text, which is what
+    // a position is a line of. A `quiet` source is lowered and not reported on: a component an
+    // editor's page imports, which is there for the props the page is held to (33.4).
+    async diagnose(
+        sources: {
+            path: string
+            text: string
+            file: AbideFile
+            reads: Read[]
+            quiet?: boolean
+        }[],
+        within: string,
+        scripts = true,
+    ): Promise<Diagnosis[]> {
+        const created: string[] = []
+        const changed: string[] = []
+        const checked: {
+            source: (typeof sources)[number]
+            checkPath: string
+            shadow: CheckedShadow
+        }[] = []
+        for (const source of sources) {
+            const shadow = checkedShadow(source.file, source.reads)
+            const checkPath = `${this.canonical(source.path)}${CHECKED_SUFFIX}`
+            this.register(checkPath, shadow.text, created, changed)
+            checked.push({ source, checkPath, shadow })
+        }
+        // 34.6 — WHAT THE BUNDLER RESOLVES AND THE CHECKER CANNOT: a stylesheet imported for its
+        // effect. Declared in a file of its own at the app's root, which is a script, because a
+        // pattern module can only be declared outside a module.
+        this.register(
+            `${this.canonical(within)}/${AMBIENT}`,
+            AMBIENT_DECLARATIONS,
+            created,
+            changed,
+        )
+        const project = await this.currentProject(created, changed)
+        if (project === undefined) return []
+        const program = project.program
+        // `path` is the file the author wrote, which for a checked module is not the file asked.
+        const report = async (
+            asked: string,
+            path: string,
+            place: (position: number) => { line: number; column: number },
+        ): Promise<Diagnosis[]> => {
+            const [syntactic, semantic] = await Promise.all([
+                program.getSyntacticDiagnostics(asked),
+                program.getSemanticDiagnostics(asked),
+            ])
+            const said: Diagnosis[] = []
+            for (const diagnostic of [...syntactic, ...semantic])
+                said.push({
+                    path,
+                    ...place(diagnostic.pos),
+                    code: diagnostic.code,
+                    category: CATEGORIES[diagnostic.category] ?? 'error',
+                    // A checked module's own names are the lowering's, and read as the author's.
+                    message: flatten(diagnostic).replaceAll(
+                        `${CHECKED_VALUES}.`,
+                        '',
+                    ),
+                })
+            return said
+        }
+        const reports: Promise<Diagnosis[]>[] = []
+        const refused: Diagnosis[] = []
+        for (const { source, checkPath, shadow } of checked) {
+            const projection = projectShadow(source.file)
+            this.lowered.set(this.canonical(source.path), {
+                text: source.text,
+                projection,
+                shadow,
+            })
+            if (source.quiet) continue
+            for (const refusal of shadow.refusals)
+                refused.push(
+                    diagnosisAt(
+                        source.path,
+                        source.text,
+                        mapBack(projection.origins, refusal.at),
+                        'error',
+                        refusal.message,
+                    ),
+                )
+            reports.push(
+                report(checkPath, source.path, (position) =>
+                    lineOf(
+                        source.text,
+                        mapBack(
+                            projection.origins,
+                            mapBack(shadow.origins, position),
+                        ),
+                    ),
+                ),
+            )
+        }
+        const standing = scripts ? this.rootsUnder(project, within) : []
+        for (const path of standing)
+            if (!this.shadows.has(path))
+                reports.push(
+                    Bun.file(path)
+                        .text()
+                        .then((text) =>
+                            report(path, path, (position) =>
+                                lineOf(text, position),
+                            ),
+                        ),
+                )
+        const found = [...refused, ...(await Promise.all(reports)).flat()]
+        found.sort(byPlace)
+        return found
+    }
+
+    // Whether `diagnose` found a refusal in the checked lowering of `path`, which it has reported.
+    lowerRefused(path: string): boolean {
+        const lowered = this.lowered.get(this.canonical(path))
+        return lowered !== undefined && lowered.shadow.refusals.length > 0
+    }
+
+    // 38.40 — WHAT THE NAME AT `offset` IN A `.abide` IS, asked of the program `diagnose` last lowered
+    // it to: its type and documentation for a hover, and where it is declared for a jump. The
+    // checked module is asked where the position was copied into it, which is what a member hangs
+    // off — `regions.join` is `Array`'s — and the projection where the lowering rewrote it, so a
+    // name read by name is the `Reactive` it was declared as.
+    //
+    // `text` IS WHAT THE EDITOR SHOWS, and an offset into it maps through a lowering of the same
+    // text or not at all: a file the parser refuses keeps its last lowering, whose offsets have
+    // moved under every edit since.
+    async inspect(
+        path: string,
+        text: string,
+        offset: number,
+    ): Promise<Inspection | undefined> {
+        const abidePath = this.canonical(path)
+        const lowered = this.lowered.get(abidePath)
+        const project = this.project
+        if (
+            lowered === undefined ||
+            lowered.text !== text ||
+            project === undefined
+        )
+            return undefined
+        const projected = mapForward(lowered.projection.origins, offset)
+        if (projected === undefined) return undefined
+        const checked = mapForward(lowered.shadow.origins, projected)
+        const asked =
+            checked === undefined
+                ? `${abidePath}${SHADOW_SUFFIX}`
+                : `${abidePath}${CHECKED_SUFFIX}`
+        if (!this.shadows.has(asked)) return undefined
+        const checker = project.checker
+        const found = await checker.getSymbolAtPosition(
+            asked,
+            checked ?? projected,
+        )
+        if (found === undefined) return undefined
+        const symbol = await aliasedSymbol(checker, found)
+        const declarations: Node[] = []
+        for (const handle of symbol.declarations) {
+            const node = await handle.resolve(project)
+            if (node !== undefined) declarations.push(node)
+        }
+        // A `.abide` import resolves to its checked module's stand-in, which is the component.
+        const component =
+            symbol.name === COMPONENT_STAND_IN &&
+            declarations[0]?.getSourceFile().fileName.endsWith(CHECKED_SUFFIX)
+        const [signature, documentation] = component
+            ? [
+                  `(component) ${found.name}(props: ${await propsTypeOf(checker, symbol)})`,
+                  '',
+              ]
+            : await Promise.all([
+                  describe(project, symbol, declarations[0]),
+                  symbol.getDocumentationComment(checker),
+              ])
+        const definitions: Place[] = []
+        for (const node of declarations) {
+            const named = (node as { name?: Node }).name ?? node
+            const file = node.getSourceFile()
+            definitions.push(
+                this.placeOf(
+                    file.fileName,
+                    file.text,
+                    named.getStart(file),
+                    named.end,
+                ),
+            )
+        }
+        return {
+            signature: signature.replaceAll(`${CHECKED_VALUES}.`, ''),
+            documentation,
+            definitions,
+        }
+    }
+
+    // A span of a file the checker read, as the file the author wrote: a lowered `.abide` mapped
+    // back through both of its maps, and one this session has not lowered — or a span of the
+    // scaffolding a lowering adds, which the author never wrote — placed at its top.
+    private placeOf(
+        fileName: string,
+        text: string,
+        start: number,
+        end: number,
+    ): Place {
+        const canonical = this.canonical(fileName)
+        const suffix = canonical.endsWith(CHECKED_SUFFIX)
+            ? CHECKED_SUFFIX
+            : canonical.endsWith(`.abide${SHADOW_SUFFIX}`)
+              ? SHADOW_SUFFIX
+              : ''
+        if (suffix === '')
+            return {
+                path: fileName,
+                start: lineOf(text, start),
+                end: lineOf(text, end),
+            }
+        const abidePath = canonical.slice(0, -suffix.length)
+        const lowered = this.lowered.get(abidePath)
+        const copied =
+            lowered === undefined || suffix !== CHECKED_SUFFIX
+                ? start
+                : copiedFrom(lowered.shadow.origins, start)
+        if (lowered === undefined || copied === undefined) {
+            const top = { line: 1, column: 1 }
+            return { path: abidePath, start: top, end: top }
+        }
+        const back = (position: number): number => {
+            const projected =
+                suffix === CHECKED_SUFFIX
+                    ? mapBack(lowered.shadow.origins, position)
+                    : position
+            return mapBack(lowered.projection.origins, projected)
+        }
+        return {
+            path: abidePath,
+            start: lineOf(lowered.text, back(start)),
+            end: lineOf(lowered.text, back(end)),
+        }
+    }
+
     close(): void {
         this.api.close()
     }
+}
+
+const AMBIENT = 'abide-check.d.ts'
+const AMBIENT_DECLARATIONS = `declare module '*.css' {}
+`
+
+// 38.3 — one thing the checker said, at a line and column of the file the author wrote, both from 1.
+export type Diagnosis = {
+    path: string
+    line: number
+    column: number
+    code: number
+    category: 'error' | 'warning' | 'suggestion' | 'message'
+    message: string
+}
+
+// 38.40 — where something is in a file the author wrote, line and column from 1.
+export type Place = {
+    path: string
+    start: { line: number; column: number }
+    end: { line: number; column: number }
+}
+
+// 38.40 — the name under a cursor: how it is declared, what its doc comment says, and where.
+export type Inspection = {
+    signature: string
+    documentation: string
+    definitions: Place[]
+}
+
+// 33.4 — what a component's tag is held to: the record its stand-in is called with.
+async function propsTypeOf(
+    checker: Checker,
+    component: CheckedSymbol,
+): Promise<string> {
+    const type = await checker.getTypeOfSymbol(component)
+    const call =
+        type === undefined
+            ? undefined
+            : (await checker.getSignaturesOfType(type, SignatureKind.Call))[0]
+    const record =
+        call === undefined ? undefined : await checker.getParameterType(call, 0)
+    return record === undefined
+        ? 'any'
+        : checker.typeToString(record, undefined, NodeBuilderFlags.NoTruncation)
+}
+
+// How a hover spells a symbol, as tsserver does: the keyword it was declared with, its name, and its
+// type — a function's first signature, with how many more it has.
+async function describe(
+    project: Project,
+    symbol: CheckedSymbol,
+    declaration: Node | undefined,
+): Promise<string> {
+    const checker = project.checker
+    const flags = symbol.flags
+    const name = symbol.name
+    if (flags & SymbolFlags.Interface) return `interface ${name}`
+    if (flags & SymbolFlags.Class) return `class ${name}`
+    if (flags & SymbolFlags.TypeAlias)
+        return `type ${name} = ${await checker.typeToString(
+            await checker.getDeclaredTypeOfSymbol(symbol),
+            undefined,
+            NodeBuilderFlags.NoTruncation,
+        )}`
+    const type = await checker.getTypeOfSymbol(symbol)
+    if (type === undefined) return name
+    if (flags & (SymbolFlags.Function | SymbolFlags.Method)) {
+        const signatures = await checker.getSignaturesOfType(
+            type,
+            SignatureKind.Call,
+        )
+        const first = signatures[0]
+        const declared =
+            first === undefined
+                ? undefined
+                : await checker.signatureToSignatureDeclaration(
+                      first,
+                      SyntaxKind.MethodSignature,
+                      undefined,
+                      NodeBuilderFlags.NoTruncation,
+                  )
+        if (declared !== undefined) {
+            const printed = (await project.emitter.printNode(declared))
+                .trim()
+                .replace(/;$/, '')
+            const more = signatures.length - 1
+            return `${flags & SymbolFlags.Function ? 'function' : '(method)'} ${name}${printed}${
+                more > 0 ? ` (+${more} overload${more === 1 ? '' : 's'})` : ''
+            }`
+        }
+    }
+    const spelled = await checker.typeToString(
+        type,
+        undefined,
+        NodeBuilderFlags.NoTruncation,
+    )
+    let keyword = '(property)'
+    if (flags & SymbolFlags.Function) keyword = 'function'
+    else if (flags & SymbolFlags.Method) keyword = '(method)'
+    else if (declaration?.kind === SyntaxKind.Parameter) keyword = '(parameter)'
+    else if (flags & SymbolFlags.Variable) {
+        const list = declaration?.parent.flags ?? 0
+        keyword =
+            list & NodeFlags.Const
+                ? 'const'
+                : list & NodeFlags.Let
+                  ? 'let'
+                  : 'var'
+    }
+    return `${keyword} ${name}: ${spelled}`
+}
+
+function byPlace(one: Diagnosis, two: Diagnosis): number {
+    return (
+        one.path.localeCompare(two.path) ||
+        one.line - two.line ||
+        one.column - two.column
+    )
+}
+
+// THE WARNINGS A FILE'S READS EARN. The syntax alone decides 14.14 to 14.16 (`trackingWarnings`);
+// 14.17 and 31.13 ask what a read hands back, which is the return of the `Reactive`'s call.
+async function warningsFor(
+    checker: Checker,
+    located: { node: Node; read: Read }[],
+    templateStart: number,
+): Promise<Warning[]> {
+    const starts: { start: number; name: string }[] = []
+    for (const { node, read } of located)
+        if (READING.has(read.shape))
+            starts.push({
+                start: read.start,
+                name: (node as { text?: string }).text ?? '',
+            })
+    const warnings: Warning[] = []
+    const typed: Promise<void>[] = []
+    for (const { node, read } of located) {
+        const name = (node as { text?: string }).text ?? ''
+        if (READING.has(read.shape))
+            for (const warning of trackingWarnings(
+                node,
+                name,
+                templateStart,
+                starts,
+            ))
+                warnings.push(warning)
+        const parent = node.parent
+        const nullish =
+            read.shape === 'value' &&
+            isBinaryExpression(parent) &&
+            parent.left === node &&
+            parent.operatorToken.kind === SyntaxKind.QuestionQuestionToken
+        const member =
+            isPropertyAccessExpression(parent) &&
+            parent.expression === node &&
+            isIdentifier(parent.name) &&
+            REACTIVE_MEMBERS.has(parent.name.text)
+                ? parent.name.text
+                : undefined
+        if (!nullish && member === undefined) continue
+        typed.push(
+            valueTypeOf(checker, node).then(async (value) => {
+                if (value === undefined) return
+                // 14.17 — the fallback of a read that is never nullish is never taken: an unlanded
+                // read is a hole the position fills, not an `undefined` (2.2).
+                if (nullish && !(await admitsNullish(value)))
+                    warnings.push({
+                        at: read.start,
+                        message: `abide: \`${name} ?? …\` never takes its fallback — a read of \`${name}\` is not undefined while it loads, and its type says it is not undefined after. Ask \`${name}.ready()\` to tell the two apart. RULEBOOK 14.17.`,
+                    })
+                if (member === undefined) return
+                for (const property of await checker.getPropertiesOfType(value))
+                    if (property.name === member) {
+                        warnings.push({
+                            at: read.start,
+                            message: `abide: \`${name}.${member}\` reaches the Reactive's own \`${member}\`, and the value it holds has one too. Write \`${name}().${member}\` for the value's. RULEBOOK 31.13.`,
+                        })
+                        return
+                    }
+            }),
+        )
+    }
+    await Promise.all(typed)
+    warnings.sort((one, two) => one.at - two.at)
+    return warnings
+}
+
+// The shapes that are a read of the value, which is what tracking is about.
+const READING: ReadonlySet<Read['shape']> = new Set([
+    'value',
+    'call',
+    'shorthand',
+])
+
+// What calling the `Reactive` a name holds hands back.
+async function valueTypeOf(
+    checker: Checker,
+    node: Node,
+): Promise<Type | undefined> {
+    const type = await checker.getTypeAtLocation(node)
+    if (type === undefined) return undefined
+    const [call] = await checker.getSignaturesOfType(type, SignatureKind.Call)
+    return call === undefined
+        ? undefined
+        : checker.getReturnTypeOfSignature(call)
+}
+
+const NULLISH =
+    TypeFlags.Null |
+    TypeFlags.Undefined |
+    TypeFlags.Void |
+    TypeFlags.Any |
+    TypeFlags.Unknown
+
+async function admitsNullish(type: Type): Promise<boolean> {
+    for (const member of await unionMembers(type))
+        if ((member.flags & NULLISH) !== 0) return true
+    return false
+}
+
+// Indexed by the API's `DiagnosticCategory`.
+const CATEGORIES = ['warning', 'error', 'suggestion', 'message'] as const
+
+function flatten(diagnostic: {
+    text: string
+    messageChain?:
+        | readonly { text: string; messageChain?: unknown }[]
+        | undefined
+}): string {
+    let message = diagnostic.text
+    const chain = diagnostic.messageChain ?? []
+    for (const link of chain)
+        message += `\n  ${flatten(link as Parameters<typeof flatten>[0]).replaceAll('\n', '\n  ')}`
+    return message
 }
 
 // Where abide declares the five methods: `GET` is `declare('GET')` there and nowhere else.
@@ -507,19 +1263,12 @@ const SOCKET_SOURCE = new URL('../shared/socket.ts', import.meta.url).pathname
 
 // What declared an export: one of the five methods, or `socket`.
 type Declared = Mount['method']
-type DeclaredExport = Pick<Mount, 'name' | 'ui'> & {
+type DeclaredExport = Pick<Mount, 'name' | 'ui' | 'copy'> & {
     method: Declared | undefined
+    // 18.30 — what its copy's options declare and the build could not read.
+    unread: Diagnosis[]
 }
 const METHODS = new Set<string>(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
-
-function aliased(
-    checker: Checker,
-    symbol: CheckedSymbol,
-): Promise<CheckedSymbol> {
-    return (symbol.flags & SymbolFlags.Alias) === 0
-        ? Promise.resolve(symbol)
-        : checker.getAliasedSymbol(symbol)
-}
 
 // The method of the abide call a value is declared by — `const x = GET(…)` or `export default
 // GET(…)` — or `undefined` where it is declared any other way.
@@ -528,7 +1277,15 @@ async function declaringMethod(
     symbol: CheckedSymbol,
     methodsPath: string | undefined,
     socketPath: string | undefined,
-): Promise<{ method: Declared; ui: boolean } | undefined> {
+): Promise<
+    | {
+          method: Declared
+          ui: boolean
+          copy: CopyOptions | undefined
+          unread: Node[]
+      }
+    | undefined
+> {
     const declaration = await symbol.valueDeclaration?.resolve()
     const call =
         declaration === undefined
@@ -544,19 +1301,187 @@ async function declaringMethod(
         : call.expression
     const named = await checker.getSymbolAtLocation(callee)
     if (named === undefined) return undefined
-    const method = await aliased(checker, named)
+    const method = await aliasedSymbol(checker, named)
     const ui = !withheldFromUi(call)
     if (
         method.name === 'socket' &&
         socketPath !== undefined &&
         method.valueDeclaration?.path === socketPath
     )
-        return { method: 'SOCKET', ui }
-    return METHODS.has(method.name) &&
-        methodsPath !== undefined &&
-        method.valueDeclaration?.path === methodsPath
-        ? { method: method.name as Method, ui }
+        return { method: 'SOCKET', ui, copy: undefined, unread: [] }
+    if (
+        !METHODS.has(method.name) ||
+        methodsPath === undefined ||
+        method.valueDeclaration?.path !== methodsPath
+    )
+        return undefined
+    const declared =
+        method.name === 'GET'
+            ? await declaredCopy(checker, call.arguments[0])
+            : { copy: undefined, unread: [] }
+    // 16.33 — A HANDLER DECLARED AS AN ASYNC GENERATOR ANSWERS A STREAM, and the browser's copy has to
+    // read it as one rather than wait out the whole response: the one thing about it the build can
+    // tell from its declaration and the wire cannot tell from its first byte in time.
+    if (
+        method.name === 'GET' &&
+        (await declaresStream(checker, call.arguments[0]))
+    )
+        declared.copy = { ...declared.copy, stream: true }
+    return { method: method.name as Method, ui, ...declared }
+}
+
+// 18.19 — WHAT A `GET`'s VALUE DECLARES THAT ITS BROWSER COPY BEHAVES BY, read off its declaration for
+// 20.4's reason: what the build can read without running it. The `reactive(…)` the `GET` is handed,
+// and the options object it is handed, each written inline or bound to a name first. A value is
+// read off its TYPE, so `history: SIZE` over a `const SIZE = 3` carries 3 as `history: 3` does: a
+// string `by`, string `tags`, a number `history`, and an `identity` of abide's `structural`. A
+// function form has no serialisation and stays the server's. 18.30 — anything else of `by`, `tags`
+// or `history` is handed back UNREAD, for the build to warn on.
+async function declaredCopy(
+    checker: Checker,
+    handed: Node | undefined,
+): Promise<{ copy: CopyOptions | undefined; unread: Node[] }> {
+    const unread: Node[] = []
+    const call = await boundValue(checker, handed)
+    if (call === undefined || !isCallExpression(call) || !isReactiveCall(call))
+        return { copy: undefined, unread }
+    const options = await boundValue(checker, call.arguments[1])
+    if (options === undefined || !isObjectLiteralExpression(options))
+        return { copy: undefined, unread }
+    const copy: CopyOptions = {}
+    for (const property of options.properties) {
+        if (!isPropertyAssignment(property) || !isIdentifier(property.name))
+            continue
+        const value = property.initializer
+        const name = property.name.text
+        if (name === 'identity') {
+            if (
+                isIdentifier(value) &&
+                (await isAbideStructural(checker, value))
+            )
+                copy.identity = 'structural'
+        } else if (name === 'by' || name === 'history' || name === 'tags') {
+            const type = await checker.getTypeAtLocation(value)
+            if (type === undefined) continue
+            if (
+                (await checker.getSignaturesOfType(type, SignatureKind.Call))
+                    .length > 0
+            )
+                continue
+            if (name === 'by' && type.isStringLiteralType())
+                copy.by = type.value
+            else if (name === 'history' && type.isNumberLiteralType())
+                copy.history = type.value
+            else if (name === 'tags') {
+                const tags = await stringLiteralsOf(checker, value, type)
+                if (tags === undefined) unread.push(value)
+                else copy.tags = tags
+            } else unread.push(value)
+        }
+    }
+    return {
+        copy: Object.keys(copy).length > 0 ? copy : undefined,
+        unread,
+    }
+}
+
+// Whether what a `GET` is handed is an `async function*` — written inline, bound to a name, declared
+// as a function, or handed to `reactive` first.
+async function declaresStream(
+    checker: Checker,
+    handed: Node | undefined,
+): Promise<boolean> {
+    let node = await declarationOf(checker, handed)
+    if (node !== undefined && isCallExpression(node) && isReactiveCall(node))
+        node = await declarationOf(checker, node.arguments[0])
+    return (
+        node !== undefined &&
+        (isFunctionExpression(node) || isFunctionDeclaration(node)) &&
+        node.asteriskToken !== undefined &&
+        (node.modifierFlags & ModifierFlags.Async) !== 0
+    )
+}
+
+// `boundValue`, and a function declaration where the name is one.
+async function declarationOf(
+    checker: Checker,
+    node: Node | undefined,
+): Promise<Node | undefined> {
+    if (node === undefined || !isIdentifier(node)) return node
+    const named = await checker.getSymbolAtLocation(node)
+    if (named === undefined) return undefined
+    const declared = await (
+        await aliasedSymbol(checker, named)
+    ).valueDeclaration?.resolve()
+    if (declared !== undefined && isFunctionDeclaration(declared))
+        return declared
+    return boundInitializer(checker, named)
+}
+
+// A node, or where it is a name, what the name was initialised with.
+async function boundValue(
+    checker: Checker,
+    node: Node | undefined,
+): Promise<Node | undefined> {
+    if (node === undefined || !isIdentifier(node)) return node
+    const named = await checker.getSymbolAtLocation(node)
+    return named === undefined ? undefined : boundInitializer(checker, named)
+}
+
+// A list of names: an array literal of string-literal-typed elements, or a tuple type of string
+// literals (`as const`). `undefined` where it is anything else.
+async function stringLiteralsOf(
+    checker: Checker,
+    value: Node,
+    type: Type,
+): Promise<string[] | undefined> {
+    const names: string[] = []
+    if (isArrayLiteralExpression(value)) {
+        for (const element of value.elements) {
+            const each = await checker.getTypeAtLocation(element)
+            if (each === undefined || !each.isStringLiteralType())
+                return undefined
+            names.push(each.value)
+        }
+        return names
+    }
+    if (!(await checker.isTupleType(type))) return undefined
+    for (const each of await checker.getTypeArguments(type as TypeReference)) {
+        if (!each.isStringLiteralType()) return undefined
+        names.push(each.value)
+    }
+    return names
+}
+
+// What the value a symbol names was initialised with, through an import to the module that declares
+// it: `reactive(…)` in `const rows = reactive(…)`, wherever `rows` is read from.
+async function boundInitializer(
+    checker: Checker,
+    symbol: CheckedSymbol,
+): Promise<Node | undefined> {
+    const bound = await (
+        await aliasedSymbol(checker, symbol)
+    ).valueDeclaration?.resolve()
+    return bound !== undefined && isVariableDeclaration(bound)
+        ? bound.initializer
         : undefined
+}
+
+// Abide's own comparator, by its symbol rather than its spelling: an app's function of the same name
+// is not the one the browser's copy would be handed.
+async function isAbideStructural(
+    checker: Checker,
+    named: Node,
+): Promise<boolean> {
+    const symbol = await checker.getSymbolAtLocation(named)
+    if (symbol === undefined) return false
+    const target = await aliasedSymbol(checker, symbol)
+    return (
+        target.name === 'structural' &&
+        (target.valueDeclaration?.path ?? '').endsWith(
+            '/shared/reactive/structural.ts',
+        )
+    )
 }
 
 // 20.4 — `clients: { ui: false }` written on the declaration, which is what the build can read without
@@ -566,21 +1491,12 @@ function withheldFromUi(call: Node & { arguments?: readonly Node[] }): boolean {
     const options = call.arguments?.[1]
     if (options === undefined || !isObjectLiteralExpression(options))
         return false
-    for (const property of options.properties) {
-        if (!isPropertyAssignment(property) || !isIdentifier(property.name))
-            continue
-        if (property.name.text !== 'clients') continue
-        const clients = property.initializer
-        if (!isObjectLiteralExpression(clients)) return false
-        for (const member of clients.properties)
-            if (
-                isPropertyAssignment(member) &&
-                isIdentifier(member.name) &&
-                member.name.text === 'ui'
-            )
-                return member.initializer.kind === SyntaxKind.FalseKeyword
-    }
-    return false
+    const clients = optionNamed(options, 'clients')
+    return (
+        clients !== undefined &&
+        isObjectLiteralExpression(clients) &&
+        optionNamed(clients, 'ui')?.kind === SyntaxKind.FalseKeyword
+    )
 }
 
 // 31.3 — THE DECLARED TYPE OF THE POSITION A READ STANDS IN, where it is one of the three the
@@ -751,13 +1667,33 @@ async function proveSlots(
     }
 }
 
+// A union's members, or the type alone where it is not one.
+async function unionMembers(type: Type): Promise<readonly Type[]> {
+    return (type.flags & TypeFlags.Union) !== 0
+        ? await (type as UnionOrIntersectionType).getTypes()
+        : [type]
+}
+
+// Whether every member of the type passes, `null` and `undefined` aside, and one at least is left
+// to: an optional parameter is its type or `undefined`, and is still the type.
+async function everyPresentMember(
+    type: Type,
+    test: (member: Type) => Promise<boolean>,
+): Promise<boolean> {
+    let present = false
+    for (const member of await unionMembers(type)) {
+        if ((member.flags & (TypeFlags.Undefined | TypeFlags.Null)) !== 0)
+            continue
+        if (!(await test(member))) return false
+        present = true
+    }
+    return present
+}
+
 // Every member of the type is a primitive, whose string conversion and comparison run no code.
 // `any` and `unknown` are not: what they hold at runtime is anything.
 async function isPrimitiveTyped(type: Type): Promise<boolean> {
-    const members =
-        (type.flags & TypeFlags.Union) !== 0
-            ? await (type as UnionOrIntersectionType).getTypes()
-            : [type]
+    const members = await unionMembers(type)
     for (const member of members)
         if ((member.flags & (TypeFlags.Primitive | TypeFlags.Never)) === 0)
             return false
@@ -886,19 +1822,38 @@ const REACTIVE_SOURCE = new URL(
     import.meta.url,
 ).pathname
 const PROPS_SOURCE = new URL('../shared/props.ts', import.meta.url).pathname
+const SELECTION_SOURCE = new URL('../shared/reactive/index.ts', import.meta.url)
+    .pathname
 
 // 31.3 — A `Reactive` IS TOLD BY ITS DECLARATION, never by how it prints. Every instantiation of
 // abide's `Reactive` carries the symbol of the one type literal it is declared as, whatever alias
 // or re-export the app reached it through — so `type Counter = Reactive<number>` is one, and an
 // app's own type that happens to be spelled `Reactive` is not. `undefined` where the project never
 // reaches abide, and then nothing in it is one. `props` is abide's file as the checker names it.
-type Abide = { reactive: CheckedSymbol | undefined; props: string | undefined }
+type Abide = {
+    reactive: CheckedSymbol | undefined
+    // 31.14 — abide's `Selection` alias, which a position may be typed as rather than as a `Reactive`.
+    selection: CheckedSymbol | undefined
+    props: string | undefined
+}
 
 async function abideIn(project: Project): Promise<Abide> {
-    const [declares, props] = await Promise.all([
+    const [declares, props, selects] = await Promise.all([
         project.program.getSourceFile(REACTIVE_SOURCE),
         project.program.getSourceFile(PROPS_SOURCE),
+        project.program.getSourceFile(SELECTION_SOURCE),
     ])
+    let selection: CheckedSymbol | undefined
+    for (const statement of selects?.statements ?? [])
+        if (
+            isTypeAliasDeclaration(statement) &&
+            statement.name.text === 'Selection'
+        ) {
+            selection = await project.checker.getSymbolAtLocation(
+                statement.name,
+            )
+            break
+        }
     let reactive: CheckedSymbol | undefined
     for (const statement of declares?.statements ?? [])
         if (
@@ -911,7 +1866,7 @@ async function abideIn(project: Project): Promise<Abide> {
             reactive = await literal?.getSymbol()
             break
         }
-    return { reactive, props: props?.path }
+    return { reactive, selection, props: props?.path }
 }
 
 // A union is `Reactive`-typed only where EVERY member is, `null` and `undefined` aside: `s.set`
@@ -926,19 +1881,32 @@ async function isReactiveType(
     lists: boolean,
 ): Promise<boolean> {
     if (abide.reactive === undefined) return false
-    const members =
-        (type.flags & TypeFlags.Union) !== 0
-            ? await (type as UnionOrIntersectionType).getTypes()
-            : [type]
-    let reactive = false
-    for (const member of members) {
-        if ((member.flags & (TypeFlags.Undefined | TypeFlags.Null)) !== 0)
-            continue
-        if (!(await isReactiveMember(checker, abide.reactive, member, lists)))
-            return false
-        reactive = true
-    }
-    return reactive
+    if (await isSelection(checker, abide, type)) return true
+    const reactive = abide.reactive
+    return everyPresentMember(type, (member) =>
+        isReactiveMember(checker, reactive, member, lists),
+    )
+}
+
+// 31.14 — A POSITION TYPED AS A `Selection`, or as a type parameter constrained by one (the free
+// `refresh`, `invalidate`, `busy` and `ready` take `Chosen extends Selection`). A value is never a
+// selection of itself, so a read there hands `refresh` the invoice rather than the thing to reload.
+async function isSelection(
+    checker: Checker,
+    abide: Abide,
+    type: Type,
+): Promise<boolean> {
+    const selection = abide.selection
+    if (selection === undefined) return false
+    return everyPresentMember(type, async (member) => {
+        const declared =
+            (member.flags & TypeFlags.TypeParameter) !== 0
+                ? await checker.getConstraintOfTypeParameter(
+                      member as TypeParameter,
+                  )
+                : member
+        return (await declared?.getAliasSymbol())?.id === selection.id
+    })
 }
 
 // `getSymbol` is answered from the client's cache once a symbol has been seen, so past the first
@@ -966,13 +1934,17 @@ async function isReactiveMember(
 }
 
 // 33 — WHAT `props<Props>()` BINDS, and it is a second question from 31.3's rather than a case of
-// it: a prop is not a `Reactive` and is not typed as one (33.6), so no type answers this. The
-// CALLEE does: abide's own `props`, which an app's function of that spelling is not. The pattern
-// is flat (33.14), and every name it binds is one accessor (33.4).
+// it: a prop is not a `Reactive` and is not typed as one, so no type answers this. The CALLEE
+// does: abide's own `props`, which an app's function of that spelling is not. The pattern is flat
+// (33.14), and every name it binds is one accessor (33.4).
 //
 // THREE KINDS OF READ COME BACK: the call itself, which lowers to the record the caller passed;
 // each default, which lowers to an accessor answering it; and every occurrence of every name the
 // pattern bound.
+//
+// 33.6, 33.7 — A PROP THE CHILD WRITES IS A CELL, and the child is the only side that can tell: a
+// name assigned, updated, or handed on as a `bind:` operand. Its key rides the call's read, its
+// default becomes a cell too, and every occurrence reads through the accessor as a `Reactive`.
 async function propsReads(
     checker: Checker,
     abide: Abide,
@@ -1002,14 +1974,18 @@ async function propsReads(
     }
     if (calls.length === 0 || abide.props === undefined) return
     const named = await checker.getSymbolAtLocation(callees)
+    // One entry per name a pattern binds: the key it takes, the call's read its key joins where
+    // the child writes it, and its default's pair.
     const bound: Node[] = []
+    const bindings: { key: string; call: Read; defaults: Read[] }[] = []
     for (let at = 0; at < calls.length; at += 1) {
         const symbol = named[at]
         if (symbol === undefined) continue
-        const callee = await aliased(checker, symbol)
+        const callee = await aliasedSymbol(checker, symbol)
         if (callee.valueDeclaration?.path !== abide.props) continue
         const { pattern, call } = calls[at] as { pattern: Node; call: Node }
-        reads.push(newRead(call.getStart(), call.end, 'props'))
+        const callRead = newRead(call.getStart(), call.end, 'props')
+        reads.push(callRead)
         // 33.3 — `const all = props()` is the untyped record itself, and there is no pattern
         // to walk. Its members are read through `all`, which the lowering leaves alone.
         if (!isObjectBindingPattern(pattern)) continue
@@ -1020,18 +1996,29 @@ async function propsReads(
                 throw new Error(
                     'abide: a props pattern is flat — a rename, a default and a rest element, and no nested pattern. RULEBOOK 33.14.',
                 )
+            const defaults: Read[] = []
             if (element.initializer !== undefined) {
                 const open = element.initializer.getStart()
-                reads.push(newRead(open, open, 'defaultOpen'))
-                reads.push(
+                defaults.push(
+                    newRead(open, open, 'defaultOpen'),
                     newRead(
                         element.initializer.end,
                         element.initializer.end,
                         'defaultClose',
                     ),
                 )
+                reads.push(...defaults)
             }
+            const renamed = element.propertyName
             bound.push(name)
+            bindings.push({
+                key:
+                    renamed !== undefined && isIdentifier(renamed)
+                        ? renamed.text
+                        : name.text,
+                call: callRead,
+                defaults,
+            })
         }
     }
     if (bound.length === 0) return
@@ -1040,37 +2027,67 @@ async function propsReads(
     const found = await Promise.all(
         symbols.map(async (symbol) =>
             symbol === undefined
-                ? { reactive: false, nodes: [] }
-                : {
-                      // 33.7 — A PROP DECLARED AS A `Reactive` is the caller's own, and is read and
-                      // written by name as one — through its accessor.
-                      reactive: await isReactiveSymbol(checker, abide, symbol),
-                      nodes: await Promise.all(
-                          (
-                              await checker.getReferencesToSymbolInFile(
-                                  shadowPath,
-                                  symbol,
-                              )
-                          ).map((reference) => reference.resolve()),
-                      ),
-                  },
+                ? []
+                : await Promise.all(
+                      (
+                          await checker.getReferencesToSymbolInFile(
+                              shadowPath,
+                              symbol,
+                          )
+                      ).map((reference) => reference.resolve()),
+                  ),
         ),
     )
-    for (const { reactive, nodes } of found)
-        for (const node of nodes) {
-            if (node === undefined) continue
-            if (!reactive) {
-                const read = classifyPropRead(node)
-                if (read !== undefined) reads.push(read)
-                continue
-            }
+    for (let at = 0; at < found.length; at += 1) {
+        const binding = bindings[at] as (typeof bindings)[number]
+        const uses: Read[] = []
+        let written = false
+        for (const node of found[at] as (Node | undefined)[]) {
             // The binding itself is the pattern's, and not a use of the name.
-            if (node.parent?.kind === SyntaxKind.BindingElement) continue
+            if (
+                node === undefined ||
+                node.parent?.kind === SyntaxKind.BindingElement
+            )
+                continue
             const read = classifyRead(node)
             if (read === undefined) continue
+            if (
+                read.shape === 'write' ||
+                read.shape === 'update' ||
+                isBindOperand(node)
+            )
+                written = true
+            uses.push(read)
+        }
+        if (!written) {
+            for (const node of found[at] as (Node | undefined)[]) {
+                if (node === undefined) continue
+                const read = classifyPropRead(node)
+                if (read !== undefined) reads.push(read)
+            }
+            continue
+        }
+        binding.call.path.push({ name: binding.key, start: 0, end: 0 })
+        for (const read of binding.defaults) read.through = true
+        for (const read of uses) {
             read.through = true
             reads.push(read)
         }
+    }
+}
+
+// A name standing alone as a `bind:` operand, which the projection wraps in `__bind` on an element
+// and `__bound` on a component (`projectShadow`'s `openerOf` and `invocation`).
+function isBindOperand(node: Node): boolean {
+    const parent = node.parent
+    return (
+        parent !== undefined &&
+        isCallExpression(parent) &&
+        isIdentifier(parent.expression) &&
+        (parent.expression.text === '__bind' ||
+            parent.expression.text === '__bound') &&
+        parent.arguments[0] === node
+    )
 }
 
 async function isReactiveSymbol(

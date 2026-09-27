@@ -11,7 +11,8 @@
         "./server": "./src/server/index.ts",
         "./report": "./src/report/index.ts",
         "./gate": "./src/gate/index.ts",
-        "./renderCases": "./scripts/renderCases.ts"
+        "./renderCases": "./scripts/renderCases.ts",
+        "./rows": "./scripts/rows.ts"
     },
     "scripts": {
         "typecheck": "tsc -p tsconfig.json",

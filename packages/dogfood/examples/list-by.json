@@ -1,0 +1,7 @@
+{
+    "title": "`reactive(contacts, { by: 'id' })` — every list over it moves nodes",
+    "summary": "The contacts and the call queue, one list shown twice. Swap the top two.",
+    "app": "crm",
+    "files": ["src/ui/components/ListByContacts.abide"],
+    "render": "src/ui/components/ListByContacts.abide"
+}

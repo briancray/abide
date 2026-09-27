@@ -15,9 +15,8 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { brotliDecompressSync } from 'node:zlib' // bun decompresses gzip and zstd of its own, and no brotli
+import { buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-
-const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 const SHELL = `<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>`
 
@@ -82,7 +81,7 @@ import '#ui/broken.ts'
 
 <main id="broken"><h1>Broken</h1></main>`
 
-let server: Bun.Subprocess | undefined
+let stop: (() => void) | undefined
 let base = ''
 
 beforeAll(async () => {
@@ -110,6 +109,7 @@ beforeAll(async () => {
         // 36.11 — TWO DEPTHS, because "its path below that directory" is the clause and a flat
         // directory cannot tell a path from a name.
         'ui/public/robots.txt': 'User-agent: *\nAllow: /\n',
+        'ui/public/notes.md': '# notes\n',
         'ui/public/img/dot.svg':
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>',
         // THE APP'S OWN, rather than whatever the walk up from here finds. The compiler reads
@@ -128,56 +128,20 @@ beforeAll(async () => {
         }),
     })
 
-    const built = Bun.spawnSync([
-        'bun',
-        BIN,
-        'build',
-        '--root',
-        app,
-        '--out',
-        `${app}/.abide`,
-    ])
+    const built = buildApp(app)
     if (built.exitCode !== 0)
-        throw new Error(`abide build failed: ${built.stderr.toString()}`)
+        throw new Error(`abide build failed: ${built.stderr}`)
 
-    // `--port 0` and the address read back off stdout, rather than a number picked here: this
-    // file runs under `--parallel` beside every other one, and a fixed port is the one way a
-    // suite that passes alone fails in a batch.
-    server = Bun.spawn(
-        [
-            'bun',
-            BIN,
-            'start',
-            '--root',
-            app,
-            '--out',
-            `${app}/.abide`,
-            '--port',
-            '0',
-        ],
-        { stdout: 'pipe', stderr: 'pipe' },
-    )
-    base = await addressOf(server)
+        // `--port 0` and the address read back off stdout, rather than a number picked here: this
+        // file runs under `--parallel` beside every other one, and a fixed port is the one way a
+        // suite that passes alone fails in a batch.
+    ;({ base, stop } = await startApp(app))
 }, 30_000)
 
 afterAll(() => {
-    server?.kill()
+    stop?.()
     removeTemporaryModules()
 })
-
-// The origin `abide start` printed. Read rather than assumed — and a boot that fails says so here
-// rather than leaving every test below to time out against a socket nothing is on.
-async function addressOf(child: Bun.Subprocess): Promise<string> {
-    let seen = ''
-    for await (const chunk of child.stdout as ReadableStream<Uint8Array>) {
-        seen += new TextDecoder().decode(chunk)
-        const found = /http:\/\/[^\s]+/.exec(seen)
-        if (found) return new URL(found[0]).origin
-    }
-    throw new Error(
-        `abide start printed no address: ${seen}${await new Response(child.stderr as ReadableStream<Uint8Array>).text()}`,
-    )
-}
 
 test('an address a page matches is painted into the shell — 38.6', async () => {
     const response = await Bun.fetch(`${base}/`)
@@ -502,6 +466,40 @@ test('a public file revalidates against an etag off its bytes — 21.12, 21.13, 
     expect(stale.status).toBe(200)
 })
 
+// 21.14 — WEAK COMPARISON: the `W/` form a compressing proxy hands the browser, a list, and `*`. THE
+// REVERT: compare `if-none-match` to the etag with `===`; all three answer 200 with the body.
+test('a public file revalidates against a weak, listed or wildcard etag — 21.14', async () => {
+    const etag = (await Bun.fetch(`${base}/robots.txt`)).headers.get(
+        'etag',
+    ) as string
+    for (const given of [`W/${etag}`, `"other", ${etag}`, '*']) {
+        const again = await Bun.fetch(`${base}/robots.txt`, {
+            headers: { 'if-none-match': given },
+        })
+        expect(`${given} ${again.status}`).toBe(`${given} 304`)
+    }
+})
+
+// 36.17 — a text type the extension names without a charset is given UTF-8's. THE REVERT: answer
+// `Bun.file(file.path)` in `publicResponse`; the type reads `text/markdown` alone.
+test('a public text file with no charset of its own is answered as UTF-8 — 36.17', async () => {
+    expect(
+        (await Bun.fetch(`${base}/notes.md`)).headers.get('content-type'),
+    ).toBe('text/markdown; charset=utf-8')
+})
+
+// 15.17 — a public file and the bundle answer `GET` and `HEAD` alone. THE REVERT: drop both
+// `readsOnly` checks in `answerRequest`; each POST is answered 200 with the file.
+test('a public file and the bundle refuse another method 405 — 15.17', async () => {
+    const html = await (await Bun.fetch(`${base}/`)).text()
+    const entry = /src="([^"]*\/entry[^"]*\.js)"/.exec(html)?.[1] as string
+    for (const path of ['/robots.txt', entry]) {
+        const answer = await Bun.fetch(`${base}${path}`, { method: 'POST' })
+        expect(`${path} ${answer.status}`).toBe(`${path} 405`)
+        expect(answer.headers.get('allow')).toBe('GET, HEAD')
+    }
+})
+
 // 16.36's range, on a public file, answered by the `answerBlobTagged` a returned `Blob` is. NOT A
 // GATE ON THAT: Bun.serve ranges a file body of its own, so a public branch answering a bare
 // `Bun.file` passes this too. What it holds is that the range keeps the public headers.
@@ -534,7 +532,7 @@ test('a public file answers a stale if-range in full — 16.36', async () => {
 // from one that is unconditional — writing the `<link>` always passes every test above, and so
 // does a `publicFiles` that never handles an absent directory. This app has neither, which is
 // also the shape of every app before its author adds one.
-let bare: Bun.Subprocess | undefined
+let stopBare: (() => void) | undefined
 let bareBase = ''
 
 beforeAll(async () => {
@@ -547,37 +545,15 @@ beforeAll(async () => {
             include: ['ui'],
         }),
     })
-    const built = Bun.spawnSync([
-        'bun',
-        BIN,
-        'build',
-        '--root',
-        app,
-        '--out',
-        `${app}/.abide`,
-    ])
+    const built = buildApp(app)
     if (built.exitCode !== 0)
-        throw new Error(`abide build failed: ${built.stderr.toString()}`)
+        throw new Error(`abide build failed: ${built.stderr}`)
 
-    bare = Bun.spawn(
-        [
-            'bun',
-            BIN,
-            'start',
-            '--root',
-            app,
-            '--out',
-            `${app}/.abide`,
-            '--port',
-            '0',
-        ],
-        { stdout: 'pipe', stderr: 'pipe' },
-    )
-    bareBase = await addressOf(bare)
+    ;({ base: bareBase, stop: stopBare } = await startApp(app))
 }, 30_000)
 
 afterAll(() => {
-    bare?.kill()
+    stopBare?.()
 })
 
 // THE REVERT: write the `<link>` in `clientTags` whatever the manifest says and this reports a
@@ -611,18 +587,10 @@ test('a public file claiming a page address is a build error naming both — 36.
         'ui/pages/about/page.abide': '<main>About</main>',
         'ui/public/about': 'the file that shadows the page',
     })
-    const built = Bun.spawnSync([
-        'bun',
-        BIN,
-        'build',
-        '--root',
-        app,
-        '--out',
-        `${app}/.abide`,
-    ])
+    const built = buildApp(app)
 
     expect(built.exitCode).not.toBe(0)
-    const said = built.stderr.toString()
+    const said = built.stderr
     // BOTH, which is the clause. Naming one leaves the reader to find the other.
     expect(said).toContain('ui/public/about')
     expect(said).toContain('/about')

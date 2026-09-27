@@ -52,9 +52,10 @@ none, where a `refresh()` reloads only what something is reading and marks the r
 `refresh()` the reconnect default.
 
 A selection is scope-bounded as a value is, and a tag with it, so one request can never
-invalidate another's. The `global` entries are the exception on a server: a bare `invalidate()`
-and a bare `refresh()` each reach every one of them in the process, that being the whole of what
-a bare sweep can still touch once the request's own entries die with it.
+invalidate another's. A `global` value belongs to no request, so every selection that matches it
+reaches it, including a tag fired inside a request. And a bare `invalidate()` and a bare
+`refresh()` on a server each reach every `global` entry in the process, that being the whole of
+what a bare sweep can still touch once the request's own entries die with it.
 
 ## Examples
 

@@ -33,6 +33,7 @@
         "zod": "^4.6.5"
     },
     "devDependencies": {
+        "harness": "workspace:*",
         "tailwindcss": "^4.3.3"
     }
 }

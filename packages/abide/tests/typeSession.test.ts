@@ -182,7 +182,7 @@ test('a whole build takes ONE snapshot, not one per file', async () => {
                 ),
             })
 
-        const answers = await batch.readsFor(sources)
+        const answers = (await batch.readsFor(sources)).reads
         expect(batch.snapshots).toBe(1)
         expect(answers).toHaveLength(12)
         // And every answer is the one the per-file path would have given.

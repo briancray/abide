@@ -6,17 +6,24 @@
 // THE DEV SERVER IS THIS SPEC'S OWN. The config's `webServer` runs `abide start` for every other
 // spec, and a second one here would be two servers over one tree — so this spawns `abide dev`
 // on a socket of its own and kills it afterwards.
+//
+// OVER A COPY OF THE APP, not the app. A save to the docs' own tree reloads every `abide dev`
+// watching it — the reader's `bun run dev` included, whose Tests page is what runs this spec, so
+// the page it reported to reloaded out from under the run. The copy sits as deep in the repo as
+// the app does, so its tsconfig's `extends` and every workspace import resolve the same.
 
 import { type ChildProcess, spawn } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 const BIN = `${REPO}packages/abide/bin/abide.ts`
-const ROOT = `${REPO}packages/dogfood/src`
+const APP = `${REPO}packages/dogfood`
+const COPY = `${REPO}.test-modules/dogfood-dev`
+const ROOT = `${COPY}/src`
 // A file an author WROTE rather than one the generator owns, and one every page carries: a
 // marker in the nav is visible from whatever address the browser is standing on.
-const NAV = `${ROOT}/ui/components/DocsNav.abide`
+const BAR = `${ROOT}/ui/components/SiteBar.abide`
 
 let dev: ChildProcess | undefined
 let base = ''
@@ -28,12 +35,16 @@ let original = ''
 // than the project's base.
 //
 // SKIPPED IN `beforeAll`, not `beforeEach`: a `beforeAll` runs before the first `beforeEach` does,
-// so a skip there still spawned the second dev server and read `NAV` — and its `afterAll` wrote
-// that reading back, which is the marked file if `root` had saved it by then.
+// so a skip there still spawned the second dev server — over a copy made fresh in the directory
+// `root`'s was being served from.
 // biome-ignore lint/correctness/noEmptyPattern: playwright refuses a first parameter that is not a destructuring pattern, and this hook reads only the second.
 test.beforeAll(async ({}, testInfo) => {
     testInfo.skip(testInfo.project.name !== 'root', 'one dev server is enough')
-    original = readFileSync(NAV, 'utf8')
+    rmSync(COPY, { recursive: true, force: true })
+    mkdirSync(COPY, { recursive: true })
+    for (const kept of ['package.json', 'tsconfig.json', 'src'])
+        cpSync(`${APP}/${kept}`, `${COPY}/${kept}`, { recursive: true })
+    original = readFileSync(BAR, 'utf8')
     dev = spawn('bun', [BIN, 'dev', '--root', ROOT, '--port', '0'], {
         cwd: REPO,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -53,8 +64,8 @@ test.beforeAll(async ({}, testInfo) => {
 
 test.afterAll(() => {
     if (dev === undefined) return
-    writeFileSync(NAV, original)
     dev.kill()
+    rmSync(COPY, { recursive: true, force: true })
 })
 
 // THE REVERT: drop the socket terminate from `serveDev`'s `replace`, and this waits out its
@@ -73,11 +84,11 @@ test('a save reloads the tab a reader has open — 38.4, 38.16', async ({
     })
 
     writeFileSync(
-        NAV,
+        BAR,
         original.replace('abide<span>docs</span>', 'abide<span>SAVED</span>'),
     )
 
-    await expect(page.locator('nav .brand')).toHaveText('abideSAVED', {
+    await expect(page.locator('.site .brand')).toHaveText('abideSAVED', {
         timeout: 30_000,
     })
     expect(
@@ -88,8 +99,8 @@ test('a save reloads the tab a reader has open — 38.4, 38.16', async ({
 
     // AND BACK. The loop is not one-way: the next save reaches the same tab, which is what an
     // author actually does with it.
-    writeFileSync(NAV, original)
-    await expect(page.locator('nav .brand')).toHaveText('abidedocs', {
+    writeFileSync(BAR, original)
+    await expect(page.locator('.site .brand')).toHaveText('abidedocs', {
         timeout: 30_000,
     })
 })

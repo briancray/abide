@@ -2,9 +2,8 @@
 // Request handling, SSR and the rpc boundary. Nothing here may be reached from the client
 // entry's static closure.
 //
-// THE COMPILER IS NOT HERE. It was reserved for `./build` and moved to its own #compiler seam:
-// this module is public surface, so a compiler under it is one `export *` from being an app's
-// dependency. `packages/abide/tests/compiler.test.ts` holds that apart.
+// THE COMPILER IS NOT HERE — it has its own #compiler seam. This module is public surface, so a
+// compiler under it is one `export *` from being an app's dependency. `packages/abide/tests/compiler.test.ts` holds that apart.
 
 // THE WHOLE ISOMORPHIC SURFACE, re-exported rather than owned. A server module imports `GET` and
 // `reactive` through this one specifier — the same callable, by the same name, that `abide`
@@ -24,8 +23,6 @@ export {
 } from '#shared/rpc.ts'
 // 27 — the resolved configuration.
 export { type Config, config } from './config.ts'
-// 29 — the content security policy, as a rung.
-export { csp } from './csp.ts'
 // 25 — the account of the app.
 export { type Health, health } from './health.ts'
 // 42 — the app object, and 37's hooks an `src/server/app.ts` calls.

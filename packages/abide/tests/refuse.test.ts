@@ -5,6 +5,8 @@
 
 import { expect, test } from 'bun:test'
 import {
+    type Failed,
+    aborted,
     flushSync,
     isFailed,
     jsonSchema,
@@ -18,7 +20,7 @@ import {
 // 15.3. The status an app gets without asking, and it is the one that says "what you sent
 // cannot be worked with" — which is what a declared refusal almost always is.
 test('a declared refusal defaults to status 400', () => {
-    const tooSlow = refuse.typed('TooSlow')
+    const tooSlow = refuse.named('TooSlow')
     const refusal = tooSlow()
     expect(`${refusal.name} ${refusal.status}`).toBe('TooSlow 400')
 })
@@ -28,7 +30,7 @@ test('a declared refusal defaults to status 400', () => {
 // everywhere else. A constructor that threw would make `const refusal = mine()` a control
 // flow change at the declaration site.
 test('constructing a Failed is inert', () => {
-    const mine = refuse.typed('Mine')
+    const mine = refuse.named('Mine')
     let threw: unknown
     try {
         mine()
@@ -69,8 +71,8 @@ test('a refusal that crossed a wire is still one', () => {
 // `error.name === 'NotFound'` by hand is a string literal nothing checks, and the one that
 // matters is the NEGATIVE: a refusal of some other name must not narrow.
 test('a declared refusal narrows on its own name and no other', () => {
-    const mine = refuse.typed('Mine')
-    const yours = refuse.typed('Yours')
+    const mine = refuse.named('Mine')
+    const yours = refuse.named('Yours')
     expect(`mine: ${mine.is(mine())} ${mine.is(yours())}`).toBe(
         'mine: true false',
     )
@@ -85,13 +87,14 @@ test('a declared refusal narrows on its own name and no other', () => {
 // strings, which is the thing a refusal crossing a wire cannot afford.
 test('a message function runs at construction on the data', () => {
     let ran = 0
-    const tooBig = refuse.typed<'TooBig', { limit: number }>(
+    const tooBig = refuse.named(
         'TooBig',
         413,
         (data) => {
             ran += 1
             return `over ${data.limit}`
         },
+        { schema: (value: unknown) => value as { limit: number } },
     )
     const refusal = tooBig({ limit: 10 })
     expect(refusal.message).toBe('over 10')
@@ -102,18 +105,18 @@ test('a message function runs at construction on the data', () => {
 
 // 15.13. A formatter is cosmetic and a refusal is not, so a bug in the first must not cost
 // the second — 15.4 has constructing inert and a throwing formatter is not an exception to
-// it. The fallback is the NAME, which is the one string that is always right.
+// it. The fallback is what no message at all would have been — the status's reason phrase, or
+// the name for a status with none.
 //
 // THE REVERT: dropping the `try`/`catch` from `messageFor` reports the throw escaping
 // construction, so the caller never gets the `Failed` at all.
-test('a message function that throws falls back to the name', () => {
-    const broken = refuse.typed<'Broken', { n: number }>(
-        'Broken',
-        400,
-        (data) => {
-            throw new Error(`formatter is wrong about ${data.n}`)
-        },
-    )
+test('a message function that throws falls back to the reason phrase, then the name', () => {
+    const shape = { schema: (value: unknown) => value as { n: number } }
+    const formatter = (data: { n: number }): string => {
+        throw new Error(`formatter is wrong about ${data.n}`)
+    }
+    const broken = refuse.named('Broken', 400, formatter, shape)
+    const unregistered = refuse.named('Unregistered', 599, formatter, shape)
     let threw: unknown
     let refusal: { name: string; message: string } | undefined
     try {
@@ -122,25 +125,64 @@ test('a message function that throws falls back to the name', () => {
         threw = thrown
     }
     expect(`threw: ${threw === undefined ? 'no' : 'yes'}`).toBe('threw: no')
-    expect(`${refusal?.name} ${refusal?.message}`).toBe('Broken Broken')
+    expect(`${refusal?.name} ${refusal?.message}`).toBe('Broken Bad Request')
+    expect(unregistered({ n: 1 }).message).toBe('Unregistered')
 })
 
-// 15.7 and 15.8 — the only two refusals the framework declares beyond the one 17.4 names,
-// and 15.9 caps it there. The statuses are not interchangeable: a 422 says the request
+// 15.13 — A DECLARED REFUSAL WITH NO MESSAGE IS ITS STATUS'S REASON PHRASE, and a status with none
+// falls back to the name.
+test('a named refusal with no message takes its reason phrase, or its name — 15.13', () => {
+    expect(
+        [
+            refuse.named('Mine')().message,
+            refuse.named('Mine', 409)().message,
+            refuse.named('Mine', 599)().message,
+        ].join(' | '),
+    ).toBe('Bad Request | Conflict | Mine')
+})
+
+// 15.18 — DATA COMES OFF THE SCHEMA, so the name is written once and both are inferred. The
+// `@ts-expect-error` is the assertion: typecheck fails if a refusal with no schema starts taking
+// data, or if the message function stops being accepted only beside one.
+test('a refusal carries data only through its schema, and infers both from it — 15.18', () => {
+    const tooBig = refuse.named('TooBig', 413, (data) => `over ${data.limit}`, {
+        schema: (value: unknown) => value as { limit: number },
+    })
+    const refusal: Failed<'TooBig', { limit: number }> = tooBig({ limit: 10 })
+    expect(`${refusal.name} ${refusal.message}`).toBe('TooBig over 10')
+    // @ts-expect-error no schema declares no data
+    refuse.named('Plain')({ n: 1 })
+    // @ts-expect-error a message function needs a schema to be typed by
+    refuse.named('Plain', 400, (data: { n: number }) => `${data.n}`)
+})
+
+// 17.8 — no message is the status's reason phrase, and a status with none is still named.
+test('refuse with no message takes the reason phrase for its status — 17.8', () => {
+    expect(
+        [refuse(404).message, refuse(503).message, refuse(599).message].join(
+            ' | ',
+        ),
+    ).toBe('Not Found | Service Unavailable | HttpError')
+})
+
+// 15.7, 15.8 and 16.54 — the only three refusals the framework declares beyond the one 17.4
+// names, and 15.9 caps it there. The statuses are not interchangeable: a 422 says the request
 // parsed and its contents are wrong, which is what a schema that ran and refused found out.
-test('abide declares three refusal names and no more', () => {
+test('abide declares four refusal names and no more', () => {
     const missing = notFound({ path: '/x', method: 'GET' })
     const invalid = validationError<{ email: string }>({
         email: ['required'],
     })
     const undeclared = refuse(418, 'no coffee')
+    const abandoned = aborted()
     expect(
         [
             `${missing.name} ${missing.status}`,
             `${invalid.name} ${invalid.status}`,
+            `${abandoned.name} ${abandoned.status}`,
             `${undeclared.name} ${undeclared.status}`,
         ].join(' | '),
-    ).toBe('NotFound 404 | ValidationError 422 | HttpError 418')
+    ).toBe('NotFound 404 | ValidationError 422 | Aborted 499 | HttpError 418')
     // 15.7: the refusal carries where it was looking, which is what a log needs and what a
     // caller must not be able to tell apart from an address it is not allowed to see.
     expect(missing.data).toEqual({ path: '/x', method: 'GET' })
@@ -156,7 +198,7 @@ test('abide declares three refusal names and no more', () => {
 //
 // THE REVERT: letting `runSchema`'s throw escape `make` reports `built: no`.
 test('a refusal schema that refuses still builds the Failed', () => {
-    const tooBig = refuse.typed<'TooBig', { limit: number }>(
+    const tooBig = refuse.named<'TooBig', { limit: number }>(
         'TooBig',
         413,
         undefined,
@@ -186,7 +228,7 @@ test('a refusal schema that refuses still builds the Failed', () => {
 // `message, schema`.
 test('a refusal schema runs before the message function', () => {
     const order: string[] = []
-    const mine = refuse.typed<'Mine', { n: number }>(
+    const mine = refuse.named<'Mine', { n: number }>(
         'Mine',
         400,
         (data) => {
@@ -228,7 +270,7 @@ test('a refusal survives a schema that is itself wrong', () => {
     ]
     const built: string[] = []
     for (const [what, schema] of schemas) {
-        const mine = refuse.typed<'Mine', { n: number }>(
+        const mine = refuse.named<'Mine', { n: number }>(
             'Mine',
             400,
             undefined,
@@ -276,8 +318,8 @@ test('a refusal survives JSON and is still a refusal', () => {
     }
     expect(seen).toEqual([
         'HttpError: message: upstream is down isFailed: true',
-        'NotFound: message: NotFound isFailed: true',
-        'ValidationError: message: ValidationError isFailed: true',
+        'NotFound: message: Not Found isFailed: true',
+        'ValidationError: message: Unprocessable Content isFailed: true',
     ])
 })
 
@@ -287,7 +329,7 @@ test('a refusal survives JSON and is still a refusal', () => {
 // the save/restore from `runSchema` in `#shared/Schema.ts`; `runs` below reports 2.
 test("a refusal's schema runs untracked", () => {
     const other = reactive(1)
-    const mine = refuse.typed<'Mine', { n: number }>('Mine', 400, undefined, {
+    const mine = refuse.named<'Mine', { n: number }>('Mine', 400, undefined, {
         schema: (value: unknown) => {
             other()
             return value as { n: number }

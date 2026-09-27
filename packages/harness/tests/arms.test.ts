@@ -1283,6 +1283,67 @@ test('rpc-reactive: the button reads the probes off the call itself', async () =
     expect([read('#status'), read('#total')]).toEqual(['', '$91.00'])
 })
 
+test('rpc-follow: a change on the server reaches the list without a second read', async () => {
+    const reads: string[] = []
+    globalThis.fetch = Object.assign(
+        async (url: string) => {
+            reads.push(String(url))
+            return Response.json(
+                [
+                    { id: 'acme', name: 'Acme Corp', stage: 'lead' },
+                    { id: 'globex', name: 'Globex', stage: 'proposal' },
+                ],
+                { headers: { 'x-version': '7' } },
+            )
+        },
+        { preconnect: () => {} },
+    ) as unknown as typeof fetch
+    const opened: {
+        sent: string[]
+        onopen?: () => void
+        onmessage?: (event: { data: string }) => void
+    }[] = []
+    const unstubbed = globalThis.WebSocket
+    globalThis.WebSocket = class {
+        sent: string[] = []
+        onopen?: () => void
+        onmessage?: (event: { data: string }) => void
+        constructor() {
+            opened.push(this)
+            queueMicrotask(() => this.onopen?.())
+        }
+        send(text: string) {
+            this.sent.push(text)
+        }
+    } as unknown as typeof WebSocket
+    try {
+        await mount('rpc-follow', 'deals.js')
+        await Bun.sleep(10)
+        const stages = () =>
+            [...document.querySelectorAll('#deals li span')].map(
+                (one) => one.textContent,
+            )
+        expect(stages()).toEqual(['lead', 'proposal'])
+        // The feed names the version the first read answered with.
+        expect(opened[0]?.sent).toEqual([JSON.stringify({ since: 7 })])
+
+        // THE CLAIM: the server's change arrives on the feed and the list follows it, with no
+        // second read — the arm needed a socket, a frame format and a version of its own for it.
+        opened[0]?.onmessage?.({
+            data: JSON.stringify({
+                deals: [
+                    { id: 'acme', name: 'Acme Corp', stage: 'qualified' },
+                    { id: 'globex', name: 'Globex', stage: 'proposal' },
+                ],
+            }),
+        })
+        expect(stages()).toEqual(['qualified', 'proposal'])
+        expect(reads).toEqual(['/api/deals'])
+    } finally {
+        globalThis.WebSocket = unstubbed
+    }
+})
+
 test('bind-text: the field and the state are one copy', async () => {
     await mount('bind-text', 'contact.js')
     expect(read('#summary')).toBe('ada@example.com on monthly')
@@ -1867,6 +1928,30 @@ test('list-keyed: a reorder moves the nodes it already had', async () => {
     expect(order()).toEqual([2, 0, 1])
 })
 
+test('list-by: one key keeps the nodes of both lists over the value', async () => {
+    await mount('list-by', 'contacts.js')
+    const shown = (list: string) =>
+        [...document.querySelectorAll(`${list} li`)].map((one) =>
+            one.textContent?.replace(/^(ada|grace|katherine)/, ''),
+        )
+    const held = (list: string) => [...document.querySelectorAll(`${list} li`)]
+    const tableBefore = held('#rows')
+    const queueBefore = held('#queue')
+
+    click('#swap')
+    const names = ['Grace Hopper', 'Ada Lovelace', 'Katherine Johnson']
+    expect(shown('#rows')).toEqual(names)
+    expect(shown('#queue')).toEqual(names)
+    // THE CLAIM, IN BOTH LISTS: the same nodes in a new order, `-1` for a node that was not
+    // among them. A rebuild shows the same names and fails here.
+    expect(held('#rows').map((one) => tableBefore.indexOf(one))).toEqual([
+        1, 0, 2,
+    ])
+    expect(held('#queue').map((one) => queueBefore.indexOf(one))).toEqual([
+        1, 0, 2,
+    ])
+})
+
 test('props-live: the child follows the parent without being re-created', async () => {
     await mount('props-live', 'invoice.js')
     const child = () => document.querySelector('#total strong')
@@ -1998,7 +2083,7 @@ test('every control the arm renders is one the page source names', async () => {
 // only ever visible as a readout, so an arm reporting a count the `.abide` source never names
 // is the two arms having come apart on the one line the reader is there to read. It renders
 // perfectly either way, and it is worse than a stray button: a stray button does nothing, and
-// a stray counter is a figure the ratio is then taken against. RULEBOOK 40.20.
+// a stray counter is a figure the ratio is then taken against. RULEBOOK 40.19.
 //
 // A READOUT IS A `<strong>` and its label is the text in front of it, which is the shape both
 // arms already wrote — the value is the part that legitimately differs, being live in one and

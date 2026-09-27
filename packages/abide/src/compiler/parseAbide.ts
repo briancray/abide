@@ -3,6 +3,7 @@ import {
     type Attribute,
     type Branch,
     childListsOf,
+    type Setup,
     type TemplateNode,
 } from './TemplateNode.ts'
 import {
@@ -26,12 +27,27 @@ export type AbideFile = {
     // in a browser. Apart from `scripts` because the two run a different number of times, which is
     // the whole of the clause.
     modules: string[]
-    // `<style>` bodies in source order. Scoping is 34.4 and is not implemented yet.
+    // `<style>` bodies in source order, outside any block body — each scoped to the component (34.4). A
+    // body's own is on its block (34.13).
     styles: string[]
     // 39.1, 39.3 — what every top-level `<head>` contributes to the document head, split off the
     // template here so no walk over the body steps around it. In tree order, which is 39.5.
     head: TemplateNode[]
     template: TemplateNode[]
+    // WHERE EACH PIECE THE PROJECTION COPIES STARTS IN THE SOURCE, so a checker's position in the
+    // projection is a line of the `.abide` (38.3). A script block by index; a template expression
+    // by the holder the projection keys its span by, a `{#for}` key by its block, an element's tag
+    // name by the element, and a literal attribute's name by the attribute. A value the
+    // parser rewrote — an interpolated attribute becomes a template literal — is placed where its
+    // text starts, which is its line if not its column.
+    origins: Origins
+}
+
+type Origins = {
+    modules: number[]
+    scripts: number[]
+    holders: Map<object, number>
+    keys: Map<object, number>
 }
 
 // What an open level is when it is a control block's ARM rather than an element. Not a string, so
@@ -65,6 +81,12 @@ export function parseAbide(source: string): AbideFile {
     const scripts: string[] = []
     const modules: string[] = []
     const styles: string[] = []
+    const origins: Origins = {
+        modules: [],
+        scripts: [],
+        holders: new Map(),
+        keys: new Map(),
+    }
     const root: TemplateNode[] = []
     // The open elements, innermost last. `root` is the floor and is never popped.
     const stack: TemplateNode[][] = [root]
@@ -126,7 +148,7 @@ export function parseAbide(source: string): AbideFile {
                 continue
             }
 
-            const tag = readTag(source, at)
+            const tag = readTag(source, at, origins.holders)
             if (tag === undefined) {
                 // A `<` THAT OPENS NO TAG IS TEXT. `<p>a < b</p>` lost its `<` to a parser that
                 // stepped over what it could not read.
@@ -134,8 +156,8 @@ export function parseAbide(source: string): AbideFile {
                 continue
             }
 
-            // 34.1, 34.4 — a `<script>` or a `<style>` is the FILE's, not markup, and its body is
-            // taken raw. Here rather than in a pass of its own: a scan that runs before the
+            // 34.1, 34.4 — a `<script>` or a `<style>` is the FILE's, or inside a block the BODY's
+            // (14.8, 34.13), never markup, and its body is taken raw. Here rather than in a pass of its own: a scan that runs before the
             // template is parsed cannot tell a tag from the same characters inside a string in an
             // expression, and lifted the second into component setup.
             // LOWERCASED, for the reason the close tag above is: `<SCRIPT>let z = 1</SCRIPT>` was
@@ -148,8 +170,8 @@ export function parseAbide(source: string): AbideFile {
             // their attributes were discarded and a JSON-LD body was emitted as a JavaScript
             // statement, so the module did not parse and the document lost the tag.
             //
-            // A `<style>` HAS NO SECOND FORM — 34.4 makes every one of them the component's, with
-            // no attribute deciding otherwise — so this is one rule about `<script>` rather than an
+            // A `<style>` HAS NO SECOND FORM — no attribute decides where one goes, only whether it
+            // stands in a block body (34.13) — so this is one rule about `<script>` rather than an
             // exception carved out of a rule about both.
             const block =
                 lowerTag === 'style'
@@ -159,7 +181,38 @@ export function parseAbide(source: string): AbideFile {
                       : undefined
             if (lowerTag === 'script' || lowerTag === 'style') {
                 const raw = rawBody(source, lowerTag, tag)
+                // 14.8 — A `<script>` INSIDE A BLOCK IS THAT BODY'S, set up once each time the body is
+                // built, and not the component's: lifted, it ran once for the page and a row's own
+                // names (`{#for item …}`) were not in scope.
+                // 34.13 — AND A `<style>` INSIDE A BLOCK IS THAT BODY'S, scoped to the elements it
+                // holds (`markScoped`) rather than to the whole component.
+                if (block === styles && blocks.length > 0) {
+                    const owner = bodyOf(
+                        blocks[blocks.length - 1] as TemplateNode,
+                    )
+                    owner.style =
+                        owner.style === null
+                            ? raw.body
+                            : `${owner.style}\n${raw.body}`
+                    at = raw.end
+                    continue
+                }
+                if (block === scripts && blocks.length > 0) {
+                    const owner = bodyOf(
+                        blocks[blocks.length - 1] as TemplateNode,
+                    )
+                    if (owner.setup !== null)
+                        throw new Error(
+                            'abide: this block body has two <script> blocks. A body is set up once, by one. RULEBOOK 14.8.',
+                        )
+                    owner.setup = { text: raw.body }
+                    origins.holders.set(owner.setup, tag.end)
+                    at = raw.end
+                    continue
+                }
                 if (block !== undefined) {
+                    if (block === scripts) origins.scripts.push(tag.end)
+                    else if (block === modules) origins.modules.push(tag.end)
                     block.push(raw.body)
                     at = raw.end
                     continue
@@ -189,6 +242,7 @@ export function parseAbide(source: string): AbideFile {
                 attributes: tag.attributes,
                 children: [],
             }
+            origins.holders.set(element, at + 1)
             children.push(element)
             // The same rule again: `<BR>` read as an ordinary element was pushed onto the open
             // stack and swallowed the rest of the file as its children, and the emitter wrote a
@@ -203,15 +257,15 @@ export function parseAbide(source: string): AbideFile {
 
         if (char === '{') {
             const end = slotEnd(source, at)
-            const inner = source.slice(at + 1, end).trim()
+            const slot = trimmed(source, at + 1, end)
+            const inner = slot.text
 
             // `{#if}`, `{:else}`, `{:else if}`, `{/if}` — a control block opens a new ARM rather
             // than a new element, so it keeps its own stack beside the element one.
             if (inner.startsWith('#if')) {
-                const branch: Branch = {
-                    subject: inner.slice(3).trim(),
-                    children: [],
-                }
+                const subject = trimmed(source, slot.at + 3, end)
+                const branch = newBranch(subject.text)
+                origins.holders.set(branch, subject.at)
                 const block: TemplateNode = {
                     kind: 'block',
                     block: 'if',
@@ -231,11 +285,15 @@ export function parseAbide(source: string): AbideFile {
                     block.kind === 'block' &&
                     block.block === 'if'
                 ) {
-                    const branch: Branch = {
-                        // `{:else}` carries no condition, which is what makes it always take.
-                        subject: elseSubject(inner),
-                        children: [],
-                    }
+                    // `{:else}` carries no condition, which is what makes it always take.
+                    const subject = trimmed(
+                        source,
+                        slot.at + elseSubjectAt(inner),
+                        end,
+                    )
+                    const branch = newBranch(subject.text)
+                    if (branch.subject !== '')
+                        origins.holders.set(branch, subject.at)
                     // UNWOUND TO THE ARM'S OWN LEVEL, for the reason `{/if}` below is: an
                     // element the author left open in the PREVIOUS arm sits above it, and
                     // popping one level left `open` naming that element while `stack` held the
@@ -251,7 +309,7 @@ export function parseAbide(source: string): AbideFile {
             }
             // 32.16 — `{#try}`, `{:catch e}`, `{:finally}`, `{/try}`.
             if (inner === '#try') {
-                const body: Branch = { subject: '', children: [] }
+                const body = newBranch('')
                 const block: TemplateNode = {
                     kind: 'block',
                     block: 'try',
@@ -276,10 +334,9 @@ export function parseAbide(source: string): AbideFile {
                     // The finally arm is a third branch until `{/try}` folds it into the other two.
                     if (inner.startsWith(':catch'))
                         block.error = inner.slice(6).trim()
-                    const branch: Branch = {
-                        subject: inner === ':finally' ? FINALLY : '',
-                        children: [],
-                    }
+                    const branch = newBranch(
+                        inner === ':finally' ? FINALLY : '',
+                    )
                     block.branches.push(branch)
                     stack.push(branch.children)
                     open.push(ARM)
@@ -306,7 +363,11 @@ export function parseAbide(source: string): AbideFile {
                 continue
             }
             if (inner.startsWith('#for')) {
-                const block = forBlock(inner.slice(4).trim())
+                const block = forBlock(
+                    source,
+                    trimmed(source, slot.at + 4, end),
+                    origins,
+                )
                 children.push(block)
                 blocks.push(block)
                 stack.push(block.children)
@@ -332,7 +393,12 @@ export function parseAbide(source: string): AbideFile {
                 continue
             }
 
-            children.push({ kind: 'expression', source: inner })
+            const expression: TemplateNode = {
+                kind: 'expression',
+                source: inner,
+            }
+            origins.holders.set(expression, slot.at)
+            children.push(expression)
             at = end + 1
             continue
         }
@@ -352,7 +418,14 @@ export function parseAbide(source: string): AbideFile {
         assertNoNestedHead([node], '')
         template.push(node)
     }
-    return { scripts, modules, styles, head, template }
+    return {
+        scripts,
+        modules,
+        styles,
+        head,
+        template,
+        origins,
+    }
 }
 
 // 39.2 — a `<head>` MUST be top level, and MUST NOT appear inside a control block. Nested, it
@@ -393,9 +466,29 @@ function closeTry(
     for (const branch of block.branches)
         if (branch.subject === FINALLY) after = branch.children
         else kept.push(branch)
-    if (kept.length === 1) kept.push({ subject: '', children: [] })
+    if (kept.length === 1) kept.push(newBranch(''))
     block.branches = kept.slice(0, 2)
     return after
+}
+
+// An arm under `subject`, with nothing in it yet.
+function newBranch(subject: string): Branch {
+    return { subject, children: [], setup: null, style: null }
+}
+
+// 14.8 — the body a branch-local `<script>` written inside `block` belongs to: a row's, or the arm
+// open where it stands. A `{#try}` body refuses one: what a boundary sets up when its body is replaced
+// by the catch (32.16) is not decided, and a guess here would be the decision.
+function bodyOf(block: TemplateNode): {
+    setup: Setup | null
+    style: string | null
+} {
+    if (block.kind === 'block' && block.block === 'for') return block
+    if (block.kind === 'block' && block.block === 'if')
+        return block.branches[block.branches.length - 1] as Branch
+    throw new Error(
+        'abide: a <script> or a <style> inside a {#try} belongs to no body. Move it into a component the {#try} holds, or into a {#for} or {#if} inside it. RULEBOOK 34.12.',
+    )
 }
 
 // An HTML tag name is ASCII case-INSENSITIVE, so `</DIV>` closes a `<div>`. A component name is
@@ -482,20 +575,33 @@ function pushText(
     return next
 }
 
-// The condition on a `{:else …}` arm, or '' for the bare `{:else}` that always takes.
+// Where the condition on a `{:else …}` arm starts in `inner`, or its end for the bare `{:else}`
+// that always takes.
 //
 // A DIRECTIVE ENDS AT A WORD BOUNDARY. `startsWith` has none, so `{:elseif b}` was silently read
 // as `{:else if b}` and `{:else ifValid}` as `{:else if}` over the subject `Valid` — a condition
 // the author never wrote, deciding which arm renders.
-function elseSubject(inner: string): string {
+function elseSubjectAt(inner: string): number {
     const rest = inner.slice(':else'.length)
-    if (rest.trim() === '') return ''
-    const condition = /^\s+if(?=[\s(])([\s\S]*)$/.exec(rest)?.[1]?.trim()
-    if (condition === undefined || condition === '')
+    if (rest.trim() === '') return inner.length
+    const keyword = /^\s+if(?=[\s(])/.exec(rest)
+    if (keyword === null || rest.slice(keyword[0].length).trim() === '')
         throw new Error(
             `abide: {${inner}} is not a control block. Write {:else} or {:else if <condition>}.`,
         )
-    return condition
+    return ':else'.length + keyword[0].length
+}
+
+// `source` from `start` to `end`, trimmed, and where what is left starts — the position a
+// checker's answer about it is placed at (38.3).
+function trimmed(
+    source: string,
+    start: number,
+    end: number,
+): { text: string; at: number } {
+    const raw = source.slice(start, end)
+    const text = raw.trimStart()
+    return { text: text.trimEnd(), at: start + raw.length - text.length }
 }
 
 // `item, index of list by key` — `index` and `by` are optional, and everything after `of` up to
@@ -508,8 +614,11 @@ function elseSubject(inner: string): string {
 // names.filter(n => n !== "run by me")}` split on the ` by ` inside the string literal and the
 // subject ended mid-quote. One scanner for all three rather than one fix for the comma.
 function forBlock(
-    source: string,
+    file: string,
+    header: { text: string; at: number },
+    origins: Origins,
 ): TemplateNode & { kind: 'block'; block: 'for' } {
+    const source = header.text
     // THE HEADER IS TOKENS, read by the scanner a slot is: an `of`, a `,` or a `by` inside a string,
     // a call or an object pattern is the expression's own, and only one at depth zero divides the
     // header. `by` is a word rather than a keyword, so a member named `by` is not one.
@@ -561,22 +670,36 @@ function forBlock(
         throw new Error(
             `abide: {#for ${source}} names no item, so a row has nothing to call itself. Write {#for item of list}.`,
         )
-    return {
+    const end = header.at + source.length
+    const subject = trimmed(
+        file,
+        header.at + of.end,
+        by === undefined ? end : header.at + by.start,
+    )
+    const key =
+        by === undefined
+            ? { text: '', at: end }
+            : trimmed(file, header.at + by.end, end)
+    const block: TemplateNode & { kind: 'block'; block: 'for' } = {
         kind: 'block',
         block: 'for',
         item,
         index,
-        subject: source
-            .slice(of.end, by === undefined ? source.length : by.start)
-            .trim(),
-        key: by === undefined ? '' : source.slice(by.end).trim(),
+        subject: subject.text,
+        key: key.text,
         children: [],
+        setup: null,
+        style: null,
     }
+    origins.holders.set(block, subject.at)
+    if (key.text !== '') origins.keys.set(block, key.at)
+    return block
 }
 
 function readTag(
     source: string,
     open: number,
+    origins: Map<object, number>,
 ):
     | {
           name: string
@@ -599,6 +722,15 @@ function readTag(
     const name = source.slice(nameStart, at)
     const attributes: Attribute[] = []
 
+    // Every attribute read from `from` on is placed: an expression at `position` — where its value
+    // starts, or, where the parser rewrote the value, where the text it was rewritten from does — and
+    // a literal at its name, `named`, which is where a finding about it is read.
+    const place = (from: number, position: number, named: number): void => {
+        for (let index = from; index < attributes.length; index += 1) {
+            const placed = attributes[index] as Attribute
+            origins.set(placed, placed.expression ? position : named)
+        }
+    }
     while (at < source.length) {
         while (at < source.length && isSpace(source[at] as string)) at += 1
         if (source[at] === '>')
@@ -611,9 +743,11 @@ function readTag(
         // lowering reads it exactly as it reads any other attribute's.
         if (source[at] === '{') {
             const close = slotEnd(source, at)
-            const inner = source.slice(at + 1, close).trim()
-            if (inner.startsWith('...')) {
-                attributes.push(attribute('...', inner.slice(3).trim(), true))
+            const inner = trimmed(source, at + 1, close)
+            if (inner.text.startsWith('...')) {
+                const spread = trimmed(source, inner.at + 3, close)
+                attributes.push(attribute('...', spread.text, true))
+                place(attributes.length - 1, spread.at, at)
                 at = close + 1
                 continue
             }
@@ -634,6 +768,7 @@ function readTag(
 
         if (source[at] !== '=') {
             attributes.push(attribute(attrName, '', false))
+            place(attributes.length - 1, attrStart, attrStart)
             continue
         }
         at += 1
@@ -642,9 +777,9 @@ function readTag(
         // ends where it reads as ending.
         if (source[at] === '{') {
             const close = slotEnd(source, at)
-            attributes.push(
-                attribute(attrName, source.slice(at + 1, close).trim(), true),
-            )
+            const value = trimmed(source, at + 1, close)
+            attributes.push(attribute(attrName, value.text, true))
+            place(attributes.length - 1, value.at, attrStart)
             at = close + 1
             continue
         }
@@ -660,7 +795,9 @@ function readTag(
                 throw new Error(
                     `abide: the ${quote} opening ${attrName} on <${name}> is never closed, so the rest of the file reads as part of that attribute.`,
                 )
+            const from = attributes.length
             pushQuoted(attributes, attrName, source.slice(at + 1, close), name)
+            place(from, at + 1, attrStart)
             at = close + 1
             continue
         }
@@ -674,7 +811,9 @@ function readTag(
         // 32.3 HOLDS WHETHER OR NOT THE VALUE IS QUOTED. Pushed straight as a literal, a slot in
         // an unquoted value — `<a href=/x/{id}>` — was served as the author's own braces, never
         // lowered and never past the `safeUrl` 32.21 asks a URL attribute for.
+        const from = attributes.length
         pushQuoted(attributes, attrName, source.slice(valueStart, at), name)
+        place(from, valueStart, attrStart)
     }
     return { name, attributes, selfClosing: false, end: at }
 }

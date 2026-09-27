@@ -4,9 +4,10 @@ nav: Failures
 intent: Turn a refusal into something the caller can name, narrow and render — not a 500 and a guess.
 covers:
   - `refuse`
-  - `refuse.typed`
+  - `refuse.named`
   - `notFound`
   - `validationError`
+  - `aborted`
   - `Failed<Name, Data>`
   - `Failures`
   - `return myError(data)`
@@ -27,14 +28,16 @@ and data**: declared once, returned from the handler, narrowed by name wherever 
 
 | You write | What you get |
 | --- | --- |
-| `refuse.typed(name, status?, message?, options?)` | a factory for a refusal a caller can name and narrow |
+| `refuse.named(name, status?, message?, options?)` | a factory for a refusal a caller can name and narrow |
 | `refuse(status, message?)` | an undeclared refusal at a status |
 
-`refuse.typed` hands back a factory, and the factory carries the type, so there is no registry
+`refuse.named` hands back a factory, and the factory carries the type, so there is no registry
 to consult and nothing to keep in step. Its status defaults to **400** rather than 500, a
-declared refusal being by construction an expected answer. `options.schema` checks the data
-synchronously at construction, and a `message` given as a function runs there too. Declaring
-in `#shared` lets a page and a handler use the same names.
+declared refusal being by construction an expected answer, and its message to the status's
+phrase. Data is declared by `options.schema` and by nothing else: the schema types it, so the
+name is written once, and checks it synchronously at construction, where a `message` given as a
+function runs too, on the data. Declaring in `#shared` lets a page and a handler use the same
+names.
 
 `refuse(status)` is for where the status *is* the answer. It carries no data and has no options
 bag to put any in, data undeclared having no type on the other side. You return it like any other
@@ -112,18 +115,19 @@ Structural, because a caller catches a shape rather than a class it imported. Ov
 wire a refusal serializes as `{ name, message, data }` and hydrates back into that shape, the
 status coming from the response.
 
-## abide's own names: two you can narrow, and one you cannot
+## abide's own names: three you can narrow, and one you cannot
 
-Both built with `refuse.typed` like any other:
+Both built with `refuse.named` like any other:
 
 | | Status | Returned where |
 | --- | --- | --- |
 | `notFound` | 404 | no route matched, or no handler is mounted at that address and method |
 | `validationError` | 422 | a schema refused the arguments |
+| `aborted` | 499 | every call waiting on a load handed a `signal`, and every one of them aborted |
 
 `notFound` carries `{ path, method }`, so an error page can say which address. `validationError`
 carries `Issues<Args>`, keyed by path, and `rpc.isError(e, 'ValidationError')` narrows `e.data` to it with
-nothing declared.
+nothing declared. `aborted` carries nothing, and only reaches a value whose callers asked for it.
 
 `HttpError` is the third name and the last. It is what `refuse(status)` hands back: undeclared,
 entering no `Failures` union, and nothing can narrow to it. It is still a name a caller reads,

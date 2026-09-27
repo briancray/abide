@@ -12,7 +12,9 @@
 // with scripting off, or by a crawler, fills entries no call will ever come for.
 
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
-import { chunksOfStream, isStreaming } from './answerValue.ts'
+import { isStreaming } from '#shared/reactive/index.ts'
+import { chunksOfStream } from './answerValue.ts'
+import type { PageRender } from './requestScope.ts'
 
 // 41.18.
 const SEED_LIFE_MS = 30_000
@@ -42,9 +44,7 @@ const BUFFER = new Map<string, Map<object, Map<string, Entry[]>>>()
 // The sink a page's render scope reports each call into, for one caller — `true` where the call was
 // new to this render. A key already reported is reported once: two components reaching one invoice
 // are one call in the browser too, since the browser's `Rpc` joins a standing call (1.8).
-export function seedFor(
-    caller: string,
-): (rpc: object, args: unknown, reached: unknown) => boolean {
+export function seedFor(caller: string): PageRender['seed'] {
     const reported = new Map<object, Set<string>>()
     return (rpc, args, reached) => {
         const key = seedKey(args)

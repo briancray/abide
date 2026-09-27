@@ -171,7 +171,8 @@ about north", so the tags are a second index beside it, and every entry has to b
 a later reload quietly misses it.
 
 A tag is scoped the way a keyed value is: request-local on a server, process-local in a browser. One
-request can never reload another's.
+request can never reload another's, and a `global` value, which belongs to no request, is reached
+from every one.
 
 Read on: [Reloading](decide-when-a-value-reloads.md) ·
 [Mutations](../server/change-something-on-the-server.md)

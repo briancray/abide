@@ -147,16 +147,16 @@ reading back.
 
 Both gates refuse. What you refuse **with** picks between them: a schema refuses as
 `ValidationError`, and a `transform` refuses as a name of your own — the only way a failure
-arrives carrying data you chose. `refuse.typed` declares it once and resolves on both sides, so
+arrives carrying data you chose. `refuse.named` declares it once and resolves on both sides, so
 the same name serves a form field and a handler.
 
 ```ts #shared/failures.ts
 import { refuse } from 'abide'
+import { z } from 'zod'
 
-export const notAnEmail = refuse.typed<'NotAnEmail', { value: string }>(
-    'NotAnEmail',
-    422,
-)
+export const notAnEmail = refuse.named('NotAnEmail', 422, undefined, {
+    schema: z.object({ value: z.string() }),
+})
 ```
 
 ```abide #ui/pages/account/page.abide — excerpt
@@ -186,42 +186,36 @@ calls a page makes on a refused request. That is the reason to reach for it over
 Read on: [Failures](../server/refuse-a-request-and-say-why.md) ·
 [Schemas](../server/check-what-callers-send-you.md)
 
-## A component prop needs `bind:` to write back
+## A component prop writes back to the caller with `bind:`
 
-The child decides this, not the call site.
+The call site decides this, not the child.
 
-A prop declared as a plain `T` is a **live read** of the caller's expression. `count={total}`
-tracks `total`, `count={total * 2}` tracks it as a derived read, and neither reinstantiates the
-component. There is nothing behind it to write to — so there is no binding to add, and
-`bind:count={total * 2}` has nothing to bind.
-
-A child that wants the write path declares the prop as a `Reactive` instead:
+A prop is a **live read** of the caller's expression. `count={total}` tracks `total`,
+`count={total * 2}` tracks it as a derived read, and neither reinstantiates the component. The
+child declares the prop as the type of its value and writes it by name:
 
 ```abide #ui/components/Stepper.abide
 <script>
-import { props, type Reactive } from 'abide'
+import { props } from 'abide'
 
-type Props = { count: Reactive<number> }
-
-const { count } = props<Props>()
+const { count } = props<{ count: number }>()
 </script>
 
 <button onclick={() => count += 1}>{count}</button>
 ```
 
-Declaring it that way makes `bind:` a **compile requirement** at every call site — not a runtime
-warning, and not something the component discovers about how it was called:
+Put `bind:` on the tag and the write goes to the caller's value:
 
 ```abide abide
 <Stepper bind:count={total}/>
 ```
 
-Leave the `bind:` off and it does not compile. The marker sits at the call site on purpose:
-that is the side giving write access up, so a reader sees it without opening the child, while
-the child declaring it lets the compiler check every caller.
+Leave `bind:` off and the write stays in the child until the caller's expression changes. The
+same `Stepper` then works bound and unbound, and a reader sees which one it is at the call site
+without opening the child.
 
-`bind:` needs the same lvalue a native binding does — a value's name, a member path, or a
-`{get, set}` pair.
+On a component, `bind:` takes the name of a reactive value, or a `{get, set}` pair as an input
+does. `bind:count={total * 2}` has nothing to write to, and the checker says so.
 
 Read on: [Components](reuse-a-piece-of-markup.md)
 

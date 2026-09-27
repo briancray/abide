@@ -26,7 +26,8 @@ export type RequestScope = Scope & {
     caller: string | undefined
     // 26.14 — this request's one resolve of the principal.
     principal: Promise<Principal> | undefined
-    // 16.24 — the longest `timeout` any handler that ran in this request asked for, in seconds.
+    // 16.24 — the longest `timeout` any handler that ran in this request asked for, in seconds, and
+    // `Infinity` for one that is never reaped (16.62).
     timeout: number
     // 29.3 — this response's nonce, minted by the `csp` rung or on the first ask.
     nonce: string | undefined

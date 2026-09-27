@@ -21,7 +21,15 @@ export type Attribute = {
 export type Branch = {
     subject: string
     children: TemplateNode[]
+    // 14.8 — the arm's branch-local `<script>`, or `null`.
+    setup: Setup | null
+    // 34.13 — the arm's branch-local `<style>`, or `null`.
+    style: string | null
 }
+
+// 14.8 — A BRANCH-LOCAL `<script>`: setup run once each time its body is built, and a record of its
+// own so the projection and the lowering can key its span apart from the subject's.
+export type Setup = { text: string }
 
 export type TemplateNode =
     | {
@@ -53,6 +61,10 @@ export type TemplateNode =
           subject: string
           key: string
           children: TemplateNode[]
+          // 14.8 — the row's branch-local `<script>`, or `null`.
+          setup: Setup | null
+          // 34.13 — the row's branch-local `<style>`, or `null`.
+          style: string | null
       }
 
 // THE NODE LISTS ONE LEVEL DOWN — an element's children, a row's body, each arm of an `{#if}` or a

@@ -5,6 +5,7 @@ intent: Where a failure lands, what it renders in, and why 404 is not a special 
 covers:
   - `src/ui/pages/**/error.abide`
   - `onError`
+  - `allow: GET, HEAD`
 ---
 
 An `error.abide` is the page a failure renders in. It is resolved **nearest-ancestor**, exactly
@@ -35,12 +36,15 @@ Read on: [Failures](../server/refuse-a-request-and-say-why.md)
 ## 404 is a refusal like any other
 
 There is no separate not-found page and no special-casing of a status. An address nothing
-answers is `notFound`, which is a refusal built with `refuse.typed` like the ones your app
+answers is `notFound`, which is a refusal built with `refuse.named` like the ones your app
 declares, carrying `{ path, method }` so the page can say which address.
 
 That is why the error page's shape is a narrowing rather than a status switch: the page asks
 which failure this is, and "no route matched" is one of the answers rather than a different
 mechanism arriving at the same file.
+
+A page asked by any method but `GET` or `HEAD` is the same shape: a refusal at 405, painted by the
+same error page, carrying `allow: GET, HEAD` for whoever sent the `POST`.
 
 ## An error page that fails escalates past the boundary
 

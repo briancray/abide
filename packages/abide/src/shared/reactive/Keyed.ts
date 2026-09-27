@@ -9,11 +9,13 @@
 import type { Failed } from '../Failed.ts'
 import { checkArgs } from '../refuse.ts'
 import type { Schema } from '../Schema.ts'
+import { ARGS_GATE } from './ARGS_GATE.ts'
 import { CELL } from './CELL.ts'
 import { canonicalKey } from './canonicalKey.ts'
+import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
 import { armTimer } from './Expiry.ts'
-import { ARGS_GATE } from './ARGS_GATE.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
+import { matchesPattern } from './matchesPattern.ts'
 import { NotLanded } from './NotLanded.ts'
 import {
     abandonDeferred,
@@ -74,16 +76,6 @@ function argsOf(entry: unknown): unknown {
     return (entry as { [CELL]: { args: unknown } })[CELL].args
 }
 
-function matches(args: unknown, pattern: unknown): boolean {
-    if (pattern === undefined) return true
-    if (args === null || typeof args !== 'object') return args === pattern
-    const wanted = pattern as Record<string, unknown>
-    const held = args as Record<string, unknown>
-    for (const key of Object.keys(wanted))
-        if (held[key] !== wanted[key]) return false
-    return true
-}
-
 // THE LIFE OF EVERY ENTRY OF ONE `Keyed` (11.46, 11.49, 11.50), allocated only where a
 // `ttl` was declared.
 //
@@ -103,6 +95,7 @@ function matches(args: unknown, pattern: unknown): boolean {
 // ONE MAP, IN RECENCY ORDER, holding what an eviction needs beside when the entry last produced.
 type Follower = {
     at: number
+    ms: number
     cell: Tracked
     reader: Subscriber
     evict: () => void
@@ -125,7 +118,8 @@ class Lifetime {
         const cell = entry[CELL]
         // A MIRROR WITH NO ADOPTER — `Subscriber.isMirror` says why.
         const reader = newSubscriber([cell], null, true)
-        const follower: Follower = { at: 0, cell, reader, evict }
+        const follower: Follower = { at: 0, ms: this.ms, cell, reader, evict }
+        ENTRY_LIVES.set(cell, follower)
         reader.notify = (): void => {
             if ((cell as unknown as { servable: boolean }).servable)
                 this.touch(key, follower)
@@ -343,7 +337,8 @@ export function createKeyed<
         entries,
         busy: (pattern?: Partial<Args>): boolean => {
             for (const entry of entries.values())
-                if (matches(argsOf(entry), pattern) && entry.busy()) return true
+                if (matchesPattern(argsOf(entry), pattern) && entry.busy())
+                    return true
             return false
         },
         // ALL rather than ANY, and the quantifiers are not a pair of preferences: `busy`
@@ -351,17 +346,17 @@ export function createKeyed<
         // that is the only pairing under which `busy && !ready` reads as one sentence.
         ready: (pattern?: Partial<Args>): boolean => {
             for (const entry of entries.values())
-                if (matches(argsOf(entry), pattern) && !entry.ready())
+                if (matchesPattern(argsOf(entry), pattern) && !entry.ready())
                     return false
             return true
         },
         refresh: (pattern?: Partial<Args>): void => {
             for (const entry of entries.values())
-                if (matches(argsOf(entry), pattern)) entry.refresh()
+                if (matchesPattern(argsOf(entry), pattern)) entry.refresh()
         },
         invalidate: (pattern?: Partial<Args>): void => {
             for (const entry of entries.values())
-                if (matches(argsOf(entry), pattern)) entry.invalidate()
+                if (matchesPattern(argsOf(entry), pattern)) entry.invalidate()
         },
     }) satisfies Gated<Args>
     return self as Keyed<Stored, Args, Accepted, Failures> & Gated<Args>

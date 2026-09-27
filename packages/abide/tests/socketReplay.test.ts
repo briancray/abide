@@ -10,8 +10,8 @@ import { expect, setSystemTime, test } from 'bun:test'
 import { reactive } from '#shared'
 import { socket } from '#shared/socket.ts'
 import {
-    type Connection,
     connectionOf,
+    type MuxSocket,
     socketHandlers,
 } from '#server/answerSocket.ts'
 
@@ -24,15 +24,16 @@ async function frames(
         send(text: string) {
             sent.push(JSON.parse(text))
         },
-    } as unknown as Bun.ServerWebSocket<Connection>
+    } satisfies MuxSocket
     const handlers = socketHandlers(
         new Map([['/room', socket(value as never)]]) as never,
+        new Map(),
     )
     await handlers.message(
         ws,
         JSON.stringify({ op: 'sub', id: 1, address: '/room' }),
     )
-    handlers.close?.(ws, 1000, '')
+    handlers.close(ws)
     return sent
 }
 
@@ -99,9 +100,10 @@ test('a live production carries its own ordinal where the cursor collapsed a bur
         send(text: string) {
             sent.push(JSON.parse(text))
         },
-    } as unknown as Bun.ServerWebSocket<Connection>
+    } satisfies MuxSocket
     const handlers = socketHandlers(
         new Map([['/room', socket(room as never)]]) as never,
+        new Map(),
     )
     await handlers.message(
         ws,
@@ -111,7 +113,7 @@ test('a live production carries its own ordinal where the cursor collapsed a bur
     room.publish('b')
     room.publish('c')
     for (let turn = 0; turn < 10; turn++) await Promise.resolve()
-    handlers.close?.(ws, 1000, '')
+    handlers.close(ws)
     const numbered: string[] = []
     for (const frame of sent)
         if (frame.op === 'prod') numbered.push(`${frame.seq}:${frame.value}`)

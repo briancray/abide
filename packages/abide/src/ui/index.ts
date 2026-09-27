@@ -25,6 +25,8 @@
 
 export { oneStyleValue } from '#shared/escapeText.ts'
 export { isRaw } from '#shared/Raw.ts'
+// 14.8 — an `{#if}` arm's branch-local `<script>`, set up outside the watch that swaps it in.
+export { untracked } from '#shared/reactive/tracking.ts'
 // 41.10's adopt half of a walk the compiler emits twice from one traversal — see `adoptNode.ts`.
 export {
     elementHere,
@@ -46,10 +48,11 @@ export { markupNodes } from './parseMarkup.ts'
 export { REGION_CLOSE, REGION_OPEN } from './REGION.ts'
 export { type Row, reconcile, replaceRow } from './reconcile.ts'
 export { fillRegion, isEmptyRegion, type Region } from './regions.ts'
-export { Scope } from './Scope.ts'
-export { inBoundary, TryBoundary } from './TryBoundary.ts'
+export { rowKeyOf } from './rowKeyOf.ts'
+export { EMPTY_SCOPE, Scope } from './Scope.ts'
 export { setAttribute } from './setAttribute.ts'
 export { setClass } from './setClass.ts'
 export { setMarkup } from './setMarkup.ts'
 export { setStyleProperty } from './setStyleProperty.ts'
 export { setText } from './setText.ts'
+export { inBoundary, TryBoundary } from './TryBoundary.ts'
