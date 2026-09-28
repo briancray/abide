@@ -20,6 +20,8 @@ export const RPC_SERVER: {
     // 18.23 — the `global` entry an answer came from, so a follower subscribed before it existed, or
     // fed from one since evicted, is fed from this one.
     served: ((rpc: object, serving: unknown) => void) | null
+    // 21.20 — how long a handler's own body took inside its rungs, so the answer can tell the two apart.
+    handled: ((rpc: object, duration: number) => void) | null
 } = {
     request: () => {
         throw new Error(
@@ -31,4 +33,5 @@ export const RPC_SERVER: {
     timeout: () => undefined,
     broadcast: null,
     served: null,
+    handled: null,
 }

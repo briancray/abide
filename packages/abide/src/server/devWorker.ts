@@ -32,6 +32,7 @@ import { fenceServer } from './fenceServer.ts'
 import { namesUnder } from './namesUnder.ts'
 import { refuseAddressCollision } from './refuseAddressCollision.ts'
 import { shellUnder } from './render.ts'
+import { LISTENING } from './requestScope.ts'
 import { loadTables } from './serveBuild.ts'
 
 // Where the compiled modules pretend to live. Under the app's own root so that `#ui/…` and a bare
@@ -72,10 +73,12 @@ export type ToWorker =
     | { kind: 'socket-message'; conn: number; text: string }
     | { kind: 'socket-close'; conn: number }
 
-// Out: ready, a frame the mux sends a browser, and a request's head, each chunk, and its end.
+// Out: ready, a frame the mux sends a browser, a request's idle timeout raised, and its head, each
+// chunk, and its end.
 export type FromWorker =
     | { kind: 'ready' }
     | { kind: 'socket-send'; conn: number; text: string }
+    | { kind: 'timeout'; id: number; seconds: number }
     | {
           kind: 'head'
           id: number
@@ -160,6 +163,14 @@ const bodies = new Map<
     { reader: ReadableStreamDefaultReader<Uint8Array>; html: boolean }
 >()
 
+// 16.23 — THE LISTENER HOLDS THE CONNECTION, so the idle timeout a call raises is raised there, on
+// the request bun handed it: each request built here is known by the ask it was built from.
+const ASKS = new WeakMap<Request, number>()
+LISTENING.timeout = (received, seconds) => {
+    const id = ASKS.get(received)
+    if (id !== undefined) worker.postMessage({ kind: 'timeout', id, seconds })
+}
+
 // A status whose response has no body to send, which `Response` refuses to be built with one.
 const BODILESS = new Set([101, 204, 205, 304])
 
@@ -172,6 +183,7 @@ async function answerAsk(ask: Ask): Promise<void> {
         headers: ask.headers,
         body: ask.body,
     })
+    ASKS.set(request, ask.id)
     let response: Response
     try {
         response =

@@ -467,3 +467,36 @@ test('a misspelled keyword is refused even when it holds undefined', () => {
         ),
     ).toBeNull()
 })
+
+// A REFUSED SHAPE STAYS REFUSED. The node was marked verified BEFORE its shape was checked, so the
+// throw that refused the first write left it marked and the second write skipped the check — the
+// typo read nowhere and `3` accepted. THE REVERT: add the node to `VERIFIED` ahead of
+// `verifyShape` in `check`; the second call reports `null` rather than throwing.
+test('a schema refused once is refused on every call', () => {
+    const typo = { type: 'number', minimun: 5 } as unknown as JsonValue
+    for (let call = 0; call < 2; call++) {
+        let threw: unknown
+        try {
+            validateJson<Anywhere>(typo, 3)
+        } catch (thrown) {
+            threw = thrown
+        }
+        expect((threw as Error | undefined)?.message).toContain('minimun')
+    }
+})
+
+// `const` HOLDING `undefined` IS THE KEYWORD ABSENT, as every other keyword's is. It was applied by
+// presence, so `{const: options.fixed}` with no `fixed` refused every value. THE REVERT: test
+// `'const' in node` in `check`; the first expectation reports `must be undefined`.
+test('const holding undefined constrains nothing', () => {
+    expect(
+        validateJson(
+            { type: 'string', const: undefined } as unknown as JsonValue,
+            'abc',
+        ),
+    ).toBeNull()
+    // `null` is a JSON value, and a `const` holding it still constrains.
+    expect(validateJson<Anywhere>({ const: null }, 'abc')).toEqual({
+        '': ['must be null'],
+    })
+})

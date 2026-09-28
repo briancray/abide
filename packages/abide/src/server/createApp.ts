@@ -30,7 +30,13 @@ import { CONFIG_ROOT, config } from './config.ts'
 import './csp.ts'
 import { HOOKS, reportUnexpected } from './hooks.ts'
 import { MUX_ADMITTED } from './MUX_ADMITTED.ts'
-import { applyWritten, inScope, LISTENING } from './requestScope.ts'
+import {
+    applyWritten,
+    inScope,
+    LISTENING,
+    rungsTook,
+    serverTiming,
+} from './requestScope.ts'
 import { traceResponse } from './trace.ts'
 
 // 28.8 — one line per request.
@@ -124,10 +130,14 @@ export async function bootApp(
         fetch: (request) => fetch(request),
     }
 
-    // 16.15, 37.3 — THE APP LANE'S ONION, composed once over the whole request path.
-    const answer = compose(HOOKS.rungs, ({ request }) =>
-        answerRequest(booted, request),
-    )
+    // 16.15, 37.3 — THE APP LANE'S ONION, composed once over the whole request path. 21.20 — the
+    // centre takes its own time back out of what `fetch` counts for the whole onion.
+    const answer = compose(HOOKS.rungs, async ({ request }) => {
+        const began = performance.now()
+        const answered = await answerRequest(booted, request)
+        if (HOOKS.rungs.length > 0) rungsTook(began - performance.now())
+        return answered
+    })
 
     const open = new Set<Bun.ServerWebSocket<Connection>>()
     let inFlight = 0
@@ -148,11 +158,15 @@ export async function bootApp(
         try {
             // 42.6 — `run`, with dispatch over it — and the headers every answer carries stamped
             // inside it, where the trace the request was answered under is still the current one.
-            return await run(
+            // 16.23 — the scope keeps `given` too, the one request bun will raise a timeout on.
+            return await inScope(
+                request,
                 async () => {
                     let answered: Response
                     try {
                         answered = await answer({ request })
+                        if (HOOKS.rungs.length > 0)
+                            rungsTook(performance.now() - started)
                     } catch (thrown) {
                         reportUnexpected(thrown)
                         answered = plainAnswer('internal server error', 500)
@@ -168,7 +182,7 @@ export async function bootApp(
                         )
                     return stamped
                 },
-                { request },
+                given,
             )
         } finally {
             inFlight -= 1
@@ -268,6 +282,9 @@ function stamp(answered: Response): Response {
         stamped = new Response(answered.body, answered)
         stamped.headers.set('x-content-type-options', 'nosniff')
     }
+    // 21.10 — gathered before what was written through `response`, which overrides it.
+    const timing = serverTiming()
+    if (timing !== undefined) stamped.headers.set('server-timing', timing)
     const written = applyWritten(stamped.headers)
     const status = written !== 200 ? written : stamped.status
     // 17.8 — a failure nobody named a reason for is given its registered one.

@@ -232,7 +232,13 @@ export async function serveLanguage(
                 return false
             case 'textDocument/didOpen': {
                 const opened = params?.textDocument as Document
-                if (!opened.uri.endsWith('.abide')) return true
+                // A document with no file behind it — `untitled:` — belongs to no app, and has no
+                // path for one to be found from.
+                if (
+                    !opened.uri.startsWith('file:') ||
+                    !opened.uri.endsWith('.abide')
+                )
+                    return true
                 documents.set(opened.uri, {
                     uri: opened.uri,
                     text: opened.text,

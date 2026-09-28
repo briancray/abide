@@ -167,6 +167,35 @@ test('an MCP call is answered through the app, refusals included — 20.10', asy
     expect(JSON.parse(read.contents[0]?.text as string)).toEqual([{ id: 1 }])
 })
 
+// 16.14 — THE MCP ENDPOINT IS GATED ON `Origin` AS A MUTATION IS. A tool call runs its handler with
+// the caller's cookies, and a `text/plain` POST crosses origins with no preflight, so another origin's
+// page could otherwise run any published mutation as its reader. From the app's own origin the call
+// is answered. THE REVERT: drop the gate in `answerMcp`; the cross-origin call is answered 200 and
+// the mutation runs.
+test('a cross-origin POST to the MCP endpoint is refused, and a same-origin one answered — 16.14', async () => {
+    const payFrom = (origin: string): Promise<Response> =>
+        Bun.fetch(`${base}/__abide/mcp`, {
+            method: 'POST',
+            headers: { 'content-type': 'text/plain', origin },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'tools/call',
+                params: { name: 'invoices_pay', arguments: { amount: 5 } },
+            }),
+        })
+    const crossing = await payFrom('https://elsewhere.example')
+    expect(crossing.status).toBe(403)
+    const own = await payFrom(new URL(base).origin)
+    expect(own.status).toBe(200)
+    const called = ((await own.json()) as Record<string, unknown>).result as {
+        content: { text: string }[]
+        isError: boolean
+    }
+    expect(called.isError).toBe(false)
+    expect(JSON.parse(called.content[0]?.text as string)).toEqual({ paid: 5 })
+})
+
 // 20.10, 42.12 — AN MCP CALL IS ANSWERED BY THE APP IT WAS MADE TO, not by whichever `App` the process
 // built last: two held in one process, the second stopped, and the first still answers its tools. THE
 // REVERT: answer the call through `RPC_SERVER.raw`; the stopped app answers it 503.

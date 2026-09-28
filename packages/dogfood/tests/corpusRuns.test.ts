@@ -68,7 +68,7 @@ async function appTree(session: TypeSession): Promise<Record<string, string>> {
             emitClient(
                 file,
                 names,
-                graph.invoked.has(absolute) ? 'repeated' : 'none',
+                graph.invoked.has(absolute) ? 'invoked' : 'none',
                 components,
             ) || 'export default () => {}'
     }

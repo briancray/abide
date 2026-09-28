@@ -8,7 +8,9 @@
 export type Attribute = {
     name: string
     lowerName: string
-    // The literal text, or the expression source where `expression` is true.
+    // The literal text, or the expression source where `expression` is true. A quoted value with a
+    // slot in it is a template literal whose static text is already decoded (32.28, 32.29), and on a
+    // component a static value is too (`pushQuoted`).
     value: string
     // `attr={expr}` rather than `attr="text"`. The field is always present rather than added
     // on the expression path, so the record has one shape.

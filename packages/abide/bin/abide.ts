@@ -359,7 +359,13 @@ async function scaffoldCommand({
 // 38.2 — A SCRIPT UNDER THE ABIDE RUNTIME: the request scope installed, the configuration resolved
 // against the app it stands in, and the script run in a scope of its own — so it imports `#server`
 // and `#shared` and reads `config` without a build.
-async function run({ positionals: [, file, ...rest] }: Given): Promise<number> {
+//
+// HANDS BACK NO CODE ONCE THE SCRIPT IS RUNNING, as `start` does: the script's top level settling is
+// not the script ending. A timer, a server or a socket it left open keeps the process alive, and a
+// `process.exitCode` it set is what the process exits with.
+async function run({
+    positionals: [, file, ...rest],
+}: Given): Promise<number | undefined> {
     if (file === undefined) {
         console.error('abide run: name the file — abide run <file> [args…]')
         return 1
@@ -370,7 +376,7 @@ async function run({ positionals: [, file, ...rest] }: Given): Promise<number> {
     const { CONFIG_ROOT } = await import('#server/config.ts')
     CONFIG_ROOT.current = appRoot(undefined) ?? process.cwd()
     await inScope(undefined, () => import(Bun.pathToFileURL(path).href))
-    return 0
+    return undefined
 }
 
 // 38.8.

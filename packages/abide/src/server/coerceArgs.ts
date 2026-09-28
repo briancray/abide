@@ -9,6 +9,7 @@
 import { numberFromText } from '#shared/numberFromText.ts'
 import { ARGS_GATE } from '#shared/reactive/ARGS_GATE.ts'
 import type { Gated } from '#shared/reactive/Keyed.ts'
+import { bareName } from '#shared/rpcRequest.ts'
 
 export type Document = {
     type?: string | string[]
@@ -27,15 +28,26 @@ export function argsDocumentOf(handler: Gated<unknown>): Document | undefined {
         : undefined
 }
 
+// `query` is the raw `?…` the args were read from: `URLSearchParams` reads `rpcRequest`'s empty list,
+// a bare name, as `''` — the same as `tags=`, the list `['']` — so a declared array tells the two
+// apart there. A text member keeps the `''`.
 export function coerceArgs(
     args: Record<string, string | string[]> | undefined,
     document: Document | undefined,
+    query: string,
 ): unknown {
     if (args === undefined || document?.properties === undefined) return args
     const coerced: Record<string, unknown> = {}
     for (const [name, text] of Object.entries(args)) {
         const member = document.properties[name]
-        coerced[name] = member === undefined ? text : coerceMember(text, member)
+        if (member === undefined) coerced[name] = text
+        else if (
+            text === '' &&
+            typesOf(member).includes('array') &&
+            `&${query.slice(1)}&`.includes(`&${bareName(name)}&`)
+        )
+            coerced[name] = []
+        else coerced[name] = coerceMember(text, member)
     }
     return coerced
 }

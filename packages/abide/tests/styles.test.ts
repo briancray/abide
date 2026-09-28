@@ -41,6 +41,35 @@ test('a comment on its own line ahead of a selector leaves the rightmost compoun
     expect(scoped('.x\n.y{x:y}')).toBe('.x\n.y[a-t]{x:y}')
 })
 
+// 34.4 REACHES A NESTED RULE. `.card { .title {…} }` is `.card .title` to a browser, so a nested
+// selector left as written styles a child component's `.title` inside the card; and a grouping
+// at-rule the walk did not know was copied whole, so `@starting-style { .x {…} }` reached every
+// `.x` in the document.
+//
+// THE REVERT: copy a qualified rule's body as written and drop `starting-style` and `scope` from
+// `NESTING`. 5 of the 5 nested selectors below then carry no token.
+test('a nested rule and a grouping at-rule require the token too — 34.4', () => {
+    const scoped = (css: string) => scopeCss(css, 'a-t')
+    expect(
+        scoped('.card { color: red; .title { color: blue } & > p { x: y } }'),
+    ).toBe(
+        '.card[a-t] { color: red; .title[a-t] { color: blue } & > p[a-t] { x: y } }',
+    )
+    expect(scoped('.card { @media (x) { .title { x: y } } }')).toBe(
+        '.card[a-t] { @media (x) { .title[a-t] { x: y } } }',
+    )
+    expect(scoped('@starting-style { .x { opacity: 0 } }')).toBe(
+        '@starting-style { .x[a-t] { opacity: 0 } }',
+    )
+    expect(scoped('@scope (.card) { img { x: y } }')).toBe(
+        '@scope (.card) { img[a-t] { x: y } }',
+    )
+    // A declaration's own `;` inside a value is not a statement's end.
+    expect(scoped('.x { background: url("a;b{c}") }')).toBe(
+        '.x[a-t] { background: url("a;b{c}") }',
+    )
+})
+
 const CARD = `<script>
 import { props } from 'abide'
 

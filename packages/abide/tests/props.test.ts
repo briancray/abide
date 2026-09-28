@@ -57,7 +57,7 @@ async function mountPage(
         const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
         modules[`${name}.ts`] = emitComponent(file, reads)
         modules[`${name}.client.ts`] =
-            emitClient(file, reads, name !== 'Page' ? 'repeated' : 'none') ||
+            emitClient(file, reads, name !== 'Page' ? 'invoked' : 'none') ||
             'export default () => {}'
     }
     const dir = temporaryModule(modules)
@@ -390,6 +390,36 @@ let titles = reactive(['one', 'two'])
     expect(document.querySelector('li') as unknown).toBe(first)
 })
 
+// 39.6 — A COMPONENT'S HEAD IS NOT APPLIED BY THE ROWS IT FILLS. Only a route level applies its
+// head from its mount; an invoked child fills an empty region once per row the list grew by, and
+// its head there would be a parse and a walk of `document.head` a row. A keyless `<meta charset>`
+// appends on every application (39.5), so the count is the number of times the head was applied.
+//
+// THE REVERT: emit the head application for every `selfFill` but `'none'` (`emitClient`) — three
+// grown rows append three `<meta charset>`s where none is due.
+test("a component's head is not applied per row it grows by — 39.6", async () => {
+    const { mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Row from './Row.abide'
+
+let titles = reactive<string[]>([])
+</script>
+
+<ul>{#for title of titles}<Row title={title}/>{/for}</ul>
+<button onclick={() => { titles = ['a', 'b', 'c'] }}>grow</button>`,
+        { Row: `<head><meta charset="utf-8"></head>\n${ROW}` },
+    )
+    document.head.innerHTML = ''
+    mount(pageRegion(document.body))
+    flushSync()
+    ;(document.querySelector('button') as HTMLElement).click()
+    flushSync()
+
+    expect(document.querySelectorAll('li')).toHaveLength(3)
+    expect(document.head.querySelectorAll('meta[charset]')).toHaveLength(0)
+})
+
 // A COMPONENT ROW THE LIST GREW IS ITS WHOLE MARKUP. The row the browser builds is its anchor and
 // the child's empty pair; the child fills the pair on the row's MOUNT, after `make` handed its nodes
 // over. A row held as the nodes `make` returned moved the pair and left the child's `<li>` standing
@@ -593,4 +623,48 @@ test("a child's write goes where the caller bound it — 33.6, 33.7", async () =
     ;(document.getElementById('reset') as HTMLElement).click()
     flushSync()
     expect(text('passed')).toBe('2020')
+})
+
+// A PROP'S STATIC TEXT IS THE CHARACTERS IT STANDS FOR, as an element's attribute is: `AT&amp;T`
+// hands the child `AT&T`. Emitted as the author's bytes, the child was handed the entity itself —
+// a string, not markup, so nothing downstream ever decoded it. The static form, and the static
+// pieces of an interpolated one, each decoded on its own so the slot stays data: `&amp{amp}` is
+// `&` and then the slot's own `amp;`, never a reference the two finish together. The child writes
+// its `&` as `+` so the text says which string arrived, on the server and on a child the browser
+// builds.
+//
+// THE REVERT: pass `raw` through in `pushQuoted` and `staticText` rather than
+// `decodeCharacterReferences` — the server writes `AT+amp;T` for both props and the built child
+// reads `AT+amp;T|AT+amp;T 1|+ampamp;`.
+test("a prop's static text arrives decoded, beside a slot as well — 33.4", async () => {
+    const CARD = `<script>
+import { props } from 'abide'
+
+const { title, line, edge } = props<{ title: string; line: string; edge: string }>()
+</script>
+
+<b class="card">{title.replaceAll('&', '+')}|{line.replaceAll('&', '+')}|{edge.replaceAll('&', '+')}</b>`
+    const { html, mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Card from './Card.abide'
+
+let n = reactive(0)
+let show = reactive(false)
+const amp = 'amp;'
+</script>
+
+<Card title="AT&amp;T" line="AT&amp;T {n}" edge="&amp{amp}"/>
+<button onclick={() => { n = n + 1; show = true }}>go</button>
+<div>{#if show}<Card title="AT&amp;T" line="AT&amp;T {n}" edge="&amp{amp}"/>{/if}</div>`,
+        { Card: CARD },
+    )
+    expect(html).toContain('<b class="card">AT+T|AT+T 0|+amp;</b>')
+    mount(pageRegion(document.body))
+    flushSync()
+    ;(document.querySelector('button') as HTMLElement).click()
+    flushSync()
+    const cards = document.querySelectorAll('.card')
+    expect(cards[0]?.textContent).toBe('AT+T|AT+T 1|+amp;')
+    expect(cards[1]?.textContent).toBe('AT+T|AT+T 1|+amp;')
 })

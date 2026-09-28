@@ -959,7 +959,7 @@ test('a head contribution merges by key, and the last one for a key wins', async
 //
 // BOTH DIRECTIONS ARE REVERTS, and one alone gates half of it.
 //
-// NARROW TOO FAR — `quoteOnly` for every attribute, `isUrlAttribute` included — and the document
+// NARROW TOO FAR — `escapeQuote` for every attribute, `URL_ATTRIBUTES` included — and the document
 // carries `href="&#106;avascript:alert(1)"` where `&amp;#106;` is due, which is a `javascript:`
 // URL on an anchor a click reaches.
 //
@@ -1409,7 +1409,7 @@ test('a region made once is parsed, and one made once a row is built', async () 
         '<script>let rows = reactive([1])\nlet on = reactive(true)</script>' +
         '{#if on}<p>page</p>{/if}<ul>{#for row of rows}<li>{#if on}<b>row</b>{/if}</li>{/for}</ul>'
     const { file, reads } = await typed(source, ['rows', 'on'])
-    const once = emitClient(file, reads, 'once')
+    const once = emitClient(file, reads, 'routed')
     const page = once.slice(
         once.indexOf('const rg0_a0_build'),
         once.indexOf('const rg0_a0_build') + 200,
@@ -1419,6 +1419,65 @@ test('a region made once is parsed, and one made once a row is built', async () 
     // The arm inside the row: built.
     expect(once).toContain('__document.createElement("b")')
     // A component's own arm: built, because the component can stand in a row.
-    const invoked = emitClient(file, reads, 'repeated')
+    const invoked = emitClient(file, reads, 'invoked')
     expect(invoked).toContain('__document.createElement("p")')
+})
+
+// 39.1 THROUGH A COMPONENT IN THE HEAD. A child invoked inside `<head>` is called from the HEAD
+// expression, and its own contributions are collected into the same array a child in the body
+// pushes to — so the array is declared wherever EITHER invokes one.
+//
+// THE REVERT: decide `heads` from `body` alone in `emitComponent`. The render then throws
+// `ReferenceError: __heads is not defined` where the child's `<meta>` is due in the head.
+test('a component invoked inside the head contributes to it', async () => {
+    const dir = temporaryModule({
+        'Seo.ts': compileFile(
+            '<head><meta name="description" content="d"/></head><span>s</span>',
+        ),
+        'Page.ts': compileFile(
+            `<script>\nimport Seo from './Seo.abide'\n</script>\n<head><Seo/></head><p>x</p>`,
+        ),
+    })
+    const { default: Page } = await import(`${dir}/Page.ts`)
+    let out = ''
+    for await (const chunk of render(
+        Page,
+        '<!doctype html><html><head></head><body></body></html>',
+    ))
+        out += new TextDecoder().decode(chunk)
+    const meta = out.indexOf('<meta name="description" content="d">')
+    expect(meta).toBeGreaterThan(-1)
+    expect(meta).toBeLessThan(out.indexOf('</head>'))
+    expect(out).toContain('<p>x</p>')
+})
+
+// 19.12 — A SLOT IS ONE EXPRESSION, whatever it holds, and the emit splices it into an argument list
+// and an initializer. A comma expression spliced bare is two arguments, or a second declarator;
+// a trailing line comment spliced bare comments out the parentheses after it.
+//
+// THE REVERT: hand the lowered text back as written from `Lowering.slot`. The comma slot's client
+// module then fails to parse, and the commented one's server module fails to build: 2 of 2 wrong.
+test('a slot holding a comma or a trailing comment is one expression', async () => {
+    const rendered: string[] = []
+    const transpiler = new Bun.Transpiler({ loader: 'ts' })
+    for (const slot of ['a, b', 'b // the second\n']) {
+        const source = `<script>\nconst a = 'first'\nconst b = 'second'\n</script>\n<p>{${slot}}</p>`
+        const dir = temporaryModule({ 'Page.ts': compileFile(source) })
+        try {
+            // The client half splices the same text into a `const`, where a bare comma is a
+            // second declarator with no initializer.
+            transpiler.transformSync(emitClient(parseAbide(source)))
+            const { default: Page } = await import(`${dir}/Page.ts`)
+            let out = ''
+            for await (const chunk of render(
+                Page,
+                '<!doctype html><html><head></head><body></body></html>',
+            ))
+                out += new TextDecoder().decode(chunk)
+            rendered.push(/<p>(.*?)<\/p>/.exec(out)?.[1] ?? out)
+        } catch (thrown) {
+            rendered.push(String(thrown))
+        }
+    }
+    expect(rendered).toEqual(['second', 'second'])
 })

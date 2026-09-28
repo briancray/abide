@@ -1048,6 +1048,69 @@ test('a document holding fewer rows than the client computes reconciles — 41.1
     expect(said.join(' ')).toContain('holds 3 rows')
 })
 
+// 41.10 THE OTHER WAY ROUND: the document holds MORE rows than the client computes. The rows past
+// the last item have no item, and wiring them anyway handed `undefined` to the key — `row.id` threw
+// a TypeError, which is not a `Mismatch`, so the page died instead of warning and rebuilding. The
+// divergence is made by hand as above: the server painted five, and a client whose subject is
+// three hydrates against those five nodes.
+//
+// THE REVERT: wire every row the document holds before comparing lengths — the mount throws
+// TypeError: undefined is not an object (evaluating 'row.id') and none of this is reached.
+const THREE = `<script>
+import { reactive } from 'abide'
+
+let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
+</script>
+
+<ul id="three">{#for row of rows by row.id}<li>{row.id}</li>{/for}</ul>`
+
+test('a document holding more rows than the client computes warns and rebuilds — 41.10', async () => {
+    const file = parseAbide(THREE)
+    const names = await session.reads(`${ROOT}src/three.abide`, file)
+    const dir = temporaryModule({
+        'Page.ts': compileFile(THREE, names),
+        'Page.client.ts': emitClient(file, names),
+    })
+    const { default: Component } = await import(`${dir}/Page.ts`)
+    let html = ''
+    for await (const chunk of render(
+        Component,
+        '<!doctype html><html><head></head><body></body></html>',
+    ))
+        html += new TextDecoder().decode(chunk)
+    document.body.innerHTML = html.slice(
+        html.indexOf('<body>') + '<body>'.length,
+        html.indexOf('</body>'),
+    )
+    const painted = [...document.querySelectorAll('#three li')]
+    expect(painted).toHaveLength(3)
+    let last = painted[2] as Element
+    for (const id of ['d', 'e']) {
+        const extra = last.cloneNode(true) as Element
+        extra.textContent = id
+        last.after(extra)
+        last = extra
+    }
+    expect(document.querySelectorAll('#three li')).toHaveLength(5)
+
+    const { default: mount } = await import(`${dir}/Page.client.ts`)
+    const said: string[] = []
+    const warn = console.warn
+    console.warn = (...parts: unknown[]): void => {
+        said.push(parts.map(String).join(' '))
+    }
+    try {
+        mount(pageRegion(document.body))
+    } finally {
+        console.warn = warn
+    }
+    expect(
+        [...document.querySelectorAll('#three li')].map((n) => n.textContent),
+    ).toEqual(['a', 'b', 'c'])
+    expect(said.filter((line) => line.includes('41.10'))).toHaveLength(1)
+    expect(said.join(' ')).toContain('holds 5 rows')
+})
+
 // 32.33 — A `{#for}` WITH NO KEY OVER A `Reactive` NAMED ALONE KEYS BY THAT VALUE'S `by`. The page
 // is `PAGE` with the key moved off the block and onto the value, so the counts are the ones the
 // written key earns above.

@@ -82,9 +82,32 @@ Every handler answer carries `server-timing` with **the handler's own duration**
 number the request's own timing hides. A call that took 900 ms because the service it reached
 out to took 850 shows the 850 on the handler, not somewhere in the transfer.
 
-An answer the page's render had already fetched says so. Its description reads that it was
-answered from the render's run, and its duration is how long that run took. It would otherwise
-look exactly like a fresh call that happened to be fast.
+The metric's name says which run the time is from, since the row already names the handler:
+
+* `Direct` — the handler ran for this request.
+* `Seeded` — the page's render had already fetched it, and the duration is how long that run
+  took. It would otherwise look exactly like a fresh call that happened to be fast.
+* `Cached` — a `global` value already held answered it, and nothing ran.
+* `Started` — a stream, timed to its first chunk, which is what the response waited for.
+
+Where `middleware` ran — the app's, the handler's, or both — their time is **`Middleware`**, and
+`Direct` is the handler's body alone. A slow guard and a slow query no longer read as one number.
+
+A span joins them where you ask it to. Its name becomes the metric, so it has to be a plain
+token — no spaces:
+
+```ts server
+const rows = await trace.span(
+    'search',
+    () => database.invoices.search(query, limit),
+    { timing: true },
+)
+```
+
+Only what finished **before the head went out** can be in it. A page sends its head before it
+renders, so a page's entry is its `Middleware` and nothing from the render; the render's calls
+show their own time as `Seeded` on the requests that follow. A span is opt-in because its name
+is visible to anyone with the network panel open.
 
 ## Next
 

@@ -191,11 +191,14 @@ test('the head starts every call the page made, before its markup — 41.21', as
 test("an answer says how long its handler took, and whether the render's run answered it — 21.15", async () => {
     const cookie = await render()
     const seeded = await Bun.fetch(`${base}${CALL}`, { headers: { cookie } })
+    // This app runs a rung, so `Middleware` follows (21.20).
     expect(seeded.headers.get('server-timing')).toMatch(
-        /^handler;dur=[\d.]+;desc="answered from the render's run"$/,
+        /^Seeded;dur=[\d.]+, Middleware;/,
     )
     const fresh = await Bun.fetch(`${base}${CALL}`)
-    expect(fresh.headers.get('server-timing')).toMatch(/^handler;dur=[\d.]+$/)
+    expect(fresh.headers.get('server-timing')).toMatch(
+        /^Direct;dur=[\d.]+, Middleware;/,
+    )
     // The slow handler's own 150 ms, not the request's.
     const duration = Number(
         /dur=([\d.]+)/.exec(fresh.headers.get('server-timing') ?? '')?.[1],

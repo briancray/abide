@@ -4,6 +4,7 @@ import { emitComponent } from '#compiler'
 import { REACTIVE_MEMBERS } from '#compiler/REACTIVE_MEMBERS.ts'
 import { tokenise } from '#compiler/tokenise.ts'
 import { reactive } from '#shared'
+import { writePath } from '#shared/writePath.ts'
 import { closeTyped, lower, refusal, typed } from './typed.ts'
 
 afterAll(closeTyped)
@@ -34,9 +35,61 @@ test('a read by name becomes a call', async () => {
 test('an assignment becomes a write', async () => {
     expect(await lower('n = 1', N)).toBe('n.set(1)')
     expect(await lower('n = n + 1', N)).toBe('n.set(n() + 1)')
-    expect(await lower('() => n = n + 1', N)).toBe('() => n.set(n() + 1)')
+    // A concise body RETURNS the write, so its value is read (see the test below).
+    expect(await lower('() => n = n + 1', N)).toBe(
+        '() => ((__stored) => (n.set(__stored), __stored))(n() + 1)',
+    )
+    expect(await lower('() => { n = n + 1 }', N)).toBe(
+        '() => { n.set(n() + 1) }',
+    )
     expect(await lower('n += 1', N)).toBe('n.set(n() + (1))')
     expect(await lower('n -= step', N)).toBe('n.set(n() - (step))')
+})
+
+// 31.4 — A WRITE WHOSE VALUE IS READ IS WORTH WHAT IT STORED, as JavaScript's own is: `a = b = 0`
+// sets both, and `if ((n = next()) > 0)` tests what was stored. A write in statement position, and
+// either side of a comma standing as one, still takes the short form — the value form begins with
+// `(`, which a line break in front of it would read as a call.
+//
+// THE REVERT: hand `writeParts` and `pathWrite` a `discarded` of true everywhere. `set` hands back
+// nothing, so 7 of the 8 values below read `undefined`.
+function written(lowered: string, names: string[]): unknown[] {
+    const cells: unknown[] = []
+    for (const _ of names) {
+        let held: unknown = { count: 1 }
+        cells.push(
+            Object.assign(() => held, {
+                set(next: unknown): void {
+                    held = next
+                },
+            }),
+        )
+    }
+    return new Function(
+        '__writePath',
+        ...names,
+        `const out = []\n${lowered}\nreturn out`,
+    )(writePath, ...cells)
+}
+
+test('a write used as a value is worth what it stored — 31.4', async () => {
+    const A = new Set(['a', 'b', 's'])
+    const run = async (script: string): Promise<unknown[]> =>
+        written(await lower(script, A), ['a', 'b', 's'])
+    const values = [
+        ...(await run('a = 0\nout.push(a = b = 3, b)')),
+        ...(await run('a = 5\nout.push((a += 2))')),
+        ...(await run('a = 0\nout.push((a ||= 4))')),
+        ...(await run('out.push((s.count = 9), (s.count += 1))')),
+        ...(await run('out.push(s.count++, ++s.count)')),
+    ]
+    // `b` is read, not written, which is why the one 3 survives the revert.
+    expect(values).toEqual([3, 3, 7, 4, 9, 10, 1, 3])
+    // Statement position is the short form it always was, a comma of statements included.
+    expect(await lower('f()\na = 1, b = 2', A)).toBe('f()\na.set(1), b.set(2)')
+    expect(await lower('s.count = 1', A)).toBe(
+        's.set(__writePath(s(), ["count"], 1))',
+    )
 })
 
 // 31.7 — the explicit spelling keeps compiling, and is not rewritten twice.
@@ -659,7 +712,7 @@ test('an increment and a decrement are writes — 31.4', async () => {
 // A `++` BELONGS TO WHICHEVER OPERAND IT IS NOT SEPARATED FROM, which is JavaScript's restricted
 // production read from both ends. THE REVERT: take a neighbouring `++` TOKEN for this
 // name's rather than the update node the checker parented it under; the two below emit
-// `a((__previous) => …)(n()) = 1` — which PARSES, and throws the write away — and
+// `a((__stored) => …)(n() + (1)) = 1` — which PARSES, and throws the write away — and
 // `n.set(n() + 1)b`, which does not. 2 wrong rewrites, and only one of them is loud.
 test('an update belongs to the operand on its own line', async () => {
     expect(await lower('a++\nn = 1', N)).toBe('a++\nn.set(1)')
@@ -669,7 +722,7 @@ test('an update belongs to the operand on its own line', async () => {
     // the operand it always was.
     expect(await lower('a\n++n', N)).toBe('a\nn.set(n() + 1)')
     expect(await lower('a + ++n', N)).toBe(
-        'a + ((__previous) => (n.set(__previous + 1), __previous + 1))(n())',
+        'a + ((__stored) => (n.set(__stored), __stored))(n() + (1))',
     )
 })
 

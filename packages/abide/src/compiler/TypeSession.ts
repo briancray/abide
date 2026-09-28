@@ -253,13 +253,15 @@ export class TypeSession {
                 directory = statSync(path).isDirectory()
             } catch {
                 this.edits.deleted.push(path)
-                // A `.abide` that is gone takes its shadow with it, or the checker keeps a page
-                // nobody has as a root of the project for the rest of the session.
+                // A `.abide` that is gone takes its shadows with it, or the checker keeps a page
+                // nobody has as a root of the project for the rest of the session — and a page
+                // importing it goes on reading the props its checked module declared.
+                const gone = this.canonical(path)
                 for (const shadowPath of this.shadows.keys())
                     if (
-                        shadowPath ===
-                            `${this.canonical(path)}${SHADOW_SUFFIX}` ||
-                        shadowPath.startsWith(`${this.canonical(path)}/`)
+                        shadowPath === `${gone}${SHADOW_SUFFIX}` ||
+                        shadowPath === `${gone}${CHECKED_SUFFIX}` ||
+                        shadowPath.startsWith(`${gone}/`)
                     ) {
                         this.shadows.delete(shadowPath)
                         this.edits.deleted.push(shadowPath)
@@ -410,8 +412,15 @@ export class TypeSession {
         const created: string[] = []
         const changed: string[] = []
 
-        for (const source of sources) {
-            const projection = projectShadow(source.file)
+        // EVERY SOURCE PROJECTS BEFORE ANY SHADOW IS REGISTERED. A projection refuses (a top-level
+        // `await`), and a shadow registered ahead of the refusal was in `shadows` with the lists
+        // that would have reported it dropped — so the retry found nothing moved, and the checker
+        // answered from the old shadow at the new one's offsets, or never had the file at all.
+        const projected = sources.map((source) => ({
+            source,
+            projection: projectShadow(source.file),
+        }))
+        for (const { source, projection } of projected) {
             // 34.2 — A `<script module>` DECLARES NAMES TOO, and the `<script>` under it is inside
             // that scope on both sides. The projection holds both from offset 0.
             const scripts = projection.text.slice(0, projection.scripts.end)
@@ -549,6 +558,9 @@ export class TypeSession {
                     query.scriptsEnd,
                     answers[at] as Read[],
                 )
+                // Awaited after the round trips below, so a 33.14 refusal would reject with nothing
+                // listening and be reported unhandled; `await props` still throws it.
+                props.catch(() => {})
                 // No name is no round trip to ask about none.
                 const symbols =
                     names.length === 0

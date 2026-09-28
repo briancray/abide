@@ -259,3 +259,17 @@ const inner = reactive('s')
     const wrong = await diagnosed(arms('inner.toFixed()'))
     expect(wrong.map(({ line }) => line)).toEqual([11])
 })
+
+// AN ARM'S SCRIPT IS STATEMENTS, NOT A VALUE. A template position is parenthesized where a comma or
+// a trailing comment would change what the emit splices it into (19.12); a script spliced the same
+// way is `(const a = 1, b = 2)`, which is not a program.
+//
+// THE REVERT: lower a setup through `Lowering.expression` rather than `Lowering.setup`. Both
+// server module then fails to build — `Unexpected const` — where `1 2` is due.
+test("an arm's script with a comma declaration and a trailing comment is spliced as written", async () => {
+    const html = await mountSource(
+        `{#if true}<script>\nconst a = 1, b = 2 // two at once\n</script><b id="pair">{a} {b}</b>{/if}`,
+    )
+    expect(html).toContain('>1 2<')
+    expect(text('#pair')).toBe('1 2')
+})

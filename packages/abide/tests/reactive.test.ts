@@ -2609,6 +2609,28 @@ test('a producer that revalidates to the same value restarts the life', () => {
     }
 })
 
+// 1.7 AND 6.12 AFTER THE TIMER HAS DROPPED THE PRODUCTION: awaiting is reaching, and nothing is
+// served and nothing is loading, so an await that starts no reload waits on a probe nothing moves.
+//
+// THE REVERT: removing the `expire` call from `settled` reports 'hung' with 1 run.
+test('an await after the ttl dropped the production reloads it', async () => {
+    let runs = 0
+    const loaded = reactive(
+        async () => {
+            runs += 1
+            return runs
+        },
+        { ttl: 20 },
+    )
+    expect(await loaded).toBe(1)
+    await Bun.sleep(60)
+    const answer = await Promise.race([
+        loaded.then((value) => `loaded ${value}`),
+        Bun.sleep(300).then(() => 'hung'),
+    ])
+    expect(`${answer} with ${runs} runs`).toBe('loaded 2 with 2 runs')
+})
+
 // 6.5 ON THE RING, with the timer deliberately out of reach — a `ttl` of a minute cannot
 // fire inside this test, so what drops the productions is the read and nothing else.
 // 6.9's timer is the common path and this is the backstop it needs: a clamped background
@@ -4331,6 +4353,43 @@ test('a set on a stream stands until the next chunk overwrites it', async () => 
     expect(`after publish: ${rows().join(',')}`).toBe(
         'after publish: published',
     )
+})
+
+// 5.7 AND 2.5 ON A STREAM: a patch that grows or shrinks the accumulation mints no chunk, so the ring
+// it reshaped still has to line up with the ordinal a cursor holds — and a read shows what it added.
+//
+// THE REVERT: drop the `ringBase`/`visible` move from `patchCell`'s stream branch; the push reads
+// `1,2` after the patch and hands the cursor `x` as a chunk (3 is never delivered), and the splice
+// hands it `undefined` from one past the end of the ring.
+test('a patch that reshapes a stream keeps its cursors in step', async () => {
+    const outcomes: string[] = []
+    for (const reshape of [
+        (chunks: string[]) => chunks.push('x'),
+        (chunks: string[]) => chunks.splice(0, 1),
+    ]) {
+        const feed = streamOf<string>()
+        const rows = reactive(feed.body)
+        const run = feed.runs[0] as Run<string>
+        run.push('1')
+        run.push('2')
+        await turns()
+        const cursor = rows[Symbol.asyncIterator]()
+        await cursor.next()
+        await cursor.next()
+        rows.patch((chunks) => {
+            reshape(chunks)
+        })
+        const read = rows().join(',')
+        const pending = cursor.next()
+        run.push('3')
+        const taken = await Promise.race([
+            pending.then((step) => String(step.value)),
+            Bun.sleep(200).then(() => 'nothing'),
+        ])
+        await cursor.return?.()
+        outcomes.push(`read ${read}, cursor ${taken}`)
+    }
+    expect(outcomes).toEqual(['read 1,2,x, cursor 3', 'read 2, cursor 3'])
 })
 
 // 9.26: A CURSOR WALKS CHUNKS, and a write is not one. A write minting an ordinal with nothing in

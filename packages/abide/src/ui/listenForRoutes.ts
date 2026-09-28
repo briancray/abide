@@ -27,13 +27,21 @@ export function listenForRoutes(router: Router): () => void {
 
     // BACK AND FORWARD HAVE ALREADY MOVED THE ADDRESS BAR by the time this runs, so the page is
     // mounted where the bar already points and nothing is pushed for it.
+    //
+    // 30.20 — A STEP BETWEEN TWO FRAGMENTS OF THE STANDING PAGE — back over an in-page `#anchor` jump — is
+    // no navigation at all: the page, its state and its calls stay, and nothing is asked. It is
+    // decided here rather than in `go`, because the entry stepped to may carry no fragment, and a
+    // `go` to the same address with none is a navigation like any other.
     const onPop = (): void => {
         const found = router.match(location.pathname)
         if (found === undefined) {
             location.reload()
             return
         }
-        void router.go(location.href, { replace: true, keepScroll: true })
+        const stepped = { replace: true, keepScroll: true }
+        if (router.shows(location))
+            router.follow(new URL(location.href), stepped)
+        else void router.go(location.href, stepped)
     }
 
     const listening = new AbortController()

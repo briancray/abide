@@ -306,7 +306,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `content-security-policy: frame-ancestors 'none'` | a page | The default a write through `response` or `csp` overrides. | 21.18, 21.10 |
 | `access-control-allow-origin` | an rpc answer to another origin | The origin a handler admitted. | 21.19, 16.25 |
 | `allow: GET, HEAD` | a page, a public file or the bundle, asked by another method | The methods the address answers. | 15.17 |
-| `server-timing` | an rpc answer | The handler's duration, and whether the render's run answered it. | 21.15 |
+| `server-timing` | an rpc answer; `Middleware` and a `timing` span on any answer | The handler's duration, named `Direct`, `Seeded` from the render's run, `Cached` from a held `global` production, or `Started` to a stream's first chunk; the rungs' time; and each `timing` span. | 21.15, 21.20, 21.21, 24.6 |
 | `abide-version` | a `GET` answered from a `global` value with no `middleware` | The version of the production answered. | 18.20, 18.21, 18.22, 18.24 |
 
 # Generated surfaces
@@ -327,7 +327,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `/__abide/mcp` | `POST` | The streamable-http MCP endpoint. | 20.5, 20.7, 20.8, 20.9, 20.10 |
+| `/__abide/mcp` | `POST` | The streamable-http MCP endpoint. | 20.5, 20.7, 20.8, 20.9, 20.10, 20.12 |
 
 # Ambient values
 
@@ -371,7 +371,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- | --- |
 | `trace` | `() => string` | The trace id of the operation this work belongs to. | 24.1 |
 | `trace.sampled` | `() => boolean` | The caller's sampling decision, carried through verbatim. | 24.2 |
-| `trace.span` | `<T>(name: string, body: () => T) => T` | Opens a child span around a body. | 24.3, 24.4 |
+| `trace.span` | `<T>(name: string, body: () => T, options?: { timing?: boolean }) => T` | Opens a child span around a body. | 24.3, 24.4, 24.6, 24.7 |
 | `trace.headers` | `() => Record<string, string>` | What an outbound request carries. | 24.5 |
 
 ## `server`
@@ -462,7 +462,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `url` | `<P extends string>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query] : [params?: ParamsOf<P>, queryParams?: Query]) => string` | Builds an address from a route literal. | 30.1, 30.2, 30.8 |
+| `url` | `<P extends string>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query] : [params?: ParamsOf<P>, queryParams?: Query]) => string` | Builds an address from a route literal. | 30.1, 30.2, 30.8, 30.19 |
 | `HasParams<P>` | `boolean` | Whether the literal carries a required segment. | 30.2 |
 | `HasSegments<P>` | `boolean` | Whether the literal carries a segment of any kind. | 30.2 |
 | `RequiredNames<P>` | `string` | The required segment names. | 30.3 |
@@ -475,7 +475,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18 |
+| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22 |
 
 # `.abide` files
 
@@ -539,7 +539,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | Spelling | Meaning | Rules |
 | --- | --- | --- |
 | `{#component Name(pattern)}` | An inline component. | 32.17 |
-| `<Name/>` | A component invocation. | 32.18, 32.35, 32.36, 32.37 |
+| `<Name/>` | A component invocation. | 32.18, 32.35, 32.36, 32.37, 33.19 |
 | `<slot/>` | The position children render into. | 32.19 |
 | `<slot>fallback</slot>` | Renders children, or a fallback. | 32.19 |
 | `<Tag>…</Tag>` | Children passed to a component's slot. | 32.19 |

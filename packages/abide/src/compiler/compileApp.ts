@@ -224,8 +224,8 @@ export async function emitApp(
     // server and hydrates, and a page they NAVIGATED to is handed the empty anchor pair and
     // fills it from the template in its own module. `emitClient`'s `isEmptyRegion` guard is
     // what makes one module serve both, so "routable" joins "invoked" as a module that fills
-    // itself — and parts from it only in how OFTEN it can be filled, which is what decides
-    // whether the fill is markup or a build (`SelfFill`).
+    // itself — and parts from it in how OFTEN it can be filled, which is what decides whether
+    // the fill is markup or a build, and in carrying a head (`SelfFill`).
     const layouts: string[] = []
     for (const entry of parsed)
         if (entry.kind === 'layout') layouts.push(entry.relative)
@@ -290,10 +290,13 @@ export async function emitApp(
         // page under it may arrive with the layout already standing or with nothing at all.
         // An `error.abide` is never navigated to — only the server holds the error table.
         const name = relative.slice(relative.lastIndexOf('/') + 1)
+        const routed = entry.kind === 'page' || entry.kind === 'layout'
         const selfFill = graph.invoked.has(entry.path)
-            ? 'repeated'
-            : entry.kind === 'page' || entry.kind === 'layout'
-              ? 'once'
+            ? routed
+                ? 'both'
+                : 'invoked'
+            : routed
+              ? 'routed'
               : 'none'
         const client = emitClient(entry.file, fileReads, selfFill, components)
         const stylesheet = styled
@@ -343,9 +346,11 @@ type FileKind = 'page' | 'layout' | 'error' | 'component'
 function fileKind(relative: string): FileKind {
     if (!relative.startsWith('pages/') && !relative.includes('/pages/'))
         return 'component'
-    if (relative.endsWith('page.abide')) return 'page'
-    if (relative.endsWith('layout.abide')) return 'layout'
-    return relative.endsWith('error.abide') ? 'error' : 'component'
+    // The WHOLE basename: `homepage.abide` ends with `page.abide` and is a component.
+    const name = relative.slice(relative.lastIndexOf('/') + 1)
+    if (name === 'page.abide') return 'page'
+    if (name === 'layout.abide') return 'layout'
+    return name === 'error.abide' ? 'error' : 'component'
 }
 
 // THE LAYOUTS A PAGE RENDERS INSIDE, outermost first. Every `layout.abide` in a directory ON THE

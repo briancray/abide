@@ -658,11 +658,12 @@ let b = reactive('B')
 // 32.28 IN A RUN THAT MOVES. Static text is markup, so `AT&amp;T` is the four characters `AT&T`
 // wherever it is written — and a LIVE run's binding writes the whole run through `data`, which is
 // not a parse, so the static piece has to go in decoded or the entity lands on the screen as its
-// own bytes the first time the binding runs. The build path decodes the same piece the same way
-// (`decodedText`), which is what keeps a painted run and a written one the same text.
+// own bytes the first time the binding runs. The compiler decodes the piece by the text rule
+// (`decodeCharacterReferences`), the same one a built row's text takes, which is what keeps a
+// painted run and a written one the same text.
 //
 // THE REVERT: push the static piece's bytes as they stand (`JSON.stringify(node.text)`) into the
-// live run's text branch in `emitClient`. This reports `AT&amp;T 0` at mount and `AT&amp;T 1` after
+// live run's text branch in `emitClient`, rather than decoded. This reports `AT&amp;T 0` at mount and `AT&amp;T 1` after
 // the click, where `AT&T 0` and `AT&T 1` are due.
 test('a live run writes its static entities as the characters they stand for — 32.28', async () => {
     const { mount } = await mountPage(`<script>
@@ -680,4 +681,109 @@ let count = reactive(0)
     ;(document.querySelector('button') as HTMLElement).click()
     flushSync()
     expect(out.textContent).toBe('AT&T 1')
+})
+
+// 32.28 IN AN ATTRIBUTE THAT ALSO HOLDS A SLOT. The static text around a slot is the author's markup
+// exactly as it is in an attribute with none — `AT&amp;T` is `AT&T` — and only the slot is data.
+// Taken as one string, the whole value was escaped on the server (`AT&amp;amp;T`) and set as its
+// own bytes by the client, so `title="AT&amp;T {n}"` showed `AT&amp;T 0` on both, while a bare `&`
+// happened to come out right on both and hid it. A URL attribute is the exception 32.29 already
+// makes: its static text is escaped the way a slot is, so `&amp;` stays those five characters.
+//
+// DECODED BY THE BUILD, and the value is data whole after that: the parser turns each static piece
+// into the characters it stands for (`decodeCharacterReferences`), the server escapes the whole
+// value as it would `{expr}`, and every way the client writes one sets it as it stands — the binding
+// that keeps a live attribute moving, a row the browser builds (`title`, which reads only the row),
+// and a live attribute on that built row (`data-live`). And the mount writes NOTHING: the value is
+// what the browser already made of the server's bytes, so hydration compares equal.
+//
+// `Q&{slotted}` IS THE BOUNDARY, and it holds by construction. A static `&` that ended right before
+// a slot once took the slot's `#38;` as the rest of a reference in the served bytes, and the page
+// showed `Q&` where the data said `Q&#38;`; with the static text decoded and the whole value
+// escaped, the slot's `&` is written `&amp;` like any other.
+//
+// THE REVERT: decode only a component's prop in `pushQuoted` (`interpolated(raw, prop)`), so an
+// element's static pieces reach the escape as the author's bytes: the server writes
+// `title="AT&amp;amp;T 0"` and the first assertion reports it.
+test('the static text of an interpolated attribute is markup, and its slots are data — 32.28, 32.29', async () => {
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+let n = reactive(0)
+let rows = reactive([1])
+const slotted = '#38;'
+</script>
+
+<main><p id="named" title="AT&amp;T {n}">a</p><p id="bare" title="AT&T {n}">b</p><p id="numeric" title="AT&#38;T {n}">c</p><p id="joined" title="Q&{slotted}">j</p><a id="url" href="/q?x=1&amp;y={n}">u</a><p id="merged" class="a&amp;b {n}" class:on={n}>m</p><button id="go" onclick={() => { n = n + 1; rows = [...rows, rows.length + 1] }}>go</button><ul>{#for row of rows by row}<li id={'r' + row} title="AT&amp;T {row}" data-live="AT&amp;T {n}">r</li>{/for}</ul></main>`)
+
+    expect(html).toContain('<p id="named" title="AT&amp;T 0">')
+    expect(html).toContain('<p id="bare" title="AT&amp;T 0">')
+    expect(html).toContain('<p id="numeric" title="AT&amp;T 0">')
+    expect(html).toContain('<p id="joined" title="Q&amp;#38;">')
+    expect(html).toContain('<a id="url" href="/q?x=1&amp;amp;y=0">')
+
+    const title = (id: string, name = 'title') =>
+        document.querySelector(`#${id}`)?.getAttribute(name)
+    expect(title('named')).toBe('AT&T 0')
+    expect(title('bare')).toBe('AT&T 0')
+    expect(title('numeric')).toBe('AT&T 0')
+    expect(title('joined')).toBe('Q&#38;')
+    expect(title('url', 'href')).toBe('/q?x=1&amp;y=0')
+    expect(document.querySelector('#merged')?.classList.contains('a&b')).toBe(
+        true,
+    )
+    expect(title('r1')).toBe('AT&T 1')
+
+    const mountWork = measure(() => {
+        mount(pageRegion(document.body))
+        flushSync()
+    })
+    expect(mountWork.attributesSet).toBe(0)
+
+    ;(document.querySelector('#go') as HTMLElement).click()
+    flushSync()
+    expect(title('named')).toBe('AT&T 1')
+    expect(title('bare')).toBe('AT&T 1')
+    expect(title('numeric')).toBe('AT&T 1')
+    expect(title('url', 'href')).toBe('/q?x=1&amp;y=1')
+    expect(title('r2')).toBe('AT&T 2')
+    expect(title('r1', 'data-live')).toBe('AT&T 1')
+    expect(title('r2', 'data-live')).toBe('AT&T 1')
+})
+
+// A ROW THE BROWSER BUILDS READS ITS STATIC TEXT AS THE PARSER READ THE SERVER'S, under the rule the
+// position takes. `&notin` is the edge the two rules draw: between two tags it is `¬` and then
+// `in`, and in an attribute the `in` after it keeps the whole as written. The build decodes each
+// static string once (`decodeCharacterReferences`), so the row the page grew and the row the server
+// painted are compared field by field — text, a static attribute, an interpolated one.
+//
+// THE REVERTS: build a text piece by the attribute rule (`emitBuild`'s static text) — the grown row
+// reads `&notin & 2|` where `¬in & 2|` is due. Hand a static attribute over as its bytes
+// (`buildRender`'s `bytes` as `JSON.stringify(bytes)`) — the grown row's `data-s` reads
+// `&notin;x &amp;notin` where `∉x &notin` is due.
+test('a built row decodes static text by the text rule and an attribute by the attribute rule — 32.28', async () => {
+    const { mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+let rows = reactive([1])
+</script>
+
+<main><button id="go" onclick={() => { rows = [...rows, rows.length + 1] }}>go</button><ul>{#for row of rows by row}<li id={'r' + row} data-s="&notin;x &amp;notin" title="&notin &amp; {row}">&notin &amp; {row}|</li>{/for}</ul></main>`)
+    const read = (id: string) => {
+        const row = document.querySelector(`#${id}`) as Element
+        return [
+            row.textContent,
+            row.getAttribute('data-s'),
+            row.getAttribute('title'),
+        ]
+    }
+    expect(read('r1')).toEqual(['¬in & 1|', '∉x &notin', '&notin & 1'])
+    const mountWork = measure(() => {
+        mount(pageRegion(document.body))
+        flushSync()
+    })
+    expect(mountWork.attributesSet).toBe(0)
+    ;(document.querySelector('#go') as HTMLElement).click()
+    flushSync()
+    expect(read('r2')).toEqual(['¬in & 2|', '∉x &notin', '&notin & 2'])
 })

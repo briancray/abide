@@ -9,9 +9,16 @@
 import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLocalStorage and has no context-carrying api of its own
 import { TRACE, writeSpan } from '#shared/log.ts'
 import { randomToken } from './randomToken.ts'
-import { currentRequestScope, type RequestScope } from './requestScope.ts'
+import {
+    currentRequestScope,
+    type RequestScope,
+    timed,
+} from './requestScope.ts'
 
 const SPAN = new AsyncLocalStorage<string>()
+
+// 24.7 — RFC 9110's `token`, which is all a `server-timing` metric name may be.
+const TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
 
 const TRACEPARENT = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/
 
@@ -61,18 +68,28 @@ export const trace = Object.assign(
             )
         },
         // 24.3, 24.4 — ONE LINE PER SPAN, written when the body settles: `time` is when it started,
-        // and the duration is `performance.now`'s, which a clock change cannot move.
-        span<T>(name: string, body: () => T): T {
+        // and the duration is `performance.now`'s, which a clock change cannot move. 24.6 — and
+        // one `server-timing` entry where asked for, which only a span closed before the head
+        // went out reaches.
+        span<T>(
+            name: string,
+            body: () => T,
+            options?: { timing?: boolean },
+        ): T {
+            const timing = options?.timing === true
+            if (timing && !TOKEN.test(name))
+                throw new Error(
+                    `abide: trace.span("${name}", …, { timing: true }) names a server-timing metric, which must be an HTTP token — no spaces, quotes or separators. RULEBOOK 24.7.`,
+                )
             const scope = currentRequestScope()
             if (scope === undefined) return body()
             traceOf(scope)
             const startedAt = new Date().toISOString()
             const started = performance.now()
             const close = (): void => {
-                writeSpan(
-                    startedAt,
-                    `${name} ${(performance.now() - started).toFixed(3)}ms`,
-                )
+                const duration = performance.now() - started
+                writeSpan(startedAt, `${name} ${duration.toFixed(3)}ms`)
+                if (timing) timed(scope.timing, name, duration)
             }
             let result: T
             try {

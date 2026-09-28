@@ -1,4 +1,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
+import { URL_ATTRIBUTES } from '#shared/URL_ATTRIBUTES.ts'
+import { isComponentTag } from './classifyTemplate.ts'
+import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import {
     type Attribute,
     type Branch,
@@ -8,6 +11,7 @@ import {
 } from './TemplateNode.ts'
 import {
     isSpace,
+    nesting,
     skipQuoted,
     slotEnd,
     type Token,
@@ -630,19 +634,9 @@ function forBlock(
     for (let index = 0; index < tokens.length; index += 1) {
         const token = tokens[index] as Token
         const kind = token.kind
-        if (
-            kind === SyntaxKind.OpenBraceToken ||
-            kind === SyntaxKind.OpenBracketToken ||
-            kind === SyntaxKind.OpenParenToken
-        )
-            depth += 1
-        else if (
-            kind === SyntaxKind.CloseBraceToken ||
-            kind === SyntaxKind.CloseBracketToken ||
-            kind === SyntaxKind.CloseParenToken
-        )
-            depth -= 1
-        else if (depth !== 0) continue
+        const moved = nesting(kind)
+        depth += moved
+        if (moved !== 0 || depth !== 0) continue
         else if (of === undefined) {
             if (kind === SyntaxKind.OfKeyword) of = token
             else if (kind === SyntaxKind.CommaToken && comma === undefined)
@@ -827,6 +821,16 @@ function readTag(
 // escaped by `escapeAttribute`, and scheme-checked by `safeUrl` where 32.21 asks for it. A second
 // shape here would be a second copy of all three.
 //
+// 32.28 — ITS STATIC TEXT IS DECODED HERE, so what is left is data whole and takes that one path on
+// both sides: `title="AT&amp;T {n}"` is the literal `AT&T ${n}`, escaped as one value by the server
+// and set as it stands by the browser. Each static piece is decoded ON ITS OWN, so a slot's text can
+// never finish a reference the author's began: `&amp{x}` is `&` and then the slot. 32.29 keeps a URL
+// attribute's static text as written, escaped with its slots the way `{expr}` is.
+//
+// 33.19 — A COMPONENT'S PROP IS DECODED WHEN IT IS STATIC TOO, because it is never markup: an element's
+// static value is served as the author's bytes (`staticAttributeBytes`), and a prop is handed over
+// as a string, so `<Card title="AT&amp;T">` hands the child `AT&T`.
+//
 // 32.20 — AN INTERPOLATED `style` TAKES THE OTHER ROAD and lowers to one `style:prop` per
 // declaration, which is why the split happens here, where the interpolated form is still told
 // apart from the whole `style={expr}` one.
@@ -836,9 +840,19 @@ function pushQuoted(
     raw: string,
     tag: string,
 ): void {
-    const expression = interpolated(raw)
+    const prop = isComponentTag(tag)
+    const expression = interpolated(
+        raw,
+        prop || !URL_ATTRIBUTES.has(attrName.toLowerCase()),
+    )
     if (expression === undefined) {
-        attributes.push(attribute(attrName, raw, false))
+        attributes.push(
+            attribute(
+                attrName,
+                prop ? decodeCharacterReferences(raw, 'attribute') : raw,
+                false,
+            ),
+        )
         return
     }
     if (attrName.toLowerCase() !== 'style') {
@@ -860,7 +874,7 @@ function pushQuoted(
                 `abide: an interpolated style on <${tag}> has a declaration with no property name. Write style:prop={value}. RULEBOOK 32.20.`,
             )
         const value = declaration.slice(colon + 1).trim()
-        const slotted = interpolated(value)
+        const slotted = interpolated(value, false)
         attributes.push(
             attribute(
                 `style:${property}`,
@@ -882,7 +896,7 @@ function attribute(
 // The value as a template-literal expression, or `undefined` where it holds no slot at all. An
 // UNCLOSED `{` is text: `slotEnd` runs to the end of the value and the brace was never a
 // slot, so the attribute stays exactly what the author wrote.
-function interpolated(raw: string): string | undefined {
+function interpolated(raw: string, decode: boolean): string | undefined {
     let out = ''
     let at = 0
     let found = false
@@ -891,12 +905,18 @@ function interpolated(raw: string): string | undefined {
         if (brace === -1) break
         const close = slotEnd(raw, brace)
         if (close >= raw.length) break
-        out += `${templateText(raw.slice(at, brace))}\${${raw.slice(brace + 1, close).trim()}}`
+        out += `${staticText(raw.slice(at, brace), decode)}\${${raw.slice(brace + 1, close).trim()}}`
         at = close + 1
         found = true
     }
     if (!found) return undefined
-    return `\`${out}${templateText(raw.slice(at))}\``
+    return `\`${out}${staticText(raw.slice(at), decode)}\``
+}
+
+function staticText(text: string, decode: boolean): string {
+    return templateText(
+        decode ? decodeCharacterReferences(text, 'attribute') : text,
+    )
 }
 
 // The static text of a template literal. A `\`, a backtick and a `${` are the three sequences the

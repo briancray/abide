@@ -6,6 +6,7 @@
 // WHERE THE JAR COMES FROM IS A SLOT the server fills (`#server/requestScope.ts`), for `TRACE`'s
 // reason: this seam cannot name the request scope, and a browser bundle must not reach it.
 
+import { decodedOrKept } from './decodedOrKept.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
 type CookieInit = Bun.CookieInit
@@ -96,7 +97,9 @@ export class Cookies implements Iterable<[string, string]> {
         return Object.fromEntries(this.held)
     }
 
-    // The `set-cookie` lines this jar has written, in order.
+    // The `set-cookie` lines this jar has written, in order — a server's alone. A browser's jar lives
+    // as long as the page and its writes went into the document, so it keeps none: held, they grew
+    // one line per write with nothing to read them.
     toSetCookieHeaders(): string[] {
         return [...this.writes]
     }
@@ -145,7 +148,7 @@ export class Cookies implements Iterable<[string, string]> {
 
     write(name: string, init: CookieInit): void {
         const serialized = serializeCookie(init, this.inBrowser)
-        this.writes.push(serialized)
+        if (!this.inBrowser) this.writes.push(serialized)
         this.sink(serialized)
         this.changed(name)
     }
@@ -180,6 +183,8 @@ function capitalised(sameSite: string): string {
     return sameSite.charAt(0).toUpperCase() + sameSite.slice(1)
 }
 
+// THE JAR HOLDS VALUES DECODED, whichever path fills it: `serializeCookie` encodes, and the header,
+// `document.cookie` and a `cookieStore` change all carry the encoded text.
 function parseCookies(header: string): Map<string, string> {
     const parsed = new Map<string, string>()
     for (const pair of header.split(';')) {
@@ -187,12 +192,7 @@ function parseCookies(header: string): Map<string, string> {
         if (at === -1) continue
         const name = pair.slice(0, at).trim()
         if (name === '') continue
-        const raw = pair.slice(at + 1).trim()
-        let value = raw
-        try {
-            value = decodeURIComponent(raw)
-        } catch {}
-        parsed.set(name, value)
+        parsed.set(name, decodedOrKept(pair.slice(at + 1).trim()))
     }
     return parsed
 }
@@ -228,8 +228,9 @@ function browserCookies(): Cookies {
             deleted?: { name: string }[]
         }
         for (const cookie of changed) {
-            if (jar.held.get(cookie.name) === cookie.value) continue
-            jar.held.set(cookie.name, cookie.value ?? '')
+            const value = decodedOrKept(cookie.value ?? '')
+            if (jar.held.get(cookie.name) === value) continue
+            jar.held.set(cookie.name, value)
             jar.changed(cookie.name)
         }
         for (const cookie of deleted) {

@@ -272,9 +272,11 @@ function check(
     }
     const node = schema as Node
 
+    // MARKED ONLY ONCE THE SHAPE HOLDS: a node marked before a throw skipped the check on every
+    // later call, so a typo refused the first write and let the second through unread.
     if (!VERIFIED.has(node)) {
-        VERIFIED.add(node)
         verifyShape(node, path)
+        VERIFIED.add(node)
     }
 
     // NaN AND THE INFINITIES ARE NOT JSON VALUES — the invariant `canonicalKey` holds at the reach
@@ -316,7 +318,7 @@ function check(
         }
     }
 
-    if ('const' in node && !sameJson(node.const, value))
+    if (node.const !== undefined && !sameJson(node.const, value))
         noteOr(found, path, `must be ${JSON.stringify(node.const)}`)
 
     const enumerated = node.enum as JsonValue[] | undefined

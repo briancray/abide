@@ -190,8 +190,14 @@ export function socketHandlers(
             }
             if (carried === undefined) return
             const onion = carried.onion
+            // A SUBSCRIPTION IS HELD FROM THE FRAME ON, not from when its rungs let it through: an
+            // `unsub` or the connection's close that lands while a rung is pending stops this
+            // placeholder, and the rungs resolving to find another in its place install nothing.
+            const pending = (): void => {}
             try {
                 if (frame.op === 'sub') {
+                    ws.data.subscriptions.get(id)?.()
+                    ws.data.subscriptions.set(id, pending)
                     // 18.3, 18.4 — the lane's rungs, and a rung refuses by throwing.
                     if (onion !== null)
                         await onion({
@@ -199,6 +205,7 @@ export function socketHandlers(
                             args: frame.args,
                             request,
                         })
+                    if (ws.data.subscriptions.get(id) !== pending) return
                     subscribe(
                         ws,
                         id,
@@ -226,6 +233,8 @@ export function socketHandlers(
                     if (isFailed(minted)) throw minted
                 }
             } catch (thrown) {
+                if (ws.data.subscriptions.get(id) === pending)
+                    ws.data.subscriptions.delete(id)
                 send(ws, { op: 'error', id, error: failure(thrown) })
             }
         },
@@ -246,7 +255,6 @@ function subscribe(
     seq: number | undefined,
     epoch: string | undefined,
 ): void {
-    ws.data.subscriptions.get(id)?.()
     // The past `s.history` would hand back — the adopted value's, swept of what outlived its `ttl`.
     const cell = pastOf(value)
     const current = epochOf(cell)

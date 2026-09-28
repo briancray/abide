@@ -17,6 +17,7 @@ let answer: { body: unknown; life: string } = {
     life: 'private, no-store',
 }
 let loads = 0
+let asked: RequestInit | undefined
 const unstubbedSocket = globalThis.WebSocket
 const unstubbedFetch = globalThis.fetch
 globalThis.WebSocket = class {
@@ -24,8 +25,9 @@ globalThis.WebSocket = class {
     readyState = 0
     send(): void {}
 } as unknown as typeof WebSocket
-globalThis.fetch = (async () => {
+globalThis.fetch = (async (_url: string, init?: RequestInit) => {
     loads += 1
+    asked = init
     return new Response(JSON.stringify(answer.body), {
         headers: {
             'content-type': 'application/json',
@@ -210,4 +212,30 @@ test('a copy goes stale when the max-age its answer carried runs out', async () 
     await settle(1_200)
     await timed()
     expect(loads - before).toBe(1)
+})
+
+// A LIFE THE SERVER ROUNDED DOWN TO NOTHING. What is left under a second answers `max-age=0`, and the
+// copy is stale as soon as it lands. THE REVERT: start the timer only for `seconds > 0`; the copy is
+// served for good and 0 loads are made where 1 is due.
+test('a copy answered max-age=0 is stale at once', async () => {
+    answer = { body: ['last'], life: 'private, max-age=0' }
+    const ending = wire('GET', '/__abide/rpc/library/ending') as (
+        args?: unknown,
+    ) => (() => unknown) & PromiseLike<unknown>
+    await ending()
+    const before = loads
+    await settle()
+    await ending()
+    expect(loads - before).toBe(1)
+})
+
+// THE BROWSER'S HTTP CACHE HEARS NO `invalidate`, and would answer a stale copy's reload with the
+// value it was dropping. THE REVERT: leave `cache` out of `rpcRequest`'s init; this reads `undefined`.
+test('a copy asks past the HTTP cache', async () => {
+    answer = { body: ['fresh'], life: 'private, max-age=60' }
+    const cached = wire('GET', '/__abide/rpc/library/cached') as (
+        args?: unknown,
+    ) => (() => unknown) & PromiseLike<unknown>
+    await cached()
+    expect(asked?.cache).toBe('no-cache')
 })

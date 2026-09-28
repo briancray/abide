@@ -45,10 +45,10 @@ export type Rendered = { head: string; body: string }
 // what the page under it contributed is pushed as the thunk runs, so the document carries both
 // and the order is the tree's (39.5).
 // THE SHAPE IS THE SAME AT EVERY LEVEL, `children` included. The emitted readers are shared with
-// the client, where `Router.paramsProp` mints the record with both keys for the same reason: every
-// compiled page and layout loads its props off one of these, and a level that omits a key the
-// level above it carries is a second hidden class for all of them. The innermost has nothing below
-// it, so its `children` is present and undefined rather than absent.
+// the client, where `Router.ts`'s `routeProps` mints the record with both keys for the same
+// reason: every compiled page and layout loads its props off one of these, and a level that omits a
+// key the level above it carries is a second hidden class for all of them. The innermost has
+// nothing below it, so its `children` is present and undefined rather than absent.
 //
 // 41.20 — EVERY LEVEL IS SET UP BEFORE ANY IS BUILT, and the turn is let run between the two, so a
 // call the setup started that answers without waiting on anything — a value already held, a

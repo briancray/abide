@@ -12,8 +12,9 @@
 import { log, namedLogger } from '#shared/log.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
 import type { Method } from '#shared/rpc.ts'
+import { refuse } from '#shared/refuse.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
-import type { Mounted } from './answerRpc.ts'
+import { answered, crossingOrigin, type Mounted } from './answerRpc.ts'
 import { framed } from './answerValue.ts'
 import { appIdentity, config } from './config.ts'
 
@@ -184,6 +185,13 @@ export async function answerMcp(
     if (!opened('ABIDE_MCP')) return undefined
     if (request.method !== 'POST')
         return new Response(null, { status: 405, headers: { allow: 'POST' } })
+    // 20.12, 16.14 — A POST FROM ANOTHER ORIGIN IS REFUSED, as a mutation's is: a tool call runs a handler
+    // with the caller's own cookies, and a `text/plain` body is sent cross-origin with no preflight.
+    const crossing = crossingOrigin(request.headers.get('origin'), request.url)
+    if (crossing !== null)
+        return answered(
+            refuse(403, `A POST from ${crossing} is not allowed here.`),
+        )
     let message: JsonRpc
     try {
         message = (await request.json()) as JsonRpc
@@ -291,10 +299,7 @@ function callOf(
     )
     const headers = new Headers(asked.headers)
     headers.delete('content-length')
-    if (call.body !== undefined) {
-        headers.set('content-type', 'application/json')
-        headers.delete('origin')
-    }
+    if (call.body !== undefined) headers.set('content-type', 'application/json')
     return new Request(new URL(call.url, asked.url), {
         method,
         headers,

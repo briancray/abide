@@ -24,6 +24,9 @@
 // reaches does not belong on what every compiled module resolves through.
 
 export { oneStyleValue } from '#shared/escapeText.ts'
+// 39.6 — a module mounted into an empty region applies its own head, from inside its instance
+// (`emitClient`); only a module that carries its own markup and a `<head>` imports it.
+export { applyHead } from './applyHead.ts'
 export { isRaw } from '#shared/Raw.ts'
 // 14.8 — an `{#if}` arm's branch-local `<script>`, set up outside the watch that swaps it in.
 export { untracked } from '#shared/reactive/tracking.ts'
@@ -38,9 +41,6 @@ export {
 export { bindElement } from './bindElement.ts'
 export { bindProperty } from './bindProperty.ts'
 export { bindSpread } from './bindSpread.ts'
-// What a built row writes where the parser would have decoded the server's bytes — see
-// `decodeMarkup.ts` — and the one cut a `style:` value takes on both sides.
-export { decodedAttribute, decodedText } from './decodeMarkup.ts'
 export { escapeless } from './escapeless.ts'
 export { List, listAt, updateList } from './List.ts'
 export { warnMismatch } from './Mismatch.ts'

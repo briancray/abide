@@ -37,6 +37,50 @@ test("the browser's jar writes the document's cookies", () => {
     expect(document.cookie).not.toContain('flavor=oat')
 })
 
+// 22.6 — A `cookieStore` CHANGE IS HELD DECODED, as `document.cookie` is read: the event carries the
+// encoded text a write put there, so held raw, `Ada Lovelace` read back as `Ada%20Lovelace` until a
+// reload, and the write woke its readers a second time. THE REVERT: compare and store `cookie.value`
+// as it came in the `change` listener in `browserCookies`; the read is `Ada%20Lovelace`.
+test("a cookieStore change is held decoded, and a write's own echo wakes nobody — 22.6", () => {
+    const jar = cookies()
+    let runs = 0
+    let seen = null as string | null
+    const stop = watch(() => {
+        runs += 1
+        seen = jar.get('person')
+    })
+    jar.set('person', 'Ada Lovelace')
+    flushSync()
+    expect(document.cookie).toContain('person=Ada%20Lovelace')
+    const store = (globalThis as unknown as { cookieStore: EventTarget })
+        .cookieStore
+    store.dispatchEvent(
+        Object.assign(new Event('change'), {
+            changed: [{ name: 'person', value: 'Ada%20Lovelace' }],
+            deleted: [],
+        }),
+    )
+    flushSync()
+    expect(seen).toBe('Ada Lovelace')
+    expect(runs).toBe(2)
+    stop()
+    jar.delete('person')
+})
+
+// A BROWSER'S JAR KEEPS NO `set-cookie` LINES: its writes went into the document, and it lives as
+// long as the page, so a line held per write grew with nothing to read it. A server's jar keeps
+// them. THE REVERT: push onto `writes` whatever the side in `Cookies.write`; the browser's jar
+// holds every line this file has written through it, 7 by the time this runs.
+test("a browser's jar holds no set-cookie lines; a server's does", () => {
+    const browser = cookies()
+    for (let write = 0; write < 3; write++) browser.set('draft', String(write))
+    expect(browser.toSetCookieHeaders()).toEqual([])
+    browser.delete('draft')
+    const server = new Cookies('', () => {}, false)
+    server.set('draft', '1')
+    expect(server.toSetCookieHeaders()).toHaveLength(1)
+})
+
 // 22.3 — `secure` defaults from `NODE_ENV` on a server.
 test('secure defaults from NODE_ENV — 22.3', () => {
     const saved = process.env.NODE_ENV

@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs' // bun exposes no realpath of its own
 import { dirname } from 'node:path' // bun exposes no path helpers of its own
 import type { Read } from './classifyRead.ts'
 import {
@@ -123,11 +124,17 @@ export async function checkSource(
         quiet?: boolean
     }[] = [{ path, text, file }]
     const from = dirname(path)
+    // THE RESOLVER FOLLOWS SYMLINKS AND THE PAGE'S PATH DOES NOT: under a linked root — `/tmp` is one
+    // on macOS — a component resolves outside the page's own spelling of the app, where neither the
+    // shadow the page's import is pointed at nor the editor's unsaved text is found.
+    const linkedRoot = realpathSync(root)
     for (const specifier of abideSpecifiers(
         [...file.modules, ...file.scripts].join('\n'),
     )) {
-        const imported = resolveFrom(specifier, from)
+        let imported = resolveFrom(specifier, from)
         if (imported === undefined) continue
+        if (linkedRoot !== root && imported.startsWith(`${linkedRoot}/`))
+            imported = `${root}${imported.slice(linkedRoot.length)}`
         try {
             const importedText =
                 held(imported) ?? (await Bun.file(imported).text())

@@ -387,6 +387,64 @@ test('a save to a plain .ts beside an open page reaches its findings — 38.12',
     expect(after.params).toMatchObject({ uri, diagnostics: [] })
 })
 
+// A DOCUMENT WITH NO FILE BEHIND IT has no path to find an app from, and its check threw out of the
+// queue every later check waits behind. THE REVERT: accept any `.abide` in `didOpen`; the page's
+// change is never published.
+test('an untitled document leaves every other one checked — 38.12', async () => {
+    send({
+        method: 'textDocument/didOpen',
+        params: {
+            textDocument: {
+                uri: 'untitled:Scratch.abide',
+                languageId: 'abide',
+                version: 1,
+                text: SAVED,
+            },
+        },
+    })
+    const uri = Bun.pathToFileURL(`${app}/ui/pages/page.abide`).href
+    send({
+        method: 'textDocument/didChange',
+        params: {
+            textDocument: { uri, version: 99 },
+            contentChanges: [{ text: EDITED }],
+        },
+    })
+    // The edited text's one finding, and not an earlier publish still queued for this page.
+    const published = await next(
+        (message) =>
+            message.method === 'textDocument/publishDiagnostics' &&
+            (message.params as { uri: string }).uri === uri &&
+            (message.params as { diagnostics: unknown[] }).diagnostics
+                .length === 1,
+    )
+    expect(published.params).toMatchObject({ uri })
+}, 60_000)
+
+// A DELETED COMPONENT TAKES ITS CHECKED MODULE WITH IT. THE REVERT: drop the `CHECKED_SUFFIX` arm in
+// `TypeSession.edited`; the page goes on checking `<Card title="x"/>` against the props the deleted
+// file declared, and reports nothing.
+test('a page importing a deleted component says it cannot find it — 38.12', async () => {
+    const uri = Bun.pathToFileURL(`${app}/ui/pages/page.abide`).href
+    await Bun.file(`${app}/ui/components/Card.abide`).delete()
+    send({
+        method: 'textDocument/didChange',
+        params: {
+            textDocument: { uri, version: 100 },
+            contentChanges: [{ text: SAVED }],
+        },
+    })
+    const published = await next(
+        (message) =>
+            message.method === 'textDocument/publishDiagnostics' &&
+            (message.params as { uri: string }).uri === uri &&
+            (
+                message.params as { diagnostics: { code?: number }[] }
+            ).diagnostics.some((diagnostic) => diagnostic.code === 2307),
+    )
+    expect(published.params).toMatchObject({ uri })
+}, 60_000)
+
 test('the server shuts down when asked — 38.12', async () => {
     send({ id: 2, method: 'shutdown' })
     expect(await next((message) => message.id === 2)).toMatchObject({

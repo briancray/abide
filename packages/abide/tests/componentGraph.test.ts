@@ -59,3 +59,28 @@ test('an app compiled through a symlinked root links its components — 32.18', 
         rmSync(outside, { recursive: true, force: true })
     }
 })
+
+// 23.3 — A ROUTE IS A FILE NAMED `page.abide`, not one whose name ENDS with it. A colocated
+// `homepage.abide` read as a page is a second route at its directory's address, and a
+// `sidebarlayout.abide` read as a layout wraps every page below it.
+//
+// THE REVERT: test `relative.endsWith('page.abide')` / `'layout.abide'` in `fileKind` and this
+// reads 2 routes at `/blog`, against 1.
+test('a file whose name only ends with page.abide is a component — 23.3', async () => {
+    const { routes } = await compileApp(
+        temporaryModule({
+            'package.json': JSON.stringify({
+                name: 'basename-fixture',
+                type: 'module',
+                imports: { '#ui/*': './ui/*' },
+            }),
+            'ui/app.html': `<!doctype html><html><head></head><body></body></html>`,
+            'ui/pages/blog/page.abide': `<p>blog</p>`,
+            'ui/pages/blog/homepage.abide': `<p>home</p>`,
+            'ui/pages/blog/sidebarlayout.abide': `<aside>side</aside>`,
+        }),
+    )
+    const blog = routes.filter((route) => route.pattern === '/blog')
+    expect(blog).toHaveLength(1)
+    expect(blog[0]?.layouts).toEqual([])
+})

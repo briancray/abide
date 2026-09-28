@@ -2453,9 +2453,15 @@ function readyNow(cell: Cell): boolean {
 // its first chunk; reading the value's own `loading` alone did the same through an adoption.
 function settled(cell: Cell): Promise<unknown> {
     // 1.7: awaiting a value is reaching it, so what a read would pull is pulled here too — a reload
-    // an invalidate owed, and a recompute a write left marked.
+    // an invalidate owed, a recompute a write left marked, and a reload a `ttl` drop owes (6.12):
+    // with nothing served and nothing loading, the await would wait on a probe nothing moves.
+    //
+    // ONLY ONCE THE TIMER HAS DROPPED IT. The read's half of 6.11 — a production still served past
+    // its deadline — is not taken here, because 16.7's `ttl` of 0 makes every mutation's production
+    // past its deadline the moment it lands, and the await that answers the call ran it again.
     if (cell.owes !== OWES_NOTHING) settleOwed(cell)
     if (cell.state !== CLEAN) resolve(cell)
+    if (cell.expiry?.dropped) expire(cell)
     if (cell.servable && !busyNow(cell)) return Promise.resolve(heldValue(cell))
     if (!cell.landed && !busyNow(cell)) {
         const failure = failureOf(cell)
@@ -2552,7 +2558,19 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
     }
     // 9.27: the accumulation itself, so the next chunk lands after the change rather than
     // rebuilding a snapshot from chunks the patch never saw.
+    const before = stream.chunks.length
     recordWrites(stream.chunks, mutate, PATCH_SINKS.get(cell))
+    // 5.7 AS THE VALUE BRANCH KEEPS IT: a patch mints no ordinal, so an accumulation it grew or
+    // shrank moves the ring's base instead — `ring[i]` stays ordinal `ringBase + i + 1` and the
+    // next chunk lands one past the ordinal a caught-up cursor holds. And what it added is shown.
+    const grown = stream.chunks.length - before
+    if (grown !== 0) {
+        cell.ringBase -= grown
+        stream.visible = Math.min(
+            Math.max(stream.visible + grown, 0),
+            stream.chunks.length,
+        )
+    }
     stream.version += 1
     // 5.24, as for a chunk (5.18): the window's close is what tells the readers.
     if (tellsChunks(cell, cell.cap)) cascade(cell)

@@ -124,3 +124,18 @@ test('a {/try} inside an element closes the block rather than opening a regular 
         children: [{ kind: 'block', block: 'try' }],
     })
 })
+
+// A BLOCK'S DIRECTIVE TAKES AN OPERAND. `#if` scans as a private name, which ends an operand, so a
+// regular expression opening the condition read as a division — and a quote or a brace inside it
+// ran the slot on past its own `}`.
+//
+// THE REVERT: drop `slotEnd`'s skip of the directive's `#name`. The first slot below ends at 50, the
+// source's length, where 16 is due; the second at 33 where 18 is due; and each parse puts 1
+// top-level node where 2 are.
+test('a regular expression opening a block condition is a literal', () => {
+    const quoted = `{#if /'/.test(s)}<p>yes</p>{/if}<footer>f</footer>`
+    const braced = `{#if /[{]/.test(s)}<p>yes</p>{/if}<footer>f</footer>`
+    expect([slotEnd(quoted, 0), slotEnd(braced, 0)]).toEqual([16, 18])
+    expect(parseAbide(quoted).template).toHaveLength(2)
+    expect(parseAbide(braced).template).toHaveLength(2)
+})

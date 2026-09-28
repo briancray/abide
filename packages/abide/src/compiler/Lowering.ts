@@ -8,8 +8,8 @@ import {
     projectShadow,
     type Span,
 } from './projectShadow.ts'
-import type { TemplateNode } from './TemplateNode.ts'
-import { type Token, tokenise } from './tokenise.ts'
+import type { Setup, TemplateNode } from './TemplateNode.ts'
+import { nesting, type Token, tokenise } from './tokenise.ts'
 
 // 31.1 and 31.4 — inside a `.abide` a name bound to a `Reactive` is READ where it stands and
 // WRITTEN where it is assigned.
@@ -132,10 +132,15 @@ export class Lowering {
     // is why the markup-writing holders (an expression, an attribute value) ask for it and a
     // subject, a key and a listener do not.
     slot(holder: object): string {
-        return this.lower(this.spanOf(holder), true)
+        return grouped(this.lower(this.spanOf(holder), true))
     }
 
     expression(holder: object): string {
+        return grouped(this.lower(this.spanOf(holder), false))
+    }
+
+    // 14.8 — a branch-local `<script>`: statements, spliced as a body rather than as one value.
+    setup(holder: Setup): string {
         return this.lower(this.spanOf(holder), false)
     }
 
@@ -148,7 +153,7 @@ export class Lowering {
     // as one, which is why this is the same walk with one read left alone rather than the source
     // passed through.
     reference(holder: object): string {
-        return this.lower(this.spanOf(holder), false, true)
+        return grouped(this.lower(this.spanOf(holder), false, true))
     }
 
     // 32.35 — THE COMPONENT A TAG CHOOSES BY A VALUE, lowered to the read of it; `undefined` where
@@ -170,7 +175,7 @@ export class Lowering {
         const span = this.projection.keys.get(block)
         if (span === undefined)
             throw new Error('abide: a {#for} key was never projected.')
-        return this.lower(span, false)
+        return grouped(this.lower(span, false))
     }
 
     // 14.2 — WHETHER A POSITION IS BOUND, and it is bound unless the checker PROVED it reads nothing
@@ -307,7 +312,11 @@ export class Lowering {
             if (current.shape === 'write' && current.path.length === 0) {
                 const [open, close] =
                     this.checkedWriteParts(current) ??
-                    writeParts(this.nameOf(current), current.operator)
+                    writeParts(
+                        this.nameOf(current),
+                        current.operator,
+                        current.discarded,
+                    )
                 copy(current.from)
                 pin(current.from)
                 out += open
@@ -406,16 +415,15 @@ export class Lowering {
         const value =
             read.value === undefined ? '1' : this.lower(read.value, raw).trim()
         if (read.path.length > 0) return this.pathWrite(read, name, value, raw)
-        // 31.4 — `n++`, `--n`. The read is bound once so a postfix can hand back what it read,
-        // which is what JavaScript hands back; a statement discards it and takes the short form —
-        // which is not a saving but a requirement: the value-preserving form begins with `(`, and
-        // after a line break JavaScript refuses to insert the semicolon in front of it, so
-        // `f()\nn++` would have emitted a call on `f()`'s result.
+        // 31.4 — `n++`, `--n`. A statement discards the value and takes the short form — which is
+        // not a saving but a requirement: the value-preserving form begins with `(`, and after a
+        // line break JavaScript refuses to insert the semicolon in front of it, so `f()\nn++` would
+        // have emitted a call on `f()`'s result. A read prefix is `n += 1`, worth what it stored;
+        // only a read postfix binds what it read, which is what JavaScript hands back.
         const step = read.operator
         if (read.discarded) return `${name}.set(${name}() ${step} 1)`
-        return `((__previous) => (${name}.set(__previous ${step} 1), ${
-            read.prefix ? `__previous ${step} 1` : '__previous'
-        }))(${name}())`
+        if (read.prefix) return writeParts(name, step, false).join(value)
+        return `((${PREVIOUS}) => (${name}.set(${PREVIOUS} ${step} 1), ${PREVIOUS}))(${name}())`
     }
 
     // 38.3 — A WRITE IS AN ASSIGNMENT TO WHAT A READ READS, where the checker is asked. Lowered to
@@ -465,11 +473,39 @@ export class Lowering {
         const op = read.operator
         const current = `${name}()${segments.map((segment) => `[${segment}]`).join('')}`
         const short = SHORT_CIRCUIT.has(op)
+        const writePath = `${this.use('writePath')}(${name}(), [${segments.join(', ')}], `
+        // A POSTFIX UPDATE IS WORTH WHAT IT READ, and only it: every other write is worth what it
+        // stored, as the whole-name forms are.
+        if (!read.discarded && read.shape === 'update' && !read.prefix)
+            return `((${PREVIOUS}) => (${name}.set(${writePath}${PREVIOUS} ${op} 1)), ${PREVIOUS}))(${current})`
         const stored =
             op === '' || short ? value : `${current} ${op} (${value})`
-        const write = `${name}.set(${this.use('writePath')}(${name}(), [${segments.join(', ')}], ${stored}))`
+        const write = read.discarded
+            ? `${name}.set(${writePath}${stored}))`
+            : `((${STORED}) => (${name}.set(${writePath}${STORED})), ${STORED}))(${stored})`
         return short ? `${current} ${op} ${write}` : write
     }
+}
+
+// 19.12 — A TEMPLATE POSITION IS ONE EXPRESSION, and the emit splices it into an argument list, an
+// initializer or an arrow's body. So a top-level comma, a leading `{` (a block, as an arrow's
+// body) and a trailing line comment (which would comment out what the emit closes it with) are
+// parenthesized — and nothing else is, so the common slot is emitted as written.
+function grouped(text: string): string {
+    if (!text.includes(',') && !text.includes('/') && text[0] !== '{')
+        return text
+    const tokens = tokenise(text)
+    const last = tokens[tokens.length - 1]
+    if (last !== undefined && last.end < text.trimEnd().length)
+        return `(${text}\n)`
+    if (tokens[0]?.kind === SyntaxKind.OpenBraceToken) return `(${text})`
+    let depth = 0
+    for (const token of tokens) {
+        depth += nesting(token.kind)
+        if (depth === 0 && token.kind === SyntaxKind.CommaToken)
+            return `(${text})`
+    }
+    return text
 }
 
 // What the emitted component function calls its props record. Under `__` for the reason every
@@ -487,8 +523,24 @@ export const CHECKED_WRITE = '__written'
 // 31.4 — what stands either side of the value in the write a name and an assignment operator stand
 // for. THE SIXTEEN ARE ONE MECHANISM: the operator is the token's own text without its `=`, so
 // completeness is a property rather than a list.
-function writeParts(name: string, op: string): [string, string] {
-    if (op === '') return [`${name}.set(`, ')']
-    if (SHORT_CIRCUIT.has(op)) return [`${name}() ${op} ${name}.set(`, ')']
-    return [`${name}.set(${name}() ${op} (`, '))']
+//
+// 31.4 — A WRITE IS WORTH WHAT IT STORED wherever its value is read, as JavaScript's `a = b = 0`
+// is: `set` hands back nothing, so the value is bound once and handed back beside the write. A
+// discarded write takes the short form, for the reason a discarded `n++` does.
+function writeParts(
+    name: string,
+    op: string,
+    discarded: boolean,
+): [string, string] {
+    const open = discarded
+        ? `${name}.set(`
+        : `((${STORED}) => (${name}.set(${STORED}), ${STORED}))(`
+    if (op === '') return [open, ')']
+    if (SHORT_CIRCUIT.has(op)) return [`${name}() ${op} ${open}`, ')']
+    return [`${open}${name}() ${op} (`, '))']
 }
+
+// What a read write binds: the value it stored, or — a postfix update — the value it read. Under
+// `__` for the reason every framework name in an emitted module is (`importClause`).
+const STORED = '__stored'
+const PREVIOUS = '__previous'

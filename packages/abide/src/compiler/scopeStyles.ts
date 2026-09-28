@@ -100,10 +100,16 @@ export function namesViewTransition(css: string): boolean {
     return false
 }
 
-// Statements at one level: at-rules, and qualified rules whose preludes are selector lists. Block
-// at-rules holding rules — `@media`, `@supports`, `@container`, `@layer` — are walked into; every other
-// at-rule is copied as written, a `@keyframes`' selectors being percentages rather than elements.
-const NESTING = /^@(media|supports|container|layer|document)\b/i
+// Statements at one level: declarations, at-rules, and qualified rules whose preludes are selector
+// lists. Block at-rules holding rules — `@media`, `@supports`, `@container`, `@layer`,
+// `@starting-style`, `@scope` — are walked into; every other at-rule is copied as written, a
+// `@keyframes`' selectors being percentages rather than elements.
+//
+// A QUALIFIED RULE'S BODY IS WALKED TOO, because CSS nests: `.card { .title {…} }` is `.card .title`,
+// and a nested selector left as written reaches a child component's `.title` inside the card. A
+// declaration is a statement ending at its `;` or at the body's end, so it is copied as it stands.
+const NESTING =
+    /^@(media|supports|container|layer|document|starting-style|scope)\b/i
 
 function scopeRules(css: string, attribute: string): string {
     let out = ''
@@ -127,7 +133,8 @@ function scopeRules(css: string, attribute: string): string {
             out += NESTING.test(trimmed)
                 ? `${prelude}{${scopeRules(body, attribute)}}`
                 : `${prelude}{${body}}`
-        else out += `${scopeSelectorList(prelude, attribute)}{${body}}`
+        else
+            out += `${scopeSelectorList(prelude, attribute)}{${scopeRules(body, attribute)}}`
         at = close + 1
     }
     return out

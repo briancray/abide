@@ -2,6 +2,7 @@
 // `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { rpcRequest } from '#shared/rpcRequest.ts'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -34,6 +35,22 @@ export const guarded = GET(lookup, {
 })
 
 export const seenOrder = GET(() => order)
+
+export const tagged = GET(
+    reactive(async ({ tags }: { tags: string[] }) => tags, {
+        args: jsonSchema({
+            type: 'object',
+            properties: { tags: { type: 'array', items: { type: 'string' } } },
+            required: ['tags'],
+        }),
+    }),
+)
+
+export const searched = GET(
+    reactive(async ({ q }: { q: string }) => q, {
+        args: jsonSchema({ type: 'object', properties: { q: { type: 'string' } }, required: ['q'] }),
+    }),
+)
 
 const inner = GET(() => 'inner value', {
     middleware: [
@@ -129,6 +146,37 @@ test('a GET arg is coerced from the type its JSON Schema declares — 19.8, 19.9
         'outer:number',
         'inner',
     ])
+})
+
+// 16.19 — AN EMPTY LIST CROSSES THE URL AS ONE, spelled by the browser's own `rpcRequest` and read
+// back by the server: alone, where the query would otherwise be empty and the args `undefined`, and
+// beside other members, where it would otherwise be missing. `['']` stays the one-member list it is.
+// THE REVERT: skip an empty list in `rpcRequest` as before; the lone one is refused 422 and the
+// other arrives without its member.
+test('an empty list arg reaches the handler as an empty list — 16.19, 19.8', async () => {
+    const called = async (
+        name: string,
+        args: Record<string, unknown>,
+    ): Promise<[number, unknown]> => {
+        const answer = await Bun.fetch(
+            `${base}${rpcRequest('GET', `${RPC}/${name}`, args).url}`,
+        )
+        return [answer.status, await answer.json()]
+    }
+    expect(await called('tagged', { tags: [] })).toEqual([200, []])
+    expect(await called('tagged', { tags: [''] })).toEqual([200, ['']])
+    expect(await called('guarded', { id: 42, flags: [] })).toEqual([
+        200,
+        { id: 42, type: 'number', flags: [] },
+    ])
+})
+
+// 16.19, 19.8 — A BARE NAME IS AN EMPTY LIST ONLY WHERE THE SCHEMA DECLARES AN ARRAY: a text member
+// given `?q` keeps the `''` `URLSearchParams` reads it as. THE REVERT: turn every bare name into `[]`
+// ahead of the schema, as `answerRpc` once did; `?q` is refused 422, a list where a string is due.
+test('a bare name for a text arg stays text — 16.19, 19.8', async () => {
+    const answer = await Bun.fetch(`${base}${RPC}/searched?q`)
+    expect([answer.status, await answer.json()]).toEqual([200, ''])
 })
 
 // 16.19, 16.22 — `ctx.args()` VALIDATES, and its refusal leaves the whole onion at its own status.
@@ -348,4 +396,34 @@ console.log(JSON.stringify({ raised, answered }))
         raised: { untimed: [], slow: [40], endless: [0] },
         answered: { untimed: 200, slow: 200, endless: 200 },
     })
+}, 30_000)
+
+// 16.23, 16.11 — THE TIMEOUT IS RAISED ON THE REQUEST THE LISTENER RECEIVED. Under a mount the app
+// answers a copy below it, and bun's `timeout` does nothing for a request it was not handed itself.
+// THE REVERT: raise it on the request `answerRpc` answers; the recording server is handed the copy,
+// and reads `[false, 40]`.
+test('a call under a mount raises the idle timeout on the request the listener received — 16.23, 16.11', async () => {
+    const server = new URL('../src/server/', import.meta.url).pathname
+    await Bun.write(
+        `${app}/mountedTimeout.ts`,
+        `import { bootApp } from '${server}createApp.ts'
+import { LISTENING } from '${server}requestScope.ts'
+import { loadBuild } from '${server}serveBuild.ts'
+
+const received = new Request('http://app.test/app${RPC}/slow')
+const raised: [boolean, number][] = []
+LISTENING.server = { timeout: (request: Request, seconds: number) => raised.push([request === received, seconds]) } as never
+const app = await bootApp('${app}', () => loadBuild({ root: '${app}', out: '${app}/.abide' }))
+const status = (await app.fetch(received)).status
+await app.stop()
+console.log(JSON.stringify({ raised, status }))
+`,
+    )
+    const ran = Bun.spawnSync(['bun', `${app}/mountedTimeout.ts`], {
+        cwd: app,
+        env: { ...process.env, APP_URL: 'http://app.test/app' },
+    })
+    const printed = ran.stdout.toString().trim().split('\n').at(-1) as string
+    expect(ran.exitCode).toBe(0)
+    expect(JSON.parse(printed)).toEqual({ raised: [[true, 40]], status: 200 })
 }, 30_000)

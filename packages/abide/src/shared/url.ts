@@ -77,10 +77,10 @@ export function url<P extends string>(
         }
         if (segment.kind === 'rest' && Array.isArray(value)) {
             for (const each of value)
-                address += `/${encodeURIComponent(String(each))}`
+                address += `/${encodedSegment(pattern, segment.name, each)}`
             continue
         }
-        address += `/${encodeURIComponent(String(value))}`
+        address += `/${encodedSegment(pattern, segment.name, value)}`
     }
     if (address === '') address = '/'
     address = mounted(address)
@@ -92,4 +92,20 @@ export function url<P extends string>(
               ? query.toString()
               : queryText(query)
     return search === '' ? address : `${address}?${search}`
+}
+
+// 30.19 — A VALUE OF `.` OR `..` HAS NO SPELLING AS A SEGMENT: the URL parser collapses it as a
+// dot-segment, and `%2E` / `%2E%2E` with it, so the address would land on another route. Refused
+// rather than written, as a missing required segment is (30.3).
+function encodedSegment(
+    pattern: string | undefined,
+    name: string,
+    value: unknown,
+): string {
+    const text = String(value)
+    if (text === '.' || text === '..')
+        throw new Error(
+            `abide: url('${pattern}') was given '${text}' for '${name}', and no address carries it as a segment — the URL parser resolves it to another route. RULEBOOK 30.19.`,
+        )
+    return encodeURIComponent(text)
 }

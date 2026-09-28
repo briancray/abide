@@ -100,6 +100,21 @@ console.log(JSON.stringify({ args: process.argv.slice(2), scoped }))
     })
 })
 
+// 38.2 — THE SCRIPT ENDS WHEN IT ENDS, not when its top level settles: a timer it left pending
+// still fires, and the `process.exitCode` it set is the process's. THE REVERT: return `0` from
+// `run` after the import; the timer's line is never printed and this exits 0 where 3 is due.
+test('run lets the script end on its own, keeping its exit code — 38.2', () => {
+    const dir = temporaryModule({
+        'script.ts': `setTimeout(() => console.log('timer fired'), 50)
+process.exitCode = 3
+console.log('top level done')
+`,
+    })
+    const ran = Bun.spawnSync(['bun', BIN, 'run', 'script.ts'], { cwd: dir })
+    expect(ran.stdout.toString()).toBe('top level done\ntimer fired\n')
+    expect(ran.exitCode).toBe(3)
+})
+
 // 38.8 — ONE CALL, AND ITS EXIT CODE SAYS HOW IT WENT: 0 answered, 7 refused, 8 faulted.
 test('call answers with the value, and exits 7 on a refusal and 8 on a fault — 38.8', () => {
     const call = (...args: string[]) =>

@@ -97,7 +97,7 @@ reached it, and there is no moment at which one request's is visible to another'
 | --- | --- | --- |
 | `trace` | `() => string` | The trace id of the operation this work belongs to. |
 | `trace.sampled` | `() => boolean` | The caller's sampling decision, carried through verbatim. |
-| `trace.span` | `<T>(name: string, body: () => T) => T` | Opens a child span around a body. |
+| `trace.span` | `<T>(name: string, body: () => T, options?: { timing?: boolean }) => T` | Opens a child span around a body. |
 | `trace.headers` | `() => Record<string, string>` | What an outbound request carries. |
 
 ## `server`

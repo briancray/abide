@@ -15,11 +15,11 @@ import {
 } from './Cursor.ts'
 import type { Read } from './classifyRead.ts'
 import { bindingsOf, isSingleRooted, isSlot } from './classifyTemplate.ts'
+import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import {
     emitHead,
     emitRow,
     importClause,
-    isUrlAttribute,
     mergedValue,
     renderMarkup,
     shareScope,
@@ -62,19 +62,22 @@ function claim(counter: Counter, prefix: string): string {
     return name
 }
 
-// `selfFill` is whether this module can be mounted against an EMPTY region, and how often: a file a
-// ROUTE reaches (30.11) is mounted against a page no server painted, ONCE a navigation; a file
-// another INVOKES as a component (32.18) can stand in a row a list grew by, once A ROW. Both need a
-// second copy of the template, and one that needs neither is 34% more client than it needs:
-// measured at 1797 -> 2405 shipped lines over the corpus with every file carrying one. How OFTEN is
-// what decides whether that copy is markup or a build (`Cursor.repeated`), so the two are not one
-// flag: a page's fill is one parse, and a component's is a parse per row.
+// `selfFill` is how this module can be mounted against an EMPTY region: a file a ROUTE reaches
+// (30.11) is mounted against a page no server painted, once a navigation; a file another INVOKES
+// as a component (32.18) can stand in a row a list grew by, once A ROW. Both need a second copy of
+// the template, and one that needs neither is 34% more client than it needs: measured at 1797 ->
+// 2405 shipped lines over the corpus with every file carrying one. INVOKED decides whether that
+// copy is markup or a build (`Cursor.repeated`) — a page's fill is one parse, and a component's is
+// a parse per row — and ROUTED decides whether it carries a head (39.6). A file can be both, and
+// then each fact decides its own half.
 //
 // WHICH FILES THOSE ARE IS THE BUILD'S KNOWLEDGE, being a fact about the import graph and the file
 // tree rather than about this file, so it arrives rather than being guessed here — and it DEFAULTS
-// TO NEITHER, because the wrong answer costs a static page the "ships no runtime" fact above. A
-// file that is both routed and invoked is `'repeated'`: the case it can be made in most often wins.
-export type SelfFill = 'none' | 'once' | 'repeated'
+// TO NEITHER, because the wrong answer costs a static page the "ships no runtime" fact above.
+export type SelfFill = 'none' | 'routed' | 'invoked' | 'both'
+
+// The mount's third argument, which only the router passes (`Router.mountFrom`).
+const ROUTED = '__routed'
 
 export function emitClient(
     file: AbideFile,
@@ -93,7 +96,7 @@ export function emitClient(
         undefined,
         undefined,
         false,
-        selfFill === 'repeated',
+        selfFill === 'invoked' || selfFill === 'both',
     )
     placeTemplate(file.template, page)
     const counter = { next: 0 }
@@ -110,19 +113,39 @@ export function emitClient(
     // from the template this module already holds, once, inside the instance whose setup just ran.
     // Rendering it from the caller instead would mean the child's setup running twice per row: one
     // run for the markup and another for the bindings.
-    const fills =
-        !carriesOwnMarkup || page.positions.length === 0
-            ? ''
-            : `function __build(__document) {\n    ${emitMaker(page, lowering)}\n}\nif (${lowering.use('isEmptyRegion')}(${REGION_ROOT})) ${lowering.use('fillRegion')}(${REGION_ROOT}, __build)\n`
-
-    // 39.6 — THE HEAD A NAVIGATION HAS TO APPLY. Only a module that carries its own markup can be
-    // reached without a server having rendered it, so only that module needs one; a page the
-    // server painted arrives with its head already in the document.
-    const headMarkup = carriesOwnMarkup ? emitHead(file, lowering, true) : "''"
-    const headExport =
-        headMarkup === "''"
-            ? ''
-            : `export function head() { return ${headMarkup} }\n`
+    //
+    // 39.6 — A ROUTE LEVEL APPLIES ITS OWN HEAD THERE, for the same reason: an empty region is
+    // one no server painted, so no server wrote this level's head either. Inside `mount`, after
+    // the setup, because a `<title>{title}</title>` reads the instance's names as a body slot does
+    // — at module scope it was a ReferenceError on every navigation to it. Before the fill, so the
+    // title the reader sees is the page they are arriving at for however long the build takes;
+    // and a layout mounts before the page in its slot, so the deepest contribution lands last and
+    // wins (39.4). A region the server painted is hydrated with the head the server wrote.
+    //
+    // ONLY WHERE THE ROUTER MOUNTED IT, which it says with `ROUTED`: the server writes the heads of
+    // the route's chain alone, and an invoked component fills an empty region once per row the list
+    // grew by — applying a head there is a parse and a walk of `document.head` a row. So a file that
+    // is both routed and invoked titles the document as a page and leaves it alone as a row.
+    const headMarkup =
+        selfFill === 'routed' || selfFill === 'both'
+            ? emitHead(file, lowering, true)
+            : "''"
+    const heads = headMarkup !== "''"
+    const applied = heads
+        ? `if (${ROUTED}) ${lowering.use('applyHead')}(${headMarkup}); `
+        : ''
+    const builds = carriesOwnMarkup && page.positions.length > 0
+    let fills = ''
+    if (applied !== '' || builds) {
+        const build = builds
+            ? `function __build(__document) {\n    ${emitMaker(page, lowering)}\n}\n`
+            : ''
+        const isEmpty = lowering.use('isEmptyRegion')
+        const fill = builds
+            ? `${lowering.use('fillRegion')}(${REGION_ROOT}, __build)`
+            : ''
+        fills = `${build}if (${isEmpty}(${REGION_ROOT})) { ${applied}${fill} }\n`
+    }
 
     // NOTHING LIVE IS NO MODULE: every unit the page's region pushes is a binding, a listener or a
     // region, so an empty `lines` is a page with nothing live anywhere in it.
@@ -137,7 +160,7 @@ export function emitClient(
     // A FILE MOUNTED AGAINST AN EMPTY REGION SHIPS A MODULE REGARDLESS: the router or the caller's
     // client module imports it by name, so the no-op is what it ships.
     const live = lines.length > 0
-    if (!live && fills === '' && headExport === '')
+    if (!live && fills === '')
         return carriesOwnMarkup ? 'export default () => {}\n' : ''
 
     // A SCOPE IS WHAT THERE IS TO STOP, so a module with nothing live opens none. A static child
@@ -198,8 +221,7 @@ return ${SCOPE}`
     return `${sharedImport}import { ${importClause(runtime.sort())} } from '${RUNTIME_SPECIFIER}'
 ${componentImports(withoutProps(moduleSetup.imports), '.client', components)}${componentImports(withoutProps(setup.imports), '.client', components)}
 ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}\
-${headExport}\
-export default function mount(${REGION_ROOT}${lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
+export default function mount(${REGION_ROOT}${heads ? `, ${PROPS} = {}, ${ROUTED}` : lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
 ${opened}${setup.body}
 ${helpers.join('\n')}
 ${fills}${captured}${bindings}${closed}
@@ -310,7 +332,6 @@ function emitRegion(
         }
         const slot = at.name.slice('__c'.length)
         if (at.kind === 'text') {
-            const decoded: string[] = []
             const values: string[] = []
             const brands: string[] = []
             const text: string[] = []
@@ -320,17 +341,12 @@ function emitRegion(
                 if (node.kind === 'text') {
                     markup.push(JSON.stringify(node.text))
                     // 32.28 — static text is markup, and `data` is not a parse: a piece with an
-                    // entity in it goes in as the characters it stands for, decoded ONCE at mount
-                    // rather than per write — the same `decodedText` the build takes it through.
-                    if (!node.text.includes('&')) {
-                        text.push(JSON.stringify(node.text))
-                        continue
-                    }
-                    const name = `__s${slot}_${piece}`
-                    decoded.push(
-                        `const ${name} = ${lowering.use('decodedText')}(${at.name}, ${JSON.stringify(node.text)})`,
+                    // entity in it goes in as the characters it stands for, decoded by the build.
+                    text.push(
+                        JSON.stringify(
+                            decodeCharacterReferences(node.text, 'text'),
+                        ),
                     )
-                    text.push(name)
                     continue
                 }
                 const value = `__v${slot}_${piece}`
@@ -348,7 +364,7 @@ function emitRegion(
             // back what the run now is and the binding holds that.
             texts.push(
                 `let __t${slot} = ${lowering.use('textHere')}(${at.name})
-${decoded.map((line) => `${line}\n`).join('')}${SCOPE}.watch(() => {
+${SCOPE}.watch(() => {
     const ${values.join(', ')}
     __t${slot} = ${brands.join(' || ')} ? ${lowering.use('setMarkup')}(__t${slot}, ${markup.join(' + ')}) : ${lowering.use('setText')}(__t${slot}, ${text.join(' + ')})
 })`,
@@ -497,8 +513,8 @@ function emitMaker(
 // and then `mount`, so a value the mount binds — a run or an attribute reading a `Reactive` — is
 // written by the binding's first run and the build leaves it: a live run is an empty text node, a
 // live attribute is not set. Everything else takes the value the parser would have made of the
-// server's bytes — `escapeless` for an expression, and the parser itself, once a string, for a
-// static one with an `&` in it (`decodedText`, `decodedAttribute`). A merged `class` or `style` is
+// server's bytes — `escapeless` for an expression, and the build's own decode for a static one
+// (`decodeCharacterReferences`). A merged `class` or `style` is
 // written whole, through the same structure the markup takes (`mergedValue`), so the two are one
 // string.
 //
@@ -582,9 +598,7 @@ function builtRun(
         const node = at.run[piece] as TemplateNode
         if (node.kind === 'text') {
             text.push(
-                node.text.includes('&')
-                    ? `${lowering.use('decodedText')}(${DOCUMENT}, ${JSON.stringify(node.text)})`
-                    : JSON.stringify(node.text),
+                JSON.stringify(decodeCharacterReferences(node.text, 'text')),
             )
             markup.push(JSON.stringify(node.text))
             continue
@@ -626,15 +640,13 @@ function builtAttribute(
         return `${lowering.use('attributeText')}(${JSON.stringify(written.name)}, ${lowering.slot(written.attribute)})`
     }
     if (written.value === '') return "''"
-    // 32.29 — a URL attribute is served with its `&` encoded, so the parser hands back the author's
-    // bytes exactly and there is nothing to decode.
-    if (isUrlAttribute(written.lowerName)) return JSON.stringify(written.value)
+    // 32.29 — a URL attribute's bytes are its value escaped whole, so they decode back to it exactly.
     return render.bytes(staticAttributeBytes(written.lowerName, written.value))
 }
 
-// The build's half of `ValueRender`: what the parser would have made of each piece the markup
-// escapes. A merge member reading a `Reactive` is still evaluated here, under 41.4's guard, because
-// a merged attribute is written whole or not at all.
+// The build's half of `ValueRender`: what the parser makes of each piece the markup escapes. A
+// merge member reading a `Reactive` is still evaluated here, under 41.4's guard, because a merged
+// attribute is written whole or not at all.
 function buildRender(lowering: Lowering): ValueRender {
     const guarded = (attribute: Attribute): string =>
         `${lowering.use('escapeless')}(${unlandable(lowering, attribute, lowering.slot(attribute))})`
@@ -643,9 +655,7 @@ function buildRender(lowering: Lowering): ValueRender {
         declaration: (attribute) =>
             `${lowering.use('oneStyleValue')}(${guarded(attribute)})`,
         bytes: (bytes) =>
-            bytes.includes('&')
-                ? `${lowering.use('decodedAttribute')}(${DOCUMENT}, ${JSON.stringify(bytes)})`
-                : JSON.stringify(bytes),
+            JSON.stringify(decodeCharacterReferences(bytes, 'attribute')),
     }
 }
 
@@ -1018,7 +1028,7 @@ function emitArms(
         const setup = setups?.[arm] ?? null
         const local =
             setup !== null
-                ? lowering.expression(setup)
+                ? lowering.setup(setup)
                 : arm === 1 && caught !== undefined
                   ? caught
                   : ''
@@ -1112,7 +1122,7 @@ function emitList(
             `const ${name}_subject = () => ${subject}`,
             `const ${name}_key = ${key}`,
             block.setup !== null
-                ? `const ${name}_setUp = (${item}, ${at}) => {\n${lowering.expression(block.setup)}\n${builders}\nreturn { make: ${name}_make, mount: ${name}_mount }\n}`
+                ? `const ${name}_setUp = (${item}, ${at}) => {\n${lowering.setup(block.setup)}\n${builders}\nreturn { make: ${name}_make, mount: ${name}_mount }\n}`
                 : `${builders}\nconst ${name}_builders = { make: ${name}_make, mount: ${name}_mount }\nconst ${name}_setUp = () => ${name}_builders`,
         ].join('\n'),
     )

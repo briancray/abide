@@ -1,4 +1,4 @@
-import { escapeAttribute } from '#shared/escapeText.ts'
+import { escapeAttribute, escapeQuote } from '#shared/escapeText.ts'
 import { headKeyOf } from '#shared/headKeyOf.ts'
 import { isEventName } from '#shared/isEventName.ts'
 import { safeUrl } from '#shared/safeUrl.ts'
@@ -115,7 +115,9 @@ export function emitComponent(
         .filter((part) => part !== '')
         .join('\n')
 
-    const heads = body.some((part) => part.includes(HEADS))
+    // A child invoked inside `<head>` pushes to the same array from the head expression.
+    const heads =
+        head.includes(HEADS) || body.some((part) => part.includes(HEADS))
     // 10.5 — around the setup that calls `reactive.share`, and the body whose children are
     // rendered inside it and find it on the way up.
     const { opened, closed } = shareScope(lowering, '    ')
@@ -127,6 +129,7 @@ export function emitComponent(
     // call that renders it stands inside the BODY expression — so the heads are collected as the
     // body is built and the body is bound to a name before the return reads them. The array is
     // emitted only where the page invokes something: a page with no component pays nothing.
+    // `head` is read before `__heads.join` in the return, so a child in the head lands too.
     const build = `${heads ? `    const ${HEADS} = []\n` : ''}\
     const ${BODY} = ${concat(body)}
     return {
@@ -275,7 +278,7 @@ function renderPosition(
         // 14.8 — the row's branch-local `<script>`, run at the head of each row, untracked like the
         // component's own setup (14.7) since the render tracks nothing.
         const setup =
-            node.setup === null ? '' : `${lowering.expression(node.setup)}\n`
+            node.setup === null ? '' : `${lowering.setup(node.setup)}\n`
         return `${OPEN_ANCHOR} + ((__list) => {
         if (!Array.isArray(__list)) return ''
         let __out = ''
@@ -335,7 +338,7 @@ function renderPosition(
                 body:
                     branch.setup === null
                         ? body
-                        : `(() => {\n${lowering.expression(branch.setup)}\nreturn ${body}\n})()`,
+                        : `(() => {\n${lowering.setup(branch.setup)}\nreturn ${body}\n})()`,
             }
         })
         let expression = "''"
@@ -643,8 +646,21 @@ export function writtenAttributes(
             written.push({ kind: 'dynamic', name: attribute.name, attribute })
             continue
         }
+        // `URL_ATTRIBUTES` is keyed by the FOLDED name (`Attribute.lowerName`): compared as
+        // written, `<a HREF={u}>` took the ordinary computed branch with no `safeUrl` around it —
+        // 32.21's check, skipped by a capital letter.
+        //
+        // A LEAF OF NAMES RATHER THAN FOUR COMPARISONS, because four was not the set: `xlink:href`
+        // is how an `<a>` inside `<svg>` spells the same attribute and
+        // `<svg><a xlink:href="javascript:…">` navigates in every browser, and `poster`, `cite`,
+        // `ping` and `object`'s `data` are URL-valued by the same HTML rule `href` is. The check
+        // is name-keyed and tag-blind, which is what makes an inert extra safe — a `cite` on
+        // something that is not a `<blockquote>` is not a URL a browser follows, so dropping a
+        // `javascript:` value there costs nothing — and `srcset` stays OUT because its value is a
+        // LIST with descriptors, which the scheme scan would read as one URL and drop whole.
+        // `srcdoc` is markup rather than a URL and is guarded by the escaping instead.
         if (
-            isUrlAttribute(attribute.lowerName) &&
+            URL_ATTRIBUTES.has(attribute.lowerName) &&
             safeUrl(attribute.value) !== attribute.value
         )
             continue
@@ -709,16 +725,12 @@ function staticMarkup(written: WrittenAttribute & { kind: 'static' }): string {
     return ` ${written.name}="${staticAttributeBytes(written.lowerName, written.value)}"`
 }
 
-// The bytes between the quotes a static value is served as — which is also what a BUILT row asks
-// the parser to decode, so the two cannot read one value two ways.
+// The bytes between the quotes a static value is served as — which is also what a BUILT row decodes
+// (`decodeCharacterReferences`), so the two cannot read one value two ways.
 export function staticAttributeBytes(lowerName: string, value: string): string {
-    return isUrlAttribute(lowerName) ? escapeAttribute(value) : quoteOnly(value)
-}
-
-// The one rewrite a static attribute value still takes. Not `escapeAttribute`'s tail: that one
-// runs over a value `escapeText` has already been through, and this runs over the author's bytes.
-function quoteOnly(value: string): string {
-    return value.includes('"') ? value.replaceAll('"', '&quot;') : value
+    return URL_ATTRIBUTES.has(lowerName)
+        ? escapeAttribute(value)
+        : escapeQuote(value)
 }
 
 // 39.4, 39.11, 39.12 — the contributions a `<head>` makes, merged by key, the LAST one for a key
@@ -875,7 +887,7 @@ function styleValue(
         parts.push(
             plain.expression
                 ? render.dynamic(plain)
-                : render.bytes(quoteOnly(plain.value)),
+                : render.bytes(escapeQuote(plain.value)),
             render.bytes('; '),
         )
     for (const attribute of styles) {
@@ -884,7 +896,7 @@ function styleValue(
         if (!attribute.expression) {
             parts.push(
                 render.bytes(
-                    `${lead}${property}: ${quoteOnly(attribute.value)}`,
+                    `${lead}${property}: ${escapeQuote(attribute.value)}`,
                 ),
             )
             continue
@@ -917,11 +929,11 @@ function classValue(
         parts.push(
             plain.expression
                 ? render.dynamic(plain)
-                : render.bytes(quoteOnly(plain.value)),
+                : render.bytes(escapeQuote(plain.value)),
         )
     for (const attribute of classes) {
         const written = render.bytes(
-            ` ${quoteOnly(attribute.name.slice('class:'.length))}`,
+            ` ${escapeQuote(attribute.name.slice('class:'.length))}`,
         )
         // A `class:name` WITH NO EXPRESSION is a name with no condition on it — `class:active`
         // alone, or `class:active="anything"` — and a name that is always written is exactly what
@@ -934,19 +946,4 @@ function classValue(
         )
     }
     return concat(parts)
-}
-
-// Given the FOLDED name (`Attribute.lowerName`): compared as written, `<a HREF={u}>` took the
-// ordinary computed branch with no `safeUrl` around it — 32.21's check, skipped by a capital letter.
-//
-// A LEAF OF NAMES RATHER THAN FOUR COMPARISONS, because four was not the set: `xlink:href` is how
-// an `<a>` inside `<svg>` spells the same attribute and `<svg><a xlink:href="javascript:…">`
-// navigates in every browser, and `poster`, `cite`, `ping` and `object`'s `data` are URL-valued
-// by the same HTML rule `href` is. The check is name-keyed and tag-blind, which is what makes an
-// inert extra safe — a `cite` on something that is not a `<blockquote>` is not a URL a browser
-// follows, so dropping a `javascript:` value there costs nothing — and `srcset` stays OUT because
-// its value is a LIST with descriptors, which the scheme scan would read as one URL and drop
-// whole. `srcdoc` is markup rather than a URL and is guarded by the escaping instead.
-export function isUrlAttribute(lowerName: string): boolean {
-    return URL_ATTRIBUTES.has(lowerName)
 }

@@ -9,7 +9,7 @@ import {
     rowOf,
     rowsIn,
 } from './reconcile.ts'
-import { isEmptyRegion, type Region } from './regions.ts'
+import { isEmptyRegion, type Region, removeUntil } from './regions.ts'
 import type { Scope } from './Scope.ts'
 
 // ONE RECORD PER `{#for}`, owned by the emitted block, holding everything the two arms — the
@@ -97,10 +97,27 @@ export function listAt(
 // `updateList` returned before `reconcile` could fix it. Repairing that silently is the clause
 // half-applied: the divergence is a document and a client that disagree, which is the one thing
 // the channel exists to report.
+//
+// THE LENGTHS ARE COMPARED BEFORE A ROW IS WIRED, and only the rows both sides hold are. A row the
+// document holds past the last item has no item to key or set up — handed `undefined`, a keyed
+// list threw a TypeError out of `item[by]`, which is not a `Mismatch` and so took the page down on
+// exactly the disagreement this reports. Those rows are removed here, and the reconcile after
+// builds whatever the document was short.
 function hydrate(list: List, items: unknown[]): boolean {
     const found = rowsIn(list.region, list.anchored)
     if (found.length === 0 && isEmptyRegion(list.region)) return false
-    for (let at = 0; at < found.length; at += 1) {
+    const agreed = found.length === items.length
+    if (!agreed) {
+        warnMismatch(
+            new Mismatch(
+                `abide: the document holds ${found.length} rows where this {#for} computes ${items.length}, so the client and the server disagree about this region's shape (41.10).`,
+            ),
+        )
+        if (found.length > items.length)
+            removeUntil(found[items.length] as ChildNode, list.region.close)
+    }
+    const wired = Math.min(found.length, items.length)
+    for (let at = 0; at < wired; at += 1) {
         const item = items[at]
         list.rows.push(
             rowOf(
@@ -112,13 +129,7 @@ function hydrate(list: List, items: unknown[]): boolean {
             ),
         )
     }
-    if (found.length === items.length) return true
-    warnMismatch(
-        new Mismatch(
-            `abide: the document holds ${found.length} rows where this {#for} computes ${items.length}, so the client and the server disagree about this region's shape (41.10).`,
-        ),
-    )
-    return false
+    return agreed
 }
 
 // 32.15 — AN ARRAY RECONCILES AND AN ASYNC SUBJECT APPENDS AS ITEMS ARRIVE. There is no list to

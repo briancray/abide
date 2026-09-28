@@ -26,6 +26,7 @@ import {
     type Segment,
 } from '#shared/routePattern.ts'
 import { applyHead } from '#ui/applyHead.ts'
+import { REGION_CLOSE, REGION_OPEN } from '#ui/REGION.ts'
 import { listenForRoutes, type PageMount, startRouter } from '#ui/routing.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -87,7 +88,7 @@ async function pages(
         const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
         modules[`${name}.ts`] = emitComponent(file, reads)
         // ROUTABLE, so the module carries its own markup — what the build now passes for a page.
-        modules[`${name}.client.ts`] = emitClient(file, reads, 'once')
+        modules[`${name}.client.ts`] = emitClient(file, reads, 'routed')
     }
     const dir = temporaryModule(modules)
     const home = (await import(`${dir}/Home.client.ts`)).default as PageMount
@@ -521,14 +522,108 @@ test("a routable page's client module carries its merged head — 39.12", async 
 <p>body</p>`,
     )
     const reads = await session.reads(`${ROOT}src/Head.abide`, file)
-    const client = emitClient(file, reads, 'once')
-    expect(client).toContain('export function head()')
+    const client = emitClient(file, reads, 'routed')
+    expect(client).toContain('__applyHead(')
     expect(client).toContain('Second')
     expect(client).not.toContain('First')
     // A page nobody navigates to needs none of it.
-    expect(emitClient(file, reads, 'none')).not.toContain(
-        'export function head()',
+    expect(emitClient(file, reads, 'none')).not.toContain('__applyHead(')
+})
+
+// 39.6 — A HEAD READS THE INSTANCE, as a body slot does. `<title>{title}</title>` over a setup
+// `const` is the ordinary way to title a page, and the head is applied from inside the mount that
+// declared it — emitted at module scope it read a name only `mount` had, and a navigation to the
+// page threw after the old page was already gone.
+//
+// THE REVERT: emit the head as a module-scope `export function head()` and apply it from the
+// router's commit. The navigation then rejects with `ReferenceError: title is not defined` where
+// it is due to resolve and title the document `Arrived`.
+test("a navigated page's head reads the names its setup declared — 39.6", async () => {
+    history.replaceState(null, '', '/')
+    document.head.innerHTML = '<title>Home</title>'
+    const mounts = await pages()
+    const source = `<head><title>{title}</title></head>
+<script>
+const title = 'Arrived'
+</script>
+<main id="titled"><h1>{title}</h1></main>`
+    const file = parseAbide(source)
+    const reads = await session.reads(`${ROOT}src/Titled.abide`, file)
+    const dir = temporaryModule({
+        'Titled.client.ts': emitClient(file, reads, 'routed'),
+    })
+    const r = startRouter(
+        [
+            {
+                pattern: '/titled',
+                // THE WHOLE MODULE, as the emitted route table loads it — not its default alone.
+                load: () => import(`${dir}/Titled.client.ts`),
+                layouts: [],
+            },
+            {
+                pattern: '/',
+                load: async () => ({ default: mounts.home as PageMount }),
+                layouts: [],
+            },
+        ],
+        document.body,
     )
+    await r.hydrate()
+    let thrown = ''
+    try {
+        await r.go('/titled')
+    } catch (error) {
+        thrown = String(error)
+    }
+    flushSync()
+    expect(thrown).toBe('')
+    expect(document.title).toBe('Arrived')
+    expect(document.querySelector('#titled h1')?.textContent).toBe('Arrived')
+})
+
+// 39.6 — A FILE BOTH ROUTED AND INVOKED titles the document when the router mounts it, and
+// leaves the head alone when a caller mounts it into a row. Both are empty regions, so the
+// mount cannot tell them apart by the region: the router says so.
+//
+// THE REVERT: emit the head for `'routed'` alone in `emitClient`. The navigation then leaves the
+// title `Home` where `Both` is due.
+test('a page that is also a component applies its head only where it is routed — 39.6', async () => {
+    history.replaceState(null, '', '/')
+    document.head.innerHTML = '<title>Home</title>'
+    const mounts = await pages()
+    const file = parseAbide(
+        '<head><title>Both</title></head><main id="both">both</main>',
+    )
+    const reads = await session.reads(`${ROOT}src/Both.abide`, file)
+    const dir = temporaryModule({
+        'Both.client.ts': emitClient(file, reads, 'both'),
+    })
+    const loaded = (await import(`${dir}/Both.client.ts`)) as {
+        default: PageMount
+    }
+    const open = document.createComment(REGION_OPEN)
+    const close = document.createComment(REGION_CLOSE)
+    const row = document.createElement('li')
+    row.append(open, close)
+    loaded.default({ open, close })
+    expect(row.textContent).toBe('both')
+    expect(document.title).toBe('Home')
+
+    const r = startRouter(
+        [
+            { pattern: '/both', load: async () => loaded, layouts: [] },
+            {
+                pattern: '/',
+                load: async () => ({ default: mounts.home as PageMount }),
+                layouts: [],
+            },
+        ],
+        document.body,
+    )
+    await r.hydrate()
+    await r.go('/both')
+    flushSync()
+    expect(document.title).toBe('Both')
 })
 
 // A NAVIGATION THAT WAS SUPERSEDED MUST NOT MOUNT ON TOP OF THE ONE THAT REPLACED IT. Both ways
@@ -621,7 +716,7 @@ async function chained(): Promise<{
         const file = parseAbide(source)
         const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
         modules[`${name}.ts`] = emitComponent(file, reads, true)
-        modules[`${name}.client.ts`] = emitClient(file, reads, 'once')
+        modules[`${name}.client.ts`] = emitClient(file, reads, 'routed')
     }
     const dir = temporaryModule(modules)
     const mount = async (name: string): Promise<PageMount> =>
@@ -854,4 +949,215 @@ test('a view transition a later navigation overtook writes nothing — 39.9', as
     } finally {
         transition.remove()
     }
+})
+
+// A STEP THAT MOVES ONLY THE FRAGMENT IS NOT A NAVIGATION. Back over an in-page `#setup` jump
+// fires `popstate` on an entry whose page is the one standing, and remounting it threw away every
+// piece of state the reader had — for a middleware round trip nobody asked for. The count the
+// reader bumped is the state, and the scope is how a remount that rebuilt the same text shows.
+//
+// THE REVERT: have `onPop` call `router.go` for every step; this reports `asked` as ['/'] where
+// [] is due, and the count back at 0.
+test('back over a fragment of the standing page neither asks nor remounts', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    await r.hydrate()
+    flushSync()
+    const stop = listenForRoutes(r)
+    ;(document.querySelector('#bump') as HTMLElement).click()
+    flushSync()
+    const scope = r.levels.at(-1)?.scope
+
+    // What the browser does for `<a href="#setup">` and then Back: the entry pushed, and the bar
+    // moved back to the one before it before `popstate` is dispatched.
+    history.pushState(null, '', '/#setup')
+    history.replaceState(null, '', '/')
+    dispatchEvent(new PopStateEvent('popstate'))
+    await Bun.sleep(0)
+    flushSync()
+
+    expect(asked).toEqual([])
+    expect(r.levels.at(-1)?.scope).toBe(scope)
+    expect(document.querySelector('#home p')?.textContent).toBe('1')
+    expect(route.url().href).toBe(location.href)
+    stop()
+})
+
+// THE BROWSER'S FRAGMENT NAVIGATION, KEPT. A routed link to `/#install` from `/` is a jump within
+// the page: nothing asked, nothing remounted, the entry pushed and the element brought into view.
+// A link carrying a fragment to ANOTHER route mounts it and then does the same, where the top of
+// the page is what an address with no fragment gets.
+//
+// THE REVERT: drop the fragment check from `go` and write `scrollTo(0, 0)` after the mount, as
+// `commit` did; the in-page link reports `asked` as ['/'] and nothing scrolled into view, and the
+// cross-route one reports [] where ['lines'] is due.
+test('a routed link with a fragment scrolls to its element, remounting nothing it shares', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    await r.hydrate()
+    flushSync()
+    const stop = listenForRoutes(r)
+    const scrolled: string[] = []
+    const into = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (this: Element): void {
+        scrolled.push(this.id)
+    }
+    try {
+        // Outside the page region, so a navigation leaves them standing.
+        for (const id of ['install', 'lines']) {
+            const target = document.createElement('p')
+            target.id = id
+            document.body.append(target)
+        }
+        const scope = r.levels.at(-1)?.scope
+        const link = document.createElement('a')
+        link.href = '/#install'
+        document.body.append(link)
+        const click = new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+        })
+        link.dispatchEvent(click)
+        expect(click.defaultPrevented).toBe(true)
+        await Bun.sleep(0)
+        flushSync()
+        expect(asked).toEqual([])
+        expect(r.levels.at(-1)?.scope).toBe(scope)
+        expect(location.hash).toBe('#install')
+        expect(scrolled).toEqual(['install'])
+
+        scrolled.length = 0
+        await navigate('/invoices/42#lines')
+        flushSync()
+        expect(document.querySelector('#invoice h1')?.textContent).toBe(
+            'Invoice',
+        )
+        expect(scrolled).toEqual(['lines'])
+    } finally {
+        Element.prototype.scrollIntoView = into
+        stop()
+    }
+})
+
+// 33.5 AND 41.11 TOGETHER: A KEPT LAYOUT READS THE ADDRESS IT IS STANDING AT NOW. Kept across a
+// navigation, a layout is not mounted again, so whatever its props and its `<slot/>` read has to
+// be read at the moment it is used rather than captured when the layout first mounted.
+const USERS = `<script>
+import { props, reactive } from 'abide'
+
+const { params } = props<{ params: { id: string } }>()
+let open = reactive(true)
+</script>
+
+<div id="users"><h2 id="who">user {params.id}</h2><button id="fold" onclick={() => { open = !open }}>fold</button>{#if open}<slot/>{/if}</div>`
+
+const PROFILE = `<script>
+import { props } from 'abide'
+
+const { params } = props<{ params: { id: string } }>()
+</script>
+
+<main id="profile">profile {params.id}</main>`
+
+const EDIT = `<script>
+import { reactive } from 'abide'
+
+let saved = reactive(0)
+</script>
+
+<main id="edit">edit {saved}</main>`
+
+async function users() {
+    const modules: Record<string, string> = {}
+    for (const [name, source] of Object.entries({
+        Users: USERS,
+        Profile: PROFILE,
+        Edit: EDIT,
+    })) {
+        const file = parseAbide(source)
+        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
+        modules[`${name}.client.ts`] = emitClient(file, reads, 'routed')
+    }
+    const dir = temporaryModule(modules)
+    const mount = async (name: string): Promise<PageMount> =>
+        (await import(`${dir}/${name}.client.ts`)).default as PageMount
+    const layout = await mount('Users')
+    const profile = await mount('Profile')
+    const edit = await mount('Edit')
+    const wrapping = async (): Promise<{ default: PageMount }> => ({
+        default: layout,
+    })
+    // The empty page region, so the first navigation builds the chain from its templates.
+    document.body.innerHTML = `<!--${REGION_OPEN}--><!--${REGION_CLOSE}-->`
+    history.replaceState(null, '', '/elsewhere')
+    return startRouter([
+        {
+            pattern: '/users/[id]/edit',
+            load: async () => ({ default: edit }),
+            layouts: [wrapping],
+        },
+        {
+            pattern: '/users/[id]',
+            load: async () => ({ default: profile }),
+            layouts: [wrapping],
+        },
+    ])
+}
+
+// THE REVERT: hand the layout `params: () => params` over the params it was mounted with, as
+// `paramsProp` did; this reports "user 1" where "user 2" is due.
+test("a kept layout's params prop reads the address it stands at — 33.5, 41.11", async () => {
+    const r = await users()
+    await r.go('/users/1')
+    flushSync()
+    expect(document.querySelector('#who')?.textContent).toBe('user 1')
+    const kept = document.querySelector('#users')
+    await r.go('/users/2')
+    flushSync()
+    expect(document.querySelector('#users')).toBe(kept)
+    expect(document.querySelector('#profile')?.textContent).toBe('profile 2')
+    expect(document.querySelector('#who')?.textContent).toBe('user 2')
+})
+
+// A `<slot/>` WHOSE REGION IS REBUILT. Folded, the page in it leaves with it and is stopped; a
+// navigation while it is folded mounts nothing into a region no longer in the document; and
+// unfolded, the slot mounts the page the address resolves to NOW — not the one the layout was
+// first mounted with.
+//
+// THE REVERT, IN TWO HALVES. Have the slot's `mount` hand back nothing, as `mountFrom` did, and
+// folding leaves the edit page standing — 2 levels where 1 is due, its scope still awake. Have it
+// mount from the chain captured when the layout mounted, and unfolding puts back the profile the
+// layout was first mounted over, and `#edit` is missing where "edit 0" is due.
+test("a kept layout's slot mounts the current page whenever it opens — 35.1, 12.13", async () => {
+    const r = await users()
+    await r.go('/users/1')
+    await r.go('/users/1/edit')
+    flushSync()
+    expect(document.querySelector('#edit')?.textContent).toBe('edit 0')
+    const editing = r.levels.at(-1)
+    expect(editing?.scope?.stops.length).toBeGreaterThan(0)
+    ;(document.querySelector('#fold') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelector('#edit')).toBeNull()
+    expect(r.levels).toHaveLength(1)
+    expect(editing?.scope?.stops.length).toBe(0)
+
+    ;(document.querySelector('#fold') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelector('#edit')?.textContent).toBe('edit 0')
+    expect(document.querySelector('#profile')).toBeNull()
+
+    ;(document.querySelector('#fold') as HTMLElement).click()
+    flushSync()
+    await r.go('/users/2')
+    flushSync()
+    expect(document.querySelector('#who')?.textContent).toBe('user 2')
+    expect(document.querySelector('#profile')).toBeNull()
+
+    ;(document.querySelector('#fold') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelector('#profile')?.textContent).toBe('profile 2')
+    expect(document.querySelector('#edit')).toBeNull()
+    expect(r.levels).toHaveLength(2)
 })

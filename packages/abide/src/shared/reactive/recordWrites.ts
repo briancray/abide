@@ -12,6 +12,11 @@
 // method called with its arguments, at the path it was reached by. Anything that cannot be replayed
 // from that — a comparator, a `Map`'s own method, a row reached before its array was reordered —
 // marks the sink `lost` rather than send something that would land somewhere else (18.28).
+//
+// A RAW OBJECT THE CALLBACK PLACES IN THE VALUE IS WRITTEN THROUGH NO PROXY, since the callback
+// holds it directly: `list.push(row); row.name = x`. So a placed object is SENT AS IT STANDS WHEN THE
+// CALLBACK RETURNS — every op's value is copied then rather than at its write — and a write made
+// under one is not kept, since that copy already carries it.
 import type { PatchOp } from './PATCH_SINKS.ts'
 import { PATCHES } from './PATCHES.ts'
 
@@ -30,7 +35,7 @@ const RESHAPING = new Set([
 ])
 
 // What a proxy of this module answers with the object it stands for, so one handed back into the
-// value is stored as that object (`unwrapped`) — a read any other object answers with `undefined`.
+// value is stored as that object (`stored`) — a read any other object answers with `undefined`.
 const TARGET = Symbol('target')
 
 export function recordWrites<Value>(
@@ -49,13 +54,12 @@ export function recordWrites<Value>(
     // `list[0] === list[0]` inside the callback, and its parent. ONE ENTRY rather than a map for each,
     // because a row read is the loop this runs per row and each map is a lookup and an insert there.
     const reached = new Map<object, Reached>()
-    // 18.26 — where each object was first reached from the root, and how many reshapes had happened
-    // when it was: a path read before a reshape may no longer name the same object.
-    const paths =
-        sink === undefined
-            ? undefined
-            : new Map<object, { path: (string | number)[]; at: number }>()
-    let reshapes = 0
+    // 18.26 — where each object was reached from the root: a path read before its array was
+    // reshaped may no longer name the same object.
+    const paths = sink === undefined ? undefined : new Map<object, Step>()
+    // Every raw object `stored` has walked: what a placed object is — one reached under it is sent in
+    // its copy — and what stops the walk on a value inside itself.
+    let walked: Set<object> | undefined
 
     // STOPS AT AN OBJECT ALREADY MARKED IN THIS PATCH, since everything above it was marked with it —
     // so a loop writing every row marks the array once rather than once a row.
@@ -96,12 +100,29 @@ export function recordWrites<Value>(
         return known
     }
 
-    // 18.26 — the path a write through `held` is kept at, or `undefined` where it cannot be trusted.
-    const pathTo = (held: object): (string | number)[] | undefined => {
-        const known = paths?.get(held)
-        if (known === undefined) return undefined
-        if (known.at !== reshapes && known.path.length > 0) return undefined
-        return known.path
+    // 18.26 — the path a write through `held` is kept at: `undefined` where it cannot be trusted, and
+    // `null` where it need not be kept because an object on it was PLACED, and is sent as it stands.
+    // A PATH IS TRUSTED WHERE EACH STEP STILL NAMES WHAT IT WAS REACHED BY, asked of the value as it
+    // stands at the write — which is when the replay applies it. A reshape, an assignment, a
+    // `delete` or a shortened `length` that moved an object off its slot all fail the same read,
+    // and an array's own path is untouched by its reshape, so two pushes to one nested list are
+    // both kept. The keys are gathered by the same walk, after `last` — the step a write names
+    // below `held`, where it names one.
+    const pathTo = (
+        held: object,
+        last: string | number | undefined,
+    ): (string | number)[] | null | undefined => {
+        let step = paths?.get(held)
+        if (step === undefined) return undefined
+        const path: (string | number)[] = last === undefined ? [] : [last]
+        let child = held
+        for (; step.parent !== null; step = step.above as Step) {
+            if (step.placed) return null
+            if (Reflect.get(step.parent, step.key) !== child) return undefined
+            path.push(step.key)
+            child = step.parent
+        }
+        return path.reverse()
     }
 
     // Only an INDEX is a number: `length` on an array is a named step, and `Number('length')` is NaN.
@@ -115,20 +136,17 @@ export function recordWrites<Value>(
             ? Number(property)
             : String(property)
 
+    // A WRITE UNDER A PLACED OBJECT IS NOT KEPT: the copy of it sent is taken after the write.
     const keep = (
         held: object,
+        last: string | number | undefined,
         op: (path: (string | number)[]) => PatchOp,
     ): void => {
         if (sink === undefined || sink.lost) return
-        const path = pathTo(held)
+        const path = pathTo(held, last)
+        if (path === null) return
         if (path === undefined) sink.lost = true
-        else
-            try {
-                sink.ops.push(op(path))
-            } catch {
-                // A value `structuredClone` refuses — a function in a row — is sent whole instead.
-                sink.lost = true
-            }
+        else sink.ops.push(op(path))
     }
 
     const handler: ProxyHandler<object> = {
@@ -143,32 +161,40 @@ export function recordWrites<Value>(
             )
                 return (...args: unknown[]) => {
                     mark(held)
-                    if (sink !== undefined)
+                    const raws = args.map(stored)
+                    if (sink !== undefined) {
                         if (args.some((arg) => typeof arg === 'function'))
                             sink.lost = true
                         else
-                            keep(held, (path) => ({
+                            keep(held, undefined, (path) => ({
                                 path,
                                 call: property,
-                                args: args.map(snapshot),
+                                args: raws,
                             }))
-                    reshapes += 1
-                    return (value as (...args: unknown[]) => unknown).apply(
-                        held,
-                        args.map(unwrapped),
-                    )
+                    }
+                    const result = (
+                        value as (...args: unknown[]) => unknown
+                    ).apply(held, raws)
+                    // `sort`, `reverse`, `fill` and `copyWithin` answer the array itself, and
+                    // handing back the raw one would take every write after it off the record.
+                    return result === held
+                        ? (reached.get(held) as Reached).proxy
+                        : result
                 }
             if (value === null || typeof value !== 'object') return value
             const entry = reach(value, held)
             if (paths !== undefined && !paths.has(value)) {
                 const above = paths.get(held)
-                // A CHILD IS AS STALE AS ITS PARENT: one reached after a reshape through a row read
-                // before it hangs off an index that may have moved. The root's own path cannot.
                 if (above !== undefined)
-                    paths.set(value, {
-                        path: [...above.path, stepOf(held, property)],
-                        at: above.path.length === 0 ? reshapes : above.at,
-                    })
+                    paths.set(
+                        value,
+                        new Step(
+                            stepOf(held, property),
+                            held,
+                            above,
+                            walked?.has(value) ?? false,
+                        ),
+                    )
             }
             if (entry.proxy !== null) return entry.proxy
             mark(value)
@@ -178,44 +204,92 @@ export function recordWrites<Value>(
         },
         set(held, property, value) {
             mark(held)
-            if (sink !== undefined)
-                keep(held, (path) => ({
-                    path: [...path, stepOf(held, property)],
-                    set: snapshot(value),
+            const raw = stored(value)
+            if (sink !== undefined) {
+                keep(held, stepOf(held, property), (path) => ({
+                    path,
+                    set: raw,
                 }))
-            return Reflect.set(held, property, unwrapped(value), held)
+            }
+            return Reflect.set(held, property, raw, held)
         },
         deleteProperty(held, property) {
             mark(held)
             if (sink !== undefined)
-                keep(held, (path) => ({
-                    path: [...path, stepOf(held, property)],
+                keep(held, stepOf(held, property), (path) => ({
+                    path,
                     delete: true,
                 }))
             return Reflect.deleteProperty(held, property)
         },
     }
 
-    // A proxy stored back into the value would outlive the patch and go on marking writes.
-    const unwrapped = (value: unknown): unknown =>
-        value !== null && typeof value === 'object'
-            ? ((value as { [TARGET]?: object })[TARGET] ?? value)
-            : value
-
-    // TAKEN AT THE WRITE, not when the ops are sent: `list.push(row); row.name = x` would otherwise
-    // send a row already named, and then name it again.
-    const snapshot = (value: unknown): unknown => {
-        const raw = unwrapped(value)
-        return raw !== null && typeof raw === 'object'
-            ? structuredClone(raw)
-            : raw
+    // WHAT A WRITE PUTS IN THE VALUE, WITH NO PROXY ANYWHERE IN IT. A proxy stored would outlive the
+    // patch and go on marking writes, and a new array built from proxied reads — a `filter`, a
+    // spread row — holds them below its top.
+    //
+    // AN OBJECT IN TWO PLACES IS NOT REFUSED: every op's copy is taken when the callback returns, so
+    // each place is sent as it then stands, and a write kept through either path replays onto the
+    // copy at that path as it did on the server. What the wire cannot carry is the one object two
+    // places share, and a value sent whole loses that the same way.
+    const stored = (value: unknown): unknown => {
+        if (value === null || typeof value !== 'object') return value
+        const target = (value as { [TARGET]?: object })[TARGET]
+        if (target !== undefined) return target
+        if (!isWrappable(value)) return value
+        walked ??= new Set()
+        if (walked.has(value)) return value
+        walked.add(value)
+        // Handed back raw by a reshape — a row `pop` took out — and put back: placed, so sent as it
+        // stands, with no proxy below it and no write under it kept.
+        const step = paths?.get(value)
+        if (step !== undefined) step.placed = true
+        if (reached.has(value)) return value
+        if (Array.isArray(value)) {
+            for (let index = 0; index < value.length; index += 1) {
+                const field: unknown = value[index]
+                if (field === null || typeof field !== 'object') continue
+                const inner = stored(field)
+                if (inner !== field) value[index] = inner
+            }
+            return value
+        }
+        const fields = value as Record<string, unknown>
+        for (const key in fields) {
+            const field = fields[key]
+            if (field === null || typeof field !== 'object') continue
+            const inner = stored(field)
+            if (inner !== field) fields[key] = inner
+        }
+        return value
     }
 
     const proxy = new Proxy(root, handler)
     reached.set(root, new Reached(proxy, null))
-    paths?.set(root, { path: [], at: 0 })
-    mutate(proxy as Value)
+    paths?.set(root, new Step('', null, null, false))
+    const first = sink === undefined ? 0 : sink.ops.length
+    try {
+        mutate(proxy as Value)
+    } finally {
+        // SENT AS THEY STAND NOW: the ops hold the objects they stored, and a write made after
+        // one — raw or under a placed object — is in its copy rather than an op of its own.
+        if (sink !== undefined && !sink.lost)
+            try {
+                for (let index = first; index < sink.ops.length; index += 1) {
+                    const op = sink.ops[index] as PatchOp
+                    if ('set' in op) op.set = snapshot(op.set)
+                    else if ('call' in op)
+                        op.args = snapshot(op.args) as unknown[]
+                }
+            } catch {
+                // A value `structuredClone` refuses — a function in a row — is sent whole instead.
+                sink.lost = true
+            }
+    }
 }
+
+const snapshot = (raw: unknown): unknown =>
+    raw !== null && typeof raw === 'object' ? structuredClone(raw) : raw
 
 // An object the patch reached: the proxy it is handed out as — `null` for one no proxy can stand in
 // for — and what it was reached from, `null` for the root.
@@ -228,6 +302,26 @@ class Reached {
         this.proxy = proxy
         this.parent = parent
         this.marked = false
+    }
+}
+
+// 18.26 — the key an object was reached by, the object it was read off — `null` for the root — and
+// that object's own step, and whether the callback placed it.
+class Step {
+    key: string | number
+    parent: object | null
+    above: Step | null
+    placed: boolean
+    constructor(
+        key: string | number,
+        parent: object | null,
+        above: Step | null,
+        placed: boolean,
+    ) {
+        this.key = key
+        this.parent = parent
+        this.above = above
+        this.placed = placed
     }
 }
 

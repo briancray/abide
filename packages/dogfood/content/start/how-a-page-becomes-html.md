@@ -162,8 +162,8 @@ again.
 
 The render **buffered what it fetched**, so each of those requests is answered from the buffer
 rather than from the database. The handler runs once. The request still shows in the network
-panel like any other, with its address, its status and a `server-timing` entry saying it was
-answered from the render's run and how long the handler took.
+panel like any other, with its address, its status and a `Seeded` entry under `server-timing`
+saying it was answered from the render's run and how long the handler took.
 
 That saves the **handler's work** and a round trip after the bundle. On a slow connection the
 bundle is the long wait, and the calls ride inside it rather than after it.

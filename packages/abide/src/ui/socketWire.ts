@@ -136,14 +136,16 @@ class Following {
     // until a read runs the producer (7.17). The later answer's timer replaces the earlier.
     expireAfter(life: string | null | undefined): void {
         clearTimeout(this.expiry)
-        const seconds = Number(/max-age=(\d+)/.exec(life ?? '')?.[1] ?? 0)
+        // `max-age=0` is a life the server rounded down to nothing, and stale now — only an answer
+        // with no `max-age` at all is bounded by `invalidate` alone (21.17).
+        const seconds = /max-age=(\d+)/.exec(life ?? '')?.[1]
         this.expiry =
-            seconds > 0
-                ? setTimeout(
+            seconds === undefined
+                ? undefined
+                : setTimeout(
                       () => (this.entry() as Reactive<unknown>).invalidate(),
-                      seconds * 1000,
+                      Number(seconds) * 1000,
                   )
-                : undefined
     }
 
     frame(): BrowserFrame {

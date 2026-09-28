@@ -1129,6 +1129,9 @@ still be refused on the call.
 20.11 `/__abide/openapi.json` MUST publish a `Schema`'s own JSON Schema where it has one, probing
 one spelling for it, and MUST publish the type-derived `JsonSchema` where it has none.
 
+20.12 `/__abide/mcp` MUST refuse 403 a request whose `Origin` is another origin's, before it reads
+the body.
+
 # 21. Generated headers
 
 21.1 Every response MUST carry `x-content-type-options: nosniff`.
@@ -1163,8 +1166,9 @@ of that header.
 21.14 A request whose `if-none-match` is `*`, or lists the `etag` 21.13 derives under weak
 comparison, MUST be answered 304.
 
-21.15 An `Rpc` answer MUST carry `server-timing` with its handler's duration, and MUST say where it
-was answered from the `render`'s run.
+21.15 An `Rpc` answer MUST carry `server-timing` with its handler's duration under a metric naming
+the run: `Seeded` where the `render`'s run answered it, `Cached` where a `global` production already
+held answered it, `Started` where it is a stream timed to its first chunk, and `Direct` otherwise.
 
 21.16 The `max-age` 21.8 derives MUST be what is left of the answered production's `ttl`.
 
@@ -1173,6 +1177,11 @@ was answered from the `render`'s run.
 21.18 A page MUST default to `content-security-policy: frame-ancestors 'none'`.
 
 21.19 `access-control-allow-origin` MUST name only an origin the handler's `crossOrigin` admits.
+
+21.20 An answer whose request ran `middleware` rungs MUST carry `server-timing` `Middleware` with the
+time those rungs took apart from what they wrapped.
+
+21.21 The `Direct` duration 21.15 carries MUST NOT include the time 21.20 counts.
 
 # 22. Request-scoped ambients
 
@@ -1226,6 +1235,11 @@ composite.
 24.4 A span MUST carry `startedAt` as ISO-8601 and its duration as a monotonic measurement.
 
 24.5 `trace.headers` MUST carry `traceparent` naming the current span as parent.
+
+24.6 A `trace.span` opened with `timing` MUST be carried in its answer's `server-timing` under its
+name, where it closed before the head was sent.
+
+24.7 A `trace.span` opened with `timing` MUST throw where its name is not an HTTP token.
 
 # 25. Health
 
@@ -1408,6 +1422,17 @@ wrote where it wrote one.
 on.
 
 30.18 `navigate` MUST leave an answer other than 204 to the document.
+
+30.19 `url` MUST throw where a param, or a member of a rest param, is `.` or `..`.
+
+30.20 A history step to an address that differs from the page shown only in its fragment MUST NOT
+pass through `middleware`, and MUST NOT remount the page.
+
+30.21 `navigate` to the page shown, at an address carrying a fragment, MUST NOT pass through
+`middleware`, and MUST NOT remount the page.
+
+30.22 `navigate` without `keepScroll` MUST scroll to the element the address's fragment names, and to
+the top where it names none.
 
 # 31. Reading and writing by name
 
@@ -1593,6 +1618,10 @@ dropped wherever it stands.
 
 33.18 In a `.abide` template a run of whitespace that renders nothing but carries a newline and
 indentation MUST be dropped at both ends of every block body and of the top-level template.
+
+33.19 The static text of a prop a `<Name/>` passes MUST reach the child as the characters it stands
+for, decoded by HTML's attribute-value rule, and each static piece of an interpolated one MUST be
+decoded on its own.
 
 # 34. Script and style blocks
 

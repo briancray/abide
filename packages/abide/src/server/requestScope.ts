@@ -39,11 +39,23 @@ export type RequestScope = Scope & {
     trace: { id: string; span: string; flags: string } | undefined
     // `undefined` where the scope was opened without one — 42.8's scope, which 22.1 throws in.
     request: Request | undefined
+    // 16.23 — THE REQUEST THE LISTENER WAS HANDED, before a mount or a rung made another: bun raises
+    // the idle timeout only on the one it received itself.
+    received: Request | undefined
     // 22.9 — what a write through `response` is collected onto, for whoever answers to apply.
     response: { status: number; headers: Headers }
     // 41.13, 41.21 — the page this scope is rendering, which its calls report into; `undefined` in
     // every scope but a page's.
     page: PageRender | undefined
+    // 21.15, 21.20, 24.6 — WHAT THE ANSWER'S `server-timing` CARRIES, gathered until the head goes out.
+    timing: {
+        entries: string[]
+        // 21.20 — the time rungs took, apart from what they wrapped; `undefined` where none ran.
+        middleware: number | undefined
+        // The handler this request is answering, and its own body's time inside its rungs.
+        answering: object | undefined
+        handled: number | undefined
+    }
 }
 
 // A PAGE'S RENDER, as its calls see it: the seed buffer's sink for this caller (41.13), and the
@@ -65,7 +77,10 @@ SCOPING.provider = {
         STORAGE.run(scope as RequestScope | undefined, body, given),
 }
 
-function scopeFor(given: Request | undefined): RequestScope {
+function scopeFor(
+    given: Request | undefined,
+    received: Request | undefined,
+): RequestScope {
     return {
         instances: new Map(),
         page: undefined,
@@ -78,7 +93,14 @@ function scopeFor(given: Request | undefined): RequestScope {
         principal: undefined,
         applied: false,
         request: given,
+        received,
         response: { status: 200, headers: new Headers() },
+        timing: {
+            entries: [],
+            middleware: undefined,
+            answering: undefined,
+            handled: undefined,
+        },
     }
 }
 
@@ -86,8 +108,9 @@ function scopeFor(given: Request | undefined): RequestScope {
 export function inScope<Result>(
     given: Request | undefined,
     body: () => Result,
+    received: Request | undefined = given,
 ): Result {
-    return STORAGE.run(scopeFor(given), body)
+    return STORAGE.run(scopeFor(given, received), body)
 }
 
 // 37.3 — A RUNG MAY HAND `next` A REQUEST OF ITS OWN, and it is served in the scope `App.fetch`
@@ -96,9 +119,16 @@ export function adoptRequest(given: Request): void {
     ;(STORAGE.getStore() as RequestScope).request = given
 }
 
-// 42.9 — what `App.listen` bound, for `server` to hand back.
-export const LISTENING: { server: Bun.Server<unknown> | undefined } = {
+// 42.9 — what `App.listen` bound, for `server` to hand back. 16.23 — and how a call raises the idle
+// timeout on the request the listener received: on the server bound here, or where the listener is
+// on another thread (`abide dev`), a message to it.
+export const LISTENING: {
+    server: Bun.Server<unknown> | undefined
+    timeout: (received: Request, seconds: number) => void
+} = {
     server: undefined,
+    timeout: (received, seconds) =>
+        LISTENING.server?.timeout(received, seconds),
 }
 
 // ONE SCOPE ACROSS EVERY PULL of what `open` hands back. A response body is pulled by the server's
@@ -191,6 +221,44 @@ export function request(): Request {
 
 // 16.12 — the request a handler's rung is handed.
 RPC_SERVER.request = request
+
+// 21.20 — only the handler being answered: one it calls in process reports into the same scope.
+RPC_SERVER.handled = (rpc, duration) => {
+    const timing = STORAGE.getStore()?.timing
+    if (timing?.answering === rpc && timing.handled === undefined)
+        timing.handled = duration
+}
+
+// 21.20 — time spent in rungs, or taken back out where it was the centre's.
+export function rungsTook(duration: number): void {
+    const timing = STORAGE.getStore()?.timing
+    if (timing !== undefined)
+        timing.middleware = (timing.middleware ?? 0) + duration
+}
+
+// 21.15, 24.6 — one `server-timing` metric, onto the answer `timing` belongs to.
+export function timed(
+    timing: RequestScope['timing'] | undefined,
+    name: string,
+    duration: number,
+): void {
+    timing?.entries.push(metric(name, duration))
+}
+
+function metric(name: string, duration: number): string {
+    return `${name};dur=${duration.toFixed(1)}`
+}
+
+// 21.15, 21.20, 24.6 — WHAT THE ANSWER CARRIES, in the order it was gathered; `undefined` for none.
+export function serverTiming(): string | undefined {
+    const timing = STORAGE.getStore()?.timing
+    if (timing === undefined) return undefined
+    const entries =
+        timing.middleware === undefined
+            ? timing.entries
+            : [...timing.entries, metric('Middleware', timing.middleware)]
+    return entries.length === 0 ? undefined : entries.join(', ')
+}
 
 // 22.1, 22.9 — the response being built for it.
 export function response(): { status: number; headers: Headers } {

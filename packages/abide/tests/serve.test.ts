@@ -110,6 +110,8 @@ beforeAll(async () => {
         // directory cannot tell a path from a name.
         'ui/public/robots.txt': 'User-agent: *\nAllow: /\n',
         'ui/public/notes.md': '# notes\n',
+        // 36.11 — A NAME THE URL PARSER ESCAPES, asked for as `/my%20ph%C3%B6to.txt`.
+        'ui/public/my phöto.txt': 'escaped\n',
         'ui/public/img/dot.svg':
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>',
         // THE APP'S OWN, rather than whatever the walk up from here finds. The compiler reads
@@ -159,7 +161,7 @@ test('an address a page matches is painted into the shell — 38.6', async () =>
 
 // THE REVERT: hand the page `{ params: found.params }` rather than `{ params: () => … }` in
 // `serveBuild` and this reports `params is not a function` instead of the id — which is the same
-// break `Router.paramsProp` carries on the client side of the same contract.
+// break `Router.ts`'s `routeProps` carries on the client side of the same contract.
 // THE REVERT: hand the emitters no `componentGraph` imports in `compileApp` and the build this
 // file serves fails before any address answers — `Could not resolve: "#ui/components/Badge.client.ts"`,
 // the module the page imports being in the source tree, where the compiler wrote nothing.
@@ -431,6 +433,16 @@ test('a public file is answered at its path below the directory — 36.11, 36.12
     const nested = await Bun.fetch(`${base}/img/dot.svg`)
     expect(nested.status).toBe(200)
     expect(await nested.text()).toContain('<svg')
+})
+
+// 36.11 — A NAME THE ADDRESS ESCAPES IS STILL ITS PATH: the space and the `ö` arrive percent-encoded
+// and the file is keyed by its name on disk. THE REVERT: look the file up by `url.pathname` as it
+// came; the address falls through to the routes and is 404.
+test('a public file whose name the address escapes is answered — 36.11', async () => {
+    const escaped = await Bun.fetch(`${base}/my phöto.txt`)
+    expect(new URL(escaped.url).pathname).toBe('/my%20ph%C3%B6to.txt')
+    expect(escaped.status).toBe(200)
+    expect(await escaped.text()).toBe('escaped\n')
 })
 
 test('a public file carries a content-type off its extension — 36.14', async () => {

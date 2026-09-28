@@ -7,7 +7,7 @@
 // ON AN ELEMENT, attributes: what the server writes into the tag, and what the client keeps writing.
 // A key the element names explicitly is the explicit attribute's (33.12's rule, held for elements
 // too); a value is written as a named attribute's is (32.38); a function is a listener where the
-// key is `on<event>`, and never markup.
+// key is `on<event>`, and nothing under an `on<event>` key, nor any function, is ever markup.
 
 import { attributeText, writtenMarkup } from './attributeText.ts'
 import { isEventName } from './isEventName.ts'
@@ -42,11 +42,14 @@ export function spreadEntries(
     for (const [name, member] of Object.entries(value)) {
         const lower = name.toLowerCase()
         if (explicit.includes(lower)) continue
-        if (typeof member === 'function') {
-            if (listeners !== null && isEventName(lower))
+        // 32.4 — AN `on<event>` NAME IS NEVER MARKUP, whatever it holds: a string under `onclick`
+        // written as an attribute is an inline handler, script compiled from data.
+        if (isEventName(lower)) {
+            if (listeners !== null && typeof member === 'function')
                 listeners.push([lower.slice(2), member as EventListener])
             continue
         }
+        if (typeof member === 'function') continue
         if (!ATTRIBUTE_NAME.test(name)) continue
         // 32.38 — the named attribute's answer, so a spread and `name={expr}` never disagree.
         const text = attributeText(name, member)

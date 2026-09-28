@@ -198,6 +198,7 @@ gate(
 // time a stream as settled at the call (`duration: 0` in `outcomeOf`); the header reads `dur=0.0`.
 test('a streaming answer times its handler to the first chunk — 21.15', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/late`)
+    expect(answer.headers.get('server-timing')).toMatch(/^Started;dur=/)
     const duration = Number(
         /dur=([\d.]+)/.exec(answer.headers.get('server-timing') ?? '')?.[1],
     )

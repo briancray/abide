@@ -11,7 +11,7 @@ import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { mounted as underMount } from '#shared/mount.ts'
 import type { Gated } from '#shared/reactive/Keyed.ts'
-import { deadlineOf } from '#shared/reactive/index.ts'
+import { deadlineOf, pastOf } from '#shared/reactive/index.ts'
 import { notFound, refuse } from '#shared/refuse.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import type { Method, Rpc } from '#shared/rpc.ts'
@@ -27,6 +27,8 @@ import { prefers } from './prefers.ts'
 import {
     currentRequestScope,
     LISTENING,
+    rungsTook,
+    timed,
     writtenStatus,
 } from './requestScope.ts'
 import { type Outcome, outcomeOf, takeSeed } from './seedBuffer.ts'
@@ -159,20 +161,36 @@ export async function answerRpc(
             ? coerceArgs(
                   raw as Record<string, string | string[]> | undefined,
                   found.argsDocument,
+                  inUrl ? url.search : '',
               )
             : raw
     // 16.61 — where neither names one, nothing is raised and the server's own idle timeout stands.
     const timeout = handler.timeout ?? RPC_SERVER.timeout()
-    if (timeout !== undefined) raiseTimeout(request, timeout)
+    if (timeout !== undefined) raiseTimeout(timeout)
     // 41.7 — the call a hydrating page makes for what its render already reached is answered from
     // that, and the handler is not run again (41.13).
     // 16.56 — a `HEAD` leaves the seed for the `GET` it stands in front of.
     const caller = head ? undefined : callerOf()
     const seeded =
         caller === undefined ? undefined : takeSeed(caller, handler, args)
+    // 21.15 — A `global` PRODUCTION ALREADY HELD, and not loading, answers without a run: a run
+    // this call started moves the generation, and one it joined was loading when it came.
+    const held =
+        seeded === undefined ? GLOBAL_GETS.get(handler)?.(args) : undefined
+    const heldCell = held === undefined ? undefined : pastOf(held)
+    const heldAt =
+        heldCell === undefined || heldCell.loading
+            ? undefined
+            : heldCell.generation
+    const timing = currentRequestScope()?.timing
+    if (timing !== undefined) timing.answering = handler
     const started = performance.now()
     const outcome =
         seeded === undefined ? await outcomeOf(handler(args)) : await seeded
+    const cached =
+        heldAt !== undefined &&
+        GLOBAL_GETS.get(handler)?.(args) === held &&
+        pastOf(held).generation === heldAt
     // 16.40 — A MUTATION A DOCUMENT MADE — a form posted with no script — is answered as a navigation.
     if (!inUrl && prefers(request, 'text/html', 'application/json'))
         return navigated(outcome, request, failurePage)
@@ -181,35 +199,31 @@ export async function answerRpc(
     // varies on `Origin` too (21.7), which `defaultHeaders` never reached.
     if (outcome.settled && outcome.value instanceof Response) {
         answer.headers.append('vary', 'origin')
-        return stamped(answer, admitted, undefined, false)
+        return admitting(answer, admitted)
     }
-    // A stream's time is to its first chunk, which the answer's head waited for.
-    return stamped(
-        answer,
-        admitted,
-        outcome.duration ?? performance.now() - started,
-        seeded !== undefined,
-    )
+    // 21.15 — HOW LONG THE HANDLER TOOK, AND WHICH RUN THIS IS, for the network panel: the row
+    // already names the handler, so the metric names the run. A stream's time is to its first
+    // chunk, which the answer's head waited for.
+    const took = outcome.duration ?? performance.now() - started
+    const run =
+        seeded !== undefined
+            ? 'Seeded'
+            : cached
+              ? 'Cached'
+              : outcome.duration === undefined
+                ? 'Started'
+                : 'Direct'
+    // 21.20 — what the rungs took is theirs, and the handler's own body is what `Direct` reports.
+    const handled = run === 'Direct' ? timing?.handled : undefined
+    if (handled !== undefined) rungsTook(took - handled)
+    timed(timing, run, handled ?? took)
+    return admitting(answer, admitted)
 }
 
-// 21.19 — the origin a crossing call came from, where the handler admits it; 21.15 — HOW LONG THE HANDLER TOOK, AND WHICH RUN THIS
-// IS, for the network panel: an answer from the render's run looks exactly like a fresh one
-// otherwise, and the time is the handler's own rather than this request's.
-function stamped(
-    answer: Response,
-    admitted: string | null,
-    duration: number | undefined,
-    seeded: boolean,
-): Response {
+// 21.19 — the origin a crossing call came from, where the handler admits it.
+function admitting(answer: Response, admitted: string | null): Response {
     if (admitted !== null)
         answer.headers.set('access-control-allow-origin', admitted)
-    if (duration !== undefined)
-        answer.headers.set(
-            'server-timing',
-            seeded
-                ? `handler;dur=${duration.toFixed(1)};desc="answered from the render's run"`
-                : `handler;dur=${duration.toFixed(1)}`,
-        )
     return answer
 }
 
@@ -268,7 +282,7 @@ function defaultHeaders(): Headers {
 }
 
 // 15.1 — a refusal crosses the wire as the four fields it is, at its own status.
-function answered(failure: Failed<string, unknown>): Response {
+export function answered(failure: Failed<string, unknown>): Response {
     return new Response(JSON.stringify(wireFailure(failure)), {
         status: failure.status,
         headers: defaultHeaders(),
@@ -387,16 +401,20 @@ function preflight(found: Mounted, origin: string, request: Request): Response {
 //
 // 16.62 — `Infinity` is never reaped, which bun spells 0; any finite bound is capped at the 255
 // seconds bun's idle timeout can hold.
-function raiseTimeout(request: Request, milliseconds: number): void {
+//
+// ON THE REQUEST THE LISTENER RECEIVED, never the one being answered: under a mount, or past a rung
+// that handed `next` its own, that is a copy, and bun's `timeout` does nothing for a request it was
+// not handed itself.
+function raiseTimeout(milliseconds: number): void {
     const scope = currentRequestScope()
-    const bound = LISTENING.server
-    if (scope === undefined || bound === undefined) return
+    const received = scope?.received
+    if (scope === undefined || received === undefined) return
     const seconds = Number.isFinite(milliseconds)
         ? Math.min(255, Math.ceil(milliseconds / 1000))
         : Number.POSITIVE_INFINITY
     if (seconds <= scope.timeout) return
     scope.timeout = seconds
-    bound.timeout(request, Number.isFinite(seconds) ? seconds : 0)
+    LISTENING.timeout(received, Number.isFinite(seconds) ? seconds : 0)
 }
 
 function isForm(request: Request): boolean {

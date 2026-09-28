@@ -34,6 +34,25 @@ export function tokenise(source: string): Token[] {
     return tokens
 }
 
+// How far `kind` moves the bracket depth a top-level separator is found at: a template's
+// substitutions nest as a call's arguments do, so `${a, b}` holds its comma.
+export function nesting(kind: SyntaxKind): number {
+    switch (kind) {
+        case SyntaxKind.OpenParenToken:
+        case SyntaxKind.OpenBracketToken:
+        case SyntaxKind.OpenBraceToken:
+        case SyntaxKind.TemplateHead:
+            return 1
+        case SyntaxKind.CloseParenToken:
+        case SyntaxKind.CloseBracketToken:
+        case SyntaxKind.CloseBraceToken:
+        case SyntaxKind.TemplateTail:
+            return -1
+        default:
+            return 0
+    }
+}
+
 // 32.1 — WHERE A TEMPLATE SLOT OPENED AT `open` ENDS: the index of its closing `}`, or the length
 // of the source where it never closes. The same scan `tokenise` makes, so the regex-or-division
 // question, a template literal's substitutions, strings and comments are answered once for both
@@ -43,6 +62,9 @@ export function tokenise(source: string): Token[] {
 // `{/for}`, `{/try}` — any `/name`, with any whitespace around it — read as a regular expression
 // would run on to the next `/` and take the markup after the block with them. No expression is a
 // bare `/name` either, so the whole shape is the directive rather than a list of block names.
+//
+// AN OPEN DIRECTIVE'S NAME IS SKIPPED, and the scan starts past it expecting an operand:
+// `{#if /'/.test(s)}` opens a literal, where `#if` read as a private name would divide.
 export function slotEnd(source: string, open: number): number {
     let first = open + 1
     while (first < source.length && isSpace(source[first] as string)) first += 1
@@ -56,9 +78,19 @@ export function slotEnd(source: string, open: number): number {
             if (source[close] === '}') return close
         }
     }
+    let from = open
     let depth = 0
+    if (source[first] === '#') {
+        let name = first + 1
+        while (name < source.length && isLetter(source[name] as string))
+            name += 1
+        if (name > first + 1) {
+            from = name
+            depth = 1
+        }
+    }
     let end = source.length
-    scan(source, open, (kind, scanner) => {
+    scan(source, from, (kind, scanner) => {
         if (kind === SyntaxKind.OpenBraceToken) depth += 1
         else if (kind === SyntaxKind.CloseBraceToken) {
             depth -= 1

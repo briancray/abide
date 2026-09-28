@@ -18,6 +18,7 @@ import {
     SOCKET_ADDRESS,
 } from '#shared/ADDRESSES.ts'
 import { DEBUG_META } from '#shared/DEBUG_META.ts'
+import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { escapeAttribute } from '#shared/escapeText.ts'
 import type { Failed } from '#shared/Failed.ts'
 import { namedLogger } from '#shared/log.ts'
@@ -166,8 +167,9 @@ export async function answerRequest(
     // 36.11 — A PUBLIC FILE IS ITS PATH BELOW THE DIRECTORY, so `/favicon.ico` is answered
     // before any route is tried. The order is not load-bearing: `abide build` and `abide dev`
     // run `refuseAddressCollision` (36.13) over the same two trees before anything is served,
-    // so at run time there can never be a collision to resolve.
-    const file = app.published.get(asked)
+    // so at run time there can never be a collision to resolve. 36.11 — keyed by its name on disk
+    // and asked for percent-encoded: `my photo.jpg` is `/my%20photo.jpg`.
+    const file = app.published.get(decodedOrKept(asked))
     if (file !== undefined)
         return readsOnly(request)
             ? publicResponse(request, file)

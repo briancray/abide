@@ -64,7 +64,7 @@ export type Read = {
     // A write's operator without its `=` (`''` for `=` itself); an update's `+` or `-`.
     operator: string
     prefix: boolean
-    // An update whose value nothing reads — the statement form, and a `for`'s incrementor.
+    // A write or an update whose value nothing reads (`isDiscarded`).
     discarded: boolean
     arguments: number
     // 31.8 — the member path between the name and the write: a property's name, or the span of a
@@ -115,6 +115,26 @@ function isAssigned(outer: Node, target: Node): outer is BinaryExpression {
         outer.operatorToken.kind >= SyntaxKind.FirstAssignment &&
         outer.operatorToken.kind <= SyntaxKind.LastAssignment
     )
+}
+
+// WHETHER NOTHING READS AN EXPRESSION'S VALUE: a statement, a `for`'s own two, or either side
+// of a comma whose own value nothing reads — `a = 1, b = 2` as a statement is two discarded writes.
+// The comma is not optional: a write whose value IS read lowers to a form beginning with `(`, and
+// at the head of a line JavaScript inserts no semicolon in front of one.
+function isDiscarded(expression: Node): boolean {
+    const holder = expression.parent
+    if (isExpressionStatement(holder)) return true
+    if (isForStatement(holder))
+        return (
+            holder.incrementor === expression ||
+            holder.initializer === expression
+        )
+    if (
+        isBinaryExpression(holder) &&
+        holder.operatorToken.kind === SyntaxKind.CommaToken
+    )
+        return holder.left === expression || isDiscarded(holder)
+    return false
 }
 
 function isIncrement(
@@ -245,6 +265,7 @@ export function classifyRead(node: Node): Read | undefined {
         read.operator = outer.operatorToken.getText().slice(0, -1)
         read.to = outer.end
         read.value = { start: outer.right.getStart(), end: outer.right.end }
+        read.discarded = isDiscarded(outer)
         return read
     }
     if (isIncrement(outer)) {
@@ -253,10 +274,7 @@ export function classifyRead(node: Node): Read | undefined {
         read.prefix = isPrefixUnaryExpression(outer)
         read.from = outer.getStart()
         read.to = outer.end
-        const holder = outer.parent
-        read.discarded =
-            isExpressionStatement(holder) ||
-            (isForStatement(holder) && holder.incrementor === outer)
+        read.discarded = isDiscarded(outer)
         return read
     }
     // A path that ends in anything else is a read of the value, whose members follow it.

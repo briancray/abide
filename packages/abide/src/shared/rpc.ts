@@ -190,11 +190,18 @@ export function declare(method: Method): Declare {
         const onion =
             rungs.length === 0
                 ? null
-                : compose(rungs, async (ctx: RpcContext) =>
-                      streams
-                          ? (handler as (args: unknown) => unknown)(argsOf(ctx))
-                          : reach(argsOf(ctx)),
-                  )
+                : compose(rungs, async (ctx: RpcContext) => {
+                      if (streams)
+                          return (handler as (args: unknown) => unknown)(
+                              argsOf(ctx),
+                          )
+                      const started = performance.now()
+                      try {
+                          return await reach(argsOf(ctx))
+                      } finally {
+                          RPC_SERVER.handled?.(rpc, performance.now() - started)
+                      }
+                  })
         const wrapped =
             onion === null
                 ? null

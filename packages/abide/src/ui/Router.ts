@@ -1,4 +1,5 @@
 import { CURRENT_ROUTER, type NavigateOptions } from '#shared/CURRENT_ROUTER.ts'
+import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { firstMatch, type Params, partsOf } from '#shared/matchRoute.ts'
 import { unmounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
@@ -8,21 +9,24 @@ import {
     rankBySpecificity,
     type Segment,
 } from '#shared/routePattern.ts'
-import { applyHead } from './applyHead.ts'
 import { LAYER_MOUNT, LAYER_NAVIGATE } from './LAYER_NAMES.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
 import { fillRegion, pageRegion, type Region } from './regions.ts'
-import type { Scope } from './Scope.ts'
+import type { Scope, Stoppable } from './Scope.ts'
 
 // A PAGE'S CLIENT MODULE, mounted against the region the router owns. The same default export a
 // page already has — the router is a CALLER of a page exactly as a page is a caller of a
 // component, which is why nothing about the emitted module changes to be routable.
-export type PageMount = (root: Region, props?: Record<string, unknown>) => Scope
+export type PageMount = (
+    root: Region,
+    props?: Record<string, unknown>,
+    routed?: boolean,
+) => Scope
 
-// `head` is emitted only where a page carries its own markup, which is every routable one — but
-// a page with no `<head>` block contributes nothing and ships no such export, so it is optional
-// here rather than a function that returns ''.
-type PageModule = { default: PageMount; head?: () => string }
+// 39.6 — A LEVEL'S HEAD IS ITS OWN MOUNT'S TO APPLY, from inside the instance its slots read
+// (`emitClient`), so the router hands the module a region and says it is the router — a file
+// invoked as a component too is mounted without it, and applies no head a row.
+type PageModule = { default: PageMount }
 
 export type Route = {
     // The route literal, in the bracket spelling the page's directory is already written in.
@@ -38,15 +42,15 @@ type Compiled = Route & { segments: Segment[] }
 
 type Found = { route: Compiled; params: Params }
 
-// 41.11 — ONE LEVEL OF WHAT IS MOUNTED: the module standing there, the scope that stops it, and
-// the region its child occupies. The router holds these rather than letting each level own the
-// one below it, which is what makes a shared layout something it can KEEP: a scope stopped from
-// above takes its children with it, and a layout that survives a navigation must not take the
-// page it was holding a moment ago.
+// 41.11 — ONE LEVEL OF WHAT IS MOUNTED: the scope that stops it and the region its child
+// occupies. The module standing there is `chain`'s at the same index. The router holds these
+// rather than letting each level own the one below it, which is what makes a shared layout
+// something it can KEEP: a scope stopped from above takes its children with it, and a layout that
+// survives a navigation must not take the page it was holding a moment ago.
 type Level = {
-    module: PageModule
     scope: Scope | undefined
-    // Where this level's `<slot/>` is, learned when the level below it mounted there.
+    // Where this level's `<slot/>` is, learned when the level below it mounted there, and
+    // `undefined` again once that region leaves — a `<slot/>` inside a closed `{#if}` is nowhere.
     slot: Region | undefined
 }
 
@@ -58,6 +62,13 @@ export class Router {
     routes: Compiled[]
     // The chain standing in the document, outermost layout first and the page last.
     levels: Level[]
+    // THE CHAIN THE ADDRESS RESOLVED TO, which a kept layout's `<slot/>` mounts from whenever its
+    // region opens — read at that moment rather than captured when the layout mounted, or a slot
+    // reopened after a navigation put back the page the reader had left.
+    chain: PageModule[]
+    // The address the standing chain was mounted for, fragment left off: what a step that moves
+    // only the fragment is compared against.
+    mounted: string | undefined
     // WHICH NAVIGATION IS THE LIVE ONE. Both ways in await the destination's module before they
     // touch anything, and a dynamic import resolves in whatever order the chunks arrive — so two
     // clicks, or a click landing while `hydrate` is still loading, each mounted a page: the second
@@ -80,6 +91,8 @@ export class Router {
         this.region = region
         this.routes = routes
         this.levels = []
+        this.chain = []
+        this.mounted = undefined
         this.navigation = 0
         this.prefetched = new Set()
         this.transitions = transitions
@@ -129,6 +142,13 @@ export class Router {
             location.href = target.href
             return
         }
+        // 30.21 — A FRAGMENT OF THE PAGE ALREADY STANDING is the browser's fragment navigation: nothing
+        // is asked or mounted. With no fragment, the same address is a navigation like any other,
+        // as it is to the browser.
+        if (target.hash !== '' && this.shows(target)) {
+            this.follow(target, options)
+            return
+        }
         this.navigation += 1
         const ticket = this.navigation
         route.navigating.set(true)
@@ -176,6 +196,29 @@ export class Router {
         }
     }
 
+    // Whether `target` differs from the address the standing chain was mounted for only by its
+    // fragment.
+    shows(target: URL | Location): boolean {
+        return this.mounted === `${target.pathname}${target.search}`
+    }
+
+    // A STEP WITHIN THE STANDING PAGE: the address written and `route.url` moved, and the page, its
+    // scope and every call it made left where they are. It supersedes a navigation in flight the
+    // way a click on another link would. Back and forward arrive here with the bar already moved
+    // and `keepScroll`, which leaves the scroll to the browser's own restoration.
+    follow(target: URL, options: NavigateOptions = {}): void {
+        this.navigation += 1
+        route.navigating.set(false)
+        // THE SAME ADDRESS REPLACES rather than pushing, which is what the browser does for a
+        // link to the fragment it is already at.
+        writeAddress(
+            target,
+            options.replace === true || target.href === location.href,
+        )
+        route.url.set(new URL(target.href))
+        if (options.keepScroll !== true) scrollToFragment(target.hash)
+    }
+
     // 39.9 — AWAITED TO THE WRITE, NOT TO THE ANIMATION: `updateCallbackDone` settles once the
     // arriving page is in the document, and `finished` would hold the navigation for however long
     // the app's transition plays. 39.10 — a browser with no `startViewTransition` writes directly.
@@ -217,27 +260,23 @@ export class Router {
             this.stopFrom(shared)
             // The region the arriving part goes into: the page region where nothing is kept, and
             // the deepest kept layout's own slot where something is.
+            //
+            // NOWHERE, where that slot's region is closed: the arriving part is mounted by the slot
+            // when it opens, off `chain`, and not into a region no longer in the document.
             const into =
                 shared === 0
                     ? this.region
-                    : ((this.levels[shared - 1] as Level).slot as Region)
+                    : (this.levels[shared - 1] as Level).slot
             // EMPTIED THROUGH THE PRIMITIVE EVERY OTHER REGION IS. `fillRegion(region)` with no
             // build is this removal, and it carries the 41.10 refusal for a region no longer in a
             // document that a hand-written walk swallows.
-            fillRegion(into)
-            const full = `${target.pathname}${target.search}${target.hash}`
-            if (options.replace === true) history.replaceState(null, '', full)
-            else history.pushState(null, '', full)
-            // 39.6 — BEFORE THE BODY IS WIRED, so a `<title>` the reader sees is the page they are
-            // arriving at rather than the one they left, for however long the mount takes. Every
-            // level that is arriving contributes, outermost first, which is the order the server
-            // wrote them in; a kept layout's head is already standing and is not applied again.
-            for (let at = shared; at < arriving.length; at += 1) {
-                const head = (arriving[at] as PageModule).head
-                if (head !== undefined) applyHead(head())
-            }
-            this.mountChain(target.href, found, arriving, shared, into)
-            if (options.keepScroll !== true) scrollTo(0, 0)
+            if (into !== undefined) fillRegion(into)
+            writeAddress(target, options.replace === true)
+            // 39.6 — each arriving level applies its own head as it mounts into its emptied region,
+            // outermost first; a kept layout is not mounted again, so neither is its head.
+            this.mountChain(target, found, arriving, shared, into)
+            // The top of the page, or — as the browser does on a load — the fragment's element.
+            if (options.keepScroll !== true) scrollToFragment(target.hash)
         } finally {
             endLayer(LAYER_NAVIGATE)
         }
@@ -246,14 +285,16 @@ export class Router {
     // How much of the arriving chain is already standing. Layouts only: the page is the level
     // that is always replaced, even where the address resolved to the same module with other
     // params, because its own bindings read those params.
+    //
+    // EVERY STANDING LEVEL IS COMPARED, the page included: a page is never a layout, so it cannot
+    // match one, and a layout whose slot is closed stands with nothing below it.
     private shares(arriving: PageModule[]): number {
         const layouts = arriving.length - 1
-        const standing = this.levels.length === 0 ? 0 : this.levels.length - 1
         let shared = 0
         while (
             shared < layouts &&
-            shared < standing &&
-            (this.levels[shared] as Level).module.default ===
+            shared < this.levels.length &&
+            (this.chain[shared] as PageModule).default ===
                 (arriving[shared] as PageModule).default
         )
             shared += 1
@@ -274,31 +315,38 @@ export class Router {
     // between two tags uses — and the router learns where that slot is on the way past, which is
     // what lets it swap the page there later without the layout knowing.
     //
-    // THE CHILD'S SCOPE IS THE ROUTER'S, not the layout's: `mount` hands back nothing, so the
-    // layout owns nothing below it and a kept layout cannot stop the page arriving under it.
-    private mountFrom(
-        modules: PageModule[],
-        at: number,
-        region: Region,
-        params: Params,
-    ): void {
-        const module = modules[at] as PageModule
-        const level: Level = { module, scope: undefined, slot: undefined }
+    // THE CHILD'S SCOPE IS THE ROUTER'S, not the layout's, so a kept layout cannot stop the page
+    // arriving under it. What `mount` hands the layout is a stop for WHATEVER STANDS IN THE SLOT
+    // when the slot's region leaves — a `<slot/>` inside a closed `{#if}` — rather than for the
+    // page that happened to be mounted first. And the slot mounts from `chain`, so a slot that
+    // opens again mounts the page the address resolves to now.
+    private mountFrom(at: number, region: Region): void {
+        const module = this.chain[at] as PageModule
+        const level: Level = { scope: undefined, slot: undefined }
         this.levels[at] = level
-        const props = paramsProp(params)
-        if (at < modules.length - 1)
+        const props = routeProps()
+        if (at < this.chain.length - 1)
             props.children = () => ({
                 // NO BUILD, because the level below carries its own (32.18): a module a route
                 // reaches fills the region it is mounted against when that region is empty, so
                 // the build and the mount are one call rather than two.
                 build: undefined,
-                mount: (slot: Region): undefined => {
+                mount: (slot: Region): Stoppable => {
+                    this.release(level, at)
                     level.slot = slot
-                    this.mountFrom(modules, at + 1, slot, params)
-                    return undefined
+                    this.mountFrom(at + 1, slot)
+                    return { stop: () => this.release(level, at) }
                 },
             })
-        level.scope = module.default(region, props)
+        level.scope = module.default(region, props, true)
+    }
+
+    // What stands below `level`, stopped, and its slot forgotten. A no-op once the level itself has
+    // been replaced, which is how a stop handed to a layout that has since left does nothing.
+    private release(level: Level, at: number): void {
+        if (this.levels[at] !== level) return
+        level.slot = undefined
+        this.stopFrom(at + 1)
     }
 
     // The page the SERVER painted, wired where it stands. No fill happens — the region is not
@@ -312,14 +360,15 @@ export class Router {
         // arriving page's bindings to the departing page's nodes.
         this.navigation += 1
         const ticket = this.navigation
-        // NO `applyHead` HERE. The document's head is the one the server wrote for this very
-        // page, and re-applying would replace each contribution with an identical copy — which is
-        // a `<link rel=stylesheet>` refetched and a flash of unstyled document on every load.
+        // NO HEAD IS APPLIED FOR A PAINTED PAGE: its region is not empty, so its mount hydrates
+        // rather than fills, and the head is the one the server wrote. Re-applying would replace
+        // each contribution with an identical copy — a `<link rel=stylesheet>` refetched and a
+        // flash of unstyled document on every load.
         const standing = await load(found.route)
         if (this.navigation !== ticket) return
         // THE HYDRATE SHARE. Same name as the navigation's mount because it is the same work on the
         // same chain — what differs is the op it is a fraction of.
-        this.mountChain(location.href, found, standing, 0, this.region)
+        this.mountChain(new URL(location.href), found, standing, 0, this.region)
     }
 
     // AT THE TOP OF THE CHAIN, NOT INSIDE `mountFrom`: it recurses one level per layout, and
@@ -327,16 +376,19 @@ export class Router {
     // count the innermost level once per level above it. 23.1 — WRITTEN BEFORE THE ARRIVING PAGE'S
     // SETUP, which reads it.
     private mountChain(
-        href: string,
+        target: URL,
         found: Found,
         modules: PageModule[],
         from: number,
-        into: Region,
+        into: Region | undefined,
     ): void {
-        arrive(href, found.route.pattern, found.params)
+        arrive(target.href, found.route.pattern, found.params)
+        this.chain = modules
+        this.mounted = `${target.pathname}${target.search}`
+        if (into === undefined) return
         beginLayer(LAYER_MOUNT)
         try {
-            this.mountFrom(modules, from, into, found.params)
+            this.mountFrom(from, into)
         } finally {
             endLayer(LAYER_MOUNT)
         }
@@ -373,14 +425,44 @@ async function ask(target: URL): Promise<Response | undefined> {
 // one, so every page with a `[param]` in its address hydrated dead — with its server markup
 // already on screen, which is what kept it quiet.
 //
+// 33.5 — AND A LIVE ONE: `params` reads `route.params`, which every navigation writes. A layout
+// kept across `/users/1` -> `/users/2` is not mounted again, so an accessor over the params it was
+// mounted with went on answering user 1.
+//
 // THE SHAPE IS FIXED HERE, `children` included: every compiled page and layout loads its props
 // off this record, and a field added on a later path is a second hidden class for all of them.
 // A level with nothing below it leaves the key present and undefined, which is what both
 // emitted readers already test for.
-function paramsProp(
-    params: Params,
-): Record<string, (() => unknown) | undefined> {
-    return { params: () => params, children: undefined }
+function routeProps(): Record<string, (() => unknown) | undefined> {
+    return { params: readParams, children: undefined }
+}
+
+const readParams = (): Params => route.params()
+
+function writeAddress(target: URL, replace: boolean): void {
+    const full = `${target.pathname}${target.search}${target.hash}`
+    if (replace) history.replaceState(null, '', full)
+    else history.pushState(null, '', full)
+}
+
+// 30.22 — WHAT THE BROWSER DOES WITH A FRAGMENT: its element — by id, then a named `<a>` — brought into
+// view, and the top of the page where there is none or it names none. A fragment that will not
+// percent-decode is looked up as written.
+function scrollToFragment(hash: string): void {
+    const id = decodedOrKept(hash.slice(1))
+    if (id !== '') {
+        const byId = document.getElementById(id)
+        if (byId !== null) {
+            byId.scrollIntoView()
+            return
+        }
+        for (const named of document.getElementsByName(id))
+            if (named instanceof HTMLAnchorElement) {
+                named.scrollIntoView()
+                return
+            }
+    }
+    scrollTo(0, 0)
 }
 
 // THE ROUTES, MOST SPECIFIC FIRST, and the router registered as this document's. Ranking here

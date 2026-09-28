@@ -119,3 +119,60 @@ test('a live production carries its own ordinal where the cursor collapsed a bur
         if (frame.op === 'prod') numbered.push(`${frame.seq}:${frame.value}`)
     expect(numbered.at(-1)).toBe('3:c')
 })
+
+// 18.3 — A SUBSCRIPTION WHOSE RUNG IS STILL PENDING WHEN THE CONNECTION CLOSES, or when its `unsub`
+// lands, is never installed: the rung resolving afterwards finds its placeholder gone. THE REVERT:
+// install the subscription after the rung without checking; each connection is left holding one live
+// subscription, and the sizes read [1, 1].
+test('a subscription whose rung resolves after the close or the unsub is not installed — 18.3', async () => {
+    const room = reactive<string>(undefined, { global: true })
+    const released: (() => void)[] = []
+    const gated = socket(room as never, {
+        middleware: [
+            async (next) => {
+                await new Promise<void>((done) => released.push(done))
+                return next()
+            },
+        ],
+    })
+    const handlers = socketHandlers(
+        new Map([['/room', gated]]) as never,
+        new Map(),
+    )
+    const connected = () => {
+        const sent: { op: string }[] = []
+        const ws = {
+            data: connectionOf(new Request('http://app.test/__abide/socket')),
+            send(text: string) {
+                sent.push(JSON.parse(text))
+            },
+        } satisfies MuxSocket
+        return { ws, sent }
+    }
+    const closed = connected()
+    const closing = handlers.message(
+        closed.ws,
+        JSON.stringify({ op: 'sub', id: 1, address: '/room' }),
+    )
+    handlers.close(closed.ws)
+    const unsubbed = connected()
+    const unsubbing = handlers.message(
+        unsubbed.ws,
+        JSON.stringify({ op: 'sub', id: 1, address: '/room' }),
+    )
+    await handlers.message(
+        unsubbed.ws,
+        JSON.stringify({ op: 'unsub', id: 1, address: '/room' }),
+    )
+    for (const release of released) release()
+    await closing
+    await unsubbing
+    room.publish('after')
+    for (let turn = 0; turn < 10; turn++) await Promise.resolve()
+    expect([
+        closed.ws.data.subscriptions.size,
+        unsubbed.ws.data.subscriptions.size,
+    ]).toEqual([0, 0])
+    expect([...closed.sent, ...unsubbed.sent]).toEqual([])
+    handlers.close(unsubbed.ws)
+})

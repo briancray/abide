@@ -25,7 +25,7 @@ import {
     openChecker,
 } from '#compiler/compileApp.ts'
 import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
-import { DEV_ADDRESS, SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
+import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import type { Ask, FromWorker, ToWorker } from './devWorker.ts'
 import { MUX_ADMITTED } from './MUX_ADMITTED.ts'
 import { SETTLE_MILLISECONDS } from './SETTLE_MILLISECONDS.ts'
@@ -39,7 +39,9 @@ export type DevOptions = {
 // A request in flight: the request itself — because a worker replaced before it answered answers
 // nothing, and the ask has to be put to the app that exists (38.25) — and, once its head has come
 // back, the stream the body is fed into and the pull waiting on the worker's next chunk (38.36).
-type InFlight = Omit<Ask, 'id'> & {
+type InFlight = Omit<Ask, 'id' | 'method' | 'url'> & {
+    // 16.23 — the request bun handed the listener, which is the one its idle timeout is raised on.
+    request: Request
     settle: (response: Response) => void
     stream: ReadableStreamDefaultController<Uint8Array> | null
     pulled: (() => void) | null
@@ -148,7 +150,10 @@ export async function serveDev(
             if (message.kind === 'ready') ready = true
             else if (message.kind === 'socket-send')
                 muxed.get(message.conn)?.send(message.text)
-            else answer(started, message)
+            else if (message.kind === 'timeout') {
+                const asked = inFlight.get(message.id)?.request
+                if (asked !== undefined) server.timeout(asked, message.seconds)
+            } else answer(started, message)
         }
         worker = started
         started.postMessage({
@@ -221,8 +226,7 @@ export async function serveDev(
         const body = request.body === null ? null : await request.arrayBuffer()
         return await new Promise<Response>((resolve) => {
             forward({
-                method: request.method,
-                url: request.url,
+                request,
                 headers: identityOnly(request.headers),
                 body,
                 settle: resolve,
@@ -247,7 +251,10 @@ export async function serveDev(
     // read the connection makes: a high-water mark of 0 asks for nothing ahead of the reader.
     function answer(
         from: DevWorker,
-        message: Exclude<FromWorker, { kind: 'ready' | 'socket-send' }>,
+        message: Exclude<
+            FromWorker,
+            { kind: 'ready' | 'socket-send' | 'timeout' }
+        >,
     ): void {
         const waiting = inFlight.get(message.id)
         if (waiting === undefined) return
@@ -305,7 +312,7 @@ export async function serveDev(
         else if (message.kind === 'end') {
             inFlight.delete(id)
             stream.close()
-        } else if (message.kind === 'fail') waiting.failed = message.message
+        } else waiting.failed = message.message
         pulled?.()
     }
 
@@ -322,8 +329,8 @@ export async function serveDev(
         worker.postMessage({
             kind: 'request',
             id,
-            method: waiting.method,
-            url: waiting.url,
+            method: waiting.request.method,
+            url: waiting.request.url,
             headers: waiting.headers,
             body: waiting.body,
         })
@@ -343,10 +350,15 @@ export async function serveDev(
         maxRequestBodySize: Number.MAX_SAFE_INTEGER,
         async fetch(request, listening) {
             const asked = new URL(request.url).pathname
-            if (asked !== SOCKET_ADDRESS && asked !== DEV_ADDRESS)
-                return ask(request)
+            // THE MUX STANDS UNDER THE MOUNT, which is the app's configuration and so the worker's to
+            // read: every upgrade but the reload client's is taken for one, and the worker says
+            // whether it is (`MUX_ADMITTED`).
+            const mux =
+                asked !== DEV_ADDRESS &&
+                request.headers.get('upgrade') === 'websocket'
+            if (!mux && asked !== DEV_ADDRESS) return ask(request)
             // 37.3 — THE MUX'S UPGRADE IS ASKED OF THE APP FIRST, whose lane runs in the worker.
-            if (asked === SOCKET_ADDRESS && ready) {
+            if (mux && ready) {
                 const answered = await ask(request)
                 if (answered.status !== MUX_ADMITTED) return answered
             }
@@ -355,7 +367,7 @@ export async function serveDev(
             // the worker it is meant to show.
             if (!ready) return new Response('rebuilding', { status: 503 })
             let data: Carried
-            if (asked === SOCKET_ADDRESS) {
+            if (mux) {
                 nextConnection += 1
                 data = {
                     conn: nextConnection,

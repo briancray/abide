@@ -144,7 +144,7 @@ calls `jsonSchema` never carries one (19.14).
 | `allow: GET, HEAD` | a page, a public file or the bundle, asked by another method | The methods the address answers, on the 405. |
 | `vary` | wherever an answer depends on a request header | Names the header the answer varied on. |
 | `abide-version` | a `GET` answered from a `global` value with no `middleware` | The version of the production answered, which the browser names when it follows the handler over the socket, so it is sent a later value only. |
-| `server-timing` | an rpc answer | The handler's duration, and whether the render's run answered it. |
+| `server-timing` | an rpc answer; `Middleware` and a `timing` span on any answer | The handler's duration, named `Direct`, `Seeded` from the render's run, `Cached` from a held `global` production, or `Started` to a stream's first chunk; the rungs' time; and each `timing` span. |
 
 Every response declares its own content type and carries `x-content-type-options: nosniff`
 unconditionally, a browser guessing a different type being only ever the vulnerability. A

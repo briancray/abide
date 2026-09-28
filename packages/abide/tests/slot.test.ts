@@ -48,7 +48,7 @@ async function mountPage(
         const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
         modules[`${name}.ts`] = emitComponent(file, reads)
         modules[`${name}.client.ts`] =
-            emitClient(file, reads, name !== 'Page' ? 'repeated' : 'none') ||
+            emitClient(file, reads, name !== 'Page' ? 'invoked' : 'none') ||
             'export default () => {}'
     }
     const dir = temporaryModule(modules)

@@ -57,7 +57,12 @@ function escapeMarkup(text: string): string {
 // standing behind `safeUrl`'s scheme check, per 32.29. A `Raw` here is escaped like the string it
 // holds, which is why this runs the rewrite rather than `escapeText`.
 export function escapeAttribute(value: unknown): string {
-    const text = escapeMarkup(textOf(value))
+    return escapeQuote(escapeMarkup(textOf(value)))
+}
+
+// 32.28 — the one rewrite the AUTHOR'S OWN attribute text takes: it is markup, so its `&` stays a
+// reference, and only the `"` that would end the attribute is encoded.
+export function escapeQuote(text: string): string {
     return text.includes('"') ? text.replaceAll('"', '&quot;') : text
 }
 

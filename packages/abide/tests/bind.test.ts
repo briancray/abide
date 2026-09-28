@@ -182,9 +182,13 @@ let attrs = reactive<Record<string, unknown>>({ onClick: () => heard.push('first
 <button id="none" onclick={() => { attrs = {} }}>none</button>`
 
 // 32.11 — A FUNCTION UNDER \`on<event>\` IS A LISTENER, any case, replaced when the value hands over
-// another and removed when it stops carrying one; a non-function under the same name is neither a
-// listener nor markup-safe text it would be refused as. THE REVERT: skip \`removeEventListener\` in
+// another and removed when it stops carrying one. THE REVERT: skip \`removeEventListener\` in
 // \`bindSpread\`; the click after \`none\` is heard as 'second' again.
+//
+// 32.4 — A NON-FUNCTION UNDER \`on<event>\` IS NEITHER A LISTENER NOR MARKUP, on the server or the
+// client: a string there written as an attribute is an inline handler, script compiled from data.
+// THE REVERT: let a non-function \`on<event>\` member fall through to \`attributeText\` in
+// \`spreadEntries\`; the server writes \`onfocus="text"\` into the tag.
 test('a spread binds its on<event> functions as listeners, and keeps them in step — 32.11', async () => {
     const heard: string[] = []
     ;(globalThis as unknown as { heard: string[] }).heard = heard
@@ -201,7 +205,7 @@ test('a spread binds its on<event> functions as listeners, and keeps them in ste
         '<!doctype html><html><head></head><body></body></html>',
     ))
         html += new TextDecoder().decode(chunk)
-    expect(html).toContain('<p id="target" onfocus="text">target</p>')
+    expect(html).toContain('<p id="target">target</p>')
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + 6,
         html.indexOf('</body>'),
@@ -210,6 +214,7 @@ test('a spread binds its on<event> functions as listeners, and keeps them in ste
     mount(pageRegion(document.body))
     flushSync()
     const target = document.getElementById('target') as HTMLElement
+    expect(target.hasAttribute('onfocus')).toBe(false)
     target.click()
     ;(document.getElementById('next') as HTMLElement).click()
     flushSync()
