@@ -1699,10 +1699,18 @@ function mirror(cell: Cell, inner: Cell): void {
         unserve(cell)
         return
     }
+    const value = heldValue(inner)
+    // 11.13 FOR A PATCH (5.7): the inner woke holding the reference this already serves. Only a patch
+    // does that — a production of the same reference is stopped at the inner's own identity gate —
+    // and the gate `accept` runs here would read it as no change at all, so it wakes as a patch.
+    if (cell.servable && !cell.loading && value === heldValue(cell)) {
+        wakePatched(cell, value)
+        return
+    }
     // 11.13 mirrors the production into the outer value, and 11.14 runs the OUTER's own
     // `transform` on the way in — which is `accept`, and is why this does not call
     // `produce` directly.
-    accept(cell, heldValue(inner), true)
+    accept(cell, value, true)
 }
 
 // 11.12 governs what a body HANDS BACK, so a run that hands back something else is no
@@ -2550,10 +2558,7 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
         //
         // 8.8 AS `serve` READS IT: a patch the window held is written by the release that serves
         // it, so a run of patches in one window is one write rather than one per patch (5.12).
-        if (cap === null || cell.body !== null || wakes(cell, cap, head)) {
-            cascade(cell)
-            if (cell.store !== null) persist(cell, cell.store, cell.value)
-        }
+        wakePatched(cell, head)
         return
     }
     // 9.27: the accumulation itself, so the next chunk lands after the change rather than
@@ -2574,6 +2579,14 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
     stream.version += 1
     // 5.24, as for a chunk (5.18): the window's close is what tells the readers.
     if (tellsChunks(cell, cell.cap)) cascade(cell)
+}
+
+function wakePatched(cell: Cell, head: unknown): void {
+    const cap = cell.cap
+    if (cap === null || cell.body !== null || wakes(cell, cap, head)) {
+        cascade(cell)
+        if (cell.store !== null) persist(cell, cell.store, cell.value)
+    }
 }
 
 // WHAT AN INVALIDATE LEAVES BEHIND, and it is a debt rather than a mark. The mark walk's states

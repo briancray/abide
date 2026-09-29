@@ -49,7 +49,7 @@ const TSCONFIG = JSON.stringify({
         allowImportingTsExtensions: true,
         types: [],
     },
-    include: ['ui', 'shared'],
+    include: ['ui', 'shared', 'server'],
 })
 
 let server: Bun.Subprocess | undefined
@@ -69,6 +69,30 @@ beforeAll(async () => {
         // 38.20 — IN THE SOURCE TREE AND NOWHERE ELSE. Nothing copies this anywhere, because
         // nothing builds: an address answering it is the clause and a stale copy cannot pass it.
         'ui/public/robots.txt': 'User-agent: *\nAllow: /\n',
+        // A COUNT A RESTART WOULD RESET, so surviving is told apart from being replaced (37.8, 38.42).
+        'shared/served.ts':
+            'let served = 0\nexport function serve(): number {\n    served += 1\n    return served\n}\n',
+        'ui/pages/served/page.abide': `<script>
+import { serve } from '#shared/served'
+
+const served = serve()
+</script>
+
+<main id="served">{served}</main>`,
+        'ui/pages/orphan/page.abide': `<script>
+Promise.reject(new Error('nobody awaited this'))
+</script>
+
+<main id="orphan">orphaned</main>`,
+        // A HANDLER TREE FROM THE START, so a handler saved later lands in a directory the checker
+        // already knows.
+        'server/rpc/present.ts':
+            "import { GET } from 'abide/server'\n\nexport const present = GET(() => 'here')\n",
+        'ui/pages/exit/page.abide': `<script>
+process.exit(3)
+</script>
+
+<main id="exit"/>`,
         'package.json': PACKAGE,
         'tsconfig.json': TSCONFIG,
     })
@@ -102,8 +126,8 @@ async function waitFor(
     )
 }
 
-// WHAT ARRIVED, where a body can end in an error: a page that fails after its head has gone out does
-// (41.16, 38.38), with what broke streamed ahead of the error — which is what a browser shows.
+// WHAT ARRIVED, where a body can end in an error: one a reload cut short does (38.38), with what
+// broke streamed ahead of the error — which is what a browser shows.
 async function received(response: Response): Promise<string> {
     const reader = (response.body as ReadableStream<Uint8Array>).getReader()
     const decoder = new TextDecoder()
@@ -136,13 +160,12 @@ async function waitUntil(
 
 // THE PAGE'S OWN CHUNK, which is where its markup is: the table's loaders are dynamic imports so
 // a destination stays off the entry's bytes (30.11), and an assertion against `entry.js` reads a
-// module the page's markup was never in.
+// module the page's markup was never in. Named by the home document's own preload (38.29) rather
+// than by the entry's first loader, which is whichever page the bundler listed first.
 async function pageChunk(): Promise<string> {
-    const entry = await (
-        await Bun.fetch(`${base}/__abide/client/entry.js`)
-    ).text()
-    const found = /"\.\/(page\.client-[^"]+\.js)"/.exec(entry)
-    if (found === null) return entry
+    const home = await (await Bun.fetch(`${base}/`)).text()
+    const found = /\/(page\.client-[^"]+\.js)"/.exec(home)
+    if (found === null) return home
     return await (
         await Bun.fetch(`${base}/__abide/client/${found[1] as string}`)
     ).text()
@@ -164,6 +187,17 @@ test('a page is painted by the command with no build in front of it — 38.4', a
     expect(html).toContain('<title>Home</title>')
     // The shell is the app's, not a document the command invented.
     expect(html).toContain('<meta charset="utf-8">')
+})
+
+// 41.1 — A PAGE IS BUILT WHOLE BEFORE IT IS SENT, so it goes out with its length even through the
+// worker's chunk-by-chunk relay (38.36). THE REVERT: drop the `content-length` `answerRequest` sets on a
+// page, or send the body after its head rather than with it in `answerAsk`; either way it goes out
+// chunked, with no length.
+test('a page arrives with its length rather than chunked — 41.1', async () => {
+    const response = await Bun.fetch(`${base}/`)
+    const body = new Uint8Array(await response.arrayBuffer())
+    expect(response.headers.get('transfer-encoding')).toBeNull()
+    expect(response.headers.get('content-length')).toBe(String(body.byteLength))
 })
 
 // AN EXTENSIONLESS SEAM IMPORT RESOLVES UNDER DEV AS IT DOES IN A BUILD. The runtime takes a `#`
@@ -334,6 +368,30 @@ test('a source that does not compile keeps the server up — 38.4', async () => 
     ).toContain('<h1>Home</h1>')
 }, 30_000)
 
+// 38.15 — AN IMPORT SAVED BEFORE ITS MODULE EXISTS recovers once the module does. Bun's resolver
+// remembers a file it failed to find for the life of the process, so while the app was a worker
+// thread every reload inherited the miss and the page stayed broken until the command restarted.
+// THE REVERT: hold the app in a `Worker` again; the last wait times out on the failure document.
+test('an import saved before its module exists recovers when the module is written — 38.15', async () => {
+    // A HANDLER, which the app imports at boot and bun resolves itself — the shape that met it: a
+    // compiled page's imports go through abide's plugin, which asks the disk every time.
+    await save(
+        'server/rpc/late.ts',
+        "import { GET } from 'abide/server'\nimport { late } from '#shared/late'\n\nexport const readLate = GET(() => late)\n",
+    )
+    expect(
+        await waitFor(`${base}/__abide/rpc/late/readLate`, (body) =>
+            body.includes('Cannot find'),
+        ),
+    ).toContain('Cannot find')
+    await save('shared/late.ts', "export const late = 'arrived'\n")
+    expect(
+        await waitFor(`${base}/__abide/rpc/late/readLate`, (body) =>
+            body.includes('arrived'),
+        ),
+    ).toBe('"arrived"')
+}, 30_000)
+
 // A SECOND APP, AND IT EARNS THE SECOND BOOT: a client build that fails cannot be provoked in an
 // app whose pages all resolve, and the failure has to be there at BOOT for the clause to be about
 // the server staying up rather than about a reload recovering.
@@ -372,6 +430,31 @@ afterAll(() => {
 
 // THE REVERT: throw on `built.success === false` in `bundleInMemory` — the way `abide build` does
 // — and the command dies at boot, so this test has no server to ask.
+// THE REVERT: drop `keepServing()` from the worker; the rejection ends it, 38.42 replaces it, and the
+// count starts again from 1.
+test('a rejection nobody awaited neither ends the app nor loses its state — 37.8', async () => {
+    const before = await received(await Bun.fetch(`${base}/served`))
+    const count = Number(/<main id="served">(\d+)/.exec(before)?.[1])
+    expect(await received(await Bun.fetch(`${base}/orphan`))).toContain(
+        'orphaned',
+    )
+    await Bun.sleep(100)
+    expect(await received(await Bun.fetch(`${base}/served`))).toContain(
+        `<main id="served">${count + 1}</main>`,
+    )
+}, 30_000)
+
+// THE REVERT: drop the worker's `close` listener in `serveDev`; the request is never answered and
+// every one after it hangs.
+test('an app that exits is restarted, and the request it held is answered — 38.42', async () => {
+    // The head goes out before setup runs, so what the exit leaves is a body that ends rather than
+    // one that never does.
+    await received(await Bun.fetch(`${base}/exit`))
+    expect(
+        await waitFor(`${base}/`, (body) => body.includes('Home')),
+    ).toContain('<h1>Home</h1>')
+}, 30_000)
+
 test('a client build that fails does not stop the server — 38.18', async () => {
     const response = await Bun.fetch(`${brokenBase}/`)
     expect(response.status).toBe(200)

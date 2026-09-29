@@ -48,11 +48,12 @@ async function mountPage(source: string): Promise<string> {
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -343,11 +344,12 @@ let name = reactive('ada')
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -547,11 +549,12 @@ let prefix = reactive('p')
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),

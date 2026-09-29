@@ -1,11 +1,11 @@
-// 38.30 — which encoding a request takes, off `accept-encoding`, and the stream that compresses a
-// document once it has. Asserted here rather than only through a server: every case below is a
+// 38.30 — which encoding a request takes, off `accept-encoding`, and the compression of a document
+// once it has. Asserted here rather than only through a server: every case below is a
 // header a browser or a proxy really sends, and a server arm can only send the one header
 // `Bun.fetch` was given.
 
 import { expect, test } from 'bun:test'
 import { brotliDecompressSync } from 'node:zlib' // bun decompresses gzip and zstd of its own, and no brotli
-import { compressStream } from '#server/compressStream.ts'
+import { compressDocument } from '#server/compressDocument.ts'
 import { ENCODINGS, negotiateEncoding } from '#server/negotiateEncoding.ts'
 import { prefers } from '#server/prefers.ts'
 
@@ -60,26 +60,16 @@ test('an accept header prefers by quality, then by order, and q=0 refuses', () =
     expect(html('text/html;q=0.5, application/json')).toBe(false)
 })
 
-// A CHUNK THAT COMPRESSES TO NOTHING. Brotli flushes an empty chunk that follows a flush to zero
-// bytes, and a `pull` that enqueues nothing is never followed by another — so the document stops
-// there for good, with no error and no end.
-// THE REVERT: make the loop in `compressStream`'s `pull` an `if` and this times out at the empty
-// chunk.
-test('a chunk that compresses to nothing does not stall the document — 38.30', async () => {
-    async function* chunks(): AsyncGenerator<Uint8Array> {
-        yield new TextEncoder().encode('<head>')
-        yield new Uint8Array(0)
-        yield new TextEncoder().encode('</head><body>ok</body>')
-    }
-    const reading = new Response(compressStream(chunks(), 'br')).arrayBuffer()
-    const settled = await Promise.race([
-        reading,
-        Bun.sleep(1_000).then(() => 'stalled' as const),
-    ])
-    expect(settled).not.toBe('stalled')
+// A DOCUMENT IS COMPRESSED WHOLE and reads back byte for byte, in each encoding a request can take.
+test('a document compresses in either encoding and reads back whole — 38.30', () => {
+    const document = new TextEncoder().encode(
+        `<!doctype html><title>x</title>${'<p>row</p>'.repeat(200)}`,
+    )
+    const decoded = new TextDecoder()
     expect(
-        new TextDecoder().decode(
-            brotliDecompressSync(new Uint8Array(settled as ArrayBuffer)),
-        ),
-    ).toBe('<head></head><body>ok</body>')
+        decoded.decode(brotliDecompressSync(compressDocument(document, 'br'))),
+    ).toBe(decoded.decode(document))
+    expect(
+        decoded.decode(Bun.gunzipSync(compressDocument(document, 'gzip'))),
+    ).toBe(decoded.decode(document))
 })

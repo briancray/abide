@@ -64,11 +64,12 @@ async function mountPage(
 
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
 
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
@@ -174,6 +175,33 @@ import Total from './Total.abide'
     )
     expect(html).toContain('<strong>EUR 12.00</strong>')
     expect(html).toContain('<strong>USD 7.00</strong>')
+})
+
+// 33.4 — AN OPTIONAL PROP WITH NO DEFAULT, LEFT OUT, READS `undefined` on both sides. The caller
+// passes no accessor for it, and the read of one was `label()` on nothing — a TypeError that ended
+// the render. THE REVERT: drop the `absent` read in `propsReads`; the render throws `label is not a
+// function`, and the mount does too.
+test('an optional prop the caller left out reads undefined — 33.4', async () => {
+    const { html, mount } = await mountPage(
+        `<script>
+import Tag from './Tag.abide'
+</script>
+<Tag label="given"/><Tag/>`,
+        {
+            Tag: `<script>
+import { props } from 'abide'
+
+const { label } = props<{ label?: string }>()
+</script>
+
+<b>{label ?? 'none'}</b>`,
+        },
+    )
+    expect(html).toContain('<b>given</b>')
+    expect(html).toContain('<b>none</b>')
+    mount(pageRegion(document.body))
+    flushSync()
+    expect(document.body.textContent).toContain('givennone')
 })
 
 // 32.18 THROUGH THE BUILD — A CHILD WITH NOTHING TO HYDRATE STILL SHIPS A MODULE, because the

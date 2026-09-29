@@ -97,8 +97,7 @@ async function pages(
     // The server's painting of the HOME page only — the one the reader arrived at.
     const { default: Component } = await import(`${dir}/Home.ts`)
     let html = ''
-    for await (const chunk of render(Component, shell))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(await render(Component, shell))
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -581,6 +580,54 @@ const title = 'Arrived'
     expect(document.querySelector('#titled h1')?.textContent).toBe('Arrived')
 })
 
+// 39.13 — A HEAD FOLLOWS WHAT IT READS. A detail page's title reads the record it loads, which has
+// not landed when the router mounts it — applied once, the tab said `Invoice` for as long as the
+// page was open. THE REVERT: apply the head once in `emitClient`, as a static head is; the title
+// stays `Invoice` after the value lands.
+test("a navigated page's head follows a value that lands after the mount — 39.13", async () => {
+    history.replaceState(null, '', '/')
+    document.head.innerHTML = '<title>Home</title>'
+    const mounts = await pages()
+    const source = `<head><title>Invoice {number}</title></head>
+<script>
+import { reactive } from 'abide'
+
+const number = reactive(new Promise<string>((resolve) => {
+    ;(globalThis as { landNumber?: (value: string) => void }).landNumber = resolve
+}))
+</script>
+<main id="late">late</main>`
+    const file = parseAbide(source)
+    const reads = await session.reads(`${ROOT}src/Late.abide`, file)
+    const dir = temporaryModule({
+        'Late.client.ts': emitClient(file, reads, 'routed'),
+    })
+    const r = startRouter(
+        [
+            {
+                pattern: '/late',
+                load: () => import(`${dir}/Late.client.ts`),
+                layouts: [],
+            },
+            {
+                pattern: '/',
+                load: async () => ({ default: mounts.home as PageMount }),
+                layouts: [],
+            },
+        ],
+        document.body,
+    )
+    await r.hydrate()
+    await r.go('/late')
+    flushSync()
+    expect(document.title).toBe('Invoice')
+    ;(globalThis as { landNumber?: (value: string) => void }).landNumber?.('42')
+    await Promise.resolve()
+    await Promise.resolve()
+    flushSync()
+    expect(document.title).toBe('Invoice 42')
+})
+
 // 39.6 — A FILE BOTH ROUTED AND INVOKED titles the document when the router mounts it, and
 // leaves the head alone when a caller mounts it into a row. Both are empty regions, so the
 // mount cannot tell them apart by the region: the router says so.
@@ -727,11 +774,12 @@ async function chained(): Promise<{
     const Layout = (await import(`${dir}/Chrome.ts`)).default
     const Home = (await import(`${dir}/Home.ts`)).default
     let html = ''
-    for await (const chunk of render(
-        () => composePage([Layout], Home, { params: () => ({}) }),
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            () => composePage([Layout], Home, { params: () => ({}) }),
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
 
     return {
         layout: await mount('Chrome'),
@@ -949,6 +997,60 @@ test('a view transition a later navigation overtook writes nothing — 39.9', as
     } finally {
         transition.remove()
     }
+})
+
+// 30.23, 30.24, 30.25 — THE ROUTE STANDING, AT ANOTHER QUERY: a filter written to the address. The page
+// reads the address through `route`, so it follows rather than being rebuilt — the count the reader
+// bumped, and the focus a search box would hold, stay — nothing is asked, and the scroll stays put.
+// THE REVERT: drop the `unmoved` branch from `go`; this reports `asked` as ['/'], a new scope, the
+// count back at 0 and the page scrolled to the top.
+test('a navigation that moves only the query keeps the page — 30.23, 30.24, 30.25', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    await r.hydrate()
+    flushSync()
+    ;(document.querySelector('#bump') as HTMLElement).click()
+    flushSync()
+    const scope = r.levels.at(-1)?.scope
+    const scrolled: unknown[] = []
+    const scrollTo = globalThis.scrollTo
+    globalThis.scrollTo = ((...to: unknown[]) => {
+        scrolled.push(to)
+    }) as typeof globalThis.scrollTo
+    try {
+        await navigate('/?genre=fantasy', { replace: true })
+        flushSync()
+    } finally {
+        globalThis.scrollTo = scrollTo
+    }
+    expect(asked).toEqual([])
+    expect(r.levels.at(-1)?.scope).toBe(scope)
+    expect(document.querySelector('#home p')?.textContent).toBe('1')
+    expect(route.url().search).toBe('?genre=fantasy')
+    expect(location.search).toBe('?genre=fantasy')
+    expect(scrolled).toEqual([])
+})
+
+// 30.23, 30.24 — THE ROUTE STANDING, AT ANOTHER PATH: a season chosen under one series. `middleware`
+// is asked about the new path, and the page it matched is the one mounted, so it follows: the same
+// nodes, the same scope, and `route.params` moved. THE REVERT: drop the `landing.route ===
+// this.standing` branch from `go`; the page is rebuilt, a new `<h1>` and a new scope.
+test('a navigation to another path of the same route asks, and keeps the page — 30.23, 30.24', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    await r.hydrate()
+    await navigate('/invoices/42')
+    flushSync()
+    const scope = r.levels.at(-1)?.scope
+    const heading = document.querySelector('#invoice h1')
+    asked.length = 0
+    await navigate('/invoices/7')
+    flushSync()
+    expect(asked).toEqual(['/invoices/7'])
+    expect(r.levels.at(-1)?.scope).toBe(scope)
+    expect(document.querySelector('#invoice h1')).toBe(heading)
+    expect(route.params()).toEqual({ id: '7' })
+    expect(location.pathname).toBe('/invoices/7')
 })
 
 // A STEP THAT MOVES ONLY THE FRAGMENT IS NOT A NAVIGATION. Back over an in-page `#setup` jump

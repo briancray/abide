@@ -45,6 +45,23 @@ export const save = POST(({ amount }: { amount: string | string[] }) =>
 export const move = POST(() => redirect('/elsewhere', 303))
 `
 
+// 41.1, 35.2 — A DETAIL PAGE WHOSE RECORD IS NOT THERE. The handler refuses, the page reads the
+// refusal while it is built, and nothing of the document has gone out yet.
+const RECORDS = `import { GET, notFound } from 'abide/server'
+
+export const record = GET(({ id }: { id: number }) => (id === 1 ? { title: 'The first record' } : notFound()))
+`
+
+const RECORD_PAGE = `<script>
+import { reactive, route } from 'abide'
+import { record } from '#server/rpc/records'
+
+const found = reactive(() => record({ id: Number(route.params().id) }))
+</script>
+
+<head><title>{found.title}</title></head>
+<h1 id="record">{found.title}</h1>`
+
 let base = ''
 let stop = (): void => {}
 
@@ -59,6 +76,20 @@ beforeAll(async () => {
         'ui/pages/tax returns/error.abide':
             '<h1 id="encoded">No such return</h1>',
         'server/rpc/forms.ts': FORMS,
+        'server/rpc/records.ts': RECORDS,
+        'ui/pages/records/[id]/page.abide': RECORD_PAGE,
+        'ui/pages/records/error.abide': `<script>
+import { props, type Failed } from 'abide'
+
+const { failure } = props<{ failure: Failed<string, unknown> }>()
+</script>
+
+<h1 id="records">No such record ({failure.status})</h1>`,
+        'ui/pages/thrown/page.abide': `<script>
+const missing = undefined as unknown as { boom: string }
+</script>
+
+<p>{missing.boom}</p>`,
     }))
 }, 30_000)
 
@@ -129,6 +160,31 @@ const FORM_HEADERS = {
 const formHeaders = (): Record<string, string> => ({
     ...FORM_HEADERS,
     referer: `${base}/invoices/42`,
+})
+
+// 41.1, 35.2 — A REFUSAL A PAGE READS WHILE IT IS BUILT IS THE DOCUMENT'S STATUS, painted by the nearest
+// error page: nothing of the document has gone out, so the status is still the page's to decide.
+// THE REVERT: yield the shell's head in `render` before the component is asked, as it was; the
+// missing record answers 200, the document stopping short after its head.
+test('a page whose record is refused answers at the refusal status — 41.1, 35.2', async () => {
+    const found = await Bun.fetch(`${base}/records/1`)
+    expect(found.status).toBe(200)
+    const page = await found.text()
+    expect(page).toContain('<title>The first record</title>')
+    expect(page).toContain('<h1 id="record">The first record</h1>')
+
+    const missing = await Bun.fetch(`${base}/records/2`)
+    expect(missing.status).toBe(404)
+    expect(await missing.text()).toContain(
+        '<h1 id="records">No such record (404)</h1>',
+    )
+})
+
+// 41.1, 16.43 — A PAGE THAT THROWS is the server's fault, answered 500 by the nearest error page.
+test('a page that throws as it is built answers 500 — 41.1, 16.43', async () => {
+    const answer = await Bun.fetch(`${base}/thrown`)
+    expect(answer.status).toBe(500)
+    expect(await answer.text()).toContain('<h1>Something went wrong</h1>')
 })
 
 // 16.40 — A FORM POSTED WITH NO SCRIPT IS ANSWERED AS A NAVIGATION: a value is a 303 back where the

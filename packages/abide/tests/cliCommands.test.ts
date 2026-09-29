@@ -39,7 +39,7 @@ afterAll(() => {
 
 // 38.1 — THE LAYOUT, WRITTEN, and a step already done is skipped rather than overwritten. The
 // scaffolded app then builds, which is what "a starter project" has to mean.
-test('scaffold writes a starter project, skips what is there, and builds — 38.1', () => {
+test('scaffold writes a starter project, skips what is there, and builds — 38.1, 38.43', () => {
     const into = temporaryModule({ 'readme.md': 'here\n' })
     const first = Bun.spawnSync(['bun', BIN, 'scaffold', 'ledger'], {
         cwd: into,
@@ -57,6 +57,22 @@ test('scaffold writes a starter project, skips what is there, and builds — 38.
         expect(`${path} ${Bun.file(`${app}/${path}`).size > 0}`).toBe(
             `${path} true`,
         )
+
+    // A dependency that installs: this checkout's own path, since no registry carries its version,
+    // and the runtime's types beside it. THE REVERT: `^0.0.0` fails `bun install`, and without
+    // `@types/bun` `abide check` reports `Bun` untyped in the starter's own `app.ts`.
+    const manifest = JSON.parse(
+        require('node:fs').readFileSync(`${app}/package.json`, 'utf8'),
+    )
+    expect(manifest.dependencies.abide).toBe(
+        `file:${new URL('..', import.meta.url).pathname.replace(/\/$/, '')}`,
+    )
+    expect(Object.keys(manifest.devDependencies)).toEqual(['@types/bun'])
+    expect(
+        JSON.parse(
+            require('node:fs').readFileSync(`${app}/tsconfig.json`, 'utf8'),
+        ).compilerOptions.types,
+    ).toEqual(['bun'])
 
     const edited = 'edited by the author\n'
     Bun.write(`${app}/src/ui/app.html`, edited)
@@ -76,6 +92,45 @@ test('scaffold writes a starter project, skips what is there, and builds — 38.
     const built = Bun.spawnSync(['bun', BIN, 'build'], { cwd: app })
     expect(built.stderr.toString()).toBe('')
     expect(built.exitCode).toBe(0)
+})
+
+// 38.44 — THE APP'S BUNDLER PLUGINS, where bun has an app declare them. A local plugin stands in for
+// `bun-plugin-tailwind`, which is the same shape and a network install. THE REVERT: drop
+// `appPlugins` from `bundleClient`; the stylesheet is built without the stamp.
+test('build runs the plugins bunfig.toml declares over the client — 38.44', () => {
+    const app = temporaryModule({
+        'package.json': JSON.stringify({
+            name: 'stamped',
+            type: 'module',
+            imports: { '#ui/*': './src/ui/*' },
+        }),
+        'bunfig.toml': '[serve.static]\nplugins = ["./stamp.ts"]\n',
+        'stamp.ts': `export default {
+    name: 'stamp',
+    setup(build: Bun.PluginBuilder) {
+        build.onLoad({ filter: /\\.css$/ }, async ({ path }) => ({
+            contents: (await Bun.file(path).text()) + '\\n.stamped-by-plugin { color: red }',
+            loader: 'css',
+        }))
+    },
+}
+`,
+        'src/ui/app.html':
+            '<!doctype html><html><head></head><body></body></html>',
+        'src/ui/app.css': 'main { color: blue }',
+        'src/ui/pages/page.abide':
+            "<script>\nimport '#ui/app.css'\n</script>\n<main>hi</main>",
+    })
+    const built = Bun.spawnSync(['bun', BIN, 'build'], { cwd: app })
+    expect(built.stderr.toString()).toBe('')
+    const sheets = [...new Bun.Glob('*.css').scanSync(`${app}/.abide/client`)]
+    expect(sheets.length).toBe(1)
+    expect(
+        require('node:fs').readFileSync(
+            `${app}/.abide/client/${sheets[0]}`,
+            'utf8',
+        ),
+    ).toContain('.stamped-by-plugin')
 })
 
 // 38.2 — EVERYTHING AFTER THE FILE IS THE SCRIPT'S, its own flags included, and the script runs in a

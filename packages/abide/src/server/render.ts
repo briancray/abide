@@ -1,5 +1,5 @@
-// 35.4 and 35.5 — `render` takes a component already bound to its props and produces the document
-// as an async generator of bytes.
+// 35.4 and 35.5 — `render` takes a component already bound to its props and produces the document's
+// bytes.
 
 import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
 import { isThenable } from '#shared/reactive/isThenable.ts'
@@ -50,7 +50,7 @@ export type Rendered = { head: string; body: string }
 // key the level above it carries is a second hidden class for all of them. The innermost has
 // nothing below it, so its `children` is present and undefined rather than absent.
 //
-// 41.20 — EVERY LEVEL IS SET UP BEFORE ANY IS BUILT, and the turn is let run between the two, so a
+// 41.19 — EVERY LEVEL IS SET UP BEFORE ANY IS BUILT, and the turn is let run between the two, so a
 // call the setup started that answers without waiting on anything — a value already held, a
 // handler that only awaits what it has — is painted rather than left for the browser to fill. A
 // compiled page or layout answers `head` and `body` lazily and says which share scope its setup ran
@@ -87,7 +87,7 @@ export async function composePage(
     await new Promise((settled) => setImmediate(settled))
     const outermost = levels[0] as Rendered
     // BUILT ON THE FIRST READ, not here: `render` writes the early-call script between the setup
-    // this has just finished and the markup (41.21), so the calls leave before the page is built.
+    // this has just finished and the markup (41.20), so the calls leave before the page is built.
     // THE OUTERMOST HEAD FIRST: reading it builds the chain, which is what pushes the heads below.
     let built: Rendered | undefined
     const build = (): Rendered => {
@@ -107,10 +107,10 @@ export async function composePage(
     }
 }
 
-export async function* render(
+export async function render(
     component: Component,
     shell?: Shell,
-): AsyncGenerator<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
     // GUARDED, because the string form is already settled: `shellText` is `async`, so awaiting it
     // unconditionally wrapped a promise and spent a microtask turn per request for nothing.
     const document = typeof shell === 'string' ? shell : await shellText(shell)
@@ -120,40 +120,38 @@ export async function* render(
     // and the clamp is what keeps the head ahead of the body whatever order the shell wrote them in.
     const bodyAt = bodyAnchor(document)
     const headAt = headAnchor(document)
-    // 41.1 — THE SHELL'S HEAD BEFORE THE COMPONENT IS ASKED. It is known the moment the shell is,
-    // and it is what starts every fetch the document makes — the stylesheet, the entry and its
-    // preloads (38.23, 38.24, 38.29) — so nothing the page does holds it. What the PAGE puts in the
-    // head goes out with the body: it is the page's answer, and it cannot be known sooner.
+    // 41.1 — NOTHING GOES OUT UNTIL THE PAGE IS BUILT. The status line goes out with the first byte,
+    // and a page reading a record that is not there is a 404 only while no byte has: so the page and
+    // its layouts are set up (41.19) and built before the shell's head is sent, and a refusal or a
+    // throw on the way is the caller's to answer at its own status (35.2) rather than a 200 cut short.
+    // What waits is the import on a page's first request and its setup and build after that; a
+    // value still in flight is a sink as before (41.4), and costs the wait nothing.
     //
-    // 41.16 — A THROW AFTER THIS POINT ENDS THE STREAM IN AN ERROR, not in a document. The status
-    // line is on the wire, so it cannot become a 500; a response that stops short of its
-    // terminating chunk is one every client and cache reads as incomplete, where an error page
-    // written into the body would be a complete 200 somebody stores.
-    yield ENCODER.encode(document.slice(0, headAt))
     // 34.3 — SETUP IS SYNCHRONOUS, so a bare component answers its record outright, and the guard
-    // spends no microtask turn on it. 41.1 — BUT IT MAY BE PENDING: the head has already gone out,
-    // so a caller with something to wait on first — `answerRequest` importing the page and its
-    // chain — hands over a component whose record is a promise, and the wait lands after the flush.
+    // spends no microtask turn on it. A caller with something to wait on first — `answerRequest`
+    // importing the page and its chain — hands over a component whose record is a promise.
     const answered = (component as () => Rendered | PromiseLike<Rendered>)()
     const rendered = isThenable(answered) ? await answered : answered
-    // 41.21 — THE PAGE'S CALLS LEAVE BEFORE ITS MARKUP IS BUILT. Setup has run, so every call the
-    // page makes is known, and a script in the head starts each one as the request the browser's
-    // own `Rpc` would make — while the rest of the document and the bundle are still on their way.
-    // Each is its own request, so the network panel shows them as it would have anyway.
+    // BUILT HERE, where a throw is still a status: the outermost head builds the chain.
+    const head = rendered.head
+    const body = rendered.body
+    // 41.20 — THE PAGE'S CALLS LEAVE AHEAD OF ITS MARKUP. Setup has run, so every call the page
+    // makes is known, and a script in the head starts each one as the request the browser's own
+    // `Rpc` would make — while the rest of the document and the bundle are still on their way.
     const calls = currentRequestScope()?.page?.calls
-    if (calls !== undefined && calls.length > 0)
-        yield ENCODER.encode(earlyCallScript(calls))
+    const early =
+        calls !== undefined && calls.length > 0 ? earlyCallScript(calls) : ''
     // 41.9 — THE PAGE IS A REGION LIKE ANY OTHER, and written between the same pair
     // `renderComponent` writes a child between. A router swaps what stands between them, and with
     // the pair on the wire the client finds the page rather than guessing where it ends among
     // whatever else the shell put in the body.
-    yield ENCODER.encode(
-        `${rendered.head}${document.slice(headAt, bodyAt)}<!--${REGION_OPEN}-->${rendered.body}<!--${REGION_CLOSE}-->${document.slice(bodyAt)}`,
+    return ENCODER.encode(
+        `${document.slice(0, headAt)}${early}${head}${document.slice(headAt, bodyAt)}<!--${REGION_OPEN}-->${body}<!--${REGION_CLOSE}-->${document.slice(bodyAt)}`,
     )
 }
 
-// 41.21 — THE SCRIPT ITSELF: each call started with `fetch`, and its answer left under the call's key
-// in `EARLY_CALLS` for `wire` to take (41.22). A framed answer's body is left UNREAD (16.33), so a
+// 41.20 — THE SCRIPT ITSELF: each call started with `fetch`, and its answer left under the call's key
+// in `EARLY_CALLS` for `wire` to take (41.21). A framed answer's body is left UNREAD (16.33), so a
 // streaming handler's copy takes its chunks as they land rather than after the last one. Inline because nothing else runs before the bundle
 // has arrived, which is the wait it exists to overlap.
 //

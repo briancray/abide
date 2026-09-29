@@ -11,6 +11,7 @@
 // answer available.
 
 import { tmpdir } from 'node:os' // bun has no temporary-directory lookup of its own
+import type { TestCase } from './rows.ts'
 
 // A RUNNER THAT IS STOPPED STOPS ITS SUITES. SIGTERM reaches this process and nothing under it, so
 // without passing it on a Stop orphans every `bun test` and browser still running, and the next
@@ -22,18 +23,12 @@ process.on('SIGTERM', () => {
     process.exit(143)
 })
 
-export type SuiteCase = {
-    name: string
-    milliseconds: number
-    failure: string | null
-}
-
 export type Suite = {
     file: string
     tests: number
     failures: number
     skipped: number
-    cases: SuiteCase[]
+    cases: TestCase[]
 }
 
 function attribute(tag: string, name: string): string {
@@ -54,7 +49,7 @@ export function parseJUnit(xml: string): Suite[] {
     const suites: Suite[] = []
     for (const block of xml.split('<testsuite ').slice(1)) {
         const head = block.slice(0, block.indexOf('>'))
-        const cases: SuiteCase[] = []
+        const cases: TestCase[] = []
         for (const entry of block.split('<testcase ').slice(1)) {
             const caseHead = entry.slice(0, entry.indexOf('>'))
             const failure = /<failure[^>]*message="([^"]*)"/.exec(entry)
@@ -62,6 +57,8 @@ export function parseJUnit(xml: string): Suite[] {
                 name: unescapeXml(attribute(caseHead, 'name')),
                 milliseconds:
                     Number.parseFloat(attribute(caseHead, 'time')) * 1000,
+                // Both runners mark a skipped case, a `todo` included, with the one element.
+                skipped: /<skipped\b/.test(entry),
                 failure: failure ? unescapeXml(failure[1] ?? '') : null,
             })
         }

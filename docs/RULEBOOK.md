@@ -1431,8 +1431,17 @@ pass through `middleware`, and MUST NOT remount the page.
 30.21 `navigate` to the page shown, at an address carrying a fragment, MUST NOT pass through
 `middleware`, and MUST NOT remount the page.
 
-30.22 `navigate` without `keepScroll` MUST scroll to the element the address's fragment names, and to
-the top where it names none.
+30.22 A `navigate` that mounts a page, without `keepScroll`, MUST scroll to the element the address's
+fragment names, and to the top where it names none.
+
+30.23 `navigate` to an address the route of the page shown matches MUST NOT remount the page, and
+MUST move `route.url` and `route.params` to that address.
+
+30.24 A navigation 30.23 keeps the page for MUST pass through `middleware` where its path differs from
+the page shown, and MUST NOT where only its query or fragment does.
+
+30.25 A `navigate` that does not remount the page MUST NOT move the scroll, except to the element a
+fragment it carries names.
 
 # 31. Reading and writing by name
 
@@ -1669,7 +1678,7 @@ and to no other element the component writes.
 
 35.4 `render` MUST take a `Component` already bound to its props.
 
-35.5 `render` MUST produce a document as an async generator of bytes.
+35.5 `render` MUST produce a document as its bytes.
 
 35.6 A `Shell` MUST default to `src/ui/app.html`.
 
@@ -1745,6 +1754,9 @@ start.
 
 37.7 `onConfig` and `onPrincipal` MUST replace rather than compose, and a second MUST warn.
 
+37.8 Under `abide start` and `abide dev`, a rejection nothing handled and a throw nothing caught MUST
+reach `onError` as 37.5's error does, and MUST NOT end the process.
+
 # 38. Commands
 
 38.1 `abide scaffold` MUST write a starter project, and MUST skip a step already done.
@@ -1777,9 +1789,9 @@ per 20.1.
 38.14 `abide mcp` MUST be a bridge a model client spawns and kills, and `abide start` MUST NOT be
 put in that position.
 
-38.15 `abide dev` MUST hold the app in a worker and keep the listener on the main thread.
+38.15 `abide dev` MUST hold the app in a child process and keep the listener in its own.
 
-38.16 `abide dev` MUST replace that worker to reload, and MUST force-close every live socket on
+38.16 `abide dev` MUST replace that process to reload, and MUST force-close every live socket on
 replacement.
 
 38.17 `abide dev` MUST build the client into memory, unminified and entry-named by its source, and
@@ -1835,7 +1847,8 @@ text on disk.
 
 38.36 `abide dev` MUST send a response body as the app produces it.
 
-38.37 `abide dev` MUST read no more of a response body than the connection has taken.
+38.37 `abide dev` MUST read no more of a response body whose length is not declared than the
+connection has taken.
 
 38.38 A response `abide dev` has begun to answer when it replaces the worker MUST end in an error.
 
@@ -1847,6 +1860,15 @@ a component tag as the component it invokes.
 
 38.41 `abide check` MUST hold every attribute a component tag passes to the type its component's
 `props` call declares, and MUST report a mismatch on the attribute.
+
+38.42 A worker `abide dev` did not replace that exits MUST be replaced, and every request it held
+MUST be answered or ended rather than left open.
+
+38.43 The project `abide scaffold` writes MUST depend on the abide that wrote it in a spelling that
+installs, and MUST type the runtime its server modules run on.
+
+38.44 `abide build` and `abide dev` MUST build the client with the plugins the app's `bunfig.toml`
+names under `[serve.static] plugins`, after abide's own.
 
 # 39. Head and view transitions
 
@@ -1879,6 +1901,9 @@ app MUST NOT be required to feature-detect.
 `property` attribute for `<meta>`, and `rel` with `href` for `<link>`.
 
 39.12 The last `<head>` contribution for a key within one file MUST win.
+
+39.13 In a browser, a `<head>` contribution that reads a value MUST follow it for as long as its page
+or layout is mounted.
 
 # 40. Documentation
 
@@ -1965,7 +1990,8 @@ forms, the options they share, and a link to its reference page.
 
 # 41. Rendering and hydration
 
-41.1 `render` MUST flush the `<head>` as soon as it is known.
+41.1 `render` MUST send nothing until the page and every layout around it are set up and built, and a
+refusal or a throw before then MUST be answered at its own status by the nearest `error.abide`.
 
 41.2 A render MUST start every asynchronous read up front and in parallel.
 
@@ -1986,7 +2012,7 @@ again, and a serialized setup result MUST NOT be adopted.
 productions by the block's key, and MUST NOT be appended to.
 
 41.9 `render` MUST delimit a dynamic region with a comment anchor, and MUST NOT add a node, an
-attribute or a wrapper to the document for any other purpose than 41.21's script.
+attribute or a wrapper to the document for any other purpose than 41.20's script.
 
 41.10 A hydration mismatch MUST rebuild the enclosing block and MUST NOT rebuild the page, warning
 on `abide:hydrate`.
@@ -2004,24 +2030,21 @@ remove every row it shadows.
 
 41.15 A repeated `{#for}` key MUST warn once for the block on `abide:hydrate`.
 
-41.16 A `render` that fails after flushing MUST end its stream in an error, and MUST NOT end it as a
-complete document.
+41.16 A seed buffer entry MUST answer one `Rpc` call, and MUST be dropped once it has.
 
-41.17 A seed buffer entry MUST answer one `Rpc` call, and MUST be dropped once it has.
-
-41.18 A seed buffer entry no `Rpc` call takes MUST be dropped 30 seconds after the `render` that
+41.17 A seed buffer entry no `Rpc` call takes MUST be dropped 30 seconds after the `render` that
 filled it.
 
-41.19 A seed buffer entry MUST be matched by `principal.caller`, the handler and the call's `Args`
+41.18 A seed buffer entry MUST be matched by `principal.caller`, the handler and the call's `Args`
 key.
 
-41.20 A `render` MUST set up a page and every layout around it, and let the turn's queued microtasks
+41.19 A `render` MUST set up a page and every layout around it, and let the turn's queued microtasks
 run, before it builds any of their markup.
 
-41.21 A `render` MUST write one inline script into the head once setup has run and before any
+41.20 A `render` MUST write one inline script into the head once setup has run and before any
 markup, starting each `Rpc` call the setup made as the request the browser's `Rpc` makes for it.
 
-41.22 The browser's `Rpc` MUST take a call 41.21's script started in place of making it, once.
+41.21 The browser's `Rpc` MUST take a call 41.20's script started in place of making it, once.
 
 # 42. The app object
 

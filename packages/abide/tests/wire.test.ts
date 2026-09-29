@@ -317,10 +317,10 @@ test('the wire is the same Rpc: coalesced, narrowable, and a mutation calls agai
     }
 })
 
-// 41.22 — A CALL THE PAGE ALREADY STARTED IS TAKEN, ONCE. Asserted by what reached `fetch`, because a
+// 41.21 — A CALL THE PAGE ALREADY STARTED IS TAKEN, ONCE. Asserted by what reached `fetch`, because a
 // wire that fetched again would answer the same invoice. THE REVERT: skip the `EARLY_CALLS` lookup
 // in `wire`; the first reach fetches — one call where none is due — and lands a turn later.
-test('the wire takes a call the page already started, and fetches after that — 41.22', async () => {
+test('the wire takes a call the page already started, and fetches after that — 41.21', async () => {
     const fetched: string[] = []
     const window = globalThis as unknown as Record<string, unknown>
     const previous = window.fetch

@@ -272,7 +272,7 @@ export async function emitApp(
         const components = graph.imports.get(entry.path)
         modules.set(
             relative.replace(/\.abide$/, '.ts'),
-            // 41.20 — a page and a layout are built a level at a time by `render`.
+            // 41.19 — a page and a layout are built a level at a time by `render`.
             emitComponent(
                 entry.file,
                 fileReads,

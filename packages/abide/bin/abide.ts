@@ -13,6 +13,7 @@ import { compileApp } from '#compiler/compileApp.ts'
 import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
 import { scaffold } from '#compiler/scaffold.ts'
 import { serveLanguage } from '#compiler/serveLanguage.ts'
+import { appPlugins } from '#server/appPlugins.ts'
 import {
     CLIENT_DIRECTORY,
     ENCODING_SUFFIX,
@@ -137,7 +138,7 @@ async function build({ root, out }: AppDirectories): Promise<number> {
     refuseAddressCollision(app.routes, publicAddresses, 'abide build')
     await bundleClient(
         out,
-        fenceServer(root, app.modules),
+        [fenceServer(root, app.modules), ...(await appPlugins(root))],
         publicAddresses,
         app.routes.length > 0,
     )
@@ -183,7 +184,7 @@ async function copyPublic(
 // does NOT carry yet is 38.19's list of public files.
 async function bundleClient(
     out: string,
-    fence: Bun.BunPlugin,
+    plugins: Bun.BunPlugin[],
     publicAddresses: string[],
     paged: boolean,
 ): Promise<void> {
@@ -199,7 +200,7 @@ async function bundleClient(
         return
     }
     const built = await Bun.build({
-        ...clientBuildOptions(out, [fence], publicAddresses),
+        ...clientBuildOptions(out, plugins, publicAddresses),
         outdir: `${out}/${CLIENT_DIRECTORY}`,
         // 38.5 — MINIFIED, and EVERY NAME HASHED, the entry's included: chunks and assets are
         // already `[name]-[hash]` by default and the entry is not, which left the one file every

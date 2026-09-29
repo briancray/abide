@@ -20,7 +20,7 @@ import {
 import { DEBUG_META } from '#shared/DEBUG_META.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { escapeAttribute } from '#shared/escapeText.ts'
-import type { Failed } from '#shared/Failed.ts'
+import { type Failed, isFailed } from '#shared/Failed.ts'
 import { namedLogger } from '#shared/log.ts'
 import { MOUNT_META } from '#shared/MOUNT_META.ts'
 import { coversPrefix, firstMatch, partsOf } from '#shared/matchRoute.ts'
@@ -38,17 +38,13 @@ import type { Rpc } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import type { Socket } from '#shared/socket.ts'
 import { answerRpc, type Mounted } from './answerRpc.ts'
-import {
-    answerBlobTagged,
-    answerValue,
-    bodyOf,
-    contentEtag,
-} from './answerValue.ts'
+import { answerBlobTagged, answerValue, contentEtag } from './answerValue.ts'
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 import { chunksOf, type Manifest } from './chunksByModule.ts'
-import { compressStream } from './compressStream.ts'
+import { compressDocument } from './compressDocument.ts'
 import { answerLogs, answerMcp, openApi } from './generatedSurfaces.ts'
 import { reportHealth } from './health.ts'
+import { failureOf } from './hooks.ts'
 import { MUX_ADMITTED } from './MUX_ADMITTED.ts'
 import { namesUnder } from './namesUnder.ts'
 import { ENCODINGS, negotiateEncoding } from './negotiateEncoding.ts'
@@ -56,8 +52,8 @@ import { callerFor, resolvePrincipal } from './principal.ts'
 import { type Component, composePage, headAnchor, render } from './render.ts'
 import {
     adoptRequest,
+    beginRender,
     currentRequestScope,
-    inScopeEachPull,
     writtenStatus,
 } from './requestScope.ts'
 import { seedFor } from './seedBuffer.ts'
@@ -113,6 +109,10 @@ export type AppSources = {
     // 20.10 — the `App.fetch` an MCP call is answered through: this app's, which `RPC_SERVER.raw`
     // is not — that slot holds whichever `App` the process booted last.
     fetch: (request: Request) => Promise<Response>
+    // 38.4 — WHAT A PAGE THAT THREW, UNREFUSED, IS ANSWERED WITH in place of 16.43's bare 500: `abide
+    // dev`'s document naming what broke, for the author looking at the browser. `abide start` has
+    // none, and says nothing about itself to the caller.
+    explained: ((thrown: unknown) => Response) | undefined
 }
 
 // What a command reads or compiles, before `bootApp` adds what the `App` itself supplies.
@@ -228,26 +228,39 @@ export async function answerRequest(
     const caller = callerFor()
     // 23.1 — WHERE THIS PAGE IS, for its setup to read, in the request's own instances (11.32).
     arrive(request.url, found.route.pattern, found.params)
+    beginRender({ seed: seedFor(caller), calls: [] })
+    // 41.1, 35.2 — THE DOCUMENT IS THE BUILT PAGE, read whole before there is a `Response` to commit a
+    // status to: a refusal the page read, or a throw, is answered by the nearest error page at its own
+    // status rather than as a 200 the stream then abandons.
+    let document: Uint8Array<ArrayBuffer>
+    try {
+        document = await render(bound, found.route.document)
+    } catch (thrown) {
+        const failure = failureOf(thrown)
+        if (!isFailed(thrown) && app.explained !== undefined)
+            return app.explained(thrown)
+        return answerFailure(app, asked, failure)
+    }
     // 21.10, 22.9 — WHAT WAS WRITTEN THROUGH `response` BEFORE THE HEAD WENT OUT: a `middleware`
-    // rung's, in the scope `App.fetch` opened. A write the render makes lands after the headers
-    // have been sent, and 26.21 is the clause that refuses the one write that would matter.
+    // rung's, and the page's own setup's, the head going out with the built page.
     const status = writtenStatus()
-    const chunks = inScopeEachPull({ seed: seedFor(caller), calls: [] }, () =>
-        render(bound, found.route.document),
-    )
     const encoding = negotiateEncoding(
         request.headers.get('accept-encoding'),
         ENCODINGS,
     )
-    if (encoding === undefined)
-        return new Response(bodyOf(chunks, 'bytes'), { status, headers })
-    headers.set('content-encoding', encoding)
-    return new Response(compressStream(chunks, encoding), { status, headers })
+    // THE LENGTH IS SAID, not left to the server to find: `abide dev` relays the body chunk by chunk
+    // from its worker (38.36), and a relayed body with no declared length goes out chunked.
+    let answered = document
+    if (encoding !== undefined) {
+        headers.set('content-encoding', encoding)
+        answered = compressDocument(document, encoding)
+    }
+    headers.set('content-length', String(answered.byteLength))
+    return new Response(answered, { status, headers })
 }
 
-// 41.1 — THE IMPORTS ARE THE COMPONENT'S, so they run after `render` has flushed the head
-// rather than ahead of the whole response. The first request for a page after boot pays the
-// import, and every fetch the head starts is under way while it does.
+// THE IMPORTS ARE THE COMPONENT'S, so a page nobody asks for is never loaded, and the first request
+// for one after boot pays its import before the document goes out (41.1).
 //
 // THE PAGE AND ITS CHAIN, IN ONE ROUND OF WAITING. A nested `Promise.all` rather than one
 // flat array with the page spliced onto the head: the two settle together either way, and the
@@ -291,7 +304,7 @@ const SURFACES = new Map<
 ])
 
 // What a call made in a page's render reports into: the seed buffer (41.13), and — where the handler
-// is mounted — the request the browser will make for it, for the early-call script (41.21). Once per
+// is mounted — the request the browser will make for it, for the early-call script (41.20). Once per
 // render, as the browser's `Rpc` makes it once, and the seed buffer is what says which is the once.
 RPC_SERVER.reached = (rpc, args, reached) => {
     const page = currentRequestScope()?.page
@@ -335,7 +348,10 @@ export function appSources(
     shell: string,
     manifest: Manifest,
     head: string,
-    parts: Pick<AppSources, 'framework' | 'published' | 'handlers' | 'sockets'>,
+    parts: Pick<
+        AppSources,
+        'framework' | 'published' | 'handlers' | 'sockets' | 'explained'
+    >,
 ): LoadedSources {
     const documentOf = (modules: string[]): string =>
         intoHead(shell, clientTags(manifest, modules) + head)
@@ -520,15 +536,9 @@ async function answerFailure(
     for (const error of errorsFor(app.errors, pathname)) {
         try {
             const bound = boundPage(error, { failure: () => failure })
-            const chunks: Uint8Array[] = []
-            for await (const chunk of inScopeEachPull(undefined, () =>
-                render(bound, app.errorDocument),
-            ))
-                chunks.push(chunk)
-            return new Response(Bun.concatArrayBuffers(chunks), {
-                status,
-                headers,
-            })
+            beginRender(undefined)
+            const document = await render(bound, app.errorDocument)
+            return new Response(document, { status, headers })
         } catch (thrown) {
             RENDER_LOG.warning(
                 `the error page for ${error.pattern} failed, so the next one answers`,

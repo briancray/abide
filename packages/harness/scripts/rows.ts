@@ -18,6 +18,10 @@ export type BenchRow = {
     vanilla: number | null
     // abide / vanilla as the lane is allowed to say it: a number, or why there is none.
     claim: string
+    // The operations batched into one sample, and the A/A floor as a fraction — `null` for a row
+    // that counts rather than times.
+    n: number | null
+    floor: number | null
     note: string
 }
 
@@ -28,8 +32,17 @@ export type TestRow = {
     failures: number
     skipped: number
     milliseconds: number
-    failed: { name: string; failure: string }[]
+    // Every test the file ran, in the order its report lists them.
+    cases: TestCase[]
     note: string
+}
+
+// ONE TEST IN A FILE, as its report gave it: a failure carries the message the runner wrote.
+export type TestCase = {
+    name: string
+    milliseconds: number
+    skipped: boolean
+    failure: string | null
 }
 
 // A RUNNER THAT DIED PART WAY, as the line the docs app writes after the rows it did send: a stream

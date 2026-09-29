@@ -65,6 +65,7 @@ being the one that knows what the work costs.
 | `src/ui/pages/**/error.abide` | The page a refusal renders in. |
 | `src/server/rpc/**/*.ts` | The rpc handlers. |
 | `src/server/sockets/**/*.ts` | The socket handlers. |
+| `bunfig.toml` | Under `[serve.static] plugins`, the bundler plugins the client is built with. |
 
 The three seams are `#server`, `#ui` and `#shared`, and an import across one uses the specifier
 rather than a relative path. `src/ui/pages/**` is the route tree; `src/server/rpc/**` and

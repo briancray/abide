@@ -3,7 +3,7 @@ import { randomToken } from './randomToken.ts'
 import { currentRequestScope, type RequestScope } from './requestScope.ts'
 
 // 26.5 AND 26.19 — WHICH BROWSER, as against who is using it: read off the `abide-caller` cookie, or
-// minted where there is none. What the seed buffer is keyed by (41.19), and what `principal.caller`
+// minted where there is none. What the seed buffer is keyed by (41.18), and what `principal.caller`
 // reads.
 //
 // MINTED ON A PAGE ALONE. A page is where a browser starts, and the one answer a later call has to be
@@ -13,7 +13,7 @@ import { currentRequestScope, type RequestScope } from './requestScope.ts'
 // 26.19.
 const CALLER_COOKIE = 'abide-caller'
 
-// 41.19 — `principal.caller` AS IT STANDS IN THIS REQUEST, never minted: a caller rotated by a
+// 41.18 — `principal.caller` AS IT STANDS IN THIS REQUEST, never minted: a caller rotated by a
 // `principal.clear` earlier in it (26.7, 26.9) is the one a seed is matched by, not the cookie the
 // request arrived with — or a render made for the signed-in caller answers the signed-out one.
 export function callerOf(): string | undefined {

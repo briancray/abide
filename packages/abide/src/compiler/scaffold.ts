@@ -10,6 +10,17 @@ import { COMPILER_OPTIONS } from './defaultProject.ts'
 // stand. What depends on the name — the manifests — is written here.
 const STARTER = new URL('../../scaffold/', import.meta.url).pathname
 
+// THE ABIDE THAT WROTE THE PROJECT is the one it depends on. Installed from a registry, that is its
+// version; run from a checkout, no registry has that version, and the only spelling that installs
+// is the checkout's own path.
+const PACKAGE_ROOT = new URL('../../', import.meta.url).pathname.replace(
+    /\/$/,
+    '',
+)
+const ABIDE_DEPENDENCY = PACKAGE_ROOT.includes('/node_modules/')
+    ? `^${abidePackage.version}`
+    : `file:${PACKAGE_ROOT}`
+
 function filesFor(name: string): Record<string, string> {
     return {
         'package.json': `${JSON.stringify(
@@ -32,13 +43,20 @@ function filesFor(name: string): Record<string, string> {
                     '#server/*': ['./src/server/*', './src/server/*.ts'],
                     '#shared/*': ['./src/shared/*', './src/shared/*.ts'],
                 },
-                dependencies: { abide: `^${abidePackage.version}` },
+                dependencies: { abide: ABIDE_DEPENDENCY },
+                // `Bun`, `bun:sqlite` and the rest of the runtime a server module reaches for are
+                // typed by these, and `abide check` reports every one untyped without them.
+                devDependencies: { '@types/bun': 'latest' },
             },
             null,
             4,
         )}\n`,
         'tsconfig.json': `${JSON.stringify(
-            { compilerOptions: COMPILER_OPTIONS, include: ['src'] },
+            // TypeScript 7 includes no `@types` package it is not named, so the runtime's is named.
+            {
+                compilerOptions: { ...COMPILER_OPTIONS, types: ['bun'] },
+                include: ['src'],
+            },
             null,
             4,
         )}\n`,

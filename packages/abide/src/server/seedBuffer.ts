@@ -3,12 +3,12 @@
 // of those is answered from the value the render reached rather than by running the handler again
 // — the value itself, so a call arriving while the render's load is still in flight joins it.
 //
-// KEYED BY WHO, WHAT AND WITH WHICH ARGS (41.19): the caller's cookie, the one thing the browser's
+// KEYED BY WHO, WHAT AND WITH WHICH ARGS (41.18): the caller's cookie, the one thing the browser's
 // call carries that the render also saw, and the handler and the `Args` key 11.24 takes. A GET's
 // query arrives as text until 19.8 coerces it, so a render that passed a number misses here and
 // the handler runs — the answer is right and the saving is lost.
 //
-// ONE CALL PER ENTRY (41.17), and a bounded life for the entries nothing takes (41.18): a page read
+// ONE CALL PER ENTRY (41.16), and a bounded life for the entries nothing takes (41.17): a page read
 // with scripting off, or by a crawler, fills entries no call will ever come for.
 
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
@@ -16,7 +16,7 @@ import { isStreaming } from '#shared/reactive/index.ts'
 import { chunksOfStream } from './answerValue.ts'
 import type { PageRender } from './requestScope.ts'
 
-// 41.18.
+// 41.17.
 const SEED_LIFE_MS = 30_000
 
 // How a handler's call ended, and how long it took from the call to the end — what 21.15's
@@ -35,7 +35,7 @@ type Entry = {
     timer: ReturnType<typeof setTimeout> | undefined
 }
 
-// INDEXED BY THE THREE THINGS 41.19 MATCHES ON — caller, handler, args key — so a call finds its entry
+// INDEXED BY THE THREE THINGS 41.18 MATCHES ON — caller, handler, args key — so a call finds its entry
 // without reading the others. A caller whose calls never match (a crawler, a render whose args the
 // wire does not reproduce) leaves every entry standing for 30 seconds, and a list read end to end
 // made each of its calls pay for all of them. Several entries under one key are taken oldest first.

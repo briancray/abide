@@ -54,6 +54,8 @@ function cellsOf(item: RowItem) {
         return {
             abide: '—',
             vanilla: '—',
+            n: '—',
+            floor: '—',
             claim: state.label,
             figureTone: 'board-waiting',
             claimTone: state.tone,
@@ -63,6 +65,8 @@ function cellsOf(item: RowItem) {
     return {
         abide: figure(row.abide, row.unit),
         vanilla: figure(row.vanilla, row.unit),
+        n: row.n === null ? '—' : row.n.toLocaleString('en-US'),
+        floor: row.floor === null ? '—' : `${(row.floor * 100).toFixed(1)}%`,
         claim: row.claim,
         figureTone: '',
         claimTone: verdictOf(row.claim),
@@ -136,7 +140,7 @@ function verdictOf(claim: string): string {
                 </div>
                 <table>
                     <thead>
-                        <tr><th>Bench</th><th class="board-figure">abide</th><th class="board-figure">vanilla</th><th class="board-figure">abide / vanilla</th><th></th></tr>
+                        <tr><th>Bench</th><th class="board-figure">abide</th><th class="board-figure">vanilla</th><th class="board-figure">abide / vanilla</th><th class="board-figure">n</th><th class="board-figure">A/A floor</th><th></th></tr>
                     </thead>
                     <tbody>
                         {#for item of section.items by item.id}
@@ -145,6 +149,8 @@ function verdictOf(claim: string): string {
                                 <td class={`board-figure ${cellsOf(item).figureTone}`}>{cellsOf(item).abide}</td>
                                 <td class={`board-figure ${cellsOf(item).figureTone}`}>{cellsOf(item).vanilla}</td>
                                 <td class={`board-figure ${cellsOf(item).claimTone}`}>{cellsOf(item).claim}</td>
+                                <td class={`board-figure ${cellsOf(item).figureTone}`}>{cellsOf(item).n}</td>
+                                <td class={`board-figure ${cellsOf(item).figureTone}`}>{cellsOf(item).floor}</td>
                                 <td class="board-figure"><button class="board-run" onclick={() => start(`item:${item.id}`)} disabled={running}>Run</button></td>
                             </tr>
                         {/for}

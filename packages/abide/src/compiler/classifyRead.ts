@@ -56,6 +56,7 @@ export type Read = {
         | 'props'
         | 'defaultOpen'
         | 'defaultClose'
+        | 'absent'
         | 'static'
         | 'raw'
     // What the rewrite replaces: the name, or a whole write or update from its first token.

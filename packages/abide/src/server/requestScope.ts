@@ -44,7 +44,7 @@ export type RequestScope = Scope & {
     received: Request | undefined
     // 22.9 — what a write through `response` is collected onto, for whoever answers to apply.
     response: { status: number; headers: Headers }
-    // 41.13, 41.21 — the page this scope is rendering, which its calls report into; `undefined` in
+    // 41.13, 41.20 — the page this scope is rendering, which its calls report into; `undefined` in
     // every scope but a page's.
     page: PageRender | undefined
     // 21.15, 21.20, 24.6 — WHAT THE ANSWER'S `server-timing` CARRIES, gathered until the head goes out.
@@ -59,7 +59,7 @@ export type RequestScope = Scope & {
 }
 
 // A PAGE'S RENDER, as its calls see it: the seed buffer's sink for this caller (41.13), and the
-// requests the browser will make for them, for the early-call script (41.21). ON THE SCOPE because
+// requests the browser will make for them, for the early-call script (41.20). ON THE SCOPE because
 // that is the only thing a call made deep in a page's setup can find it through when requests
 // interleave — `RPC_SERVER.reached` is one slot for every request in flight.
 export type PageRender = {
@@ -131,44 +131,12 @@ export const LISTENING: {
         LISTENING.server?.timeout(received, seconds),
 }
 
-// ONE SCOPE ACROSS EVERY PULL of what `open` hands back. A response body is pulled by the server's
-// reader, which runs in no request at all, and a render builds its page on the first pull — so a
-// scope opened around the call alone would be gone before any of the page ran.
-//
-// `page` is what the calls made in it report into (41.13) — a page's render passes one.
-//
-// THE SCOPE IS RESOLVED AT THE CALL, not on the first pull: a generator's body runs when it is first
-// pulled, in whatever context the reader pulls from, and would miss the scope the request is
-// answered in (42.6) — and with it the route and the `response` writes made before the page began.
-export function inScopeEachPull<Chunk>(
-    page: PageRender | undefined,
-    open: () => AsyncGenerator<Chunk>,
-): AsyncGenerator<Chunk> {
-    const scope = STORAGE.getStore() as RequestScope
-    scope.page = page
-    return pullIn(scope, open)
+// WHAT THE CALLS A RENDER MAKES REPORT INTO (41.13), set on the request's own scope before the render
+// runs: a page's render passes one, and an error page's none. The render is awaited where the request
+// is answered, so it runs in that scope throughout (42.6).
+export function beginRender(page: PageRender | undefined): void {
+    ;(STORAGE.getStore() as RequestScope).page = page
 }
-
-async function* pullIn<Chunk>(
-    scope: RequestScope,
-    open: () => AsyncGenerator<Chunk>,
-): AsyncGenerator<Chunk> {
-    const chunks = STORAGE.run(scope, open)
-    try {
-        for (;;) {
-            const step = await STORAGE.run(scope, pullNext, chunks)
-            if (step.done === true) return
-            yield step.value
-        }
-    } finally {
-        // A reader who hung up stops the render inside the scope it was running in.
-        await STORAGE.run(scope, closeEarly, chunks)
-    }
-}
-
-const pullNext = <Chunk>(chunks: AsyncGenerator<Chunk>) => chunks.next()
-const closeEarly = <Chunk>(chunks: AsyncGenerator<Chunk>) =>
-    chunks.return(undefined)
 
 // The scope a request or `App.run` opened, or `undefined` outside every one.
 export function currentRequestScope(): RequestScope | undefined {

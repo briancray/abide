@@ -123,8 +123,7 @@ export async function buildCompiledPage(
 
         const { default: Component } = await import(`${scratch}/Page.ts`)
         let markup = ''
-        for await (const chunk of render(Component, SHELL))
-            markup += new TextDecoder().decode(chunk)
+        markup += new TextDecoder().decode(await render(Component, SHELL))
 
         const built = await Bun.build({
             entrypoints: [`${scratch}/entry.ts`],

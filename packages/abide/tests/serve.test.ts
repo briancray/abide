@@ -65,7 +65,7 @@ const { params } = props<{ params: { id: string } }>()
 
 // 41.1 — A PAGE WHOSE IMPORT TAKES A WHILE, and the only way a fixture can make one: a component
 // script refuses a top-level `await`, and a module it imports does not. The wait is the import's,
-// which is exactly what the first request for a page after boot pays.
+// which is exactly what the first request for a page after boot pays — before any of it is sent.
 const SLOW_MS = 400
 
 const SLOW = `<script>
@@ -74,7 +74,7 @@ import '#ui/slow.ts'
 
 <main id="slow"><h1>Slow</h1></main>`
 
-// 41.16 — a page that fails AFTER the head has gone out (41.1).
+// 41.1 — a page that fails as it is imported, before anything has gone out.
 const BROKEN = `<script>
 import '#ui/broken.ts'
 </script>
@@ -273,13 +273,12 @@ test('the document preloads the static closure of its own route, and nothing els
     expect(invoiceOnly.length).toBe(1)
 })
 
-// 41.1. THE REVERT: move the first `yield` in `render` below the component call, or load the page
-// in `answerRequest` ahead of the `Response` as it was, or drop the flush from `compressStream`, and
-// the head arrives with the body — after the import, SLOW_MS in.
-test('the head is on the wire before the page is imported — 41.1', async () => {
+// 41.1 — NOTHING OF A PAGE GOES OUT UNTIL IT IS BUILT, since the status goes with the first byte: the
+// document arrives whole, after the import. 38.30 AS WELL: COMPRESSED, and a compressor that held its
+// input to the end would still pass, so the body is asserted complete rather than early. THE REVERT:
+// yield the shell's head before the component is asked; `modulepreload` arrives before SLOW_MS.
+test('nothing of a page is on the wire before it is built — 41.1', async () => {
     const started = performance.now()
-    // 38.30 AS WELL: COMPRESSED, which is where a compressor that holds its input until the end
-    // would put the head back behind the body. Brotli because it is what a browser asks for.
     const response = await Bun.fetch(`${base}/slow`, {
         headers: { 'accept-encoding': 'br' },
     })
@@ -300,26 +299,16 @@ test('the head is on the wire before the page is imported — 41.1', async () =>
         )
             headAt = performance.now() - started
     }
-    const doneAt = performance.now() - started
-    // WHAT STARTS THE FETCHES is in the early part, and the page is not.
-    expect(headAt).toBeLessThan(SLOW_MS / 2)
-    expect(doneAt).toBeGreaterThanOrEqual(SLOW_MS)
+    expect(headAt).toBeGreaterThanOrEqual(SLOW_MS)
     expect(seen).toContain('<main id="slow">')
 })
 
-// 41.16 — 41.1's cost, decided rather than left to happen: the status line is out, so a page that
-// throws afterwards cannot become a 500. It must not become a COMPLETE 200 either — a document
-// with an error written into it is one a cache stores — so the stream ends in an error.
-test('a page that fails after the head has flushed ends the stream in an error — 41.16', async () => {
+// 41.1 — A PAGE THAT FAILS BEFORE IT IS BUILT is answered at the failure's status, which for a throw
+// is the server's 500 (16.43), and this app has no error page to paint it. THE REVERT: construct the
+// `Response` in `answerRequest` before pulling the first chunk; it answers 200 and the stream errors.
+test('a page that fails before it is built answers at its status — 41.1', async () => {
     const response = await Bun.fetch(`${base}/broken`)
-    expect(response.status).toBe(200)
-    let failed = false
-    try {
-        await response.text()
-    } catch {
-        failed = true
-    }
-    expect(failed).toBe(true)
+    expect(response.status).toBe(500)
     // AND THE SERVER IS STILL UP.
     expect((await Bun.fetch(`${base}/`)).status).toBe(200)
 })

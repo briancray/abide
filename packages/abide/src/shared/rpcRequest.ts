@@ -1,5 +1,5 @@
 // 16.19 — THE REQUEST A CALL IS, WRITTEN ONCE FOR BOTH ENDS. The browser's `wire` sends it, and the
-// server writes the same request into a page's early-call script (41.21) — so the two have to agree
+// server writes the same request into a page's early-call script (41.20) — so the two have to agree
 // to the byte, or the browser's call misses the request that was already started for it. `key` is
 // that agreement: method, URL and body, which is what makes two requests the same one.
 //

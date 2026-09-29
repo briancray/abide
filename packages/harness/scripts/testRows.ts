@@ -5,8 +5,8 @@
 // `bun packages/harness/scripts/testRows.ts --list`, or `--scope all --filter reactive`, from the
 // repo root. `--gates` runs every `gate()`'s revert as well (RULEBOOK 44.9).
 
-import { rowsCommand } from './rowsCommand.ts'
 import type { RowItem, TestRow } from './rows.ts'
+import { rowsCommand } from './rowsCommand.ts'
 import { BUN_REPORT, PLAYWRIGHT_REPORT, runSuite } from './runSuite.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
@@ -76,7 +76,7 @@ function emptyRow(id: string, state: TestRow['state']): TestRow {
         failures: 0,
         skipped: 0,
         milliseconds: 0,
-        failed: [],
+        cases: [],
         note: '',
     }
 }
@@ -95,9 +95,7 @@ async function runOne(item: TestItem, gates: boolean): Promise<TestRow> {
             row.tests += suite.tests
             row.failures += suite.failures
             row.skipped += suite.skipped
-            for (const one of suite.cases)
-                if (one.failure !== null)
-                    row.failed.push({ name: one.name, failure: one.failure })
+            for (const one of suite.cases) row.cases.push(one)
         }
     } catch (error) {
         row.state = 'broken'

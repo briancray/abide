@@ -22,6 +22,7 @@ import {
 } from './CLIENT_BUILD.ts'
 import type { Manifest } from './chunksByModule.ts'
 import { bootApp } from './createApp.ts'
+import { keepServing } from './keepServing.ts'
 import { namesUnder } from './namesUnder.ts'
 import {
     ENCODINGS,
@@ -47,6 +48,8 @@ export async function serveBuild(
 ): Promise<Bun.Server<unknown>> {
     const app = await bootApp(options.root, () => loadBuild(options))
     await app.listen(options.port === undefined ? {} : { port: options.port })
+    // 37.8 ONCE SERVING, and not before: a boot that fails is 37.6's to fail hard.
+    keepServing()
     return LISTENING.server as Bun.Server<unknown>
 }
 
@@ -112,6 +115,7 @@ export async function loadBuild(
     }
 
     return appSources(table, shell, manifest, '', {
+        explained: undefined,
         framework: (pathname, request) => {
             if (!pathname.startsWith(`${CLIENT_ADDRESS}/`)) return undefined
             const name = pathname.slice(CLIENT_ADDRESS.length + 1)

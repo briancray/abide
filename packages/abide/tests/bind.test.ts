@@ -47,11 +47,12 @@ async function mounted(): Promise<string> {
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + 6,
         html.indexOf('</body>'),
@@ -147,11 +148,12 @@ test('a spread writes attributes, and keeps them in step with the value — 32.1
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     expect(html).toContain(
         '<div id="card" title="first" data-kind="card">card</div>',
     )
@@ -200,11 +202,12 @@ test('a spread binds its on<event> functions as listeners, and keeps them in ste
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     expect(html).toContain('<p id="target">target</p>')
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + 6,

@@ -61,8 +61,7 @@ type Values<T> = Iterable<T> | AsyncIterable<T> | ReadableStream<T>
 ```
 
 One input type across `page`, `json`, `jsonl` and `sse`. A source that is already a
-`ReadableStream` is not converted into an iterable to become one, and `page(render(Component))`
-needs no adapter between the two.
+`ReadableStream` is not converted into an iterable to become one.
 
 ## The caller gets a `Reactive`, not a stream to manage
 

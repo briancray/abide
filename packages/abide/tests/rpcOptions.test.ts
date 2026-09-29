@@ -89,11 +89,23 @@ export const streamed = GET(
     },
     {
         middleware: [
-            // No args schema, so the URL's text is what arrives (19.8).
+            // No args schema, so the annotation types the URL's text (19.10).
             async (next, ctx) =>
-                (ctx.args() as { n: string }).n === '13' ? refuse(451, 'unlucky') : next(),
+                (ctx.args() as { n: number }).n === 13 ? refuse(451, 'unlucky') : next(),
         ],
     },
+)
+
+export const annotated = GET(
+    reactive(
+        ({ id, kind, tags, page = 1 }: { id: number; kind: 'movie' | 'series'; tags?: string[]; page: number }) => ({
+            id,
+            type: typeof id,
+            kind,
+            tags,
+            page,
+        }),
+    ),
 )
 
 export const releaseStream = GET(() => {
@@ -146,6 +158,48 @@ test('a GET arg is coerced from the type its JSON Schema declares — 19.8, 19.9
         'outer:number',
         'inner',
     ])
+})
+
+// 19.10 — THE ANNOTATION IS THE SCHEMA where none is declared: the URL's text arrives as the types
+// it names, and what the types refuse is refused before the handler runs. 19.11 — a member the
+// handler defaults is not required, whatever the annotation says. THE REVERT: drop `args` from the
+// mount row in `handlersUnder`; `id` arrives the string `'42'`, and `id=abc` and `kind=film` both
+// reach the handler and answer 200. Drop `defaulted` from `argsSchemaOf` and the first call is 422.
+test('a GET typed only by its annotation is coerced and held to it — 19.10, 19.11', async () => {
+    const answer = await Bun.fetch(
+        `${base}${RPC}/annotated?id=42&kind=movie&tags=a`,
+    )
+    expect(answer.status).toBe(200)
+    expect(await answer.json()).toEqual({
+        id: 42,
+        type: 'number',
+        kind: 'movie',
+        tags: ['a'],
+        page: 1,
+    })
+    expect(
+        await (
+            await Bun.fetch(`${base}${RPC}/annotated?id=1&kind=series&page=3`)
+        ).json(),
+    ).toEqual({ id: 1, type: 'number', kind: 'series', page: 3 })
+    for (const query of ['id=abc&kind=movie', 'id=1&kind=film', 'kind=movie']) {
+        const refused = await Bun.fetch(`${base}${RPC}/annotated?${query}`)
+        expect(`${query} ${refused.status}`).toBe(`${query} 422`)
+        expect(((await refused.json()) as { name: string }).name).toBe(
+            'ValidationError',
+        )
+    }
+})
+
+// 19.10 ON A BODY: JSON carries its own types, and the annotation still holds them. THE REVERT, as
+// above: the string reaches `pay` and is echoed back 200.
+test('a mutation body is held to its annotation — 19.10', async () => {
+    const refused = await Bun.fetch(`${base}${RPC}/pay`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"amount":"five"}',
+    })
+    expect(refused.status).toBe(422)
 })
 
 // 16.19 — AN EMPTY LIST CROSSES THE URL AS ONE, spelled by the browser's own `rpcRequest` and read

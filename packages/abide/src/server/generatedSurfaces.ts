@@ -6,13 +6,13 @@
 // request path everything under `/__abide` is — and a tool call is a request through it again (20.10).
 //
 // NOT HERE YET: 20.4's `ui: false`, which is the build's to withhold; 16.38's default of `mcp` and
-// `cli` to false for a handler returning a `Response`, which wants the return type; and 20.11's
-// type-derived schema, which waits on 19.10.
+// `cli` to false for a handler returning a `Response`, which wants the return type. 20.11's
+// type-derived schema is the build's (19.10), and arrives here as the mount's `argsDocument`.
 
 import { log, namedLogger } from '#shared/log.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
-import type { Method } from '#shared/rpc.ts'
 import { refuse } from '#shared/refuse.ts'
+import type { Method } from '#shared/rpc.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 import { answered, crossingOrigin, type Mounted } from './answerRpc.ts'
 import { framed } from './answerValue.ts'

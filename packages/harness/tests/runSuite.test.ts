@@ -17,7 +17,9 @@ const REPORT = `<?xml version="1.0" encoding="UTF-8"?>
     </testcase>
   </testsuite>
   <testsuite name="b.test.ts" file="b.test.ts" tests="1" failures="0" skipped="1" time="0.02">
-    <testcase name="skips &amp; waits" time="0" />
+    <testcase name="skips &amp; waits" time="0">
+      <skipped />
+    </testcase>
   </testsuite>
 </testsuites>`
 
@@ -37,6 +39,14 @@ test('a failure comes back with the number it reported', () => {
     expect(failed?.failure).toContain('Expected: 2')
     expect(failed?.failure).toContain('Received: 1')
     expect(suites[0]?.cases[0]?.failure).toBeNull()
+})
+
+// THE TESTS PAGE LISTS EVERY CASE, so a skipped one has to say so rather than read as a pass.
+// Reverted to reading failures alone, the skipped case comes back `skipped: false`.
+test('each case says whether it passed, failed or was skipped', () => {
+    const [first, second] = parseJUnit(REPORT)
+    expect(first?.cases.map((one) => one.skipped)).toEqual([false, false])
+    expect(second?.cases[0]?.skipped).toBe(true)
 })
 
 test('an escaped name comes back unescaped', () => {

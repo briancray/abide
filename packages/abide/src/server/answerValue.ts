@@ -94,19 +94,19 @@ export async function answerValue(
             headers,
             status,
         )
-    if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
-        headers.set('content-type', 'application/octet-stream')
-        return new Response(value as BodyInit, { status, headers })
-    }
-    // 17.2 — the document `page` named, as text or as a stream of its bytes.
+    // 17.2 — the document `page` named: text, the bytes `render` hands back, or a stream of bytes.
     if (framing === 'html') {
         headers.set('content-type', 'text/html; charset=utf-8')
-        if (typeof value === 'string')
-            return new Response(value, { status, headers })
+        if (typeof value === 'string' || value instanceof Uint8Array)
+            return new Response(value as BodyInit, { status, headers })
         return new Response(bodyOf(chunksOf(value), 'bytes'), {
             status,
             headers,
         })
+    }
+    if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
+        headers.set('content-type', 'application/octet-stream')
+        return new Response(value as BodyInit, { status, headers })
     }
     // A sync iterable is a stream only where a helper fixed the framing: an array is a value.
     if (isValues(value) || (framing !== undefined && isIterable(value)))
@@ -185,8 +185,8 @@ export function framed(
 }
 
 // 16.46, 16.47 — ONE FRAME PER PULL, so a reader sees each chunk as it is produced rather than once
-// the stream has finished. A page's render rides the `'bytes'` framing too (35.5, 41.1), and a
-// reader who hangs up returns the generator, which stops the render in its scope.
+// the stream has finished. A reader who hangs up returns the generator, which stops what it
+// was reading in its scope.
 //
 // AN EVENT STREAM OPENS ON A COMMENT: a streamed answer's head goes out with its first byte, so a
 // stream with nothing yet to say — an empty `log.records` — held its reader's headers until it did.

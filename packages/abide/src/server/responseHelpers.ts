@@ -11,7 +11,9 @@ export type Values<T> = Iterable<T> | AsyncIterable<T> | ReadableStream<T>
 export type RedirectStatus = 301 | 302 | 303 | 307 | 308
 
 // 17.2 — a rendered document: what `render` produced, not a render.
-export function page<Body extends string | Values<Uint8Array | string>>(
+export function page<
+    Body extends string | Uint8Array | Values<Uint8Array | string>,
+>(
     body: Body,
 ): Body {
     response().headers.set('content-type', 'text/html; charset=utf-8')

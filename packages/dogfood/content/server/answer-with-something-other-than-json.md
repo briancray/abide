@@ -89,18 +89,18 @@ The same serialization a bare return gets, with somewhere to put the rest of the
 ## `page` sends what a render produced
 
 `page` takes what a render **produced** rather than doing the render, which is why it takes the
-generator `render` yields:
+bytes `render` hands back:
 
 ```ts #server/rpc/previews.ts — excerpt
 import { page, render } from 'abide'
 import Invoice from '#ui/components/Invoice.abide'
 
 export const previewInvoice = GET(async ({ id }: { id: string }) =>
-    page(render(Invoice({ invoice: await database.invoice.find(id) }))),
+    page(await render(Invoice({ invoice: await database.invoice.find(id) }))),
 )
 ```
 
-`text/html`, streamed as the render yields it. `render` takes an optional shell, so an email body
+`text/html`, the bytes as the render built them. `render` takes an optional shell, so an email body
 or an embed comes from the same component.
 
 Read on: [Manual rendering](../pages/render-a-document-yourself.md)

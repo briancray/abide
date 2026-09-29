@@ -7,10 +7,11 @@
 import { homedir } from 'node:os' // bun exposes no home directory of its own
 import { APP_NAME } from '#shared/log.ts'
 import { MOUNT } from '#shared/mount.ts'
+import { numberFromText } from '#shared/numberFromText.ts'
 import { reactive } from '#shared/reactive/index.ts'
 import { validationError } from '#shared/refuse.ts'
-import { numberFromText } from '#shared/numberFromText.ts'
 import { runSchema } from '#shared/Schema.ts'
+import { appDirectories } from './appDirectories.ts'
 import { type Env, HOOKS } from './hooks.ts'
 
 // The app's root, for 27.3's derivation — set by `bootApp` before the value is first read.
@@ -69,9 +70,9 @@ function coerce(text: string, standing: unknown): unknown {
 function derived(): Record<string, string> {
     const root = CONFIG_ROOT.current
     let manifest: { name?: string; version?: string } = {}
-    for (const at of [`${root}/package.json`, `${root}/../package.json`]) {
+    for (const directory of appDirectories(root)) {
         try {
-            manifest = require(at) as typeof manifest
+            manifest = require(`${directory}/package.json`) as typeof manifest
             break
         } catch {}
     }

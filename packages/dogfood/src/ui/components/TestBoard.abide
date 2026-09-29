@@ -3,7 +3,7 @@
 // finishes (`harness/scripts/testRows.ts`). The bench board's shape, for the bench board's
 // reasons: one value holds the rows and a run patches into it as each lands.
 import { reactive } from 'abide'
-import { matchesFilter, type RowItem, type TestRow } from 'harness/rows'
+import { matchesFilter, type RowItem, type TestCase, type TestRow } from 'harness/rows'
 import { runTests, testCatalog } from '#server/rpc/tests'
 import { messageOf } from '#ui/messageOf.ts'
 import { readRows } from '#ui/readRows.ts'
@@ -96,6 +96,17 @@ function stop() {
     stopping?.abort()
 }
 
+// ONE TEST'S LINE: a mark, and its tone, for how it came out.
+function markOf(one: TestCase): { mark: string; tone: string } {
+    if (one.failure !== null) return { mark: '✗', tone: 'board-bad' }
+    if (one.skipped) return { mark: '–', tone: 'board-waiting' }
+    return { mark: '✓', tone: 'board-good' }
+}
+
+function caseTime(one: TestCase): string {
+    return one.skipped ? '' : `${one.milliseconds.toFixed(one.milliseconds < 10 ? 1 : 0)} ms`
+}
+
 function seconds(row: TestRow): string {
     return `${(row.milliseconds / 1000).toFixed(row.milliseconds < 10_000 ? 2 : 1)} s`
 }
@@ -136,17 +147,25 @@ function seconds(row: TestRow): string {
                         {#for item of section.items by item.id}
                             <tr>
                                 <td>
-                                    {item.name}
                                     {#if landed.get(item.id)?.state === 'broken'}
+                                        {item.name}
                                         <span class="board-note board-bad">{landed.get(item.id)?.note}</span>
-                                    {:else if (landed.get(item.id)?.failed.length ?? 0) > 0}
-                                        <details>
-                                            <summary>{landed.get(item.id)?.failed.length} failing</summary>
-                                            {#for failed of landed.get(item.id)?.failed ?? []}
-                                                <pre><strong>{failed.name}</strong>
-{failed.failure}</pre>
-                                            {/for}
+                                    {:else if (landed.get(item.id)?.cases.length ?? 0) > 0}
+                                        <details open={(landed.get(item.id)?.failures ?? 0) > 0}>
+                                            <summary class:board-bad={(landed.get(item.id)?.failures ?? 0) > 0}>{item.name}</summary>
+                                            <ul class="board-cases">
+                                                {#for one of landed.get(item.id)?.cases ?? []}
+                                                    <li>
+                                                        <span class={markOf(one).tone}>{markOf(one).mark}</span>
+                                                        <span class:board-waiting={one.skipped}>{one.name}</span>
+                                                        <span class="board-figure">{caseTime(one)}</span>
+                                                        {#if one.failure !== null}<pre>{one.failure}</pre>{/if}
+                                                    </li>
+                                                {/for}
+                                            </ul>
                                         </details>
+                                    {:else}
+                                        {item.name}
                                     {/if}
                                 </td>
                                 <td class={`board-figure ${cellsOf(item).passingTone}`}>{cellsOf(item).passing}</td>

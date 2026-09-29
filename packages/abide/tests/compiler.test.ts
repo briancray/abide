@@ -176,8 +176,7 @@ test('a compiled page renders as bytes into a shell', async () => {
     const shell =
         '<!doctype html><html><head><title>t</title></head><body></body></html>'
     let out = ''
-    for await (const chunk of render(Page, shell))
-        out += new TextDecoder().decode(chunk)
+    out += new TextDecoder().decode(await render(Page, shell))
 
     // 39.1, 39.3 — the head contribution is hoisted at compile time and lands in the document
     // head, not where it was written. THE REVERT: emit `<head>` into the body like any other
@@ -415,8 +414,9 @@ const ok = '/docs'
     const dir = temporaryModule({ 'Page.ts': compileFile(page) })
     const { default: Page } = await import(`${dir}/Page.ts`)
     let out = ''
-    for await (const chunk of render(Page, '<html><body></body></html>'))
-        out += new TextDecoder().decode(chunk)
+    out += new TextDecoder().decode(
+        await render(Page, '<html><body></body></html>'),
+    )
     expect(out).not.toContain('javascript:')
     expect(out).toContain('href="/docs"')
 })
@@ -521,8 +521,7 @@ test('a shell missing either end tag still receives the head', async () => {
     const carried: string[] = []
     for (const shell of shells) {
         let out = ''
-        for await (const chunk of render(Page, shell))
-            out += new TextDecoder().decode(chunk)
+        out += new TextDecoder().decode(await render(Page, shell))
         const head = out.indexOf('<title>abide</title>')
         const body = out.indexOf('<h1 class="title">')
         carried.push(
@@ -809,11 +808,12 @@ async function renderPage(source: string): Promise<string> {
     const module = `${temporaryModule({ 'Page.ts': await serverOf(source) })}/Page.ts`
     const { default: Page } = await import(module)
     let out = ''
-    for await (const chunk of render(
-        Page,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        out += new TextDecoder().decode(chunk)
+    out += new TextDecoder().decode(
+        await render(
+            Page,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     return out
 }
 
@@ -1223,7 +1223,9 @@ test('an interpolated style property cannot set a second one', async () => {
 // clause holding only `attributeMarkup` — a ReferenceError at render.
 test('a raw call lowers in an attribute value too', async () => {
     const emitted = await serverOf('<a href={raw(u)}>x</a>', ['u'])
-    expect(emitted).toContain('__attributeMarkup("href", __slotValue(() => __raw(u())))')
+    expect(emitted).toContain(
+        '__attributeMarkup("href", __slotValue(() => __raw(u())))',
+    )
     expect(emitted).toContain('raw as __raw')
 })
 
@@ -1302,8 +1304,7 @@ test('a shell with no closing head tag still gets its head content', async () =>
     const shell =
         '<!doctype html><html><body><div id="app"></div></body></html>'
     let out = ''
-    for await (const chunk of render(Page, shell))
-        out += new TextDecoder().decode(chunk)
+    out += new TextDecoder().decode(await render(Page, shell))
 
     expect(out.indexOf('<title>abide</title>')).toBeLessThan(
         out.indexOf('<body>'),
@@ -1440,11 +1441,12 @@ test('a component invoked inside the head contributes to it', async () => {
     })
     const { default: Page } = await import(`${dir}/Page.ts`)
     let out = ''
-    for await (const chunk of render(
-        Page,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        out += new TextDecoder().decode(chunk)
+    out += new TextDecoder().decode(
+        await render(
+            Page,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     const meta = out.indexOf('<meta name="description" content="d">')
     expect(meta).toBeGreaterThan(-1)
     expect(meta).toBeLessThan(out.indexOf('</head>'))
@@ -1469,11 +1471,12 @@ test('a slot holding a comma or a trailing comment is one expression', async () 
             transpiler.transformSync(emitClient(parseAbide(source)))
             const { default: Page } = await import(`${dir}/Page.ts`)
             let out = ''
-            for await (const chunk of render(
-                Page,
-                '<!doctype html><html><head></head><body></body></html>',
-            ))
-                out += new TextDecoder().decode(chunk)
+            out += new TextDecoder().decode(
+                await render(
+                    Page,
+                    '<!doctype html><html><head></head><body></body></html>',
+                ),
+            )
             rendered.push(/<p>(.*?)<\/p>/.exec(out)?.[1] ?? out)
         } catch (thrown) {
             rendered.push(String(thrown))

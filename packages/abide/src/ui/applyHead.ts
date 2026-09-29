@@ -10,6 +10,7 @@
 
 import { headKeyOf } from '#shared/headKeyOf.ts'
 import { markupNodes } from './parseMarkup.ts'
+import type { Scope } from './Scope.ts'
 
 export function applyHead(markup: string): void {
     const head = document.head
@@ -66,4 +67,20 @@ function headKey(element: Element): string | undefined {
     return headKeyOf(element.tagName.toLowerCase(), (name) =>
         element.getAttribute(name),
     )
+}
+
+// 39.13 — A HEAD THAT READS A VALUE FOLLOWS IT for as long as its level is mounted, which is the
+// scope's life. Where the server painted the level, the first run only subscribes: the head it
+// would write is the one the server already wrote.
+export function liveHead(
+    scope: Scope,
+    painted: boolean,
+    markup: () => string,
+): void {
+    let subscribing = painted
+    scope.watch(() => {
+        const text = markup()
+        if (subscribing) subscribing = false
+        else applyHead(text)
+    })
 }

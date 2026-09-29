@@ -61,11 +61,12 @@ async function mountPage() {
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -180,11 +181,12 @@ async function mountPairs() {
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -273,11 +275,12 @@ test('a binding below a row’s first child is reached, in both row shapes', asy
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -335,11 +338,12 @@ test('a row that left stops reading', async () => {
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -433,11 +437,12 @@ async function mountRefetch() {
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -515,11 +520,12 @@ test('a row whose value is NaN is not remade', async () => {
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -575,11 +581,12 @@ test('a for over an async iterable appends each item as it arrives', async () =>
     })
     const { default: Component } = await import(`${dir}/Async.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
 
     // 41.3 — NOTHING INLINE, and the anchors are still there for the client to fill between.
     expect(html).toContain('<ul id="stream"><!--[--><!--]--></ul>')
@@ -645,11 +652,12 @@ test('a repeated {#for} key keeps the last row, drops what it shadows, and warns
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -961,11 +969,12 @@ test('a subject building fresh items keeps the rows the server sent', async () =
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -1010,11 +1019,12 @@ test('a document holding fewer rows than the client computes reconciles — 41.1
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -1073,11 +1083,12 @@ test('a document holding more rows than the client computes warns and rebuilds �
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -1153,11 +1164,12 @@ async function mountSource(source: string): Promise<void> {
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -1367,11 +1379,12 @@ test('a row that binds nothing allocates no scope, hydrated or made', async () =
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
-    for await (const chunk of render(
-        Component,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        html += new TextDecoder().decode(chunk)
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),

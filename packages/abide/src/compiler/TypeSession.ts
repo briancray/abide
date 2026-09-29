@@ -51,6 +51,7 @@ import type { CopyOptions } from '#shared/CopyOptions.ts'
 import type { Method } from '#shared/rpc.ts'
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { AMBIENT_SOURCES, ambientReadsIn } from './ambientReads.ts'
+import { argsSchemaOf } from './argsSchemaOf.ts'
 import {
     CHECKED_SUFFIX,
     type CheckedShadow,
@@ -767,11 +768,25 @@ export class TypeSession {
                                 ),
                             )
                         }
+                        // 19.10 — a handler's args, as its annotation types them.
+                        const handlerType =
+                            declared === undefined ||
+                            declared.method === 'SOCKET'
+                                ? undefined
+                                : await checker.getTypeOfSymbol(target)
                         return {
                             name: exported.name,
                             method: declared?.method,
                             ui: declared?.ui ?? true,
                             copy: declared?.copy,
+                            args:
+                                handlerType === undefined
+                                    ? undefined
+                                    : await argsSchemaOf(
+                                          checker,
+                                          handlerType,
+                                          declared?.defaulted ?? [],
+                                      ),
                             unread,
                         }
                     }),
@@ -1275,7 +1290,7 @@ const SOCKET_SOURCE = new URL('../shared/socket.ts', import.meta.url).pathname
 
 // What declared an export: one of the five methods, or `socket`.
 type Declared = Mount['method']
-type DeclaredExport = Pick<Mount, 'name' | 'ui' | 'copy'> & {
+type DeclaredExport = Pick<Mount, 'name' | 'ui' | 'copy' | 'args'> & {
     method: Declared | undefined
     // 18.30 — what its copy's options declare and the build could not read.
     unread: Diagnosis[]
@@ -1295,6 +1310,7 @@ async function declaringMethod(
           ui: boolean
           copy: CopyOptions | undefined
           unread: Node[]
+          defaulted?: string[]
       }
     | undefined
 > {
@@ -1331,15 +1347,53 @@ async function declaringMethod(
         method.name === 'GET'
             ? await declaredCopy(checker, call.arguments[0])
             : { copy: undefined, unread: [] }
+    const body = await handlerBodyOf(checker, call.arguments[0])
     // 16.33 — A HANDLER DECLARED AS AN ASYNC GENERATOR ANSWERS A STREAM, and the browser's copy has to
     // read it as one rather than wait out the whole response: the one thing about it the build can
     // tell from its declaration and the wire cannot tell from its first byte in time.
-    if (
-        method.name === 'GET' &&
-        (await declaresStream(checker, call.arguments[0]))
-    )
+    if (method.name === 'GET' && declaresStream(body))
         declared.copy = { ...declared.copy, stream: true }
-    return { method: method.name as Method, ui, ...declared }
+    return {
+        method: method.name as Method,
+        ui,
+        ...declared,
+        defaulted: defaultedMembers(body),
+    }
+}
+
+// What a handler call is handed, followed to its function — written inline, bound to a name,
+// declared as a function, or handed to `reactive` first — or what it is where it is no function.
+async function handlerBodyOf(
+    checker: Checker,
+    handed: Node | undefined,
+): Promise<Node | undefined> {
+    const node = await declarationOf(checker, handed)
+    return node !== undefined && isCallExpression(node) && isReactiveCall(node)
+        ? await declarationOf(checker, node.arguments[0])
+        : node
+}
+
+// 19.11 — THE ARGS MEMBERS A HANDLER DEFAULTS, which its annotation still calls required: the type
+// the `Rpc` carries is the one written, and a default lives on the pattern that destructures it.
+function defaultedMembers(node: Node | undefined): string[] {
+    if (
+        node === undefined ||
+        !(
+            isArrowFunction(node) ||
+            isFunctionExpression(node) ||
+            isFunctionDeclaration(node)
+        )
+    )
+        return []
+    const pattern = node.parameters[0]?.name
+    if (pattern === undefined || !isObjectBindingPattern(pattern)) return []
+    const defaulted: string[] = []
+    for (const element of pattern.elements) {
+        if (element.initializer === undefined) continue
+        const key = element.propertyName ?? element.name
+        if (key !== undefined && isIdentifier(key)) defaulted.push(key.text)
+    }
+    return defaulted
 }
 
 // 18.19 — WHAT A `GET`'s VALUE DECLARES THAT ITS BROWSER COPY BEHAVES BY, read off its declaration for
@@ -1397,15 +1451,8 @@ async function declaredCopy(
     }
 }
 
-// Whether what a `GET` is handed is an `async function*` — written inline, bound to a name, declared
-// as a function, or handed to `reactive` first.
-async function declaresStream(
-    checker: Checker,
-    handed: Node | undefined,
-): Promise<boolean> {
-    let node = await declarationOf(checker, handed)
-    if (node !== undefined && isCallExpression(node) && isReactiveCall(node))
-        node = await declarationOf(checker, node.arguments[0])
+// Whether a `GET`'s handler body (`handlerBodyOf`) is an `async function*`.
+function declaresStream(node: Node | undefined): boolean {
     return (
         node !== undefined &&
         (isFunctionExpression(node) || isFunctionDeclaration(node)) &&
@@ -2020,6 +2067,12 @@ async function propsReads(
                     ),
                 )
                 reads.push(...defaults)
+            } else if (element.dotDotDotToken === undefined) {
+                // 33.4 — A PROP THE CALLER LEFT OUT IS `undefined`, and has no accessor to read it
+                // through: every binding is given one, inert wherever the caller passed the key.
+                const absent = newRead(name.end, name.end, 'absent')
+                defaults.push(absent)
+                reads.push(absent)
             }
             const renamed = element.propertyName
             bound.push(name)

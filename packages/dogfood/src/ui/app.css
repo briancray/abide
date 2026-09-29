@@ -1330,11 +1330,29 @@ th.board-figure {
 
 .board summary {
     cursor: pointer;
+}
+
+.board summary.board-bad {
     color: var(--bad);
 }
 
-.board details pre {
-    margin-top: .5rem;
+/* A FILE'S TESTS, one line each: the mark, the name taking what is left, and the time. */
+.board-cases {
+    display: grid;
+    grid-template-columns: 1rem minmax(0, 1fr) auto;
+    column-gap: .5rem;
+    margin: .5rem 0 .25rem;
+    padding: 0;
+    list-style: none;
+}
+
+.board-cases li {
+    display: contents;
+}
+
+.board-cases pre {
+    grid-column: 2 / -1;
+    margin: .25rem 0 .5rem;
     white-space: pre-wrap;
     color: var(--bad);
 }

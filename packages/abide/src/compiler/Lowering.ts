@@ -404,6 +404,11 @@ export class Lowering {
                     : '() => ('
             case 'defaultClose':
                 return read.through ? '))' : ')'
+            case 'absent':
+                if (this.checking) return undefined
+                return read.through
+                    ? ` = ${this.use('propCell')}(() => undefined)`
+                    : ' = () => undefined'
             case 'static':
                 return undefined
             // 32.26, 32.2 — THE SLOT SPELLING `raw(x)` IS A CALL TO THE FRAMEWORK'S `raw`, the
@@ -437,9 +442,15 @@ export class Lowering {
         const held = `${CHECKED_VALUES}.${spelled}`
         const written = `${CHECKED_WRITE}(${this.nameOf(read)}, `
         const op = read.operator
-        if (op === '') return [`(${held} = ${written}`, '))']
-        if (SHORT_CIRCUIT.has(op)) return [`(${held} ${op}= ${written}`, '))']
-        return [`(${held} = ${written}${held} ${op} (`, ')))']
+        // A WRITE THAT IS A WHOLE STATEMENT MUST NOT OPEN ON `(`: after a line with no semicolon,
+        // JavaScript reads it as a call on that line — `await f()` then `x = 1` checked as
+        // `f()(...)`. `void` cannot continue a line, and unlike a leading `;` it stays one
+        // statement under a braceless `if`.
+        const open = read.discarded ? 'void (' : '('
+        if (op === '') return [`${open}${held} = ${written}`, '))']
+        if (SHORT_CIRCUIT.has(op))
+            return [`${open}${held} ${op}= ${written}`, '))']
+        return [`${open}${held} = ${written}${held} ${op} (`, ')))']
     }
 
     private valueOf(spelled: string, read: Read, name: string): string {

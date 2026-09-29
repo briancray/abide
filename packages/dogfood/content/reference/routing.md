@@ -53,7 +53,7 @@ error naming both files rather than whichever won at the first request.
 | Name | Signature | Meaning |
 | --- | --- | --- |
 | `Component` | `interface Component {}` | A component bound to its props. |
-| `render` | `(component: Component, shell?: Shell) => AsyncGenerator<Uint8Array>` | What produces a document. |
+| `render` | `(component: Component, shell?: Shell) => Promise<Uint8Array>` | What produces a document. |
 | `Shell` | `string \| URL \| undefined` | The document a render renders into. |
 
 ### Parameters
@@ -65,8 +65,8 @@ error naming both files rather than whichever won at the first request.
 
 ### Return value
 
-An `AsyncGenerator<Uint8Array>` — the document as bytes, produced as the render reaches them.
-That is what the page pipeline streams, and what `page()` takes directly.
+A `Promise<Uint8Array>` — the document's bytes, built whole. That is what the page pipeline sends,
+and what `page()` takes directly.
 
 ## Sinks
 
@@ -118,7 +118,7 @@ const { id, tab = 'summary' } = route.params
 
 ```ts #server/rpc/previews.ts — excerpt
 export const previewInvoice = GET(async ({ id }: { id: string }) =>
-    page(render(Invoice({ invoice: await database.invoice.find(id) }))),
+    page(await render(Invoice({ invoice: await database.invoice.find(id) }))),
 )
 ```
 

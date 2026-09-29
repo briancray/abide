@@ -1306,6 +1306,25 @@ test('an adopted derived value mirrors what it recomputes to — 11.13', () => {
     stop()
 })
 
+// 11.13 FOR A PATCH, which is the one production that keeps its reference (5.7). The mirror copied
+// the inner's value into the adopter through the identity gate, found the reference it already
+// held, and woke nobody — so `reactive(() => getRows())` never showed a row a server patched.
+// THE REVERT: drop the same-reference arm in `mirror`; the adopter's watch runs once, not twice.
+test('a patch of an adopted value wakes the adopter — 11.13, 5.7', () => {
+    const rows = reactive([{ id: 1, watched: false }])
+    const adopter = reactive(() => rows)
+    const seen: boolean[] = []
+    const stop = watch(() => {
+        seen.push((adopter() as { watched: boolean }[])[0]?.watched ?? false)
+    })
+    rows.patch((value) => {
+        ;(value[0] as { watched: boolean }).watched = true
+    })
+    flushSync()
+    expect(seen).toEqual([false, true])
+    stop()
+})
+
 test('adopted productions mirror into the outer value, through its own transform', () => {
     const feed = reactive(1)
     const outer = reactive(() => feed, {

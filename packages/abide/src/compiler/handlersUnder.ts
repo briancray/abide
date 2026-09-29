@@ -57,9 +57,14 @@ export async function handlersUnder(
     const owners = new Map<string, string>()
     for (let at = 0; at < modules.length; at += 1) {
         const { source, path, isSocket } = modules[at] as HandlerModule
-        for (const { name: exported, method, ui, copy, unread } of declared[
-            at
-        ] ?? []) {
+        for (const {
+            name: exported,
+            method,
+            ui,
+            copy,
+            args,
+            unread,
+        } of declared[at] ?? []) {
             if (method === undefined || (method === 'SOCKET') !== isSocket)
                 throw new Error(
                     isSocket
@@ -73,7 +78,15 @@ export async function handlersUnder(
                     `abide: ${owner} and ${source} both declare a ${isSocket ? 'socket' : 'handler'} at ${address}. RULEBOOK 19.2.`,
                 )
             owners.set(address, source)
-            mounts.push({ address, method, source, name: exported, ui, copy })
+            mounts.push({
+                address,
+                method,
+                source,
+                name: exported,
+                ui,
+                copy,
+                args,
+            })
             warnings.push(...unread)
         }
     }

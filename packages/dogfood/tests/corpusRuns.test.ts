@@ -123,8 +123,7 @@ test('every example renders on the server and mounts on the client', async () =>
                 // IN A REQUEST, as a page is always rendered: `principal` reads the request's
                 // cookie and throws outside one (22.1).
                 await inScope(new Request('http://example.test/'), async () => {
-                    for await (const chunk of render(Component, SHELL))
-                        html += new TextDecoder().decode(chunk)
+                    html = new TextDecoder().decode(await render(Component, SHELL))
                 })
 
                 // EACH EXAMPLE GETS ITS OWN ROOT, AND THAT IS NOT DECORATION. Overwriting one

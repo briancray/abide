@@ -1,20 +1,20 @@
 // 38.4 — `abide dev`: the project, watched, with the app kept up across every save. What is here
-// is the LISTENER and nothing else (38.15): the socket is bound once on this thread and survives
+// is the LISTENER and nothing else (38.15): the socket is bound once in this process and survives
 // every reload, so a browser holding a connection open meets a server that is still there when
 // the app behind it has been thrown away and rebuilt.
 //
 // 18.2 — THE APP'S MUX IS HELD HERE TOO, and its frames relayed: the browser's web socket is bound
-// on this thread, tagged with a connection id, and the worker's mux answers each frame through it.
+// in this process, tagged with a connection id, and the app's mux answers each frame through it.
 // A reload closes these with the reload client's, and a follower reconnects naming the version it
 // holds (18.24), so the rebuilt app sends it only what moved.
 //
-// THE COMPILE IS HERE AND THE APP IS THERE. The compiler stays loaded on this thread across every
-// reload, where a compiler imported into each new worker cost 4.5 s a save against the 80 ms the
-// compile takes — and the clause asks for the APP to be in the worker, which the compiler is not.
+// THE COMPILE IS HERE AND THE APP IS THERE. The compiler stays loaded in this process across every
+// reload, where a compiler imported into each new app cost 4.5 s a save against the 80 ms the
+// compile takes — and the clause asks for the APP to be in the child, which the compiler is not.
 //
-// 38.16 — A RELOAD IS A NEW WORKER, not a module cache to invalidate. An app leaves things behind
-// that no invalidation reaches — a timer, a `share`, a module that ran once — and a worker is the
-// one boundary that takes all of them with it. Every live socket is force-closed with it, which
+// 38.16 — A RELOAD IS A NEW PROCESS, not a module cache to invalidate. An app leaves things behind
+// that no invalidation reaches — a timer, a `share`, a module that ran once, and bun's own memory of
+// a file it failed to find — and a process is the one boundary that takes all of them with it. Every live socket is force-closed with it, which
 // is also the whole of the reload protocol: the reload client reconnects and reloads, so nothing
 // here has a message to send.
 
@@ -50,10 +50,10 @@ type InFlight = Omit<Ask, 'id' | 'method' | 'url'> & {
     failed: string | null
 }
 
-// The worker, spoken to and heard in its own protocol.
-type DevWorker = Omit<Worker, 'postMessage' | 'onmessage'> & {
+// The app's process, spoken to in its own protocol.
+type DevWorker = {
     postMessage(message: ToWorker): void
-    onmessage: ((event: MessageEvent<FromWorker>) => unknown) | null
+    terminate(): void
 }
 
 type Compiled = { modules: Map<string, string>; failure: string }
@@ -140,20 +140,48 @@ export async function serveDev(
 
     // The worker, compiled and answering.
     function open({ modules, failure }: Compiled): void {
-        // THE ENVIRONMENT AS IT STANDS, `NODE_ENV` included (36.3): a worker left to its default is
-        // handed the one this process STARTED with, and never sees what the command set since.
-        const started: DevWorker = new Worker(
-            new URL('./devWorker.ts', import.meta.url).href,
-            { env: process.env as Record<string, string> },
+        // 38.15 — A PROCESS, NOT A THREAD, for the header's reason: bun remembers a file it failed
+        // to find for the life of the process, and a thread inherits the miss.
+        //
+        // THE ENVIRONMENT AS IT STANDS, `NODE_ENV` included (36.3): the child is handed what this
+        // process holds now rather than what it started with. `advanced` carries an `ArrayBuffer`.
+        const child = Bun.spawn(
+            ['bun', new URL('./devWorker.ts', import.meta.url).pathname],
+            {
+                env: process.env as Record<string, string>,
+                stdio: ['inherit', 'inherit', 'inherit'],
+                serialization: 'advanced',
+                ipc(message: FromWorker) {
+                    if (message.kind === 'ready') ready = true
+                    else if (message.kind === 'socket-send')
+                        muxed.get(message.conn)?.send(message.text)
+                    else if (message.kind === 'timeout') {
+                        const asked = inFlight.get(message.id)?.request
+                        if (asked !== undefined)
+                            server.timeout(asked, message.seconds)
+                    } else answer(started, message)
+                },
+                // 38.42 — AN APP THAT EXITS ON ITS OWN is replaced, and says so: a listener still
+                // forwarding to it leaves every tab hanging.
+                onExit() {
+                    if (worker !== started) return
+                    console.error(
+                        'abide dev: the app exited, so it was restarted',
+                    )
+                    endInFlight(false, 'abide dev: the app exited')
+                    replace()
+                },
+            },
         )
-        started.onmessage = ({ data: message }) => {
-            if (message.kind === 'ready') ready = true
-            else if (message.kind === 'socket-send')
-                muxed.get(message.conn)?.send(message.text)
-            else if (message.kind === 'timeout') {
-                const asked = inFlight.get(message.id)?.request
-                if (asked !== undefined) server.timeout(asked, message.seconds)
-            } else answer(started, message)
+        const started: DevWorker = {
+            // A message to a process already gone is one nobody would answer; its exit says so.
+            postMessage(message) {
+                if (!child.killed && child.exitCode === null)
+                    child.send(message)
+            },
+            terminate() {
+                child.kill()
+            },
         }
         worker = started
         started.postMessage({
@@ -166,6 +194,29 @@ export async function serveDev(
         // to wait for one to EXIST.
         const waiting = queued.splice(0)
         for (const again of waiting) forward(again)
+    }
+
+    // WHAT AN APP THAT IS GONE WAS HOLDING. A request whose head has not gone out is re-asked of the
+    // replacement (38.25), or answered where the app ended itself — the request in hand may be what
+    // ended it (38.42). 38.38 — one whose head has gone out cannot be answered again, and ends as
+    // `abide start`'s does.
+    function endInFlight(reask: boolean, why: string): void {
+        for (const held of inFlight.values()) {
+            if (held.stream !== null) {
+                held.stream.error(new Error(why))
+                held.pulled?.()
+            } else if (reask) queued.push(held)
+            else
+                held.settle(
+                    new Response(why, {
+                        status: 500,
+                        headers: {
+                            'content-type': 'text/plain; charset=utf-8',
+                        },
+                    }),
+                )
+        }
+        inFlight.clear()
     }
 
     // 38.16 — THE REPLACEMENT. The old worker is terminated, every socket it could still be
@@ -182,17 +233,7 @@ export async function serveDev(
         for (const socket of sockets) socket.terminate()
         sockets.clear()
         muxed.clear()
-        // 38.38 — one whose head has gone out cannot be answered again, and ends as `abide start`'s does.
-        for (const again of inFlight.values()) {
-            if (again.stream === null) queued.push(again)
-            else {
-                again.stream.error(
-                    new Error('abide dev replaced the app mid-response'),
-                )
-                again.pulled?.()
-            }
-        }
-        inFlight.clear()
+        endInFlight(true, 'abide dev replaced the app mid-response')
         if (compiling !== undefined) stale = true
         else compiling = reopen()
     }
@@ -260,10 +301,10 @@ export async function serveDev(
         if (waiting === undefined) return
         const { id } = message
         if (message.kind === 'head') {
-            if (message.empty) {
+            if (message.empty || message.whole !== undefined) {
                 inFlight.delete(id)
                 waiting.settle(
-                    new Response(null, {
+                    new Response(message.whole ?? null, {
                         status: message.status,
                         statusText: message.statusText,
                         headers: message.headers,

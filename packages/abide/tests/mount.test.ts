@@ -45,7 +45,7 @@ test('a page under the mount loads from under it — 16.11', async () => {
         /<script type="module" src="\/docs\/__abide\/client\/entry-[^"]+\.js">/,
     )
     expect(html).toContain('<a id="link" href="/docs/invoices/4">four</a>')
-    // 41.21 — the early call is the address the browser's own call is made at.
+    // 41.20 — the early call is the address the browser's own call is made at.
     expect(html).toContain('/docs/__abide/rpc/invoices/getInvoice?id=4')
     const entry = /src="(\/docs\/__abide\/client\/entry-[^"]+\.js)"/.exec(
         html,

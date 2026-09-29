@@ -331,7 +331,7 @@ declare function ${BOUND}<Value>(value: { get(): Value; set(value: Value): unkno
 declare function __propCell<Value>(read: () => Value): () => ${REACTIVE}<Value>
 declare function __raw(value: unknown): unknown
 declare function __writePath<Root>(root: Root, path: readonly PropertyKey[], value: unknown): Root
-declare function __accessors<Record, Written extends keyof Record = never>(record: Record, written?: readonly Written[]): { [Key in keyof Record]: Key extends Written ? () => ${REACTIVE}<Record[Key]> : () => Record[Key] }
+declare function __accessors<Record, Written extends keyof Record = never>(record: Record, written?: readonly Written[]): { [Key in keyof Record]-?: Key extends Written ? () => ${REACTIVE}<Record[Key]> : () => Record[Key] }
 export {}
 `
 

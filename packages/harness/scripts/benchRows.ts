@@ -29,10 +29,13 @@ import {
     cards,
     vanillaMarkup,
 } from './renderCases.ts'
-import { rowsCommand } from './rowsCommand.ts'
 import type { BenchRow, RowItem } from './rows.ts'
+import { rowsCommand } from './rowsCommand.ts'
 
-type Measured = Pick<BenchRow, 'unit' | 'abide' | 'vanilla' | 'claim' | 'note'>
+type Measured = Pick<
+    BenchRow,
+    'unit' | 'abide' | 'vanilla' | 'claim' | 'n' | 'floor' | 'note'
+>
 
 // What more than one row needs and is expensive to make: a checker session is seconds to open.
 type Context = {
@@ -40,6 +43,9 @@ type Context = {
     session: Promise<TypeSession> | undefined
     arms: Map<string, Promise<Arm | null>>
 }
+
+// A row that counts rather than times has no batch and no A/A floor.
+const UNTIMED = { n: null, floor: null }
 
 type BenchItem = RowItem & { measure: (context: Context) => Promise<Measured> }
 
@@ -69,7 +75,9 @@ function timed(
         abide: abide / unitDivisor,
         vanilla: vanilla / unitDivisor,
         claim: divided(abide, vanilla),
-        note: `n=${measured.n} · A/A floor ${(measured.floor * 100).toFixed(1)}%`,
+        n: measured.n,
+        floor: measured.floor,
+        note: '',
     }
 }
 
@@ -100,12 +108,19 @@ function reactiveItems(): BenchItem[] {
                     unit: 'ns',
                     abide: abide.nanoseconds,
                     vanilla: vanilla.nanoseconds,
-                    claim: claimOf(result),
+                    // Inside the A/A floor the arms are indistinguishable, and the floor has a column of
+                    // its own to say how wide that is.
+                    claim:
+                        result.kind === 'underTheFloor'
+                            ? '1.00x'
+                            : claimOf(result),
+                    n: measured.n,
+                    floor: measured.floor,
                     // WORK FIRST: a ratio over two arms doing different jobs prices two jobs.
                     note:
                         result.workDisagreement.length > 0
                             ? `work disagrees — ${result.workDisagreement.join('; ')}`
-                            : `n=${measured.n} · A/A floor ${(measured.floor * 100).toFixed(1)}%`,
+                            : '',
                 }
             },
         })
@@ -205,6 +220,7 @@ function compilerItems(): BenchItem[] {
                         abide: null,
                         vanilla: null,
                         claim: 'no vanilla script',
+                        ...UNTIMED,
                         note: '',
                     }
                 return {
@@ -212,6 +228,7 @@ function compilerItems(): BenchItem[] {
                     abide: arm.authoredAbide,
                     vanilla: arm.authoredVanilla,
                     claim: divided(arm.authoredAbide, arm.authoredVanilla),
+                    ...UNTIMED,
                     note: 'what a developer writes',
                 }
             },
@@ -231,6 +248,7 @@ function compilerItems(): BenchItem[] {
                             arm === null
                                 ? 'no vanilla script'
                                 : 'not typeable yet',
+                        ...UNTIMED,
                         note: '',
                     }
                 return {
@@ -238,6 +256,7 @@ function compilerItems(): BenchItem[] {
                     abide: arm.shippedAbide,
                     vanilla: arm.shippedVanilla,
                     claim: divided(arm.shippedAbide, arm.shippedVanilla),
+                    ...UNTIMED,
                     note: 'emitted client module; the runtime is charged to every page besides',
                 }
             },
@@ -259,6 +278,7 @@ function machineryItems(): BenchItem[] {
                     abide,
                     vanilla,
                     claim: divided(abide, vanilla),
+                    ...UNTIMED,
                     note: 'against the hand-written signal',
                 }
             },
@@ -280,6 +300,7 @@ if (import.meta.main)
                 abide: null,
                 vanilla: null,
                 claim: '',
+                ...UNTIMED,
                 note: '',
             }
             for (const item of selected)

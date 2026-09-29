@@ -37,7 +37,7 @@ Read on: [Layouts](give-pages-the-same-chrome.md)
 
 ## Nothing in the head holds the flush by default
 
-The head goes out as soon as it is known, and a value still in flight does **not** delay it.
+The head goes out with the page once it is built, and a value still in flight does **not** delay it.
 That is the whole reason a title can be wrong for a moment: the alternative is a blank tab
 while the invoice loads, and a blank tab is worse.
 

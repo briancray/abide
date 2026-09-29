@@ -1,4 +1,4 @@
-// 41.20 — A RENDER LETS THE TURN RUN BETWEEN SETTING A PAGE UP AND BUILDING IT. A handler that answers
+// 41.19 — A RENDER LETS THE TURN RUN BETWEEN SETTING A PAGE UP AND BUILDING IT. A handler that answers
 // without waiting on anything is `async` all the same, so it lands a microtask after the call that
 // started it — and a body built in the same breath as the setup painted it as a hole every time.
 // What is asserted is the markup the server sent, and that nothing was set up twice to get it.
@@ -56,7 +56,7 @@ afterAll(() => {
 
 // THE REVERT: drop the `setImmediate` wait in `composePage`; the invoice is a hole like the slow one,
 // and `<p id="invoice"> </p>` is what is sent.
-test('a value that answers within the turn is painted, and one that waits is a hole — 41.20', async () => {
+test('a value that answers within the turn is painted, and one that waits is a hole — 41.19', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
     // One setup, so one run: the page was not set up a second time to paint it.
     expect(html).toContain('<p id="invoice">4021 1</p>')

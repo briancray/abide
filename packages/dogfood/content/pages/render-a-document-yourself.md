@@ -18,7 +18,7 @@ import { GET, page, render } from 'abide'
 import Invoice from '#ui/components/Invoice.abide'
 
 export const previewInvoice = GET(async ({ id }: { id: string }) =>
-    page(render(Invoice({ invoice: await database.invoice.find(id) }))),
+    page(await render(Invoice({ invoice: await database.invoice.find(id) }))),
 )
 ```
 
@@ -28,9 +28,9 @@ export const previewInvoice = GET(async ({ id }: { id: string }) =>
 not rendered. That is what makes the signature one argument rather than two, and what keeps the
 props typed at the binding site rather than as an untyped bag handed alongside.
 
-It produces an **async generator of bytes**. That is the same thing the page pipeline streams,
-so a caller that wants the document whole awaits it and a caller that wants to stream it hands
-it to `page` — and `page` takes it directly, because `Values<T>` covers a generator.
+It produces the document's **bytes**, built whole before any of them are handed back (41.1) — the
+same thing the page pipeline sends. A caller that wants text decodes them, and a caller answering
+with them hands them to `page`, which takes them directly.
 
 Read on: [Response types](../server/answer-with-something-other-than-json.md) ·
 [Components](../templates/reuse-a-piece-of-markup.md)

@@ -1,7 +1,7 @@
-// 38.15 — THE APP, IN A WORKER. Everything an app's own code touches is in here: the modules it
-// compiled to, the client bundle, and the render. The listener is on the main thread
-// (`serveDev`), so replacing this worker is how a reload happens and nothing an app left behind
-// — a module in the registry, a timer, a `share` — survives one.
+// 38.15 — THE APP, IN A CHILD PROCESS. Everything an app's own code touches is in here: the modules
+// it compiled to, the client bundle, and the render. The listener is the parent (`serveDev`), so
+// replacing this process is how a reload happens and nothing an app left behind — a module in the
+// registry, a timer, a `share`, a file bun once failed to find — survives one.
 //
 // THE COMPILER IS NOT THE APP, and it stays outside: `serveDev` compiles and sends the modules
 // in, so the compiler is loaded once for every reload — `serveDev` says what that saves.
@@ -24,11 +24,13 @@ import { CLIENT_ADDRESS, DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import { escapeText } from '#shared/escapeText.ts'
 import { appSources, publicFilesUnder } from './answerRequest.ts'
 import { connectionOf, type MuxSocket, socketHandlers } from './answerSocket.ts'
+import { appPlugins } from './appPlugins.ts'
 import { CLIENT_ENTRY, PUBLIC_DIRECTORY } from './CLIENT_BUILD.ts'
 import { chunksByModule, type Manifest, NO_MANIFEST } from './chunksByModule.ts'
 import { clientBuildOptions } from './clientBuildOptions.ts'
 import { type App, bootApp } from './createApp.ts'
 import { fenceServer } from './fenceServer.ts'
+import { keepServing } from './keepServing.ts'
 import { namesUnder } from './namesUnder.ts'
 import { refuseAddressCollision } from './refuseAddressCollision.ts'
 import { shellUnder } from './render.ts'
@@ -86,6 +88,8 @@ export type FromWorker =
           statusText: string
           headers: [string, string][]
           empty: boolean
+          // A body whose length the answer declared, sent with its head rather than pulled.
+          whole: ArrayBuffer | undefined
       }
     | { kind: 'chunk'; id: number; bytes: ArrayBuffer }
     | { kind: 'end'; id: number }
@@ -99,10 +103,12 @@ export type Ask = {
     body: ArrayBuffer | null
 }
 
-const worker = self as unknown as {
-    onmessage: (event: MessageEvent<ToWorker>) => unknown
-    postMessage(message: FromWorker, transfer?: Transferable[]): void
+// 38.15 — TO THE LISTENER, over bun's IPC: this is its child process (`serveDev` says why a process).
+function toListener(message: FromWorker): void {
+    process.send?.(message)
 }
+// The listener gone — its process killed rather than ended — takes this one with it.
+process.on('disconnect', () => process.exit(0))
 
 // THE COMPILE, AS SOMETHING TO WAIT ON. A request that arrives while the worker is still
 // compiling has to wait for the app rather than be told there is none: the listener forwards
@@ -119,11 +125,15 @@ const connections = new Map<number, MuxSocket>()
 // keeps it up through a bundle that failed, so the failure is something to SERVE.
 let failure = ''
 
-worker.onmessage = async ({ data: message }) => {
+keepServing()
+
+process.on('message', (message: ToWorker) => void receive(message))
+
+async function receive(message: ToWorker): Promise<void> {
     if (message.kind === 'start') {
         opening = open(message)
         await opening
-        worker.postMessage({ kind: 'ready' })
+        toListener({ kind: 'ready' })
         return
     }
     if (message.kind === 'pull') return pull(message.id)
@@ -141,7 +151,7 @@ worker.onmessage = async ({ data: message }) => {
                 new Request(message.url, { headers: message.headers }),
             ),
             send(text: string) {
-                worker.postMessage({ kind: 'socket-send', conn, text })
+                toListener({ kind: 'socket-send', conn, text })
             },
         }
         connections.set(conn, connection)
@@ -168,7 +178,7 @@ const bodies = new Map<
 const ASKS = new WeakMap<Request, number>()
 LISTENING.timeout = (received, seconds) => {
     const id = ASKS.get(received)
-    if (id !== undefined) worker.postMessage({ kind: 'timeout', id, seconds })
+    if (id !== undefined) toListener({ kind: 'timeout', id, seconds })
 }
 
 // A status whose response has no body to send, which `Response` refuses to be built with one.
@@ -194,15 +204,23 @@ async function answerAsk(ask: Ask): Promise<void> {
         response = failedDocument(describe(thrown))
     }
     const body = BODILESS.has(response.status) ? null : response.body
-    worker.postMessage({
+    // A DECLARED LENGTH IS A BODY ALREADY WHOLE, and it crosses with its head: re-streamed through the
+    // listener, bun meets a first read that has to wait on this worker and answers it chunked,
+    // dropping the length the app declared.
+    const whole =
+        body !== null && response.headers.has('content-length')
+            ? await response.arrayBuffer()
+            : undefined
+    toListener({
         kind: 'head',
         id: ask.id,
         status: response.status,
         statusText: response.statusText,
         headers: [...response.headers.entries()],
         empty: body === null,
+        whole,
     })
-    if (body === null) return
+    if (body === null || whole !== undefined) return
     bodies.set(ask.id, {
         reader: body.getReader(),
         html: (response.headers.get('content-type') ?? '').startsWith(
@@ -211,10 +229,9 @@ async function answerAsk(ask: Ask): Promise<void> {
     })
 }
 
-// ONE CHUNK PER ASK, transferred rather than copied. A throw in the middle ends the stream in an
-// error, as `abide start` does (41.16) — and where the answer is a page, what broke goes out as markup
-// first. `render` flushes the head before a page's module is imported (41.1), so a page that does not
-// parse fails HERE, after the status has gone, and a reader shown a blank tab is told nothing.
+// ONE CHUNK PER ASK. A throw in the middle ends the stream in an error, as `abide start` does — and
+// where the answer is html a handler streams, what broke goes out as markup first, a reader
+// shown a blank tab otherwise being told nothing. A page is never here: it is built whole (41.1).
 async function pull(id: number): Promise<void> {
     const reading = bodies.get(id)
     if (reading === undefined) return
@@ -222,23 +239,23 @@ async function pull(id: number): Promise<void> {
         const { done, value } = await reading.reader.read()
         if (done) {
             bodies.delete(id)
-            worker.postMessage({ kind: 'end', id })
+            toListener({ kind: 'end', id })
             return
         }
-        // COPIED, THEN TRANSFERRED. A chunk may be a view on a buffer its producer still owns — a
+        // THE VIEW'S OWN BYTES. A chunk may be a view on a buffer its producer still owns — a
         // compressor's `Buffer` is a slice of a shared pool, and `Buffer#slice` copies nothing — so
-        // handing over `value.buffer` sent the whole pool and detached it under the producer.
+        // sending `value.buffer` sent the whole pool.
         const bytes = new Uint8Array(value).buffer as ArrayBuffer
-        worker.postMessage({ kind: 'chunk', id, bytes }, [bytes])
+        toListener({ kind: 'chunk', id, bytes })
     } catch (thrown) {
         bodies.delete(id)
         const why = describe(thrown)
         if (reading.html) {
             const shown = new TextEncoder().encode(failureMarkup(why))
                 .buffer as ArrayBuffer
-            worker.postMessage({ kind: 'chunk', id, bytes: shown }, [shown])
+            toListener({ kind: 'chunk', id, bytes: shown })
         }
-        worker.postMessage({ kind: 'fail', id, message: why })
+        toListener({ kind: 'fail', id, message: why })
     }
 }
 
@@ -283,13 +300,16 @@ async function open(
         const publicDirectory = `${root}/ui/${PUBLIC_DIRECTORY}`
         const publicNames = namesUnder(publicDirectory)
         const [bundle, shell, published, [table, mounted]] = await Promise.all([
-            bundleInMemory(
-                root,
-                base,
-                // 16.29, 16.30 — the browser's view of `server/`, as `abide build` gives it.
-                [plugin, fenceServer(root, start.modules)],
-                paged,
-                publicNames.map((name) => `/${name}`),
+            // 38.44 — the app's own plugins, imported beside the reads below rather than ahead of them.
+            appPlugins(root).then((own) =>
+                bundleInMemory(
+                    root,
+                    base,
+                    // 16.29, 16.30 — the browser's view of `server/`, as `abide build` gives it.
+                    [plugin, fenceServer(root, start.modules), ...own],
+                    paged,
+                    publicNames.map((name) => `/${name}`),
+                ),
             ),
             shellUnder(root),
             // 38.20 — OUT OF THE SOURCE TREE. `abide build` copies these into its output and dev
@@ -311,6 +331,7 @@ async function open(
         const sources = appSources(table, shell, bundle.manifest, reload, {
             framework: (pathname) => served(bundle, pathname),
             published,
+            explained: (thrown) => failedDocument(describe(thrown)),
             ...mounted,
         })
         mux = socketHandlers(mounted.sockets, mounted.handlers)

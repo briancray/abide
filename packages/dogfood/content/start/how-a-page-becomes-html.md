@@ -10,9 +10,9 @@ covers:
 ---
 
 A request lands, and bytes start leaving before anything it needs has arrived. That is the one
-decision the rest of this page explains. **The document is not held for the data.** The head
-goes out as soon as it is known, the markup follows, and the values that were still in flight
-fill the places they were read.
+decision the rest of this page explains. **The document is not held for the data.** It goes out
+once the page is set up and built, and the values that were still in flight fill the places they
+were read.
 
 | | Stage | What runs |
 | --- | --- | --- |
@@ -85,7 +85,7 @@ you maintain. Leave `#ui/app.html` out entirely and abide serves its own minimal
 
 A page's `<head>` elements are merged into that document by key, deepest contributor winning, so
 a page's `<title>` replaces its layout's. The positions are known at compile time, which is why
-step 4 can flush the head before the body has been walked.
+merging them costs step 4 no second walk of the body.
 
 Read on: [Head & metadata](../pages/set-the-title-and-social-preview.md) ·
 [Layouts](../pages/give-pages-the-same-chrome.md) ·
@@ -183,6 +183,11 @@ Read on: [Reading data](../server/read-data-without-writing-an-api.md) ·
 Once the page has hydrated, the browser does the rendering. A navigation fetches what the next
 page reads rather than a new document, and the layouts a route shares with the one before it are
 never rebuilt — a header with an open menu in it stays exactly as it was.
+
+A navigation the page already standing matches — another query, or another `[id]` of the same
+route — rebuilds nothing at all. `route.url` and `route.params` move, and what reads them follows:
+`reactive(() => getInvoice({ id: route.params.id }))` loads the next invoice while a search box
+keeps its focus and the scroll stays where it was (30.23, 30.25).
 
 Read on: [Links & navigation](../pages/link-to-another-page.md) ·
 [View transitions](../pages/animate-from-one-page-to-the-next.md)

@@ -9,9 +9,8 @@ covers:
   - `<textarea>{v}</textarea>`
 ---
 
-The document is **not held for the data**. The head goes out as soon as it is known, the markup
-follows as far as it goes, and every value still in flight leaves a hole that fills when it
-lands. Nothing is opted into: this is what a render does.
+The document is **not held for the data**. It goes out once the page is built, the markup as far
+as it goes, and every value still in flight leaves a hole that fills when it lands. Nothing is opted into: this is what a render does.
 
 ## A hole in the page is a sink
 
@@ -64,6 +63,10 @@ The one wait is abide's, and it is a single turn. The page and its layouts are s
 they started get that turn to answer, and then the markup is built. A value already held, or a
 handler with nothing to wait on, is painted rather than left as a hole. Anything that waits on the
 network or a timer is not waited for.
+
+Nothing has gone out during that turn, so what the page read there still decides the answer. A
+handler that refused — `notFound()` for a record that is not there — is painted by the nearest
+`error.abide` at its own status, a 404 rather than a 200 that stops short (41.1).
 
 The case that wants otherwise is metadata a crawler reads, which does not come back for the
 second version. That value has to be there before the render starts, and getting it there is the

@@ -17,8 +17,8 @@ import type { Read } from './classifyRead.ts'
 import { bindingsOf, isSingleRooted, isSlot } from './classifyTemplate.ts'
 import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import {
-    emitHead,
     emitRow,
+    headSink,
     importClause,
     mergedValue,
     renderMarkup,
@@ -78,6 +78,8 @@ export type SelfFill = 'none' | 'routed' | 'invoked' | 'both'
 
 // The mount's third argument, which only the router passes (`Router.mountFrom`).
 const ROUTED = '__routed'
+// Whether the server painted this level, read before the fill that would make it so (39.13).
+const PAINTED = '__painted'
 
 export function emitClient(
     file: AbideFile,
@@ -126,17 +128,27 @@ export function emitClient(
     // the route's chain alone, and an invoked component fills an empty region once per row the list
     // grew by — applying a head there is a parse and a walk of `document.head` a row. So a file that
     // is both routed and invoked titles the document as a page and leaves it alone as a row.
-    const headMarkup =
+    const head =
         selfFill === 'routed' || selfFill === 'both'
-            ? emitHead(file, lowering, true)
-            : "''"
+            ? headSink(file)
+            : undefined
+    const headMarkup =
+        head === undefined ? "''" : renderMarkup(head, lowering, true)
     const heads = headMarkup !== "''"
-    const applied = heads
-        ? `if (${ROUTED}) ${lowering.use('applyHead')}(${headMarkup}); `
-        : ''
+    // 39.13 — A HEAD THAT READS SOMETHING LIVE FOLLOWS IT, from a watch the page's scope owns — live
+    // by the rule `emitRegion` binds by. One that reads nothing that moves is applied once.
+    const liveHeads = head !== undefined && heads && readsLive(head, lowering)
+    const applied =
+        heads && !liveHeads
+            ? `if (${ROUTED}) ${lowering.use('applyHead')}(${headMarkup}); `
+            : ''
+    if (liveHeads)
+        lines.push(
+            `if (${ROUTED}) ${lowering.use('liveHead')}(${SCOPE}, ${PAINTED}, () => ${headMarkup})`,
+        )
     const builds = carriesOwnMarkup && page.positions.length > 0
     let fills = ''
-    if (applied !== '' || builds) {
+    if (applied !== '' || builds || liveHeads) {
         const build = builds
             ? `function __build(__document) {\n    ${emitMaker(page, lowering)}\n}\n`
             : ''
@@ -144,7 +156,9 @@ export function emitClient(
         const fill = builds
             ? `${lowering.use('fillRegion')}(${REGION_ROOT}, __build)`
             : ''
-        fills = `${build}if (${isEmpty}(${REGION_ROOT})) { ${applied}${fill} }\n`
+        fills = liveHeads
+            ? `${build}const ${PAINTED} = !${isEmpty}(${REGION_ROOT})\nif (!${PAINTED}) { ${fill} }\n`
+            : `${build}if (${isEmpty}(${REGION_ROOT})) { ${applied}${fill} }\n`
     }
 
     // NOTHING LIVE IS NO MODULE: every unit the page's region pushes is a binding, a listener or a
@@ -227,6 +241,21 @@ ${helpers.join('\n')}
 ${fills}${captured}${bindings}${closed}
 }
 `
+}
+
+// 39.13 — WHETHER A PLACED REGION READS ANYTHING THAT MOVES, by `emitRegion`'s own rule: a nested
+// region, a live text run, or an attribute `lowering.isLive` says is.
+function readsLive(sink: Cursor, lowering: Lowering): boolean {
+    for (const at of sink.positions) {
+        if (at.kind === 'region') return true
+        if (at.kind === 'text') {
+            if (isLiveRun(at.run, lowering)) return true
+            continue
+        }
+        for (const attribute of (at.holder as ElementNode).attributes)
+            if (attribute.expression && lowering.isLive(attribute)) return true
+    }
+    return false
 }
 
 // One region's bindings, emitted against its own root: the page, a `{#if}` arm, a `{#for}` row, a

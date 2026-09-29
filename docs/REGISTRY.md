@@ -207,7 +207,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.9, 16.12, 16.26, 16.27, 16.28, 16.29, 16.30, 16.34, 16.45, 16.53, 16.54, 16.67, 41.5, 41.7, 41.12, 41.22 |
+| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.9, 16.12, 16.26, 16.27, 16.28, 16.29, 16.30, 16.34, 16.45, 16.53, 16.54, 16.67, 41.5, 41.7, 41.12, 41.21 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.31 |
 | `Produced` | `unknown` | What it yields, per the unit rule. | 1.2, 16.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.19 |
@@ -240,7 +240,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Values<T>` | `Iterable<T> \| AsyncIterable<T> \| ReadableStream<T>` | What every body helper takes. | 17.1 |
-| `page` | `<Body extends string \| Values<Uint8Array \| string>>(body: Body) => Body` | A rendered document as `text/html`. | 17.2 |
+| `page` | `<Body extends string \| Uint8Array \| Values<Uint8Array \| string>>(body: Body) => Body` | A rendered document as `text/html`. | 17.2 |
 | `redirect` | `(to: string, status?: RedirectStatus) => undefined` | A navigation. | 17.3 |
 | `jsonl` | `<T>(values: Values<T>) => Values<T>` | One JSON value per line, fixed. | 16.46, 17.6, 17.7 |
 | `sse` | `<T>(values: Values<T>) => Values<T>` | The same machine framed as server-sent events, fixed. | 16.47, 17.6, 17.7 |
@@ -353,8 +353,8 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `route.url` | `Reactive<URL>` | Where we are. | 23.1, 23.2, 23.3, 23.4 |
-| `route.params` | `Reactive<Params>` | The matched route's segments. | 23.1, 23.5 |
+| `route.url` | `Reactive<URL>` | Where we are. | 23.1, 23.2, 23.3, 23.4, 30.23 |
+| `route.params` | `Reactive<Params>` | The matched route's segments. | 23.1, 23.5, 30.23 |
 | `Params` | `Record<string, string>` | What a matched route's segments are. | 23.5 |
 | `route.name` | `Reactive<string>` | The resolution path. | 23.1, 23.6 |
 | `route.navigating` | `Reactive<boolean>` | Whether a navigation is in flight. | 23.1 |
@@ -475,7 +475,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22 |
+| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22, 30.23, 30.24, 30.25 |
 
 # `.abide` files
 
@@ -567,7 +567,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Path | Meaning | Rules |
 | --- | --- | --- |
-| `<head>` | A page's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12 |
+| `<head>` | A page's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12, 39.13 |
 | `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.7, 39.8, 39.9, 39.10 |
 | `[name]` | A required dynamic segment. | 23.5, 30.3 |
 | `[[name]]` | An optional segment. | 23.5, 30.4 |
@@ -579,7 +579,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Component` | `interface Component {}` | A component bound to its props. | 32.18, 35.4 |
-| `render` | `(component: Component, shell?: Shell) => AsyncGenerator<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.5, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.21, 35.11 |
+| `render` | `(component: Component, shell?: Shell) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 35.11 |
 | `Shell` | `string \| URL \| undefined` | The document a render renders into. | 35.6 |
 
 ## Sinks
@@ -637,6 +637,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `src/ui/pages/**/error.abide` | The page a refusal renders in. | 35.2, 35.3 |
 | `src/server/rpc/**/*.ts` | The rpc handlers. | 19.1, 19.16 |
 | `src/server/sockets/**/*.ts` | The socket handlers. | 19.1 |
+| `bunfig.toml` | The file whose `[serve.static] plugins` the client is built with. | 38.44 |
 
 ## Lifecycle hooks
 
@@ -646,7 +647,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `middleware` | `(...rungs: Middleware<{ request: Request }, Response>[]) => () => void` | The per-request app lane. | 37.3 |
 | `onStart` | `(fn: (start: () => Promise<void>) => void \| Promise<void>) => () => void` | Wraps the boot. | 37.4, 37.6 |
 | `onStop` | `(fn: (stop: () => Promise<void>) => void \| Promise<void>) => () => void` | Mirrors it for teardown. | 37.4, 37.6 |
-| `onError` | `(fn: (error: unknown) => unknown) => () => void` | Runs on an unexpected error in this scope. | 37.5 |
+| `onError` | `(fn: (error: unknown) => unknown) => () => void` | Runs on an unexpected error in this scope. | 37.5, 37.8 |
 | `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's config defaults. | 27.6, 37.7 |
 | `onHealth` | `(report: () => unknown \| Promise<unknown>) => () => void` | The app's health reporter. | 25.2 |
 | `onPrincipal` | `(resolve: (claims: unknown) => unknown \| Promise<unknown>) => () => void` | Turns claims into the app's half of a principal. | 26.4, 37.7 |
@@ -669,12 +670,12 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Command | Meaning | Rules |
 | --- | --- | --- |
-| `abide scaffold <name>` | Writes a starter project. | 38.1 |
+| `abide scaffold <name>` | Writes a starter project. | 38.1, 38.43 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2 |
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.32, 38.33, 38.34, 38.41 |
-| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 38.4, 38.15, 38.16, 38.17, 38.18, 38.20, 38.25, 38.26, 38.27, 38.29, 38.31, 38.36, 38.37, 38.38, 38.39 |
-| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.5, 38.19, 38.26, 38.27, 38.28, 38.31 |
-| `abide start [--port <n>]` | Boots the built app. | 38.6, 38.21, 38.22, 38.23, 38.24, 38.26, 38.27, 38.28, 38.29, 38.30 |
+| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 38.4, 38.15, 38.16, 38.17, 38.18, 38.20, 38.25, 38.26, 38.27, 38.29, 38.31, 38.36, 38.37, 38.38, 38.39, 38.42, 38.44 |
+| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.44, 38.5, 38.19, 38.26, 38.27, 38.28, 38.31 |
+| `abide start [--port <n>]` | Boots the built app. | 37.8, 38.6, 38.21, 38.22, 38.23, 38.24, 38.26, 38.27, 38.28, 38.29, 38.30 |
 | `abide connect [url]` | The interactive shell against a running app. | 38.7 |
 | `abide call <address> [args]` | One call to one handler. | 38.8 |
 | `abide openapi [--out <file>] [--url <origin>]` | The OpenAPI document written rather than served. | 38.9 |

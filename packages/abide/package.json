@@ -26,6 +26,9 @@
         "#compiler": "./src/compiler/index.ts",
         "#compiler/*": "./src/compiler/*"
     },
+    "dependencies": {
+        "typescript": "^7.0.2"
+    },
     "scripts": {
         "typecheck": "tsc -p tsconfig.json"
     },

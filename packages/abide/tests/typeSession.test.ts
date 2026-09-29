@@ -75,11 +75,12 @@ count = count + step
 
     const { default: Page } = await import(module)
     let out = ''
-    for await (const chunk of render(
-        Page,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        out += new TextDecoder().decode(chunk)
+    out += new TextDecoder().decode(
+        await render(
+            Page,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
 
     // 2 + 3 = 5, so the write went through `set` rather than rebinding the name.
     expect(out).toContain('<title>count is 5</title>')
@@ -105,11 +106,12 @@ import { onboarding } from '${ROOT}src/conversations.ts'
     const module = `${temporaryModule({ 'Page.ts': compileFile(source, names) })}/Page.ts`
     const { default: Page } = await import(module)
     let out = ''
-    for await (const chunk of render(
-        Page,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        out += new TextDecoder().decode(chunk)
+    out += new TextDecoder().decode(
+        await render(
+            Page,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     expect(out).toContain('<p>hello</p>')
 })
 
@@ -140,11 +142,12 @@ const held: import('abide').Reactive<number> = a
     const module = `${temporaryModule({ 'Page.ts': compileFile(source, names) })}/Page.ts`
     const { default: Page } = await import(module)
     let out = ''
-    for await (const chunk of render(
-        Page,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        out += new TextDecoder().decode(chunk)
+    out += new TextDecoder().decode(
+        await render(
+            Page,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     expect(out).toContain('<p>1|1|hello|1</p>')
 })
 
@@ -307,10 +310,11 @@ const { label } = props()
     const module = `${temporaryModule({ 'Page.ts': compileFile(source, reads) })}/Page.ts`
     const { default: Page } = await import(module)
     let out = ''
-    for await (const chunk of render(
-        Page,
-        '<!doctype html><html><head></head><body></body></html>',
-    ))
-        out += new TextDecoder().decode(chunk)
+    out += new TextDecoder().decode(
+        await render(
+            Page,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
     expect(out).toContain('<p>mine</p>')
 })

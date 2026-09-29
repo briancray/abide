@@ -4,8 +4,8 @@
 // hands back a `Reactive`, the keyed face narrows by args, a mutation's `ttl` is 0 (16.7), and a
 // refusal narrows through `isError` — because it is built by the one `declare` both seams share.
 //
-// 41.22 — A CALL THE PAGE ALREADY STARTED IS TAKEN, NOT MADE AGAIN. A server-rendered page's early-call
-// script (41.21) sent this page's calls while the body was still arriving; the first reach of each
+// 41.21 — A CALL THE PAGE ALREADY STARTED IS TAKEN, NOT MADE AGAIN. A server-rendered page's early-call
+// script (41.20) sent this page's calls while the body was still arriving; the first reach of each
 // takes its answer — at once where it has arrived, which lands the value in the same run as
 // hydration's setup — and every reach after that fetches, a refresh being a new call.
 //

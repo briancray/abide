@@ -24,9 +24,6 @@
 // reaches does not belong on what every compiled module resolves through.
 
 export { oneStyleValue } from '#shared/escapeText.ts'
-// 39.6 — a module mounted into an empty region applies its own head, from inside its instance
-// (`emitClient`); only a module that carries its own markup and a `<head>` imports it.
-export { applyHead } from './applyHead.ts'
 export { isRaw } from '#shared/Raw.ts'
 // 14.8 — an `{#if}` arm's branch-local `<script>`, set up outside the watch that swaps it in.
 export { untracked } from '#shared/reactive/tracking.ts'
@@ -38,6 +35,9 @@ export {
     runHere,
     textHere,
 } from './adoptNode.ts'
+// 39.6 — a module mounted into an empty region applies its own head, from inside its instance
+// (`emitClient`); only a module that carries its own markup and a `<head>` imports it.
+export { applyHead, liveHead } from './applyHead.ts'
 export { bindElement } from './bindElement.ts'
 export { bindProperty } from './bindProperty.ts'
 export { bindSpread } from './bindSpread.ts'

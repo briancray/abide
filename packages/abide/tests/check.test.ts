@@ -137,6 +137,32 @@ const { value } = props<{ value: string }>()
 <p>{value.toUpperCase()}</p>
 <button onclick={() => (value = value + '!')}>more</button>`
 
+// 33.4 — AN OPTIONAL PROP IS STILL ONE ACCESSOR: the key is optional to the caller, never the
+// accessor to the child. THE REVERT: drop the `-?` on `__accessors`; the read reports TS2344.
+const OPTIONAL = `<script>
+import { props } from 'abide'
+
+const { label } = props<{ label?: string }>()
+</script>
+
+<p>{label ?? 'none'}</p>`
+
+// 38.3 — A WRITE ON THE LINE AFTER ONE WITH NO SEMICOLON. The checker's write opens on `(` where
+// it is a value, and JavaScript reads a line opening on `(` as a call on the line above. THE REVERT:
+// open every checked write on `(`; this reports TS2349, `Promise<void>` not callable.
+const AFTER_AWAIT = `<script>
+import { reactive } from 'abide'
+
+let copied = reactive('')
+
+async function copy() {
+    await Promise.resolve()
+    copied = 'yes'
+}
+</script>
+
+<button onclick={copy}>{copied}</button>`
+
 // A WRITE NARROWS AS JAVASCRIPT'S DOES: after `x = 3` under `x === null`, `x` is a number.
 const NARROWED = `<script>
 import { reactive } from 'abide'
@@ -182,8 +208,10 @@ beforeAll(async () => {
         'ui/pages/props/page.abide': PROPS,
         'ui/pages/chosen/page.abide': CHOSEN,
         'ui/pages/narrowed/page.abide': NARROWED,
+        'ui/pages/after-await/page.abide': AFTER_AWAIT,
         'ui/components/Bare.abide': '<p>bare</p>',
         'ui/components/Held.abide': HELD,
+        'ui/components/Optional.abide': OPTIONAL,
         'ui/app.css': 'p { color: red }',
         'shared/sum.ts': "export const sum: number = 'x'\n",
     })
@@ -219,6 +247,10 @@ test('a page read and written by name checks clean — 38.3', () => {
 // THE REVERT: project a component's attributes as statements of their own (`__any(value)`), as
 // before a tag was a call; nothing is reported here at all. Or type every checked module's default
 // export as taking `any` (`componentModule('any')`); the same.
+test('an optional prop reads as its value or undefined — 33.4', () => {
+    expect(inFile('ui/components/Optional.abide')).toEqual([])
+})
+
 test('a tag is held to the props its component declares, on the attribute — 38.41', () => {
     const at = (needle: string, skip: number) => place(PROPS, needle, skip)
     const reported: { line: number; column: number; code: number }[] = []
@@ -286,6 +318,10 @@ test('an error lands on the name, not on an earlier echo of it — 38.3', () => 
 // 38.3 — A WRITE UNDOES A NARROWING, as the program it runs as does. THE REVERT: return `undefined`
 // from `checkedWriteParts`, so a write is `x.set(3)` — a call, which undoes nothing — and each
 // `x.toFixed()` after one reports `x` as possibly null (TS18047).
+test('a write after a line with no semicolon checks as its own statement — 38.3', () => {
+    expect(inFile('ui/pages/after-await/page.abide')).toEqual([])
+})
+
 test('a write narrows the name it writes — 38.3', () => {
     expect(inFile('narrowed/page.abide')).toEqual([])
 })

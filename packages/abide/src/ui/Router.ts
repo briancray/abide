@@ -66,9 +66,11 @@ export class Router {
     // region opens — read at that moment rather than captured when the layout mounted, or a slot
     // reopened after a navigation put back the page the reader had left.
     chain: PageModule[]
-    // The address the standing chain was mounted for, fragment left off: what a step that moves
-    // only the fragment is compared against.
+    // The path the standing chain was mounted for: a step to it that moves only the query or the
+    // fragment keeps the page (30.23, 30.24).
     mounted: string | undefined
+    // 30.23 — THE ROUTE THE STANDING PAGE WAS MATCHED BY, which an address it matches again keeps.
+    standing: Compiled | undefined
     // WHICH NAVIGATION IS THE LIVE ONE. Both ways in await the destination's module before they
     // touch anything, and a dynamic import resolves in whatever order the chunks arrive — so two
     // clicks, or a click landing while `hydrate` is still loading, each mounted a page: the second
@@ -93,6 +95,7 @@ export class Router {
         this.levels = []
         this.chain = []
         this.mounted = undefined
+        this.standing = undefined
         this.navigation = 0
         this.prefetched = new Set()
         this.transitions = transitions
@@ -142,11 +145,11 @@ export class Router {
             location.href = target.href
             return
         }
-        // 30.21 — A FRAGMENT OF THE PAGE ALREADY STANDING is the browser's fragment navigation: nothing
-        // is asked or mounted. With no fragment, the same address is a navigation like any other,
-        // as it is to the browser.
-        if (target.hash !== '' && this.shows(target)) {
-            this.follow(target, options)
+        // 30.21, 30.23, 30.24 — THE ROUTE STANDING, AT ITS OWN PATH: another query, another fragment or
+        // the same address. The page reads its address through `route`, so it follows rather than
+        // being rebuilt, and there is no path for `middleware` to decide anything new about.
+        if (found.route === this.standing && this.mounted === target.pathname) {
+            this.follow(target, options, found)
             return
         }
         this.navigation += 1
@@ -185,6 +188,12 @@ export class Router {
                 location.href = landed.href
                 return
             }
+            // 30.23 — THE ROUTE STANDING, AT ANOTHER PATH: `middleware` has said yes to the path, and
+            // the page it matched is the one already mounted, so it follows.
+            if (landing.route === this.standing) {
+                this.follow(landed, options, landing)
+                return
+            }
             const arriving =
                 landing === found ? loaded : await load(landing.route)
             if (this.navigation !== ticket) return
@@ -196,17 +205,14 @@ export class Router {
         }
     }
 
-    // Whether `target` differs from the address the standing chain was mounted for only by its
-    // fragment.
-    shows(target: URL | Location): boolean {
-        return this.mounted === `${target.pathname}${target.search}`
-    }
-
-    // A STEP WITHIN THE STANDING PAGE: the address written and `route.url` moved, and the page, its
+    // A STEP WITHIN THE STANDING PAGE: the address written and `route` moved, and the page, its
     // scope and every call it made left where they are. It supersedes a navigation in flight the
     // way a click on another link would. Back and forward arrive here with the bar already moved
     // and `keepScroll`, which leaves the scroll to the browser's own restoration.
-    follow(target: URL, options: NavigateOptions = {}): void {
+    //
+    // 30.25 — THE SCROLL STAYS where no page was replaced, except to a fragment the address names:
+    // a reader choosing a season is not sent back to the top of the series.
+    follow(target: URL, options: NavigateOptions, found: Found): void {
         this.navigation += 1
         route.navigating.set(false)
         // THE SAME ADDRESS REPLACES rather than pushing, which is what the browser does for a
@@ -215,8 +221,10 @@ export class Router {
             target,
             options.replace === true || target.href === location.href,
         )
-        route.url.set(new URL(target.href))
-        if (options.keepScroll !== true) scrollToFragment(target.hash)
+        arrive(target.href, found.route.pattern, found.params)
+        this.mounted = target.pathname
+        if (options.keepScroll !== true && target.hash !== '')
+            scrollToFragment(target.hash)
     }
 
     // 39.9 — AWAITED TO THE WRITE, NOT TO THE ANIMATION: `updateCallbackDone` settles once the
@@ -282,9 +290,8 @@ export class Router {
         }
     }
 
-    // How much of the arriving chain is already standing. Layouts only: the page is the level
-    // that is always replaced, even where the address resolved to the same module with other
-    // params, because its own bindings read those params.
+    // How much of the arriving chain is already standing. Layouts only: a page reached here is
+    // another route's, the same route's being followed instead (30.23).
     //
     // EVERY STANDING LEVEL IS COMPARED, the page included: a page is never a layout, so it cannot
     // match one, and a layout whose slot is closed stands with nothing below it.
@@ -384,7 +391,8 @@ export class Router {
     ): void {
         arrive(target.href, found.route.pattern, found.params)
         this.chain = modules
-        this.mounted = `${target.pathname}${target.search}`
+        this.standing = found.route
+        this.mounted = target.pathname
         if (into === undefined) return
         beginLayer(LAYER_MOUNT)
         try {

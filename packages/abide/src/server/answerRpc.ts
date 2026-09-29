@@ -9,15 +9,17 @@ import type { CopyOptions } from '#shared/CopyOptions.ts'
 import { type Failed, isFailed, wireFailure } from '#shared/Failed.ts'
 import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { isRecord } from '#shared/isRecord.ts'
+import type { JsonValue } from '#shared/JsonValue.ts'
 import { mounted as underMount } from '#shared/mount.ts'
-import type { Gated } from '#shared/reactive/Keyed.ts'
-import { deadlineOf, pastOf } from '#shared/reactive/index.ts'
-import { notFound, refuse } from '#shared/refuse.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
+import { deadlineOf, pastOf } from '#shared/reactive/index.ts'
+import type { Gated } from '#shared/reactive/Keyed.ts'
+import { notFound, refuse, validationError } from '#shared/refuse.ts'
 import type { Method, Rpc } from '#shared/rpc.ts'
 import { argsInURL } from '#shared/rpcRequest.ts'
 import type { Socket } from '#shared/socket.ts'
 import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
+import { validateJson } from '#shared/validateJson.ts'
 import { answerValue } from './answerValue.ts'
 import { callerOf } from './callerOf.ts'
 import { argsDocumentOf, coerceArgs, type Document } from './coerceArgs.ts'
@@ -47,6 +49,8 @@ export type Mount = {
     // 18.19 — what a `GET`'s value declares that the browser's copy behaves by, where its declaration
     // names any of it. `undefined` otherwise.
     copy: CopyOptions | undefined
+    // 19.10 — the JSON Schema the handler's args annotation derives, where it takes a record.
+    args: JsonValue | undefined
 }
 
 export type Mounted = Mount & {
@@ -55,6 +59,9 @@ export type Mounted = Mount & {
     // 19.8, 20.11 — the args' JSON Schema, probed once at mount: a third-party schema converts
     // itself on every probe.
     argsDocument: Document | undefined
+    // 19.10 — what the wire holds args to where the handler declares no `args` gate of its own: the
+    // annotation's schema. An in-process call already holds the type, so the handler never runs it.
+    wireArgs: JsonValue | undefined
 }
 
 // 16.63 — the environment's `timeout`, for every call a handler that names none makes.
@@ -92,14 +99,16 @@ export async function mountHandlers(
             continue
         }
         const handler = exported as Rpc<unknown, unknown> & Gated<unknown>
+        const declared = argsDocumentOf(handler)
         // 16.10, 16.11 — the address `rpc.url` and `rpc.raw` build on, under the mount — and what a
-        // page's render turns a call it made into the browser's request by (41.21).
+        // page's render turns a call it made into the browser's request by (41.20).
         handler.address = underMount(mount.address)
         handlers.set(mount.address, {
             ...mount,
             method: mount.method,
             handler,
-            argsDocument: argsDocumentOf(handler),
+            argsDocument: declared ?? (mount.args as Document | undefined),
+            wireArgs: declared === undefined ? mount.args : undefined,
         })
     }
     return { handlers, sockets }
@@ -164,6 +173,12 @@ export async function answerRpc(
                   inUrl ? url.search : '',
               )
             : raw
+    // 19.10 — THE WIRE HELD TO THE ANNOTATION, where no `args` schema is declared to hold it. Args
+    // that did not come are the handler's to answer, as they were before.
+    if (found.wireArgs !== undefined && args !== undefined) {
+        const issues = validateJson(found.wireArgs, args)
+        if (issues !== null) return answered(validationError(issues))
+    }
     // 16.61 — where neither names one, nothing is raised and the server's own idle timeout stands.
     const timeout = handler.timeout ?? RPC_SERVER.timeout()
     if (timeout !== undefined) raiseTimeout(timeout)

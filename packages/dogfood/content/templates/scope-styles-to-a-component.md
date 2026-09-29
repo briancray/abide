@@ -6,6 +6,7 @@ covers:
   - `<style>`
   - `:global(…)`
   - `import './app.css'`
+  - `bunfig.toml`
 examples:
   - packages/dogfood/examples/style-scoped.json
   - packages/dogfood/examples/style-global.json
@@ -69,6 +70,21 @@ That is also why there is one mechanism here rather than two. A stylesheet is a 
 like any other, which is what lets the build know which routes need it without being told.
 
 Read on: [Scripts](run-code-when-a-component-loads.md)
+
+## A bundler plugin builds the app's stylesheet too
+
+Tailwind, and anything else that turns a stylesheet into a stylesheet, is a bun plugin, and you
+declare it where bun has you declare one: `bunfig.toml`, beside the app's `package.json`.
+
+```toml bunfig.toml
+[serve.static]
+plugins = ["bun-plugin-tailwind"]
+```
+
+`abide build` and `abide dev` both build the client with it, after abide's own (38.44). Your
+`app.css` then opens with `@import "tailwindcss"`, and the classes your `.abide` files use are the
+ones it emits — Tailwind finds them by reading the source, `.abide` included, so there is nothing
+to list.
 
 ## Next
 

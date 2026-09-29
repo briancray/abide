@@ -17,6 +17,9 @@
       "bin": {
         "abide": "./bin/abide.ts",
       },
+      "dependencies": {
+        "typescript": "^7.0.2",
+      },
     },
     "packages/dogfood": {
       "name": "dogfood",

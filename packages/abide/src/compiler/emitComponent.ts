@@ -43,7 +43,7 @@ const EMPTY_REGION = JSON.stringify(
 // do. Under `__` for the reason every framework name in an emitted module is.
 const HEADS = '__heads'
 const BODY = '__body'
-// A page's or a layout's deferred build (41.20), and the share scope it resumes.
+// A page's or a layout's deferred build (41.19), and the share scope it resumes.
 const SETTLED_AT = '__settledAt'
 const BUILT = '__built'
 const BUILD = '__build'
@@ -76,7 +76,7 @@ export function shareScope(
 // two returns rather than one string a renderer has to go looking through. 35.5 is answered by
 // `render`, which turns the two into the byte stream a document is served as.
 
-// `settles` IS A PAGE OR A LAYOUT, which `render` builds a level at a time (41.20): its setup runs at
+// `settles` IS A PAGE OR A LAYOUT, which `render` builds a level at a time (41.19): its setup runs at
 // the call and its markup is built on the first read of `head` or `body`, so the calls the setup
 // started are given the turn to answer that a component built inside its caller's markup is not.
 // Every other component builds where it is called, and pays nothing for the difference.
@@ -136,7 +136,7 @@ export function emitComponent(
         head: ${head}${heads ? ` + ${HEADS}.join('')` : ''},
         body: ${BODY},
     }`
-    // 41.20 — BUILT ON THE FIRST READ, and ONCE: `render` reads `head` and then `body`, and a
+    // 41.19 — BUILT ON THE FIRST READ, and ONCE: `render` reads `head` and then `body`, and a
     // child the markup invokes must not be set up twice. The build resumes the share scope the
     // setup ran in (10.5), since by the time it is read the caller's has long been left — and that
     // scope is `scope` on the answer, so `composePage` sets the level below up inside it too.
@@ -498,11 +498,15 @@ export function emitHead(
     lowering: Lowering,
     client: boolean,
 ): string {
-    // Merged before they are placed (39.12), so the head is the one markup placed here rather than
-    // rendered from positions the template walk already placed.
+    return renderMarkup(headSink(file), lowering, client)
+}
+
+// A file's head, placed. Merged before it is placed (39.12), so the head is the one markup placed
+// here rather than rendered from positions the template walk already placed.
+export function headSink(file: AbideFile): Cursor {
     const sink = new Cursor()
     placeTemplate(mergeHead(file.head), sink)
-    return renderMarkup(sink, lowering, client)
+    return sink
 }
 
 // A region's markup, as an expression, rendered from its positions. Exported because a region made
